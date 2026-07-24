@@ -13,7 +13,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.server";
 import { getBaseClient } from "@/chain/client";
-import { decodeTradeLog, PROXY_ADDRESS, type CanonicalTrade } from "@/chain/decoder";
+import { decodeTradeLog, PROXY_ADDRESS, TRADE_EVENTS, type CanonicalTrade } from "@/chain/decoder";
 import { applyTrade, emptyRow, type BeliefRow, type Trade } from "@/domain/domain";
 
 // Deploy block for the proxy on Base. Backfill from here on first run.
@@ -27,7 +27,7 @@ const REORG_DEPTH = 12n;
 const MAX_CHUNK = 3_000n;
 const CHUNK_DELAY_MS = 250;
 // Cap per-run scan so a single tick returns well under the pg_net/HTTP timeout.
-const MAX_BLOCKS_PER_RUN = 60_000n;
+const MAX_BLOCKS_PER_RUN = 15_000n;
 
 const runId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -71,6 +71,7 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
             const end = start + MAX_CHUNK - 1n > to ? to : start + MAX_CHUNK - 1n;
             const logs = await client.getLogs({
               address: PROXY_ADDRESS,
+              events: TRADE_EVENTS,
               fromBlock: start,
               toBlock: end,
             });

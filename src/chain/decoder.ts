@@ -5,7 +5,7 @@
  * Fails LOUDLY at module load if the required events aren't present —
  * spec forbids guessing event shapes.
  */
-import { decodeEventLog, type Log, type Hex } from "viem";
+import { decodeEventLog, parseAbiItem, type Log, type Hex } from "viem";
 import abi from "./abi.json" with { type: "json" };
 import meta from "./abi.meta.json" with { type: "json" };
 
@@ -36,6 +36,10 @@ for (const name of REQUIRED) {
 export const PROXY_ADDRESS = meta.proxy_address.toLowerCase() as `0x${string}`;
 export const CHAIN_ID = meta.chain_id;
 export const ABI = abi as unknown as readonly AbiEvent[];
+export const TRADE_EVENTS = [
+  parseAbiItem("event TokensBought(uint256 indexed marketId, address indexed buyer, string questionId, bool yes, uint256 amount, uint256 ethSpent, uint256 fee, uint256 agentFee, uint256 creatorFee, uint256 treasuryFee, uint256 newPrice)"),
+  parseAbiItem("event TokensSold(uint256 indexed marketId, address indexed seller, string questionId, bool yes, uint256 amount, uint256 proceeds, uint256 newPrice)"),
+] as const;
 
 export interface CanonicalTrade {
   tx_hash: string;
