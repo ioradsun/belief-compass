@@ -13,7 +13,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.server";
 import { getBaseClient } from "@/chain/client";
-import { decodeTradeLog, PROXY_ADDRESS, type CanonicalTrade } from "@/chain/decoder";
+import { decodeTradeLog, PROXY_ADDRESS, TRADE_EVENT_TOPICS, type CanonicalTrade } from "@/chain/decoder";
 import { applyTrade, emptyRow, type BeliefRow, type Trade } from "@/domain/domain";
 
 // Deploy block for the proxy on Base. Backfill from here on first run.
@@ -71,6 +71,7 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
             const end = start + MAX_CHUNK - 1n > to ? to : start + MAX_CHUNK - 1n;
             const logs = await client.getLogs({
               address: PROXY_ADDRESS,
+              topics: [TRADE_EVENT_TOPICS],
               fromBlock: start,
               toBlock: end,
             });
