@@ -9,38 +9,129 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WalletAddrRouteImport } from './routes/wallet.$addr'
+import { Route as MarketIdRouteImport } from './routes/market.$id'
+import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
+import { Route as ApiPublicJobsChainPollerRouteImport } from './routes/api/public/jobs/chain-poller'
+import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/public/jobs/belief-rollup'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WalletAddrRoute = WalletAddrRouteImport.update({
+  id: '/wallet/$addr',
+  path: '/wallet/$addr',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketIdRoute = MarketIdRouteImport.update({
+  id: '/market/$id',
+  path: '/market/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicJobsPovPollerRoute = ApiPublicJobsPovPollerRouteImport.update({
+  id: '/api/public/jobs/pov-poller',
+  path: '/api/public/jobs/pov-poller',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicJobsChainPollerRoute =
+  ApiPublicJobsChainPollerRouteImport.update({
+    id: '/api/public/jobs/chain-poller',
+    path: '/api/public/jobs/chain-poller',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicJobsBeliefRollupRoute =
+  ApiPublicJobsBeliefRollupRouteImport.update({
+    id: '/api/public/jobs/belief-rollup',
+    path: '/api/public/jobs/belief-rollup',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/market/$id': typeof MarketIdRoute
+  '/wallet/$addr': typeof WalletAddrRoute
+  '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
+  '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
+  '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/market/$id': typeof MarketIdRoute
+  '/wallet/$addr': typeof WalletAddrRoute
+  '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
+  '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
+  '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/market/$id': typeof MarketIdRoute
+  '/wallet/$addr': typeof WalletAddrRoute
+  '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
+  '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
+  '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/sitemap.xml'
+    | '/market/$id'
+    | '/wallet/$addr'
+    | '/api/public/jobs/belief-rollup'
+    | '/api/public/jobs/chain-poller'
+    | '/api/public/jobs/pov-poller'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/sitemap.xml'
+    | '/market/$id'
+    | '/wallet/$addr'
+    | '/api/public/jobs/belief-rollup'
+    | '/api/public/jobs/chain-poller'
+    | '/api/public/jobs/pov-poller'
+  id:
+    | '__root__'
+    | '/'
+    | '/sitemap.xml'
+    | '/market/$id'
+    | '/wallet/$addr'
+    | '/api/public/jobs/belief-rollup'
+    | '/api/public/jobs/chain-poller'
+    | '/api/public/jobs/pov-poller'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  MarketIdRoute: typeof MarketIdRoute
+  WalletAddrRoute: typeof WalletAddrRoute
+  ApiPublicJobsBeliefRollupRoute: typeof ApiPublicJobsBeliefRollupRoute
+  ApiPublicJobsChainPollerRoute: typeof ApiPublicJobsChainPollerRoute
+  ApiPublicJobsPovPollerRoute: typeof ApiPublicJobsPovPollerRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +139,52 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/wallet/$addr': {
+      id: '/wallet/$addr'
+      path: '/wallet/$addr'
+      fullPath: '/wallet/$addr'
+      preLoaderRoute: typeof WalletAddrRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/market/$id': {
+      id: '/market/$id'
+      path: '/market/$id'
+      fullPath: '/market/$id'
+      preLoaderRoute: typeof MarketIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/jobs/pov-poller': {
+      id: '/api/public/jobs/pov-poller'
+      path: '/api/public/jobs/pov-poller'
+      fullPath: '/api/public/jobs/pov-poller'
+      preLoaderRoute: typeof ApiPublicJobsPovPollerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/jobs/chain-poller': {
+      id: '/api/public/jobs/chain-poller'
+      path: '/api/public/jobs/chain-poller'
+      fullPath: '/api/public/jobs/chain-poller'
+      preLoaderRoute: typeof ApiPublicJobsChainPollerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/jobs/belief-rollup': {
+      id: '/api/public/jobs/belief-rollup'
+      path: '/api/public/jobs/belief-rollup'
+      fullPath: '/api/public/jobs/belief-rollup'
+      preLoaderRoute: typeof ApiPublicJobsBeliefRollupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
+  MarketIdRoute: MarketIdRoute,
+  WalletAddrRoute: WalletAddrRoute,
+  ApiPublicJobsBeliefRollupRoute: ApiPublicJobsBeliefRollupRoute,
+  ApiPublicJobsChainPollerRoute: ApiPublicJobsChainPollerRoute,
+  ApiPublicJobsPovPollerRoute: ApiPublicJobsPovPollerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

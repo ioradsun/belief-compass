@@ -8,7 +8,7 @@ const marketQO = (id: number) => queryOptions({
 });
 
 export const Route = createFileRoute("/market/$id")({
-  head: ({ loaderData }) => {
+  head: ({ loaderData }: { loaderData?: Awaited<ReturnType<typeof getMarket>> }) => {
     const title = loaderData?.market?.title ?? `Market #${loaderData?.state?.onchain_id ?? ""}`;
     return {
       meta: [
