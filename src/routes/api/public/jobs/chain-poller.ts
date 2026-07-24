@@ -78,6 +78,7 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
               const t = decodeTradeLog(log);
               if (t) trades.push(t);
             }
+            if (end < to) await new Promise((r) => setTimeout(r, CHUNK_DELAY_MS));
           }
 
           // 2. Delete non-canonical trades in the rescanned range (reorg orphans)
