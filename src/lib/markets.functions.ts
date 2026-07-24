@@ -83,3 +83,52 @@ export const getWallet = createServerFn({ method: "GET" })
       .limit(200);
     return { wallet, positions: positions ?? [] };
   });
+
+const CHAIN_DEPLOY_BLOCK = 45_500_000;
+
+export const getIngestStatus = createServerFn({ method: "GET" }).handler(async () => {
+  const sb = publicClient();
+  const [markets, trades, beliefs, feedEvents, matches, mstate, ingest] = await Promise.all([
+    sb.from("markets").select("*", { count: "exact", head: true }),
+    sb.from("trades").select("*", { count: "exact", head: true }),
+    sb.from("wallet_beliefs").select("*", { count: "exact", head: true }),
+    sb.from("feed_events").select("*", { count: "exact", head: true }),
+    sb.from("wallet_matches").select("*", { count: "exact", head: true }),
+    sb.from("market_state")
+      .select("*", { count: "exact", head: true })
+      .gt("believers_yes", 0),
+    sb.from("ingest_state").select("last_block").eq("id", 1).maybeSingle(),
+  ]);
+
+  let head: number | null = null;
+  try {
+    const rpc = await fetch("https://mainnet.base.org", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_blockNumber", params: [] }),
+    });
+    const j = await rpc.json();
+    head = parseInt(j.result, 16);
+  } catch { /* ignore */ }
+
+  const lastBlock = Number(ingest.data?.last_block ?? CHAIN_DEPLOY_BLOCK);
+  const chainPct = head
+    ? Math.min(100, Math.max(0, ((lastBlock - CHAIN_DEPLOY_BLOCK) / (head - CHAIN_DEPLOY_BLOCK)) * 100))
+    : null;
+
+  return {
+    markets: markets.count ?? 0,
+    trades: trades.count ?? 0,
+    beliefs: beliefs.count ?? 0,
+    feedEvents: feedEvents.count ?? 0,
+    matches: matches.count ?? 0,
+    marketsWithBelievers: mstate.count ?? 0,
+    chain: {
+      deployBlock: CHAIN_DEPLOY_BLOCK,
+      lastBlock,
+      head,
+      blocksBehind: head ? Math.max(0, head - lastBlock) : null,
+      progressPct: chainPct,
+    },
+  };
+});
