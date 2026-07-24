@@ -1,0 +1,12 @@
+{
+  "impl_address": "0xeEc43FF91502d7715F02C55f1Ab3dEb02b6A488a",
+  "proxy_address": "0xd4f4619bb4590598C778178690b77C589b93A3eB",
+  "chain_id": 8453,
+  "fetched_at": "2026-07-24T21:00:08.714832Z",
+  "source": "etherscan v2 (chainid=8453)",
+  "sha256": "00f4a072ac955734e172ca7e5cb1868406b3db11bb5ab838d9d80d21d853d7e2",
+  "trade_events": [
+    "TokensBought",
+    "TokensSold"
+  ]
+}
