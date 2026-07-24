@@ -2,7 +2,7 @@
  * POV API client — server only. Never import into client code.
  */
 export interface PovMarket {
-  onChainMarketId: number;
+  onChainMarketId: number | string;
   id?: string;
   title?: string;
   categorySlug?: string;
@@ -19,6 +19,7 @@ export interface PovMarket {
 
 export interface PovMarketsPage {
   data?: PovMarket[];
+  items?: PovMarket[];
   markets?: PovMarket[];
   nextCursor?: string | null;
 }
@@ -37,7 +38,7 @@ export async function* iterateAllMarkets(): AsyncGenerator<PovMarket> {
   let cursor: string | undefined;
   do {
     const page = await fetchMarketsPage(cursor);
-    const rows = page.data ?? page.markets ?? [];
+    const rows = page.data ?? page.items ?? page.markets ?? [];
     for (const m of rows) yield m;
     cursor = page.nextCursor ?? undefined;
   } while (cursor);
