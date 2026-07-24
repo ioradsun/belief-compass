@@ -1,0 +1,126 @@
+/**
+ * Job C — belief rollup. Bearer-guarded.
+ * Reads current POV prices from market_state, runs evaluate() over affected
+ * wallet_beliefs rows, updates stance/stance_side/conviction/days_held.
+ * Then GROUP BY onchain_id refreshes market_state believer counts, People%,
+ * divergence, velocity, new_believers_1h. Never emits feed_events itself.
+ */
+import { createFileRoute } from "@tanstack/react-router";
+import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.server";
+import { evaluate, type BeliefRow } from "@/domain/domain";
+
+const rowToBeliefRow = (r: Record<string, unknown>): BeliefRow => ({
+  yes_shares: Number(r.yes_shares ?? 0),
+  no_shares: Number(r.no_shares ?? 0),
+  yes_cost: Number(r.yes_cost ?? 0),
+  no_cost: Number(r.no_cost ?? 0),
+  expressed_side: (r.expressed_side as BeliefRow["expressed_side"]) ?? "INACTIVE",
+  directional_since: r.directional_since ? new Date(r.directional_since as string) : null,
+  first_backed_at: r.first_backed_at ? new Date(r.first_backed_at as string) : null,
+  last_trade_at: r.last_trade_at ? new Date(r.last_trade_at as string) : null,
+});
+
+export const Route = createFileRoute("/api/public/jobs/belief-rollup")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        try { assertIngestBearer(request); }
+        catch (r) { return r instanceof Response ? r : new Response("err", { status: 500 }); }
+
+        const url = new URL(request.url);
+        const mode = url.searchParams.get("mode") ?? "incremental"; // incremental|full|sweep
+        const sb = getServiceSupabase();
+        const now = new Date();
+
+        // Choose affected market set
+        let marketIds: number[];
+        if (mode === "full" || mode === "sweep") {
+          const { data } = await sb.from("markets").select("onchain_id");
+          marketIds = (data ?? []).map((r) => Number(r.onchain_id));
+        } else {
+          const cutoff = new Date(Date.now() - 2 * 60_000).toISOString();
+          const { data } = await sb.from("trades")
+            .select("onchain_id").gte("ts", cutoff);
+          marketIds = [...new Set((data ?? []).map((r) => Number(r.onchain_id)))];
+        }
+
+        if (marketIds.length === 0) return Response.json({ ok: true, markets: 0 });
+
+        // Denylist for believer counts
+        const { data: deny } = await sb.from("wallet_denylist").select("wallet");
+        const denylist = new Set((deny ?? []).map((d) => (d.wallet as string).toLowerCase()));
+
+        // Load prices for all affected markets
+        const { data: states } = await sb.from("market_state")
+          .select("onchain_id, yes_price_usd, no_price_usd, money_yes_pct")
+          .in("onchain_id", marketIds);
+        const priceMap = new Map(
+          (states ?? []).map((s) => [Number(s.onchain_id), {
+            yesPriceUsd: Number(s.yes_price_usd ?? 0),
+            noPriceUsd: Number(s.no_price_usd ?? 0),
+            moneyYesPct: Number(s.money_yes_pct ?? 0),
+          }])
+        );
+
+        // Evaluate wallet_beliefs and rebuild market_state per market
+        for (const mid of marketIds) {
+          const p = priceMap.get(mid);
+          if (!p) continue;
+          const { data: beliefs } = await sb.from("wallet_beliefs")
+            .select("*").eq("onchain_id", mid);
+
+          const updates: Record<string, unknown>[] = [];
+          let by = 0, bn = 0, bm = 0;
+          for (const r of beliefs ?? []) {
+            const row = rowToBeliefRow(r as Record<string, unknown>);
+            const v = evaluate(row, { yesPriceUsd: p.yesPriceUsd, noPriceUsd: p.noPriceUsd }, now);
+            updates.push({
+              wallet: r.wallet, onchain_id: mid,
+              stance: v.stance, stance_side: v.stance_side,
+              conviction: v.conviction, days_held: v.days_held,
+              updated_at: now.toISOString(),
+            });
+            if (denylist.has((r.wallet as string).toLowerCase())) continue;
+            if (v.stance_side === "YES") by++;
+            else if (v.stance_side === "NO") bn++;
+            else if (v.stance_side === "MIXED") bm++;
+          }
+          if (updates.length > 0) {
+            // Upsert in chunks to avoid huge payloads
+            for (let i = 0; i < updates.length; i += 500) {
+              await sb.from("wallet_beliefs").upsert(updates.slice(i, i + 500),
+                { onConflict: "wallet,onchain_id" });
+            }
+          }
+
+          const total = by + bn;
+          const peoplePct = total > 0 ? (by / total) * 100 : null;
+          const divergence = peoplePct != null && p.moneyYesPct != null
+            ? Math.abs(p.moneyYesPct - peoplePct) : null;
+
+          // Velocity: trades in last 5m
+          const t5m = new Date(Date.now() - 5 * 60_000).toISOString();
+          const { count: velocity } = await sb.from("trades")
+            .select("*", { count: "exact", head: true })
+            .eq("onchain_id", mid).gte("ts", t5m);
+
+          // New believers in last hour: count of "backed" events
+          const t1h = new Date(Date.now() - 3600_000).toISOString();
+          const { count: nb1h } = await sb.from("feed_events")
+            .select("*", { count: "exact", head: true })
+            .eq("onchain_id", mid).eq("type", "backed").gte("occurred_at", t1h);
+
+          await sb.from("market_state").update({
+            believers_yes: by, believers_no: bn, believers_mixed: bm,
+            people_yes_pct: peoplePct, divergence,
+            velocity_5m: velocity ?? 0,
+            new_believers_1h: nb1h ?? 0,
+            updated_at: now.toISOString(),
+          }).eq("onchain_id", mid);
+        }
+
+        return Response.json({ ok: true, markets: marketIds.length, mode });
+      },
+    },
+  },
+});
