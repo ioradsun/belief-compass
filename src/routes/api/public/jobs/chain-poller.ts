@@ -22,11 +22,12 @@ import { applyTrade, emptyRow, type BeliefRow, type Trade } from "@/domain/domai
 // Conservative default; override with PROXY_DEPLOY_BLOCK env if known exactly.
 const DEPLOY_BLOCK = BigInt(process.env.PROXY_DEPLOY_BLOCK ?? "45500000");
 const REORG_DEPTH = 12n;
-// Public Base RPC allows up to 10k blocks per eth_getLogs call.
-const MAX_CHUNK = 9_000n;
+// Public Base RPC allows up to 10k blocks per eth_getLogs call but rate-limits
+// heavily. Keep chunks smaller and sleep between them.
+const MAX_CHUNK = 3_000n;
+const CHUNK_DELAY_MS = 250;
 // Cap per-run scan so a single tick returns well under the pg_net/HTTP timeout.
-// Multiple runs advance last_block until we catch head.
-const MAX_BLOCKS_PER_RUN = 300_000n;
+const MAX_BLOCKS_PER_RUN = 60_000n;
 
 const runId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
