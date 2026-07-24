@@ -33,7 +33,7 @@ export const listFeed = createServerFn({ method: "GET" }).handler(async () => {
       new_believers_1h, velocity_5m,
       markets:onchain_id ( title, category, author_name, author_pfp )
     `)
-    .order("trending_score", { ascending: false, nullsFirst: false })
+    .order("volume_total_usd", { ascending: false, nullsFirst: false })
     .limit(50);
   if (error) return { data: [], error: error.message };
   return { data: data ?? [], error: null };
