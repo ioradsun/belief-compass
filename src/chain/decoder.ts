@@ -58,7 +58,7 @@ export function decodeTradeLog(log: Log): CanonicalTrade | null {
       data: log.data,
       topics: log.topics,
       strict: false,
-    }) as { eventName: string; args: Record<string, unknown> };
+    }) as unknown as { eventName: string; args: Record<string, unknown> };
 
     if (decoded.eventName !== "TokensBought" && decoded.eventName !== "TokensSold") {
       return null;
