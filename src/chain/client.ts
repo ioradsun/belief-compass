@@ -39,6 +39,6 @@ export function getBaseClient() {
   const url = pickUrl();
   return createPublicClient({
     chain: base,
-    transport: http(url, { batch: false, timeout: 20_000, fetchOptions: {}, retryCount: 0, fetch: retryingFetch }),
+    transport: http(url, { batch: false, timeout: 20_000, retryCount: 0, fetchFn: retryingFetch }),
   });
 }
