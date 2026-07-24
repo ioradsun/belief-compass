@@ -116,7 +116,7 @@ describe("Invariant (b): reduce(all) === reduce(a) + reduce(b)", () => {
     buy("NO", 200, 100, "2026-01-20"),
   ];
 
-  it.each([1, 2, 3, 4])("split at %i", (i) => {
+  it.each([1, 2, 3, 4])("split at %i", (i: number) => {
     const full = reduce(trades);
     const partial = reduce(trades.slice(i), reduce(trades.slice(0, i)));
     expect(partial.yes_shares).toBeCloseTo(full.yes_shares);
