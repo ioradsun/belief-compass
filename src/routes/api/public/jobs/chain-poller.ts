@@ -18,9 +18,15 @@ import { applyTrade, emptyRow, type BeliefRow, type Trade } from "@/domain/domai
 
 // Deploy block for the proxy on Base. Backfill from here on first run.
 // Unknown at build time — set conservatively; Job B skips ranges with no logs cheaply.
-const DEPLOY_BLOCK = BigInt(process.env.PROXY_DEPLOY_BLOCK ?? "10000000");
+// Base proxy deploy is around block ~45.8M (18 days of markets before head at build time).
+// Conservative default; override with PROXY_DEPLOY_BLOCK env if known exactly.
+const DEPLOY_BLOCK = BigInt(process.env.PROXY_DEPLOY_BLOCK ?? "45500000");
 const REORG_DEPTH = 12n;
-const MAX_CHUNK = 5_000n;
+// Public Base RPC allows up to 10k blocks per eth_getLogs call.
+const MAX_CHUNK = 9_000n;
+// Cap per-run scan so a single tick returns well under the pg_net/HTTP timeout.
+// Multiple runs advance last_block until we catch head.
+const MAX_BLOCKS_PER_RUN = 300_000n;
 
 const runId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -56,7 +62,8 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
             ? BigInt(leased.last_block) - REORG_DEPTH
             : DEPLOY_BLOCK;
           const fromClamped = from < DEPLOY_BLOCK ? DEPLOY_BLOCK : from;
-          const to = head;
+          const maxTo = fromClamped + MAX_BLOCKS_PER_RUN - 1n;
+          const to = head < maxTo ? head : maxTo;
 
           const trades: CanonicalTrade[] = [];
           for (let start = fromClamped; start <= to; start += MAX_CHUNK) {
