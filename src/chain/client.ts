@@ -2,16 +2,16 @@ import { createPublicClient, http } from "viem";
 import { base } from "viem/chains";
 
 // Public Base RPC fallback. mainnet.base.org throttles historical eth_getLogs
-// heavily; dRPC is currently more reliable for the backfill ranges we scan.
+// heavily, and free Alchemy Base keys cap eth_getLogs to 10 blocks.
 // If BASE_RPC_URL is set to a paid provider (Alchemy paid, QuickNode, etc.),
 // prefer it. BASE_RPC_URL_OVERRIDE trumps both.
-const PUBLIC_RPC = "https://base.drpc.org";
+const PUBLIC_RPC = "https://developer-access-mainnet.base.org";
 
 function pickUrl() {
   if (process.env.BASE_RPC_URL_OVERRIDE) return process.env.BASE_RPC_URL_OVERRIDE;
   const u = process.env.BASE_RPC_URL;
   // Skip Alchemy free-tier keys — 10-block cap makes backfill infeasible.
-  if (u && !/alchemy\.com/i.test(u)) return u;
+  if (u && !/alchemy/i.test(u)) return u;
   return PUBLIC_RPC;
 }
 
