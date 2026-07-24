@@ -4,9 +4,10 @@
  * only jobs writing across all wallets/markets need this.
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export function getServiceSupabase() {
-  return supabaseAdmin;
+export function getServiceSupabase(): SupabaseClient {
+  return supabaseAdmin as unknown as SupabaseClient;
 }
 
 export function assertIngestBearer(req: Request): void {
