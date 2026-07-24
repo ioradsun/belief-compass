@@ -1,10 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { listFeed } from "@/lib/markets.functions";
+import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
+import { listFeed, getIngestStatus } from "@/lib/markets.functions";
 
 const feedQO = queryOptions({
   queryKey: ["feed"],
   queryFn: async () => (await listFeed()),
+});
+
+const statusQO = queryOptions({
+  queryKey: ["ingest-status"],
+  queryFn: async () => (await getIngestStatus()),
+  refetchInterval: 15_000,
 });
 
 export const Route = createFileRoute("/")({
@@ -38,6 +44,103 @@ function fmtUsd(n: number | null | undefined) {
   return `$${v.toFixed(0)}`;
 }
 
+type JobState = "done" | "in-progress" | "pending";
+function Dot({ state }: { state: JobState }) {
+  const color =
+    state === "done" ? "bg-emerald-500"
+    : state === "in-progress" ? "bg-amber-500 animate-pulse"
+    : "bg-muted-foreground/40";
+  return <span className={`inline-block h-2 w-2 rounded-full ${color}`} />;
+}
+
+function StatusPanel() {
+  const { data, isLoading } = useQuery(statusQO);
+  if (isLoading || !data) {
+    return (
+      <div className="rounded-lg border border-border p-4 text-xs text-muted-foreground">
+        Loading ingest status…
+      </div>
+    );
+  }
+
+  const chainPct = data.chain.progressPct ?? 0;
+  const chainState: JobState =
+    data.chain.blocksBehind == null ? "in-progress"
+    : data.chain.blocksBehind < 100 ? "done"
+    : "in-progress";
+  const povState: JobState = data.markets > 0 ? "done" : "pending";
+  const beliefState: JobState = data.marketsWithBelievers > 0 ? "in-progress" : "pending";
+  const matchState: JobState = data.matches > 0 ? "done" : "pending";
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Ingest status
+        </h2>
+        <span className="text-[10px] text-muted-foreground">auto-refresh 15s</span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Job
+          state={povState}
+          title="POV markets"
+          detail={`${data.markets.toLocaleString()} markets imported`}
+        />
+        <Job
+          state={chainState}
+          title="Chain indexer (Base)"
+          detail={
+            data.chain.head
+              ? `block ${data.chain.lastBlock.toLocaleString()} / ${data.chain.head.toLocaleString()} · ${data.chain.blocksBehind?.toLocaleString()} behind`
+              : `block ${data.chain.lastBlock.toLocaleString()}`
+          }
+          progress={chainPct}
+        />
+        <Job
+          state={beliefState}
+          title="Belief rollup"
+          detail={`${data.beliefs.toLocaleString()} beliefs across ${data.marketsWithBelievers} markets · ${data.trades.toLocaleString()} trades`}
+        />
+        <Job
+          state={matchState}
+          title="DNA matcher"
+          detail={
+            data.matches > 0
+              ? `${data.matches.toLocaleString()} match rows cached`
+              : "runs on demand when you open a wallet"
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+function Job({
+  state, title, detail, progress,
+}: { state: JobState; title: string; detail: string; progress?: number }) {
+  return (
+    <div className="rounded-md border border-border bg-background/60 p-3">
+      <div className="flex items-center gap-2">
+        <Dot state={state} />
+        <span className="text-sm font-medium">{title}</span>
+        <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">
+          {state === "done" ? "complete" : state === "in-progress" ? "running" : "pending"}
+        </span>
+      </div>
+      <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
+      {progress != null && (
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full bg-emerald-500 transition-all"
+            style={{ width: `${Math.max(2, progress).toFixed(1)}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Feed() {
   const { data } = useSuspenseQuery(feedQO);
   const rows = data.data ?? [];
@@ -53,14 +156,16 @@ function Feed() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+        <StatusPanel />
+
         {rows.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
             No markets yet. The POV poller runs on a schedule — data will appear once the first cycle completes.
           </div>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="p-3">Market</th>
@@ -102,7 +207,7 @@ function Feed() {
           </div>
         )}
 
-        <p className="mt-6 text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Positions are trade-derived estimates; token transfers are not yet indexed. "Wallets" counts directional believers, not people.
         </p>
       </main>
