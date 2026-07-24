@@ -14,7 +14,374 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      feed_events: {
+        Row: {
+          created_at: string
+          event_key: string
+          id: number
+          occurred_at: string
+          onchain_id: number | null
+          payload: Json | null
+          side: string | null
+          type: string
+          wallet: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_key: string
+          id?: number
+          occurred_at: string
+          onchain_id?: number | null
+          payload?: Json | null
+          side?: string | null
+          type: string
+          wallet?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_key?: string
+          id?: number
+          occurred_at?: string
+          onchain_id?: number | null
+          payload?: Json | null
+          side?: string | null
+          type?: string
+          wallet?: string | null
+        }
+        Relationships: []
+      }
+      ingest_state: {
+        Row: {
+          id: number
+          last_block: number | null
+          lease_expires_at: string | null
+          lease_owner: string | null
+        }
+        Insert: {
+          id?: number
+          last_block?: number | null
+          lease_expires_at?: string | null
+          lease_owner?: string | null
+        }
+        Update: {
+          id?: number
+          last_block?: number | null
+          lease_expires_at?: string | null
+          lease_owner?: string | null
+        }
+        Relationships: []
+      }
+      market_state: {
+        Row: {
+          believers_mixed: number
+          believers_no: number
+          believers_yes: number
+          boost_score: number | null
+          chg_1h: number | null
+          chg_24h: number | null
+          divergence: number | null
+          money_yes_pct: number | null
+          new_believers_1h: number
+          no_price_usd: number | null
+          onchain_id: number
+          people_yes_pct: number | null
+          trending_score: number | null
+          updated_at: string
+          velocity_5m: number
+          volume_total_usd: number | null
+          yes_price_usd: number | null
+        }
+        Insert: {
+          believers_mixed?: number
+          believers_no?: number
+          believers_yes?: number
+          boost_score?: number | null
+          chg_1h?: number | null
+          chg_24h?: number | null
+          divergence?: number | null
+          money_yes_pct?: number | null
+          new_believers_1h?: number
+          no_price_usd?: number | null
+          onchain_id: number
+          people_yes_pct?: number | null
+          trending_score?: number | null
+          updated_at?: string
+          velocity_5m?: number
+          volume_total_usd?: number | null
+          yes_price_usd?: number | null
+        }
+        Update: {
+          believers_mixed?: number
+          believers_no?: number
+          believers_yes?: number
+          boost_score?: number | null
+          chg_1h?: number | null
+          chg_24h?: number | null
+          divergence?: number | null
+          money_yes_pct?: number | null
+          new_believers_1h?: number
+          no_price_usd?: number | null
+          onchain_id?: number
+          people_yes_pct?: number | null
+          trending_score?: number | null
+          updated_at?: string
+          velocity_5m?: number
+          volume_total_usd?: number | null
+          yes_price_usd?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "market_state_onchain_id_fkey"
+            columns: ["onchain_id"]
+            isOneToOne: true
+            referencedRelation: "markets"
+            referencedColumns: ["onchain_id"]
+          },
+        ]
+      }
+      markets: {
+        Row: {
+          agent_opinions: Json | null
+          author_name: string | null
+          author_pfp: string | null
+          author_wallet: string | null
+          category: string | null
+          created_at: string | null
+          first_seen: string
+          onchain_id: number
+          our_metadata: Json | null
+          pov_uuid: string | null
+          source: string
+          title: string | null
+        }
+        Insert: {
+          agent_opinions?: Json | null
+          author_name?: string | null
+          author_pfp?: string | null
+          author_wallet?: string | null
+          category?: string | null
+          created_at?: string | null
+          first_seen?: string
+          onchain_id: number
+          our_metadata?: Json | null
+          pov_uuid?: string | null
+          source?: string
+          title?: string | null
+        }
+        Update: {
+          agent_opinions?: Json | null
+          author_name?: string | null
+          author_pfp?: string | null
+          author_wallet?: string | null
+          category?: string | null
+          created_at?: string | null
+          first_seen?: string
+          onchain_id?: number
+          our_metadata?: Json | null
+          pov_uuid?: string | null
+          source?: string
+          title?: string | null
+        }
+        Relationships: []
+      }
+      price_snapshots: {
+        Row: {
+          captured_at: string
+          money_yes_pct: number | null
+          onchain_id: number
+          yes_price_usd: number | null
+        }
+        Insert: {
+          captured_at?: string
+          money_yes_pct?: number | null
+          onchain_id: number
+          yes_price_usd?: number | null
+        }
+        Update: {
+          captured_at?: string
+          money_yes_pct?: number | null
+          onchain_id?: number
+          yes_price_usd?: number | null
+        }
+        Relationships: []
+      }
+      trades: {
+        Row: {
+          block_hash: string
+          block_number: number
+          direction: string
+          eth_amount: number
+          log_index: number
+          onchain_id: number
+          raw_log: Json | null
+          side: string
+          token_amount: number
+          ts: string
+          tx_hash: string
+          wallet: string
+        }
+        Insert: {
+          block_hash: string
+          block_number: number
+          direction: string
+          eth_amount: number
+          log_index: number
+          onchain_id: number
+          raw_log?: Json | null
+          side: string
+          token_amount: number
+          ts: string
+          tx_hash: string
+          wallet: string
+        }
+        Update: {
+          block_hash?: string
+          block_number?: number
+          direction?: string
+          eth_amount?: number
+          log_index?: number
+          onchain_id?: number
+          raw_log?: Json | null
+          side?: string
+          token_amount?: number
+          ts?: string
+          tx_hash?: string
+          wallet?: string
+        }
+        Relationships: []
+      }
+      user_events: {
+        Row: {
+          dwell_ms: number | null
+          id: number
+          onchain_id: number | null
+          session_id: string | null
+          ts: string
+          type: string
+          wallet: string | null
+        }
+        Insert: {
+          dwell_ms?: number | null
+          id?: number
+          onchain_id?: number | null
+          session_id?: string | null
+          ts?: string
+          type: string
+          wallet?: string | null
+        }
+        Update: {
+          dwell_ms?: number | null
+          id?: number
+          onchain_id?: number | null
+          session_id?: string | null
+          ts?: string
+          type?: string
+          wallet?: string | null
+        }
+        Relationships: []
+      }
+      wallet_beliefs: {
+        Row: {
+          conviction: number
+          days_held: number
+          directional_since: string | null
+          expressed_side: string
+          first_backed_at: string | null
+          last_trade_at: string | null
+          no_cost: number
+          no_shares: number
+          onchain_id: number
+          stance: number | null
+          stance_side: string | null
+          updated_at: string
+          wallet: string
+          yes_cost: number
+          yes_shares: number
+        }
+        Insert: {
+          conviction?: number
+          days_held?: number
+          directional_since?: string | null
+          expressed_side?: string
+          first_backed_at?: string | null
+          last_trade_at?: string | null
+          no_cost?: number
+          no_shares?: number
+          onchain_id: number
+          stance?: number | null
+          stance_side?: string | null
+          updated_at?: string
+          wallet: string
+          yes_cost?: number
+          yes_shares?: number
+        }
+        Update: {
+          conviction?: number
+          days_held?: number
+          directional_since?: string | null
+          expressed_side?: string
+          first_backed_at?: string | null
+          last_trade_at?: string | null
+          no_cost?: number
+          no_shares?: number
+          onchain_id?: number
+          stance?: number | null
+          stance_side?: string | null
+          updated_at?: string
+          wallet?: string
+          yes_cost?: number
+          yes_shares?: number
+        }
+        Relationships: []
+      }
+      wallet_denylist: {
+        Row: {
+          added_at: string
+          reason: string | null
+          wallet: string
+        }
+        Insert: {
+          added_at?: string
+          reason?: string | null
+          wallet: string
+        }
+        Update: {
+          added_at?: string
+          reason?: string | null
+          wallet?: string
+        }
+        Relationships: []
+      }
+      wallet_matches: {
+        Row: {
+          agreements: number
+          calculated_at: string
+          disagreements: number
+          match_score: number
+          matched_wallet: string
+          shared_markets: number
+          wallet: string
+        }
+        Insert: {
+          agreements: number
+          calculated_at?: string
+          disagreements: number
+          match_score: number
+          matched_wallet: string
+          shared_markets: number
+          wallet: string
+        }
+        Update: {
+          agreements?: number
+          calculated_at?: string
+          disagreements?: number
+          match_score?: number
+          matched_wallet?: string
+          shared_markets?: number
+          wallet?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
