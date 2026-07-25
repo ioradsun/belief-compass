@@ -66,7 +66,7 @@ function StatusPanel() {
   const chainPct = data.chain.progressPct ?? 0;
   const chainState: JobState =
     data.chain.blocksBehind == null ? "in-progress"
-    : data.chain.blocksBehind < 100 ? "done"
+    : data.chain.phase === "live" ? "done"
     : "in-progress";
   const povState: JobState = data.markets > 0 ? "done" : "pending";
   const beliefState: JobState = data.marketsWithBelievers > 0 ? "in-progress" : "pending";
@@ -89,10 +89,10 @@ function StatusPanel() {
         />
         <Job
           state={chainState}
-          title="Chain indexer (Base)"
+          title={data.chain.phase === "live" ? "Chain indexer (live)" : "Chain indexer (backfill)"}
           detail={
             data.chain.head
-              ? `block ${data.chain.lastBlock.toLocaleString()} / ${data.chain.head.toLocaleString()} · ${data.chain.blocksBehind?.toLocaleString()} behind`
+              ? `${data.chain.leaseActive ? "scanning now" : "ready for next tick"} · block ${data.chain.lastBlock.toLocaleString()} / ${data.chain.head.toLocaleString()} · ${data.chain.blocksBehind?.toLocaleString()} behind`
               : `block ${data.chain.lastBlock.toLocaleString()}`
           }
           progress={chainPct}
