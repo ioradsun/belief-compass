@@ -10,13 +10,12 @@
  *   1. Relationship (alignment ↔ opposition) → purple ↔ grey ↔ red RING only.
  *   2. Profit / loss → green ↔ red, GREEN RESERVED FOR PROFIT (P&L, tier 2 —
  *      not on the card yet), always paired with a +/- sign.
- *   3. Position side (YES/NO) → OPTION B: YES = blue, NO = grey. Green/red are
- *      NOT used for sides, so nothing fights P&L for green.
- * Price *momentum* is not profit, so it renders as a neutral arrow + signed %
- * (no green/red) — that keeps green exclusively for realized gains and avoids
- * clashing with the ring's opposition-red on the same card.
+ *   3. Position side (YES/NO) → OPTION B: when ever tokenized, YES = blue,
+ *      NO = grey — never green/red. Today sides appear only inside prose, so no
+ *      side color competes with P&L's green.
+ * The card reads as a STORY (hook → belief → story → turn), composed by the
+ * feed copy engine — not a recitation of fields.
  */
-import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listConvictionFeed } from "@/lib/feed.functions";
 import {
@@ -26,7 +25,7 @@ import {
   relationshipStrength,
   isOpposed,
 } from "@/lib/conviction-feed";
-import type { ActorIdentity, AvatarRef, FeedCard, Side } from "@/lib/conviction-feed";
+import type { ActorIdentity, AvatarRef, FeedCard } from "@/lib/conviction-feed";
 
 // Badge tint per role (the label chip only — the ring hue is computed from the
 // match score on the relationship axis). People/Opp sit on the purple↔red
@@ -36,12 +35,6 @@ const BADGE_COLOR: Record<string, string> = {
   opp: "#b91c1c", // deep red
   creator: "#0891b2", // cyan — authorship
   market: "#d97706", // amber — network
-};
-
-// Option B position-side colors — never green/red (that's P&L's).
-const SIDE_COLOR: Record<Side, string> = {
-  YES: "#2563eb", // blue
-  NO: "#6b7280", // grey
 };
 
 /** A pfp when we have one, otherwise a stable colored circle with initials. */
@@ -211,14 +204,12 @@ function IdentityRow({
     );
   }
 
-  // Individual: avatar (in conviction-match ring for People/Opp) + badge + name.
+  // Individual: avatar (in conviction-match ring for People/Opp) + badge.
+  // The name is carried by the story hook, so it isn't repeated here.
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground" title={title}>
       <RingAvatar actor={actor} />
       <Badge color={color} label={actor.badge} />
-      {(actor.displayName ?? actor.alias) && (
-        <span className="font-medium text-foreground">{actor.displayName ?? actor.alias}</span>
-      )}
     </div>
   );
 }
@@ -235,118 +226,86 @@ function timeAgo(iso: string): string {
   return `${d}d ago`;
 }
 
-/** The colored side token — Option B (YES = blue, NO = grey), never green/red. */
-function SideToken({ side }: { side: Side }) {
-  return (
-    <span style={{ color: SIDE_COLOR[side] }} className="font-medium">
-      {side}
-    </span>
-  );
-}
+const actionBtn =
+  "inline-flex items-center rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted";
 
-/**
- * Price + one context fact. Leads with the % move when there is one; otherwise
- * shows the current market odds (money-weighted YES%) so the "price" is never a
- * blank line. Momentum renders as a neutral arrow + signed % — NOT green/red,
- * which stays reserved for realized P&L. A muted meta row carries conviction and
- * the believer split.
- */
-function PriceContext({ card }: { card: FeedCard }) {
-  const hasMove = card.priceSide && card.priceChgPct != null;
-  const up = (card.priceChgPct ?? 0) >= 0;
+/** The single natural next step the story invites — never a forced trade. */
+function CardAction({ card }: { card: FeedCard }) {
+  const kind = card.copy?.action.kind ?? "open";
+  const market = `/market/${card.onchain_id}`;
 
-  let priceEl: ReactNode = null;
-  if (hasMove) {
-    priceEl = (
-      <>
-        <SideToken side={card.priceSide!} />{" "}
-        <span className="text-foreground">
-          {up ? "▲" : "▼"} {up ? "+" : ""}
-          {card.priceChgPct!.toFixed(0)}%
-        </span>
-      </>
-    );
-  } else if (card.impliedYesPct != null) {
-    priceEl = (
-      <>
-        <span className="text-foreground">{Math.round(card.impliedYesPct)}%</span>{" "}
-        <SideToken side="YES" />
-        <span className="text-muted-foreground"> odds</span>
-      </>
+  if (kind === "back_sides") {
+    // Live tension → let the reader take a side. (Backing happens on the market
+    // page until inline wallet-connect lands, so both route there.)
+    return (
+      <div className="mt-3 flex gap-2">
+        <a href={`${market}?side=YES`} className={actionBtn}>
+          Back YES
+        </a>
+        <a href={`${market}?side=NO`} className={actionBtn}>
+          Back NO
+        </a>
+      </div>
     );
   }
-
-  const meta: string[] = [];
-  if (card.convictionPct != null) meta.push(`${card.convictionPct}% conviction`);
-  if (card.believersYes != null && card.believersNo != null) {
-    meta.push(`${card.believersYes} YES · ${card.believersNo} NO`);
+  if (kind === "convictions" && card.actorWallet) {
+    return (
+      <div className="mt-3">
+        <a href={`/wallet/${card.actorWallet}`} className={actionBtn}>
+          See Their Convictions
+        </a>
+      </div>
+    );
   }
-
-  if (!priceEl && !card.context && meta.length === 0) return null;
+  const label = card.copy?.action.label ?? "Open Market";
   return (
-    <div className="mt-1 space-y-0.5 text-xs">
-      {(priceEl || card.context) && (
-        <div className="tabular-nums">
-          {priceEl}
-          {priceEl && card.context && <span className="text-muted-foreground"> · </span>}
-          {card.context && <span className="text-muted-foreground">{card.context}</span>}
-        </div>
-      )}
-      {meta.length > 0 && (
-        <div className="text-muted-foreground tabular-nums">{meta.join(" · ")}</div>
-      )}
+    <div className="mt-3">
+      <a href={market} className={actionBtn}>
+        {kind === "convictions" ? "Open Market" : label}
+      </a>
     </div>
   );
 }
 
+/**
+ * A card reads as a small story, not a field dump: an identity glance, then
+ * HOOK → BELIEF → STORY → (TURN only when tension is real) → one action.
+ */
 function ConvictionCard({ card }: { card: FeedCard }) {
+  const copy = card.copy;
   return (
     <div className="rounded-lg border border-border bg-background/60 p-4 transition-colors hover:bg-muted/30">
-      {/* wealth — the visceral hook, loudest — with when it happened */}
-      <div className="flex items-baseline justify-between gap-2">
-        {card.wealth ? (
-          <div className="text-lg font-semibold tracking-tight">{card.wealth.text}</div>
+      {/* identity glance (avatar + ring/stack + role badge) and when it happened */}
+      <div className="flex items-start justify-between gap-2">
+        {card.actor ? (
+          <IdentityRow actor={card.actor} crowd={card.crowd} crowdTotal={card.crowdTotal} />
         ) : (
-          <div className="text-sm font-medium text-muted-foreground">No money in yet</div>
+          <span />
         )}
         <time className="shrink-0 text-[11px] text-muted-foreground" dateTime={card.occurredAt}>
           {timeAgo(card.occurredAt)}
         </time>
       </div>
 
-      {/* identity — quiet sub-line; dropped entirely when unattributed */}
-      {card.actor && (
-        <div className="mt-1.5">
-          <IdentityRow actor={card.actor} crowd={card.crowd} crowdTotal={card.crowdTotal} />
-        </div>
+      {/* HOOK — the single most interesting truthful fact */}
+      <p className="mt-2 text-[15px] font-semibold leading-snug tracking-tight">
+        {copy?.hook ?? card.story}
+      </p>
+
+      {/* THE BELIEF — the market question, given room to breathe */}
+      <p className="mt-1.5 text-[15px] leading-snug text-foreground">
+        &ldquo;{copy?.belief ?? card.marketTitle}&rdquo;
+      </p>
+
+      {/* THE STORY — who acted, what changed */}
+      {copy?.story && <p className="mt-1.5 text-sm text-muted-foreground">{copy.story}</p>}
+
+      {/* THE TURN — shown only when tension is real (material divergence) */}
+      {copy?.turn && (
+        <p className="mt-1.5 text-sm font-medium text-amber-600 dark:text-amber-500">{copy.turn}</p>
       )}
 
-      {/* story — the one sentence */}
-      <p className="mt-1.5 text-sm text-foreground">{card.story}</p>
-      <p className="text-xs text-muted-foreground">{card.marketTitle}</p>
-
-      {/* who else is in — the crowd behind an individual actor */}
-      {card.actor?.scale === "individual" && card.crowdTotal >= 1 && card.crowd.length > 0 && (
-        <div className="mt-1.5 flex items-center gap-1.5">
-          <AvatarStack refs={card.crowd} total={card.crowdTotal} max={4} size={20} />
-          <span className="text-[11px] text-muted-foreground">
-            {card.crowdTotal === 1 ? "1 other believer" : `${card.crowdTotal} others in`}
-          </span>
-        </div>
-      )}
-
-      {/* price + one context fact */}
-      <PriceContext card={card} />
-
-      {/* exactly one action */}
-      <div className="mt-3">
-        <a
-          href={`/market/${card.onchain_id}`}
-          className="inline-flex items-center rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
-        >
-          Open Market
-        </a>
-      </div>
+      <CardAction card={card} />
     </div>
   );
 }
@@ -364,7 +323,9 @@ export function ConvictionFeed({ wallet }: { wallet?: string }) {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Conviction signal feed
         </h2>
-        <span className="text-[10px] text-muted-foreground">who changed their mind — and why</span>
+        <span className="text-[10px] text-muted-foreground">
+          beliefs worth a look — and who&apos;s inside them
+        </span>
       </div>
 
       {wallet && data && !data.hasPeople && (

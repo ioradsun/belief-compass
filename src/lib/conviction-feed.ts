@@ -16,6 +16,8 @@
 // Types
 // ---------------------------------------------------------------------------
 
+import type { CardCopy } from "./feed-copy";
+
 export type ActorScale = "individual" | "group" | "market" | "none";
 export type ActorRole =
   | "people"
@@ -73,6 +75,8 @@ export interface FeedCard {
   believersNo: number | null;
   crowd: AvatarRef[]; // backer avatars for the stack (capped); empty for pure individual cards
   crowdTotal: number; // total backers, so the stack can render a "+N" overflow
+  copy: CardCopy | null; // composed story (hook/belief/story/turn/action) — set for shown cards
+  actorWallet: string | null; // primary actor's wallet, for the "See Their Convictions" deep-link
   action: FeedAction;
   signalType: string; // internal only — ranking + analytics, never rendered
   score: number;
