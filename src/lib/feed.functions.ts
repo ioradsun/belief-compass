@@ -28,6 +28,7 @@ import {
   aliasFor,
   rankScore,
 } from "@/lib/conviction-feed";
+import { composeCard, cleanName, type CopyInput, type CopyBehavior } from "@/lib/feed-copy";
 import { fetchPovUser } from "@/lib/pov.server";
 
 function publicClient() {
@@ -75,6 +76,7 @@ type MarketState = {
   yes_price_usd: number | null;
   no_price_usd: number | null;
   money_yes_pct: number | null;
+  people_yes_pct: number | null;
   chg_1h: number | null;
   chg_24h: number | null;
   believers_yes: number | null;
@@ -141,7 +143,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       sb
         .from("market_state")
         .select(
-          "onchain_id, yes_price_usd, no_price_usd, money_yes_pct, chg_1h, chg_24h, believers_yes, believers_no, new_believers_1h",
+          "onchain_id, yes_price_usd, no_price_usd, money_yes_pct, people_yes_pct, chg_1h, chg_24h, believers_yes, believers_no, new_believers_1h",
         )
         .in("onchain_id", marketIds),
       sb
@@ -246,6 +248,9 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
     // Per-card scratch for the profile-enrichment pass: which wallet is the
     // primary actor, and who the backers are (for the avatar stack).
     const cardWallets = new Map<string, { actorWallet: string | null; backers: string[] }>();
+    // Structured facts the copy engine composes into a story once the actor's
+    // clean name is resolved (in the enrichment pass). actorName filled there.
+    const cardFacts = new Map<string, Omit<CopyInput, "actorName">>();
 
     for (const [id, agg] of aggById) {
       const ms = stateById.get(id);
@@ -274,6 +279,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       const newBelievers =
         ms?.new_believers_1h && ms.new_believers_1h > 0 ? ms.new_believers_1h : agg.backed.size;
       const impliedYesPct = ms?.money_yes_pct ?? null;
+      const peopleYesPct = ms?.people_yes_pct ?? null;
       const believersYes = ms?.believers_yes ?? null;
       const believersNo = ms?.believers_no ?? null;
       const convictionOf = (wallet: string | null | undefined): number | null => {
@@ -328,6 +334,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           believersNo,
           crowd: [],
           crowdTotal: agg.backed.size,
+          copy: null,
+          actorWallet: null,
           action: "open",
           signalType: `individual_${role}_${reducing ? "reduce" : "commit"}`,
           score: rankScore({
@@ -339,6 +347,23 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           }),
           occurredAt: agg.latest,
         };
+        const behavior: CopyBehavior = reducing ? "reduce" : isNew ? "joined" : "increase";
+        cardFacts.set(individual.id, {
+          behavior,
+          actorScale: "individual",
+          actorRole: role,
+          belief: title,
+          side: acted.side,
+          capitalCommitted: !reducing && usd > 0 ? usd : null,
+          capitalWithdrawn: reducing && usd > 0 ? usd : null,
+          backersTotal: agg.backed.size,
+          believersYes,
+          believersNo,
+          priceFell: chg != null && chg < 0,
+          moneyYesPct: impliedYesPct,
+          peopleYesPct,
+          isViewerHolding: false,
+        });
         break; // one individual card per market is plenty
       }
 
@@ -365,6 +390,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           believersNo,
           crowd: [],
           crowdTotal: agg.backed.size,
+          copy: null,
+          actorWallet: null,
           action: "open",
           signalType: "creator_started",
           score: rankScore({
@@ -379,6 +406,22 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           }),
           occurredAt: meta.created_at ?? agg.latest,
         };
+        cardFacts.set(creator.id, {
+          behavior: "born",
+          actorScale: "individual",
+          actorRole: "creator",
+          belief: title,
+          side: null,
+          capitalCommitted: null,
+          capitalWithdrawn: null,
+          backersTotal: agg.backed.size,
+          believersYes,
+          believersNo,
+          priceFell: false,
+          moneyYesPct: impliedYesPct,
+          peopleYesPct,
+          isViewerHolding: false,
+        });
       }
 
       // --- (c) Network / crowd card: always available, weakest attribution. ---
@@ -412,6 +455,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         believersNo,
         crowd: [],
         crowdTotal: agg.backed.size,
+        copy: null,
+        actorWallet: null,
         action: "open",
         signalType: wealth ? "market_flow" : "market_unattributed",
         score: rankScore({
@@ -424,6 +469,22 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         }),
         occurredAt: agg.latest,
       };
+      cardFacts.set(network.id, {
+        behavior: wealth ? "flow" : "unattributed",
+        actorScale: "market",
+        actorRole: "market",
+        belief: title,
+        side: storySide,
+        capitalCommitted: top.dir === "in" && top.usd > 0 ? top.usd : null,
+        capitalWithdrawn: top.dir === "out" && top.usd > 0 ? top.usd : null,
+        backersTotal: agg.backed.size,
+        believersYes,
+        believersNo,
+        priceFell: chg != null && chg < 0,
+        moneyYesPct: impliedYesPct,
+        peopleYesPct,
+        isViewerHolding: false,
+      });
 
       // Prefer the most attributed story per market: individual > creator > network.
       const chosen = individual ?? creator ?? network;
@@ -464,6 +525,14 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       const backers = (cw?.backers ?? []).filter((w) => w.toLowerCase() !== actorLc);
       c.crowd = backers.slice(0, CROWD_MAX).map((w) => avatarRef(w, profiles.get(w.toLowerCase())));
       c.crowdTotal = backers.length;
+
+      // Compose the story copy now that the actor's clean name is resolved.
+      c.actorWallet = cw?.actorWallet ?? null;
+      const facts = cardFacts.get(c.id);
+      if (facts) {
+        const actorName = cleanName(c.actor?.displayName ?? c.actor?.alias ?? null);
+        c.copy = composeCard({ ...facts, actorName });
+      }
     }
 
     return { data: shown, viewer, hasPeople, error: null };
