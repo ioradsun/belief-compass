@@ -19,6 +19,7 @@
 import { type ReactNode, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useAccount } from "wagmi";
 import { listConvictionFeed } from "@/lib/feed.functions";
 import {
   initialsFor,
@@ -559,33 +560,45 @@ const WALLET_RE = /^0x[0-9a-fA-F]{40}$/;
 /**
  * Viewer control. The relationship ring (People/Opp alignment) is viewer-
  * relative, so without a viewer the feed runs at network/creator scale and
- * shows no rings. There's no wallet-connect yet, so rather than a fake "Connect"
- * button this offers an honest, functional way in: view the feed AS any wallet
- * (sets ?wallet=), which lights up People/Opp and their rings.
+ * shows no rings. A connected wallet (RainbowKit) drives the viewer automatically;
+ * ?wallet= is an explicit override you can also paste to view AS any wallet.
  */
-function ViewerControl({ wallet }: { wallet?: string }) {
+function short(addr: string) {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+function ViewerControl({ override, connected }: { override?: string; connected?: string }) {
   const navigate = useNavigate();
   const [val, setVal] = useState("");
   const setViewer = (w: string | undefined) =>
     navigate({ to: "/", search: (prev: Record<string, unknown>) => ({ ...prev, wallet: w }) });
 
-  if (wallet) {
+  // Explicit ?wallet= override — takes precedence over the connected wallet.
+  if (override) {
     return (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
         <span>
-          Viewing as{" "}
-          <span className="font-medium text-foreground">
-            {wallet.slice(0, 6)}…{wallet.slice(-4)}
-          </span>{" "}
-          — your People &amp; Opp are lit up.
+          Viewing as <span className="font-medium text-foreground">{short(override)}</span> — your
+          People &amp; Opp are lit up.
         </span>
         <button
           type="button"
           onClick={() => setViewer(undefined)}
           className="underline hover:text-foreground"
         >
-          clear
+          {connected ? "back to my wallet" : "clear"}
         </button>
+      </div>
+    );
+  }
+
+  // Connected wallet drives the viewer — no paste needed.
+  if (connected) {
+    return (
+      <div className="text-[11px] text-muted-foreground">
+        Viewing as your wallet{" "}
+        <span className="font-medium text-foreground">{short(connected)}</span> — your People &amp;
+        Opp are lit up.
       </div>
     );
   }
@@ -602,7 +615,7 @@ function ViewerControl({ wallet }: { wallet?: string }) {
       <input
         value={val}
         onChange={(e) => setVal(e.target.value)}
-        placeholder="Paste a wallet to see who thinks like you"
+        placeholder="Connect your wallet, or paste one, to see who thinks like you"
         spellCheck={false}
         className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-ring"
       />
@@ -618,9 +631,14 @@ function ViewerControl({ wallet }: { wallet?: string }) {
 }
 
 export function ConvictionFeed({ wallet }: { wallet?: string }) {
+  // The connected wallet drives the viewer automatically; ?wallet= overrides it.
+  const { address } = useAccount();
+  const connected = address ? address.toLowerCase() : undefined;
+  const viewer = wallet ?? connected;
+
   const { data, isLoading } = useQuery({
-    queryKey: ["conviction-feed", wallet ?? null],
-    queryFn: () => listConvictionFeed({ data: wallet ? { wallet } : {} }),
+    queryKey: ["conviction-feed", viewer ?? null],
+    queryFn: () => listConvictionFeed({ data: viewer ? { wallet: viewer } : {} }),
     refetchInterval: 30_000,
   });
 
@@ -635,9 +653,9 @@ export function ConvictionFeed({ wallet }: { wallet?: string }) {
         </span>
       </div>
 
-      <ViewerControl wallet={wallet} />
+      <ViewerControl override={wallet} connected={connected} />
 
-      {wallet && data && !data.hasPeople && (
+      {viewer && data && !data.hasPeople && (
         <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
           No People or Opp for this wallet yet — it needs a few shared markets. Showing the market
           at large.
