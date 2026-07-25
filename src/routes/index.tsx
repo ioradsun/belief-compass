@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { listFeed, getIngestStatus } from "@/lib/markets.functions";
 import { ConvictionFeed } from "@/components/ConvictionFeed";
@@ -69,6 +70,7 @@ function Dot({ state }: { state: JobState }) {
 
 function StatusPanel() {
   const { data, isLoading } = useQuery(statusQO);
+  const [expanded, setExpanded] = useState(false);
   if (isLoading || !data) {
     return (
       <div className="rounded-lg border border-border p-4 text-xs text-muted-foreground">
@@ -78,15 +80,39 @@ function StatusPanel() {
   }
 
   const chainPct = data.chain.progressPct ?? 0;
+  const chainLive = data.chain.phase === "live";
   const chainState: JobState =
-    data.chain.blocksBehind == null
-      ? "in-progress"
-      : data.chain.phase === "live"
-        ? "done"
-        : "in-progress";
+    data.chain.blocksBehind == null ? "in-progress" : chainLive ? "done" : "in-progress";
   const povState: JobState = data.markets > 0 ? "done" : "pending";
-  const beliefState: JobState = data.marketsWithBelievers > 0 ? "in-progress" : "pending";
-  const matchState: JobState = data.matches > 0 ? "done" : "pending";
+  // Belief rollup is "done" once the chain is live AND beliefs have been folded.
+  const beliefState: JobState =
+    data.beliefs > 0 && chainLive ? "done" : data.beliefs > 0 ? "in-progress" : "pending";
+  // DNA matcher is on-demand — ready once the pipeline is live.
+  const matchState: JobState =
+    data.matches > 0 || (chainLive && data.beliefs > 0) ? "done" : "pending";
+
+  const allDone =
+    povState === "done" && chainState === "done" && beliefState === "done" && matchState === "done";
+
+  if (allDone && !expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="flex w-full items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-2.5 text-left transition-colors hover:bg-emerald-500/10"
+      >
+        <div className="flex items-center gap-2">
+          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="text-sm font-medium">All systems live</span>
+          <span className="hidden text-xs text-muted-foreground sm:inline">
+            {data.markets.toLocaleString()} markets · {data.trades.toLocaleString()} trades ·{" "}
+            {data.beliefs.toLocaleString()} beliefs
+          </span>
+        </div>
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">details</span>
+      </button>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-4">
@@ -94,7 +120,18 @@ function StatusPanel() {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Ingest status
         </h2>
-        <span className="text-[10px] text-muted-foreground">auto-refresh 15s</span>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-muted-foreground">auto-refresh 15s</span>
+          {allDone && (
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+            >
+              collapse
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -105,13 +142,13 @@ function StatusPanel() {
         />
         <Job
           state={chainState}
-          title={data.chain.phase === "live" ? "Chain indexer (live)" : "Chain indexer (backfill)"}
+          title={chainLive ? "Chain indexer (live)" : "Chain indexer (backfill)"}
           detail={
             data.chain.head
               ? `${data.chain.leaseActive ? "scanning now" : "ready for next tick"} · block ${data.chain.lastBlock.toLocaleString()} / ${data.chain.head.toLocaleString()} · ${data.chain.blocksBehind?.toLocaleString()} behind`
               : `block ${data.chain.lastBlock.toLocaleString()}`
           }
-          progress={chainPct}
+          progress={chainLive ? undefined : chainPct}
         />
         <Job
           state={beliefState}
@@ -124,7 +161,7 @@ function StatusPanel() {
           detail={
             data.matches > 0
               ? `${data.matches.toLocaleString()} match rows cached`
-              : "runs on demand when you open a wallet"
+              : "ready — computes on demand when you open a wallet"
           }
         />
       </div>
