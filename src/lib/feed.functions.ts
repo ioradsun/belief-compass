@@ -30,6 +30,7 @@ import {
 } from "@/lib/conviction-feed";
 import { composeCard, cleanName, type CopyInput, type CopyBehavior } from "@/lib/feed-copy";
 import { sequenceFeed } from "@/lib/feed-sequence";
+import { buildPriceBlock, type DailyPoint } from "@/lib/feed-price";
 import { fetchPovUser } from "@/lib/pov.server";
 
 function publicClient() {
@@ -340,6 +341,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           believersNo,
           crowd: [],
           crowdTotal: agg.backed.size,
+          price: null,
           copy: null,
           actorWallet: null,
           action: "open",
@@ -399,6 +401,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           believersNo,
           crowd: [],
           crowdTotal: agg.backed.size,
+          price: null,
           copy: null,
           actorWallet: null,
           action: "open",
@@ -467,6 +470,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         believersNo,
         crowd: [],
         crowdTotal: agg.backed.size,
+        price: null,
         copy: null,
         actorWallet: null,
         action: "open",
@@ -549,7 +553,23 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       }
     }
 
-    // 7. Composition after ranking: order the cards for narrative rhythm.
+    // 7. Ambient price context — daily-bucketed history for the shown markets.
+    // Truthful window: whatever has actually accrued in price_snapshots.
+    const shownIds = [...new Set(shown.map((c) => c.onchain_id))];
+    const dailyByMarket = new Map<number, DailyPoint[]>();
+    if (shownIds.length > 0) {
+      const { data: rows } = await sb.rpc("price_series_daily", { p_ids: shownIds, p_days: 60 });
+      for (const r of (rows ?? []) as { onchain_id: number; bucket: string; pct: number }[]) {
+        const arr = dailyByMarket.get(r.onchain_id) ?? [];
+        arr.push({ bucket: r.bucket, pct: Number(r.pct) });
+        dailyByMarket.set(r.onchain_id, arr);
+      }
+    }
+    for (const c of shown) {
+      c.price = buildPriceBlock(dailyByMarket.get(c.onchain_id) ?? [], c.impliedYesPct);
+    }
+
+    // 8. Composition after ranking: order the cards for narrative rhythm.
     const ordered = sequenceFeed(shown);
     return { data: ordered, viewer, hasPeople, error: null };
   });

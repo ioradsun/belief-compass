@@ -28,6 +28,7 @@ import {
 } from "@/lib/conviction-feed";
 import type { ActorIdentity, AvatarRef, FeedCard } from "@/lib/conviction-feed";
 import type { CardFormat } from "@/lib/feed-copy";
+import { MIN_SPARK_POINTS } from "@/lib/feed-price";
 
 // Badge tint per role (the label chip only — the ring hue is computed from the
 // match score on the relationship axis). People/Opp sit on the purple↔red
@@ -272,6 +273,76 @@ function CardAction({ card }: { card: FeedCard }) {
 function actorName(card: FeedCard): string | null {
   return card.actor?.displayName ?? card.actor?.alias ?? null;
 }
+
+/** Tiny 2-month trajectory. Neutral stroke (momentum ≠ P&L) + an endpoint dot
+ *  as the non-color trend cue for colorblind readers. */
+function Sparkline({ values }: { values: number[] }) {
+  const w = 60;
+  const h = 16;
+  const pad = 2;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = pad + (i / (values.length - 1)) * (w - 2 * pad);
+    const y = pad + (1 - (v - min) / range) * (h - 2 * pad);
+    return [x, y] as const;
+  });
+  const d = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
+  const last = pts[pts.length - 1];
+  return (
+    <svg width={w} height={h} className="shrink-0" aria-hidden>
+      <path
+        d={d}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        className="text-muted-foreground"
+      />
+      <circle cx={last[0]} cy={last[1]} r="1.6" className="fill-foreground" />
+    </svg>
+  );
+}
+
+/**
+ * Ambient market context: implied belief · 24h pulse · trajectory. This is where
+ * the MARKET stands, never what the card's event did — hence its own separated
+ * row. Dedup: a scoreboard hook already carries the 24h move; a tension card's
+ * split already carries the implied %.
+ */
+function PriceRow({ card, format }: { card: FeedCard; format: CardFormat }) {
+  const p = card.price;
+  if (!p) return null;
+  const showImplied = format !== "tension" && p.impliedPct != null;
+  const show24h = format !== "scoreboard" && p.chg24h != null;
+  const showSpark = p.series.length >= MIN_SPARK_POINTS;
+  if (!showImplied && !show24h && !showSpark) return null;
+
+  const up = (p.chg24h ?? 0) >= 0;
+  return (
+    <div className="mt-2 flex items-center gap-3 border-t border-border/50 pt-2 text-xs text-muted-foreground">
+      {showImplied && (
+        <span className="tabular-nums">
+          YES <span className="font-medium text-foreground">{p.impliedPct}%</span>
+        </span>
+      )}
+      {show24h && (
+        <span className="tabular-nums" title={`24h change in implied probability`}>
+          {up ? "▲" : "▼"} {up ? "+" : "−"}
+          {Math.abs(p.chg24h!)}% 24h
+        </span>
+      )}
+      {showSpark && (
+        <span className="flex items-center gap-1.5">
+          <Sparkline values={p.series} />
+          <span className="text-[10px] text-muted-foreground/70">{p.windowLabel}</span>
+        </span>
+      )}
+    </div>
+  );
+}
 function Belief({ text, className = "" }: { text: string; className?: string }) {
   return <p className={`leading-snug text-foreground ${className}`}>&ldquo;{text}&rdquo;</p>;
 }
@@ -442,6 +513,7 @@ function ConvictionCard({ card }: { card: FeedCard }) {
         {timeAgo(card.occurredAt)}
       </time>
       <div className="pr-12">{body}</div>
+      <PriceRow card={card} format={format} />
       <CardAction card={card} />
     </div>
   );

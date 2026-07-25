@@ -18,6 +18,20 @@
 
 import type { CardCopy } from "./feed-copy";
 
+/**
+ * Ambient market context shown on every card — where the MARKET stands, never
+ * what the card's event did. Implied probability (money-weighted YES%), the 24h
+ * pulse, and a trajectory whose window is labeled truthfully to whatever history
+ * has actually accrued.
+ */
+export interface PriceBlock {
+  impliedPct: number | null; // current money-weighted YES probability, 0..100
+  chg24h: number | null; // signed change in implied % over ~24h
+  series: number[]; // downsampled implied % over the window, oldest → newest
+  windowDays: number; // actual span of the series (may be < 60)
+  windowLabel: string; // truthful label: "2 months" / "3 weeks" / "5 days"
+}
+
 export type ActorScale = "individual" | "group" | "market" | "none";
 export type ActorRole =
   | "people"
@@ -76,6 +90,7 @@ export interface FeedCard {
   believersNo: number | null;
   crowd: AvatarRef[]; // backer avatars for the stack (capped); empty for pure individual cards
   crowdTotal: number; // total backers, so the stack can render a "+N" overflow
+  price: PriceBlock | null; // ambient market context (implied % / 24h / sparkline)
   copy: CardCopy | null; // composed story (hook/belief/story/turn/action) — set for shown cards
   actorWallet: string | null; // primary actor's wallet, for the "See Their Convictions" deep-link
   action: FeedAction;
