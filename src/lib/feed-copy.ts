@@ -34,6 +34,23 @@ export type CopyBehavior =
 
 export type ActionKind = "back_sides" | "open" | "review" | "convictions";
 
+/**
+ * Distinct visual story forms, so the timeline changes shape instead of stacking
+ * identical cards. Each renders differently; the sequencer (feed-sequence.ts)
+ * uses these + intensity to pace the feed like film editing.
+ */
+export type CardFormat =
+  | "birth" // a belief is planted — big question, minimal copy
+  | "character" // a recognizable person moved — lead with them
+  | "crowd" // faces dominate — a group arriving or splitting
+  | "scoreboard" // a meaningful market move — big number
+  | "tension" // split-screen money vs people
+  | "rare" // your echo and your opposite agree — used sparingly
+  | "quiet"; // a breather — persistence, low activity
+
+// A move must swing at least this much to earn a scoreboard.
+export const SCOREBOARD_MOVE_PCT = 20;
+
 export interface CopyInput {
   behavior: CopyBehavior;
   actorName: string | null; // already resolved to a clean name, or null at network scale
@@ -47,8 +64,10 @@ export interface CopyInput {
   believersYes: number | null;
   believersNo: number | null;
   priceFell: boolean; // did the price fall before this act? (for "added after it fell")
+  priceChgPct: number | null; // the market's headline move, for the scoreboard
   moneyYesPct: number | null; // money-weighted YES%
   peopleYesPct: number | null; // head-count YES%
+  convergence: boolean; // People AND Opp landed on the same side (rare)
   isViewerHolding: boolean; // the viewer owns this position → Review
 }
 
@@ -58,6 +77,8 @@ export interface CardCopy {
   story: string;
   turn: string | null;
   action: { kind: ActionKind; label: string };
+  format: CardFormat; // which visual shape to render
+  intensity: number; // 0 (quiet breather) .. 2 (high drama) — drives pacing
 }
 
 /**
@@ -87,6 +108,31 @@ function divergenceTurn(moneyYes: number, peopleYes: number): string {
   const py = Math.round(peopleYes);
   const pn = 100 - py;
   return `The money's ${Math.round(moneyYes)}% YES. The people are split ${py}–${pn}.`;
+}
+
+/** The natural visual shape for a signal, before the sequencer varies the order. */
+function pickFormat(i: CopyInput, divergent: boolean): { format: CardFormat; intensity: number } {
+  const bigMove = i.priceChgPct != null && Math.abs(i.priceChgPct) >= SCOREBOARD_MOVE_PCT;
+  if (i.convergence) return { format: "rare", intensity: 2 }; // rarest: both poles agree
+  if (divergent) return { format: "tension", intensity: 2 };
+  switch (i.behavior) {
+    case "born":
+      return { format: "birth", intensity: 1 };
+    case "reduce":
+      return { format: "character", intensity: 2 }; // backing away is a turn
+    case "joined":
+    case "increase":
+      if (i.actorRole === "people" || i.actorRole === "opp")
+        return { format: "character", intensity: i.actorRole === "opp" ? 2 : 1 };
+      return bigMove ? { format: "scoreboard", intensity: 1 } : { format: "crowd", intensity: 1 };
+    case "flow":
+      if (bigMove) return { format: "scoreboard", intensity: 1 };
+      return i.backersTotal >= 3
+        ? { format: "crowd", intensity: 1 }
+        : { format: "quiet", intensity: 0 };
+    default:
+      return bigMove ? { format: "scoreboard", intensity: 1 } : { format: "quiet", intensity: 0 };
+  }
 }
 
 const ACTION_LABEL: Record<ActionKind, string> = {
@@ -189,13 +235,23 @@ export function composeCard(i: CopyInput): CardCopy {
     }
   }
 
+  // The rarest signal in the system: your echo and your opposite on one side.
+  if (i.convergence) {
+    hook = `Your People and your Opp both backed ${side}.`;
+    story = `They almost never agree.`;
+    action = "back_sides";
+  }
+
   if (i.isViewerHolding) action = "review";
 
+  const { format, intensity } = pickFormat(i, turn != null);
   return {
     hook,
     belief: i.belief,
     story,
     turn,
     action: { kind: action, label: ACTION_LABEL[action] },
+    format,
+    intensity,
   };
 }

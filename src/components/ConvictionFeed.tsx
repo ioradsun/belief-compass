@@ -16,6 +16,7 @@
  * The card reads as a STORY (hook → belief → story → turn), composed by the
  * feed copy engine — not a recitation of fields.
  */
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listConvictionFeed } from "@/lib/feed.functions";
 import {
@@ -26,6 +27,7 @@ import {
   isOpposed,
 } from "@/lib/conviction-feed";
 import type { ActorIdentity, AvatarRef, FeedCard } from "@/lib/conviction-feed";
+import type { CardFormat } from "@/lib/feed-copy";
 
 // Badge tint per role (the label chip only — the ring hue is computed from the
 // match score on the relationship axis). People/Opp sit on the purple↔red
@@ -267,44 +269,179 @@ function CardAction({ card }: { card: FeedCard }) {
   );
 }
 
-/**
- * A card reads as a small story, not a field dump: an identity glance, then
- * HOOK → BELIEF → STORY → (TURN only when tension is real) → one action.
- */
+function actorName(card: FeedCard): string | null {
+  return card.actor?.displayName ?? card.actor?.alias ?? null;
+}
+function Belief({ text, className = "" }: { text: string; className?: string }) {
+  return <p className={`leading-snug text-foreground ${className}`}>&ldquo;{text}&rdquo;</p>;
+}
+
+// Per-format shell tint — most cards share the base; tension/rare/quiet differ so
+// the timeline is visually irregular, not a uniform stack.
+const SHELL: Record<CardFormat, string> = {
+  birth: "border-border bg-background/60",
+  character: "border-border bg-background/60",
+  crowd: "border-border bg-background/60",
+  scoreboard: "border-border bg-background/60",
+  tension: "border-amber-500/30 bg-amber-500/[0.04]",
+  rare: "border-violet-500/40 bg-violet-500/[0.05]",
+  quiet: "border-dashed border-border bg-transparent",
+};
+
+/** One page in the story. Each format is a distinct visual beat. */
 function ConvictionCard({ card }: { card: FeedCard }) {
   const copy = card.copy;
+  const format: CardFormat = copy?.format ?? "quiet";
+  const name = actorName(card);
+
+  let body: ReactNode;
+  switch (format) {
+    case "birth":
+      body = (
+        <>
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            New belief
+          </div>
+          <Belief text={copy!.belief} className="mt-1.5 text-lg font-semibold" />
+          <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+            {card.actor && (
+              <Avatar
+                pfpUrl={card.actor.pfpUrl}
+                name={name ?? "?"}
+                seed={card.actor.alias ?? "?"}
+                size={18}
+              />
+            )}
+            <span>
+              {name ? <span className="font-medium text-foreground">{name}</span> : "Someone"} asked
+              it first.{copy!.story ? ` ${copy!.story}` : ""}
+            </span>
+          </div>
+        </>
+      );
+      break;
+
+    case "character":
+      body = (
+        <div className="flex items-start gap-3">
+          {card.actor && <RingAvatar actor={card.actor} />}
+          <div className="min-w-0 flex-1">
+            {card.actor && (
+              <Badge
+                color={BADGE_COLOR[card.actor.role ?? "market"] ?? BADGE_COLOR.market}
+                label={card.actor.badge}
+              />
+            )}
+            <p className="mt-1 text-[15px] font-semibold leading-snug">{copy!.hook}</p>
+            {copy!.story && <p className="text-sm text-muted-foreground">{copy!.story}</p>}
+            <Belief text={copy!.belief} className="mt-1.5 text-xs text-muted-foreground" />
+          </div>
+        </div>
+      );
+      break;
+
+    case "crowd":
+      body = (
+        <>
+          {card.crowd.length > 0 ? (
+            <AvatarStack refs={card.crowd} total={card.crowdTotal} max={5} size={28} />
+          ) : (
+            card.actor && (
+              <IdentityRow actor={card.actor} crowd={card.crowd} crowdTotal={card.crowdTotal} />
+            )
+          )}
+          <p className="mt-2 text-[15px] font-semibold leading-snug">{copy!.hook}</p>
+          <Belief text={copy!.belief} className="mt-1 text-sm text-muted-foreground" />
+          {copy!.story && <p className="mt-0.5 text-sm text-muted-foreground">{copy!.story}</p>}
+        </>
+      );
+      break;
+
+    case "scoreboard": {
+      const up = (card.priceChgPct ?? 0) >= 0;
+      body = (
+        <>
+          <div className="text-2xl font-bold tracking-tight">
+            {card.priceSide} {up ? "▲ +" : "▼ "}
+            {Math.abs(card.priceChgPct ?? 0).toFixed(0)}%
+          </div>
+          <Belief text={copy!.belief} className="mt-1 text-[15px]" />
+          {copy!.story && <p className="mt-1 text-sm text-muted-foreground">{copy!.story}</p>}
+        </>
+      );
+      break;
+    }
+
+    case "tension":
+      body = (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-md bg-muted/40 p-2.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Money
+              </div>
+              <div className="text-lg font-bold tabular-nums">
+                {card.impliedYesPct != null ? `${Math.round(card.impliedYesPct)}% YES` : "—"}
+              </div>
+            </div>
+            <div className="rounded-md bg-muted/40 p-2.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                People
+              </div>
+              <div className="text-lg font-bold tabular-nums">
+                {card.peopleYesPct != null ? `${Math.round(card.peopleYesPct)}% YES` : "—"}
+              </div>
+            </div>
+          </div>
+          <Belief text={copy!.belief} className="mt-2 text-[15px]" />
+          <p className="mt-1 text-sm font-medium text-amber-600 dark:text-amber-500">
+            {copy!.turn ?? "The money and the people disagree."}
+          </p>
+        </>
+      );
+      break;
+
+    case "rare":
+      body = (
+        <>
+          <div className="flex items-center gap-2">
+            {card.actor && <RingAvatar actor={card.actor} />}
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-violet-600 dark:text-violet-400">
+              People × Opp
+            </span>
+          </div>
+          <p className="mt-2 text-[15px] font-semibold leading-snug">{copy!.hook}</p>
+          {copy!.story && <p className="text-sm text-muted-foreground">{copy!.story}</p>}
+          <Belief text={copy!.belief} className="mt-1.5 text-sm text-muted-foreground" />
+        </>
+      );
+      break;
+
+    case "quiet":
+    default:
+      body = (
+        <>
+          <p className="text-sm text-foreground">{copy?.hook ?? card.story}</p>
+          <Belief
+            text={copy?.belief ?? card.marketTitle}
+            className="mt-1 text-xs text-muted-foreground/80 italic"
+          />
+        </>
+      );
+      break;
+  }
+
   return (
-    <div className="rounded-lg border border-border bg-background/60 p-4 transition-colors hover:bg-muted/30">
-      {/* identity glance (avatar + ring/stack + role badge) and when it happened */}
-      <div className="flex items-start justify-between gap-2">
-        {card.actor ? (
-          <IdentityRow actor={card.actor} crowd={card.crowd} crowdTotal={card.crowdTotal} />
-        ) : (
-          <span />
-        )}
-        <time className="shrink-0 text-[11px] text-muted-foreground" dateTime={card.occurredAt}>
-          {timeAgo(card.occurredAt)}
-        </time>
-      </div>
-
-      {/* HOOK — the single most interesting truthful fact */}
-      <p className="mt-2 text-[15px] font-semibold leading-snug tracking-tight">
-        {copy?.hook ?? card.story}
-      </p>
-
-      {/* THE BELIEF — the market question, given room to breathe */}
-      <p className="mt-1.5 text-[15px] leading-snug text-foreground">
-        &ldquo;{copy?.belief ?? card.marketTitle}&rdquo;
-      </p>
-
-      {/* THE STORY — who acted, what changed */}
-      {copy?.story && <p className="mt-1.5 text-sm text-muted-foreground">{copy.story}</p>}
-
-      {/* THE TURN — shown only when tension is real (material divergence) */}
-      {copy?.turn && (
-        <p className="mt-1.5 text-sm font-medium text-amber-600 dark:text-amber-500">{copy.turn}</p>
-      )}
-
+    <div
+      className={`relative rounded-lg border p-4 transition-colors hover:bg-muted/20 ${SHELL[format]}`}
+    >
+      <time
+        className="absolute right-3 top-3 text-[11px] text-muted-foreground"
+        dateTime={card.occurredAt}
+      >
+        {timeAgo(card.occurredAt)}
+      </time>
+      <div className="pr-12">{body}</div>
       <CardAction card={card} />
     </div>
   );
