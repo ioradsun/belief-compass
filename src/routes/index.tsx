@@ -3,6 +3,8 @@ import { useState } from "react";
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { listFeed, getIngestStatus } from "@/lib/markets.functions";
 import { ConvictionFeed } from "@/components/ConvictionFeed";
+import { WalletConnectButton } from "@/components/WalletConnect";
+
 
 const feedQO = queryOptions({
   queryKey: ["feed"],
@@ -210,14 +212,20 @@ function Feed() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border">
-        <div className="mx-auto max-w-7xl px-6 py-8">
-          <h1 className="text-3xl font-semibold tracking-tight">conviction</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Markets tell you what moved. Conviction tells you why. Wealth tells you why people
-            cared.
-          </p>
+        <div className="mx-auto flex max-w-7xl items-start justify-between gap-4 px-6 py-8">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">conviction</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Markets tell you what moved. Conviction tells you why. Wealth tells you why people
+              cared.
+            </p>
+          </div>
+          <div className="pt-1">
+            <WalletConnectButton />
+          </div>
         </div>
       </header>
+
 
       <main className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[1fr_minmax(320px,380px)]">
         <div className="space-y-6">
