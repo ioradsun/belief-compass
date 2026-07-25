@@ -166,6 +166,61 @@ export function creatorActor(wallet: string | null, profile?: WalletProfile | nu
 }
 
 // ---------------------------------------------------------------------------
+// Relationship axis — the conviction-match ring around an actor's avatar.
+//
+// Hue encodes ALIGNMENT ↔ OPPOSITION (purple ↔ grey ↔ red); it is a spectrum,
+// not a traffic light. Deliberately NOT green/yellow/red: opposition is valuable
+// signal, not a warning, and green/red are reserved for P&L (see the palette
+// rule in ConvictionFeed.tsx). Strength (distance from neutral) fills the ring
+// equally for both poles, so a strong Opp is as visually present as strong
+// People. Thresholds are config, not literals.
+// ---------------------------------------------------------------------------
+
+export const MATCH_THRESHOLDS = {
+  strongAlign: 90, // ≥ → deep purple (your People)
+  moderateAlign: 70, // ≥ → muted purple
+  neutral: 50, // the ambiguous midpoint; mirrored for opposition (30 / 10)
+} as const;
+
+export type RelationshipBucket =
+  "strong-align" | "moderate-align" | "neutral" | "moderate-oppose" | "strong-oppose";
+
+/** Map a 0..100 match score (50 = neutral) to a symmetric relationship bucket. */
+export function relationshipBucket(matchPct: number): RelationshipBucket {
+  const m = Math.max(0, Math.min(100, matchPct));
+  const moderateOppose = 100 - MATCH_THRESHOLDS.moderateAlign; // 30
+  const strongOppose = 100 - MATCH_THRESHOLDS.strongAlign; // 10
+  if (m >= MATCH_THRESHOLDS.strongAlign) return "strong-align";
+  if (m >= MATCH_THRESHOLDS.moderateAlign) return "moderate-align";
+  if (m > moderateOppose) return "neutral";
+  if (m > strongOppose) return "moderate-oppose";
+  return "strong-oppose";
+}
+
+export const RELATIONSHIP_COLOR: Record<RelationshipBucket, string> = {
+  "strong-align": "#6d28d9", // deep purple
+  "moderate-align": "#a78bfa", // muted purple
+  neutral: "#9ca3af", // grey
+  "moderate-oppose": "#f87171", // muted red
+  "strong-oppose": "#b91c1c", // deep red
+};
+
+export function relationshipColor(matchPct: number): string {
+  return RELATIONSHIP_COLOR[relationshipBucket(matchPct)];
+}
+
+/** 0..1 distance from neutral — fills the ring for BOTH poles. */
+export function relationshipStrength(matchPct: number): number {
+  const m = Math.max(0, Math.min(100, matchPct));
+  return Math.min(1, Math.abs(m - MATCH_THRESHOLDS.neutral) / MATCH_THRESHOLDS.neutral);
+}
+
+/** Below neutral = opposed. Used as the redundant (non-hue) ring channel. */
+export function isOpposed(matchPct: number): boolean {
+  return matchPct < MATCH_THRESHOLDS.neutral;
+}
+
+// ---------------------------------------------------------------------------
 // Neutral aliases — deterministic adjective + noun, seeded by wallet hash.
 // The pool is intentionally NON-evaluative: no "Rich", "Smart", "Lucky" — an
 // accidental "Lucky Bull" becomes a reputation the wallet never earned.

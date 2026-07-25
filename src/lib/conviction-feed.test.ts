@@ -9,6 +9,11 @@ import {
   initialsFor,
   hueFor,
   avatarRef,
+  relationshipBucket,
+  relationshipColor,
+  relationshipStrength,
+  isOpposed,
+  RELATIONSHIP_COLOR,
 } from "./conviction-feed";
 
 describe("fmtUsd — dollars, human units", () => {
@@ -122,6 +127,38 @@ describe("pricePctText", () => {
     expect(pricePctText("YES", 38)).toBe("YES +38%");
     expect(pricePctText("NO", -18)).toBe("NO -18%");
     expect(pricePctText(null, 5)).toBeNull();
+  });
+});
+
+describe("relationship ring — alignment ↔ opposition spectrum", () => {
+  it("buckets the score symmetrically around neutral (50)", () => {
+    expect(relationshipBucket(95)).toBe("strong-align");
+    expect(relationshipBucket(90)).toBe("strong-align");
+    expect(relationshipBucket(78)).toBe("moderate-align");
+    expect(relationshipBucket(55)).toBe("neutral");
+    expect(relationshipBucket(45)).toBe("neutral");
+    expect(relationshipBucket(20)).toBe("moderate-oppose");
+    expect(relationshipBucket(5)).toBe("strong-oppose");
+  });
+  it("never uses green/yellow for opposition — only purple↔grey↔red", () => {
+    // Opposition is signal, not a warning; green/red are reserved for P&L.
+    const green = /#?(0f0|00ff00|22c55e|16a34a|4ade80)/i;
+    for (const hex of Object.values(RELATIONSHIP_COLOR)) {
+      expect(green.test(hex)).toBe(false);
+    }
+    expect(relationshipColor(95)).toBe(RELATIONSHIP_COLOR["strong-align"]); // purple
+    expect(relationshipColor(5)).toBe(RELATIONSHIP_COLOR["strong-oppose"]); // red
+  });
+  it("strength fills the ring equally for both poles", () => {
+    // A strong Opp is as visually present as strong People.
+    expect(relationshipStrength(95)).toBeCloseTo(0.9, 5);
+    expect(relationshipStrength(5)).toBeCloseTo(0.9, 5);
+    expect(relationshipStrength(50)).toBe(0); // neutral = empty ring
+  });
+  it("opposition is the redundant non-hue channel", () => {
+    expect(isOpposed(20)).toBe(true);
+    expect(isOpposed(80)).toBe(false);
+    expect(isOpposed(50)).toBe(false);
   });
 });
 

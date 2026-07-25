@@ -2,20 +2,46 @@
  * Conviction Signal Feed — the card list.
  *
  * Loudness order, per spec: wealth → story → identity + context. Identity is
- * chrome (badge + completeness ring + alias); only the story reads as language.
- * The ring's fill IS the match % — the number never appears as text on the card
- * (it lives in the ring's tooltip).
+ * chrome (badge + conviction-match ring + avatar); only the story reads as
+ * language. The ring IS the match % — the number never appears as text on the
+ * card (exact value in the ring's tooltip).
+ *
+ * ── PALETTE RULE: each color axis means exactly ONE thing; hues never overlap ──
+ *   1. Relationship (alignment ↔ opposition) → purple ↔ grey ↔ red RING only.
+ *   2. Profit / loss → green ↔ red, GREEN RESERVED FOR PROFIT (P&L, tier 2 —
+ *      not on the card yet), always paired with a +/- sign.
+ *   3. Position side (YES/NO) → OPTION B: YES = blue, NO = grey. Green/red are
+ *      NOT used for sides, so nothing fights P&L for green.
+ * Price *momentum* is not profit, so it renders as a neutral arrow + signed %
+ * (no green/red) — that keeps green exclusively for realized gains and avoids
+ * clashing with the ring's opposition-red on the same card.
  */
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listConvictionFeed } from "@/lib/feed.functions";
-import { initialsFor, hueFor } from "@/lib/conviction-feed";
-import type { ActorIdentity, AvatarRef, FeedCard } from "@/lib/conviction-feed";
+import {
+  initialsFor,
+  hueFor,
+  relationshipColor,
+  relationshipStrength,
+  isOpposed,
+} from "@/lib/conviction-feed";
+import type { ActorIdentity, AvatarRef, FeedCard, Side } from "@/lib/conviction-feed";
 
-const ROLE_COLOR: Record<string, string> = {
-  people: "#7c3aed", // purple — your echo
-  opp: "#e11d48", // red — your opposite
+// Badge tint per role (the label chip only — the ring hue is computed from the
+// match score on the relationship axis). People/Opp sit on the purple↔red
+// relationship poles; creator/market are their own off-axis identity hues.
+const BADGE_COLOR: Record<string, string> = {
+  people: "#6d28d9", // deep purple
+  opp: "#b91c1c", // deep red
   creator: "#0891b2", // cyan — authorship
   market: "#d97706", // amber — network
+};
+
+// Option B position-side colors — never green/red (that's P&L's).
+const SIDE_COLOR: Record<Side, string> = {
+  YES: "#2563eb", // blue
+  NO: "#6b7280", // grey
 };
 
 /** A pfp when we have one, otherwise a stable colored circle with initials. */
@@ -53,32 +79,50 @@ function Avatar({
   );
 }
 
-/** The completeness ring drawn around an avatar. Fill = match %. */
-function RingAvatar({ actor, color }: { actor: ActorIdentity; color: string }) {
+/**
+ * Conviction-match ring around an avatar. Hue = relationship (purple↔grey↔red),
+ * arc fill = strength (distance from neutral, filling for BOTH poles). The
+ * redundant, non-hue channel required for color-blind safety: aligned rings are
+ * thick, opposed rings are thin — so alignment survives without seeing the color.
+ */
+function RingAvatar({ actor }: { actor: ActorIdentity }) {
   const name = actor.displayName ?? actor.alias ?? "?";
   const avatar = <Avatar pfpUrl={actor.pfpUrl} name={name} seed={actor.alias ?? name} size={22} />;
   if (actor.matchPct == null) return <span className="shrink-0">{avatar}</span>;
+
+  const color = relationshipColor(actor.matchPct);
+  const strength = relationshipStrength(actor.matchPct);
+  const opposed = isOpposed(actor.matchPct);
+  const width = opposed ? 1.75 : 3; // redundant channel: aligned thick, opposed thin
   const r = 13;
   const c = 2 * Math.PI * r;
-  const off = c * (1 - Math.max(0, Math.min(100, actor.matchPct)) / 100);
+  const off = c * (1 - strength);
   return (
     <span
       className="relative inline-flex shrink-0 items-center justify-center"
-      style={{ width: 30, height: 30 }}
+      style={{ width: 32, height: 32 }}
     >
-      <svg width="30" height="30" viewBox="0 0 30 30" className="absolute inset-0" aria-hidden>
-        <circle cx="15" cy="15" r={r} fill="none" stroke={color} strokeWidth="2" opacity={0.2} />
+      <svg width="32" height="32" viewBox="0 0 32 32" className="absolute inset-0" aria-hidden>
         <circle
-          cx="15"
-          cy="15"
+          cx="16"
+          cy="16"
           r={r}
           fill="none"
           stroke={color}
-          strokeWidth="2"
+          strokeWidth={width}
+          opacity={0.18}
+        />
+        <circle
+          cx="16"
+          cy="16"
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={width}
           strokeDasharray={c}
           strokeDashoffset={off}
           strokeLinecap="round"
-          transform="rotate(-90 15 15)"
+          transform="rotate(-90 16 16)"
         />
       </svg>
       {avatar}
@@ -144,10 +188,16 @@ function IdentityRow({
   crowd: AvatarRef[];
   crowdTotal: number;
 }) {
-  const color = ROLE_COLOR[actor.role ?? "market"] ?? ROLE_COLOR.market;
-  const title = actor.matchPct != null ? `${Math.round(actor.matchPct)}% match` : undefined;
+  const color = BADGE_COLOR[actor.role ?? "market"] ?? BADGE_COLOR.market;
+  // Tooltip carries the exact value — as match or opposite, whichever the score is.
+  const title =
+    actor.matchPct == null
+      ? undefined
+      : isOpposed(actor.matchPct)
+        ? `${Math.round(100 - actor.matchPct)}% opposite`
+        : `${Math.round(actor.matchPct)}% match`;
 
-  // Network scale: no single person — lead with the stack of backers.
+  // Network scale: no single person — lead with the stack of backers, no ring.
   if (actor.scale === "market") {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -161,10 +211,10 @@ function IdentityRow({
     );
   }
 
-  // Individual: avatar (in ring for People/Opp) + badge + real name or alias.
+  // Individual: avatar (in conviction-match ring for People/Opp) + badge + name.
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground" title={title}>
-      <RingAvatar actor={actor} color={color} />
+      <RingAvatar actor={actor} />
       <Badge color={color} label={actor.badge} />
       {(actor.displayName ?? actor.alias) && (
         <span className="font-medium text-foreground">{actor.displayName ?? actor.alias}</span>
@@ -185,21 +235,46 @@ function timeAgo(iso: string): string {
   return `${d}d ago`;
 }
 
+/** The colored side token — Option B (YES = blue, NO = grey), never green/red. */
+function SideToken({ side }: { side: Side }) {
+  return (
+    <span style={{ color: SIDE_COLOR[side] }} className="font-medium">
+      {side}
+    </span>
+  );
+}
+
 /**
  * Price + one context fact. Leads with the % move when there is one; otherwise
  * shows the current market odds (money-weighted YES%) so the "price" is never a
- * blank line. A muted meta row carries conviction and the believer split.
+ * blank line. Momentum renders as a neutral arrow + signed % — NOT green/red,
+ * which stays reserved for realized P&L. A muted meta row carries conviction and
+ * the believer split.
  */
 function PriceContext({ card }: { card: FeedCard }) {
   const hasMove = card.priceSide && card.priceChgPct != null;
-  let priceText: string | null = null;
-  if (hasMove) {
-    const sign = card.priceChgPct! >= 0 ? "+" : "";
-    priceText = `${card.priceSide} ${sign}${card.priceChgPct!.toFixed(0)}%`;
-  } else if (card.impliedYesPct != null) {
-    priceText = `${Math.round(card.impliedYesPct)}% YES odds`;
-  }
   const up = (card.priceChgPct ?? 0) >= 0;
+
+  let priceEl: ReactNode = null;
+  if (hasMove) {
+    priceEl = (
+      <>
+        <SideToken side={card.priceSide!} />{" "}
+        <span className="text-foreground">
+          {up ? "▲" : "▼"} {up ? "+" : ""}
+          {card.priceChgPct!.toFixed(0)}%
+        </span>
+      </>
+    );
+  } else if (card.impliedYesPct != null) {
+    priceEl = (
+      <>
+        <span className="text-foreground">{Math.round(card.impliedYesPct)}%</span>{" "}
+        <SideToken side="YES" />
+        <span className="text-muted-foreground"> odds</span>
+      </>
+    );
+  }
 
   const meta: string[] = [];
   if (card.convictionPct != null) meta.push(`${card.convictionPct}% conviction`);
@@ -207,19 +282,13 @@ function PriceContext({ card }: { card: FeedCard }) {
     meta.push(`${card.believersYes} YES · ${card.believersNo} NO`);
   }
 
-  if (!priceText && !card.context && meta.length === 0) return null;
+  if (!priceEl && !card.context && meta.length === 0) return null;
   return (
     <div className="mt-1 space-y-0.5 text-xs">
-      {(priceText || card.context) && (
+      {(priceEl || card.context) && (
         <div className="tabular-nums">
-          {priceText && (
-            <span
-              className={hasMove ? (up ? "text-emerald-600" : "text-rose-600") : "text-foreground"}
-            >
-              {priceText}
-            </span>
-          )}
-          {priceText && card.context && <span className="text-muted-foreground"> · </span>}
+          {priceEl}
+          {priceEl && card.context && <span className="text-muted-foreground"> · </span>}
           {card.context && <span className="text-muted-foreground">{card.context}</span>}
         </div>
       )}
