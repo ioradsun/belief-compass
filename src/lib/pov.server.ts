@@ -11,6 +11,9 @@ export interface PovMarket {
   noPriceUsd?: number;
   yesPercentage?: number;
   volumeTotalUsd?: number;
+  yesMarketCapUsd?: number;
+  noMarketCapUsd?: number;
+  volume24hUsd?: number;
   boostScore?: number;
   trendingScore?: number;
   author?: { walletAddress?: string; username?: string; displayName?: string; pfpUrl?: string };
