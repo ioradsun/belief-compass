@@ -97,12 +97,20 @@ export const getIngestStatus = createServerFn({ method: "GET" }).handler(async (
     sb.from("market_state")
       .select("*", { count: "exact", head: true })
       .gt("believers_yes", 0),
-    sb.from("ingest_state").select("last_block").eq("id", 1).maybeSingle(),
+    sb.from("ingest_state").select("last_block, lease_owner, lease_expires_at").eq("id", 1).maybeSingle(),
   ]);
+
+  const latestTrade = await sb
+    .from("trades")
+    .select("block_number, ts")
+    .order("block_number", { ascending: false })
+    .order("log_index", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   let head: number | null = null;
   try {
-    const rpc = await fetch("https://mainnet.base.org", {
+    const rpc = await fetch("https://developer-access-mainnet.base.org", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_blockNumber", params: [] }),
@@ -112,9 +120,12 @@ export const getIngestStatus = createServerFn({ method: "GET" }).handler(async (
   } catch { /* ignore */ }
 
   const lastBlock = Number(ingest.data?.last_block ?? CHAIN_DEPLOY_BLOCK);
+  const blocksBehind = head ? Math.max(0, head - lastBlock) : null;
   const chainPct = head
     ? Math.min(100, Math.max(0, ((lastBlock - CHAIN_DEPLOY_BLOCK) / (head - CHAIN_DEPLOY_BLOCK)) * 100))
     : null;
+  const leaseExpiresAt = ingest.data?.lease_expires_at ? new Date(ingest.data.lease_expires_at).getTime() : null;
+  const leaseActive = Boolean(leaseExpiresAt && leaseExpiresAt > Date.now());
 
   return {
     markets: markets.count ?? 0,
@@ -127,8 +138,12 @@ export const getIngestStatus = createServerFn({ method: "GET" }).handler(async (
       deployBlock: CHAIN_DEPLOY_BLOCK,
       lastBlock,
       head,
-      blocksBehind: head ? Math.max(0, head - lastBlock) : null,
+      blocksBehind,
       progressPct: chainPct,
+      phase: blocksBehind == null ? "checking" : blocksBehind <= 250 ? "live" : "backfilling",
+      leaseActive,
+      latestTradeBlock: latestTrade.data?.block_number ?? null,
+      latestTradeAt: latestTrade.data?.ts ?? null,
     },
   };
 });
