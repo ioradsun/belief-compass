@@ -19,8 +19,10 @@ const base: Omit<CopyInput, "behavior"> = {
   believersYes: 5,
   believersNo: 1,
   priceFell: false,
+  priceChgPct: null,
   moneyYesPct: null,
   peopleYesPct: null,
+  convergence: false,
   isViewerHolding: false,
 };
 

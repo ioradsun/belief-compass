@@ -29,6 +29,7 @@ import {
   rankScore,
 } from "@/lib/conviction-feed";
 import { composeCard, cleanName, type CopyInput, type CopyBehavior } from "@/lib/feed-copy";
+import { sequenceFeed } from "@/lib/feed-sequence";
 import { fetchPovUser } from "@/lib/pov.server";
 
 function publicClient() {
@@ -287,6 +288,10 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         const c = beliefByKey.get(`${wallet.toLowerCase()}|${id}`)?.conviction;
         return c != null ? Math.round(Number(c) * 100) : null;
       };
+      // Convergence: your echo AND your opposite acting on the same side — rare.
+      const pActed = people ? agg.byWallet.get(people.matched_wallet.toLowerCase()) : undefined;
+      const oActed = opp ? agg.byWallet.get(opp.matched_wallet.toLowerCase()) : undefined;
+      const convergence = Boolean(pActed && oActed && pActed.side === oActed.side);
 
       // --- (a) Individual card: viewer's People or Opp acted here. Strongest. ---
       let individual: FeedCard | null = null;
@@ -328,6 +333,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           priceSide: storySide,
           priceChgPct: chg,
           impliedYesPct,
+          peopleYesPct,
           context,
           convictionPct: convictionOf(focus.matched_wallet),
           believersYes,
@@ -360,8 +366,10 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           believersYes,
           believersNo,
           priceFell: chg != null && chg < 0,
+          priceChgPct: chg,
           moneyYesPct: impliedYesPct,
           peopleYesPct,
+          convergence,
           isViewerHolding: false,
         });
         break; // one individual card per market is plenty
@@ -384,6 +392,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           priceSide: wealth ? storySide : null,
           priceChgPct: wealth ? chg : null,
           impliedYesPct,
+          peopleYesPct,
           context: null,
           convictionPct: convictionOf(meta.author_wallet),
           believersYes,
@@ -418,8 +427,10 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           believersYes,
           believersNo,
           priceFell: false,
+          priceChgPct: chg,
           moneyYesPct: impliedYesPct,
           peopleYesPct,
+          convergence: false,
           isViewerHolding: false,
         });
       }
@@ -449,6 +460,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         priceSide: storySide,
         priceChgPct: chg,
         impliedYesPct,
+        peopleYesPct,
         context: null,
         convictionPct: null,
         believersYes,
@@ -481,8 +493,10 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         believersYes,
         believersNo,
         priceFell: chg != null && chg < 0,
+        priceChgPct: chg,
         moneyYesPct: impliedYesPct,
         peopleYesPct,
+        convergence: false,
         isViewerHolding: false,
       });
 
@@ -535,7 +549,9 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       }
     }
 
-    return { data: shown, viewer, hasPeople, error: null };
+    // 7. Composition after ranking: order the cards for narrative rhythm.
+    const ordered = sequenceFeed(shown);
+    return { data: ordered, viewer, hasPeople, error: null };
   });
 
 type SupabaseLike = ReturnType<typeof publicClient>;
