@@ -39,12 +39,22 @@ export interface WealthLine {
   text: string; // "$8.4M entered YES"
 }
 
+/** A wallet's displayable identity: real POV profile when known, generated otherwise. */
+export interface AvatarRef {
+  wallet: string;
+  alias: string; // neutral generated fallback name
+  displayName: string | null; // real POV name when known
+  pfpUrl: string | null; // real POV pic when known
+}
+
 export interface ActorIdentity {
   scale: ActorScale;
   role: ActorRole;
   badge: string; // "PEOPLE" · "OPP" · "THE MARKET" · "CREATOR" …
   alias: string | null; // individuals only; groups/market render badge only
   matchPct: number | null; // ring fill 0..100; individuals only. Never shown as text.
+  displayName: string | null; // real POV name, preferred over alias when present
+  pfpUrl: string | null; // real POV pic; null → generated initials avatar
 }
 
 export interface FeedCard {
@@ -61,6 +71,8 @@ export interface FeedCard {
   convictionPct: number | null; // actor's conviction 0..100 (individual/creator); null at network scale
   believersYes: number | null;
   believersNo: number | null;
+  crowd: AvatarRef[]; // backer avatars for the stack (capped); empty for pure individual cards
+  crowdTotal: number; // total backers, so the stack can render a "+N" overflow
   action: FeedAction;
   signalType: string; // internal only — ranking + analytics, never rendered
   score: number;
@@ -106,10 +118,17 @@ export function wealthFlow(
 // Actor identity — badge/alias/ring, viewer-relative. Chrome, not a sentence.
 // ---------------------------------------------------------------------------
 
+/** Real POV identity for a wallet, when we have it cached. */
+export interface WalletProfile {
+  displayName: string | null;
+  pfpUrl: string | null;
+}
+
 export function individualActor(
   role: "people" | "opp",
   wallet: string,
   matchPct: number | null,
+  profile?: WalletProfile | null,
 ): ActorIdentity {
   return {
     scale: "individual",
@@ -117,20 +136,32 @@ export function individualActor(
     badge: role === "people" ? "PEOPLE" : "OPP",
     alias: aliasFor(wallet),
     matchPct: matchPct == null ? null : Math.max(0, Math.min(100, matchPct)),
+    displayName: profile?.displayName ?? null,
+    pfpUrl: profile?.pfpUrl ?? null,
   };
 }
 
 export function marketActor(): ActorIdentity {
-  return { scale: "market", role: "market", badge: "THE MARKET", alias: null, matchPct: null };
+  return {
+    scale: "market",
+    role: "market",
+    badge: "THE MARKET",
+    alias: null,
+    matchPct: null,
+    displayName: null,
+    pfpUrl: null,
+  };
 }
 
-export function creatorActor(wallet: string | null): ActorIdentity {
+export function creatorActor(wallet: string | null, profile?: WalletProfile | null): ActorIdentity {
   return {
     scale: "individual",
     role: "creator",
     badge: "CREATOR",
     alias: wallet ? aliasFor(wallet) : null,
     matchPct: null,
+    displayName: profile?.displayName ?? null,
+    pfpUrl: profile?.pfpUrl ?? null,
   };
 }
 
@@ -209,6 +240,29 @@ export function aliasFor(wallet: string): string {
   const adj = ADJECTIVES[h % ADJECTIVES.length];
   const noun = NOUNS[(h >>> 8) % NOUNS.length];
   return `${adj} ${noun}`;
+}
+
+/** Two initials for a generated avatar, from a real name or the neutral alias. */
+export function initialsFor(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
+
+/** Deterministic hue (0..359) for a generated avatar, seeded by wallet. */
+export function hueFor(wallet: string): number {
+  return hashWallet(wallet) % 360;
+}
+
+/** Build an AvatarRef, preferring real POV identity, falling back to the alias. */
+export function avatarRef(wallet: string, profile?: WalletProfile | null): AvatarRef {
+  return {
+    wallet,
+    alias: aliasFor(wallet),
+    displayName: profile?.displayName ?? null,
+    pfpUrl: profile?.pfpUrl ?? null,
+  };
 }
 
 // ---------------------------------------------------------------------------

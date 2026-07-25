@@ -8,7 +8,8 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { listConvictionFeed } from "@/lib/feed.functions";
-import type { ActorIdentity, FeedCard } from "@/lib/conviction-feed";
+import { initialsFor, hueFor } from "@/lib/conviction-feed";
+import type { ActorIdentity, AvatarRef, FeedCard } from "@/lib/conviction-feed";
 
 const ROLE_COLOR: Record<string, string> = {
   people: "#7c3aed", // purple — your echo
@@ -17,55 +18,157 @@ const ROLE_COLOR: Record<string, string> = {
   market: "#d97706", // amber — network
 };
 
-function CompletenessRing({ pct, color }: { pct: number; color: string }) {
-  const r = 9;
-  const c = 2 * Math.PI * r;
-  const off = c * (1 - Math.max(0, Math.min(100, pct)) / 100);
+/** A pfp when we have one, otherwise a stable colored circle with initials. */
+function Avatar({
+  pfpUrl,
+  name,
+  seed,
+  size = 22,
+}: {
+  pfpUrl: string | null;
+  name: string;
+  seed: string;
+  size?: number;
+}) {
+  const dim = { width: size, height: size };
+  if (pfpUrl) {
+    return (
+      <img
+        src={pfpUrl}
+        alt=""
+        style={dim}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        className="rounded-full bg-muted object-cover"
+      />
+    );
+  }
   return (
-    <svg width="22" height="22" viewBox="0 0 22 22" className="shrink-0" aria-hidden>
-      <circle
-        cx="11"
-        cy="11"
-        r={r}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        className="text-muted/40"
-        opacity={0.25}
-      />
-      <circle
-        cx="11"
-        cy="11"
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeDasharray={c}
-        strokeDashoffset={off}
-        strokeLinecap="round"
-        transform="rotate(-90 11 11)"
-      />
-    </svg>
+    <span
+      style={{ ...dim, backgroundColor: `hsl(${hueFor(seed)} 45% 45%)` }}
+      className="inline-flex items-center justify-center rounded-full font-semibold text-white"
+    >
+      <span style={{ fontSize: size * 0.4 }}>{initialsFor(name)}</span>
+    </span>
   );
 }
 
-function IdentityRow({ actor }: { actor: ActorIdentity }) {
+/** The completeness ring drawn around an avatar. Fill = match %. */
+function RingAvatar({ actor, color }: { actor: ActorIdentity; color: string }) {
+  const name = actor.displayName ?? actor.alias ?? "?";
+  const avatar = <Avatar pfpUrl={actor.pfpUrl} name={name} seed={actor.alias ?? name} size={22} />;
+  if (actor.matchPct == null) return <span className="shrink-0">{avatar}</span>;
+  const r = 13;
+  const c = 2 * Math.PI * r;
+  const off = c * (1 - Math.max(0, Math.min(100, actor.matchPct)) / 100);
+  return (
+    <span
+      className="relative inline-flex shrink-0 items-center justify-center"
+      style={{ width: 30, height: 30 }}
+    >
+      <svg width="30" height="30" viewBox="0 0 30 30" className="absolute inset-0" aria-hidden>
+        <circle cx="15" cy="15" r={r} fill="none" stroke={color} strokeWidth="2" opacity={0.2} />
+        <circle
+          cx="15"
+          cy="15"
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeDasharray={c}
+          strokeDashoffset={off}
+          strokeLinecap="round"
+          transform="rotate(-90 15 15)"
+        />
+      </svg>
+      {avatar}
+    </span>
+  );
+}
+
+/** Overlapping avatars for a crowd. Shows `max`, then a "+N" overflow chip. */
+function AvatarStack({
+  refs,
+  total,
+  max = 4,
+  size = 24,
+}: {
+  refs: AvatarRef[];
+  total: number;
+  max?: number;
+  size?: number;
+}) {
+  const shown = refs.slice(0, max);
+  const overflow = Math.max(0, total - shown.length);
+  return (
+    <div className="flex items-center">
+      {shown.map((r, i) => (
+        <span
+          key={`${r.wallet}-${i}`}
+          className="rounded-full ring-2 ring-background"
+          style={{ marginLeft: i === 0 ? 0 : -8, zIndex: shown.length - i }}
+          title={r.displayName ?? r.alias}
+        >
+          <Avatar pfpUrl={r.pfpUrl} name={r.displayName ?? r.alias} seed={r.wallet} size={size} />
+        </span>
+      ))}
+      {overflow > 0 && (
+        <span
+          className="inline-flex items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground ring-2 ring-background"
+          style={{ width: size, height: size, marginLeft: -8, fontSize: size * 0.36 }}
+        >
+          +{overflow}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function Badge({ color, label }: { color: string; label: string }) {
+  return (
+    <span
+      className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+      style={{ color, backgroundColor: `${color}1a` }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function IdentityRow({
+  actor,
+  crowd,
+  crowdTotal,
+}: {
+  actor: ActorIdentity;
+  crowd: AvatarRef[];
+  crowdTotal: number;
+}) {
   const color = ROLE_COLOR[actor.role ?? "market"] ?? ROLE_COLOR.market;
   const title = actor.matchPct != null ? `${Math.round(actor.matchPct)}% match` : undefined;
+
+  // Network scale: no single person — lead with the stack of backers.
+  if (actor.scale === "market") {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        {crowd.length > 0 ? (
+          <AvatarStack refs={crowd} total={crowdTotal} />
+        ) : (
+          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+        )}
+        <Badge color={color} label={actor.badge} />
+      </div>
+    );
+  }
+
+  // Individual: avatar (in ring for People/Opp) + badge + real name or alias.
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground" title={title}>
-      {actor.scale === "individual" && actor.matchPct != null ? (
-        <CompletenessRing pct={actor.matchPct} color={color} />
-      ) : (
-        <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+      <RingAvatar actor={actor} color={color} />
+      <Badge color={color} label={actor.badge} />
+      {(actor.displayName ?? actor.alias) && (
+        <span className="font-medium text-foreground">{actor.displayName ?? actor.alias}</span>
       )}
-      <span
-        className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-        style={{ color, backgroundColor: `${color}1a` }}
-      >
-        {actor.badge}
-      </span>
-      {actor.alias && <span className="font-medium text-foreground">{actor.alias}</span>}
     </div>
   );
 }
@@ -145,13 +248,23 @@ function ConvictionCard({ card }: { card: FeedCard }) {
       {/* identity — quiet sub-line; dropped entirely when unattributed */}
       {card.actor && (
         <div className="mt-1.5">
-          <IdentityRow actor={card.actor} />
+          <IdentityRow actor={card.actor} crowd={card.crowd} crowdTotal={card.crowdTotal} />
         </div>
       )}
 
       {/* story — the one sentence */}
       <p className="mt-1.5 text-sm text-foreground">{card.story}</p>
       <p className="text-xs text-muted-foreground">{card.marketTitle}</p>
+
+      {/* who else is in — the crowd behind an individual actor */}
+      {card.actor?.scale === "individual" && card.crowdTotal >= 1 && card.crowd.length > 0 && (
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <AvatarStack refs={card.crowd} total={card.crowdTotal} max={4} size={20} />
+          <span className="text-[11px] text-muted-foreground">
+            {card.crowdTotal === 1 ? "1 other believer" : `${card.crowdTotal} others in`}
+          </span>
+        </div>
+      )}
 
       {/* price + one context fact */}
       <PriceContext card={card} />

@@ -12,16 +12,21 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        try { assertIngestBearer(request); }
-        catch (r) { return r instanceof Response ? r : new Response("err", { status: 500 }); }
+        try {
+          assertIngestBearer(request);
+        } catch (r) {
+          return r instanceof Response ? r : new Response("err", { status: 500 });
+        }
 
         const sb = getServiceSupabase();
         const started = Date.now();
-        let seen = 0, upserted = 0;
+        let seen = 0,
+          upserted = 0;
 
         const marketRows: Record<string, unknown>[] = [];
         const stateRows: Record<string, unknown>[] = [];
         const snapshotRows: Record<string, unknown>[] = [];
+        const profileRows: Record<string, unknown>[] = [];
 
         try {
           for await (const m of iterateAllMarkets()) {
@@ -54,6 +59,19 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
               yes_price_usd: m.yesPriceUsd ?? null,
               money_yes_pct: m.yesPercentage ?? null,
             });
+            // The author profile rides along on every market — cache it so the
+            // conviction feed can show a real pic without an extra API call.
+            const authorWallet = m.author?.walletAddress?.toLowerCase();
+            if (authorWallet) {
+              profileRows.push({
+                wallet: authorWallet,
+                username: m.author?.username ?? null,
+                display_name: m.author?.displayName ?? null,
+                pfp_url: m.author?.pfpUrl ?? null,
+                not_found: false,
+                fetched_at: new Date().toISOString(),
+              });
+            }
             // Flush in batches
             if (marketRows.length >= 200) {
               await flush();
@@ -69,19 +87,31 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
             if (s.error) throw s.error;
             const p = await sb.from("price_snapshots").insert(snapshotRows);
             if (p.error && !String(p.error.message).includes("duplicate")) throw p.error;
+            if (profileRows.length > 0) {
+              const pr = await sb.from("profiles").upsert(profileRows, { onConflict: "wallet" });
+              if (pr.error) throw pr.error;
+            }
             upserted += marketRows.length;
-            marketRows.length = 0; stateRows.length = 0; snapshotRows.length = 0;
+            marketRows.length = 0;
+            stateRows.length = 0;
+            snapshotRows.length = 0;
+            profileRows.length = 0;
           }
 
           // Compute chg_1h/24h from snapshots for markets touched (batch SQL)
-          await sb.rpc as unknown; // no-op; the per-market compute below is done via SQL update
-          const { error: chgErr } = await sb.rpc("recompute_price_changes").select("*").maybeSingle() as { error?: unknown };
+          (await sb.rpc) as unknown; // no-op; the per-market compute below is done via SQL update
+          const { error: chgErr } = (await sb
+            .rpc("recompute_price_changes")
+            .select("*")
+            .maybeSingle()) as { error?: unknown };
           // recompute function may not exist yet; ignore if missing.
           void chgErr;
 
           // Prune snapshots >30d
-          await sb.from("price_snapshots").delete().lt("captured_at",
-            new Date(Date.now() - 30 * 86_400_000).toISOString());
+          await sb
+            .from("price_snapshots")
+            .delete()
+            .lt("captured_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
 
           return Response.json({ ok: true, seen, upserted, ms: Date.now() - started });
         } catch (e: unknown) {

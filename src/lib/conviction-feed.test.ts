@@ -6,6 +6,9 @@ import {
   attributionVerb,
   rankScore,
   pricePctText,
+  initialsFor,
+  hueFor,
+  avatarRef,
 } from "./conviction-feed";
 
 describe("fmtUsd — dollars, human units", () => {
@@ -119,5 +122,29 @@ describe("pricePctText", () => {
     expect(pricePctText("YES", 38)).toBe("YES +38%");
     expect(pricePctText("NO", -18)).toBe("NO -18%");
     expect(pricePctText(null, 5)).toBeNull();
+  });
+});
+
+describe("avatar helpers", () => {
+  it("initialsFor takes first+last initial of a real name", () => {
+    expect(initialsFor("ROI research")).toBe("RR");
+    expect(initialsFor("Quiet River")).toBe("QR");
+    expect(initialsFor("Cobie")).toBe("CO");
+    expect(initialsFor("")).toBe("?");
+  });
+  it("hueFor is stable and in range", () => {
+    const h = hueFor("0xAbC");
+    expect(hueFor("0xabc")).toBe(h);
+    expect(h).toBeGreaterThanOrEqual(0);
+    expect(h).toBeLessThan(360);
+  });
+  it("avatarRef prefers a real profile, falls back to alias with no pic", () => {
+    const withProfile = avatarRef("0x1", { displayName: "Cobie", pfpUrl: "https://x/y.jpg" });
+    expect(withProfile.displayName).toBe("Cobie");
+    expect(withProfile.pfpUrl).toBe("https://x/y.jpg");
+    const bare = avatarRef("0x1");
+    expect(bare.displayName).toBeNull();
+    expect(bare.pfpUrl).toBeNull();
+    expect(bare.alias).toBe(aliasFor("0x1"));
   });
 });
