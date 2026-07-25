@@ -23,6 +23,7 @@ const base: Omit<CopyInput, "behavior"> = {
   moneyYesPct: null,
   peopleYesPct: null,
   convergence: false,
+  variantSeed: 0,
   isViewerHolding: false,
 };
 
@@ -108,6 +109,31 @@ describe("wealth states are never conflated", () => {
     });
     expect(c.hook).toBe("$184k moved into YES.");
     expect(c.hook).not.toMatch(/realized|gain/i);
+  });
+});
+
+describe("timestamps name their event", () => {
+  it("labels the event behind the time", () => {
+    expect(composeCard({ ...base, behavior: "born" }).timeLabel).toBe("Created");
+    expect(composeCard({ ...base, behavior: "joined" }).timeLabel).toBe("Backed");
+    expect(composeCard({ ...base, behavior: "reduce" }).timeLabel).toBe("Reduced");
+    expect(composeCard({ ...base, behavior: "flow" }).timeLabel).toBe("Last traded");
+  });
+});
+
+describe("copy variety — neighbors don't repeat the opening phrase", () => {
+  it("births read differently across seeds, but stably per seed", () => {
+    const hooks = [0, 1, 2].map(
+      (variantSeed) => composeCard({ ...base, behavior: "born", variantSeed }).hook,
+    );
+    expect(new Set(hooks).size).toBe(3); // three distinct openings
+    expect(composeCard({ ...base, behavior: "born", variantSeed: 0 }).hook).toBe(hooks[0]); // stable
+    for (const h of hooks) assertClean(h);
+  });
+  it("wraps around so any seed is valid", () => {
+    expect(composeCard({ ...base, behavior: "born", variantSeed: 3 }).hook).toBe(
+      composeCard({ ...base, behavior: "born", variantSeed: 0 }).hook,
+    );
   });
 });
 

@@ -68,6 +68,7 @@ export interface CopyInput {
   moneyYesPct: number | null; // money-weighted YES%
   peopleYesPct: number | null; // head-count YES%
   convergence: boolean; // People AND Opp landed on the same side (rare)
+  variantSeed: number; // stable per-market seed so wording varies but never flickers
   isViewerHolding: boolean; // the viewer owns this position → Review
 }
 
@@ -79,6 +80,7 @@ export interface CardCopy {
   action: { kind: ActionKind; label: string };
   format: CardFormat; // which visual shape to render
   intensity: number; // 0 (quiet breather) .. 2 (high drama) — drives pacing
+  timeLabel: string; // names the event behind the timestamp ("Created", "Backed", …)
 }
 
 /**
@@ -142,6 +144,21 @@ const ACTION_LABEL: Record<ActionKind, string> = {
   convictions: "See Their Convictions",
 };
 
+// A timestamp must always name its event — never a bare "4h ago".
+const TIME_LABEL: Record<CopyBehavior, string> = {
+  born: "Created",
+  joined: "Backed",
+  increase: "Added",
+  reduce: "Reduced",
+  flow: "Last traded",
+  unattributed: "Last moved",
+};
+
+/** Deterministic pick — same market always reads the same, but neighbors differ. */
+function variant<T>(options: T[], seed: number): T {
+  return options[((seed % options.length) + options.length) % options.length];
+}
+
 export function composeCard(i: CopyInput): CardCopy {
   const name = cleanName(i.actorName);
   const side = i.side;
@@ -157,7 +174,23 @@ export function composeCard(i: CopyInput): CardCopy {
 
   switch (i.behavior) {
     case "born": {
-      hook = name ? `${name} planted a new belief.` : `A new belief just appeared.`;
+      hook = name
+        ? variant(
+            [
+              `${name} planted a new belief.`,
+              `${name} put a new question on the table.`,
+              `A new belief, from ${name}.`,
+            ],
+            i.variantSeed,
+          )
+        : variant(
+            [
+              `A new belief just appeared.`,
+              `A new question just went up.`,
+              `Someone planted a new belief.`,
+            ],
+            i.variantSeed,
+          );
       const split =
         i.believersYes != null && i.believersNo != null && i.believersYes + i.believersNo > 0
           ? ` — ${i.believersYes} yes, ${i.believersNo} no`
@@ -174,7 +207,14 @@ export function composeCard(i: CopyInput): CardCopy {
       hook = name
         ? bigCommit
           ? `${name} just put ${fmtUsd(committed!)} behind ${side}.`
-          : `${name} just backed ${side}.`
+          : variant(
+              [
+                `${name} just backed ${side}.`,
+                `${name} took the ${side} side.`,
+                `${name} put their weight behind ${side}.`,
+              ],
+              i.variantSeed,
+            )
         : bigCommit
           ? `${fmtUsd(committed!)} just went into ${side}.`
           : `Someone new backed ${side}.`;
@@ -253,5 +293,6 @@ export function composeCard(i: CopyInput): CardCopy {
     action: { kind: action, label: ACTION_LABEL[action] },
     format,
     intensity,
+    timeLabel: TIME_LABEL[i.behavior],
   };
 }

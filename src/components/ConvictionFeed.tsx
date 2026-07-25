@@ -490,29 +490,29 @@ function ConvictionCard({ card }: { card: FeedCard }) {
 
     case "quiet":
     default:
+      // A breather — but the belief question still leads; it never loses to metadata.
       body = (
         <>
-          <p className="text-sm text-foreground">{copy?.hook ?? card.story}</p>
-          <Belief
-            text={copy?.belief ?? card.marketTitle}
-            className="mt-1 text-xs text-muted-foreground/80 italic"
-          />
+          <Belief text={copy?.belief ?? card.marketTitle} className="text-base font-medium" />
+          <p className="mt-1 text-sm text-muted-foreground">{copy?.hook ?? card.story}</p>
         </>
       );
       break;
   }
 
   return (
-    <div
-      className={`relative rounded-lg border p-4 transition-colors hover:bg-muted/20 ${SHELL[format]}`}
-    >
-      <time
-        className="absolute right-3 top-3 text-[11px] text-muted-foreground"
-        dateTime={card.occurredAt}
-      >
-        {timeAgo(card.occurredAt)}
-      </time>
-      <div className="pr-12">{body}</div>
+    <div className={`rounded-lg border p-4 transition-colors hover:bg-muted/20 ${SHELL[format]}`}>
+      {/* A timestamp always names its event — never a bare "4h ago". */}
+      <div className="mb-1.5 text-right">
+        <time
+          className="whitespace-nowrap text-[11px] text-muted-foreground"
+          dateTime={card.occurredAt}
+        >
+          {copy?.timeLabel ? `${copy.timeLabel} ` : ""}
+          {timeAgo(card.occurredAt)}
+        </time>
+      </div>
+      {body}
       <PriceRow card={card} format={format} />
       <CardAction card={card} />
     </div>

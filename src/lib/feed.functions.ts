@@ -372,6 +372,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           moneyYesPct: impliedYesPct,
           peopleYesPct,
           convergence,
+          variantSeed: id,
           isViewerHolding: false,
         });
         break; // one individual card per market is plenty
@@ -434,6 +435,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           moneyYesPct: impliedYesPct,
           peopleYesPct,
           convergence: false,
+          variantSeed: id,
           isViewerHolding: false,
         });
       }
@@ -501,6 +503,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         moneyYesPct: impliedYesPct,
         peopleYesPct,
         convergence: false,
+        variantSeed: id,
         isViewerHolding: false,
       });
 
