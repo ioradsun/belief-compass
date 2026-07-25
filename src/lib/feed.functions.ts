@@ -63,6 +63,7 @@ type MarketState = {
   onchain_id: number;
   yes_price_usd: number | null;
   no_price_usd: number | null;
+  money_yes_pct: number | null;
   chg_1h: number | null;
   chg_24h: number | null;
   believers_yes: number | null;
@@ -129,7 +130,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       sb
         .from("market_state")
         .select(
-          "onchain_id, yes_price_usd, no_price_usd, chg_1h, chg_24h, believers_yes, believers_no, new_believers_1h",
+          "onchain_id, yes_price_usd, no_price_usd, money_yes_pct, chg_1h, chg_24h, believers_yes, believers_no, new_believers_1h",
         )
         .in("onchain_id", marketIds),
       sb
@@ -158,20 +159,29 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
     const opp = oppCand && oppCand.match_score < 50 ? oppCand : null;
     const hasPeople = Boolean(people);
 
-    // Belief rows for People/Opp across these markets — for behavior + context.
+    // Belief rows for People/Opp AND market creators across these markets — for
+    // behavior, days-held context, and the conviction score shown on the card.
+    // Creators are loaded even with no viewer: the creator is the first believer,
+    // so their conviction is a real, showable score.
     const focusWallets = [people?.matched_wallet, opp?.matched_wallet].filter(Boolean) as string[];
+    const creatorWallets = [...metaById.values()]
+      .map((m) => m.author_wallet)
+      .filter((w): w is string => Boolean(w));
+    const beliefWallets = [
+      ...new Set([...focusWallets, ...creatorWallets].map((w) => w.toLowerCase())),
+    ];
     const beliefByKey = new Map<
       string,
       { first_backed_at: string | null; days_held: number | null; conviction: number | null }
     >();
-    if (viewer && focusWallets.length > 0) {
+    if (beliefWallets.length > 0) {
       const { data: beliefs } = await sb
         .from("wallet_beliefs")
         .select("wallet, onchain_id, first_backed_at, days_held, conviction")
-        .in("wallet", focusWallets)
+        .in("wallet", beliefWallets)
         .in("onchain_id", marketIds);
       for (const b of beliefs ?? []) {
-        beliefByKey.set(`${b.wallet}|${b.onchain_id}`, {
+        beliefByKey.set(`${String(b.wallet).toLowerCase()}|${b.onchain_id}`, {
           first_backed_at: b.first_backed_at as string | null,
           days_held: b.days_held as number | null,
           conviction: b.conviction as number | null,
@@ -249,6 +259,14 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
             : "YES";
       const newBelievers =
         ms?.new_believers_1h && ms.new_believers_1h > 0 ? ms.new_believers_1h : agg.backed.size;
+      const impliedYesPct = ms?.money_yes_pct ?? null;
+      const believersYes = ms?.believers_yes ?? null;
+      const believersNo = ms?.believers_no ?? null;
+      const convictionOf = (wallet: string | null | undefined): number | null => {
+        if (!wallet) return null;
+        const c = beliefByKey.get(`${wallet.toLowerCase()}|${id}`)?.conviction;
+        return c != null ? Math.round(Number(c) * 100) : null;
+      };
 
       // --- (a) Individual card: viewer's People or Opp acted here. Strongest. ---
       let individual: FeedCard | null = null;
@@ -258,7 +276,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         const acted = agg.byWallet.get(w);
         if (!acted) continue;
         const role = focus === people ? "people" : "opp";
-        const belief = beliefByKey.get(`${focus.matched_wallet}|${id}`);
+        const belief = beliefByKey.get(`${focus.matched_wallet.toLowerCase()}|${id}`);
         const firstBacked = belief?.first_backed_at
           ? new Date(belief.first_backed_at).getTime()
           : null;
@@ -289,7 +307,11 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           story,
           priceSide: storySide,
           priceChgPct: chg,
+          impliedYesPct,
           context,
+          convictionPct: convictionOf(focus.matched_wallet),
+          believersYes,
+          believersNo,
           action: "open",
           signalType: `individual_${role}_${reducing ? "reduce" : "commit"}`,
           score: rankScore({
@@ -320,7 +342,11 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
               : `Created a new market. First believer.`,
           priceSide: wealth ? storySide : null,
           priceChgPct: wealth ? chg : null,
-          context: wealth ? null : `no money in yet`,
+          impliedYesPct,
+          context: null,
+          convictionPct: convictionOf(meta.author_wallet),
+          believersYes,
+          believersNo,
           action: "open",
           signalType: "creator_started",
           score: rankScore({
@@ -328,10 +354,12 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
             attribution: 2,
             meaningful: 0.5,
             surprise: 0.4,
-            ageHours,
+            // Stamp the card with when the market was actually created, not the
+            // last trade — that's the "when it was posted" the creator story is about.
+            ageHours: (now - created) / 3_600_000,
             earlySignal: true,
           }),
-          occurredAt: agg.latest,
+          occurredAt: meta.created_at ?? agg.latest,
         };
       }
 
@@ -359,7 +387,11 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
             : networkStory,
         priceSide: storySide,
         priceChgPct: chg,
+        impliedYesPct,
         context: null,
+        convictionPct: null,
+        believersYes,
+        believersNo,
         action: "open",
         signalType: wealth ? "market_flow" : "market_unattributed",
         score: rankScore({
