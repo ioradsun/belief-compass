@@ -84,6 +84,9 @@ export interface FeedCard {
   priceChgPct: number | null; // % move; null when there's no move yet
   impliedYesPct: number | null; // current market odds (money-weighted YES%) — the "price" when there's no move
   peopleYesPct: number | null; // head-count YES% — for the tension split-screen
+  yesCapitalUsd: number | null; // capital backing YES (per-side market cap)
+  noCapitalUsd: number | null; // capital backing NO
+  volume24hUsd: number | null; // 24h volume → buying pressure
   context: string | null; // one fact: "held 73 days" / "143 new believers"
   convictionPct: number | null; // actor's conviction 0..100 (individual/creator); null at network scale
   believersYes: number | null;

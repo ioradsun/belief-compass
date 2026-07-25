@@ -23,6 +23,7 @@ import { listConvictionFeed } from "@/lib/feed.functions";
 import {
   initialsFor,
   hueFor,
+  fmtUsd,
   relationshipColor,
   relationshipStrength,
   isOpposed,
@@ -348,6 +349,38 @@ function Belief({ text, className = "" }: { text: string; className?: string }) 
   return <p className={`leading-snug text-foreground ${className}`}>&ldquo;{text}&rdquo;</p>;
 }
 
+// Option B side colors — never green/red (that stays reserved for P&L).
+const ARMY_COLOR: Record<"YES" | "NO", string> = { YES: "#2563eb", NO: "#6b7280" };
+
+/** One side's "Army": how many believers (People) and how much capital (Capital). */
+function SideArmy({
+  side,
+  believers,
+  capital,
+}: {
+  side: "YES" | "NO";
+  believers: number | null;
+  capital: number | null;
+}) {
+  return (
+    <div className="rounded-md bg-muted/40 p-2.5">
+      <div
+        className="text-[10px] font-semibold uppercase tracking-wide"
+        style={{ color: ARMY_COLOR[side] }}
+      >
+        {side} Army
+      </div>
+      <div className="mt-0.5 text-sm font-bold tabular-nums">
+        {believers != null ? believers.toLocaleString() : "—"}
+        <span className="ml-1 text-[11px] font-normal text-muted-foreground">believers</span>
+      </div>
+      <div className="text-xs tabular-nums text-muted-foreground">
+        {capital != null ? `${fmtUsd(capital)} backing` : "— backing"}
+      </div>
+    </div>
+  );
+}
+
 // Per-format shell tint — most cards share the base; tension/rare/quiet differ so
 // the timeline is visually irregular, not a uniform stack.
 const SHELL: Record<CardFormat, string> = {
@@ -445,30 +478,31 @@ function ConvictionCard({ card }: { card: FeedCard }) {
     }
 
     case "tension":
+      // Three distinct stories: PRICE (money consensus) → the belief → PEOPLE +
+      // CAPITAL per side (the "Army"). Their disagreement is the reason to click.
       body = (
         <>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-md bg-muted/40 p-2.5">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Money
-              </div>
-              <div className="text-lg font-bold tabular-nums">
-                {card.impliedYesPct != null ? `${Math.round(card.impliedYesPct)}% YES` : "—"}
-              </div>
-            </div>
-            <div className="rounded-md bg-muted/40 p-2.5">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                People
-              </div>
-              <div className="text-lg font-bold tabular-nums">
-                {card.peopleYesPct != null ? `${Math.round(card.peopleYesPct)}% YES` : "—"}
-              </div>
-            </div>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="text-lg font-bold tabular-nums">
+              {card.impliedYesPct != null ? `${Math.round(card.impliedYesPct)}% YES` : "—"}
+            </span>
+            <span className="text-[11px] text-muted-foreground">the market price</span>
+            {card.volume24hUsd != null && card.volume24hUsd > 0 && (
+              <span className="text-[11px] text-muted-foreground">
+                · {fmtUsd(card.volume24hUsd)} traded 24h
+              </span>
+            )}
           </div>
-          <Belief text={copy!.belief} className="mt-2 text-[15px]" />
-          <p className="mt-1 text-sm font-medium text-amber-600 dark:text-amber-500">
-            {copy!.turn ?? "The money and the people disagree."}
-          </p>
+          <Belief text={copy!.belief} className="mt-1.5 text-[15px]" />
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <SideArmy side="YES" believers={card.believersYes} capital={card.yesCapitalUsd} />
+            <SideArmy side="NO" believers={card.believersNo} capital={card.noCapitalUsd} />
+          </div>
+          {(copy!.shape ?? copy!.turn) && (
+            <p className="mt-2 text-sm font-medium text-amber-600 dark:text-amber-500">
+              {copy!.shape ?? copy!.turn}
+            </p>
+          )}
         </>
       );
       break;

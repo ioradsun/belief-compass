@@ -79,6 +79,9 @@ type MarketState = {
   no_price_usd: number | null;
   money_yes_pct: number | null;
   people_yes_pct: number | null;
+  yes_capital_usd: number | null;
+  no_capital_usd: number | null;
+  volume_24h_usd: number | null;
   chg_1h: number | null;
   chg_24h: number | null;
   believers_yes: number | null;
@@ -145,7 +148,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       sb
         .from("market_state")
         .select(
-          "onchain_id, yes_price_usd, no_price_usd, money_yes_pct, people_yes_pct, chg_1h, chg_24h, believers_yes, believers_no, new_believers_1h",
+          "onchain_id, yes_price_usd, no_price_usd, money_yes_pct, people_yes_pct, yes_capital_usd, no_capital_usd, volume_24h_usd, chg_1h, chg_24h, believers_yes, believers_no, new_believers_1h",
         )
         .in("onchain_id", marketIds),
       sb
@@ -282,6 +285,9 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         ms?.new_believers_1h && ms.new_believers_1h > 0 ? ms.new_believers_1h : agg.backed.size;
       const impliedYesPct = ms?.money_yes_pct ?? null;
       const peopleYesPct = ms?.people_yes_pct ?? null;
+      const yesCapitalUsd = ms?.yes_capital_usd ?? null;
+      const noCapitalUsd = ms?.no_capital_usd ?? null;
+      const volume24hUsd = ms?.volume_24h_usd ?? null;
       const believersYes = ms?.believers_yes ?? null;
       const believersNo = ms?.believers_no ?? null;
       const convictionOf = (wallet: string | null | undefined): number | null => {
@@ -335,6 +341,9 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           priceChgPct: chg,
           impliedYesPct,
           peopleYesPct,
+          yesCapitalUsd,
+          noCapitalUsd,
+          volume24hUsd,
           context,
           convictionPct: convictionOf(focus.matched_wallet),
           believersYes,
@@ -371,6 +380,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           priceChgPct: chg,
           moneyYesPct: impliedYesPct,
           peopleYesPct,
+          yesCapitalUsd,
+          noCapitalUsd,
           convergence,
           variantSeed: id,
           isViewerHolding: false,
@@ -396,6 +407,9 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           priceChgPct: wealth ? chg : null,
           impliedYesPct,
           peopleYesPct,
+          yesCapitalUsd,
+          noCapitalUsd,
+          volume24hUsd,
           context: null,
           convictionPct: convictionOf(meta.author_wallet),
           believersYes,
@@ -434,6 +448,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           priceChgPct: chg,
           moneyYesPct: impliedYesPct,
           peopleYesPct,
+          yesCapitalUsd,
+          noCapitalUsd,
           convergence: false,
           variantSeed: id,
           isViewerHolding: false,
@@ -466,6 +482,9 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         priceChgPct: chg,
         impliedYesPct,
         peopleYesPct,
+        yesCapitalUsd,
+        noCapitalUsd,
+        volume24hUsd,
         context: null,
         convictionPct: null,
         believersYes,
@@ -502,6 +521,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         priceChgPct: chg,
         moneyYesPct: impliedYesPct,
         peopleYesPct,
+        yesCapitalUsd,
+        noCapitalUsd,
         convergence: false,
         variantSeed: id,
         isViewerHolding: false,

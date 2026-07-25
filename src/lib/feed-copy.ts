@@ -67,6 +67,8 @@ export interface CopyInput {
   priceChgPct: number | null; // the market's headline move, for the scoreboard
   moneyYesPct: number | null; // money-weighted YES%
   peopleYesPct: number | null; // head-count YES%
+  yesCapitalUsd: number | null; // capital backing YES (per-side market cap)
+  noCapitalUsd: number | null; // capital backing NO
   convergence: boolean; // People AND Opp landed on the same side (rare)
   variantSeed: number; // stable per-market seed so wording varies but never flickers
   isViewerHolding: boolean; // the viewer owns this position → Review
@@ -81,6 +83,7 @@ export interface CardCopy {
   format: CardFormat; // which visual shape to render
   intensity: number; // 0 (quiet breather) .. 2 (high drama) — drives pacing
   timeLabel: string; // names the event behind the timestamp ("Created", "Backed", …)
+  shape: string | null; // broad-vs-concentrated conviction sentence, when there's a story
 }
 
 /**
@@ -112,11 +115,44 @@ function divergenceTurn(moneyYes: number, peopleYes: number): string {
   return `The money's ${Math.round(moneyYes)}% YES. The people are split ${py}–${pn}.`;
 }
 
+// Broad-vs-concentrated thresholds: one side needs clearly more believers while
+// capital stays near-even for "many believers vs a few whales" to be a real story.
+export const BROAD_BELIEVER_RATIO = 2; // ≥2× the believers on one side
+export const NEAR_EQUAL_CAPITAL_RATIO = 1.4; // capital within ~40%
+
+/**
+ * The story only this app can tell: do PEOPLE (believer count) and CAPITAL
+ * (money backing) agree? When one side has far more believers but the capital is
+ * near-even, conviction is broad on one side and concentrated (whales) on the
+ * other. Returns null when they agree — agreement is not a story.
+ */
+export function convictionShape(i: {
+  believersYes: number | null;
+  believersNo: number | null;
+  yesCapitalUsd: number | null;
+  noCapitalUsd: number | null;
+}): string | null {
+  const { believersYes: by, believersNo: bn, yesCapitalUsd: cy, noCapitalUsd: cn } = i;
+  if (by == null || bn == null || by + bn < 3) return null; // too few to characterize
+  if (cy == null || cn == null || cy + cn <= 0) return null;
+  const yesLeadsBelievers = by >= bn;
+  const bMore = Math.max(by, bn);
+  const bLess = Math.min(by, bn);
+  if (bLess === 0) return null;
+  const believerRatio = bMore / bLess;
+  const capRatio = Math.min(cy, cn) > 0 ? Math.max(cy, cn) / Math.min(cy, cn) : Infinity;
+  if (believerRatio < BROAD_BELIEVER_RATIO || capRatio > NEAR_EQUAL_CAPITAL_RATIO) return null;
+  const broad = yesLeadsBelievers ? "YES" : "NO";
+  const concentrated = yesLeadsBelievers ? "NO" : "YES";
+  const x = believerRatio >= 10 ? `${Math.round(believerRatio)}×` : `${believerRatio.toFixed(1)}×`;
+  return `${broad} has ${x} more believers but nearly equal capital — conviction is broad on ${broad}, concentrated on ${concentrated}.`;
+}
+
 /** The natural visual shape for a signal, before the sequencer varies the order. */
-function pickFormat(i: CopyInput, divergent: boolean): { format: CardFormat; intensity: number } {
+function pickFormat(i: CopyInput, hasTension: boolean): { format: CardFormat; intensity: number } {
   const bigMove = i.priceChgPct != null && Math.abs(i.priceChgPct) >= SCOREBOARD_MOVE_PCT;
   if (i.convergence) return { format: "rare", intensity: 2 }; // rarest: both poles agree
-  if (divergent) return { format: "tension", intensity: 2 };
+  if (hasTension) return { format: "tension", intensity: 2 };
   switch (i.behavior) {
     case "born":
       return { format: "birth", intensity: 1 };
@@ -284,7 +320,8 @@ export function composeCard(i: CopyInput): CardCopy {
 
   if (i.isViewerHolding) action = "review";
 
-  const { format, intensity } = pickFormat(i, turn != null);
+  const shape = convictionShape(i);
+  const { format, intensity } = pickFormat(i, turn != null || shape != null);
   return {
     hook,
     belief: i.belief,
@@ -294,5 +331,6 @@ export function composeCard(i: CopyInput): CardCopy {
     format,
     intensity,
     timeLabel: TIME_LABEL[i.behavior],
+    shape,
   };
 }

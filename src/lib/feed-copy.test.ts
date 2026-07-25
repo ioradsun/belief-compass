@@ -3,6 +3,7 @@ import {
   composeCard,
   cleanName,
   isMaterialDivergence,
+  convictionShape,
   MATERIAL_DIVERGENCE_PTS,
   type CopyInput,
 } from "./feed-copy";
@@ -22,6 +23,8 @@ const base: Omit<CopyInput, "behavior"> = {
   priceChgPct: null,
   moneyYesPct: null,
   peopleYesPct: null,
+  yesCapitalUsd: null,
+  noCapitalUsd: null,
   convergence: false,
   variantSeed: 0,
   isViewerHolding: false,
@@ -109,6 +112,55 @@ describe("wealth states are never conflated", () => {
     });
     expect(c.hook).toBe("$184k moved into YES.");
     expect(c.hook).not.toMatch(/realized|gain/i);
+  });
+});
+
+describe("conviction shape — People vs Capital (broad vs concentrated)", () => {
+  it("many believers on one side but near-even capital → the signature story", () => {
+    const s = convictionShape({
+      believersYes: 412,
+      believersNo: 89,
+      yesCapitalUsd: 1_200_000,
+      noCapitalUsd: 1_100_000,
+    });
+    expect(s).toBe(
+      "YES has 4.6× more believers but nearly equal capital — conviction is broad on YES, concentrated on NO.",
+    );
+  });
+  it("no story when both believers and capital agree", () => {
+    expect(
+      convictionShape({
+        believersYes: 400,
+        believersNo: 80,
+        yesCapitalUsd: 1_000_000,
+        noCapitalUsd: 100_000,
+      }),
+    ).toBeNull();
+  });
+  it("no story with too few believers or missing capital", () => {
+    expect(
+      convictionShape({ believersYes: 2, believersNo: 0, yesCapitalUsd: 100, noCapitalUsd: 100 }),
+    ).toBeNull();
+    expect(
+      convictionShape({
+        believersYes: 40,
+        believersNo: 5,
+        yesCapitalUsd: null,
+        noCapitalUsd: null,
+      }),
+    ).toBeNull();
+  });
+  it("promotes the card to a tension format when the shape is a story", () => {
+    const c = composeCard({
+      ...base,
+      behavior: "flow",
+      believersYes: 412,
+      believersNo: 89,
+      yesCapitalUsd: 1_200_000,
+      noCapitalUsd: 1_100_000,
+    });
+    expect(c.shape).not.toBeNull();
+    expect(c.format).toBe("tension");
   });
 });
 
