@@ -39,12 +39,22 @@ export interface WealthLine {
   text: string; // "$8.4M entered YES"
 }
 
+/** A wallet's displayable identity: real POV profile when known, generated otherwise. */
+export interface AvatarRef {
+  wallet: string;
+  alias: string; // neutral generated fallback name
+  displayName: string | null; // real POV name when known
+  pfpUrl: string | null; // real POV pic when known
+}
+
 export interface ActorIdentity {
   scale: ActorScale;
   role: ActorRole;
   badge: string; // "PEOPLE" · "OPP" · "THE MARKET" · "CREATOR" …
   alias: string | null; // individuals only; groups/market render badge only
   matchPct: number | null; // ring fill 0..100; individuals only. Never shown as text.
+  displayName: string | null; // real POV name, preferred over alias when present
+  pfpUrl: string | null; // real POV pic; null → generated initials avatar
 }
 
 export interface FeedCard {
@@ -61,6 +71,8 @@ export interface FeedCard {
   convictionPct: number | null; // actor's conviction 0..100 (individual/creator); null at network scale
   believersYes: number | null;
   believersNo: number | null;
+  crowd: AvatarRef[]; // backer avatars for the stack (capped); empty for pure individual cards
+  crowdTotal: number; // total backers, so the stack can render a "+N" overflow
   action: FeedAction;
   signalType: string; // internal only — ranking + analytics, never rendered
   score: number;
@@ -106,10 +118,17 @@ export function wealthFlow(
 // Actor identity — badge/alias/ring, viewer-relative. Chrome, not a sentence.
 // ---------------------------------------------------------------------------
 
+/** Real POV identity for a wallet, when we have it cached. */
+export interface WalletProfile {
+  displayName: string | null;
+  pfpUrl: string | null;
+}
+
 export function individualActor(
   role: "people" | "opp",
   wallet: string,
   matchPct: number | null,
+  profile?: WalletProfile | null,
 ): ActorIdentity {
   return {
     scale: "individual",
@@ -117,21 +136,88 @@ export function individualActor(
     badge: role === "people" ? "PEOPLE" : "OPP",
     alias: aliasFor(wallet),
     matchPct: matchPct == null ? null : Math.max(0, Math.min(100, matchPct)),
+    displayName: profile?.displayName ?? null,
+    pfpUrl: profile?.pfpUrl ?? null,
   };
 }
 
 export function marketActor(): ActorIdentity {
-  return { scale: "market", role: "market", badge: "THE MARKET", alias: null, matchPct: null };
+  return {
+    scale: "market",
+    role: "market",
+    badge: "THE MARKET",
+    alias: null,
+    matchPct: null,
+    displayName: null,
+    pfpUrl: null,
+  };
 }
 
-export function creatorActor(wallet: string | null): ActorIdentity {
+export function creatorActor(wallet: string | null, profile?: WalletProfile | null): ActorIdentity {
   return {
     scale: "individual",
     role: "creator",
     badge: "CREATOR",
     alias: wallet ? aliasFor(wallet) : null,
     matchPct: null,
+    displayName: profile?.displayName ?? null,
+    pfpUrl: profile?.pfpUrl ?? null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Relationship axis — the conviction-match ring around an actor's avatar.
+//
+// Hue encodes ALIGNMENT ↔ OPPOSITION (purple ↔ grey ↔ red); it is a spectrum,
+// not a traffic light. Deliberately NOT green/yellow/red: opposition is valuable
+// signal, not a warning, and green/red are reserved for P&L (see the palette
+// rule in ConvictionFeed.tsx). Strength (distance from neutral) fills the ring
+// equally for both poles, so a strong Opp is as visually present as strong
+// People. Thresholds are config, not literals.
+// ---------------------------------------------------------------------------
+
+export const MATCH_THRESHOLDS = {
+  strongAlign: 90, // ≥ → deep purple (your People)
+  moderateAlign: 70, // ≥ → muted purple
+  neutral: 50, // the ambiguous midpoint; mirrored for opposition (30 / 10)
+} as const;
+
+export type RelationshipBucket =
+  "strong-align" | "moderate-align" | "neutral" | "moderate-oppose" | "strong-oppose";
+
+/** Map a 0..100 match score (50 = neutral) to a symmetric relationship bucket. */
+export function relationshipBucket(matchPct: number): RelationshipBucket {
+  const m = Math.max(0, Math.min(100, matchPct));
+  const moderateOppose = 100 - MATCH_THRESHOLDS.moderateAlign; // 30
+  const strongOppose = 100 - MATCH_THRESHOLDS.strongAlign; // 10
+  if (m >= MATCH_THRESHOLDS.strongAlign) return "strong-align";
+  if (m >= MATCH_THRESHOLDS.moderateAlign) return "moderate-align";
+  if (m > moderateOppose) return "neutral";
+  if (m > strongOppose) return "moderate-oppose";
+  return "strong-oppose";
+}
+
+export const RELATIONSHIP_COLOR: Record<RelationshipBucket, string> = {
+  "strong-align": "#6d28d9", // deep purple
+  "moderate-align": "#a78bfa", // muted purple
+  neutral: "#9ca3af", // grey
+  "moderate-oppose": "#f87171", // muted red
+  "strong-oppose": "#b91c1c", // deep red
+};
+
+export function relationshipColor(matchPct: number): string {
+  return RELATIONSHIP_COLOR[relationshipBucket(matchPct)];
+}
+
+/** 0..1 distance from neutral — fills the ring for BOTH poles. */
+export function relationshipStrength(matchPct: number): number {
+  const m = Math.max(0, Math.min(100, matchPct));
+  return Math.min(1, Math.abs(m - MATCH_THRESHOLDS.neutral) / MATCH_THRESHOLDS.neutral);
+}
+
+/** Below neutral = opposed. Used as the redundant (non-hue) ring channel. */
+export function isOpposed(matchPct: number): boolean {
+  return matchPct < MATCH_THRESHOLDS.neutral;
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +295,29 @@ export function aliasFor(wallet: string): string {
   const adj = ADJECTIVES[h % ADJECTIVES.length];
   const noun = NOUNS[(h >>> 8) % NOUNS.length];
   return `${adj} ${noun}`;
+}
+
+/** Two initials for a generated avatar, from a real name or the neutral alias. */
+export function initialsFor(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
+
+/** Deterministic hue (0..359) for a generated avatar, seeded by wallet. */
+export function hueFor(wallet: string): number {
+  return hashWallet(wallet) % 360;
+}
+
+/** Build an AvatarRef, preferring real POV identity, falling back to the alias. */
+export function avatarRef(wallet: string, profile?: WalletProfile | null): AvatarRef {
+  return {
+    wallet,
+    alias: aliasFor(wallet),
+    displayName: profile?.displayName ?? null,
+    pfpUrl: profile?.pfpUrl ?? null,
+  };
 }
 
 // ---------------------------------------------------------------------------

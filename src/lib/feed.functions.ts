@@ -18,14 +18,17 @@ import { z } from "zod";
 import {
   type FeedCard,
   type Side,
+  type WalletProfile,
   wealthFlow,
   marketActor,
   individualActor,
   creatorActor,
+  avatarRef,
   fmtCount,
   aliasFor,
   rankScore,
 } from "@/lib/conviction-feed";
+import { fetchPovUser } from "@/lib/pov.server";
 
 function publicClient() {
   const url = process.env.SUPABASE_URL!;
@@ -48,6 +51,14 @@ const WINDOW_EVENTS = 500; // how many recent trade events to fold
 const MAX_CARDS = 40;
 const BIG_MOVE_PCT = 25; // |chg| above which an unattributed move is still worth a row
 const RECENT_CREATE_MS = 3 * 24 * 3600 * 1000; // "just created" window for creator early-signal
+const CROWD_MAX = 6; // backer avatars sent per card (component shows ~4 + overflow)
+const PROFILE_LAZY_CAP = 20; // max pov.co lookups per feed request; cached after
+
+function serviceClient() {
+  const url = process.env.SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
 
 type EventRow = {
   onchain_id: number;
@@ -232,6 +243,9 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
     // 4. Build candidate cards. One best card per market wins in step 5.
     const now = Date.now();
     const candidates: FeedCard[] = [];
+    // Per-card scratch for the profile-enrichment pass: which wallet is the
+    // primary actor, and who the backers are (for the avatar stack).
+    const cardWallets = new Map<string, { actorWallet: string | null; backers: string[] }>();
 
     for (const [id, agg] of aggById) {
       const ms = stateById.get(id);
@@ -312,6 +326,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           convictionPct: convictionOf(focus.matched_wallet),
           believersYes,
           believersNo,
+          crowd: [],
+          crowdTotal: agg.backed.size,
           action: "open",
           signalType: `individual_${role}_${reducing ? "reduce" : "commit"}`,
           score: rankScore({
@@ -347,6 +363,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           convictionPct: convictionOf(meta.author_wallet),
           believersYes,
           believersNo,
+          crowd: [],
+          crowdTotal: agg.backed.size,
           action: "open",
           signalType: "creator_started",
           score: rankScore({
@@ -392,6 +410,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         convictionPct: null,
         believersYes,
         believersNo,
+        crowd: [],
+        crowdTotal: agg.backed.size,
         action: "open",
         signalType: wealth ? "market_flow" : "market_unattributed",
         score: rankScore({
@@ -406,18 +426,108 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       };
 
       // Prefer the most attributed story per market: individual > creator > network.
-      candidates.push(individual ?? creator ?? network);
+      const chosen = individual ?? creator ?? network;
+      const actorWallet = individual
+        ? ((individual.signalType.includes("people") ? people : opp)?.matched_wallet ?? null)
+        : creator
+          ? (meta?.author_wallet ?? null)
+          : null;
+      cardWallets.set(chosen.id, { actorWallet, backers: [...agg.backed] });
+      candidates.push(chosen);
     }
 
-    // 5. Rank and cap.
+    // 5. Rank and cap — only the shown cards get profile enrichment.
     candidates.sort((a, b) => b.score - a.score);
-    return {
-      data: candidates.slice(0, MAX_CARDS),
-      viewer,
-      hasPeople,
-      error: null,
-    };
+    const shown = candidates.slice(0, MAX_CARDS);
+
+    // 6. Resolve POV profiles (pic + name) for the wallets actually shown: the
+    // primary actor of each card plus its top backers. Cached in `profiles`;
+    // misses are lazily fetched from pov.co (bounded) and written back.
+    const wanted = new Set<string>();
+    for (const c of shown) {
+      const cw = cardWallets.get(c.id);
+      if (cw?.actorWallet) wanted.add(cw.actorWallet.toLowerCase());
+      for (const w of (cw?.backers ?? []).slice(0, CROWD_MAX)) wanted.add(w.toLowerCase());
+    }
+    const profiles = await resolveProfiles(sb, [...wanted]);
+
+    for (const c of shown) {
+      const cw = cardWallets.get(c.id);
+      if (c.actor && cw?.actorWallet) {
+        const p = profiles.get(cw.actorWallet.toLowerCase());
+        if (p) {
+          c.actor.displayName = p.displayName;
+          c.actor.pfpUrl = p.pfpUrl;
+        }
+      }
+      const actorLc = cw?.actorWallet?.toLowerCase();
+      const backers = (cw?.backers ?? []).filter((w) => w.toLowerCase() !== actorLc);
+      c.crowd = backers.slice(0, CROWD_MAX).map((w) => avatarRef(w, profiles.get(w.toLowerCase())));
+      c.crowdTotal = backers.length;
+    }
+
+    return { data: shown, viewer, hasPeople, error: null };
   });
+
+type SupabaseLike = ReturnType<typeof publicClient>;
+
+/**
+ * Load cached profiles for `wallets`, then lazily resolve the misses from pov.co
+ * (bounded by PROFILE_LAZY_CAP) and write them back — including 404s as
+ * `not_found` so we never re-fetch a wallet with no POV account.
+ */
+async function resolveProfiles(
+  sb: SupabaseLike,
+  wallets: string[],
+): Promise<Map<string, WalletProfile>> {
+  const map = new Map<string, WalletProfile>();
+  if (wallets.length === 0) return map;
+
+  const { data: cached } = await sb
+    .from("profiles")
+    .select("wallet, display_name, pfp_url, not_found")
+    .in("wallet", wallets);
+  const known = new Set<string>();
+  for (const p of cached ?? []) {
+    const w = String(p.wallet).toLowerCase();
+    known.add(w);
+    if (!p.not_found)
+      map.set(w, { displayName: p.display_name ?? null, pfpUrl: p.pfp_url ?? null });
+  }
+
+  const misses = wallets.filter((w) => !known.has(w)).slice(0, PROFILE_LAZY_CAP);
+  if (misses.length === 0) return map;
+
+  const results = await Promise.allSettled(misses.map((w) => fetchPovUser(w)));
+  const nowIso = new Date().toISOString();
+  const rows: Record<string, unknown>[] = [];
+  results.forEach((r, i) => {
+    const w = misses[i];
+    if (r.status !== "fulfilled") return; // transient error — leave uncached, retry next time
+    const u = r.value;
+    if (u) {
+      map.set(w, { displayName: u.displayName ?? null, pfpUrl: u.pfpUrl ?? null });
+      rows.push({
+        wallet: w,
+        username: u.username ?? null,
+        display_name: u.displayName ?? null,
+        pfp_url: u.pfpUrl ?? null,
+        not_found: false,
+        fetched_at: nowIso,
+      });
+    } else {
+      rows.push({ wallet: w, not_found: true, fetched_at: nowIso });
+    }
+  });
+  if (rows.length > 0) {
+    try {
+      await serviceClient().from("profiles").upsert(rows, { onConflict: "wallet" });
+    } catch {
+      /* cache write is best-effort; the feed still renders with what we resolved */
+    }
+  }
+  return map;
+}
 
 // Re-export so the route can build a keyed alias preview without importing the pure module twice.
 export { aliasFor };
