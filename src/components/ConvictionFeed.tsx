@@ -16,8 +16,9 @@
  * The card reads as a STORY (hook → belief → story → turn), composed by the
  * feed copy engine — not a recitation of fields.
  */
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { listConvictionFeed } from "@/lib/feed.functions";
 import {
   initialsFor,
@@ -519,6 +520,69 @@ function ConvictionCard({ card }: { card: FeedCard }) {
   );
 }
 
+const WALLET_RE = /^0x[0-9a-fA-F]{40}$/;
+
+/**
+ * Viewer control. The relationship ring (People/Opp alignment) is viewer-
+ * relative, so without a viewer the feed runs at network/creator scale and
+ * shows no rings. There's no wallet-connect yet, so rather than a fake "Connect"
+ * button this offers an honest, functional way in: view the feed AS any wallet
+ * (sets ?wallet=), which lights up People/Opp and their rings.
+ */
+function ViewerControl({ wallet }: { wallet?: string }) {
+  const navigate = useNavigate();
+  const [val, setVal] = useState("");
+  const setViewer = (w: string | undefined) =>
+    navigate({ to: "/", search: (prev: Record<string, unknown>) => ({ ...prev, wallet: w }) });
+
+  if (wallet) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+        <span>
+          Viewing as{" "}
+          <span className="font-medium text-foreground">
+            {wallet.slice(0, 6)}…{wallet.slice(-4)}
+          </span>{" "}
+          — your People &amp; Opp are lit up.
+        </span>
+        <button
+          type="button"
+          onClick={() => setViewer(undefined)}
+          className="underline hover:text-foreground"
+        >
+          clear
+        </button>
+      </div>
+    );
+  }
+
+  const valid = WALLET_RE.test(val.trim());
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (valid) setViewer(val.trim().toLowerCase());
+      }}
+      className="flex items-center gap-1.5"
+    >
+      <input
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        placeholder="Paste a wallet to see who thinks like you"
+        spellCheck={false}
+        className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-ring"
+      />
+      <button
+        type="submit"
+        disabled={!valid}
+        className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-40"
+      >
+        View
+      </button>
+    </form>
+  );
+}
+
 export function ConvictionFeed({ wallet }: { wallet?: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ["conviction-feed", wallet ?? null],
@@ -537,9 +601,12 @@ export function ConvictionFeed({ wallet }: { wallet?: string }) {
         </span>
       </div>
 
+      <ViewerControl wallet={wallet} />
+
       {wallet && data && !data.hasPeople && (
         <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-          Haven&apos;t found your People yet. Keep taking positions.
+          No People or Opp for this wallet yet — it needs a few shared markets. Showing the market
+          at large.
         </div>
       )}
 
