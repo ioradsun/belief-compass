@@ -70,25 +70,59 @@ function IdentityRow({ actor }: { actor: ActorIdentity }) {
   );
 }
 
+function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "just now";
+  const m = Math.floor(ms / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+/**
+ * Price + one context fact. Leads with the % move when there is one; otherwise
+ * shows the current market odds (money-weighted YES%) so the "price" is never a
+ * blank line. A muted meta row carries conviction and the believer split.
+ */
 function PriceContext({ card }: { card: FeedCard }) {
-  const parts: string[] = [];
-  if (card.priceSide && card.priceChgPct != null) {
-    const sign = card.priceChgPct >= 0 ? "+" : "";
-    parts.push(`${card.priceSide} ${sign}${card.priceChgPct.toFixed(0)}%`);
+  const hasMove = card.priceSide && card.priceChgPct != null;
+  let priceText: string | null = null;
+  if (hasMove) {
+    const sign = card.priceChgPct! >= 0 ? "+" : "";
+    priceText = `${card.priceSide} ${sign}${card.priceChgPct!.toFixed(0)}%`;
+  } else if (card.impliedYesPct != null) {
+    priceText = `${Math.round(card.impliedYesPct)}% YES odds`;
   }
-  if (card.context) parts.push(card.context);
-  if (parts.length === 0) return null;
   const up = (card.priceChgPct ?? 0) >= 0;
+
+  const meta: string[] = [];
+  if (card.convictionPct != null) meta.push(`${card.convictionPct}% conviction`);
+  if (card.believersYes != null && card.believersNo != null) {
+    meta.push(`${card.believersYes} YES · ${card.believersNo} NO`);
+  }
+
+  if (!priceText && !card.context && meta.length === 0) return null;
   return (
-    <div className="mt-1 text-xs tabular-nums">
-      <span
-        className={
-          card.priceSide ? (up ? "text-emerald-600" : "text-rose-600") : "text-muted-foreground"
-        }
-      >
-        {parts[0]}
-      </span>
-      {parts[1] && <span className="text-muted-foreground"> · {parts[1]}</span>}
+    <div className="mt-1 space-y-0.5 text-xs">
+      {(priceText || card.context) && (
+        <div className="tabular-nums">
+          {priceText && (
+            <span
+              className={hasMove ? (up ? "text-emerald-600" : "text-rose-600") : "text-foreground"}
+            >
+              {priceText}
+            </span>
+          )}
+          {priceText && card.context && <span className="text-muted-foreground"> · </span>}
+          {card.context && <span className="text-muted-foreground">{card.context}</span>}
+        </div>
+      )}
+      {meta.length > 0 && (
+        <div className="text-muted-foreground tabular-nums">{meta.join(" · ")}</div>
+      )}
     </div>
   );
 }
@@ -96,12 +130,17 @@ function PriceContext({ card }: { card: FeedCard }) {
 function ConvictionCard({ card }: { card: FeedCard }) {
   return (
     <div className="rounded-lg border border-border bg-background/60 p-4 transition-colors hover:bg-muted/30">
-      {/* wealth — the visceral hook, loudest */}
-      {card.wealth ? (
-        <div className="text-lg font-semibold tracking-tight">{card.wealth.text}</div>
-      ) : (
-        <div className="text-sm font-medium text-muted-foreground">No money in yet</div>
-      )}
+      {/* wealth — the visceral hook, loudest — with when it happened */}
+      <div className="flex items-baseline justify-between gap-2">
+        {card.wealth ? (
+          <div className="text-lg font-semibold tracking-tight">{card.wealth.text}</div>
+        ) : (
+          <div className="text-sm font-medium text-muted-foreground">No money in yet</div>
+        )}
+        <time className="shrink-0 text-[11px] text-muted-foreground" dateTime={card.occurredAt}>
+          {timeAgo(card.occurredAt)}
+        </time>
+      </div>
 
       {/* identity — quiet sub-line; dropped entirely when unattributed */}
       {card.actor && (

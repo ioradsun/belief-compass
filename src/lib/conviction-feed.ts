@@ -55,12 +55,16 @@ export interface FeedCard {
   actor: ActorIdentity | null; // null = unattributed → no identity row at all
   story: string; // the ONE sentence — the only part that reads as language
   priceSide: Side | null;
-  priceChgPct: number | null;
+  priceChgPct: number | null; // % move; null when there's no move yet
+  impliedYesPct: number | null; // current market odds (money-weighted YES%) — the "price" when there's no move
   context: string | null; // one fact: "held 73 days" / "143 new believers"
+  convictionPct: number | null; // actor's conviction 0..100 (individual/creator); null at network scale
+  believersYes: number | null;
+  believersNo: number | null;
   action: FeedAction;
   signalType: string; // internal only — ranking + analytics, never rendered
   score: number;
-  occurredAt: string;
+  occurredAt: string; // when this signal happened — drives the "time ago" stamp
 }
 
 // ---------------------------------------------------------------------------
