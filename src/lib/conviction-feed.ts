@@ -1,0 +1,283 @@
+/**
+ * conviction.company — Conviction Signal Feed, pure layer.
+ *
+ * ZERO IO. No Date.now (callers pass `now`), no network, no DB. Everything here
+ * is the universal grammar from the v1 spec turned into functions:
+ *
+ *   [ wealth ] → [ actor @ scale ] → [ one of 5 behaviors ] → [ price + context ]
+ *
+ * The actor is a PARAMETER, not a type — individual / group / market all render
+ * through one shape, differing only in how wealth is summed and how the identity
+ * row degrades. Wealth claims and attribution verbs only ever say what the data
+ * proves (tier-1 capital flow here; realized/unrealized are later, gated tiers).
+ */
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export type ActorScale = "individual" | "group" | "market" | "none";
+export type ActorRole =
+  | "people"
+  | "opp" // individuals (viewer-relative)
+  | "tribe"
+  | "rivals" // crowds (viewer-relative)
+  | "creator" // authorship
+  | "market" // network scale, weakest attribution
+  | null;
+
+/** Honesty tier of a wealth figure. Only `flow` is computable without cost basis. */
+export type WealthTier = "flow" | "realized" | "unrealized";
+export type Side = "YES" | "NO";
+export type FeedAction = "open" | "back_yes" | "back_no" | "review";
+
+export interface WealthLine {
+  usd: number;
+  direction: "in" | "out";
+  side: Side | null; // null = network aggregate, no single side
+  tier: WealthTier;
+  text: string; // "$8.4M entered YES"
+}
+
+export interface ActorIdentity {
+  scale: ActorScale;
+  role: ActorRole;
+  badge: string; // "PEOPLE" · "OPP" · "THE MARKET" · "CREATOR" …
+  alias: string | null; // individuals only; groups/market render badge only
+  matchPct: number | null; // ring fill 0..100; individuals only. Never shown as text.
+}
+
+export interface FeedCard {
+  id: string;
+  onchain_id: number;
+  marketTitle: string;
+  wealth: WealthLine | null; // null when there is no honest money figure yet
+  actor: ActorIdentity | null; // null = unattributed → no identity row at all
+  story: string; // the ONE sentence — the only part that reads as language
+  priceSide: Side | null;
+  priceChgPct: number | null;
+  context: string | null; // one fact: "held 73 days" / "143 new believers"
+  action: FeedAction;
+  signalType: string; // internal only — ranking + analytics, never rendered
+  score: number;
+  occurredAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Wealth formatting — dollars by default, never raw ETH as the lead.
+// ---------------------------------------------------------------------------
+
+export function fmtUsd(n: number): string {
+  const v = Math.abs(Math.round(n));
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M`;
+  if (v >= 1e3) return `$${Math.round(v / 1e3)}k`;
+  return `$${v.toLocaleString("en-US")}`;
+}
+
+/**
+ * Tier-1 capital flow: trade size × price, summed. Always honest — no cost basis
+ * needed. `text` uses human capital-flow verbs ("entered" / "left" / "committed"),
+ * never a verb that implies profit the data hasn't proven.
+ */
+export function wealthFlow(
+  usd: number,
+  direction: "in" | "out",
+  side: Side | null,
+): WealthLine | null {
+  if (!(usd > 0)) return null;
+  const money = fmtUsd(usd);
+  let text: string;
+  if (side == null) {
+    // Network scale: attributable to no one → weakest verb.
+    text = `${money} committed today`;
+  } else if (direction === "in") {
+    text = `${money} entered ${side}`;
+  } else {
+    text = `${money} left ${side}`;
+  }
+  return { usd, direction, side, tier: "flow", text };
+}
+
+// ---------------------------------------------------------------------------
+// Actor identity — badge/alias/ring, viewer-relative. Chrome, not a sentence.
+// ---------------------------------------------------------------------------
+
+export function individualActor(
+  role: "people" | "opp",
+  wallet: string,
+  matchPct: number | null,
+): ActorIdentity {
+  return {
+    scale: "individual",
+    role,
+    badge: role === "people" ? "PEOPLE" : "OPP",
+    alias: aliasFor(wallet),
+    matchPct: matchPct == null ? null : Math.max(0, Math.min(100, matchPct)),
+  };
+}
+
+export function marketActor(): ActorIdentity {
+  return { scale: "market", role: "market", badge: "THE MARKET", alias: null, matchPct: null };
+}
+
+export function creatorActor(wallet: string | null): ActorIdentity {
+  return {
+    scale: "individual",
+    role: "creator",
+    badge: "CREATOR",
+    alias: wallet ? aliasFor(wallet) : null,
+    matchPct: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Neutral aliases — deterministic adjective + noun, seeded by wallet hash.
+// The pool is intentionally NON-evaluative: no "Rich", "Smart", "Lucky" — an
+// accidental "Lucky Bull" becomes a reputation the wallet never earned.
+// ---------------------------------------------------------------------------
+
+const ADJECTIVES = [
+  "Quiet",
+  "Amber",
+  "Orange",
+  "Slate",
+  "Cobalt",
+  "Umber",
+  "Jade",
+  "Ivory",
+  "Cedar",
+  "Dusk",
+  "Copper",
+  "Indigo",
+  "Hazel",
+  "Ashen",
+  "Basalt",
+  "Marble",
+  "Sable",
+  "Verdant",
+  "Onyx",
+  "Pale",
+  "Russet",
+  "Teal",
+  "Ochre",
+  "Flint",
+];
+const NOUNS = [
+  "Fox",
+  "River",
+  "Heron",
+  "Falcon",
+  "Otter",
+  "Willow",
+  "Marten",
+  "Sparrow",
+  "Bison",
+  "Lynx",
+  "Crane",
+  "Badger",
+  "Hawk",
+  "Wren",
+  "Ibis",
+  "Stag",
+  "Vole",
+  "Finch",
+  "Moth",
+  "Elk",
+  "Owl",
+  "Kite",
+  "Roe",
+  "Pine",
+];
+
+/** FNV-1a over the lowercased hex. Stable forever for a given wallet. */
+function hashWallet(wallet: string): number {
+  let h = 0x811c9dc5;
+  const s = wallet.toLowerCase();
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+export function aliasFor(wallet: string): string {
+  const h = hashWallet(wallet);
+  const adj = ADJECTIVES[h % ADJECTIVES.length];
+  const noun = NOUNS[(h >>> 8) % NOUNS.length];
+  return `${adj} ${noun}`;
+}
+
+// ---------------------------------------------------------------------------
+// Behaviors — the five any actor can do, plus context helpers. The behavior IS
+// the label; we never render internal type names. Attribution verbs are earned:
+// default to the weakest true statement, climb only when timing + size support it.
+// ---------------------------------------------------------------------------
+
+export interface AttributionEvidence {
+  /** Actor's own capital in this move, as a fraction of the total move (0..1). */
+  shareOfMove: number;
+  /** True if the actor acted before the price move (from block_number vs path). */
+  actedBefore: boolean;
+  /** True if the actor acted during the move. */
+  actedDuring: boolean;
+}
+
+/** joined → contributed → accelerated → drove. Weakest true verb by default. */
+export function attributionVerb(e: AttributionEvidence | null): string {
+  if (!e) return "joined the buyers";
+  if (e.actedBefore && e.shareOfMove >= 0.25) return "drove the move";
+  if (e.actedDuring && e.shareOfMove >= 0.15) return "accelerated the move";
+  if (e.shareOfMove >= 0.15) return "contributed to the move";
+  return "joined the buyers";
+}
+
+export function fmtCount(n: number, singular: string, plural = `${singular}s`): string {
+  return `${n.toLocaleString("en-US")} ${n === 1 ? singular : plural}`;
+}
+
+export function pricePctText(side: Side | null, chg: number | null): string | null {
+  if (side == null || chg == null) return null;
+  const sign = chg >= 0 ? "+" : "";
+  return `${side} ${sign}${chg.toFixed(0)}%`;
+}
+
+// ---------------------------------------------------------------------------
+// Ranking — "most interesting money move, then explain it."
+// how much wealth moved > who's behind it > how meaningful > how unusual > recent.
+// Early conviction signals and People+Opp convergence override to the top.
+// ---------------------------------------------------------------------------
+
+export const RANK_WEIGHTS = {
+  wealth: 12, // log10($) — the visceral hook and primary axis
+  attribution: 8, // a move your People/Opp drove beats an unattributed one
+  meaningful: 4, // largest-conviction / long holds over small opens
+  surprise: 5, // contradicts the actor's own pattern
+  recencyPerHour: -0.15,
+  earlySignalOverride: 40, // person acted before any price reaction
+  convergenceOverride: 100, // People + Opp on the same side — rarest signal
+  unattributedPenalty: -6, // "nobody in your graph moved" ranks below any attributed move
+} as const;
+
+export interface RankInputs {
+  wealthUsd: number;
+  attribution: number; // 0 none, 1 market, 2 creator, 3 tribe/rivals, 4 people/opp
+  meaningful: number; // 0..1
+  surprise: number; // 0..1
+  ageHours: number;
+  earlySignal?: boolean;
+  convergence?: boolean;
+  unattributed?: boolean;
+}
+
+export function rankScore(i: RankInputs): number {
+  let s = 0;
+  s += Math.log10(1 + Math.max(0, i.wealthUsd)) * RANK_WEIGHTS.wealth;
+  s += i.attribution * (RANK_WEIGHTS.attribution / 4);
+  s += i.meaningful * RANK_WEIGHTS.meaningful;
+  s += i.surprise * RANK_WEIGHTS.surprise;
+  s += Math.max(0, i.ageHours) * RANK_WEIGHTS.recencyPerHour;
+  if (i.earlySignal) s += RANK_WEIGHTS.earlySignalOverride;
+  if (i.convergence) s += RANK_WEIGHTS.convergenceOverride;
+  if (i.unattributed) s += RANK_WEIGHTS.unattributedPenalty;
+  return s;
+}
