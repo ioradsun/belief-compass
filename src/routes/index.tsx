@@ -238,7 +238,7 @@ function Feed() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full min-w-[720px] text-sm">
+              <table className="w-full min-w-[900px] text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="p-3">Market</th>
