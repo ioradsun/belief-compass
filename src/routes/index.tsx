@@ -1,9 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
-import { listFeed, getIngestStatus, type VolumeWindow } from "@/lib/markets.functions";
+import {
+  listFeed,
+  listMarketPulses,
+  getIngestStatus,
+  type VolumeWindow,
+} from "@/lib/markets.functions";
+import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { ConvictionFeed } from "@/components/ConvictionFeed";
 import { WalletConnectButton } from "@/components/WalletConnect";
+
 
 const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
   { key: "1h", label: "1H" },
