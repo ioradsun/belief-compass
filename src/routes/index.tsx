@@ -341,7 +341,9 @@ function Feed() {
                         capital: noCap,
                         people: people == null ? null : 100 - people,
                         volume: rr.no_volume_usd ?? null,
+                        trades: Number(rr.no_trade_count ?? 0),
                         tone: "rose",
+
                       },
                     ];
 
