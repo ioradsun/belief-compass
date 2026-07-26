@@ -207,9 +207,10 @@ function Job({
 }
 
 function Feed() {
-  const { data } = useSuspenseQuery(feedQO);
   const { wallet } = Route.useSearch();
+  const { data } = useSuspenseQuery(feedQO(wallet));
   const rows = data.data ?? [];
+
 
   return (
     <div className="min-h-screen bg-background text-foreground">
