@@ -331,6 +331,13 @@ export function MarketCard({
         </div>
       </header>
 
+      {tribe && row.tribe_side && (
+        <MatchStrip person={tribe} kind="Tribe" side={row.tribe_side} />
+      )}
+      {opp && row.opp_side && <MatchStrip person={opp} kind="Opp" side={row.opp_side} />}
+
+
+
       <div className="grid grid-cols-2 gap-2 p-3">
         <SideBlock
           side="YES"
