@@ -10,6 +10,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { Pulse } from "@/lib/markets.functions";
+import { hueFor, initialsFor } from "@/lib/conviction-feed";
 
 const ROTATE_MS = 4500;
 
@@ -60,12 +61,47 @@ function ago(iso: string) {
   if (s < 86_400) return `${Math.round(s / 3600)}h`;
   return `${Math.round(s / 86_400)}d`;
 }
+function personName(p: Pulse) {
+  return p.name || shortWallet(p.wallet);
+}
 function pulseLine(p: Pulse, ethUsd: number) {
   const usd = ethUsd > 0 ? p.eth * ethUsd : 0;
   const size = usd > 0 ? fmtUsd(usd) : `${p.eth.toFixed(3)} ETH`;
   const verb = p.type === "reduced" ? "cut" : "backed";
-  return `${shortWallet(p.wallet)} ${verb} ${p.side} · ${size}`;
+  return `${personName(p)} ${verb} ${p.side} · ${size}`;
 }
+
+/** Small face for a trader: real POV picture, else initials on a stable hue. */
+function Face({ p, size = 18 }: { p: Pulse; size?: number }) {
+  const name = personName(p);
+  if (p.pfpUrl)
+    return (
+      <img
+        src={p.pfpUrl}
+        alt={name}
+        loading="lazy"
+        className="shrink-0 rounded-full object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
+  const hue = hueFor(p.wallet);
+  return (
+    <span
+      className="shrink-0 rounded-full text-center font-semibold text-white"
+      style={{
+        width: size,
+        height: size,
+        lineHeight: `${size}px`,
+        fontSize: size * 0.45,
+        background: `hsl(${hue} 55% 45%)`,
+      }}
+      aria-hidden
+    >
+      {initialsFor(name)}
+    </span>
+  );
+}
+
 
 /** Flash helper: returns true for ~1s after `value` changes. */
 function useFlash(value: number | null | undefined) {
@@ -286,14 +322,17 @@ export function MarketCard({
           <>
             <span
               key={current?.key}
-              className="min-w-0 flex-1 animate-in fade-in slide-in-from-bottom-1 truncate duration-500"
+              className="flex min-w-0 flex-1 items-center gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-500"
             >
+              {current && <Face p={current} />}
+              <span className="min-w-0 flex-1 truncate">
               <span
                 className={current?.side === "YES" ? "text-emerald-600" : "text-rose-600"}
               >
                 {pulseLine(current!, ethUsd)}
               </span>
               <span className="text-muted-foreground"> · {ago(current!.at)} ago</span>
+              </span>
             </span>
             <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
               {open ? "close" : `${pulses.length} events`}
@@ -311,6 +350,7 @@ export function MarketCard({
                   p.side === "YES" ? "bg-emerald-500" : "bg-rose-500"
                 }`}
               />
+              <Face p={p} size={16} />
               <span className="min-w-0 flex-1 truncate">{pulseLine(p, ethUsd)}</span>
               <span className="shrink-0 text-[10px] text-muted-foreground">{ago(p.at)}</span>
             </li>

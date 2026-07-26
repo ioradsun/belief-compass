@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { publicClient } from "@/lib/supabase-clients";
+import { aliasFor } from "@/lib/conviction-feed";
 
 export const VOLUME_WINDOWS = {
   "1h": 3_600_000,
@@ -182,21 +183,38 @@ export const listMarketPulses = createServerFn({ method: "GET" })
     if (error) return { pulses: {} as Record<string, Pulse[]> };
 
     const out: Record<string, Pulse[]> = {};
+    const wanted = new Set<string>();
     for (const r of rows ?? []) {
       const key = String(r.onchain_id);
       const list = (out[key] ??= []);
       if (list.length >= 8) continue;
       const p = (r.payload ?? {}) as { eth?: string; tokens?: string };
       const ethRaw = Number(p.eth ?? 0);
+      const w = String(r.wallet ?? "");
+      if (w) wanted.add(w.toLowerCase());
       list.push({
         key: String(r.event_key),
         type: String(r.type),
         side: (r.side === "NO" ? "NO" : "YES") as "YES" | "NO",
-        wallet: String(r.wallet ?? ""),
+        wallet: w,
+        name: null,
+        pfpUrl: null,
         eth: Number.isFinite(ethRaw) ? ethRaw / 1e18 : 0,
         at: String(r.occurred_at),
       });
     }
+
+    // Put a face and a name on every trader we are about to show.
+    const { resolveProfiles } = await import("@/lib/profiles.server");
+    const profiles = await resolveProfiles([...wanted], 30);
+    for (const list of Object.values(out)) {
+      for (const p of list) {
+        const prof = p.wallet ? profiles.get(p.wallet.toLowerCase()) : null;
+        p.name = prof?.displayName ?? (p.wallet ? aliasFor(p.wallet) : null);
+        p.pfpUrl = prof?.pfpUrl ?? null;
+      }
+    }
+
     return { pulses: out };
   });
 
@@ -205,6 +223,9 @@ export type Pulse = {
   type: string;
   side: "YES" | "NO";
   wallet: string;
+  /** Real POV display name when known, otherwise a stable generated alias. */
+  name: string | null;
+  pfpUrl: string | null;
   eth: number;
   at: string;
 };

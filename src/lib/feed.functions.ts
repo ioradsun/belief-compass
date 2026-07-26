@@ -14,11 +14,10 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { publicClient, serviceClient } from "@/lib/supabase-clients";
+import { publicClient } from "@/lib/supabase-clients";
 import {
   type FeedCard,
   type Side,
-  type WalletProfile,
   wealthFlow,
   marketActor,
   individualActor,
@@ -39,14 +38,13 @@ import {
   convictionShape,
   type FeedEventType,
 } from "@/lib/feed-gates";
-import { fetchPovUser } from "@/lib/pov.server";
+import { resolveProfiles } from "@/lib/profiles.server";
 
 const WINDOW_EVENTS = 500; // how many recent trade events to fold
 const MAX_CARDS = 40;
 const BIG_MOVE_PCT = 25; // |chg| above which an unattributed move is still worth a row
 const RECENT_CREATE_MS = 24 * 3600 * 1000; // "just born" window — after a day it's not NEW BELIEF
 const CROWD_MAX = 6; // backer avatars sent per card (component shows ~4 + overflow)
-const PROFILE_LAZY_CAP = 20; // max pov.co lookups per feed request; cached after
 
 type EventRow = {
   onchain_id: number;
@@ -704,7 +702,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       if (cw?.actorWallet) wanted.add(cw.actorWallet.toLowerCase());
       for (const w of (cw?.backers ?? []).slice(0, CROWD_MAX)) wanted.add(w.toLowerCase());
     }
-    const profiles = await resolveProfiles(sb, [...wanted]);
+    const profiles = await resolveProfiles([...wanted]);
 
     for (const c of shown) {
       const cw = cardWallets.get(c.id);
@@ -749,66 +747,6 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
     const ordered = sequenceFeed(shown);
     return { data: ordered, viewer, hasPeople, error: null };
   });
-
-type SupabaseLike = ReturnType<typeof publicClient>;
-
-/**
- * Load cached profiles for `wallets`, then lazily resolve the misses from pov.co
- * (bounded by PROFILE_LAZY_CAP) and write them back — including 404s as
- * `not_found` so we never re-fetch a wallet with no POV account.
- */
-async function resolveProfiles(
-  sb: SupabaseLike,
-  wallets: string[],
-): Promise<Map<string, WalletProfile>> {
-  const map = new Map<string, WalletProfile>();
-  if (wallets.length === 0) return map;
-
-  const { data: cached } = await sb
-    .from("profiles")
-    .select("wallet, display_name, pfp_url, not_found")
-    .in("wallet", wallets);
-  const known = new Set<string>();
-  for (const p of cached ?? []) {
-    const w = String(p.wallet).toLowerCase();
-    known.add(w);
-    if (!p.not_found)
-      map.set(w, { displayName: p.display_name ?? null, pfpUrl: p.pfp_url ?? null });
-  }
-
-  const misses = wallets.filter((w) => !known.has(w)).slice(0, PROFILE_LAZY_CAP);
-  if (misses.length === 0) return map;
-
-  const results = await Promise.allSettled(misses.map((w) => fetchPovUser(w)));
-  const nowIso = new Date().toISOString();
-  const rows: Record<string, unknown>[] = [];
-  results.forEach((r, i) => {
-    const w = misses[i];
-    if (r.status !== "fulfilled") return; // transient error — leave uncached, retry next time
-    const u = r.value;
-    if (u) {
-      map.set(w, { displayName: u.displayName ?? null, pfpUrl: u.pfpUrl ?? null });
-      rows.push({
-        wallet: w,
-        username: u.username ?? null,
-        display_name: u.displayName ?? null,
-        pfp_url: u.pfpUrl ?? null,
-        not_found: false,
-        fetched_at: nowIso,
-      });
-    } else {
-      rows.push({ wallet: w, not_found: true, fetched_at: nowIso });
-    }
-  });
-  if (rows.length > 0) {
-    try {
-      await serviceClient().from("profiles").upsert(rows, { onConflict: "wallet" });
-    } catch {
-      /* cache write is best-effort; the feed still renders with what we resolved */
-    }
-  }
-  return map;
-}
 
 // Re-export so the route can build a keyed alias preview without importing the pure module twice.
 export { aliasFor };
