@@ -6,10 +6,19 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+// Fresh id per build — inlined into the client bundle AND read by the server
+// build-id endpoint, so VersionWatcher can detect and hard-reload stale tabs.
+const BUILD_ID = String(Date.now());
+
 export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },
+  },
+  vite: {
+    define: {
+      "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
+    },
   },
 });

@@ -13,6 +13,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WalletAddrRouteImport } from './routes/wallet.$addr'
 import { Route as MarketIdRouteImport } from './routes/market.$id'
+import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
 import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
 import { Route as ApiPublicJobsChainPollerRouteImport } from './routes/api/public/jobs/chain-poller'
 import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/public/jobs/belief-rollup'
@@ -35,6 +36,11 @@ const WalletAddrRoute = WalletAddrRouteImport.update({
 const MarketIdRoute = MarketIdRouteImport.update({
   id: '/market/$id',
   path: '/market/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicBuildIdRoute = ApiPublicBuildIdRouteImport.update({
+  id: '/api/public/build-id',
+  path: '/api/public/build-id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicJobsPovPollerRoute = ApiPublicJobsPovPollerRouteImport.update({
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/market/$id': typeof MarketIdRoute
   '/wallet/$addr': typeof WalletAddrRoute
+  '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/market/$id': typeof MarketIdRoute
   '/wallet/$addr': typeof WalletAddrRoute
+  '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/market/$id': typeof MarketIdRoute
   '/wallet/$addr': typeof WalletAddrRoute
+  '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/market/$id'
     | '/wallet/$addr'
+    | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
     | '/api/public/jobs/pov-poller'
@@ -99,6 +109,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/market/$id'
     | '/wallet/$addr'
+    | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
     | '/api/public/jobs/pov-poller'
@@ -108,6 +119,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/market/$id'
     | '/wallet/$addr'
+    | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
     | '/api/public/jobs/pov-poller'
@@ -118,6 +130,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   MarketIdRoute: typeof MarketIdRoute
   WalletAddrRoute: typeof WalletAddrRoute
+  ApiPublicBuildIdRoute: typeof ApiPublicBuildIdRoute
   ApiPublicJobsBeliefRollupRoute: typeof ApiPublicJobsBeliefRollupRoute
   ApiPublicJobsChainPollerRoute: typeof ApiPublicJobsChainPollerRoute
   ApiPublicJobsPovPollerRoute: typeof ApiPublicJobsPovPollerRoute
@@ -153,6 +166,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/build-id': {
+      id: '/api/public/build-id'
+      path: '/api/public/build-id'
+      fullPath: '/api/public/build-id'
+      preLoaderRoute: typeof ApiPublicBuildIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/jobs/pov-poller': {
       id: '/api/public/jobs/pov-poller'
       path: '/api/public/jobs/pov-poller'
@@ -182,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   MarketIdRoute: MarketIdRoute,
   WalletAddrRoute: WalletAddrRoute,
+  ApiPublicBuildIdRoute: ApiPublicBuildIdRoute,
   ApiPublicJobsBeliefRollupRoute: ApiPublicJobsBeliefRollupRoute,
   ApiPublicJobsChainPollerRoute: ApiPublicJobsChainPollerRoute,
   ApiPublicJobsPovPollerRoute: ApiPublicJobsPovPollerRoute,
