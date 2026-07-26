@@ -288,6 +288,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       const yesCapitalUsd = ms?.yes_capital_usd ?? null;
       const noCapitalUsd = ms?.no_capital_usd ?? null;
       const volume24hUsd = ms?.volume_24h_usd ?? null;
+      const yesPriceUsd = ms?.yes_price_usd ?? null;
+      const noPriceUsd = ms?.no_price_usd ?? null;
       const believersYes = ms?.believers_yes ?? null;
       const believersNo = ms?.believers_no ?? null;
       const convictionOf = (wallet: string | null | undefined): number | null => {
@@ -344,6 +346,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           yesCapitalUsd,
           noCapitalUsd,
           volume24hUsd,
+          yesPriceUsd,
+          noPriceUsd,
           context,
           convictionPct: convictionOf(focus.matched_wallet),
           believersYes,
@@ -410,6 +414,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           yesCapitalUsd,
           noCapitalUsd,
           volume24hUsd,
+          yesPriceUsd,
+          noPriceUsd,
           context: null,
           convictionPct: convictionOf(meta.author_wallet),
           believersYes,
@@ -485,6 +491,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         yesCapitalUsd,
         noCapitalUsd,
         volume24hUsd,
+        yesPriceUsd,
+        noPriceUsd,
         context: null,
         convictionPct: null,
         believersYes,

@@ -310,37 +310,38 @@ function Sparkline({ values }: { values: number[] }) {
 }
 
 /**
- * Ambient market context: implied belief · 24h pulse · trajectory. This is where
- * the MARKET stands, never what the card's event did — hence its own separated
- * row. Dedup: a scoreboard hook already carries the 24h move; a tension card's
- * split already carries the implied %.
+ * Ambient market context on EVERY card: the current share price and the 24h
+ * performance (plus the trajectory sparkline when there's enough history). This
+ * is where the MARKET stands, in its own separated row — never the event's
+ * effect. Shows the price of the side the card is about (YES by default).
  */
-function PriceRow({ card, format }: { card: FeedCard; format: CardFormat }) {
+function PriceRow({ card }: { card: FeedCard }) {
   const p = card.price;
-  if (!p) return null;
-  const showImplied = format !== "tension" && p.impliedPct != null;
-  const show24h = format !== "scoreboard" && p.chg24h != null;
-  const showSpark = p.series.length >= MIN_SPARK_POINTS;
-  if (!showImplied && !show24h && !showSpark) return null;
+  const side: "YES" | "NO" = card.priceSide === "NO" ? "NO" : "YES";
+  const sharePrice = side === "YES" ? card.yesPriceUsd : card.noPriceUsd;
+  // Prefer the daily-bucket 24h; fall back to the market_state headline change.
+  const chg24h = p?.chg24h ?? card.priceChgPct ?? null;
+  const showSpark = (p?.series.length ?? 0) >= MIN_SPARK_POINTS;
+  if (sharePrice == null && chg24h == null && !showSpark) return null;
 
-  const up = (p.chg24h ?? 0) >= 0;
+  const up = (chg24h ?? 0) >= 0;
   return (
-    <div className="mt-2 flex items-center gap-3 border-t border-border/50 pt-2 text-xs text-muted-foreground">
-      {showImplied && (
-        <span className="tabular-nums">
-          YES <span className="font-medium text-foreground">{p.impliedPct}%</span>
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/50 pt-2 text-xs text-muted-foreground">
+      {sharePrice != null && (
+        <span className="tabular-nums" title={`Current ${side} share price`}>
+          {side} <span className="font-medium text-foreground">${sharePrice.toFixed(2)}</span>
         </span>
       )}
-      {show24h && (
-        <span className="tabular-nums" title={`24h change in implied probability`}>
+      {chg24h != null && (
+        <span className="tabular-nums" title="24h price performance">
           {up ? "▲" : "▼"} {up ? "+" : "−"}
-          {Math.abs(p.chg24h!)}% 24h
+          {Math.abs(Math.round(chg24h))}% 24h
         </span>
       )}
       {showSpark && (
         <span className="flex items-center gap-1.5">
-          <Sparkline values={p.series} />
-          <span className="text-[10px] text-muted-foreground/70">{p.windowLabel}</span>
+          <Sparkline values={p!.series} />
+          <span className="text-[10px] text-muted-foreground/70">{p!.windowLabel}</span>
         </span>
       )}
     </div>
@@ -549,7 +550,7 @@ function ConvictionCard({ card }: { card: FeedCard }) {
         </time>
       </div>
       {body}
-      <PriceRow card={card} format={format} />
+      <PriceRow card={card} />
       <CardAction card={card} />
     </div>
   );
