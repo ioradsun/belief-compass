@@ -53,7 +53,7 @@ function publicClient() {
 const WINDOW_EVENTS = 500; // how many recent trade events to fold
 const MAX_CARDS = 40;
 const BIG_MOVE_PCT = 25; // |chg| above which an unattributed move is still worth a row
-const RECENT_CREATE_MS = 3 * 24 * 3600 * 1000; // "just created" window for creator early-signal
+const RECENT_CREATE_MS = 24 * 3600 * 1000; // "just born" window — after a day it's not NEW BELIEF
 const CROWD_MAX = 6; // backer avatars sent per card (component shows ~4 + overflow)
 const PROFILE_LAZY_CAP = 20; // max pov.co lookups per feed request; cached after
 
@@ -393,9 +393,18 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         break; // one individual card per market is plenty
       }
 
-      // --- (b) Creator early-signal card: recently authored, in your graph. ---
+      // --- (b) Creator "new belief" card: only for GENUINELY new markets. ---
       let creator: FeedCard | null = null;
       const created = meta?.created_at ? new Date(meta.created_at).getTime() : null;
+      // The strong early-signal rank boost is the "trusted people got in first"
+      // edge — it belongs to YOUR People/Opp, not every POV author. A generic
+      // creator's fresh market shouldn't dominate the whole feed.
+      const authorLc = meta?.author_wallet?.toLowerCase();
+      const authorInGraph = Boolean(
+        authorLc &&
+        (people?.matched_wallet.toLowerCase() === authorLc ||
+          opp?.matched_wallet.toLowerCase() === authorLc),
+      );
       if (created != null && now - created < RECENT_CREATE_MS && meta?.author_wallet) {
         creator = {
           id: `creator:${id}`,
@@ -435,7 +444,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
             // Stamp the card with when the market was actually created, not the
             // last trade — that's the "when it was posted" the creator story is about.
             ageHours: (now - created) / 3_600_000,
-            earlySignal: true,
+            earlySignal: authorInGraph,
           }),
           occurredAt: meta.created_at ?? agg.latest,
         };
