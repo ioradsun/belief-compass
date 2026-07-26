@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
-  applyTrade, evaluate, emptyRow, reduce, matchScore, MIN_SHARED_MARKETS,
-  type Trade, type BeliefRow,
+  applyTrade, evaluate, emptyRow, reduce, matchScore, circleMatches,
+  MIN_SHARED_MARKETS,
+  type Trade, type BeliefRow, type BeliefFactor,
 } from "./domain";
+
 
 const ts = (iso: string) => new Date(iso);
 const buy = (side: "YES" | "NO", shares: number, cost: number, at: string): Trade =>

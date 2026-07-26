@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { getMarket } from "@/lib/markets.functions";
+import { categoryToDomain } from "@/domain/categories";
+
 
 const marketQO = (id: number) => queryOptions({
   queryKey: ["market", id],
@@ -42,7 +44,17 @@ function MarketPage() {
         <h1 className="mt-4 text-2xl font-semibold tracking-tight">
           {market?.title ?? `Market #${id}`}
         </h1>
-        {market?.category && <div className="mt-1 text-sm text-muted-foreground">{market.category}</div>}
+        {market?.category && (
+          <div className="mt-1 text-sm text-muted-foreground">
+            {market.category}
+            {categoryToDomain(market.category) && (
+              <span className="ml-2 rounded-full border border-border px-2 py-0.5 text-xs">
+                {categoryToDomain(market.category)} Circle
+              </span>
+            )}
+          </div>
+        )}
+
 
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Stat label="Money%" value={state?.money_yes_pct != null ? `${Number(state.money_yes_pct).toFixed(0)}%` : "—"} />
