@@ -1,4 +1,6 @@
+import type { ReactElement } from "react";
 import { DOMAINS, type Domain } from "@/domain/categories";
+
 import type { CircleSummary } from "@/lib/circles.functions";
 
 interface Props {
@@ -17,9 +19,10 @@ export function Fingerprint({ circles, size = 260 }: Props) {
   const byDomain = new Map<Domain, CircleSummary>(circles.map((c) => [c.domain, c]));
 
   const points: string[] = [];
-  const stubs: JSX.Element[] = [];
-  const labels: JSX.Element[] = [];
-  const spokeEls: JSX.Element[] = [];
+  const stubs: ReactElement[] = [];
+  const labels: ReactElement[] = [];
+  const spokeEls: ReactElement[] = [];
+
 
   DOMAINS.forEach((dom, i) => {
     const angle = (i / DOMAINS.length) * Math.PI * 2 - Math.PI / 2;
