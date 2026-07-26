@@ -60,6 +60,7 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
             snapshotRows.push({
               onchain_id: m.onChainMarketId,
               yes_price_usd: m.yesPriceUsd ?? null,
+              no_price_usd: m.noPriceUsd ?? null,
               money_yes_pct: m.yesPercentage ?? null,
             });
             // The author profile rides along on every market — cache it so the

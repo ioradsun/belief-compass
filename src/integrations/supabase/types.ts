@@ -79,6 +79,8 @@ export type Database = {
           boost_score: number | null
           chg_1h: number | null
           chg_24h: number | null
+          chg_24h_no: number | null
+          chg_24h_yes: number | null
           divergence: number | null
           money_yes_pct: number | null
           new_believers_1h: number
@@ -101,6 +103,8 @@ export type Database = {
           boost_score?: number | null
           chg_1h?: number | null
           chg_24h?: number | null
+          chg_24h_no?: number | null
+          chg_24h_yes?: number | null
           divergence?: number | null
           money_yes_pct?: number | null
           new_believers_1h?: number
@@ -123,6 +127,8 @@ export type Database = {
           boost_score?: number | null
           chg_1h?: number | null
           chg_24h?: number | null
+          chg_24h_no?: number | null
+          chg_24h_yes?: number | null
           divergence?: number | null
           money_yes_pct?: number | null
           new_believers_1h?: number
@@ -203,18 +209,21 @@ export type Database = {
         Row: {
           captured_at: string
           money_yes_pct: number | null
+          no_price_usd: number | null
           onchain_id: number
           yes_price_usd: number | null
         }
         Insert: {
           captured_at?: string
           money_yes_pct?: number | null
+          no_price_usd?: number | null
           onchain_id: number
           yes_price_usd?: number | null
         }
         Update: {
           captured_at?: string
           money_yes_pct?: number | null
+          no_price_usd?: number | null
           onchain_id?: number
           yes_price_usd?: number | null
         }

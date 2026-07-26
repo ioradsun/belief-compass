@@ -249,7 +249,7 @@ function Feed() {
                     <th className="px-4 py-3 text-right">Price</th>
                     <th className="px-4 py-3 text-right">24h</th>
                     <th className="px-4 py-3 text-right">Backers</th>
-                    <th className="px-4 py-3 text-right">Money share</th>
+                    <th className="px-4 py-3 text-right">Invested</th>
                     <th className="px-4 py-3 text-right">People share</th>
                     <th className="px-4 py-3 text-right">Volume</th>
                     <th className="px-4 py-3">Your graph</th>
@@ -259,7 +259,6 @@ function Feed() {
                   {rows.map((r) => {
                     const m = (r as { markets?: { title?: string; category?: string } | null })
                       .markets;
-                    const chg = r.chg_24h == null ? null : Number(r.chg_24h);
                     const fmtShare = (n: number | null) =>
                       n == null
                         ? "—"
@@ -269,19 +268,28 @@ function Feed() {
                     const yesB = Number(r.believers_yes ?? 0);
                     const noB = Number(r.believers_no ?? 0);
                     const totalB = yesB + noB;
-                    const money = r.money_yes_pct == null ? null : Number(r.money_yes_pct);
                     const people = r.people_yes_pct == null ? null : Number(r.people_yes_pct);
                     const tribe = (r as { tribe_side?: "YES" | "NO" | null }).tribe_side ?? null;
                     const opp = (r as { opp_side?: "YES" | "NO" | null }).opp_side ?? null;
-                    const rr = r as { yes_volume_usd?: number | null; no_volume_usd?: number | null };
+                    const rr = r as {
+                      yes_volume_usd?: number | null;
+                      no_volume_usd?: number | null;
+                      yes_capital_usd?: number | null;
+                      no_capital_usd?: number | null;
+                      chg_24h_yes?: number | null;
+                      chg_24h_no?: number | null;
+                    };
+                    const yesCap = rr.yes_capital_usd == null ? null : Number(rr.yes_capital_usd);
+                    const noCap = rr.no_capital_usd == null ? null : Number(rr.no_capital_usd);
+                    const capTotal = (yesCap ?? 0) + (noCap ?? 0);
 
                     const sides = [
                       {
                         key: "YES" as const,
                         price: r.yes_price_usd,
-                        chg,
+                        chg: rr.chg_24h_yes == null ? null : Number(rr.chg_24h_yes),
                         backers: yesB,
-                        money,
+                        capital: yesCap,
                         people,
                         volume: rr.yes_volume_usd ?? null,
                         tone: "emerald",
@@ -289,9 +297,9 @@ function Feed() {
                       {
                         key: "NO" as const,
                         price: r.no_price_usd,
-                        chg: chg == null ? null : -chg,
+                        chg: rr.chg_24h_no == null ? null : Number(rr.chg_24h_no),
                         backers: noB,
-                        money: money == null ? null : 100 - money,
+                        capital: noCap,
                         people: people == null ? null : 100 - people,
                         volume: rr.no_volume_usd ?? null,
                         tone: "rose",
@@ -321,7 +329,13 @@ function Feed() {
                                 </div>
                               )}
                               <div className="mt-2 text-[11px] text-muted-foreground">
-                                total {fmtUsd(r.volume_total_usd)}
+                                market cap {capTotal > 0 ? fmtUsd(capTotal) : "—"}
+                                {capTotal > 0 && (
+                                  <> · yes {fmtUsd(yesCap ?? 0)} / no {fmtUsd(noCap ?? 0)}</>
+                                )}
+                              </div>
+                              <div className="mt-1 text-[11px] text-muted-foreground">
+                                volume {fmtUsd(r.volume_total_usd)}
                                 {Number(r.believers_mixed ?? 0) > 0 &&
                                   ` · ${r.believers_mixed} mixed`}
                               </div>
@@ -358,7 +372,16 @@ function Feed() {
                               />
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-right tabular-nums">{pct(s.money)}</td>
+                          <td className="px-4 py-4 text-right tabular-nums">
+                            <div className="font-medium">
+                              {s.capital == null ? "—" : fmtUsd(s.capital)}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {capTotal > 0 && s.capital != null
+                                ? `${Math.round((s.capital / capTotal) * 100)}% of cap`
+                                : ""}
+                            </div>
+                          </td>
                           <td className="px-4 py-4 text-right tabular-nums">{pct(s.people)}</td>
                           <td className="px-4 py-4 text-right tabular-nums">{fmtUsd(s.volume)}</td>
                           <td className="px-4 py-4">
