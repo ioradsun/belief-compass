@@ -9,7 +9,7 @@
  * Prices/volumes flash when the polled data actually changes.
  */
 import { useEffect, useRef, useState } from "react";
-import type { Pulse } from "@/lib/markets.functions";
+import type { MatchPerson, Pulse } from "@/lib/markets.functions";
 import { hueFor, initialsFor } from "@/lib/conviction-feed";
 
 const ROTATE_MS = 4500;
