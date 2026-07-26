@@ -249,7 +249,7 @@ function Feed() {
                     <th className="px-4 py-3 text-right">Price</th>
                     <th className="px-4 py-3 text-right">24h</th>
                     <th className="px-4 py-3 text-right">Backers</th>
-                    <th className="px-4 py-3 text-right">Money share</th>
+                    <th className="px-4 py-3 text-right">Invested</th>
                     <th className="px-4 py-3 text-right">People share</th>
                     <th className="px-4 py-3 text-right">Volume</th>
                     <th className="px-4 py-3">Your graph</th>
