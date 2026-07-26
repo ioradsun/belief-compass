@@ -415,6 +415,15 @@ export type Database = {
     }
     Functions: {
       eth_usd_calibration: { Args: never; Returns: number }
+      market_change_window: {
+        Args: { p_ids: number[]; p_since: string }
+        Returns: {
+          chg_no: number
+          chg_yes: number
+          onchain_id: number
+          since_at: string
+        }[]
+      }
       market_volume_window: {
         Args: { p_ids: number[]; p_since: string }
         Returns: {
