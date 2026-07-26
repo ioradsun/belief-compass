@@ -216,8 +216,11 @@ function Job({
 
 function Feed() {
   const { wallet } = Route.useSearch();
-  const { data } = useSuspenseQuery(feedQO(wallet));
+  const [win, setWin] = useState<VolumeWindow>("24h");
+  const { data } = useSuspenseQuery(feedQO(wallet, win));
   const rows = data.data ?? [];
+  const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "24H";
+
 
 
   return (
