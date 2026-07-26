@@ -251,7 +251,29 @@ function Feed() {
               cycle completes.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border">
+            <div className="rounded-lg border border-border">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <div className="text-xs text-muted-foreground">
+                  Volume = on-chain ETH traded on that side in the window, priced in USD.
+                </div>
+                <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
+                  {WINDOW_OPTIONS.map((w) => (
+                    <button
+                      key={w.key}
+                      type="button"
+                      onClick={() => setWin(w.key)}
+                      className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                        win === w.key
+                          ? "bg-foreground text-background"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="overflow-x-auto">
               <table className="w-full min-w-[1040px] text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
@@ -262,10 +284,11 @@ function Feed() {
                     <th className="px-4 py-3 text-right">Backers</th>
                     <th className="px-4 py-3 text-right">Invested</th>
                     <th className="px-4 py-3 text-right">People share</th>
-                    <th className="px-4 py-3 text-right">Volume</th>
+                    <th className="px-4 py-3 text-right">Volume {winLabel}</th>
                     <th className="px-4 py-3">Your graph</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {rows.map((r) => {
                     const m = (r as { markets?: { title?: string; category?: string } | null })
