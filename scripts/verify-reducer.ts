@@ -226,7 +226,8 @@ async function verifyWallet(
 
     const sideOk = p && rSide && p.side === rSide && !rMixed;
     const sharesOk = p && row ? nearlyEqual(rShares, p.shares) : false;
-    const ok = Boolean(sideOk && sharesOk);
+    const isDust = !p && row && rShares > 0 && rShares < DUST_SHARES;
+    const ok = Boolean((sideOk && sharesOk) || isDust);
     if (ok) matches++;
     else mismatches++;
 
@@ -238,7 +239,7 @@ async function verifyWallet(
       `  Reducer  ${row ? `${rMixed ? "MIXED" : rSide} ${fmtShares(rShares)} sh${rMixed ? ` (YES ${fmtShares(row.yes_shares)} / NO ${fmtShares(row.no_shares)})` : ""}` : "— (no trades indexed)"}`,
     );
     if (ok) {
-      console.log(`  ✅ MATCH`);
+      console.log(isDust ? `  ✅ MATCH (dust — POV filters <${DUST_SHARES} sh)` : `  ✅ MATCH`);
     } else {
       if (!p)
         console.log(`  ❌ reducer holds a position POV does not (sold off-book, or over-count)`);
