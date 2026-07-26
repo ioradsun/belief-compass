@@ -238,13 +238,15 @@ function Feed() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full min-w-[720px] text-sm">
+              <table className="w-full min-w-[900px] text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="p-3">Market</th>
+                    <th className="p-3 text-right">YES</th>
+                    <th className="p-3 text-right">NO</th>
+                    <th className="p-3 text-right">24h</th>
                     <th className="p-3 text-right">Money%</th>
                     <th className="p-3 text-right">People%</th>
-                    <th className="p-3 text-right">Divergence</th>
                     <th className="p-3 text-right">Wallets</th>
                     <th className="p-3 text-right">Volume</th>
                   </tr>
@@ -253,6 +255,10 @@ function Feed() {
                   {rows.map((r) => {
                     const m = (r as { markets?: { title?: string; category?: string } | null })
                       .markets;
+                    const chg = r.chg_24h;
+                    const chgUp = chg != null && Number(chg) >= 0;
+                    const fmtShare = (n: number | null) =>
+                      n == null ? "—" : n >= 1 ? `$${Number(n).toFixed(2)}` : `${Math.round(Number(n) * 100)}¢`;
                     return (
                       <tr key={r.onchain_id} className="border-t border-border hover:bg-muted/30">
                         <td className="p-3">
@@ -266,11 +272,22 @@ function Feed() {
                             <div className="text-xs text-muted-foreground">{m.category}</div>
                           )}
                         </td>
+                        <td className="p-3 text-right tabular-nums text-blue-600">
+                          {fmtShare(r.yes_price_usd)}
+                        </td>
+                        <td className="p-3 text-right tabular-nums text-muted-foreground">
+                          {fmtShare(r.no_price_usd)}
+                        </td>
+                        <td
+                          className="p-3 text-right tabular-nums font-medium"
+                          style={{ color: chg == null ? undefined : chgUp ? "#059669" : "#dc2626" }}
+                        >
+                          {chg == null
+                            ? "—"
+                            : `${chgUp ? "▲ +" : "▼ −"}${Math.abs(Math.round(Number(chg)))}%`}
+                        </td>
                         <td className="p-3 text-right tabular-nums">{pct(r.money_yes_pct)}</td>
                         <td className="p-3 text-right tabular-nums">{pct(r.people_yes_pct)}</td>
-                        <td className="p-3 text-right tabular-nums">
-                          {r.divergence != null ? `${Number(r.divergence).toFixed(0)}` : "—"}
-                        </td>
                         <td className="p-3 text-right tabular-nums">
                           <span className="text-emerald-600">{r.believers_yes}</span>
                           {" / "}
