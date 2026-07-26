@@ -259,7 +259,6 @@ function Feed() {
                   {rows.map((r) => {
                     const m = (r as { markets?: { title?: string; category?: string } | null })
                       .markets;
-                    const chg = r.chg_24h == null ? null : Number(r.chg_24h);
                     const fmtShare = (n: number | null) =>
                       n == null
                         ? "—"
@@ -269,19 +268,28 @@ function Feed() {
                     const yesB = Number(r.believers_yes ?? 0);
                     const noB = Number(r.believers_no ?? 0);
                     const totalB = yesB + noB;
-                    const money = r.money_yes_pct == null ? null : Number(r.money_yes_pct);
                     const people = r.people_yes_pct == null ? null : Number(r.people_yes_pct);
                     const tribe = (r as { tribe_side?: "YES" | "NO" | null }).tribe_side ?? null;
                     const opp = (r as { opp_side?: "YES" | "NO" | null }).opp_side ?? null;
-                    const rr = r as { yes_volume_usd?: number | null; no_volume_usd?: number | null };
+                    const rr = r as {
+                      yes_volume_usd?: number | null;
+                      no_volume_usd?: number | null;
+                      yes_capital_usd?: number | null;
+                      no_capital_usd?: number | null;
+                      chg_24h_yes?: number | null;
+                      chg_24h_no?: number | null;
+                    };
+                    const yesCap = rr.yes_capital_usd == null ? null : Number(rr.yes_capital_usd);
+                    const noCap = rr.no_capital_usd == null ? null : Number(rr.no_capital_usd);
+                    const capTotal = (yesCap ?? 0) + (noCap ?? 0);
 
                     const sides = [
                       {
                         key: "YES" as const,
                         price: r.yes_price_usd,
-                        chg,
+                        chg: rr.chg_24h_yes == null ? null : Number(rr.chg_24h_yes),
                         backers: yesB,
-                        money,
+                        capital: yesCap,
                         people,
                         volume: rr.yes_volume_usd ?? null,
                         tone: "emerald",
@@ -289,9 +297,9 @@ function Feed() {
                       {
                         key: "NO" as const,
                         price: r.no_price_usd,
-                        chg: chg == null ? null : -chg,
+                        chg: rr.chg_24h_no == null ? null : Number(rr.chg_24h_no),
                         backers: noB,
-                        money: money == null ? null : 100 - money,
+                        capital: noCap,
                         people: people == null ? null : 100 - people,
                         volume: rr.no_volume_usd ?? null,
                         tone: "rose",
