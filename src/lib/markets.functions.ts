@@ -186,7 +186,16 @@ export const listFeed = createServerFn({ method: "GET" })
   // Rank by the volume actually being displayed so the table is self-consistent.
   mapped.sort((a, b) => (b.window_volume_usd ?? -1) - (a.window_volume_usd ?? -1));
 
-  return { data: mapped, error: null, window: win, ethUsd, historyFrom };
+  return {
+    data: mapped,
+    error: null,
+    window: win,
+    ethUsd,
+    historyFrom,
+    tribe: tribePerson,
+    opp: oppPerson,
+  };
+
 });
 
 
