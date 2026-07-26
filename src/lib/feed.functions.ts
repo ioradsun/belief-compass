@@ -14,11 +14,10 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { publicClient, serviceClient } from "@/lib/supabase-clients";
+import { publicClient } from "@/lib/supabase-clients";
 import {
   type FeedCard,
   type Side,
-  type WalletProfile,
   wealthFlow,
   marketActor,
   individualActor,
