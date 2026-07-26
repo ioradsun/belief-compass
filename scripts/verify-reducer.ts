@@ -33,6 +33,12 @@ const DEPLOY_BLOCK = BigInt(process.env.PROXY_DEPLOY_BLOCK ?? "45500000");
 // set VERIFY_CHUNK higher (and BASE_RPC_URL) for a fast full-range run.
 const CHUNK = BigInt(process.env.VERIFY_CHUNK ?? "9000");
 const SHARE_TOL = 1e-4; // relative tolerance on share balances (float vs wei)
+// POV filters sub-cent dust from /positions (claim-burn residue, tiny leftover
+// tokens from partial sells). Reducer faithfully folds every trade, so it
+// still holds those crumbs. Treat reducer-only positions below this share
+// threshold as dust-matched, not a real ingest gap. Override with VERIFY_DUST=0
+// to see the raw diff.
+const DUST_SHARES = Number(process.env.VERIFY_DUST ?? "0.01");
 
 const TokensBought = TRADE_EVENTS[0];
 const TokensSold = TRADE_EVENTS[1];
