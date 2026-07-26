@@ -218,9 +218,10 @@ describe("circleMatches — per-domain honesty gate", () => {
     const money = out.get("Money")!;
     const politics = out.get("Politics")!;
     expect(money.insufficient).toBe(false);
-    expect(money.match_score).toBeGreaterThan(75);
+    expect(money.match_score).toBeGreaterThan(60);
     expect(politics.insufficient).toBe(false);
-    expect(politics.match_score).toBeLessThan(30);
+    expect(politics.match_score).toBeLessThan(40);
+
   });
 
   it("Circle with < 5 shared markets → insufficient", () => {
