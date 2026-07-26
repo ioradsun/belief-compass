@@ -251,10 +251,11 @@ function Feed() {
               cycle completes.
             </div>
           ) : (
-            <div className="rounded-lg border border-border">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
                 <div className="text-xs text-muted-foreground">
-                  Volume = on-chain ETH traded on that side in the window, priced in USD.
+                  Volume = on-chain ETH traded on that side in the window, priced in USD. Each card
+                  runs its own live feed — tap one to see every event.
                 </div>
                 <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
                   {WINDOW_OPTIONS.map((w) => (
@@ -273,198 +274,22 @@ function Feed() {
                   ))}
                 </div>
               </div>
-              <div className="overflow-x-auto">
-              <table className="w-full min-w-[1040px] text-sm">
-                <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3">Market</th>
-                    <th className="px-4 py-3">Side</th>
-                    <th className="px-4 py-3 text-right">Price</th>
-                    <th className="px-4 py-3 text-right">24h</th>
-                    <th className="px-4 py-3 text-right">Backers</th>
-                    <th className="px-4 py-3 text-right">Invested</th>
-                    <th className="px-4 py-3 text-right">People share</th>
-                    <th className="px-4 py-3 text-right">Volume {winLabel}</th>
-                    <th className="px-4 py-3">Your graph</th>
-                  </tr>
-                </thead>
 
-                <tbody>
-                  {rows.map((r) => {
-                    const m = (r as { markets?: { title?: string; category?: string } | null })
-                      .markets;
-                    const fmtShare = (n: number | null) =>
-                      n == null
-                        ? "—"
-                        : n >= 1
-                          ? `$${Number(n).toFixed(2)}`
-                          : `${Math.round(Number(n) * 100)}¢`;
-                    const yesB = Number(r.believers_yes ?? 0);
-                    const noB = Number(r.believers_no ?? 0);
-                    const totalB = yesB + noB;
-                    const people = r.people_yes_pct == null ? null : Number(r.people_yes_pct);
-                    const tribe = (r as { tribe_side?: "YES" | "NO" | null }).tribe_side ?? null;
-                    const opp = (r as { opp_side?: "YES" | "NO" | null }).opp_side ?? null;
-                    const rr = r as {
-                      yes_volume_usd?: number | null;
-                      no_volume_usd?: number | null;
-                      yes_trade_count?: number | null;
-                      no_trade_count?: number | null;
-                      window_volume_usd?: number | null;
-                      yes_capital_usd?: number | null;
-                      no_capital_usd?: number | null;
-                      chg_24h_yes?: number | null;
-                      chg_24h_no?: number | null;
-                    };
-                    const yesCap = rr.yes_capital_usd == null ? null : Number(rr.yes_capital_usd);
-                    const noCap = rr.no_capital_usd == null ? null : Number(rr.no_capital_usd);
-                    const capTotal = (yesCap ?? 0) + (noCap ?? 0);
-
-                    const sides = [
-                      {
-                        key: "YES" as const,
-                        price: r.yes_price_usd,
-                        chg: rr.chg_24h_yes == null ? null : Number(rr.chg_24h_yes),
-                        backers: yesB,
-                        capital: yesCap,
-                        people,
-                        volume: rr.yes_volume_usd ?? null,
-                        trades: Number(rr.yes_trade_count ?? 0),
-                        tone: "emerald",
-                      },
-
-                      {
-                        key: "NO" as const,
-                        price: r.no_price_usd,
-                        chg: rr.chg_24h_no == null ? null : Number(rr.chg_24h_no),
-                        backers: noB,
-                        capital: noCap,
-                        people: people == null ? null : 100 - people,
-                        volume: rr.no_volume_usd ?? null,
-                        trades: Number(rr.no_trade_count ?? 0),
-                        tone: "rose",
-
-                      },
-                    ];
-
-                    return sides.map((s, i) => {
-                      const up = s.chg != null && s.chg >= 0;
-                      const sharePct =
-                        totalB > 0 ? ((s.key === "YES" ? yesB : noB) / totalB) * 100 : 0;
-                      return (
-                        <tr
-                          key={`${r.onchain_id}-${s.key}`}
-                          className={`${i === 0 ? "border-t-2 border-border" : "border-t border-border/50"} align-top hover:bg-muted/30`}
-                        >
-                          {i === 0 && (
-                            <td className="px-4 py-5" rowSpan={2}>
-                              <a
-                                href={`/market/${r.onchain_id}`}
-                                className="font-medium leading-snug hover:underline"
-                              >
-                                {m?.title ?? `Market #${r.onchain_id}`}
-                              </a>
-                              {m?.category && (
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  {m.category}
-                                </div>
-                              )}
-                              <div className="mt-2 text-[11px] text-muted-foreground">
-                                market cap {capTotal > 0 ? fmtUsd(capTotal) : "—"}
-                                {capTotal > 0 && (
-                                  <> · yes {fmtUsd(yesCap ?? 0)} / no {fmtUsd(noCap ?? 0)}</>
-                                )}
-                              </div>
-                              <div className="mt-1 text-[11px] text-muted-foreground">
-                                {winLabel} volume{" "}
-                                {rr.window_volume_usd ? fmtUsd(rr.window_volume_usd) : "—"} ·
-                                lifetime {fmtUsd(r.volume_total_usd)}
-                                {Number(r.believers_mixed ?? 0) > 0 &&
-                                  ` · ${r.believers_mixed} mixed`}
-                              </div>
-
-                            </td>
-                          )}
-                          <td className="px-4 py-4">
-                            <span
-                              className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide ${
-                                s.tone === "emerald"
-                                  ? "bg-emerald-500/10 text-emerald-600"
-                                  : "bg-rose-500/10 text-rose-600"
-                              }`}
-                            >
-                              {s.key}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 text-right font-semibold tabular-nums">
-                            {fmtShare(s.price)}
-                          </td>
-                          <td
-                            className="px-4 py-4 text-right font-medium tabular-nums"
-                            style={{ color: s.chg == null ? undefined : up ? "#059669" : "#dc2626" }}
-                          >
-                            {s.chg == null
-                              ? "—"
-                              : `${up ? "▲ +" : "▼ −"}${Math.abs(Math.round(s.chg))}%`}
-                          </td>
-                          <td className="px-4 py-4 text-right tabular-nums">
-                            <div className="font-medium">{s.backers}</div>
-                            <div className="ml-auto mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-muted">
-                              <div
-                                className={`h-full ${s.tone === "emerald" ? "bg-emerald-500" : "bg-rose-500"}`}
-                                style={{ width: `${sharePct}%` }}
-                              />
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 text-right tabular-nums">
-                            <div className="font-medium">
-                              {s.capital == null ? "—" : fmtUsd(s.capital)}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground">
-                              {capTotal > 0 && s.capital != null
-                                ? `${Math.round((s.capital / capTotal) * 100)}% of cap`
-                                : ""}
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 text-right tabular-nums">{pct(s.people)}</td>
-                          <td className="px-4 py-4 text-right tabular-nums">
-                            <div className="font-medium">
-                              {s.volume == null || Number(s.volume) === 0
-                                ? "—"
-                                : fmtUsd(s.volume)}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground">
-                              {s.trades > 0 ? `${s.trades} trade${s.trades === 1 ? "" : "s"}` : "no trades"}
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-4">
-                            <div className="flex flex-col gap-1">
-                              {tribe === s.key && (
-                                <span className="inline-flex w-fit items-center rounded-full bg-violet-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-violet-600">
-                                  Tribe
-                                </span>
-                              )}
-                              {opp === s.key && (
-                                <span className="inline-flex w-fit items-center rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-600">
-                                  Opp
-                                </span>
-                              )}
-                              {tribe !== s.key && opp !== s.key && (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    });
-                  })}
-                </tbody>
-              </table>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-2">
+                {rows.map((r, idx) => (
+                  <MarketCard
+                    key={r.onchain_id}
+                    row={r as unknown as MarketRow}
+                    pulses={pulses[String(r.onchain_id)] ?? []}
+                    ethUsd={data.ethUsd ?? 0}
+                    winLabel={winLabel}
+                    stagger={(idx % 8) * 600}
+                  />
+                ))}
               </div>
             </div>
-
           )}
+
 
           <p className="text-xs text-muted-foreground">
             Positions are trade-derived estimates; token transfers are not yet indexed. "Wallets"
