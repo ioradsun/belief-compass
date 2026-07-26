@@ -198,3 +198,48 @@ describe("matchScore", () => {
     expect(m.match_score).toBeLessThan(80);
   });
 });
+
+describe("circleMatches — per-domain honesty gate", () => {
+  const mkFactors = (ids: number[], side: "YES" | "NO"): BeliefFactor[] =>
+    ids.map((i) => ({ onchain_id: i, stance: side === "YES" ? 1 : -1, stance_side: side, conviction: 0.9 }));
+
+  // 1..5 = Money, 6..10 = Politics
+  const domainOf = (id: string | number): "Money" | "Politics" | null => {
+    const n = Number(id);
+    if (n >= 1 && n <= 5) return "Money";
+    if (n >= 6 && n <= 10) return "Politics";
+    return null;
+  };
+
+  it("partitions cleanly — no cross-domain leakage", () => {
+    const a = [...mkFactors([1, 2, 3, 4, 5], "YES"), ...mkFactors([6, 7, 8, 9, 10], "YES")];
+    const b = [...mkFactors([1, 2, 3, 4, 5], "YES"), ...mkFactors([6, 7, 8, 9, 10], "NO")];
+    const out = circleMatches(a, b, domainOf);
+    const money = out.get("Money")!;
+    const politics = out.get("Politics")!;
+    expect(money.insufficient).toBe(false);
+    expect(money.match_score).toBeGreaterThan(75);
+    expect(politics.insufficient).toBe(false);
+    expect(politics.match_score).toBeLessThan(30);
+  });
+
+  it("Circle with < 5 shared markets → insufficient", () => {
+    const a = mkFactors([1, 2, 3, 4], "YES");
+    const b = mkFactors([1, 2, 3, 4], "YES");
+    const out = circleMatches(a, b, domainOf);
+    const money = out.get("Money")!;
+    expect(money.shared).toBe(4);
+    expect(money.insufficient).toBe(true);
+    expect(MIN_SHARED_MARKETS).toBe(5);
+  });
+
+  it("factors without a domain are dropped entirely", () => {
+    const a = mkFactors([1, 2, 3, 4, 5, 99, 100], "YES");
+    const b = mkFactors([1, 2, 3, 4, 5, 99, 100], "YES");
+    const out = circleMatches(a, b, domainOf);
+    // Only Money bucket exists; 99/100 have no domain.
+    expect(out.has("Money")).toBe(true);
+    expect(out.size).toBe(1);
+    expect(out.get("Money")!.shared).toBe(5);
+  });
+});
