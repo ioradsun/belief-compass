@@ -6,10 +6,12 @@ import { ConvictionFeed } from "@/components/ConvictionFeed";
 import { WalletConnectButton } from "@/components/WalletConnect";
 
 
-const feedQO = queryOptions({
-  queryKey: ["feed"],
-  queryFn: async () => await listFeed(),
-});
+const feedQO = (wallet?: string) =>
+  queryOptions({
+    queryKey: ["feed", wallet ?? null],
+    queryFn: async () => await listFeed({ data: { wallet } }),
+  });
+
 
 const statusQO = queryOptions({
   queryKey: ["ingest-status"],
