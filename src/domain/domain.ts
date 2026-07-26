@@ -241,3 +241,43 @@ export function matchScore(
 
   return { raw, raw_score, match_score, shared, agreements, disagreements, insufficient };
 }
+
+/**
+ * circleMatches — RULE 1 (honesty gate) applied per-domain.
+ *
+ * Partitions shared factors by the domain of each market and runs the same
+ * agreement × conviction-weight × confidence formula per bucket. Factors
+ * without a domain (missing category or unmapped slug) are dropped: they
+ * never claim a Circle. Circles below MIN_SHARED_MARKETS return
+ * `insufficient: true` and callers MUST NOT surface a number.
+ */
+export function circleMatches<D extends string>(
+  a: BeliefFactor[],
+  b: BeliefFactor[],
+  domainOf: (onchainId: string | number) => D | null,
+): Map<D, MatchResult> {
+  const bucketsA = new Map<D, BeliefFactor[]>();
+  const bucketsB = new Map<D, BeliefFactor[]>();
+  for (const x of a) {
+    const d = domainOf(x.onchain_id);
+    if (!d) continue;
+    const arr = bucketsA.get(d) ?? [];
+    arr.push(x);
+    bucketsA.set(d, arr);
+  }
+  for (const y of b) {
+    const d = domainOf(y.onchain_id);
+    if (!d) continue;
+    const arr = bucketsB.get(d) ?? [];
+    arr.push(y);
+    bucketsB.set(d, arr);
+  }
+  const out = new Map<D, MatchResult>();
+  for (const [d, arr] of bucketsA) {
+    const other = bucketsB.get(d);
+    if (!other) continue;
+    out.set(d, matchScore(arr, other));
+  }
+  return out;
+}
+
