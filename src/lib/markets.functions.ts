@@ -157,6 +157,54 @@ export const listFeed = createServerFn({ method: "GET" })
   return { data: mapped, error: null, window: win, ethUsd };
 });
 
+/**
+ * Per-market pulse strips: the most recent real trade events for each of the
+ * given markets, so every card in the grid can run its own little live feed.
+ */
+export const listMarketPulses = createServerFn({ method: "GET" })
+  .inputValidator((d: { ids: number[] }) =>
+    z.object({ ids: z.array(z.number().int()).max(120) }).parse(d))
+  .handler(async ({ data }) => {
+    const ids = data.ids;
+    if (ids.length === 0) return { pulses: {} as Record<string, Pulse[]> };
+    const sb = publicClient();
+    const { data: rows, error } = await sb
+      .from("feed_events")
+      .select("onchain_id, wallet, type, side, payload, occurred_at, event_key")
+      .in("onchain_id", ids)
+      .order("occurred_at", { ascending: false })
+      .limit(1200);
+    if (error) return { pulses: {} as Record<string, Pulse[]> };
+
+    const out: Record<string, Pulse[]> = {};
+    for (const r of rows ?? []) {
+      const key = String(r.onchain_id);
+      const list = (out[key] ??= []);
+      if (list.length >= 8) continue;
+      const p = (r.payload ?? {}) as { eth?: string; tokens?: string };
+      const ethRaw = Number(p.eth ?? 0);
+      list.push({
+        key: String(r.event_key),
+        type: String(r.type),
+        side: (r.side === "NO" ? "NO" : "YES") as "YES" | "NO",
+        wallet: String(r.wallet ?? ""),
+        eth: Number.isFinite(ethRaw) ? ethRaw / 1e18 : 0,
+        at: String(r.occurred_at),
+      });
+    }
+    return { pulses: out };
+  });
+
+export type Pulse = {
+  key: string;
+  type: string;
+  side: "YES" | "NO";
+  wallet: string;
+  eth: number;
+  at: string;
+};
+
+
 
 
 
