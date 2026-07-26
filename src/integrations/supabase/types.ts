@@ -146,6 +146,8 @@ export type Database = {
           author_pfp: string | null
           author_wallet: string | null
           category: string | null
+          category_source: string
+          category_version: number
           created_at: string | null
           first_seen: string
           onchain_id: number
@@ -160,6 +162,8 @@ export type Database = {
           author_pfp?: string | null
           author_wallet?: string | null
           category?: string | null
+          category_source?: string
+          category_version?: number
           created_at?: string | null
           first_seen?: string
           onchain_id: number
@@ -174,6 +178,8 @@ export type Database = {
           author_pfp?: string | null
           author_wallet?: string | null
           category?: string | null
+          category_source?: string
+          category_version?: number
           created_at?: string | null
           first_seen?: string
           onchain_id?: number
@@ -357,6 +363,7 @@ export type Database = {
           agreements: number
           calculated_at: string
           disagreements: number
+          domain: string | null
           match_score: number
           matched_wallet: string
           shared_markets: number
@@ -366,6 +373,7 @@ export type Database = {
           agreements: number
           calculated_at?: string
           disagreements: number
+          domain?: string | null
           match_score: number
           matched_wallet: string
           shared_markets: number
@@ -375,6 +383,7 @@ export type Database = {
           agreements?: number
           calculated_at?: string
           disagreements?: number
+          domain?: string | null
           match_score?: number
           matched_wallet?: string
           shared_markets?: number
