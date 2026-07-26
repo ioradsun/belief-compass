@@ -77,15 +77,44 @@ export const listFeed = createServerFn({ method: "GET" })
     }
   }
 
+  // Per-side volume: YES and NO are separate perpetual books, so split the
+  // market's total volume by the ETH notional traded on each side.
+  const ids = rows.map((r) => Number(r.onchain_id));
+  const yesEth = new Map<number, number>();
+  const noEth = new Map<number, number>();
+  if (ids.length) {
+    const { data: trades } = await sb
+      .from("trades")
+      .select("onchain_id, side, eth_amount")
+      .in("onchain_id", ids);
+    for (const t of trades ?? []) {
+      const id = Number(t.onchain_id);
+      const amt = Number(t.eth_amount ?? 0);
+      if (!Number.isFinite(amt)) continue;
+      const m = t.side === "NO" ? noEth : yesEth;
+      m.set(id, (m.get(id) ?? 0) + amt);
+    }
+  }
+
   return {
-    data: rows.map((r) => ({
-      ...r,
-      tribe_side: tribeBySide.get(Number(r.onchain_id)) ?? null,
-      opp_side: oppBySide.get(Number(r.onchain_id)) ?? null,
-    })),
+    data: rows.map((r) => {
+      const id = Number(r.onchain_id);
+      const y = yesEth.get(id) ?? 0;
+      const n = noEth.get(id) ?? 0;
+      const tot = y + n;
+      const vol = Number(r.volume_total_usd ?? 0);
+      return {
+        ...r,
+        yes_volume_usd: tot > 0 ? (vol * y) / tot : null,
+        no_volume_usd: tot > 0 ? (vol * n) / tot : null,
+        tribe_side: tribeBySide.get(id) ?? null,
+        opp_side: oppBySide.get(id) ?? null,
+      };
+    }),
     error: null,
   };
 });
+
 
 
 export const getMarket = createServerFn({ method: "GET" })
