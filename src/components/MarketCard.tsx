@@ -10,6 +10,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { Pulse } from "@/lib/markets.functions";
+import { hueFor, initialsFor } from "@/lib/conviction-feed";
 
 const ROTATE_MS = 4500;
 
@@ -321,14 +322,17 @@ export function MarketCard({
           <>
             <span
               key={current?.key}
-              className="min-w-0 flex-1 animate-in fade-in slide-in-from-bottom-1 truncate duration-500"
+              className="flex min-w-0 flex-1 items-center gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-500"
             >
+              {current && <Face p={current} />}
+              <span className="min-w-0 flex-1 truncate">
               <span
                 className={current?.side === "YES" ? "text-emerald-600" : "text-rose-600"}
               >
                 {pulseLine(current!, ethUsd)}
               </span>
               <span className="text-muted-foreground"> · {ago(current!.at)} ago</span>
+              </span>
             </span>
             <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
               {open ? "close" : `${pulses.length} events`}
@@ -346,6 +350,7 @@ export function MarketCard({
                   p.side === "YES" ? "bg-emerald-500" : "bg-rose-500"
                 }`}
               />
+              <Face p={p} size={16} />
               <span className="min-w-0 flex-1 truncate">{pulseLine(p, ethUsd)}</span>
               <span className="shrink-0 text-[10px] text-muted-foreground">{ago(p.at)}</span>
             </li>
