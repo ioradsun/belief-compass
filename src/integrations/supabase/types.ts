@@ -396,7 +396,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      price_series_daily: {
+        Args: { p_days: number; p_ids: number[] }
+        Returns: {
+          bucket: string
+          onchain_id: number
+          pct: number
+        }[]
+      }
+      recompute_price_changes: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
