@@ -32,7 +32,8 @@ export const listFeed = createServerFn({ method: "GET" })
     .select(`
       onchain_id, yes_price_usd, no_price_usd, money_yes_pct, people_yes_pct,
       believers_yes, believers_no, believers_mixed, divergence,
-      volume_total_usd, trending_score, chg_1h, chg_24h,
+      volume_total_usd, trending_score, chg_1h, chg_24h, chg_24h_yes, chg_24h_no,
+      yes_capital_usd, no_capital_usd,
       new_believers_1h, velocity_5m,
       markets:onchain_id ( title, category, author_name, author_pfp )
     `)
