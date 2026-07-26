@@ -41,7 +41,7 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(feedQO),
+  loader: ({ context }) => context.queryClient.ensureQueryData(feedQO()),
   component: Feed,
   errorComponent: ({ error }) => (
     <div className="p-8 text-sm text-destructive">Feed failed: {String(error)}</div>
