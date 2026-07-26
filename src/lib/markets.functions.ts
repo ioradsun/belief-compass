@@ -16,6 +16,15 @@ export const VOLUME_WINDOWS = {
 } as const;
 export type VolumeWindow = keyof typeof VOLUME_WINDOWS;
 
+/** The viewer's closest match (tribe) or most-opposed wallet (opp). */
+export type MatchPerson = {
+  wallet: string;
+  name: string | null;
+  pfpUrl: string | null;
+  score: number;
+};
+
+
 export const listFeed = createServerFn({ method: "GET" })
   .inputValidator((d?: { wallet?: string; window?: VolumeWindow }) =>
     z
@@ -42,7 +51,15 @@ export const listFeed = createServerFn({ method: "GET" })
     .order("volume_total_usd", { ascending: false, nullsFirst: false })
     .limit(50);
   if (error)
-    return { data: [], error: error.message, window: (input?.window ?? "24h") as VolumeWindow, ethUsd: 0 };
+    return {
+      data: [],
+      error: error.message,
+      window: (input?.window ?? "24h") as VolumeWindow,
+      ethUsd: 0,
+      historyFrom: null as string | null,
+      tribe: null as MatchPerson | null,
+      opp: null as MatchPerson | null,
+    };
 
   const rows = data ?? [];
 
@@ -51,6 +68,8 @@ export const listFeed = createServerFn({ method: "GET" })
   const viewer = input?.wallet?.toLowerCase() ?? null;
   let tribeBySide = new Map<number, "YES" | "NO">();
   let oppBySide = new Map<number, "YES" | "NO">();
+  let tribePerson: MatchPerson | null = null;
+  let oppPerson: MatchPerson | null = null;
   if (viewer && rows.length) {
     const { data: matches } = await sb
       .from("wallet_matches")
@@ -79,8 +98,24 @@ export const listFeed = createServerFn({ method: "GET" })
         if (opp && w === opp.matched_wallet.toLowerCase())
           oppBySide.set(Number(b.onchain_id), side);
       }
+
+      // Put a face and a name on the tribesman / opp so the cards can show them.
+      const { resolveProfiles } = await import("@/lib/profiles.server");
+      const profiles = await resolveProfiles(focus.map((w) => w.toLowerCase()), 4);
+      const person = (w: string, score: number): MatchPerson => {
+        const prof = profiles.get(w.toLowerCase());
+        return {
+          wallet: w,
+          name: prof?.displayName ?? aliasFor(w),
+          pfpUrl: prof?.pfpUrl ?? null,
+          score: Math.round(score),
+        };
+      };
+      if (tribe) tribePerson = person(tribe.matched_wallet, Number(tribe.match_score));
+      if (opp) oppPerson = person(opp.matched_wallet, Number(opp.match_score));
     }
   }
+
 
   // Per-side volume, first principles: YES and NO are separate books, so we sum
   // the actual on-chain ETH notional traded on each side inside the selected
@@ -159,7 +194,16 @@ export const listFeed = createServerFn({ method: "GET" })
   // Rank by the volume actually being displayed so the table is self-consistent.
   mapped.sort((a, b) => (b.window_volume_usd ?? -1) - (a.window_volume_usd ?? -1));
 
-  return { data: mapped, error: null, window: win, ethUsd, historyFrom };
+  return {
+    data: mapped,
+    error: null,
+    window: win,
+    ethUsd,
+    historyFrom,
+    tribe: tribePerson,
+    opp: oppPerson,
+  };
+
 });
 
 
