@@ -164,6 +164,66 @@ describe("conviction shape — People vs Capital (broad vs concentrated)", () =>
   });
 });
 
+describe("attribution verbs are earned (wired into the story)", () => {
+  it("climbs to 'drove the move' only with strong, timely evidence", () => {
+    const c = composeCard({
+      ...base,
+      behavior: "joined",
+      actorName: "Quiet River",
+      actorRole: "people",
+      attribution: { shareOfMove: 0.3, actedBefore: true, actedDuring: false },
+    });
+    expect(c.story).toBe("They drove the move.");
+    assertClean(c.hook, c.story, c.turn);
+  });
+  it("does not claim any 'move' verb on thin evidence — falls back to plain story", () => {
+    const c = composeCard({
+      ...base,
+      behavior: "joined",
+      actorName: "Quiet River",
+      attribution: { shareOfMove: 0.05, actedBefore: true, actedDuring: false },
+    });
+    expect(c.story).not.toMatch(/move/i);
+    expect(c.story).toBe("6 people are behind this now.");
+  });
+});
+
+describe("momentum — accelerate is a measured rate, gated upstream", () => {
+  it("states the measured acceleration and never says 'and climbing'", () => {
+    const c = composeCard({ ...base, behavior: "accelerate", side: "YES", accelRatio: 1.5 });
+    expect(c.format).toBe("momentum");
+    expect(c.hook).toBe("Backing on YES is speeding up — 50% more this window than last.");
+    assertClean(c.hook, c.story, c.turn);
+  });
+  it("momentum is not overridden into a scoreboard by a big move", () => {
+    const c = composeCard({
+      ...base,
+      behavior: "accelerate",
+      side: "NO",
+      accelRatio: 2,
+      priceChgPct: 40,
+    });
+    expect(c.format).toBe("momentum");
+  });
+});
+
+describe("achievement — structural milestone only", () => {
+  it("renders the provided structural text and stays present-tense", () => {
+    const c = composeCard({
+      ...base,
+      behavior: "milestone",
+      achievementText: "#2 most-backed belief right now — 120 believers.",
+      believersYes: 90,
+      believersNo: 30,
+    });
+    expect(c.format).toBe("achievement");
+    expect(c.hook).toBe("#2 most-backed belief right now — 120 believers.");
+    expect(c.story).toBe("90 backing YES, 30 NO.");
+    expect(c.hook + c.story).not.toMatch(/early|beat|profit|gain/i);
+    expect(c.timeLabel).toBe("Ranked");
+  });
+});
+
 describe("timestamps name their event", () => {
   it("labels the event behind the time", () => {
     expect(composeCard({ ...base, behavior: "born" }).timeLabel).toBe("Created");

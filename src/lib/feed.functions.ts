@@ -13,8 +13,8 @@
  * `wallet_matches`.
  */
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import {
   type FeedCard,
   type Side,
@@ -31,24 +31,15 @@ import {
 import { composeCard, cleanName, type CopyInput, type CopyBehavior } from "@/lib/feed-copy";
 import { sequenceFeed } from "@/lib/feed-sequence";
 import { buildPriceBlock, type DailyPoint } from "@/lib/feed-price";
+import {
+  classifyEvent,
+  momentumAcceleration,
+  structuralAchievement,
+  isMaterialDivergence,
+  convictionShape,
+  type FeedEventType,
+} from "@/lib/feed-gates";
 import { fetchPovUser } from "@/lib/pov.server";
-
-function publicClient() {
-  const url = process.env.SUPABASE_URL!;
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY!;
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: {
-      fetch: (input, init) => {
-        const h = new Headers(init?.headers);
-        if (key.startsWith("sb_") && h.get("Authorization") === `Bearer ${key}`)
-          h.delete("Authorization");
-        h.set("apikey", key);
-        return fetch(input, { ...init, headers: h });
-      },
-    },
-  });
-}
 
 const WINDOW_EVENTS = 500; // how many recent trade events to fold
 const MAX_CARDS = 40;
@@ -56,12 +47,6 @@ const BIG_MOVE_PCT = 25; // |chg| above which an unattributed move is still wort
 const RECENT_CREATE_MS = 24 * 3600 * 1000; // "just born" window — after a day it's not NEW BELIEF
 const CROWD_MAX = 6; // backer avatars sent per card (component shows ~4 + overflow)
 const PROFILE_LAZY_CAP = 20; // max pov.co lookups per feed request; cached after
-
-function serviceClient() {
-  const url = process.env.SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
 
 type EventRow = {
   onchain_id: number;
@@ -112,6 +97,8 @@ function marketChg(ms: MarketState | undefined): number | null {
   return ms.chg_24h ?? ms.chg_1h ?? null;
 }
 
+const MOMENTUM_WINDOW_MS = 3_600_000; // 1h; recent window vs the immediately prior 1h
+
 interface MarketAgg {
   onchain_id: number;
   buckets: { yesIn: number; yesOut: number; noIn: number; noOut: number };
@@ -119,6 +106,8 @@ interface MarketAgg {
   reduced: Set<string>;
   latest: string; // max occurred_at
   byWallet: Map<string, { side: Side; usdIn: number; usdOut: number }>;
+  recentBacks: number; // backing events in the last window — for the momentum gate
+  priorBacks: number; // backing events in the window before that
 }
 
 export const listConvictionFeed = createServerFn({ method: "GET" })
@@ -208,6 +197,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
     }
 
     // 3. Aggregate events per market (network/crowd scale) + per focus-wallet.
+    const nowMs = Date.now();
     const aggById = new Map<number, MarketAgg>();
     const focusSet = new Set(focusWallets.map((w) => w.toLowerCase()));
     for (const ev of events) {
@@ -221,6 +211,8 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           reduced: new Set(),
           latest: ev.occurred_at,
           byWallet: new Map(),
+          recentBacks: 0,
+          priorBacks: 0,
         };
         aggById.set(id, agg);
       }
@@ -230,6 +222,10 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       const side = ev.side === "YES" ? "YES" : "NO";
       if (isBuy) {
         agg.backed.add(ev.wallet);
+        // Bucket into the two equal windows for the window-over-window rate.
+        const ageMs = nowMs - new Date(ev.occurred_at).getTime();
+        if (ageMs >= 0 && ageMs < MOMENTUM_WINDOW_MS) agg.recentBacks += 1;
+        else if (ageMs < 2 * MOMENTUM_WINDOW_MS) agg.priorBacks += 1;
         if (side === "YES") agg.buckets.yesIn += usd;
         else agg.buckets.noIn += usd;
       } else {
@@ -247,8 +243,21 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       }
     }
 
+    // Structural achievement ranking: markets ranked by total believers across
+    // the active set. Rank is 1-based; ties break by onchain_id for stability.
+    // This is a present-tense, provable ordering — never a timing/P&L claim.
+    const rankByMarket = new Map<number, number>();
+    {
+      const believersOf = (id: number) => {
+        const s = stateById.get(id);
+        return (s?.believers_yes ?? 0) + (s?.believers_no ?? 0);
+      };
+      const ranked = [...aggById.keys()].sort((a, b) => believersOf(b) - believersOf(a) || a - b);
+      ranked.forEach((id, i) => rankByMarket.set(id, i + 1));
+    }
+
     // 4. Build candidate cards. One best card per market wins in step 5.
-    const now = Date.now();
+    const now = nowMs;
     const candidates: FeedCard[] = [];
     // Per-card scratch for the profile-enrichment pass: which wallet is the
     // primary actor, and who the backers are (for the avatar stack).
@@ -301,6 +310,20 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
       const pActed = people ? agg.byWallet.get(people.matched_wallet.toLowerCase()) : undefined;
       const oActed = opp ? agg.byWallet.get(opp.matched_wallet.toLowerCase()) : undefined;
       const convergence = Boolean(pActed && oActed && pActed.side === oActed.side);
+
+      // Central honesty gates for this market (all pure, all in feed-gates):
+      // conflict (money-vs-people / broad-vs-concentrated), momentum (rate rising
+      // window-over-window), and a structural top-N-by-believers achievement.
+      const hasConflict =
+        isMaterialDivergence(impliedYesPct, peopleYesPct) ||
+        convictionShape({ believersYes, believersNo, yesCapitalUsd, noCapitalUsd }) != null;
+      const accel = momentumAcceleration(agg.recentBacks, agg.priorBacks);
+      const totalBelievers = (believersYes ?? 0) + (believersNo ?? 0);
+      const achievementText = structuralAchievement({
+        rank: rankByMarket.get(id) ?? 999,
+        believers: totalBelievers,
+      });
+      const totalMoveUsd = b.yesIn + b.noIn + b.yesOut + b.noOut;
 
       // --- (a) Individual card: viewer's People or Opp acted here. Strongest. ---
       let individual: FeedCard | null = null;
@@ -359,6 +382,13 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           actorWallet: null,
           action: "open",
           signalType: `individual_${role}_${reducing ? "reduce" : "commit"}`,
+          eventType: classifyEvent({
+            behavior: reducing ? "reduce" : isNew ? "joined" : "increase",
+            actorRole: role,
+            hasConflict,
+            isAccelerating: accel != null,
+            isAchievement: false,
+          }),
           score: rankScore({
             wealthUsd: usd,
             attribution: 4,
@@ -369,6 +399,10 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           occurredAt: agg.latest,
         };
         const behavior: CopyBehavior = reducing ? "reduce" : isNew ? "joined" : "increase";
+        // Earned attribution: this actor's share of the market's total move. We
+        // have no block-level price-path timing yet, so actedBefore/During stay
+        // false — the verb can reach "contributed", never "drove", until we do.
+        const shareOfMove = totalMoveUsd > 0 ? Math.min(1, usd / totalMoveUsd) : 0;
         cardFacts.set(individual.id, {
           behavior,
           actorScale: "individual",
@@ -389,6 +423,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           convergence,
           variantSeed: id,
           isViewerHolding: false,
+          attribution: { shareOfMove, actedBefore: false, actedDuring: false },
         });
         break; // one individual card per market is plenty
       }
@@ -436,6 +471,7 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
           actorWallet: null,
           action: "open",
           signalType: "creator_started",
+          eventType: "recruitment", // a planted belief is the seed of recruitment
           score: rankScore({
             wealthUsd: top.usd,
             attribution: 2,
@@ -513,6 +549,13 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         actorWallet: null,
         action: "open",
         signalType: wealth ? "market_flow" : "market_unattributed",
+        eventType: classifyEvent({
+          behavior: wealth ? "flow" : "unattributed",
+          actorRole: "market",
+          hasConflict,
+          isAccelerating: accel != null,
+          isAchievement: false,
+        }),
         score: rankScore({
           wealthUsd: top.usd,
           attribution: wealth ? 1 : 0,
@@ -545,8 +588,100 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
         isViewerHolding: false,
       });
 
-      // Prefer the most attributed story per market: individual > creator > network.
-      const chosen = individual ?? creator ?? network;
+      // --- (d) Momentum card: the rate of new backers is rising (gated). ---
+      let momentum: FeedCard | null = null;
+      if (accel != null) {
+        momentum = {
+          ...network,
+          id: `momentum:${id}`,
+          story: `Backing is accelerating on ${storySide}.`,
+          actor: marketActor(),
+          signalType: "market_momentum",
+          eventType: "momentum",
+          // Acceleration is a strong "why now" — rank it above a flat network move.
+          score:
+            rankScore({
+              wealthUsd: top.usd,
+              attribution: 1,
+              meaningful: Math.min(1, newBelievers / 100),
+              surprise: Math.min(1, accel - 1),
+              ageHours,
+            }) + 6,
+        };
+        cardFacts.set(momentum.id, {
+          behavior: "accelerate",
+          actorScale: "market",
+          actorRole: "market",
+          belief: title,
+          side: storySide,
+          capitalCommitted: top.dir === "in" && top.usd > 0 ? top.usd : null,
+          capitalWithdrawn: top.dir === "out" && top.usd > 0 ? top.usd : null,
+          backersTotal: agg.backed.size,
+          believersYes,
+          believersNo,
+          priceFell: chg != null && chg < 0,
+          priceChgPct: chg,
+          moneyYesPct: impliedYesPct,
+          peopleYesPct,
+          yesCapitalUsd,
+          noCapitalUsd,
+          convergence: false,
+          variantSeed: id,
+          isViewerHolding: false,
+          accelRatio: accel,
+        });
+      }
+
+      // --- (e) Achievement card: a structural top-N-by-believers milestone. ---
+      let achievement: FeedCard | null = null;
+      if (achievementText) {
+        achievement = {
+          ...network,
+          id: `achv:${id}`,
+          story: achievementText,
+          actor: marketActor(),
+          signalType: "market_achievement",
+          eventType: "achievement",
+          score:
+            rankScore({
+              wealthUsd: top.usd,
+              attribution: 1,
+              meaningful: Math.min(1, totalBelievers / 100),
+              surprise: 0.3,
+              ageHours,
+            }) + 4,
+        };
+        cardFacts.set(achievement.id, {
+          behavior: "milestone",
+          actorScale: "market",
+          actorRole: "market",
+          belief: title,
+          side: storySide,
+          capitalCommitted: null,
+          capitalWithdrawn: null,
+          backersTotal: agg.backed.size,
+          believersYes,
+          believersNo,
+          priceFell: chg != null && chg < 0,
+          priceChgPct: chg,
+          moneyYesPct: impliedYesPct,
+          peopleYesPct,
+          yesCapitalUsd,
+          noCapitalUsd,
+          convergence: false,
+          variantSeed: id,
+          isViewerHolding: false,
+          achievementText,
+        });
+      }
+
+      // Prefer the most attributed story per market: an individual your graph
+      // knows wins; then a creator's fresh belief; then the best market-scale
+      // story among momentum / achievement / network by score. One card per market.
+      const marketScale = [network, momentum, achievement]
+        .filter((c): c is FeedCard => c != null)
+        .sort((a, b) => b.score - a.score)[0];
+      const chosen = individual ?? creator ?? marketScale;
       const actorWallet = individual
         ? ((individual.signalType.includes("people") ? people : opp)?.matched_wallet ?? null)
         : creator

@@ -17,6 +17,7 @@
 // ---------------------------------------------------------------------------
 
 import type { CardCopy } from "./feed-copy";
+import type { FeedEventType } from "./feed-gates";
 
 /**
  * Ambient market context shown on every card — where the MARKET stands, never
@@ -100,6 +101,7 @@ export interface FeedCard {
   actorWallet: string | null; // primary actor's wallet, for the "See Their Convictions" deep-link
   action: FeedAction;
   signalType: string; // internal only — ranking + analytics, never rendered
+  eventType: FeedEventType; // the closed six-type taxonomy this card belongs to
   score: number;
   occurredAt: string; // when this signal happened — drives the "time ago" stamp
 }

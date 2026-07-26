@@ -309,128 +309,6 @@ function Sparkline({ values }: { values: number[] }) {
   );
 }
 
-/**
- * Ambient market context on EVERY card: BOTH share prices (YES + NO) as they
- * stand right now, plus the 24h implied-probability move and the trajectory
- * sparkline when there's enough history. Refreshes with the feed query (30s).
- */
-function PriceRow({ card }: { card: FeedCard }) {
-  const p = card.price;
-  const yes = card.yesPriceUsd;
-  const no = card.noPriceUsd;
-  // If the card is about a specific side (YES/NO), only show that side's price, highlighted.
-  const focus = card.priceSide;
-  // Prefer the daily-bucket 24h; fall back to the market_state headline change.
-  const chg24h = p?.chg24h ?? card.priceChgPct ?? null;
-  const showSpark = (p?.series.length ?? 0) >= MIN_SPARK_POINTS;
-  if (yes == null && no == null && chg24h == null && !showSpark) return null;
-
-  const up = (chg24h ?? 0) >= 0;
-  const fmtPrice = (n: number) => (n >= 1 ? `$${n.toFixed(2)}` : `${(n * 100).toFixed(0)}¢`);
-
-  const sidePill = (label: "YES" | "NO", price: number) => (
-    <span
-      className="tabular-nums inline-flex items-center gap-1 rounded-md px-1.5 py-0.5"
-      style={{
-        color: ARMY_COLOR[label],
-        backgroundColor: `${ARMY_COLOR[label]}1a`,
-        border: `1px solid ${ARMY_COLOR[label]}55`,
-      }}
-      title={`${label} share price — live`}
-    >
-      <span className="text-[10px] font-semibold uppercase tracking-wide">{label}</span>
-      <span className="font-semibold text-foreground">{fmtPrice(price)}</span>
-    </span>
-  );
-
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/50 pt-2 text-xs text-muted-foreground">
-      {focus === "YES" && yes != null && sidePill("YES", yes)}
-      {focus === "NO" && no != null && sidePill("NO", no)}
-      {focus == null && (yes != null || no != null) && (
-        <span className="tabular-nums" title="Current share prices — live">
-          {yes != null && (
-            <>
-              <span style={{ color: ARMY_COLOR.YES }}>YES</span>{" "}
-              <span className="font-medium text-foreground">{fmtPrice(yes)}</span>
-            </>
-          )}
-          {yes != null && no != null && <span className="mx-1.5 opacity-50">·</span>}
-          {no != null && (
-            <>
-              <span style={{ color: ARMY_COLOR.NO }}>NO</span>{" "}
-              <span className="font-medium text-foreground">{fmtPrice(no)}</span>
-            </>
-          )}
-        </span>
-      )}
-
-      {chg24h != null && (
-        <span
-          className="tabular-nums font-medium"
-          style={{ color: up ? "#059669" : "#dc2626" }}
-          title="24h change in implied YES probability"
-        >
-          {up ? "▲ +" : "▼ −"}
-          {Math.abs(Math.round(chg24h))}% 24h
-        </span>
-      )}
-      {showSpark && (
-        <span className="flex items-center gap-1.5">
-          <Sparkline values={p!.series} />
-          <span className="text-[10px] text-muted-foreground/70">{p!.windowLabel}</span>
-        </span>
-      )}
-    </div>
-  );
-}
-
-/**
- * Compact always-on market facts bar. Shown on EVERY card so the reader never
- * has to click through to see: implied YES%, believer split, capital per side,
- * 24h volume. Complements PriceRow (share prices + 24h chg + sparkline).
- */
-function MarketFacts({ card }: { card: FeedCard }) {
-  const bY = card.believersYes;
-  const bN = card.believersNo;
-  const cY = card.yesCapitalUsd;
-  const cN = card.noCapitalUsd;
-  const vol = card.volume24hUsd;
-  const yesPct = card.impliedYesPct;
-  if (
-    bY == null &&
-    bN == null &&
-    cY == null &&
-    cN == null &&
-    (vol == null || vol === 0) &&
-    yesPct == null
-  )
-    return null;
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-      {yesPct != null && (
-        <span className="tabular-nums">
-          <span className="font-semibold text-foreground">{Math.round(yesPct)}%</span> YES implied
-        </span>
-      )}
-      {(bY != null || bN != null) && (
-        <span className="tabular-nums">
-          <span style={{ color: ARMY_COLOR.YES }}>{bY ?? 0}</span>
-          <span className="mx-0.5 opacity-60">/</span>
-          <span style={{ color: ARMY_COLOR.NO }}>{bN ?? 0}</span> believers
-        </span>
-      )}
-      {(cY != null || cN != null) && (
-        <span className="tabular-nums">
-          <span style={{ color: ARMY_COLOR.YES }}>{fmtUsd(cY ?? 0)}</span>
-          <span className="mx-0.5 opacity-60">/</span>
-          <span style={{ color: ARMY_COLOR.NO }}>{fmtUsd(cN ?? 0)}</span> backing
-        </span>
-      )}
-      {vol != null && vol > 0 && <span className="tabular-nums">{fmtUsd(vol)} vol 24h</span>}
-    </div>
-  );
-}
 function Belief({ text, className = "" }: { text: string; className?: string }) {
   return <p className={`leading-snug text-foreground ${className}`}>&ldquo;{text}&rdquo;</p>;
 }
@@ -438,31 +316,111 @@ function Belief({ text, className = "" }: { text: string; className?: string }) 
 // Option B side colors — never green/red (that stays reserved for P&L).
 const ARMY_COLOR: Record<"YES" | "NO", string> = { YES: "#2563eb", NO: "#6b7280" };
 
-/** One side's "Army": how many believers (People) and how much capital (Capital). */
-function SideArmy({
-  side,
-  believers,
-  capital,
-}: {
-  side: "YES" | "NO";
-  believers: number | null;
-  capital: number | null;
-}) {
+function fmtCountCell(n: number | null): string {
+  return n != null ? n.toLocaleString("en-US") : "—";
+}
+
+/** Share prices live in $0–$1 — show cents under a dollar, dollars at/above. */
+function fmtSharePrice(n: number | null): string {
+  if (n == null) return "—";
+  return n >= 1 ? `$${n.toFixed(2)}` : `${Math.round(n * 100)}¢`;
+}
+
+/** YES / NO value pair — the two independent sides, never one derived from the other. */
+function SidePair({ yes, no }: { yes: string; no: string }) {
   return (
-    <div className="rounded-md bg-muted/40 p-2.5">
-      <div
-        className="text-[10px] font-semibold uppercase tracking-wide"
-        style={{ color: ARMY_COLOR[side] }}
-      >
-        {side} Army
-      </div>
-      <div className="mt-0.5 text-sm font-bold tabular-nums">
-        {believers != null ? believers.toLocaleString() : "—"}
-        <span className="ml-1 text-[11px] font-normal text-muted-foreground">believers</span>
-      </div>
-      <div className="text-xs tabular-nums text-muted-foreground">
-        {capital != null ? `${fmtUsd(capital)} backing` : "— backing"}
-      </div>
+    <span className="flex items-center gap-3 tabular-nums">
+      <span style={{ color: ARMY_COLOR.YES }}>
+        YES <span className="text-foreground">{yes}</span>
+      </span>
+      <span style={{ color: ARMY_COLOR.NO }}>
+        NO <span className="text-foreground">{no}</span>
+      </span>
+    </span>
+  );
+}
+
+function StripRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-0.5">
+      <span className="w-16 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * The battle strip — ONE shared evidence block on EVERY card. Three tiny rows,
+ * each per-side because the three stories can disagree, and that disagreement is
+ * the reason to click:
+ *   Price     — the market's own consensus (per-side share price + 24h + trend)
+ *   Believers — how many people are on each side (breadth)
+ *   Capital   — how much money backs each side (depth)
+ * Believers and capital are shown per side and never summed; YES and NO are
+ * independent perpetual curves, so one is never computed as 100 − the other.
+ */
+function BattleStrip({ card }: { card: FeedCard }) {
+  const p = card.price;
+  const chg24h = p?.chg24h ?? card.priceChgPct ?? null;
+  const showSpark = (p?.series.length ?? 0) >= MIN_SPARK_POINTS;
+  const yesPrice = card.yesPriceUsd;
+  const noPrice = card.noPriceUsd;
+  const impliedYesPct = card.impliedYesPct;
+  const vol = card.volume24hUsd;
+  const hasPrice =
+    yesPrice != null || noPrice != null || chg24h != null || showSpark || impliedYesPct != null;
+  const hasBelievers = card.believersYes != null || card.believersNo != null;
+  const hasCapital = card.yesCapitalUsd != null || card.noCapitalUsd != null;
+  if (!hasPrice && !hasBelievers && !hasCapital) return null;
+
+  // Momentum, not P&L: the 24h arrow stays neutral. Green/red is reserved for
+  // realized/unrealized P&L (see the palette rule at the top of this file).
+  const up = (chg24h ?? 0) >= 0;
+  return (
+    <div className="mt-2 border-t border-border/50 pt-1.5 text-xs">
+      {hasPrice && (
+        <StripRow label="Price">
+          <SidePair yes={fmtSharePrice(yesPrice)} no={fmtSharePrice(noPrice)} />
+          {impliedYesPct != null && (
+            <span className="tabular-nums text-muted-foreground" title="Implied YES probability">
+              <span className="font-semibold text-foreground">{Math.round(impliedYesPct)}%</span>{" "}
+              implied
+            </span>
+          )}
+          {chg24h != null && (
+            <span className="tabular-nums text-muted-foreground" title="24h price performance">
+              {up ? "▲ +" : "▼ −"}
+              {Math.abs(Math.round(chg24h))}% 24h
+            </span>
+          )}
+          {showSpark && (
+            <span className="flex items-center gap-1.5">
+              <Sparkline values={p!.series} />
+              <span className="text-[10px] text-muted-foreground/70">{p!.windowLabel}</span>
+            </span>
+          )}
+        </StripRow>
+      )}
+      {hasBelievers && (
+        <StripRow label="Believers">
+          <SidePair yes={fmtCountCell(card.believersYes)} no={fmtCountCell(card.believersNo)} />
+        </StripRow>
+      )}
+      {hasCapital && (
+        <StripRow label="Capital">
+          <SidePair
+            yes={card.yesCapitalUsd != null ? fmtUsd(card.yesCapitalUsd) : "—"}
+            no={card.noCapitalUsd != null ? fmtUsd(card.noCapitalUsd) : "—"}
+          />
+          {vol != null && vol > 0 && (
+            <span className="tabular-nums text-muted-foreground/80" title="24h volume">
+              {fmtUsd(vol)} vol 24h
+            </span>
+          )}
+        </StripRow>
+      )}
     </div>
   );
 }
@@ -475,6 +433,10 @@ const SHELL: Record<CardFormat, string> = {
   crowd: "border-border bg-background/60",
   scoreboard: "border-border bg-background/60",
   tension: "border-amber-500/30 bg-amber-500/[0.04]",
+  // momentum = speed (sky); achievement = a neutral spotlight — deliberately NOT
+  // green: green is reserved for P&L, and a structural rank is not a profit.
+  momentum: "border-sky-500/30 bg-sky-500/[0.04]",
+  achievement: "border-foreground/20 bg-foreground/[0.035]",
   rare: "border-violet-500/40 bg-violet-500/[0.05]",
   quiet: "border-dashed border-border bg-transparent",
 };
@@ -564,8 +526,9 @@ function ConvictionCard({ card }: { card: FeedCard }) {
     }
 
     case "tension":
-      // Three distinct stories: PRICE (money consensus) → the belief → PEOPLE +
-      // CAPITAL per side (the "Army"). Their disagreement is the reason to click.
+      // The money's consensus (PRICE) leads; the belief; then the turn line that
+      // names the disagreement. The per-side Believers/Capital split — where the
+      // tension is proven — is carried by the shared BattleStrip below.
       body = (
         <>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -580,15 +543,39 @@ function ConvictionCard({ card }: { card: FeedCard }) {
             )}
           </div>
           <Belief text={copy!.belief} className="mt-1.5 text-[15px]" />
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <SideArmy side="YES" believers={card.believersYes} capital={card.yesCapitalUsd} />
-            <SideArmy side="NO" believers={card.believersNo} capital={card.noCapitalUsd} />
-          </div>
           {(copy!.shape ?? copy!.turn) && (
             <p className="mt-2 text-sm font-medium text-amber-600 dark:text-amber-500">
               {copy!.shape ?? copy!.turn}
             </p>
           )}
+        </>
+      );
+      break;
+
+    case "momentum":
+      body = (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-sky-600 dark:text-sky-400">
+              Momentum
+            </span>
+          </div>
+          <p className="mt-1.5 text-[15px] font-semibold leading-snug">{copy!.hook}</p>
+          {copy!.story && <p className="text-sm text-muted-foreground">{copy!.story}</p>}
+          <Belief text={copy!.belief} className="mt-1.5 text-xs text-muted-foreground" />
+        </>
+      );
+      break;
+
+    case "achievement":
+      body = (
+        <>
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            <span aria-hidden>🏆</span> Milestone
+          </div>
+          <p className="mt-1.5 text-[15px] font-semibold leading-snug">{copy!.hook}</p>
+          <Belief text={copy!.belief} className="mt-1 text-sm text-muted-foreground" />
+          {copy!.story && <p className="mt-0.5 text-sm text-muted-foreground">{copy!.story}</p>}
         </>
       );
       break;
@@ -634,8 +621,7 @@ function ConvictionCard({ card }: { card: FeedCard }) {
         </time>
       </div>
       {body}
-      <MarketFacts card={card} />
-      <PriceRow card={card} />
+      <BattleStrip card={card} />
       <CardAction card={card} />
     </div>
   );

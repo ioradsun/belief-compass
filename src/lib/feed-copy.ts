@@ -16,7 +16,7 @@
  *
  * ZERO IO. Pure and fully unit-tested.
  */
-import { fmtUsd, type Side } from "./conviction-feed";
+import { fmtUsd, attributionVerb, type AttributionEvidence, type Side } from "./conviction-feed";
 
 // Money and people must disagree by at least this many points to be a "turn".
 // A 5–1 split is agreement, not tension. Config, not a literal.
@@ -30,7 +30,9 @@ export type CopyBehavior =
   | "increase" // added to an existing position
   | "reduce" // pulling capital back out (flow, not loss)
   | "flow" // network/crowd capital flow, aggregate
-  | "unattributed"; // a move with nobody you know inside it
+  | "unattributed" // a move with nobody you know inside it
+  | "accelerate" // momentum — the rate of new backers is rising (gated)
+  | "milestone"; // achievement — a structural, provable ranking milestone (gated)
 
 export type ActionKind = "back_sides" | "open" | "review" | "convictions";
 
@@ -45,6 +47,8 @@ export type CardFormat =
   | "crowd" // faces dominate — a group arriving or splitting
   | "scoreboard" // a meaningful market move — big number
   | "tension" // split-screen money vs people
+  | "momentum" // the rate is rising — acceleration, not a raw count
+  | "achievement" // a structural ranking milestone — a badge
   | "rare" // your echo and your opposite agree — used sparingly
   | "quiet"; // a breather — persistence, low activity
 
@@ -72,6 +76,12 @@ export interface CopyInput {
   convergence: boolean; // People AND Opp landed on the same side (rare)
   variantSeed: number; // stable per-market seed so wording varies but never flickers
   isViewerHolding: boolean; // the viewer owns this position → Review
+  // Earned-attribution evidence for the actor's role in this move. When present,
+  // the story's verb climbs (joined → contributed → accelerated → drove) only as
+  // far as the evidence proves — null degrades to the weakest true statement.
+  attribution?: AttributionEvidence | null;
+  accelRatio?: number | null; // momentum: recent/prior backer-rate ratio (>1), gated upstream
+  achievementText?: string | null; // achievement: the structural, provable milestone string
 }
 
 export interface CardCopy {
@@ -152,8 +162,12 @@ export function convictionShape(i: {
 function pickFormat(i: CopyInput, hasTension: boolean): { format: CardFormat; intensity: number } {
   const bigMove = i.priceChgPct != null && Math.abs(i.priceChgPct) >= SCOREBOARD_MOVE_PCT;
   if (i.convergence) return { format: "rare", intensity: 2 }; // rarest: both poles agree
+  // A structural milestone is its own beat — it doesn't get overridden by tension.
+  if (i.behavior === "milestone") return { format: "achievement", intensity: 1 };
   if (hasTension) return { format: "tension", intensity: 2 };
   switch (i.behavior) {
+    case "accelerate":
+      return { format: "momentum", intensity: 2 };
     case "born":
       return { format: "birth", intensity: 1 };
     case "reduce":
@@ -188,6 +202,8 @@ const TIME_LABEL: Record<CopyBehavior, string> = {
   reduce: "Reduced",
   flow: "Last traded",
   unattributed: "Last moved",
+  accelerate: "Accelerating",
+  milestone: "Ranked",
 };
 
 /** Deterministic pick — same market always reads the same, but neighbors differ. */
@@ -203,6 +219,12 @@ export function composeCard(i: CopyInput): CardCopy {
   const bigCommit = committed != null && committed >= MATERIAL_WEALTH_USD;
   const divergent = isMaterialDivergence(i.moneyYesPct, i.peopleYesPct);
   const turn = divergent ? divergenceTurn(i.moneyYesPct!, i.peopleYesPct!) : null;
+
+  // Earned attribution verb: weakest true by default, climbing only as far as the
+  // evidence (timing + share of the move) proves. `drove`-level phrasing is only
+  // used when the actor did materially more than merely join the buyers.
+  const verb = attributionVerb(i.attribution ?? null);
+  const droveMove = (i.attribution?.shareOfMove ?? 0) >= 0.15;
 
   let hook = "";
   let story = "";
@@ -255,9 +277,11 @@ export function composeCard(i: CopyInput): CardCopy {
           ? `${fmtUsd(committed!)} just went into ${side}.`
           : `Someone new backed ${side}.`;
       story =
-        i.backersTotal > 1
-          ? `${i.backersTotal} people are behind this now.`
-          : `They're the first one in.`;
+        droveMove && name
+          ? `They ${verb}.`
+          : i.backersTotal > 1
+            ? `${i.backersTotal} people are behind this now.`
+            : `They're the first one in.`;
       action = divergent ? "back_sides" : "open";
       break;
     }
@@ -266,7 +290,9 @@ export function composeCard(i: CopyInput): CardCopy {
       const added = bigCommit ? `added ${fmtUsd(committed!)} more` : `added more`;
       story = i.priceFell
         ? `They ${added} after the price fell — not hedging, conviction.`
-        : `They ${added} to ${side}.`;
+        : droveMove
+          ? `They ${added} and ${verb}.`
+          : `They ${added} to ${side}.`;
       action = divergent ? "back_sides" : "open";
       break;
     }
@@ -297,6 +323,34 @@ export function composeCard(i: CopyInput): CardCopy {
           : `The crowd is ${inflow ? "leaning in" : "stepping back"}.`
         : `Real money on the table, no clear favorite yet.`;
       action = divergent ? "back_sides" : "open";
+      break;
+    }
+    case "accelerate": {
+      // Only reached when the momentum gate passed upstream, so "speeding up" is
+      // a measured fact — the rate of new backers is genuinely rising.
+      const s = side ?? "it";
+      const pct =
+        i.accelRatio != null && i.accelRatio > 1 ? Math.round((i.accelRatio - 1) * 100) : null;
+      hook =
+        pct != null
+          ? `Backing on ${s} is speeding up — ${pct}% more this window than last.`
+          : `Backing on ${s} is speeding up.`;
+      story =
+        i.backersTotal > 0
+          ? `${i.backersTotal} ${i.backersTotal === 1 ? "person is" : "people are"} in, and new ones are arriving faster.`
+          : `New backers are arriving faster than before.`;
+      action = divergent ? "back_sides" : "open";
+      break;
+    }
+    case "milestone": {
+      // Structural, present-tense, provable — the text is built by the honesty
+      // gate (structuralAchievement); never a timing or P&L claim.
+      hook = i.achievementText ?? `Among the most-backed beliefs right now.`;
+      story =
+        i.believersYes != null && i.believersNo != null && i.believersYes + i.believersNo > 0
+          ? `${i.believersYes} backing YES, ${i.believersNo} NO.`
+          : `The crowd is still gathering.`;
+      action = "open";
       break;
     }
     case "unattributed":
