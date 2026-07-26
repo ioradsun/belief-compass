@@ -310,31 +310,47 @@ function Sparkline({ values }: { values: number[] }) {
 }
 
 /**
- * Ambient market context on EVERY card: the current share price and the 24h
- * performance (plus the trajectory sparkline when there's enough history). This
- * is where the MARKET stands, in its own separated row — never the event's
- * effect. Shows the price of the side the card is about (YES by default).
+ * Ambient market context on EVERY card: BOTH share prices (YES + NO) as they
+ * stand right now, plus the 24h implied-probability move and the trajectory
+ * sparkline when there's enough history. Refreshes with the feed query (30s).
  */
 function PriceRow({ card }: { card: FeedCard }) {
   const p = card.price;
-  const side: "YES" | "NO" = card.priceSide === "NO" ? "NO" : "YES";
-  const sharePrice = side === "YES" ? card.yesPriceUsd : card.noPriceUsd;
+  const yes = card.yesPriceUsd;
+  const no = card.noPriceUsd;
   // Prefer the daily-bucket 24h; fall back to the market_state headline change.
   const chg24h = p?.chg24h ?? card.priceChgPct ?? null;
   const showSpark = (p?.series.length ?? 0) >= MIN_SPARK_POINTS;
-  if (sharePrice == null && chg24h == null && !showSpark) return null;
+  if (yes == null && no == null && chg24h == null && !showSpark) return null;
 
   const up = (chg24h ?? 0) >= 0;
+  const fmtPrice = (n: number) => (n >= 1 ? `$${n.toFixed(2)}` : `${(n * 100).toFixed(0)}¢`);
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/50 pt-2 text-xs text-muted-foreground">
-      {sharePrice != null && (
-        <span className="tabular-nums" title={`Current ${side} share price`}>
-          {side} <span className="font-medium text-foreground">${sharePrice.toFixed(2)}</span>
+      {(yes != null || no != null) && (
+        <span className="tabular-nums" title="Current share prices — live">
+          {yes != null && (
+            <>
+              <span style={{ color: ARMY_COLOR.YES }}>YES</span>{" "}
+              <span className="font-medium text-foreground">{fmtPrice(yes)}</span>
+            </>
+          )}
+          {yes != null && no != null && <span className="mx-1.5 opacity-50">·</span>}
+          {no != null && (
+            <>
+              <span style={{ color: ARMY_COLOR.NO }}>NO</span>{" "}
+              <span className="font-medium text-foreground">{fmtPrice(no)}</span>
+            </>
+          )}
         </span>
       )}
       {chg24h != null && (
-        <span className="tabular-nums" title="24h price performance">
-          {up ? "▲" : "▼"} {up ? "+" : "−"}
+        <span
+          className="tabular-nums font-medium"
+          style={{ color: up ? "#059669" : "#dc2626" }}
+          title="24h change in implied YES probability"
+        >
+          {up ? "▲ +" : "▼ −"}
           {Math.abs(Math.round(chg24h))}% 24h
         </span>
       )}
