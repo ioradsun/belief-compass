@@ -51,7 +51,15 @@ export const listFeed = createServerFn({ method: "GET" })
     .order("volume_total_usd", { ascending: false, nullsFirst: false })
     .limit(50);
   if (error)
-    return { data: [], error: error.message, window: (input?.window ?? "24h") as VolumeWindow, ethUsd: 0 };
+    return {
+      data: [],
+      error: error.message,
+      window: (input?.window ?? "24h") as VolumeWindow,
+      ethUsd: 0,
+      historyFrom: null as string | null,
+      tribe: null as MatchPerson | null,
+      opp: null as MatchPerson | null,
+    };
 
   const rows = data ?? [];
 
