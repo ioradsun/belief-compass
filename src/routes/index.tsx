@@ -24,7 +24,19 @@ const feedQO = (wallet?: string, window: VolumeWindow = "all") =>
   queryOptions({
     queryKey: ["feed", wallet ?? null, window],
     queryFn: async () => await listFeed({ data: { wallet, window } }),
+    // Prices, capital and volume re-poll so the cards move on their own.
+    refetchInterval: 20_000,
   });
+
+const pulsesQO = (ids: number[]) =>
+  queryOptions({
+    queryKey: ["market-pulses", ids.join(",")],
+    queryFn: async () => await listMarketPulses({ data: { ids: ids.slice(0, 120) } }),
+    enabled: ids.length > 0,
+    refetchInterval: 20_000,
+  });
+
+
 
 
 
