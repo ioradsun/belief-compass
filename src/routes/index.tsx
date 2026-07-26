@@ -372,7 +372,16 @@ function Feed() {
                               />
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-right tabular-nums">{pct(s.money)}</td>
+                          <td className="px-4 py-4 text-right tabular-nums">
+                            <div className="font-medium">
+                              {s.capital == null ? "—" : fmtUsd(s.capital)}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {capTotal > 0 && s.capital != null
+                                ? `${Math.round((s.capital / capTotal) * 100)}% of cap`
+                                : ""}
+                            </div>
+                          </td>
                           <td className="px-4 py-4 text-right tabular-nums">{pct(s.people)}</td>
                           <td className="px-4 py-4 text-right tabular-nums">{fmtUsd(s.volume)}</td>
                           <td className="px-4 py-4">
