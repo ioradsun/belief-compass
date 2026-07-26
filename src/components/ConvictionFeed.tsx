@@ -363,6 +363,53 @@ function PriceRow({ card }: { card: FeedCard }) {
     </div>
   );
 }
+
+/**
+ * Compact always-on market facts bar. Shown on EVERY card so the reader never
+ * has to click through to see: implied YES%, believer split, capital per side,
+ * 24h volume. Complements PriceRow (share prices + 24h chg + sparkline).
+ */
+function MarketFacts({ card }: { card: FeedCard }) {
+  const bY = card.believersYes;
+  const bN = card.believersNo;
+  const cY = card.yesCapitalUsd;
+  const cN = card.noCapitalUsd;
+  const vol = card.volume24hUsd;
+  const yesPct = card.impliedYesPct;
+  if (
+    bY == null &&
+    bN == null &&
+    cY == null &&
+    cN == null &&
+    (vol == null || vol === 0) &&
+    yesPct == null
+  )
+    return null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+      {yesPct != null && (
+        <span className="tabular-nums">
+          <span className="font-semibold text-foreground">{Math.round(yesPct)}%</span> YES implied
+        </span>
+      )}
+      {(bY != null || bN != null) && (
+        <span className="tabular-nums">
+          <span style={{ color: ARMY_COLOR.YES }}>{bY ?? 0}</span>
+          <span className="mx-0.5 opacity-60">/</span>
+          <span style={{ color: ARMY_COLOR.NO }}>{bN ?? 0}</span> believers
+        </span>
+      )}
+      {(cY != null || cN != null) && (
+        <span className="tabular-nums">
+          <span style={{ color: ARMY_COLOR.YES }}>{fmtUsd(cY ?? 0)}</span>
+          <span className="mx-0.5 opacity-60">/</span>
+          <span style={{ color: ARMY_COLOR.NO }}>{fmtUsd(cN ?? 0)}</span> backing
+        </span>
+      )}
+      {vol != null && vol > 0 && <span className="tabular-nums">{fmtUsd(vol)} vol 24h</span>}
+    </div>
+  );
+}
 function Belief({ text, className = "" }: { text: string; className?: string }) {
   return <p className={`leading-snug text-foreground ${className}`}>&ldquo;{text}&rdquo;</p>;
 }
@@ -566,6 +613,7 @@ function ConvictionCard({ card }: { card: FeedCard }) {
         </time>
       </div>
       {body}
+      <MarketFacts card={card} />
       <PriceRow card={card} />
       <CardAction card={card} />
     </div>
