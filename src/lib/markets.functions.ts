@@ -51,6 +51,8 @@ export const listFeed = createServerFn({ method: "GET" })
   const viewer = input?.wallet?.toLowerCase() ?? null;
   let tribeBySide = new Map<number, "YES" | "NO">();
   let oppBySide = new Map<number, "YES" | "NO">();
+  let tribePerson: MatchPerson | null = null;
+  let oppPerson: MatchPerson | null = null;
   if (viewer && rows.length) {
     const { data: matches } = await sb
       .from("wallet_matches")
@@ -79,8 +81,24 @@ export const listFeed = createServerFn({ method: "GET" })
         if (opp && w === opp.matched_wallet.toLowerCase())
           oppBySide.set(Number(b.onchain_id), side);
       }
+
+      // Put a face and a name on the tribesman / opp so the cards can show them.
+      const { resolveProfiles } = await import("@/lib/profiles.server");
+      const profiles = await resolveProfiles(focus.map((w) => w.toLowerCase()), 4);
+      const person = (w: string, score: number): MatchPerson => {
+        const prof = profiles.get(w.toLowerCase());
+        return {
+          wallet: w,
+          name: prof?.displayName ?? aliasFor(w),
+          pfpUrl: prof?.pfpUrl ?? null,
+          score: Math.round(score),
+        };
+      };
+      if (tribe) tribePerson = person(tribe.matched_wallet, Number(tribe.match_score));
+      if (opp) oppPerson = person(opp.matched_wallet, Number(opp.match_score));
     }
   }
+
 
   // Per-side volume, first principles: YES and NO are separate books, so we sum
   // the actual on-chain ETH notional traded on each side inside the selected
