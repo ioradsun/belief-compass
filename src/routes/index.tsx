@@ -309,6 +309,8 @@ function Feed() {
                     ethUsd={data.ethUsd ?? 0}
                     winLabel={winLabel}
                     stagger={(idx % 8) * 600}
+                    tribe={data.tribe ?? null}
+                    opp={data.opp ?? null}
                   />
                 ))}
               </div>
