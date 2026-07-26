@@ -93,43 +93,68 @@ export const listFeed = createServerFn({ method: "GET" })
     }
   }
 
-  // Per-side volume: YES and NO are separate perpetual books, so split the
-  // market's total volume by the ETH notional traded on each side.
+  // Per-side volume, first principles: YES and NO are separate books, so we sum
+  // the actual on-chain ETH notional traded on each side inside the selected
+  // window and convert to USD with a calibration derived from POV's own totals
+  // (Σ reported USD volume / Σ observed ETH volume).
+  const win: VolumeWindow = input?.window ?? "24h";
+  const ms = VOLUME_WINDOWS[win];
+  const since = ms == null ? null : new Date(Date.now() - ms).toISOString();
   const ids = rows.map((r) => Number(r.onchain_id));
   const yesEth = new Map<number, number>();
   const noEth = new Map<number, number>();
+  const yesTrades = new Map<number, number>();
+  const noTrades = new Map<number, number>();
+  let ethUsd = 0;
   if (ids.length) {
-    const { data: trades } = await sb
-      .from("trades")
-      .select("onchain_id, side, eth_amount")
-      .in("onchain_id", ids);
-    for (const t of trades ?? []) {
+    const [vol, cal] = await Promise.all([
+      sb.rpc("market_volume_window", { p_ids: ids, p_since: since }),
+      sb.rpc("eth_usd_calibration"),
+    ]);
+    for (const t of (vol.data ?? []) as {
+      onchain_id: number;
+      side: string;
+      eth: number;
+      trade_count: number;
+    }[]) {
       const id = Number(t.onchain_id);
-      const amt = Number(t.eth_amount ?? 0);
-      if (!Number.isFinite(amt)) continue;
-      const m = t.side === "NO" ? noEth : yesEth;
-      m.set(id, (m.get(id) ?? 0) + amt);
+      const eth = Number(t.eth ?? 0);
+      if (!Number.isFinite(eth)) continue;
+      if (t.side === "NO") {
+        noEth.set(id, (noEth.get(id) ?? 0) + eth);
+        noTrades.set(id, (noTrades.get(id) ?? 0) + Number(t.trade_count ?? 0));
+      } else {
+        yesEth.set(id, (yesEth.get(id) ?? 0) + eth);
+        yesTrades.set(id, (yesTrades.get(id) ?? 0) + Number(t.trade_count ?? 0));
+      }
     }
+    ethUsd = Number(cal.data ?? 0) || 0;
   }
 
-  return {
-    data: rows.map((r) => {
-      const id = Number(r.onchain_id);
-      const y = yesEth.get(id) ?? 0;
-      const n = noEth.get(id) ?? 0;
-      const tot = y + n;
-      const vol = Number(r.volume_total_usd ?? 0);
-      return {
-        ...r,
-        yes_volume_usd: tot > 0 ? (vol * y) / tot : null,
-        no_volume_usd: tot > 0 ? (vol * n) / tot : null,
-        tribe_side: tribeBySide.get(id) ?? null,
-        opp_side: oppBySide.get(id) ?? null,
-      };
-    }),
-    error: null,
-  };
+  const mapped = rows.map((r) => {
+    const id = Number(r.onchain_id);
+    const y = yesEth.get(id) ?? 0;
+    const n = noEth.get(id) ?? 0;
+    const yesUsd = ethUsd > 0 ? y * ethUsd : null;
+    const noUsd = ethUsd > 0 ? n * ethUsd : null;
+    return {
+      ...r,
+      yes_volume_usd: yesUsd,
+      no_volume_usd: noUsd,
+      yes_trade_count: yesTrades.get(id) ?? 0,
+      no_trade_count: noTrades.get(id) ?? 0,
+      window_volume_usd: yesUsd == null && noUsd == null ? null : (yesUsd ?? 0) + (noUsd ?? 0),
+      tribe_side: tribeBySide.get(id) ?? null,
+      opp_side: oppBySide.get(id) ?? null,
+    };
+  });
+
+  // Rank by the volume actually being displayed so the table is self-consistent.
+  mapped.sort((a, b) => (b.window_volume_usd ?? -1) - (a.window_volume_usd ?? -1));
+
+  return { data: mapped, error: null, window: win, ethUsd };
 });
+
 
 
 
