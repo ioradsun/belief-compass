@@ -10,7 +10,40 @@ import { BUILD_ID } from "@/lib/build-id";
  */
 export function VersionWatcher() {
   useEffect(() => {
-    if (BUILD_ID === "dev") return;
+    // Chunk-load failures happen the instant a user navigates to a route whose
+    // JS chunk was renamed by a redeploy. Reload immediately (once) instead of
+    // waiting for the 60s poll — otherwise the page is blank until then.
+    const reloadOnce = () => {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("_chunkReload") === "1") return; // avoid loops
+      url.searchParams.set("_chunkReload", "1");
+      window.location.replace(url.toString());
+    };
+    const isChunkError = (msg: unknown) => {
+      const s = String(msg ?? "");
+      return (
+        s.includes("Importing a module script failed") ||
+        s.includes("Failed to fetch dynamically imported module") ||
+        s.includes("error loading dynamically imported module") ||
+        /ChunkLoadError/i.test(s)
+      );
+    };
+    const onError = (e: ErrorEvent) => {
+      if (isChunkError(e.message) || isChunkError((e.error as Error)?.message)) reloadOnce();
+    };
+    const onRejection = (e: PromiseRejectionEvent) => {
+      const r = e.reason;
+      if (isChunkError(r?.message ?? r)) reloadOnce();
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+
+    if (BUILD_ID === "dev") {
+      return () => {
+        window.removeEventListener("error", onError);
+        window.removeEventListener("unhandledrejection", onRejection);
+      };
+    }
     let cancelled = false;
 
     const check = async () => {
@@ -19,7 +52,6 @@ export function VersionWatcher() {
         if (!res.ok) return;
         const { buildId } = (await res.json()) as { buildId?: string };
         if (cancelled || !buildId || buildId === BUILD_ID) return;
-        // New deploy — reload once, with a cache-buster to defeat any HTML cache.
         const url = new URL(window.location.href);
         url.searchParams.set("_v", buildId);
         window.location.replace(url.toString());
@@ -29,7 +61,6 @@ export function VersionWatcher() {
     };
 
     const id = window.setInterval(check, 60_000);
-    // Also check right after tab regains focus so a returning user sees new UI fast.
     const onFocus = () => void check();
     window.addEventListener("focus", onFocus);
     void check();
@@ -38,8 +69,11 @@ export function VersionWatcher() {
       cancelled = true;
       window.clearInterval(id);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
     };
   }, []);
 
   return null;
 }
+
