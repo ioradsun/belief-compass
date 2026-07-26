@@ -26,6 +26,8 @@ export type MarketRow = {
   no_capital_usd?: number | null;
   chg_24h_yes?: number | null;
   chg_24h_no?: number | null;
+  chg_window_yes?: number | null;
+  chg_window_no?: number | null;
   yes_volume_usd?: number | null;
   no_volume_usd?: number | null;
   yes_trade_count?: number | null;
@@ -139,7 +141,10 @@ function SideBlock({
           className="text-xs font-medium tabular-nums"
           style={{ color: chg == null ? undefined : up ? "#059669" : "#dc2626" }}
         >
-          {chg == null ? "—" : `${up ? "▲+" : "▼−"}${Math.abs(Math.round(chg))}%`}
+          {chg == null ? "—" : `${up ? "▲+" : "▼−"}${Math.abs(chg) < 1 ? Math.abs(chg).toFixed(1) : Math.round(Math.abs(chg))}%`}
+        </span>
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          {winLabel}
         </span>
       </div>
       <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-muted">
@@ -238,7 +243,7 @@ export function MarketCard({
         <SideBlock
           side="YES"
           price={row.yes_price_usd}
-          chg={row.chg_24h_yes == null ? null : Number(row.chg_24h_yes)}
+          chg={row.chg_window_yes == null ? null : Number(row.chg_window_yes)}
           backers={yesB}
           sharePct={totalB > 0 ? (yesB / totalB) * 100 : 0}
           capital={yesCap}
@@ -251,7 +256,7 @@ export function MarketCard({
         <SideBlock
           side="NO"
           price={row.no_price_usd}
-          chg={row.chg_24h_no == null ? null : Number(row.chg_24h_no)}
+          chg={row.chg_window_no == null ? null : Number(row.chg_window_no)}
           backers={noB}
           sharePct={totalB > 0 ? (noB / totalB) * 100 : 0}
           capital={noCap}

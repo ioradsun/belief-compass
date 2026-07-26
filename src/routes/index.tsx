@@ -20,7 +20,7 @@ const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-const feedQO = (wallet?: string, window: VolumeWindow = "all") =>
+const feedQO = (wallet?: string, window: VolumeWindow = "24h") =>
   queryOptions({
     queryKey: ["feed", wallet ?? null, window],
     queryFn: async () => await listFeed({ data: { wallet, window } }),
@@ -235,10 +235,10 @@ function Job({
 
 function Feed() {
   const { wallet } = Route.useSearch();
-  const [win, setWin] = useState<VolumeWindow>("all");
+  const [win, setWin] = useState<VolumeWindow>("24h");
   const { data } = useSuspenseQuery(feedQO(wallet, win));
   const rows = data.data ?? [];
-  const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "All";
+  const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "24H";
 
   const ids = rows.map((r) => Number(r.onchain_id));
   const { data: pulseData } = useQuery(pulsesQO(ids));
@@ -279,7 +279,7 @@ function Feed() {
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
                 <div className="text-xs text-muted-foreground">
-                  Volume = on-chain ETH traded on that side in the window, priced in USD. Each card
+                  Volume and price change are both scoped to the selected timeframe: on-chain ETH traded on that side (priced in USD) and the move in that side’s share price over the same window. Each card
                   runs its own live feed — tap one to see every event.
                 </div>
                 <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
