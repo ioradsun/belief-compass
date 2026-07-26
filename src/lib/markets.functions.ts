@@ -16,6 +16,15 @@ export const VOLUME_WINDOWS = {
 } as const;
 export type VolumeWindow = keyof typeof VOLUME_WINDOWS;
 
+/** The viewer's closest match (tribe) or most-opposed wallet (opp). */
+export type MatchPerson = {
+  wallet: string;
+  name: string | null;
+  pfpUrl: string | null;
+  score: number;
+};
+
+
 export const listFeed = createServerFn({ method: "GET" })
   .inputValidator((d?: { wallet?: string; window?: VolumeWindow }) =>
     z
