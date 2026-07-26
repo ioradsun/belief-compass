@@ -318,6 +318,8 @@ function PriceRow({ card }: { card: FeedCard }) {
   const p = card.price;
   const yes = card.yesPriceUsd;
   const no = card.noPriceUsd;
+  // If the card is about a specific side (YES/NO), only show that side's price, highlighted.
+  const focus = card.priceSide;
   // Prefer the daily-bucket 24h; fall back to the market_state headline change.
   const chg24h = p?.chg24h ?? card.priceChgPct ?? null;
   const showSpark = (p?.series.length ?? 0) >= MIN_SPARK_POINTS;
@@ -325,9 +327,27 @@ function PriceRow({ card }: { card: FeedCard }) {
 
   const up = (chg24h ?? 0) >= 0;
   const fmtPrice = (n: number) => (n >= 1 ? `$${n.toFixed(2)}` : `${(n * 100).toFixed(0)}¢`);
+
+  const sidePill = (label: "YES" | "NO", price: number) => (
+    <span
+      className="tabular-nums inline-flex items-center gap-1 rounded-md px-1.5 py-0.5"
+      style={{
+        color: ARMY_COLOR[label],
+        backgroundColor: `${ARMY_COLOR[label]}1a`,
+        border: `1px solid ${ARMY_COLOR[label]}55`,
+      }}
+      title={`${label} share price — live`}
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wide">{label}</span>
+      <span className="font-semibold text-foreground">{fmtPrice(price)}</span>
+    </span>
+  );
+
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/50 pt-2 text-xs text-muted-foreground">
-      {(yes != null || no != null) && (
+      {focus === "YES" && yes != null && sidePill("YES", yes)}
+      {focus === "NO" && no != null && sidePill("NO", no)}
+      {focus == null && (yes != null || no != null) && (
         <span className="tabular-nums" title="Current share prices — live">
           {yes != null && (
             <>
@@ -344,6 +364,7 @@ function PriceRow({ card }: { card: FeedCard }) {
           )}
         </span>
       )}
+
       {chg24h != null && (
         <span
           className="tabular-nums font-medium"
