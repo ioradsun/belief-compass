@@ -414,6 +414,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      eth_usd_calibration: { Args: never; Returns: number }
+      market_volume_window: {
+        Args: { p_ids: number[]; p_since: string }
+        Returns: {
+          eth: number
+          onchain_id: number
+          side: string
+          trade_count: number
+        }[]
+      }
       price_series_daily: {
         Args: { p_days: number; p_ids: number[] }
         Returns: {

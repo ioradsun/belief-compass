@@ -1,16 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
-import { listFeed, getIngestStatus } from "@/lib/markets.functions";
+import { listFeed, getIngestStatus, type VolumeWindow } from "@/lib/markets.functions";
 import { ConvictionFeed } from "@/components/ConvictionFeed";
 import { WalletConnectButton } from "@/components/WalletConnect";
 
+const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
+  { key: "1h", label: "1H" },
+  { key: "24h", label: "24H" },
+  { key: "7d", label: "1W" },
+  { key: "30d", label: "1M" },
+  { key: "all", label: "All" },
+];
 
-const feedQO = (wallet?: string) =>
+const feedQO = (wallet?: string, window: VolumeWindow = "all") =>
   queryOptions({
-    queryKey: ["feed", wallet ?? null],
-    queryFn: async () => await listFeed({ data: { wallet } }),
+    queryKey: ["feed", wallet ?? null, window],
+    queryFn: async () => await listFeed({ data: { wallet, window } }),
   });
+
 
 
 const statusQO = queryOptions({
@@ -208,8 +216,11 @@ function Job({
 
 function Feed() {
   const { wallet } = Route.useSearch();
-  const { data } = useSuspenseQuery(feedQO(wallet));
+  const [win, setWin] = useState<VolumeWindow>("all");
+  const { data } = useSuspenseQuery(feedQO(wallet, win));
   const rows = data.data ?? [];
+  const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "All";
+
 
 
   return (
@@ -240,7 +251,29 @@ function Feed() {
               cycle completes.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border">
+            <div className="rounded-lg border border-border">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <div className="text-xs text-muted-foreground">
+                  Volume = on-chain ETH traded on that side in the window, priced in USD.
+                </div>
+                <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
+                  {WINDOW_OPTIONS.map((w) => (
+                    <button
+                      key={w.key}
+                      type="button"
+                      onClick={() => setWin(w.key)}
+                      className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                        win === w.key
+                          ? "bg-foreground text-background"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="overflow-x-auto">
               <table className="w-full min-w-[1040px] text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
@@ -251,10 +284,11 @@ function Feed() {
                     <th className="px-4 py-3 text-right">Backers</th>
                     <th className="px-4 py-3 text-right">Invested</th>
                     <th className="px-4 py-3 text-right">People share</th>
-                    <th className="px-4 py-3 text-right">Volume</th>
+                    <th className="px-4 py-3 text-right">Volume {winLabel}</th>
                     <th className="px-4 py-3">Your graph</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {rows.map((r) => {
                     const m = (r as { markets?: { title?: string; category?: string } | null })
@@ -274,6 +308,9 @@ function Feed() {
                     const rr = r as {
                       yes_volume_usd?: number | null;
                       no_volume_usd?: number | null;
+                      yes_trade_count?: number | null;
+                      no_trade_count?: number | null;
+                      window_volume_usd?: number | null;
                       yes_capital_usd?: number | null;
                       no_capital_usd?: number | null;
                       chg_24h_yes?: number | null;
@@ -292,8 +329,10 @@ function Feed() {
                         capital: yesCap,
                         people,
                         volume: rr.yes_volume_usd ?? null,
+                        trades: Number(rr.yes_trade_count ?? 0),
                         tone: "emerald",
                       },
+
                       {
                         key: "NO" as const,
                         price: r.no_price_usd,
@@ -302,7 +341,9 @@ function Feed() {
                         capital: noCap,
                         people: people == null ? null : 100 - people,
                         volume: rr.no_volume_usd ?? null,
+                        trades: Number(rr.no_trade_count ?? 0),
                         tone: "rose",
+
                       },
                     ];
 
@@ -335,10 +376,13 @@ function Feed() {
                                 )}
                               </div>
                               <div className="mt-1 text-[11px] text-muted-foreground">
-                                volume {fmtUsd(r.volume_total_usd)}
+                                {winLabel} volume{" "}
+                                {rr.window_volume_usd ? fmtUsd(rr.window_volume_usd) : "—"} ·
+                                lifetime {fmtUsd(r.volume_total_usd)}
                                 {Number(r.believers_mixed ?? 0) > 0 &&
                                   ` · ${r.believers_mixed} mixed`}
                               </div>
+
                             </td>
                           )}
                           <td className="px-4 py-4">
@@ -383,7 +427,17 @@ function Feed() {
                             </div>
                           </td>
                           <td className="px-4 py-4 text-right tabular-nums">{pct(s.people)}</td>
-                          <td className="px-4 py-4 text-right tabular-nums">{fmtUsd(s.volume)}</td>
+                          <td className="px-4 py-4 text-right tabular-nums">
+                            <div className="font-medium">
+                              {s.volume == null || Number(s.volume) === 0
+                                ? "—"
+                                : fmtUsd(s.volume)}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {s.trades > 0 ? `${s.trades} trade${s.trades === 1 ? "" : "s"}` : "no trades"}
+                            </div>
+                          </td>
+
                           <td className="px-4 py-4">
                             <div className="flex flex-col gap-1">
                               {tribe === s.key && (
@@ -407,9 +461,9 @@ function Feed() {
                   })}
                 </tbody>
               </table>
-
-
+              </div>
             </div>
+
           )}
 
           <p className="text-xs text-muted-foreground">
