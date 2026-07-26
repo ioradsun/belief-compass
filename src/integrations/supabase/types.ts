@@ -82,13 +82,16 @@ export type Database = {
           divergence: number | null
           money_yes_pct: number | null
           new_believers_1h: number
+          no_capital_usd: number | null
           no_price_usd: number | null
           onchain_id: number
           people_yes_pct: number | null
           trending_score: number | null
           updated_at: string
           velocity_5m: number
+          volume_24h_usd: number | null
           volume_total_usd: number | null
+          yes_capital_usd: number | null
           yes_price_usd: number | null
         }
         Insert: {
@@ -101,13 +104,16 @@ export type Database = {
           divergence?: number | null
           money_yes_pct?: number | null
           new_believers_1h?: number
+          no_capital_usd?: number | null
           no_price_usd?: number | null
           onchain_id: number
           people_yes_pct?: number | null
           trending_score?: number | null
           updated_at?: string
           velocity_5m?: number
+          volume_24h_usd?: number | null
           volume_total_usd?: number | null
+          yes_capital_usd?: number | null
           yes_price_usd?: number | null
         }
         Update: {
@@ -120,13 +126,16 @@ export type Database = {
           divergence?: number | null
           money_yes_pct?: number | null
           new_believers_1h?: number
+          no_capital_usd?: number | null
           no_price_usd?: number | null
           onchain_id?: number
           people_yes_pct?: number | null
           trending_score?: number | null
           updated_at?: string
           velocity_5m?: number
+          volume_24h_usd?: number | null
           volume_total_usd?: number | null
+          yes_capital_usd?: number | null
           yes_price_usd?: number | null
         }
         Relationships: [
