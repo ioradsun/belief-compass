@@ -1,16 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
-import { listFeed, getIngestStatus } from "@/lib/markets.functions";
+import { listFeed, getIngestStatus, type VolumeWindow } from "@/lib/markets.functions";
 import { ConvictionFeed } from "@/components/ConvictionFeed";
 import { WalletConnectButton } from "@/components/WalletConnect";
 
+const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
+  { key: "1h", label: "1H" },
+  { key: "24h", label: "24H" },
+  { key: "7d", label: "1W" },
+  { key: "30d", label: "1M" },
+  { key: "all", label: "All" },
+];
 
-const feedQO = (wallet?: string) =>
+const feedQO = (wallet?: string, window: VolumeWindow = "24h") =>
   queryOptions({
-    queryKey: ["feed", wallet ?? null],
-    queryFn: async () => await listFeed({ data: { wallet } }),
+    queryKey: ["feed", wallet ?? null, window],
+    queryFn: async () => await listFeed({ data: { wallet, window } }),
   });
+
 
 
 const statusQO = queryOptions({
