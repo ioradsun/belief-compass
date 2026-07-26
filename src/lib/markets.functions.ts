@@ -108,10 +108,15 @@ export const listFeed = createServerFn({ method: "GET" })
   const yesTrades = new Map<number, number>();
   const noTrades = new Map<number, number>();
   let ethUsd = 0;
+  // Window-scoped price moves: first snapshot inside the window vs the latest.
+  const chgYes = new Map<number, number>();
+  const chgNo = new Map<number, number>();
+  let historyFrom: string | null = null;
   if (ids.length) {
-    const [vol, cal] = await Promise.all([
+    const [vol, cal, chg] = await Promise.all([
       sb.rpc("market_volume_window", { p_ids: ids, p_since: since }),
       sb.rpc("eth_usd_calibration"),
+      sb.rpc("market_change_window", { p_ids: ids, p_since: since }),
     ]);
     for (const t of (vol.data ?? []) as {
       onchain_id: number;
@@ -131,6 +136,17 @@ export const listFeed = createServerFn({ method: "GET" })
       }
     }
     ethUsd = Number(cal.data ?? 0) || 0;
+    for (const c of (chg.data ?? []) as {
+      onchain_id: number;
+      chg_yes: number | null;
+      chg_no: number | null;
+      since_at: string | null;
+    }[]) {
+      const id = Number(c.onchain_id);
+      if (c.chg_yes != null && Number.isFinite(Number(c.chg_yes))) chgYes.set(id, Number(c.chg_yes));
+      if (c.chg_no != null && Number.isFinite(Number(c.chg_no))) chgNo.set(id, Number(c.chg_no));
+      if (c.since_at && (historyFrom == null || c.since_at < historyFrom)) historyFrom = c.since_at;
+    }
   }
 
   const mapped = rows.map((r) => {
@@ -146,6 +162,8 @@ export const listFeed = createServerFn({ method: "GET" })
       yes_trade_count: yesTrades.get(id) ?? 0,
       no_trade_count: noTrades.get(id) ?? 0,
       window_volume_usd: yesUsd == null && noUsd == null ? null : (yesUsd ?? 0) + (noUsd ?? 0),
+      chg_window_yes: chgYes.get(id) ?? null,
+      chg_window_no: chgNo.get(id) ?? null,
       tribe_side: tribeBySide.get(id) ?? null,
       opp_side: oppBySide.get(id) ?? null,
     };
@@ -154,8 +172,9 @@ export const listFeed = createServerFn({ method: "GET" })
   // Rank by the volume actually being displayed so the table is self-consistent.
   mapped.sort((a, b) => (b.window_volume_usd ?? -1) - (a.window_volume_usd ?? -1));
 
-  return { data: mapped, error: null, window: win, ethUsd };
+  return { data: mapped, error: null, window: win, ethUsd, historyFrom };
 });
+
 
 /**
  * Per-market pulse strips: the most recent real trade events for each of the
