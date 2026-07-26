@@ -417,7 +417,17 @@ function Feed() {
                             </div>
                           </td>
                           <td className="px-4 py-4 text-right tabular-nums">{pct(s.people)}</td>
-                          <td className="px-4 py-4 text-right tabular-nums">{fmtUsd(s.volume)}</td>
+                          <td className="px-4 py-4 text-right tabular-nums">
+                            <div className="font-medium">
+                              {s.volume == null || Number(s.volume) === 0
+                                ? "—"
+                                : fmtUsd(s.volume)}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {s.trades > 0 ? `${s.trades} trade${s.trades === 1 ? "" : "s"}` : "no trades"}
+                            </div>
+                          </td>
+
                           <td className="px-4 py-4">
                             <div className="flex flex-col gap-1">
                               {tribe === s.key && (
