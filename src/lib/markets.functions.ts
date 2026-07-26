@@ -22,11 +22,26 @@ function publicClient() {
   });
 }
 
+export const VOLUME_WINDOWS = {
+  "1h": 3_600_000,
+  "24h": 86_400_000,
+  "7d": 7 * 86_400_000,
+  "30d": 30 * 86_400_000,
+  all: null,
+} as const;
+export type VolumeWindow = keyof typeof VOLUME_WINDOWS;
+
 export const listFeed = createServerFn({ method: "GET" })
-  .inputValidator((d?: { wallet?: string }) =>
-    z.object({ wallet: z.string().min(3).optional() }).parse(d ?? {}))
+  .inputValidator((d?: { wallet?: string; window?: VolumeWindow }) =>
+    z
+      .object({
+        wallet: z.string().min(3).optional(),
+        window: z.enum(["1h", "24h", "7d", "30d", "all"]).optional(),
+      })
+      .parse(d ?? {}))
   .handler(async ({ data: input }) => {
   const sb = publicClient();
+
   const { data, error } = await sb
     .from("market_state")
     .select(`
