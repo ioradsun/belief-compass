@@ -215,21 +215,77 @@ function SideBlock({
   );
 }
 
+/** Header strip: your tribesman / opp holds a position in this market. */
+function MatchStrip({
+  person,
+  kind,
+  side,
+}: {
+  person: MatchPerson;
+  kind: "Tribe" | "Opp";
+  side: "YES" | "NO";
+}) {
+  const tribe = kind === "Tribe";
+  const name = person.name || shortWallet(person.wallet);
+  return (
+    <a
+      href={`/wallet/${person.wallet}`}
+      className={`flex items-center gap-2 border-b border-border px-4 py-2 text-[11px] ${
+        tribe ? "bg-violet-500/10" : "bg-red-500/10"
+      }`}
+    >
+      {person.pfpUrl ? (
+        <img
+          src={person.pfpUrl}
+          alt={name}
+          loading="lazy"
+          className="h-4 w-4 shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <span
+          className="h-4 w-4 shrink-0 rounded-full text-center text-[8px] font-semibold leading-4 text-white"
+          style={{ background: `hsl(${hueFor(person.wallet)} 55% 45%)` }}
+          aria-hidden
+        >
+          {initialsFor(name)}
+        </span>
+      )}
+      <span
+        className={`shrink-0 font-semibold uppercase tracking-wide ${
+          tribe ? "text-violet-600" : "text-red-600"
+        }`}
+      >
+        {tribe ? "Your tribe" : "Your opp"}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">
+        <span className="text-foreground">{name}</span> is on{" "}
+        <span className={side === "YES" ? "text-emerald-600" : "text-rose-600"}>{side}</span>
+      </span>
+      <span className="shrink-0 tabular-nums text-muted-foreground">{person.score}%</span>
+    </a>
+  );
+}
+
 export function MarketCard({
   row,
   pulses,
   ethUsd,
   winLabel,
   stagger,
+  tribe,
+  opp,
 }: {
   row: MarketRow;
   pulses: Pulse[];
   ethUsd: number;
   winLabel: string;
   stagger: number;
+  tribe?: MatchPerson | null;
+  opp?: MatchPerson | null;
 }) {
   const [i, setI] = useState(0);
   const [open, setOpen] = useState(false);
+
 
   // Each card rotates its own pulses; the stagger keeps the grid from ticking
   // in lockstep. Rotation pauses while the strip is expanded.
