@@ -87,6 +87,8 @@ export interface FeedCard {
   yesCapitalUsd: number | null; // capital backing YES (per-side market cap)
   noCapitalUsd: number | null; // capital backing NO
   volume24hUsd: number | null; // 24h volume → buying pressure
+  yesPriceUsd: number | null; // current YES share price ($)
+  noPriceUsd: number | null; // current NO share price ($)
   context: string | null; // one fact: "held 73 days" / "143 new believers"
   convictionPct: number | null; // actor's conviction 0..100 (individual/creator); null at network scale
   believersYes: number | null;
