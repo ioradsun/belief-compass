@@ -221,6 +221,12 @@ function Feed() {
   const rows = data.data ?? [];
   const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "All";
 
+  const ids = rows.map((r) => Number(r.onchain_id));
+  const { data: pulseData } = useQuery(pulsesQO(ids));
+  const pulses = pulseData?.pulses ?? {};
+
+
+
 
 
   return (
