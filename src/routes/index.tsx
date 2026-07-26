@@ -13,7 +13,7 @@ const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-const feedQO = (wallet?: string, window: VolumeWindow = "24h") =>
+const feedQO = (wallet?: string, window: VolumeWindow = "all") =>
   queryOptions({
     queryKey: ["feed", wallet ?? null, window],
     queryFn: async () => await listFeed({ data: { wallet, window } }),
