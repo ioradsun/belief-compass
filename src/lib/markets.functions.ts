@@ -22,7 +22,10 @@ function publicClient() {
   });
 }
 
-export const listFeed = createServerFn({ method: "GET" }).handler(async () => {
+export const listFeed = createServerFn({ method: "GET" })
+  .inputValidator((d?: { wallet?: string }) =>
+    z.object({ wallet: z.string().min(3).optional() }).parse(d ?? {}))
+  .handler(async ({ data: input }) => {
   const sb = publicClient();
   const { data, error } = await sb
     .from("market_state")
@@ -36,8 +39,54 @@ export const listFeed = createServerFn({ method: "GET" }).handler(async () => {
     .order("volume_total_usd", { ascending: false, nullsFirst: false })
     .limit(50);
   if (error) return { data: [], error: error.message };
-  return { data: data ?? [], error: null };
+  const rows = data ?? [];
+
+  // Viewer-relative: is the viewer's closest match (tribe) or most-opposed
+  // wallet (opp) among the believers of each market, and on which side?
+  const viewer = input?.wallet?.toLowerCase() ?? null;
+  let tribeBySide = new Map<number, "YES" | "NO">();
+  let oppBySide = new Map<number, "YES" | "NO">();
+  if (viewer && rows.length) {
+    const { data: matches } = await sb
+      .from("wallet_matches")
+      .select("matched_wallet, match_score")
+      .eq("wallet", viewer)
+      .order("match_score", { ascending: false })
+      .limit(50);
+    const list = matches ?? [];
+    const tribe = list[0] ?? null;
+    const oppCand = list[list.length - 1] ?? null;
+    const opp = oppCand && Number(oppCand.match_score) < 50 ? oppCand : null;
+    const focus = [tribe?.matched_wallet, opp?.matched_wallet].filter(Boolean) as string[];
+    if (focus.length) {
+      const ids = rows.map((r) => Number(r.onchain_id));
+      const { data: beliefs } = await sb
+        .from("wallet_beliefs")
+        .select("wallet, onchain_id, stance_side")
+        .in("wallet", focus)
+        .in("onchain_id", ids)
+        .in("stance_side", ["YES", "NO"]);
+      for (const b of beliefs ?? []) {
+        const w = String(b.wallet).toLowerCase();
+        const side = b.stance_side as "YES" | "NO";
+        if (tribe && w === tribe.matched_wallet.toLowerCase())
+          tribeBySide.set(Number(b.onchain_id), side);
+        if (opp && w === opp.matched_wallet.toLowerCase())
+          oppBySide.set(Number(b.onchain_id), side);
+      }
+    }
+  }
+
+  return {
+    data: rows.map((r) => ({
+      ...r,
+      tribe_side: tribeBySide.get(Number(r.onchain_id)) ?? null,
+      opp_side: oppBySide.get(Number(r.onchain_id)) ?? null,
+    })),
+    error: null,
+  };
 });
+
 
 export const getMarket = createServerFn({ method: "GET" })
   .inputValidator((d: { onchain_id: number }) =>

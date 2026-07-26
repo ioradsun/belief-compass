@@ -6,10 +6,12 @@ import { ConvictionFeed } from "@/components/ConvictionFeed";
 import { WalletConnectButton } from "@/components/WalletConnect";
 
 
-const feedQO = queryOptions({
-  queryKey: ["feed"],
-  queryFn: async () => await listFeed(),
-});
+const feedQO = (wallet?: string) =>
+  queryOptions({
+    queryKey: ["feed", wallet ?? null],
+    queryFn: async () => await listFeed({ data: { wallet } }),
+  });
+
 
 const statusQO = queryOptions({
   queryKey: ["ingest-status"],
@@ -39,7 +41,7 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(feedQO),
+  loader: ({ context }) => context.queryClient.ensureQueryData(feedQO()),
   component: Feed,
   errorComponent: ({ error }) => (
     <div className="p-8 text-sm text-destructive">Feed failed: {String(error)}</div>
@@ -205,9 +207,10 @@ function Job({
 }
 
 function Feed() {
-  const { data } = useSuspenseQuery(feedQO);
   const { wallet } = Route.useSearch();
+  const { data } = useSuspenseQuery(feedQO(wallet));
   const rows = data.data ?? [];
+
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -238,17 +241,18 @@ function Feed() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full min-w-[900px] text-sm">
+              <table className="w-full min-w-[1040px] text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="p-3">Market</th>
-                    <th className="p-3 text-right">YES</th>
-                    <th className="p-3 text-right">NO</th>
-                    <th className="p-3 text-right">24h</th>
-                    <th className="p-3 text-right">Money%</th>
-                    <th className="p-3 text-right">People%</th>
-                    <th className="p-3 text-right">Wallets</th>
-                    <th className="p-3 text-right">Volume</th>
+                    <th className="px-4 py-3">Market</th>
+                    <th className="px-4 py-3 text-right">YES</th>
+                    <th className="px-4 py-3 text-right">NO</th>
+                    <th className="px-4 py-3 text-right">24h</th>
+                    <th className="px-4 py-3 text-right">Backers</th>
+                    <th className="px-4 py-3">Your graph</th>
+                    <th className="px-4 py-3 text-right">Money%</th>
+                    <th className="px-4 py-3 text-right">People%</th>
+                    <th className="px-4 py-3 text-right">Volume</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -259,47 +263,89 @@ function Feed() {
                     const chgUp = chg != null && Number(chg) >= 0;
                     const fmtShare = (n: number | null) =>
                       n == null ? "—" : n >= 1 ? `$${Number(n).toFixed(2)}` : `${Math.round(Number(n) * 100)}¢`;
+                    const yesB = Number(r.believers_yes ?? 0);
+                    const noB = Number(r.believers_no ?? 0);
+                    const totalB = yesB + noB;
+                    const yesShare = totalB > 0 ? (yesB / totalB) * 100 : 0;
+                    const tribe = (r as { tribe_side?: "YES" | "NO" | null }).tribe_side ?? null;
+                    const opp = (r as { opp_side?: "YES" | "NO" | null }).opp_side ?? null;
                     return (
-                      <tr key={r.onchain_id} className="border-t border-border hover:bg-muted/30">
-                        <td className="p-3">
+                      <tr
+                        key={r.onchain_id}
+                        className="border-t border-border align-top hover:bg-muted/30"
+                      >
+                        <td className="px-4 py-5">
                           <a
                             href={`/market/${r.onchain_id}`}
-                            className="font-medium hover:underline"
+                            className="font-medium leading-snug hover:underline"
                           >
                             {m?.title ?? `Market #${r.onchain_id}`}
                           </a>
                           {m?.category && (
-                            <div className="text-xs text-muted-foreground">{m.category}</div>
+                            <div className="mt-1 text-xs text-muted-foreground">{m.category}</div>
                           )}
                         </td>
-                        <td className="p-3 text-right tabular-nums text-blue-600">
-                          {fmtShare(r.yes_price_usd)}
+                        <td className="px-4 py-5 text-right tabular-nums">
+                          <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-1 font-semibold text-emerald-600">
+                            {fmtShare(r.yes_price_usd)}
+                          </span>
                         </td>
-                        <td className="p-3 text-right tabular-nums text-muted-foreground">
-                          {fmtShare(r.no_price_usd)}
+                        <td className="px-4 py-5 text-right tabular-nums">
+                          <span className="inline-flex items-center rounded-md bg-rose-500/10 px-2 py-1 font-semibold text-rose-600">
+                            {fmtShare(r.no_price_usd)}
+                          </span>
                         </td>
                         <td
-                          className="p-3 text-right tabular-nums font-medium"
+                          className="px-4 py-5 text-right tabular-nums font-medium"
                           style={{ color: chg == null ? undefined : chgUp ? "#059669" : "#dc2626" }}
                         >
                           {chg == null
                             ? "—"
                             : `${chgUp ? "▲ +" : "▼ −"}${Math.abs(Math.round(Number(chg)))}%`}
+                          <div className="text-[11px] font-normal text-muted-foreground">24h</div>
                         </td>
-                        <td className="p-3 text-right tabular-nums">{pct(r.money_yes_pct)}</td>
-                        <td className="p-3 text-right tabular-nums">{pct(r.people_yes_pct)}</td>
-                        <td className="p-3 text-right tabular-nums">
-                          <span className="text-emerald-600">{r.believers_yes}</span>
-                          {" / "}
-                          <span className="text-rose-600">{r.believers_no}</span>
-                          {r.believers_mixed > 0 && (
-                            <span className="text-muted-foreground">
-                              {" "}
-                              · {r.believers_mixed} mixed
-                            </span>
+                        <td className="px-4 py-5 text-right tabular-nums">
+                          <div>
+                            <span className="font-medium text-emerald-600">{yesB}</span>
+                            <span className="text-muted-foreground"> yes · </span>
+                            <span className="font-medium text-rose-600">{noB}</span>
+                            <span className="text-muted-foreground"> no</span>
+                          </div>
+                          <div className="mt-2 flex h-1.5 w-28 overflow-hidden rounded-full bg-rose-500/30 ml-auto">
+                            <div
+                              className="h-full bg-emerald-500"
+                              style={{ width: `${yesShare}%` }}
+                            />
+                          </div>
+                          {Number(r.believers_mixed ?? 0) > 0 && (
+                            <div className="mt-1 text-[11px] text-muted-foreground">
+                              {r.believers_mixed} mixed
+                            </div>
                           )}
                         </td>
-                        <td className="p-3 text-right tabular-nums">
+                        <td className="px-4 py-5">
+                          {tribe == null && opp == null ? (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              {tribe && (
+                                <span className="inline-flex w-fit items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-violet-600">
+                                  Tribe · {tribe}
+                                </span>
+                              )}
+                              {opp && (
+                                <span className="inline-flex w-fit items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-600">
+                                  Opp · {opp}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-5 text-right tabular-nums">{pct(r.money_yes_pct)}</td>
+                        <td className="px-4 py-5 text-right tabular-nums">
+                          {pct(r.people_yes_pct)}
+                        </td>
+                        <td className="px-4 py-5 text-right tabular-nums">
                           {fmtUsd(r.volume_total_usd)}
                         </td>
                       </tr>
@@ -307,6 +353,7 @@ function Feed() {
                   })}
                 </tbody>
               </table>
+
             </div>
           )}
 
