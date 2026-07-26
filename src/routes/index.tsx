@@ -308,6 +308,9 @@ function Feed() {
                     const rr = r as {
                       yes_volume_usd?: number | null;
                       no_volume_usd?: number | null;
+                      yes_trade_count?: number | null;
+                      no_trade_count?: number | null;
+                      window_volume_usd?: number | null;
                       yes_capital_usd?: number | null;
                       no_capital_usd?: number | null;
                       chg_24h_yes?: number | null;
@@ -326,8 +329,10 @@ function Feed() {
                         capital: yesCap,
                         people,
                         volume: rr.yes_volume_usd ?? null,
+                        trades: Number(rr.yes_trade_count ?? 0),
                         tone: "emerald",
                       },
+
                       {
                         key: "NO" as const,
                         price: r.no_price_usd,
