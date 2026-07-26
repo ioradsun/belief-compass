@@ -329,7 +329,13 @@ function Feed() {
                                 </div>
                               )}
                               <div className="mt-2 text-[11px] text-muted-foreground">
-                                total {fmtUsd(r.volume_total_usd)}
+                                market cap {capTotal > 0 ? fmtUsd(capTotal) : "—"}
+                                {capTotal > 0 && (
+                                  <> · yes {fmtUsd(yesCap ?? 0)} / no {fmtUsd(noCap ?? 0)}</>
+                                )}
+                              </div>
+                              <div className="mt-1 text-[11px] text-muted-foreground">
+                                volume {fmtUsd(r.volume_total_usd)}
                                 {Number(r.believers_mixed ?? 0) > 0 &&
                                   ` · ${r.believers_mixed} mixed`}
                               </div>
