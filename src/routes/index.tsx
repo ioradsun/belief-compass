@@ -376,10 +376,13 @@ function Feed() {
                                 )}
                               </div>
                               <div className="mt-1 text-[11px] text-muted-foreground">
-                                volume {fmtUsd(r.volume_total_usd)}
+                                {winLabel} volume{" "}
+                                {rr.window_volume_usd ? fmtUsd(rr.window_volume_usd) : "—"} ·
+                                lifetime {fmtUsd(r.volume_total_usd)}
                                 {Number(r.believers_mixed ?? 0) > 0 &&
                                   ` · ${r.believers_mixed} mixed`}
                               </div>
+
                             </td>
                           )}
                           <td className="px-4 py-4">
