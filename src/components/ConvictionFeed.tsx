@@ -613,6 +613,7 @@ function ConvictionCard({ card }: { card: FeedCard }) {
         </time>
       </div>
       {body}
+      <MarketFacts card={card} />
       <PriceRow card={card} />
       <CardAction card={card} />
     </div>
