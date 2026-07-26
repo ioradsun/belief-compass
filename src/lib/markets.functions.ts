@@ -54,7 +54,9 @@ export const listFeed = createServerFn({ method: "GET" })
     `)
     .order("volume_total_usd", { ascending: false, nullsFirst: false })
     .limit(50);
-  if (error) return { data: [], error: error.message };
+  if (error)
+    return { data: [], error: error.message, window: (input?.window ?? "24h") as VolumeWindow, ethUsd: 0 };
+
   const rows = data ?? [];
 
   // Viewer-relative: is the viewer's closest match (tribe) or most-opposed
