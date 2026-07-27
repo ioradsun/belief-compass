@@ -249,24 +249,36 @@ function Feed() {
 
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-7xl items-start justify-between gap-4 px-6 py-8">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">conviction</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Markets tell you what moved. Conviction tells you why. Wealth tells you why people
-              cared.
-            </p>
-          </div>
-          <div className="pt-1">
-            <WalletConnectButton />
-          </div>
+    <div
+      className="grid h-[100dvh] w-full overflow-hidden bg-[var(--bg)] text-[var(--text)]"
+      style={{
+        gridTemplateColumns:
+          "minmax(210px,236px) minmax(560px,1fr) minmax(290px,326px)",
+      }}
+    >
+      {/* LEFT — My Convictions */}
+      <aside
+        className="col-start-1 h-full overflow-y-auto bg-[var(--bg)] px-4 py-6"
+        style={{ borderRight: "1px solid var(--border)" }}
+      >
+        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          My Convictions
         </div>
-      </header>
+        <div className="mt-4">
+          <WalletConnectButton />
+        </div>
+      </aside>
 
+      {/* CENTER — Belief */}
+      <main className="col-start-2 h-full overflow-y-auto bg-[var(--bg)] px-6 py-6">
+        <header className="mb-6">
+          <h1 className="text-3xl font-semibold tracking-tight">conviction</h1>
+          <p className="mt-2 text-sm text-[var(--text-secondary)]">
+            Markets tell you what moved. Conviction tells you why. Wealth tells you why people
+            cared.
+          </p>
+        </header>
 
-      <main className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[1fr_minmax(320px,380px)]">
         <div className="space-y-6">
           <StatusPanel />
 
@@ -300,7 +312,7 @@ function Feed() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 {rows.map((r, idx) => (
                   <MarketCard
                     key={r.onchain_id}
@@ -317,17 +329,24 @@ function Feed() {
             </div>
           )}
 
-
           <p className="text-xs text-muted-foreground">
             Positions are trade-derived estimates; token transfers are not yet indexed. "Wallets"
             counts directional believers, not people.
           </p>
         </div>
-
-        <aside className="lg:sticky lg:top-6 lg:self-start">
-          <ConvictionFeed wallet={wallet} />
-        </aside>
       </main>
+
+      {/* RIGHT — The Room */}
+      <aside
+        className="col-start-3 h-full overflow-y-auto bg-[var(--bg)] px-4 py-6"
+        style={{ borderLeft: "1px solid var(--border)" }}
+      >
+        <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          The Room
+        </div>
+        <ConvictionFeed wallet={wallet} />
+      </aside>
     </div>
   );
 }
+
