@@ -1,0 +1,74 @@
+/**
+ * LiveTape — the right column. A compact chronological activity tape (Phase 7).
+ * Reads the server-grouped LiveRow DTO (canonical events, occurrence order); it
+ * does NOT rank, personalize, or render big market cards. Clicking a row selects
+ * that market in the center (Discover).
+ */
+import { useQuery } from "@tanstack/react-query";
+import { listLiveEvents } from "@/lib/live.functions";
+
+function ago(iso: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+export function LiveTape({ onSelect }: { onSelect: (marketId: number) => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["live-tape"],
+    queryFn: () => listLiveEvents({ data: {} }),
+    // New rows prepend; refetch keeps the tape fresh without new infra.
+    refetchInterval: 15_000,
+  });
+  const rows = data?.rows ?? [];
+
+  return (
+    <div className="min-h-0 flex-1">
+      {isLoading && rows.length === 0 ? (
+        <ul className="space-y-2" aria-hidden>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <li key={i} className="h-8 animate-pulse rounded bg-[var(--border)]/40" />
+          ))}
+        </ul>
+      ) : rows.length === 0 ? (
+        <p className="text-xs text-[var(--text-muted)]">No recent activity yet.</p>
+      ) : (
+        <ul className="space-y-0.5">
+          {rows.map((r) => (
+            <li key={r.id}>
+              <button
+                type="button"
+                onClick={() => onSelect(Number(r.marketId))}
+                className="flex w-full items-start gap-2 rounded px-1.5 py-1.5 text-left transition-colors hover:bg-[var(--border)]/30"
+              >
+                <span className="mt-0.5 w-8 shrink-0 text-[11px] tabular-nums text-[var(--text-muted)]">
+                  {ago(r.occurredAt)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span
+                    className={`text-[13px] ${
+                      r.side === "YES"
+                        ? "text-emerald-500"
+                        : r.side === "NO"
+                          ? "text-rose-500"
+                          : "text-[var(--text-secondary)]"
+                    }`}
+                  >
+                    {r.text}
+                  </span>
+                  <span className="block truncate text-[11px] text-[var(--text-muted)]">
+                    {r.marketTitle}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

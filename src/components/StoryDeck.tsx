@@ -22,6 +22,7 @@ export function StoryDeck({
   tribe,
   opp,
   reasonByMarket,
+  selectedId,
 }: {
   rows: MarketRow[];
   pulses: Record<string, Pulse[]>;
@@ -30,6 +31,8 @@ export function StoryDeck({
   tribe?: MatchPerson | null;
   opp?: MatchPerson | null;
   reasonByMarket?: Record<number, string>;
+  /** Universal selection: when set, the deck jumps to this market (You/Live click). */
+  selectedId?: number;
 }) {
   const [i, setI] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -37,6 +40,17 @@ export function StoryDeck({
   const touchX = useRef<number | null>(null);
 
   const count = rows.length;
+
+  // A selection from You or Live takes precedence over automatic progression:
+  // jump to that market and reset the dwell timer (does not permanently pause).
+  useEffect(() => {
+    if (selectedId == null) return;
+    const idx = rows.findIndex((r) => Number(r.onchain_id) === selectedId);
+    if (idx >= 0) {
+      setI(idx);
+      setElapsed(0);
+    }
+  }, [selectedId, rows]);
   const idx = Math.min(i, Math.max(0, count - 1));
 
   const go = useCallback(
