@@ -41,7 +41,7 @@ function Row({
   );
 }
 
-export function WalletIdentity({ viewing }: { viewing: string }) {
+export function WalletIdentity({ viewing, compact }: { viewing: string; compact?: boolean }) {
   const { address } = useAccount();
   const vendor = address?.toLowerCase() ?? null;
   const [open, setOpen] = useState(false);
@@ -64,8 +64,8 @@ export function WalletIdentity({ viewing }: { viewing: string }) {
         : undefined;
 
   return (
-    <section className="mt-6">
-      <div className="grid gap-2 sm:grid-cols-2">
+    <section className={compact ? "pt-4" : "mt-6"}>
+      <div className={compact ? "grid gap-2" : "grid gap-2 sm:grid-cols-2"}>
         <Row
           label="Vendor Wallet"
           addr={vendor}
