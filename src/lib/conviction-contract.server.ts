@@ -276,6 +276,9 @@ export async function getBelief(beliefId: string, address: string | null): Promi
   ]);
   if (!market) return null;
 
+  const { data: calib } = await sb.rpc("eth_usd_calibration");
+  const ethUsd = Number(calib ?? 0) || 0;
+
   const qualified = viewer.profile === "qualified";
   const matches = await matchTable(qualified ? viewerAddr : null);
   const peopleMap = await peopleFor([id], matches, qualified, viewerAddr);
