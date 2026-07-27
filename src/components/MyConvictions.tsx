@@ -42,12 +42,10 @@ export function MyConvictions({
   wallet,
   rows,
   pulses,
-  ethUsd,
 }: {
   wallet?: string;
   rows: MarketRow[];
   pulses: Record<string, Pulse[]>;
-  ethUsd: number;
 }) {
   const { data } = useQuery({
     queryKey: ["my-convictions", wallet ?? null],
