@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
+import { MarketEvidence } from "@/components/MarketEvidence";
 import { CHAIN_ID } from "@/chain/decoder";
 import {
   useBuyQuote,
@@ -134,93 +135,98 @@ export function MarketDeck({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
-      {/* Identity */}
-      <div>
-        {category && (
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            {category}
-          </div>
-        )}
-        <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
-          {title}
-        </h1>
-      </div>
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
+        {/* Identity */}
+        <div>
+          {category && (
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+              {category}
+            </div>
+          )}
+          <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
+            {title}
+          </h1>
+        </div>
 
-      {/* Pulse — why this matters now */}
-      <div
-        className="flex items-center gap-2 rounded-[12px] px-3 py-2.5"
-        style={{ border: "1px solid var(--border)" }}
-      >
-        <span
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={{ background: PULSE_TONE[pulse.tone] }}
-          aria-hidden
-        />
-        <span className="text-[13px] font-semibold text-[var(--text)]">Pulse: {pulse.label}</span>
-        <span className="min-w-0 truncate text-[12px] text-[var(--text-secondary)]">
-          {pulse.why}
-        </span>
-      </div>
-
-      {/* Battlefield */}
-      <div className="grid min-h-0 grid-cols-2 gap-2">
-        <SideCard
-          label="YES"
-          price={row.yes_price_usd}
-          chg={row.chg_window_yes ?? row.chg_24h_yes ?? null}
-          believers={row.believers_yes}
-          capital={row.yes_capital_usd ?? null}
-          selected={side === "YES"}
-          onSelect={() => setSide((s) => selectSide(s, "YES"))}
-        />
-        <SideCard
-          label="NO"
-          price={row.no_price_usd}
-          chg={row.chg_window_no ?? row.chg_24h_no ?? null}
-          believers={row.believers_no}
-          capital={row.no_capital_usd ?? null}
-          selected={side === "NO"}
-          onSelect={() => setSide((s) => selectSide(s, "NO"))}
-        />
-      </div>
-
-      {/* DNA / social evidence + recent activity */}
-      <div className="space-y-1.5">
-        <div className="flex items-start gap-2 text-[13px]">
+        {/* Pulse — why this matters now */}
+        <div
+          className="flex items-center gap-2 rounded-[12px] px-3 py-2.5"
+          style={{ border: "1px solid var(--border)" }}
+        >
           <span
-            className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ background: "var(--rel,#9b87f5)" }}
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ background: PULSE_TONE[pulse.tone] }}
             aria-hidden
           />
-          <span className="text-[var(--text-secondary)]">
-            {relationshipBeat ?? "No reliable DNA signal here yet."}
+          <span className="text-[13px] font-semibold text-[var(--text)]">Pulse: {pulse.label}</span>
+          <span className="min-w-0 truncate text-[12px] text-[var(--text-secondary)]">
+            {pulse.why}
           </span>
         </div>
-        {eventBeat && (
-          <div className="pl-3.5 text-[12px] text-[var(--text-muted)]">{eventBeat}</div>
+
+        {/* Battlefield */}
+        <div className="grid min-h-0 grid-cols-2 gap-2">
+          <SideCard
+            label="YES"
+            price={row.yes_price_usd}
+            chg={row.chg_window_yes ?? row.chg_24h_yes ?? null}
+            believers={row.believers_yes}
+            capital={row.yes_capital_usd ?? null}
+            selected={side === "YES"}
+            onSelect={() => setSide((s) => selectSide(s, "YES"))}
+          />
+          <SideCard
+            label="NO"
+            price={row.no_price_usd}
+            chg={row.chg_window_no ?? row.chg_24h_no ?? null}
+            believers={row.believers_no}
+            capital={row.no_capital_usd ?? null}
+            selected={side === "NO"}
+            onSelect={() => setSide((s) => selectSide(s, "NO"))}
+          />
+        </div>
+
+        {/* DNA / social evidence + recent activity */}
+        <div className="space-y-1.5">
+          <div className="flex items-start gap-2 text-[13px]">
+            <span
+              className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ background: "var(--rel,#9b87f5)" }}
+              aria-hidden
+            />
+            <span className="text-[var(--text-secondary)]">
+              {relationshipBeat ?? "No reliable DNA signal here yet."}
+            </span>
+          </div>
+          {eventBeat && (
+            <div className="pl-3.5 text-[12px] text-[var(--text-muted)]">{eventBeat}</div>
+          )}
+        </div>
+
+        {/* Evidence: believers · price · defense */}
+        <MarketEvidence marketId={marketId} />
+
+        {held && sellPct == null && (
+          <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
+            <span>
+              You hold <b className="text-[var(--text)]">{held.side}</b> · {fmtShares(held.tokens)}{" "}
+              shares
+            </span>
+            <button
+              type="button"
+              onClick={openSell}
+              className="ml-auto rounded-[10px] px-3 py-1 text-[12px] font-semibold text-[var(--text-secondary)]"
+              style={{ border: "1px solid var(--border)" }}
+            >
+              Sell
+            </button>
+          </div>
         )}
       </div>
 
-      {held && sellPct == null && (
-        <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
-          <span>
-            You hold <b className="text-[var(--text)]">{held.side}</b> · {fmtShares(held.tokens)}{" "}
-            shares
-          </span>
-          <button
-            type="button"
-            onClick={openSell}
-            className="ml-auto rounded-[10px] px-3 py-1 text-[12px] font-semibold text-[var(--text-secondary)]"
-            style={{ border: "1px solid var(--border)" }}
-          >
-            Sell
-          </button>
-        </div>
-      )}
-
       {/* Decision dock — buy by default; sell takes over when opened on a holding. */}
-      <div className="mt-auto">
+      <div className="shrink-0">
         {held && sellPct != null ? (
           <SellPanel
             held={held}

@@ -1,0 +1,199 @@
+/**
+ * The deck's proof section: three tabs of real evidence for the open market.
+ *   • Believers — actual holders per side, with faces, conviction and days held.
+ *   • Price — money-YES% over the last ~60 days as a small sparkline.
+ *   • Defense — the case each side is making. Best-effort from pov.co; honest
+ *     empty state until that source is wired.
+ * Server-owned via getMarketEvidence; this only renders. Compact + self-scrolling
+ * so it never fights the decision dock for space.
+ */
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
+import { hueFor, initialsFor } from "@/lib/wallet-identity";
+
+type Tab = "believers" | "price" | "defense";
+
+export function MarketEvidence({ marketId }: { marketId: number }) {
+  const [tab, setTab] = useState<Tab>("believers");
+  const { data, isLoading } = useQuery({
+    queryKey: ["evidence", marketId],
+    queryFn: () => getMarketEvidence({ data: { marketId } }),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const counts = data
+    ? { believers: data.believers.length, price: data.priceSeries.length }
+    : { believers: 0, price: 0 };
+
+  return (
+    <div className="rounded-[12px]" style={{ border: "1px solid var(--border)" }}>
+      <div className="flex gap-1 p-1">
+        <TabBtn on={tab === "believers"} onClick={() => setTab("believers")}>
+          Believers{counts.believers ? ` ${counts.believers}` : ""}
+        </TabBtn>
+        <TabBtn on={tab === "price"} onClick={() => setTab("price")}>
+          Price
+        </TabBtn>
+        <TabBtn on={tab === "defense"} onClick={() => setTab("defense")}>
+          Defense
+        </TabBtn>
+      </div>
+      <div className="max-h-[168px] overflow-y-auto px-2 pb-2">
+        {isLoading && !data ? (
+          <div className="space-y-1.5 py-2">
+            <div className="h-6 animate-pulse rounded bg-[var(--border)]/50" />
+            <div className="h-6 w-2/3 animate-pulse rounded bg-[var(--border)]/50" />
+          </div>
+        ) : tab === "believers" ? (
+          <BelieversList believers={data?.believers ?? []} />
+        ) : tab === "price" ? (
+          <PriceHistory series={data?.priceSeries ?? []} />
+        ) : (
+          <Defense />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TabBtn({
+  on,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex-1 rounded-[9px] py-1.5 text-[12px] font-semibold transition-colors"
+      style={
+        on
+          ? { background: "var(--surface-2,var(--border))", color: "var(--text)" }
+          : { color: "var(--text-muted)" }
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+function BelieversList({ believers }: { believers: Believer[] }) {
+  if (believers.length === 0) {
+    return <Empty>No directional holders yet — be the first to take a side.</Empty>;
+  }
+  return (
+    <ul className="space-y-0.5 py-1">
+      {believers.map((b) => (
+        <li key={b.wallet} className="flex items-center gap-2 py-1">
+          {b.avatarUrl ? (
+            <img src={b.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
+          ) : (
+            <span
+              className="grid h-6 w-6 place-items-center rounded-full text-[9px] font-semibold text-white"
+              style={{ background: `hsl(${hueFor(b.wallet)} 45% 45%)` }}
+              aria-hidden
+            >
+              {initialsFor(b.name)}
+            </span>
+          )}
+          <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--text)]">{b.name}</span>
+          {b.daysHeld > 0 && (
+            <span className="num text-[10px] text-[var(--text-muted)]">{b.daysHeld}d</span>
+          )}
+          <span
+            className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+            style={{
+              color: b.side === "YES" ? "var(--yes)" : "var(--no)",
+              background:
+                b.side === "YES"
+                  ? "color-mix(in oklab,var(--yes) 12%,transparent)"
+                  : "color-mix(in oklab,var(--no) 12%,transparent)",
+            }}
+          >
+            {b.side}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PriceHistory({ series }: { series: { date: string; yesPct: number }[] }) {
+  if (series.length < 2) {
+    return <Empty>Not enough price history yet — it builds as the market trades.</Empty>;
+  }
+  const w = 280;
+  const h = 96;
+  const pad = 4;
+  const xs = series.map((_, i) => pad + (i * (w - 2 * pad)) / (series.length - 1));
+  const ys = series.map((p) => {
+    const v = Math.max(0, Math.min(100, p.yesPct));
+    return pad + ((100 - v) * (h - 2 * pad)) / 100;
+  });
+  const path = xs
+    .map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${ys[i].toFixed(1)}`)
+    .join(" ");
+  const last = series[series.length - 1].yesPct;
+  const first = series[0].yesPct;
+  const delta = last - first;
+  const mid = pad + ((100 - 50) * (h - 2 * pad)) / 100;
+
+  return (
+    <div className="py-1">
+      <div className="mb-1 flex items-baseline justify-between px-1">
+        <span className="num text-[13px] font-semibold text-[var(--text)]">
+          {last.toFixed(0)}% YES
+        </span>
+        <span
+          className="num text-[11px] font-semibold"
+          style={{ color: delta >= 0 ? "var(--yes)" : "var(--no)" }}
+        >
+          {delta >= 0 ? "+" : "−"}
+          {Math.abs(delta).toFixed(0)} pts · {series.length}d
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full" role="img" aria-label="YES share over time">
+        <line
+          x1={pad}
+          y1={mid}
+          x2={w - pad}
+          y2={mid}
+          stroke="var(--border)"
+          strokeDasharray="3 3"
+          strokeWidth={1}
+        />
+        <path
+          d={path}
+          fill="none"
+          stroke={delta >= 0 ? "var(--yes)" : "var(--no)"}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
+function Defense() {
+  return (
+    <Empty>
+      The cases each side is making are coming from pov.co soon. For now, the believers and price
+      tabs carry the evidence.
+    </Empty>
+  );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-2 py-4 text-center text-[12px] leading-relaxed text-[var(--text-muted)]">
+      {children}
+    </div>
+  );
+}
