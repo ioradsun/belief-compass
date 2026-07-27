@@ -249,29 +249,16 @@ function Feed() {
       <main
         className={`${show("belief")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-6 lg:py-6`}
       >
-        <header className="mb-5 lg:mb-6">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setMenuOpen(true)}
-              aria-label="Open menu"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-[var(--border)] lg:hidden"
-            >
-              <span className="space-y-1">
-                <span className="block h-px w-4 bg-current" />
-                <span className="block h-px w-4 bg-current" />
-                <span className="block h-px w-4 bg-current" />
-              </span>
-            </button>
-            <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight lg:text-3xl">
-              conviction
-            </h1>
-          </div>
-          <p className="mt-2 text-[13px] text-[var(--text-secondary)] lg:text-sm">
-            Markets tell you what moved. Conviction tells you why. Wealth tells you why people
-            cared.
-          </p>
-        </header>
+        <OmniHeader
+          lens={lens}
+          lenses={OPP_FILTERS}
+          onLens={setLens}
+          markets={rawRows as unknown as { onchain_id: number; title?: string | null }[]}
+          wallet={wallet}
+          onSelectMarket={selectMarket}
+          onSelectPerson={selectPerson}
+          onOpenMenu={() => setMenuOpen(true)}
+        />
 
         <div className="space-y-5 lg:space-y-6">
           {/* Center focus: person profile, DNA overview, or the Discover deck. */}
@@ -286,8 +273,7 @@ function Feed() {
             </div>
           ) : (
             <div className="flex h-full min-h-0 flex-col gap-3">
-              {/* Discovery: filter + queue progress. */}
-              <div className="rounded-lg border border-border px-3 py-3 lg:px-4">{lensPicker}</div>
+
               <div className="flex items-center justify-between px-1">
                 <span className="num text-[11px] text-[var(--text-muted)]">
                   {currentIdx + 1} / {marketRows.length}
