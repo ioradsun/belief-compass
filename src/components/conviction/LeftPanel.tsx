@@ -1,0 +1,25 @@
+import { EmptyState } from "./EmptyState";
+
+/**
+ * LeftPanel — "My Convictions". Answers: who am I here?
+ * Placeholder shell; contents arrive in a later prompt.
+ */
+export function LeftPanel() {
+  return (
+    <aside className="flex min-h-0 flex-1 flex-col wide:h-full wide:col-start-1 wide:row-start-1 border-border bg-panel wide:border-r">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-4">
+        <div className="min-w-0">
+          <p className="label-micro">My Convictions</p>
+          <p className="mt-1 truncate text-sm text-text">Not connected</p>
+        </div>
+      </header>
+
+      <div className="scroll-panel min-h-0 flex-1 px-4 py-4">
+        <EmptyState
+          title="No positions yet"
+          detail="Once you back a belief, your side, capital and conviction appear here."
+        />
+      </div>
+    </aside>
+  );
+}
