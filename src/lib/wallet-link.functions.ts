@@ -12,8 +12,8 @@ const addr = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 export const getWalletLink = createServerFn({ method: "GET" })
   .inputValidator((data) => z.object({ wallet: addr }).parse(data))
   .handler(async ({ data }) => {
-    const { publicClient } = await import("@/lib/supabase-clients");
-    const { data: rows } = await publicClient()
+    const { serviceClient } = await import("@/lib/supabase-clients");
+    const { data: rows } = await serviceClient()
       .from("wallet_links")
       .select("linked_wallet, verified_at")
       .eq("connected_wallet", data.wallet.toLowerCase())

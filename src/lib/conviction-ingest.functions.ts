@@ -170,7 +170,7 @@ export const ensureConviction = createServerFn({ method: "GET" })
     // 5. Preserve chain-derived fields on any rows the indexer already built.
     const existing = new Map<number, Existing>();
     for (let i = 0; i < marketIds.length; i += 500) {
-      const { data: rows } = await sb
+      const { data: rows } = await svc
         .from("wallet_beliefs")
         .select("onchain_id, directional_since, first_backed_at, last_trade_at, yes_cost, no_cost")
         .eq("wallet", viewer)

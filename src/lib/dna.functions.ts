@@ -9,7 +9,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { publicClient } from "@/lib/supabase-clients";
+import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { categoryToDomain } from "@/domain/categories";
 import { CIRCLE_MIN_PEOPLE, type EvidenceLevel, type RelationshipLabel } from "@/domain/dna/config";
@@ -221,7 +221,7 @@ export const getNetwork = createServerFn({ method: "GET" })
         .parse(d ?? {}),
   )
   .handler(async ({ data }): Promise<NetworkResponse> => {
-    const sb = publicClient();
+    const sb = serviceClient();
     const empty: NetworkResponse = {
       summary: { expressedBeliefs: 0, twinCount: 0, tribeCount: 0, oppCount: 0, inverseCount: 0 },
       freshness: { status: "empty" },
@@ -373,7 +373,7 @@ export const getDnaOverview = createServerFn({ method: "GET" })
     z.object({ wallet: z.string().min(3).optional() }).parse(d ?? {}),
   )
   .handler(async ({ data }): Promise<DnaOverview> => {
-    const sb = publicClient();
+    const sb = serviceClient();
     const base: DnaOverview = {
       connected: false,
       expressedBeliefs: 0,
@@ -489,7 +489,7 @@ export const getPersonProfile = createServerFn({ method: "GET" })
     z.object({ wallet: z.string().min(3), viewer: z.string().min(3).optional() }).parse(d),
   )
   .handler(async ({ data }): Promise<PersonProfile> => {
-    const sb = publicClient();
+    const sb = serviceClient();
     const target = data.wallet.toLowerCase();
     const viewer = data.viewer?.toLowerCase() ?? null;
 

@@ -88,7 +88,7 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
   }
 
   // 1. Viewer directional factors.
-  const { data: mine } = await pub
+  const { data: mine } = await svc
     .from("wallet_beliefs")
     .select("onchain_id, stance_side, conviction")
     .eq("wallet", viewer)
@@ -110,7 +110,7 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
   for (let i = 0; i < candidateWallets.length; i += 200) {
     const chunk = candidateWallets.slice(i, i + 200);
     if (chunk.length === 0) break;
-    const { data } = await pub
+    const { data } = await svc
       .from("wallet_beliefs")
       .select("wallet, onchain_id, stance_side, conviction")
       .in("wallet", chunk)
