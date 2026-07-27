@@ -146,6 +146,36 @@ export type Database = {
         }
         Relationships: []
       }
+      market_refresh_queue: {
+        Row: {
+          activity_dirty: boolean
+          attempts: number
+          last_error: string | null
+          market_id: number
+          positions_dirty: boolean
+          pov_dirty: boolean
+          requested_at: string
+        }
+        Insert: {
+          activity_dirty?: boolean
+          attempts?: number
+          last_error?: string | null
+          market_id: number
+          positions_dirty?: boolean
+          pov_dirty?: boolean
+          requested_at?: string
+        }
+        Update: {
+          activity_dirty?: boolean
+          attempts?: number
+          last_error?: string | null
+          market_id?: number
+          positions_dirty?: boolean
+          pov_dirty?: boolean
+          requested_at?: string
+        }
+        Relationships: []
+      }
       market_state: {
         Row: {
           believers_mixed: number
@@ -573,9 +603,23 @@ export type Database = {
         }
         Returns: Json
       }
+      claim_market_refresh: {
+        Args: { p_limit: number }
+        Returns: {
+          market_id: number
+          activity_dirty: boolean
+          positions_dirty: boolean
+          pov_dirty: boolean
+          requested_at: string
+        }[]
+      }
+      enqueue_market_refresh: { Args: { p_market_ids: number[]; p_kind: string }; Returns: number }
       eth_usd_calibration: { Args: never; Returns: number }
       events_health: { Args: never; Returns: Json }
       mark_positions_dirty: { Args: { p_pairs: Json; p_reason: string }; Returns: number }
+      market_event_windows: { Args: { p_market: number; p_now: string }; Returns: Json }
+      market_position_aggregates: { Args: { p_market: number; p_now: string }; Returns: Json }
+      market_transition_windows: { Args: { p_market: number; p_now: string }; Returns: Json }
       ingest_chain_chunk: {
         Args: {
           p_events: Json

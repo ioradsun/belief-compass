@@ -42,11 +42,13 @@ export const listFeed = createServerFn({ method: "GET" })
     .from("market_state")
     .select(
       `
-      onchain_id, yes_price_usd, no_price_usd, money_yes_pct, people_yes_pct,
-      believers_yes, believers_no, believers_mixed, divergence,
+      onchain_id, yes_price_usd, no_price_usd, money_yes_pct, people_yes_pct, people_no_pct,
+      believers_yes, believers_no, believers_mixed, directional_believers, divergence,
       volume_total_usd, trending_score, chg_1h, chg_24h, chg_24h_yes, chg_24h_no,
       yes_capital_usd, no_capital_usd,
-      new_believers_1h, velocity_5m,
+      new_believers_1h, new_believers_24h, unique_wallets_24h, circulation_24h,
+      last_trade_at, velocity_5m,
+      live_line, live_line_kind, live_line_window, live_line_occurred_at,
       markets:onchain_id ( title, category, author_name, author_pfp )
     `,
     )
@@ -356,12 +358,19 @@ export const getWallet = createServerFn({ method: "GET" })
         no_price_usd: number | null;
         chg_24h_yes: number | null;
         chg_24h_no: number | null;
+        // The GLOBAL factual live line from the read model — attached to each
+        // owned position via THIS set-based join (never a per-position query).
+        live_line: string | null;
+        live_line_kind: string | null;
+        live_line_occurred_at: string | null;
       }
     >();
     if (ids.length) {
       const { data: st } = await sb
         .from("market_state")
-        .select("onchain_id, yes_price_usd, no_price_usd, chg_24h_yes, chg_24h_no")
+        .select(
+          "onchain_id, yes_price_usd, no_price_usd, chg_24h_yes, chg_24h_no, live_line, live_line_kind, live_line_occurred_at",
+        )
         .in("onchain_id", ids);
       for (const s of st ?? [])
         stateById.set(Number(s.onchain_id), {
@@ -369,6 +378,9 @@ export const getWallet = createServerFn({ method: "GET" })
           no_price_usd: s.no_price_usd == null ? null : Number(s.no_price_usd),
           chg_24h_yes: s.chg_24h_yes == null ? null : Number(s.chg_24h_yes),
           chg_24h_no: s.chg_24h_no == null ? null : Number(s.chg_24h_no),
+          live_line: (s.live_line as string | null) ?? null,
+          live_line_kind: (s.live_line_kind as string | null) ?? null,
+          live_line_occurred_at: (s.live_line_occurred_at as string | null) ?? null,
         });
     }
 

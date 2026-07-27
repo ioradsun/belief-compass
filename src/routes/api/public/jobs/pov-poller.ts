@@ -113,6 +113,11 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
             if (m.error) throw m.error;
             const s = await sb.from("market_state").upsert(stateRows, { onConflict: "onchain_id" });
             if (s.error) throw s.error;
+            // POV display changed → mark the read model pov-dirty (coalesced).
+            const povMarketIds = marketRows.map((r) => Number(r.onchain_id));
+            if (povMarketIds.length > 0) {
+              await sb.rpc("enqueue_market_refresh", { p_market_ids: povMarketIds, p_kind: "pov" });
+            }
             const p = await sb.from("price_snapshots").insert(snapshotRows);
             if (p.error && !String(p.error.message).includes("duplicate")) throw p.error;
             if (profileRows.length > 0) {
