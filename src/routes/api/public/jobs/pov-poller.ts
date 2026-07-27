@@ -107,11 +107,24 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
           }
           await flush();
 
+          // POV can return the same market twice inside one page window; Postgres
+          // rejects an upsert batch that touches the same key twice, so collapse
+          // to the last occurrence per key before writing.
+          function dedupeBy<T extends Record<string, unknown>>(rows: T[], key: string): T[] {
+            const m = new Map<string, T>();
+            for (const r of rows) m.set(String(r[key]), r);
+            return [...m.values()];
+          }
+
           async function flush() {
             if (marketRows.length === 0) return;
-            const m = await sb.from("markets").upsert(marketRows, { onConflict: "onchain_id" });
+            const m = await sb
+              .from("markets")
+              .upsert(dedupeBy(marketRows, "onchain_id"), { onConflict: "onchain_id" });
             if (m.error) throw m.error;
-            const s = await sb.from("market_state").upsert(stateRows, { onConflict: "onchain_id" });
+            const s = await sb
+              .from("market_state")
+              .upsert(dedupeBy(stateRows, "onchain_id"), { onConflict: "onchain_id" });
             if (s.error) throw s.error;
             // POV display changed → mark the read model pov-dirty (coalesced).
             const povMarketIds = marketRows.map((r) => Number(r.onchain_id));
@@ -121,7 +134,9 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
             const p = await sb.from("price_snapshots").insert(snapshotRows);
             if (p.error && !String(p.error.message).includes("duplicate")) throw p.error;
             if (profileRows.length > 0) {
-              const pr = await sb.from("profiles").upsert(profileRows, { onConflict: "wallet" });
+              const pr = await sb
+                .from("profiles")
+                .upsert(dedupeBy(profileRows, "wallet"), { onConflict: "wallet" });
               if (pr.error) throw pr.error;
             }
             if (eventRows.length > 0) {
@@ -129,7 +144,7 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
               // market_created event per market across all polls.
               const ev = await sb
                 .from("events")
-                .upsert(eventRows, { onConflict: "source_key", ignoreDuplicates: true })
+                .upsert(dedupeBy(eventRows, "source_key"), { onConflict: "source_key", ignoreDuplicates: true })
                 .select("id");
               if (ev.error) throw ev.error;
               createdEvents += ev.data?.length ?? 0;
