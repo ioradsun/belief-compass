@@ -9,7 +9,7 @@ import {
 } from "@/lib/markets.functions";
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { ConvictionFeed } from "@/components/ConvictionFeed";
-import { WalletConnectButton } from "@/components/WalletConnect";
+import { MyConvictions } from "@/components/MyConvictions";
 
 
 const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
@@ -261,12 +261,11 @@ function Feed() {
         className="col-start-1 h-full overflow-y-auto bg-[var(--bg)] px-4 py-6"
         style={{ borderRight: "1px solid var(--border)" }}
       >
-        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-          My Convictions
-        </div>
-        <div className="mt-4">
-          <WalletConnectButton />
-        </div>
+        <MyConvictions
+          wallet={wallet}
+          rows={rows as unknown as MarketRow[]}
+          pulses={pulses}
+        />
       </aside>
 
       {/* CENTER — Belief */}
