@@ -9,6 +9,8 @@ import {
 } from "@/lib/markets.functions";
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { ConvictionFeed } from "@/components/ConvictionFeed";
+import { StoryDeck } from "@/components/StoryDeck";
+
 import { MyConvictions } from "@/components/MyConvictions";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 
@@ -247,6 +249,8 @@ function Feed() {
   const wallet = useEffectiveWallet(searchWallet);
   const [win, setWin] = useState<VolumeWindow>("24h");
   const [tab, setTab] = useState<MobileTab>("belief");
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const { data } = useSuspenseQuery(feedQO(wallet, win));
   const rows = data.data ?? [];
   const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "24H";
@@ -280,7 +284,7 @@ function Feed() {
 
   return (
     <div
-      className="grid h-[100dvh] w-full grid-cols-1 grid-rows-[1fr_auto] overflow-hidden bg-[var(--bg)] text-[var(--text)] lg:grid-rows-1 lg:[grid-template-columns:minmax(210px,236px)_minmax(560px,1fr)_minmax(290px,326px)]"
+      className="grid h-[100dvh] w-full grid-cols-1 grid-rows-1 overflow-hidden bg-[var(--bg)] text-[var(--text)] lg:[grid-template-columns:minmax(210px,236px)_minmax(560px,1fr)_minmax(290px,326px)]"
     >
       {/* LEFT — My Convictions */}
       <aside
@@ -302,7 +306,23 @@ function Feed() {
         className={`${show("belief")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-6 lg:py-6`}
       >
         <header className="mb-5 lg:mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight lg:text-3xl">conviction</h1>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              aria-label="Open menu"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-[var(--border)] lg:hidden"
+            >
+              <span className="space-y-1">
+                <span className="block h-px w-4 bg-current" />
+                <span className="block h-px w-4 bg-current" />
+                <span className="block h-px w-4 bg-current" />
+              </span>
+            </button>
+            <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight lg:text-3xl">
+              conviction
+            </h1>
+          </div>
           <p className="mt-2 text-[13px] text-[var(--text-secondary)] lg:text-sm">
             Markets tell you what moved. Conviction tells you why. Wealth tells you why people
             cared.
@@ -323,25 +343,19 @@ function Feed() {
               <div className="rounded-lg border border-border px-3 py-3 lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3 lg:px-4">
                 {windowPicker}
                 <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground lg:order-first lg:mt-0 lg:max-w-[60%] lg:text-xs">
-                  Volume and price change are scoped to the selected timeframe. Each card runs its
-                  own live feed — tap one to see every event.
+                  One market at a time — it advances on its own. Swipe, tap prev/next, or use the
+                  arrow keys; hovering or holding pauses the deck.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 lg:gap-4 xl:grid-cols-2">
-                {rows.map((r, idx) => (
-                  <MarketCard
-                    key={r.onchain_id}
-                    row={r as unknown as MarketRow}
-                    pulses={pulses[String(r.onchain_id)] ?? []}
-                    ethUsd={data.ethUsd ?? 0}
-                    winLabel={winLabel}
-                    stagger={(idx % 8) * 600}
-                    tribe={data.tribe ?? null}
-                    opp={data.opp ?? null}
-                  />
-                ))}
-              </div>
+              <StoryDeck
+                rows={rows as unknown as MarketRow[]}
+                pulses={pulses}
+                ethUsd={data.ethUsd ?? 0}
+                winLabel={winLabel}
+                tribe={data.tribe ?? null}
+                opp={data.opp ?? null}
+              />
             </div>
           )}
 
@@ -363,29 +377,48 @@ function Feed() {
         <ConvictionFeed wallet={wallet} />
       </aside>
 
-      {/* Mobile bottom navigation */}
-      <nav
-        className="row-start-2 grid grid-cols-3 bg-[var(--panel)] pb-[env(safe-area-inset-bottom)] lg:hidden"
-        style={{ borderTop: "1px solid var(--border)" }}
-      >
-        {TABS.map((t) => (
+      {/* Mobile slide-in menu (replaces the bottom tab bar) */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
           <button
-            key={t.key}
             type="button"
-            onClick={() => setTab(t.key)}
-            aria-current={tab === t.key ? "page" : undefined}
-            className={`py-3 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
-              tab === t.key
-                ? "text-[var(--text)] shadow-[inset_0_2px_0_0_var(--text)]"
-                : "text-[var(--text-muted)]"
-            }`}
+            aria-label="Close menu"
+            onClick={() => setMenuOpen(false)}
+            className="absolute inset-0 bg-black/60"
+          />
+          <div
+            className="absolute inset-y-0 left-0 w-64 bg-[var(--panel)] p-4"
+            style={{ borderRight: "1px solid var(--border)" }}
           >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+            <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              Menu
+            </div>
+            <div className="space-y-1">
+              {TABS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => {
+                    setTab(t.key);
+                    setMenuOpen(false);
+                  }}
+                  aria-current={tab === t.key ? "page" : undefined}
+                  className={`block w-full rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                    tab === t.key
+                      ? "bg-[var(--surface)] text-[var(--text)]"
+                      : "text-[var(--text-muted)]"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 
