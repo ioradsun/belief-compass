@@ -62,7 +62,7 @@ function PovOnConnect() {
       // `replace` so the connect hop doesn't trap the back button in a loop.
       void navigate({
         to: "/",
-        search: (prev) => ({ ...prev, wallet: linked ?? address }),
+        search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({ ...prev, wallet: linked ?? address }),
         replace: true,
       });
     })();

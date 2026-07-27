@@ -25,7 +25,7 @@ export function LinkWalletCard() {
 
   function go(addr: string) {
     // The wallet view is the home "You" panel — focus the feed on this wallet.
-    void navigate({ to: "/", search: (prev) => ({ ...prev, wallet: addr }) });
+    void navigate({ to: "/", search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({ ...prev, wallet: addr }) });
   }
 
   function remember() {
