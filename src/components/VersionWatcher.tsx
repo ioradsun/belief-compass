@@ -46,12 +46,28 @@ export function VersionWatcher() {
     }
     let cancelled = false;
 
+    // Guard against reload loops: if the server's build id never matches the
+    // one baked into this bundle (which happens whenever the server and client
+    // are built separately), an unguarded reload fires forever and the page
+    // blinks. Reload at most once per target build id, per tab.
+    const alreadyReloadedFor = (id: string) => {
+      try {
+        const key = "conviction:reloaded-for";
+        if (window.sessionStorage.getItem(key) === id) return true;
+        window.sessionStorage.setItem(key, id);
+        return false;
+      } catch {
+        return true; // no storage → don't risk a loop
+      }
+    };
+
     const check = async () => {
       try {
         const res = await fetch("/api/public/build-id", { cache: "no-store" });
         if (!res.ok) return;
         const { buildId } = (await res.json()) as { buildId?: string };
         if (cancelled || !buildId || buildId === BUILD_ID) return;
+        if (alreadyReloadedFor(buildId)) return;
         const url = new URL(window.location.href);
         url.searchParams.set("_v", buildId);
         window.location.replace(url.toString());
@@ -64,6 +80,7 @@ export function VersionWatcher() {
     const onFocus = () => void check();
     window.addEventListener("focus", onFocus);
     void check();
+
 
     return () => {
       cancelled = true;
