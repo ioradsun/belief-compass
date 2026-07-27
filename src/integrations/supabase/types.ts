@@ -553,35 +553,65 @@ export type Database = {
         }
         Relationships: []
       }
-      wallet_matches: {
+      viewer_match_cache: {
         Row: {
-          agreements: number
           calculated_at: string
-          disagreements: number
-          domain: string | null
-          match_score: number
-          matched_wallet: string
-          shared_markets: number
+          candidate_count: number
+          closest_match: Json | null
+          domain_matches: Json
+          expires_at: string
+          last_error: string | null
+          match_engine_version: number
+          rival_matches: Json
+          scored_count: number
+          tribe_matches: Json
+          viewer_position_version: number
+          viewer_wallet: string
+        }
+        Insert: {
+          calculated_at?: string
+          candidate_count?: number
+          closest_match?: Json | null
+          domain_matches?: Json
+          expires_at?: string
+          last_error?: string | null
+          match_engine_version?: number
+          rival_matches?: Json
+          scored_count?: number
+          tribe_matches?: Json
+          viewer_position_version?: number
+          viewer_wallet: string
+        }
+        Update: {
+          calculated_at?: string
+          candidate_count?: number
+          closest_match?: Json | null
+          domain_matches?: Json
+          expires_at?: string
+          last_error?: string | null
+          match_engine_version?: number
+          rival_matches?: Json
+          scored_count?: number
+          tribe_matches?: Json
+          viewer_position_version?: number
+          viewer_wallet?: string
+        }
+        Relationships: []
+      }
+      wallet_match_version: {
+        Row: {
+          updated_at: string
+          version: number
           wallet: string
         }
         Insert: {
-          agreements: number
-          calculated_at?: string
-          disagreements: number
-          domain?: string | null
-          match_score: number
-          matched_wallet: string
-          shared_markets: number
+          updated_at?: string
+          version?: number
           wallet: string
         }
         Update: {
-          agreements?: number
-          calculated_at?: string
-          disagreements?: number
-          domain?: string | null
-          match_score?: number
-          matched_wallet?: string
-          shared_markets?: number
+          updated_at?: string
+          version?: number
           wallet?: string
         }
         Relationships: []
@@ -614,9 +644,21 @@ export type Database = {
         }[]
       }
       enqueue_market_refresh: { Args: { p_market_ids: number[]; p_kind: string }; Returns: number }
+      find_match_candidates: {
+        Args: { p_viewer: string; p_min_shared?: number; p_max_candidates?: number }
+        Returns: {
+          wallet: string
+          shared_markets: number
+          same_side: number
+          opposite_side: number
+          weighted_evidence: number
+          last_shared_activity_at: string | null
+        }[]
+      }
       eth_usd_calibration: { Args: never; Returns: number }
       events_health: { Args: never; Returns: Json }
       mark_positions_dirty: { Args: { p_pairs: Json; p_reason: string }; Returns: number }
+      request_viewer_match_refresh: { Args: { p_wallet: string }; Returns: undefined }
       market_event_windows: { Args: { p_market: number; p_now: string }; Returns: Json }
       market_position_aggregates: { Args: { p_market: number; p_now: string }; Returns: Json }
       market_transition_windows: { Args: { p_market: number; p_now: string }; Returns: Json }

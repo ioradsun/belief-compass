@@ -16,7 +16,6 @@ import { Route as WalletAddrRouteImport } from './routes/wallet.$addr'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
 import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/public/jobs/belief-rollup'
 import { Route as ApiPublicJobsChainPollerRouteImport } from './routes/api/public/jobs/chain-poller'
-import { Route as ApiPublicJobsDnaMatcherRouteImport } from './routes/api/public/jobs/dna-matcher'
 import { Route as ApiPublicJobsMarketRefresherRouteImport } from './routes/api/public/jobs/market-refresher'
 import { Route as ApiPublicJobsMatchWorkerRouteImport } from './routes/api/public/jobs/match-worker'
 import { Route as ApiPublicJobsPositionRebuilderRouteImport } from './routes/api/public/jobs/position-rebuilder'
@@ -60,11 +59,6 @@ const ApiPublicJobsChainPollerRoute =
     path: '/api/public/jobs/chain-poller',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicJobsDnaMatcherRoute = ApiPublicJobsDnaMatcherRouteImport.update({
-  id: '/api/public/jobs/dna-matcher',
-  path: '/api/public/jobs/dna-matcher',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiPublicJobsMarketRefresherRoute =
   ApiPublicJobsMarketRefresherRouteImport.update({
     id: '/api/public/jobs/market-refresher',
@@ -103,7 +97,6 @@ export interface FileRoutesByFullPath {
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
-  '/api/public/jobs/dna-matcher': typeof ApiPublicJobsDnaMatcherRoute
   '/api/public/jobs/market-refresher': typeof ApiPublicJobsMarketRefresherRoute
   '/api/public/jobs/match-worker': typeof ApiPublicJobsMatchWorkerRoute
   '/api/public/jobs/position-rebuilder': typeof ApiPublicJobsPositionRebuilderRoute
@@ -118,7 +111,6 @@ export interface FileRoutesByTo {
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
-  '/api/public/jobs/dna-matcher': typeof ApiPublicJobsDnaMatcherRoute
   '/api/public/jobs/market-refresher': typeof ApiPublicJobsMarketRefresherRoute
   '/api/public/jobs/match-worker': typeof ApiPublicJobsMatchWorkerRoute
   '/api/public/jobs/position-rebuilder': typeof ApiPublicJobsPositionRebuilderRoute
@@ -134,7 +126,6 @@ export interface FileRoutesById {
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
-  '/api/public/jobs/dna-matcher': typeof ApiPublicJobsDnaMatcherRoute
   '/api/public/jobs/market-refresher': typeof ApiPublicJobsMarketRefresherRoute
   '/api/public/jobs/match-worker': typeof ApiPublicJobsMatchWorkerRoute
   '/api/public/jobs/position-rebuilder': typeof ApiPublicJobsPositionRebuilderRoute
@@ -151,7 +142,6 @@ export interface FileRouteTypes {
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
-    | '/api/public/jobs/dna-matcher'
     | '/api/public/jobs/market-refresher'
     | '/api/public/jobs/match-worker'
     | '/api/public/jobs/position-rebuilder'
@@ -166,7 +156,6 @@ export interface FileRouteTypes {
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
-    | '/api/public/jobs/dna-matcher'
     | '/api/public/jobs/market-refresher'
     | '/api/public/jobs/match-worker'
     | '/api/public/jobs/position-rebuilder'
@@ -181,7 +170,6 @@ export interface FileRouteTypes {
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
-    | '/api/public/jobs/dna-matcher'
     | '/api/public/jobs/market-refresher'
     | '/api/public/jobs/match-worker'
     | '/api/public/jobs/position-rebuilder'
@@ -197,7 +185,6 @@ export interface RootRouteChildren {
   ApiPublicBuildIdRoute: typeof ApiPublicBuildIdRoute
   ApiPublicJobsBeliefRollupRoute: typeof ApiPublicJobsBeliefRollupRoute
   ApiPublicJobsChainPollerRoute: typeof ApiPublicJobsChainPollerRoute
-  ApiPublicJobsDnaMatcherRoute: typeof ApiPublicJobsDnaMatcherRoute
   ApiPublicJobsMarketRefresherRoute: typeof ApiPublicJobsMarketRefresherRoute
   ApiPublicJobsMatchWorkerRoute: typeof ApiPublicJobsMatchWorkerRoute
   ApiPublicJobsPositionRebuilderRoute: typeof ApiPublicJobsPositionRebuilderRoute
@@ -256,13 +243,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicJobsChainPollerRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/jobs/dna-matcher': {
-      id: '/api/public/jobs/dna-matcher'
-      path: '/api/public/jobs/dna-matcher'
-      fullPath: '/api/public/jobs/dna-matcher'
-      preLoaderRoute: typeof ApiPublicJobsDnaMatcherRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/public/jobs/market-refresher': {
       id: '/api/public/jobs/market-refresher'
       path: '/api/public/jobs/market-refresher'
@@ -309,7 +289,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicBuildIdRoute: ApiPublicBuildIdRoute,
   ApiPublicJobsBeliefRollupRoute: ApiPublicJobsBeliefRollupRoute,
   ApiPublicJobsChainPollerRoute: ApiPublicJobsChainPollerRoute,
-  ApiPublicJobsDnaMatcherRoute: ApiPublicJobsDnaMatcherRoute,
   ApiPublicJobsMarketRefresherRoute: ApiPublicJobsMarketRefresherRoute,
   ApiPublicJobsMatchWorkerRoute: ApiPublicJobsMatchWorkerRoute,
   ApiPublicJobsPositionRebuilderRoute: ApiPublicJobsPositionRebuilderRoute,
