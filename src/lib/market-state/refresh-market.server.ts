@@ -22,6 +22,10 @@ import {
   believerMilestoneAtOrBelow,
   type LiveLineInput,
 } from "@/lib/market-state/read-model";
+import { evaluateOpportunity, type OpportunityType } from "@/domain/opportunity";
+import { OPP } from "@/domain/opportunity-config";
+import { buildOpportunityInput } from "@/lib/opportunity/build-input";
+import { renderReason } from "@/lib/opportunity/render-reason";
 
 type SB = SupabaseClient;
 
@@ -30,17 +34,20 @@ export interface RefreshResult {
   ok: boolean;
   version?: number;
   liveLineKind?: string | null;
+  opportunityType?: string | null;
   error?: string;
 }
 
 const num = (v: unknown): number => Number(v ?? 0);
 const numOrNull = (v: unknown): number | null => (v == null ? null : Number(v));
 
-/** Refresh one market's read-model row. `ethUsd` converts ETH volume → USD. */
+/** Refresh one market's read-model row. `ethUsd` converts ETH volume → USD;
+ *  `eligibleMarketCount` sets percentile availability for the opportunity engine. */
 export async function refreshMarket(
   sb: SB,
   market: number,
   ethUsd: number,
+  eligibleMarketCount = 0,
 ): Promise<RefreshResult> {
   try {
     const nowIso = new Date().toISOString();
@@ -51,7 +58,7 @@ export async function refreshMarket(
       sb
         .from("market_state")
         .select(
-          "read_model_version, money_yes_pct, yes_capital_usd, no_capital_usd, chg_1h, chg_24h, chg_24h_yes, updated_at",
+          "read_model_version, money_yes_pct, yes_capital_usd, no_capital_usd, yes_price_usd, no_price_usd, chg_1h, chg_24h, chg_24h_yes, updated_at, opportunity_type, opportunity_type_since, opportunity_previous_type",
         )
         .eq("onchain_id", market)
         .maybeSingle(),
@@ -205,11 +212,57 @@ export async function refreshMarket(
       updated_at: nowIso,
     };
 
+    // ── Global opportunity (Phase 5): classify + score from the just-computed
+    //    factual metrics + POV display state. Pure engine, no viewer data.
+    const inputRow: Record<string, unknown> = {
+      onchain_id: market,
+      ...update,
+      yes_price_usd: state.yes_price_usd,
+      no_price_usd: state.no_price_usd,
+      money_yes_pct: moneyYes,
+      yes_capital_usd: state.yes_capital_usd,
+      no_capital_usd: state.no_capital_usd,
+      market_created_at: createdAt,
+    };
+    const opp = evaluateOpportunity(buildOpportunityInput(inputRow, now), {
+      nowMs: now,
+      eligibleMarketCount,
+      prevType: (state.opportunity_type as OpportunityType | null) ?? null,
+    });
+    const oppReason = opp.reasonCode ? renderReason(opp.reasonCode, opp.evidence) : null;
+    const prevType = (state.opportunity_type as string | null) ?? null;
+    const typeChanged = opp.type !== prevType;
+    Object.assign(update, {
+      opportunity_type: opp.type,
+      opportunity_score: opp.normalizedScore,
+      opportunity_score_raw: opp.rawScore,
+      opportunity_reason_code: opp.reasonCode,
+      opportunity_reason: oppReason,
+      opportunity_window: opp.window,
+      opportunity_sample_size: opp.sampleSize,
+      opportunity_confidence: opp.confidence,
+      opportunity_evidence: opp.evidence,
+      opportunity_eligible: opp.eligible,
+      opportunity_ineligible_reason: opp.ineligibleReason,
+      opportunity_calculated_at: nowIso,
+      opportunity_engine_version: OPP.ENGINE_VERSION,
+      opportunity_previous_type: typeChanged ? prevType : (state.opportunity_previous_type ?? null),
+      opportunity_type_since: typeChanged
+        ? nowIso
+        : ((state.opportunity_type_since as string) ?? nowIso),
+    });
+
     const res = await sb
       .from("market_state")
       .upsert({ onchain_id: market, ...update }, { onConflict: "onchain_id" });
     if (res.error) return { market, ok: false, error: res.error.message };
-    return { market, ok: true, version, liveLineKind: liveLine?.kind ?? null };
+    return {
+      market,
+      ok: true,
+      version,
+      liveLineKind: liveLine?.kind ?? null,
+      opportunityType: opp.type,
+    };
   } catch (err) {
     return { market, ok: false, error: err instanceof Error ? err.message : String(err) };
   }
@@ -227,12 +280,18 @@ export async function refreshDirtyBatch(
   // One eth/usd calibration for the whole batch.
   const { data: eth } = await sb.rpc("eth_usd_calibration");
   const ethUsd = Number(eth ?? 0) || 0;
+  // Comparison-pool size for the opportunity engine's percentile availability.
+  const { count: poolCount } = await sb
+    .from("market_state")
+    .select("*", { count: "exact", head: true })
+    .gt("directional_believers", 0);
+  const eligibleMarketCount = poolCount ?? 0;
 
   const results: RefreshResult[] = [];
   let ok = 0;
   let failed = 0;
   for (const m of markets) {
-    const r = await refreshMarket(sb, m, ethUsd);
+    const r = await refreshMarket(sb, m, ethUsd, eligibleMarketCount);
     results.push(r);
     if (r.ok) ok += 1;
     else {

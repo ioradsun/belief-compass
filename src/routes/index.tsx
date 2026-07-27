@@ -10,7 +10,38 @@ import {
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { ConvictionFeed } from "@/components/ConvictionFeed";
 import { StoryDeck } from "@/components/StoryDeck";
-import { scoreFeed, LENSES, type LensKey, type MarketSignals } from "@/lib/feed-lenses";
+// Phase 5: the SERVER owns opportunity classification + score. The client only
+// filters by the canonical type and reads the precomputed order — no scoreFeed().
+type OppFilter = "all" | "hot" | "early" | "hidden" | "contested" | "conviction" | "new";
+const OPP_FILTERS: { key: OppFilter; emoji: string; label: string; question: string }[] = [
+  {
+    key: "all",
+    emoji: "✨",
+    label: "All",
+    question: "What's objectively worth attention right now?",
+  },
+  { key: "hot", emoji: "🔥", label: "Hot", question: "What is accelerating right now?" },
+  { key: "early", emoji: "🌱", label: "Early", question: "What's growing while still small?" },
+  {
+    key: "hidden",
+    emoji: "💎",
+    label: "Hidden",
+    question: "What's active beyond its visible size?",
+  },
+  {
+    key: "contested",
+    emoji: "⚖️",
+    label: "Contested",
+    question: "Where are both sides still active?",
+  },
+  {
+    key: "conviction",
+    emoji: "🧠",
+    label: "Conviction",
+    question: "Who has held through real challenge?",
+  },
+  { key: "new", emoji: "🆕", label: "New", question: "What is genuinely recent?" },
+];
 
 import { MyConvictions } from "@/components/MyConvictions";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
@@ -254,53 +285,19 @@ function Feed() {
   // Intent engine: the active lens re-ranks the whole feed by its OWN question,
   // not just the sort order. Each lens answers a different human question, and
   // every card carries the human reason it surfaced for this lens.
-  const [lens, setLens] = useState<LensKey>("hot");
-  const hasViewer = Boolean(wallet);
-  const signals: MarketSignals[] = rawRows.map((r) => {
-    const rr = r as Record<string, unknown>;
-    const yesCap = Number(r.yes_capital_usd ?? 0);
-    const noCap = Number(r.no_capital_usd ?? 0);
-    // The Supabase join types `markets` as an array; take the first row.
-    const mm = (Array.isArray(rr.markets) ? rr.markets[0] : rr.markets) as
-      | { category?: string | null }
-      | null
-      | undefined;
-    return {
-      onchainId: Number(r.onchain_id),
-      category: mm?.category ?? null,
-      volumeTotalUsd: Number(r.volume_total_usd ?? 0),
-      volumeWindowUsd: Number((rr.window_volume_usd as number) ?? 0),
-      poolUsd: yesCap + noCap,
-      believers: Number(r.believers_yes ?? 0) + Number(r.believers_no ?? 0),
-      newBelievers: Number((rr.new_believers_1h as number) ?? 0),
-      velocity: Number((rr.velocity_5m as number) ?? 0),
-      convictionAvg: null,
-      avgDaysHeld: null,
-      ageDays: null,
-      flipRate: null,
-      tribeMatchPct: r.tribe_side ? (data.tribe?.score ?? null) : null,
-      oppMatchPct: r.opp_side ? (data.opp?.score ?? null) : null,
-      tribeSide: (r.tribe_side as "YES" | "NO" | null) ?? null,
-      oppSide: (r.opp_side as "YES" | "NO" | null) ?? null,
-      comments: null,
-      shares: null,
-    };
-  });
-  const scored = scoreFeed(lens, signals, { hasViewer });
-  const reasonByMarket: Record<number, string> = {};
-  for (const s of scored) reasonByMarket[s.onchainId] = s.reason;
-  const orderById = new Map(scored.map((s, i) => [s.onchainId, i]));
-  // Fall back to the server order when a lens produced nothing (e.g. a viewer
-  // lens with no connected wallet) so the feed is never blank.
+  const [lens, setLens] = useState<OppFilter>("all");
+  // The dropdown FILTERS the one global classification; it never re-scores. Rows
+  // arrive already ordered by the server's opportunity_score (getMarkets).
   const rows =
-    scored.length === 0
+    lens === "all"
       ? rawRows
-      : [...rawRows]
-          .filter((r) => orderById.has(Number(r.onchain_id)))
-          .sort(
-            (a, b) => orderById.get(Number(a.onchain_id))! - orderById.get(Number(b.onchain_id))!,
-          );
-  const lensNeedsWallet = scored.length === 0 && (lens === "tribe" || lens === "rivals");
+      : rawRows.filter((r) => (r as Record<string, unknown>).opportunity_type === lens);
+  const reasonByMarket: Record<number, string> = {};
+  for (const r of rawRows) {
+    const reason = (r as Record<string, unknown>).opportunity_reason;
+    if (reason) reasonByMarket[Number(r.onchain_id)] = String(reason);
+  }
+  const lensNeedsWallet = false;
 
   const ids = rows.map((r) => Number(r.onchain_id));
   const { data: pulseData } = useQuery(pulsesQO(ids));
@@ -329,11 +326,11 @@ function Feed() {
     </div>
   );
 
-  const activeLens = LENSES.find((l) => l.key === lens)!;
+  const activeLens = OPP_FILTERS.find((l) => l.key === lens)!;
   const lensPicker = (
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-        {LENSES.map((l) => (
+        {OPP_FILTERS.map((l) => (
           <button
             key={l.key}
             type="button"

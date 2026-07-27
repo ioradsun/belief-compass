@@ -16,7 +16,8 @@
     "check:data-flow": "tsx scripts/check-data-flow.ts",
     "check:positions": "tsx scripts/check-position-integrity.ts",
     "backfill:position-cursors": "tsx scripts/backfill-position-cursors.ts",
-    "check:market-state": "tsx scripts/check-market-state.ts"
+    "check:market-state": "tsx scripts/check-market-state.ts",
+    "check:opportunities": "tsx scripts/check-opportunities.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
