@@ -15,6 +15,7 @@ import { Route as WalletAddrRouteImport } from './routes/wallet.$addr'
 import { Route as MarketIdRouteImport } from './routes/market.$id'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
 import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
+import { Route as ApiPublicJobsDnaMatcherRouteImport } from './routes/api/public/jobs/dna-matcher'
 import { Route as ApiPublicJobsChainPollerRouteImport } from './routes/api/public/jobs/chain-poller'
 import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/public/jobs/belief-rollup'
 
@@ -48,6 +49,11 @@ const ApiPublicJobsPovPollerRoute = ApiPublicJobsPovPollerRouteImport.update({
   path: '/api/public/jobs/pov-poller',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicJobsDnaMatcherRoute = ApiPublicJobsDnaMatcherRouteImport.update({
+  id: '/api/public/jobs/dna-matcher',
+  path: '/api/public/jobs/dna-matcher',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicJobsChainPollerRoute =
   ApiPublicJobsChainPollerRouteImport.update({
     id: '/api/public/jobs/chain-poller',
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
+  '/api/public/jobs/dna-matcher': typeof ApiPublicJobsDnaMatcherRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
 }
 export interface FileRoutesByTo {
@@ -79,6 +86,7 @@ export interface FileRoutesByTo {
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
+  '/api/public/jobs/dna-matcher': typeof ApiPublicJobsDnaMatcherRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
 }
 export interface FileRoutesById {
@@ -90,6 +98,7 @@ export interface FileRoutesById {
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
+  '/api/public/jobs/dna-matcher': typeof ApiPublicJobsDnaMatcherRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
 }
 export interface FileRouteTypes {
@@ -102,6 +111,7 @@ export interface FileRouteTypes {
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
+    | '/api/public/jobs/dna-matcher'
     | '/api/public/jobs/pov-poller'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -112,6 +122,7 @@ export interface FileRouteTypes {
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
+    | '/api/public/jobs/dna-matcher'
     | '/api/public/jobs/pov-poller'
   id:
     | '__root__'
@@ -122,6 +133,7 @@ export interface FileRouteTypes {
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
+    | '/api/public/jobs/dna-matcher'
     | '/api/public/jobs/pov-poller'
   fileRoutesById: FileRoutesById
 }
@@ -133,6 +145,7 @@ export interface RootRouteChildren {
   ApiPublicBuildIdRoute: typeof ApiPublicBuildIdRoute
   ApiPublicJobsBeliefRollupRoute: typeof ApiPublicJobsBeliefRollupRoute
   ApiPublicJobsChainPollerRoute: typeof ApiPublicJobsChainPollerRoute
+  ApiPublicJobsDnaMatcherRoute: typeof ApiPublicJobsDnaMatcherRoute
   ApiPublicJobsPovPollerRoute: typeof ApiPublicJobsPovPollerRoute
 }
 
@@ -180,6 +193,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicJobsPovPollerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/jobs/dna-matcher': {
+      id: '/api/public/jobs/dna-matcher'
+      path: '/api/public/jobs/dna-matcher'
+      fullPath: '/api/public/jobs/dna-matcher'
+      preLoaderRoute: typeof ApiPublicJobsDnaMatcherRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/jobs/chain-poller': {
       id: '/api/public/jobs/chain-poller'
       path: '/api/public/jobs/chain-poller'
@@ -205,6 +225,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicBuildIdRoute: ApiPublicBuildIdRoute,
   ApiPublicJobsBeliefRollupRoute: ApiPublicJobsBeliefRollupRoute,
   ApiPublicJobsChainPollerRoute: ApiPublicJobsChainPollerRoute,
+  ApiPublicJobsDnaMatcherRoute: ApiPublicJobsDnaMatcherRoute,
   ApiPublicJobsPovPollerRoute: ApiPublicJobsPovPollerRoute,
 }
 export const routeTree = rootRouteImport
