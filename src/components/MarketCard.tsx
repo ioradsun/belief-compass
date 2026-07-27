@@ -1,0 +1,425 @@
+/**
+ * MarketCard — one market, alive.
+ *
+ * Replaces the old table row: YES and NO are shown as two independent books,
+ * and each card runs its OWN little feed — the market's most recent real trade
+ * events cycle through a single pulse line, one at a time, long enough to read
+ * (~4.5s) and staggered per card so the grid breathes instead of blinking in
+ * unison. Click the card to freeze the rotation and see the whole strip.
+ * Prices/volumes flash when the polled data actually changes.
+ */
+import { useEffect, useRef, useState } from "react";
+import type { MatchPerson, Pulse } from "@/lib/markets.functions";
+import { hueFor, initialsFor } from "@/lib/conviction-feed";
+
+const ROTATE_MS = 4500;
+
+export type MarketRow = {
+  onchain_id: number;
+  yes_price_usd: number | null;
+  no_price_usd: number | null;
+  people_yes_pct: number | null;
+  believers_yes: number | null;
+  believers_no: number | null;
+  believers_mixed: number | null;
+  volume_total_usd: number | null;
+  yes_capital_usd?: number | null;
+  no_capital_usd?: number | null;
+  chg_24h_yes?: number | null;
+  chg_24h_no?: number | null;
+  chg_window_yes?: number | null;
+  chg_window_no?: number | null;
+  yes_volume_usd?: number | null;
+  no_volume_usd?: number | null;
+  yes_trade_count?: number | null;
+  no_trade_count?: number | null;
+  window_volume_usd?: number | null;
+  tribe_side?: "YES" | "NO" | null;
+  opp_side?: "YES" | "NO" | null;
+  markets?: { title?: string; category?: string } | null;
+};
+
+function fmtUsd(n: number | null | undefined) {
+  if (n == null) return "—";
+  const v = Number(n);
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}k`;
+  return `$${v.toFixed(0)}`;
+}
+function fmtShare(n: number | null | undefined) {
+  if (n == null) return "—";
+  const v = Number(n);
+  return v >= 1 ? `$${v.toFixed(2)}` : `${Math.round(v * 100)}¢`;
+}
+function shortWallet(w: string) {
+  return w && w.length > 10 ? `${w.slice(0, 6)}…${w.slice(-4)}` : w || "someone";
+}
+function ago(iso: string) {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return `${Math.round(s)}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  if (s < 86_400) return `${Math.round(s / 3600)}h`;
+  return `${Math.round(s / 86_400)}d`;
+}
+function personName(p: Pulse) {
+  return p.name || shortWallet(p.wallet);
+}
+function pulseLine(p: Pulse, ethUsd: number) {
+  const usd = ethUsd > 0 ? p.eth * ethUsd : 0;
+  const size = usd > 0 ? fmtUsd(usd) : `${p.eth.toFixed(3)} ETH`;
+  const verb = p.type === "reduced" ? "cut" : "backed";
+  return `${personName(p)} ${verb} ${p.side} · ${size}`;
+}
+
+/** Small face for a trader: real POV picture, else initials on a stable hue. */
+function Face({ p, size = 18 }: { p: Pulse; size?: number }) {
+  const name = personName(p);
+  if (p.pfpUrl)
+    return (
+      <img
+        src={p.pfpUrl}
+        alt={name}
+        loading="lazy"
+        className="shrink-0 rounded-full object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
+  const hue = hueFor(p.wallet);
+  return (
+    <span
+      className="shrink-0 rounded-full text-center font-semibold text-white"
+      style={{
+        width: size,
+        height: size,
+        lineHeight: `${size}px`,
+        fontSize: size * 0.45,
+        background: `hsl(${hue} 55% 45%)`,
+      }}
+      aria-hidden
+    >
+      {initialsFor(name)}
+    </span>
+  );
+}
+
+
+/** Flash helper: returns true for ~1s after `value` changes. */
+function useFlash(value: number | null | undefined) {
+  const prev = useRef(value);
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    if (prev.current !== value && prev.current != null && value != null) {
+      setOn(true);
+      const t = setTimeout(() => setOn(false), 1000);
+      prev.current = value;
+      return () => clearTimeout(t);
+    }
+    prev.current = value;
+  }, [value]);
+  return on;
+}
+
+function SideBlock({
+  side,
+  price,
+  chg,
+  backers,
+  sharePct,
+  capital,
+  capShare,
+  volume,
+  trades,
+  winLabel,
+  badge,
+}: {
+  side: "YES" | "NO";
+  price: number | null;
+  chg: number | null;
+  backers: number;
+  sharePct: number;
+  capital: number | null;
+  capShare: number | null;
+  volume: number | null;
+  trades: number;
+  winLabel: string;
+  badge: "Tribe" | "Opp" | null;
+}) {
+  const emerald = side === "YES";
+  const up = chg != null && chg >= 0;
+  const flash = useFlash(price);
+  return (
+    <div
+      className={`rounded-lg border p-3 transition-colors duration-500 ${
+        emerald ? "border-emerald-500/25 bg-emerald-500/5" : "border-rose-500/25 bg-rose-500/5"
+      } ${flash ? (emerald ? "ring-2 ring-emerald-500/50" : "ring-2 ring-rose-500/50") : ""}`}
+    >
+      <div className="flex items-center justify-between">
+        <span
+          className={`text-[10px] font-semibold uppercase tracking-wider ${
+            emerald ? "text-emerald-600" : "text-rose-600"
+          }`}
+        >
+          {side}
+        </span>
+        {badge && (
+          <span
+            className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+              badge === "Tribe" ? "bg-violet-500/15 text-violet-600" : "bg-red-500/15 text-red-600"
+            }`}
+          >
+            {badge}
+          </span>
+        )}
+      </div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <span className="text-lg font-semibold tabular-nums">{fmtShare(price)}</span>
+        <span
+          className="text-xs font-medium tabular-nums"
+          style={{ color: chg == null ? undefined : up ? "#059669" : "#dc2626" }}
+        >
+          {chg == null ? "—" : `${up ? "▲+" : "▼−"}${Math.abs(chg) < 1 ? Math.abs(chg).toFixed(1) : Math.round(Math.abs(chg))}%`}
+        </span>
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          {winLabel}
+        </span>
+      </div>
+      <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className={`h-full transition-all duration-700 ${emerald ? "bg-emerald-500" : "bg-rose-500"}`}
+          style={{ width: `${Math.max(2, sharePct)}%` }}
+        />
+      </div>
+      <dl className="mt-2 space-y-0.5 text-[11px] text-muted-foreground">
+        <div className="flex justify-between">
+          <dt>Backers</dt>
+          <dd className="tabular-nums text-foreground">{backers}</dd>
+        </div>
+        <div className="flex justify-between">
+          <dt>Invested</dt>
+          <dd className="tabular-nums text-foreground">
+            {capital == null ? "—" : fmtUsd(capital)}
+            {capShare != null && capital != null ? (
+              <span className="text-muted-foreground"> · {Math.round(capShare)}%</span>
+            ) : null}
+          </dd>
+        </div>
+        <div className="flex justify-between">
+          <dt>Vol {winLabel}</dt>
+          <dd className="tabular-nums text-foreground">
+            {volume == null || volume === 0 ? "—" : fmtUsd(volume)}
+            <span className="text-muted-foreground"> · {trades}t</span>
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+/** Header strip: your tribesman / opp holds a position in this market. */
+function MatchStrip({
+  person,
+  kind,
+  side,
+}: {
+  person: MatchPerson;
+  kind: "Tribe" | "Opp";
+  side: "YES" | "NO";
+}) {
+  const tribe = kind === "Tribe";
+  const name = person.name || shortWallet(person.wallet);
+  return (
+    <a
+      href={`/wallet/${person.wallet}`}
+      className={`flex items-center gap-2 border-b border-border px-4 py-2 text-[11px] ${
+        tribe ? "bg-violet-500/10" : "bg-red-500/10"
+      }`}
+    >
+      {person.pfpUrl ? (
+        <img
+          src={person.pfpUrl}
+          alt={name}
+          loading="lazy"
+          className="h-4 w-4 shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <span
+          className="h-4 w-4 shrink-0 rounded-full text-center text-[8px] font-semibold leading-4 text-white"
+          style={{ background: `hsl(${hueFor(person.wallet)} 55% 45%)` }}
+          aria-hidden
+        >
+          {initialsFor(name)}
+        </span>
+      )}
+      <span
+        className={`shrink-0 font-semibold uppercase tracking-wide ${
+          tribe ? "text-violet-600" : "text-red-600"
+        }`}
+      >
+        {tribe ? "Your tribe" : "Your opp"}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">
+        <span className="text-foreground">{name}</span> is on{" "}
+        <span className={side === "YES" ? "text-emerald-600" : "text-rose-600"}>{side}</span>
+      </span>
+      <span className="shrink-0 tabular-nums text-muted-foreground">{person.score}%</span>
+    </a>
+  );
+}
+
+export function MarketCard({
+  row,
+  pulses,
+  ethUsd,
+  winLabel,
+  stagger,
+  tribe,
+  opp,
+}: {
+  row: MarketRow;
+  pulses: Pulse[];
+  ethUsd: number;
+  winLabel: string;
+  stagger: number;
+  tribe?: MatchPerson | null;
+  opp?: MatchPerson | null;
+}) {
+  const [i, setI] = useState(0);
+  const [open, setOpen] = useState(false);
+
+
+  // Each card rotates its own pulses; the stagger keeps the grid from ticking
+  // in lockstep. Rotation pauses while the strip is expanded.
+  useEffect(() => {
+    if (open || pulses.length <= 1) return;
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const start = setTimeout(() => {
+      setI((n) => (n + 1) % pulses.length);
+      interval = setInterval(() => setI((n) => (n + 1) % pulses.length), ROTATE_MS);
+    }, stagger);
+    return () => {
+      clearTimeout(start);
+      if (interval) clearInterval(interval);
+    };
+  }, [open, pulses.length, stagger]);
+
+  const yesB = Number(row.believers_yes ?? 0);
+  const noB = Number(row.believers_no ?? 0);
+  const totalB = yesB + noB;
+  const yesCap = row.yes_capital_usd == null ? null : Number(row.yes_capital_usd);
+  const noCap = row.no_capital_usd == null ? null : Number(row.no_capital_usd);
+  const capTotal = (yesCap ?? 0) + (noCap ?? 0);
+  const current = pulses[i % Math.max(1, pulses.length)];
+  const volFlash = useFlash(row.window_volume_usd ?? null);
+
+  return (
+    <article className="flex flex-col rounded-xl border border-border bg-card/40 transition-shadow hover:shadow-md">
+      <header className="border-b border-border px-4 py-3">
+        <a
+          href={`/market/${row.onchain_id}`}
+          className="text-sm font-medium leading-snug hover:underline"
+        >
+          {row.markets?.title ?? `Market #${row.onchain_id}`}
+        </a>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+          {row.markets?.category && <span>{row.markets.category}</span>}
+          <span>·</span>
+          <span>cap {capTotal > 0 ? fmtUsd(capTotal) : "—"}</span>
+          <span>·</span>
+          <span className={volFlash ? "text-foreground" : undefined}>
+            {winLabel} vol {row.window_volume_usd ? fmtUsd(row.window_volume_usd) : "—"}
+          </span>
+        </div>
+      </header>
+
+      {tribe && row.tribe_side && (
+        <MatchStrip person={tribe} kind="Tribe" side={row.tribe_side} />
+      )}
+      {opp && row.opp_side && <MatchStrip person={opp} kind="Opp" side={row.opp_side} />}
+
+
+
+      <div className="grid grid-cols-2 gap-2 p-3">
+        <SideBlock
+          side="YES"
+          price={row.yes_price_usd}
+          chg={row.chg_window_yes == null ? null : Number(row.chg_window_yes)}
+          backers={yesB}
+          sharePct={totalB > 0 ? (yesB / totalB) * 100 : 0}
+          capital={yesCap}
+          capShare={capTotal > 0 && yesCap != null ? (yesCap / capTotal) * 100 : null}
+          volume={row.yes_volume_usd ?? null}
+          trades={Number(row.yes_trade_count ?? 0)}
+          winLabel={winLabel}
+          badge={row.tribe_side === "YES" ? "Tribe" : row.opp_side === "YES" ? "Opp" : null}
+        />
+        <SideBlock
+          side="NO"
+          price={row.no_price_usd}
+          chg={row.chg_window_no == null ? null : Number(row.chg_window_no)}
+          backers={noB}
+          sharePct={totalB > 0 ? (noB / totalB) * 100 : 0}
+          capital={noCap}
+          capShare={capTotal > 0 && noCap != null ? (noCap / capTotal) * 100 : null}
+          volume={row.no_volume_usd ?? null}
+          trades={Number(row.no_trade_count ?? 0)}
+          winLabel={winLabel}
+          badge={row.tribe_side === "NO" ? "Tribe" : row.opp_side === "NO" ? "Opp" : null}
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={pulses.length === 0}
+        className="flex items-center gap-2 border-t border-border px-4 py-2.5 text-left text-xs disabled:cursor-default"
+        aria-expanded={open}
+      >
+        <span
+          className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+            pulses.length ? "animate-pulse bg-emerald-500" : "bg-muted-foreground/40"
+          }`}
+        />
+        {pulses.length === 0 ? (
+          <span className="text-muted-foreground">no trades indexed yet</span>
+        ) : (
+          <>
+            <span
+              key={current?.key}
+              className="flex min-w-0 flex-1 items-center gap-1.5 animate-in fade-in slide-in-from-bottom-1 duration-500"
+            >
+              {current && <Face p={current} />}
+              <span className="min-w-0 flex-1 truncate">
+              <span
+                className={current?.side === "YES" ? "text-emerald-600" : "text-rose-600"}
+              >
+                {pulseLine(current!, ethUsd)}
+              </span>
+              <span className="text-muted-foreground"> · {ago(current!.at)} ago</span>
+              </span>
+            </span>
+            <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+              {open ? "close" : `${pulses.length} events`}
+            </span>
+          </>
+        )}
+      </button>
+
+      {open && pulses.length > 0 && (
+        <ul className="border-t border-border px-4 py-2 text-xs">
+          {pulses.map((p) => (
+            <li key={p.key} className="flex items-center gap-2 py-1">
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                  p.side === "YES" ? "bg-emerald-500" : "bg-rose-500"
+                }`}
+              />
+              <Face p={p} size={16} />
+              <span className="min-w-0 flex-1 truncate">{pulseLine(p, ethUsd)}</span>
+              <span className="shrink-0 text-[10px] text-muted-foreground">{ago(p.at)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
+  );
+}

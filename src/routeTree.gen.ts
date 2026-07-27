@@ -17,6 +17,7 @@ import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-
 import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/public/jobs/belief-rollup'
 import { Route as ApiPublicJobsChainPollerRouteImport } from './routes/api/public/jobs/chain-poller'
 import { Route as ApiPublicJobsDnaMatcherRouteImport } from './routes/api/public/jobs/dna-matcher'
+import { Route as ApiPublicJobsMatchWorkerRouteImport } from './routes/api/public/jobs/match-worker'
 import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
 
 const IndexRoute = IndexRouteImport.update({
@@ -61,6 +62,12 @@ const ApiPublicJobsDnaMatcherRoute = ApiPublicJobsDnaMatcherRouteImport.update({
   path: '/api/public/jobs/dna-matcher',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicJobsMatchWorkerRoute =
+  ApiPublicJobsMatchWorkerRouteImport.update({
+    id: '/api/public/jobs/match-worker',
+    path: '/api/public/jobs/match-worker',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicJobsPovPollerRoute = ApiPublicJobsPovPollerRouteImport.update({
   id: '/api/public/jobs/pov-poller',
   path: '/api/public/jobs/pov-poller',
@@ -76,6 +83,7 @@ export interface FileRoutesByFullPath {
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
   '/api/public/jobs/dna-matcher': typeof ApiPublicJobsDnaMatcherRoute
+  '/api/public/jobs/match-worker': typeof ApiPublicJobsMatchWorkerRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
 }
 export interface FileRoutesByTo {
@@ -87,6 +95,7 @@ export interface FileRoutesByTo {
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
   '/api/public/jobs/dna-matcher': typeof ApiPublicJobsDnaMatcherRoute
+  '/api/public/jobs/match-worker': typeof ApiPublicJobsMatchWorkerRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
 }
 export interface FileRoutesById {
@@ -99,6 +108,7 @@ export interface FileRoutesById {
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
   '/api/public/jobs/dna-matcher': typeof ApiPublicJobsDnaMatcherRoute
+  '/api/public/jobs/match-worker': typeof ApiPublicJobsMatchWorkerRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
 }
 export interface FileRouteTypes {
@@ -112,6 +122,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
     | '/api/public/jobs/dna-matcher'
+    | '/api/public/jobs/match-worker'
     | '/api/public/jobs/pov-poller'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -123,6 +134,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
     | '/api/public/jobs/dna-matcher'
+    | '/api/public/jobs/match-worker'
     | '/api/public/jobs/pov-poller'
   id:
     | '__root__'
@@ -134,6 +146,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
     | '/api/public/jobs/dna-matcher'
+    | '/api/public/jobs/match-worker'
     | '/api/public/jobs/pov-poller'
   fileRoutesById: FileRoutesById
 }
@@ -146,6 +159,7 @@ export interface RootRouteChildren {
   ApiPublicJobsBeliefRollupRoute: typeof ApiPublicJobsBeliefRollupRoute
   ApiPublicJobsChainPollerRoute: typeof ApiPublicJobsChainPollerRoute
   ApiPublicJobsDnaMatcherRoute: typeof ApiPublicJobsDnaMatcherRoute
+  ApiPublicJobsMatchWorkerRoute: typeof ApiPublicJobsMatchWorkerRoute
   ApiPublicJobsPovPollerRoute: typeof ApiPublicJobsPovPollerRoute
 }
 
@@ -207,6 +221,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicJobsDnaMatcherRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/jobs/match-worker': {
+      id: '/api/public/jobs/match-worker'
+      path: '/api/public/jobs/match-worker'
+      fullPath: '/api/public/jobs/match-worker'
+      preLoaderRoute: typeof ApiPublicJobsMatchWorkerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/jobs/pov-poller': {
       id: '/api/public/jobs/pov-poller'
       path: '/api/public/jobs/pov-poller'
@@ -226,6 +247,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicJobsBeliefRollupRoute: ApiPublicJobsBeliefRollupRoute,
   ApiPublicJobsChainPollerRoute: ApiPublicJobsChainPollerRoute,
   ApiPublicJobsDnaMatcherRoute: ApiPublicJobsDnaMatcherRoute,
+  ApiPublicJobsMatchWorkerRoute: ApiPublicJobsMatchWorkerRoute,
   ApiPublicJobsPovPollerRoute: ApiPublicJobsPovPollerRoute,
 }
 export const routeTree = rootRouteImport
