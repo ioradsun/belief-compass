@@ -172,6 +172,8 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
     }
 
     // Trade burst: consecutive trades, same market + side + action, within window.
+    // A round-trip entry always stands alone so its story stays honest.
+    const isRoundTrip = roundTrip.has(e.source_key);
     const wallets = new Set<string>();
     let trades = 0;
     let amountEth = 0;
@@ -184,6 +186,7 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
       events[j].market_id === e.market_id &&
       events[j].side === e.side &&
       events[j].action === e.action &&
+      !(j > i && (isRoundTrip || roundTrip.has(events[j].source_key))) &&
       new Date(latest).getTime() - new Date(events[j].occurred_at).getTime() <= GROUP_WINDOW_MS
     ) {
       const ev = events[j];
@@ -194,12 +197,13 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
       j += 1;
     }
     const amountUsd = amountEth * ethUsd;
-    const isLargeSingle = trades === 1 && amountUsd >= LARGE_TRADE_USD;
+    const isLargeSingle = !isRoundTrip && trades === 1 && amountUsd >= LARGE_TRADE_USD;
     const base: Omit<LiveRow, "text"> = {
       id: e.source_key,
-      kind: isLargeSingle ? "large_trade" : "trade_burst",
+      kind: isRoundTrip ? "round_trip" : isLargeSingle ? "large_trade" : "trade_burst",
       marketId: e.market_id,
       marketTitle: e.market_title ?? `Market #${e.market_id}`,
+
       occurredAt: latest,
       startedAt: earliest,
       side: e.side,
