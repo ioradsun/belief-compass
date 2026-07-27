@@ -19,7 +19,6 @@ import { z } from "zod";
 import { classifyByShares, convictionFromValues } from "@/domain/domain";
 import { fetchPovUser, fetchPovPositions } from "@/lib/pov.server";
 import { publicClient, serviceClient } from "@/lib/supabase-clients";
-import { ensureMatchesForWallet } from "@/lib/match.functions";
 
 interface Existing {
   directional_since: string | null;
@@ -63,6 +62,38 @@ export const ensureConviction = createServerFn({ method: "GET" })
     const sb = publicClient();
     const svc = serviceClient();
 
+    // Matching is the heavy part (a candidate scan), so it does NOT run on this
+    // connect path. We enqueue the wallet and let the background match-worker
+    // compute + cache wallet_matches; the feed reads that cache and refetches, so
+    // People/Opp light up within ~a minute without blocking connect. We still
+    // report the CURRENT cache so a returning user sees their People instantly.
+    const finish = async (positionCount: number, marketCount: number) => {
+      try {
+        await svc
+          .from("match_queue")
+          .upsert(
+            { wallet: viewer, enqueued_at: new Date().toISOString(), pending: true },
+            { onConflict: "wallet" },
+          );
+      } catch {
+        /* best-effort enqueue; the on-demand path still recomputes when needed */
+      }
+      const { count } = await sb
+        .from("wallet_matches")
+        .select("*", { count: "exact", head: true })
+        .eq("wallet", viewer);
+      return {
+        viewer,
+        connected,
+        profile,
+        positionCount,
+        marketCount,
+        hasPeople: (count ?? 0) > 0,
+        matchesPending: true,
+        resolved: Boolean(povUser),
+      };
+    };
+
     // Cache the POV profile so the feed can show the pic/name immediately.
     if (povUser) {
       try {
@@ -83,18 +114,9 @@ export const ensureConviction = createServerFn({ method: "GET" })
     }
 
     if (positions.length === 0) {
-      // No POV positions to ingest — still surface matches from whatever the
-      // chain path may already have folded for this wallet.
-      const m = await ensureMatchesForWallet(viewer);
-      return {
-        viewer,
-        connected,
-        profile,
-        positionCount: 0,
-        marketCount: 0,
-        hasPeople: !m.insufficient && m.matches.length > 0,
-        resolved: Boolean(povUser),
-      };
+      // No POV positions to ingest — still enqueue so any chain-folded beliefs
+      // for this wallet get matched in the background.
+      return finish(0, 0);
     }
 
     // 3. Map POV market uuids → our onchain_id. Positions in markets we haven't
@@ -135,16 +157,7 @@ export const ensureConviction = createServerFn({ method: "GET" })
 
     const marketIds = [...byMarket.keys()];
     if (marketIds.length === 0) {
-      const m = await ensureMatchesForWallet(viewer);
-      return {
-        viewer,
-        connected,
-        profile,
-        positionCount: positions.length,
-        marketCount: 0,
-        hasPeople: !m.insufficient && m.matches.length > 0,
-        resolved: Boolean(povUser),
-      };
+      return finish(positions.length, 0);
     }
 
     // 5. Preserve chain-derived fields on any rows the indexer already built.
@@ -203,16 +216,6 @@ export const ensureConviction = createServerFn({ method: "GET" })
         .upsert(updates.slice(i, i + 500), { onConflict: "wallet,onchain_id" });
     }
 
-    // 7. Now that beliefs exist, compute matches so People/Opp light up.
-    const m = await ensureMatchesForWallet(viewer);
-
-    return {
-      viewer,
-      connected,
-      profile,
-      positionCount: positions.length,
-      marketCount: marketIds.length,
-      hasPeople: !m.insufficient && m.matches.length > 0,
-      resolved: Boolean(povUser),
-    };
+    // 7. Beliefs are in — enqueue the background matcher (does not block connect).
+    return finish(positions.length, marketIds.length);
   });
