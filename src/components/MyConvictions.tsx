@@ -10,6 +10,7 @@ import { Link } from "@tanstack/react-router";
 import { getWallet, type Pulse } from "@/lib/markets.functions";
 import type { MarketRow } from "@/components/MarketCard";
 import { WalletConnectButton } from "@/components/WalletConnect";
+import { WalletIdentity } from "@/components/WalletIdentity";
 
 type Position = {
   onchain_id: number;
@@ -110,6 +111,9 @@ export function MyConvictions({
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)" }} />
+
+      {/* Vendor + POV wallet, with the link flow one tap away */}
+      <WalletIdentity viewing={wallet ?? ""} compact />
 
       {/* 2 — Position cards */}
       {!wallet ? (
