@@ -40,6 +40,8 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
               onchain_id: m.onChainMarketId,
               pov_uuid: m.id ?? null,
               title: m.title ?? null,
+              pov_slug: m.slug ?? null,
+
               category: m.categorySlug ?? null,
               author_wallet: m.author?.walletAddress?.toLowerCase() ?? null,
               author_name: m.author?.displayName ?? null,

@@ -5,7 +5,10 @@ export interface PovMarket {
   onChainMarketId: number | string;
   id?: string;
   title?: string;
+  /** POV page slug — pov.co/markets/{slug}. */
+  slug?: string;
   categorySlug?: string;
+
   agentOpinions?: unknown;
   yesPriceUsd?: number;
   noPriceUsd?: number;

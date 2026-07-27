@@ -381,7 +381,10 @@ export const getWallet = createServerFn({ method: "GET" })
       .limit(200);
 
     const ids = Array.from(new Set((rows ?? []).map((r) => Number(r.onchain_id))));
-    const metaById = new Map<number, { title: string | null; category: string | null }>();
+    const metaById = new Map<
+      number,
+      { title: string | null; category: string | null; pov_slug: string | null }
+    >();
     if (ids.length) {
       const { data: mk } = await sb
         .from("markets")
@@ -391,8 +394,10 @@ export const getWallet = createServerFn({ method: "GET" })
         metaById.set(Number(m.onchain_id), {
           title: (m.title as string | null) ?? null,
           category: (m.category as string | null) ?? null,
+          pov_slug: (m.pov_slug as string | null) ?? null,
         });
     }
+
 
     // Live prices for every held market, so the portfolio panel does not depend
     // on the market being present in the (50-row) feed page.

@@ -50,7 +50,13 @@ export type MarketRow = {
   tribe_side?: "YES" | "NO" | null;
   opp_side?: "YES" | "NO" | null;
   story?: MarketStory | null;
-  markets?: { title?: string; category?: string } | null;
+  markets?: {
+    title?: string;
+    category?: string;
+    /** POV page slug — powers the "Trade on POV" deep link. */
+    pov_slug?: string | null;
+  } | null;
+
 };
 
 function fmtUsd(n: number | null | undefined) {
