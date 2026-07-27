@@ -9,6 +9,8 @@ import {
 } from "@/lib/markets.functions";
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { ConvictionFeed } from "@/components/ConvictionFeed";
+import { StoryDeck } from "@/components/StoryDeck";
+
 import { MyConvictions } from "@/components/MyConvictions";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 
