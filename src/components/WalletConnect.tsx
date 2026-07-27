@@ -39,6 +39,16 @@ function PovOnConnect() {
     if (!isConnected || !address) return;
     if (handled.current === address) return;
     handled.current = address;
+    // Redirect at most once per address per tab. Without this, pressing Back
+    // remounts this component and immediately re-navigates forward again,
+    // trapping the user on the wallet page.
+    const key = `conviction:auto-nav:${address.toLowerCase()}`;
+    try {
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, "1");
+    } catch {
+      /* storage unavailable — fall through and navigate once */
+    }
     // Fire-and-forget lookup (cached by browser); jump to wallet page regardless.
     void lookupPovUser({ data: { wallet: address } }).catch(() => null);
     // If this login wallet is linked to a POV trading wallet, land there instead.
@@ -57,6 +67,7 @@ function PovOnConnect() {
       });
     })();
   }, [address, isConnected, navigate]);
+
 
 
   return null;
