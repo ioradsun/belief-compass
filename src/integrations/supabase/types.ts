@@ -310,6 +310,7 @@ export type Database = {
           block_number: number
           direction: string
           eth_amount: number
+          event_source_key: string | null
           ingested_at: string
           log_index: number
           occurred_at: string | null
@@ -326,6 +327,7 @@ export type Database = {
           block_number: number
           direction: string
           eth_amount: number
+          event_source_key?: string | null
           ingested_at?: string
           log_index: number
           occurred_at?: string | null
@@ -342,6 +344,7 @@ export type Database = {
           block_number?: number
           direction?: string
           eth_amount?: number
+          event_source_key?: string | null
           ingested_at?: string
           log_index?: number
           occurred_at?: string | null

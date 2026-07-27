@@ -4,8 +4,11 @@
  *
  * The old poller stamped `trades.ts = new Date()` (ingestion time). The
  * 20260728000000 migration moved those to `ingested_at` and left `occurred_at`
- * NULL for every historical row. This script fills `occurred_at` from the real
- * block timestamp and propagates it to the trade-driven `feed_events`.
+ * NULL for every historical row. This documented, service-role repair/backfill
+ * tool fills the trades projection's `occurred_at` from the real Base block
+ * timestamp. Run it BEFORE scripts/backfill-events.ts, which then carries
+ * occurred_at into the canonical `events` log. (Phase 2.5: it no longer touches
+ * feed_events — those trade rows are deprecated and non-authoritative.)
  *
  * Properties:
  *   • Idempotent + resumable — only touches rows where occurred_at IS NULL, so it
@@ -73,7 +76,6 @@ async function run() {
 
   let blocksProcessed = 0;
   let tradesUpdated = 0;
-  let feedEventsUpdated = 0;
 
   for (;;) {
     const blocks = await nextBlocks();
@@ -95,30 +97,21 @@ async function run() {
         .update({ occurred_at: iso })
         .eq("block_number", b)
         .is("occurred_at", null)
-        .select("wallet, onchain_id, tx_hash, log_index");
+        .select("tx_hash");
       if (upd.error) throw new Error(upd.error.message);
       const rows = upd.data ?? [];
       tradesUpdated += rows.length;
-
-      // Propagate to the deterministic trade-driven feed events for this block.
-      // Every feed event in the block shares the same block time, so one update.
-      const keys = rows.map((r) => `trade:${r.wallet}:${r.onchain_id}:${r.tx_hash}:${r.log_index}`);
-      for (let i = 0; i < keys.length; i += 500) {
-        const fe = await sb
-          .from("feed_events")
-          .update({ occurred_at: iso })
-          .in("event_key", keys.slice(i, i + 500))
-          .select("event_key");
-        if (fe.error) throw new Error(fe.error.message);
-        feedEventsUpdated += fe.data?.length ?? 0;
-      }
+      // NOTE (Phase 2.5): this no longer propagates block time into trade-driven
+      // feed_events — those are deprecated and non-authoritative. Canonical event
+      // time lives in `events`; run this block-time backfill BEFORE
+      // scripts/backfill-events.ts, which then carries occurred_at into `events`.
       blocksProcessed += 1;
     }
 
     const remaining = await remainingNullCount();
     console.log(
       `[backfill] blocks_processed=${blocksProcessed} trades_updated=${tradesUpdated} ` +
-        `feed_events_updated=${feedEventsUpdated} trades_remaining_without_occurred_at=${remaining}`,
+        `trades_remaining_without_occurred_at=${remaining}`,
     );
     // Safety: if a pass fetched blocks but updated nothing (e.g. every block in
     // the page failed to fetch), stop rather than spin.
@@ -128,7 +121,7 @@ async function run() {
   const remaining = await remainingNullCount();
   console.log(
     `[backfill] DONE — blocks_processed=${blocksProcessed} trades_updated=${tradesUpdated} ` +
-      `feed_events_updated=${feedEventsUpdated} trades_remaining_without_occurred_at=${remaining}`,
+      `trades_remaining_without_occurred_at=${remaining}`,
   );
   if (remaining > 0) {
     console.log(

@@ -38,10 +38,15 @@ export const Route = createFileRoute("/api/public/jobs/belief-rollup")({
           const { data } = await sb.from("markets").select("onchain_id");
           marketIds = (data ?? []).map((r) => Number(r.onchain_id));
         } else {
+          // Markets with a canonical trade in the last 2m, by EVENT time. Reads
+          // the canonical events log (the deprecated trades.ts is no longer
+          // written and would select nothing); is_canonical excludes orphans.
           const cutoff = new Date(Date.now() - 2 * 60_000).toISOString();
-          const { data } = await sb.from("trades")
-            .select("onchain_id").gte("ts", cutoff);
-          marketIds = [...new Set((data ?? []).map((r) => Number(r.onchain_id)))];
+          const { data } = await sb.from("events")
+            .select("market_id")
+            .eq("is_canonical", true).eq("kind", "trade")
+            .gte("occurred_at", cutoff);
+          marketIds = [...new Set((data ?? []).map((r) => Number(r.market_id)))];
         }
 
         if (marketIds.length === 0) return Response.json({ ok: true, markets: 0 });

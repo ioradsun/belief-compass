@@ -229,23 +229,25 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
               const [wallet, midStr] = key.split("|");
               const onchain_id = Number(midStr);
               const { data: allTrades } = await sb.from("trades")
-                .select("side, direction, eth_amount, token_amount, occurred_at, ingested_at")
+                .select("side, direction, eth_amount, token_amount, occurred_at")
                 .eq("wallet", wallet).eq("onchain_id", onchain_id)
                 .order("block_number", { ascending: true })
                 .order("log_index", { ascending: true });
               // Fold in canonical chain order (block_number, log_index). The
-              // reducer's `ts` becomes the belief timestamps (directional_since,
-              // first_backed_at), so it must be EVENT time. During the transition
-              // a not-yet-backfilled historical trade has occurred_at NULL; we
-              // stand in ingested_at only so the fold has a Date, and it self-
-              // corrects once the block-time backfill sets occurred_at.
-              const tradeObjs: Trade[] = (allTrades ?? []).map((r) => ({
-                side: r.side as "YES" | "NO",
-                direction: r.direction as "BUY" | "SELL",
-                token_amount: Number(r.token_amount) / 1e18,
-                eth_amount: Number(r.eth_amount) / 1e18,
-                ts: new Date((r.occurred_at ?? r.ingested_at) as string),
-              }));
+              // reducer's `ts` is EVENT time (occurred_at) — never ingested_at.
+              // The projection is derived from canonical events (occurred_at NOT
+              // NULL), and the Phase-1 block-time backfill fills any historical
+              // rows, so occurred_at is always present here; a residual NULL is
+              // skipped rather than silently folded as ingestion time.
+              const tradeObjs: Trade[] = (allTrades ?? [])
+                .filter((r) => r.occurred_at != null)
+                .map((r) => ({
+                  side: r.side as "YES" | "NO",
+                  direction: r.direction as "BUY" | "SELL",
+                  token_amount: Number(r.token_amount) / 1e18,
+                  eth_amount: Number(r.eth_amount) / 1e18,
+                  ts: new Date(r.occurred_at as string),
+                }));
               const folded: BeliefRow = tradeObjs.reduce(applyTrade, emptyRow());
               await sb.from("wallet_beliefs").upsert({
                 wallet, onchain_id,

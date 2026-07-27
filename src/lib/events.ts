@@ -33,6 +33,29 @@ export type EventSource = (typeof EVENT_SOURCES)[number];
 export const EVENT_KINDS = ["trade", "market_created", "legacy_event"] as const;
 export type EventKind = (typeof EVENT_KINDS)[number];
 
+// ── Read column set (single-sourced) ─────────────────────────────────────────
+// The ONLY columns product reads select. Deliberately excludes ingested_at and
+// created_at (operational/audit — never recency) and payload (raw_log — never
+// shipped to clients). Recency reads use occurred_at only; there is no fallback
+// to ingestion time anywhere downstream.
+export const EVENT_READ_COLUMNS = [
+  "source_key",
+  "source",
+  "kind",
+  "market_id",
+  "wallet",
+  "side",
+  "action",
+  "amount_eth",
+  "shares",
+  "price",
+  "chain_id",
+  "block_number",
+  "log_index",
+  "occurred_at",
+] as const;
+export const EVENT_READ_SELECT = EVENT_READ_COLUMNS.join(", ");
+
 // ── Deterministic identity ───────────────────────────────────────────────────
 /** Hashes are compared and keyed lowercase so casing never splits an identity. */
 export function normalizeHash(h: string): string {

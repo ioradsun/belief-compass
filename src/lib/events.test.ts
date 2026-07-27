@@ -11,6 +11,7 @@ import {
   toLegacyFeedEventRow,
   orphanedSourceKeys,
   classifyLegacyFeedEvent,
+  EVENT_READ_COLUMNS,
   type CanonicalTradeLike,
   type EventFact,
 } from "./events";
@@ -215,6 +216,29 @@ describe("market creation emits exactly one event", () => {
     ];
     expect(dedupeBySourceKey(polls)).toHaveLength(1);
     expect(polls[0].source_key).toBe("pov:market:7:created");
+  });
+});
+
+describe("Phase 2.5 — projection provenance format", () => {
+  it("the trade event source_key matches the trades.event_source_key SQL backfill", () => {
+    // Migration 20260730000000 backfills:
+    //   'chain:8453:' || lower(tx_hash) || ':' || log_index
+    const ev = tradeEventFromCanonical(trade({ tx_hash: "0xDeAd", log_index: 4 }), 8453, "t");
+    expect(ev.source_key).toBe("chain:8453:0xdead:4");
+    const sqlForm = `chain:8453:${"0xDeAd".toLowerCase()}:${4}`;
+    expect(ev.source_key).toBe(sqlForm); // 1:1 event ↔ projection provenance
+  });
+});
+
+describe("Phase 2.5 — canonical reads never fall back to ingestion time", () => {
+  it("the event read column set excludes ingested_at and created_at", () => {
+    expect(EVENT_READ_COLUMNS).not.toContain("ingested_at");
+    expect(EVENT_READ_COLUMNS).not.toContain("created_at");
+    // recency is driven by occurred_at, which must be present.
+    expect(EVENT_READ_COLUMNS).toContain("occurred_at");
+  });
+  it("does not expose the raw payload column to clients", () => {
+    expect(EVENT_READ_COLUMNS).not.toContain("payload");
   });
 });
 

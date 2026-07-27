@@ -17,12 +17,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { publicClient } from "@/lib/supabase-clients";
-import { type EventFact } from "@/lib/events";
+import { EVENT_READ_SELECT, type EventFact } from "@/lib/events";
 
-// Columns safe + sufficient for activity reads. Deliberately excludes `payload`
-// (raw_log) and operational timestamps (ingested_at/created_at).
-const SELECT =
-  "source_key, source, kind, market_id, wallet, side, action, amount_eth, shares, price, chain_id, block_number, log_index, occurred_at";
+// Columns safe + sufficient for activity reads. Single-sourced in events.ts;
+// deliberately excludes `payload` (raw_log) and operational timestamps
+// (ingested_at/created_at) so no reader can fall back to ingestion time.
+const SELECT = EVENT_READ_SELECT;
 
 const MAX_LIMIT = 1000;
 
@@ -96,7 +96,7 @@ export const listLatestEvents = createServerFn({ method: "GET" })
     q = orderRecency(q).limit(data.limit ?? 500) as typeof q;
     const { data: rows, error } = await q;
     if (error) return { data: [] as EventFact[], error: error.message };
-    return { data: (rows ?? []).map((r) => toFact(r as Row)), error: null };
+    return { data: (rows ?? []).map((r) => toFact(r as unknown as Row)), error: null };
   });
 
 const marketInput = baseInput.extend({ marketId: z.union([z.number().int(), z.string()]) });
@@ -117,7 +117,7 @@ export const listMarketEvents = createServerFn({ method: "GET" })
     q = orderRecency(q).limit(data.limit ?? 50) as typeof q;
     const { data: rows, error } = await q;
     if (error) return { data: [] as EventFact[], error: error.message };
-    return { data: (rows ?? []).map((r) => toFact(r as Row)), error: null };
+    return { data: (rows ?? []).map((r) => toFact(r as unknown as Row)), error: null };
   });
 
 const walletInput = baseInput.extend({ wallet: z.string().min(3) });
@@ -138,7 +138,7 @@ export const listWalletEvents = createServerFn({ method: "GET" })
     q = orderRecency(q).limit(data.limit ?? 100) as typeof q;
     const { data: rows, error } = await q;
     if (error) return { data: [] as EventFact[], error: error.message };
-    return { data: (rows ?? []).map((r) => toFact(r as Row)), error: null };
+    return { data: (rows ?? []).map((r) => toFact(r as unknown as Row)), error: null };
   });
 
 /**
@@ -160,5 +160,5 @@ export async function readLatestTradeEvents(
   q = orderRecency(q).limit(Math.min(opts.limit ?? 500, MAX_LIMIT)) as typeof q;
   const { data: rows, error } = await q;
   if (error) return [];
-  return (rows ?? []).map((r) => toFact(r as Row));
+  return (rows ?? []).map((r) => toFact(r as unknown as Row));
 }
