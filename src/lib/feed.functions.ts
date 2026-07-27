@@ -39,6 +39,8 @@ import {
   type FeedEventType,
 } from "@/lib/feed-gates";
 import { resolveProfiles } from "@/lib/profiles.server";
+import { readLatestTradeEvents } from "@/lib/events.functions";
+import { toLegacyFeedEventRow } from "@/lib/events";
 
 const WINDOW_EVENTS = 500; // how many recent trade events to fold
 const MAX_CARDS = 40;
@@ -116,15 +118,11 @@ export const listConvictionFeed = createServerFn({ method: "GET" })
     const sb = publicClient();
     const viewer = data.wallet ? data.wallet.toLowerCase() : null;
 
-    // 1. Recent real trade events — the spine of the feed.
-    const { data: rawEvents, error } = await sb
-      .from("feed_events")
-      .select("onchain_id, wallet, type, side, payload, occurred_at, event_key")
-      .order("occurred_at", { ascending: false })
-      .limit(WINDOW_EVENTS);
-    if (error) return { data: [] as FeedCard[], viewer, hasPeople: false, error: error.message };
-
-    const events = (rawEvents ?? []) as EventRow[];
+    // 1. Recent real trade events — the spine of the feed. Sourced from the
+    //    canonical `events` log (is_canonical only, ordered by event time) and
+    //    adapted into the legacy row shape this feed was built on.
+    const facts = await readLatestTradeEvents(sb, { limit: WINDOW_EVENTS });
+    const events = facts.map(toLegacyFeedEventRow) as EventRow[];
     if (events.length === 0)
       return { data: [] as FeedCard[], viewer, hasPeople: false, error: null };
 

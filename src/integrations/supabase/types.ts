@@ -14,6 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
+      events: {
+        Row: {
+          action: string | null
+          amount_eth: number | null
+          block_hash: string | null
+          block_number: number | null
+          chain_id: number | null
+          created_at: string
+          id: string
+          ingested_at: string
+          is_canonical: boolean
+          kind: string
+          log_index: number | null
+          market_id: string | null
+          occurred_at: string
+          orphaned_at: string | null
+          payload: Json
+          price: number | null
+          shares: number | null
+          side: string | null
+          source: string
+          source_key: string
+          tx_hash: string | null
+          wallet: string | null
+        }
+        Insert: {
+          action?: string | null
+          amount_eth?: number | null
+          block_hash?: string | null
+          block_number?: number | null
+          chain_id?: number | null
+          created_at?: string
+          id?: string
+          ingested_at?: string
+          is_canonical?: boolean
+          kind: string
+          log_index?: number | null
+          market_id?: string | null
+          occurred_at: string
+          orphaned_at?: string | null
+          payload?: Json
+          price?: number | null
+          shares?: number | null
+          side?: string | null
+          source: string
+          source_key: string
+          tx_hash?: string | null
+          wallet?: string | null
+        }
+        Update: {
+          action?: string | null
+          amount_eth?: number | null
+          block_hash?: string | null
+          block_number?: number | null
+          chain_id?: number | null
+          created_at?: string
+          id?: string
+          ingested_at?: string
+          is_canonical?: boolean
+          kind?: string
+          log_index?: number | null
+          market_id?: string | null
+          occurred_at?: string
+          orphaned_at?: string | null
+          payload?: Json
+          price?: number | null
+          shares?: number | null
+          side?: string | null
+          source?: string
+          source_key?: string
+          tx_hash?: string | null
+          wallet?: string | null
+        }
+        Relationships: []
+      }
       feed_events: {
         Row: {
           created_at: string
@@ -448,6 +523,17 @@ export type Database = {
     }
     Functions: {
       eth_usd_calibration: { Args: never; Returns: number }
+      events_health: { Args: never; Returns: Json }
+      ingest_chain_chunk: {
+        Args: {
+          p_events: Json
+          p_present_keys: Json
+          p_chain_id: number
+          p_start: number
+          p_end: number
+        }
+        Returns: Json
+      }
       market_change_window: {
         Args: { p_ids: number[]; p_since: string }
         Returns: {

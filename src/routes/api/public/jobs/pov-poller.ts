@@ -7,6 +7,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.server";
 import { iterateAllMarkets } from "@/lib/pov.server";
+import { marketCreatedSourceKey } from "@/lib/events";
 
 export const Route = createFileRoute("/api/public/jobs/pov-poller")({
   server: {
@@ -27,6 +28,9 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
         const stateRows: Record<string, unknown>[] = [];
         const snapshotRows: Record<string, unknown>[] = [];
         const profileRows: Record<string, unknown>[] = [];
+        const eventRows: Record<string, unknown>[] = [];
+        let createdEvents = 0;
+        let createdEventsSkippedNoTime = 0;
 
         try {
           for await (const m of iterateAllMarkets()) {
@@ -63,6 +67,26 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
               no_price_usd: m.noPriceUsd ?? null,
               money_yes_pct: m.yesPercentage ?? null,
             });
+            // One canonical market_created event per market, EVER. The
+            // deterministic source_key + insert-ignore-duplicates means repeated
+            // polls of an unchanged market never produce a second event. We only
+            // emit when POV gives an authoritative creation time — occurred_at
+            // must be real event time, never ingestion time. Markets with no
+            // source creation time are skipped (kept out of recency ranking) and
+            // reported; see the report's deferred limitations.
+            if (m.createdAt) {
+              eventRows.push({
+                source_key: marketCreatedSourceKey(m.onChainMarketId),
+                source: "pov",
+                kind: "market_created",
+                market_id: String(m.onChainMarketId),
+                wallet: m.author?.walletAddress?.toLowerCase() ?? null,
+                occurred_at: m.createdAt,
+                payload: { created_at_source: "pov" },
+              });
+            } else {
+              createdEventsSkippedNoTime++;
+            }
             // The author profile rides along on every market — cache it so the
             // conviction feed can show a real pic without an extra API call.
             const authorWallet = m.author?.walletAddress?.toLowerCase();
@@ -95,11 +119,22 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
               const pr = await sb.from("profiles").upsert(profileRows, { onConflict: "wallet" });
               if (pr.error) throw pr.error;
             }
+            if (eventRows.length > 0) {
+              // Idempotent: on conflict (source_key) do nothing → exactly one
+              // market_created event per market across all polls.
+              const ev = await sb
+                .from("events")
+                .upsert(eventRows, { onConflict: "source_key", ignoreDuplicates: true })
+                .select("id");
+              if (ev.error) throw ev.error;
+              createdEvents += ev.data?.length ?? 0;
+            }
             upserted += marketRows.length;
             marketRows.length = 0;
             stateRows.length = 0;
             snapshotRows.length = 0;
             profileRows.length = 0;
+            eventRows.length = 0;
           }
 
           // Compute chg_1h/24h from snapshots for markets touched (batch SQL)
@@ -117,7 +152,14 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
             .delete()
             .lt("captured_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
 
-          return Response.json({ ok: true, seen, upserted, ms: Date.now() - started });
+          return Response.json({
+            ok: true,
+            seen,
+            upserted,
+            market_created_events_inserted: createdEvents,
+            market_created_skipped_no_source_time: createdEventsSkippedNoTime,
+            ms: Date.now() - started,
+          });
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : String(e);
           console.error("[pov-poller]", msg);
