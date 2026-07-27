@@ -5,6 +5,7 @@ import { getMatchesForWallet } from "@/lib/match.functions";
 import { getCirclesForWallet, type CircleSummary } from "@/lib/circles.functions";
 import { Fingerprint } from "@/components/Fingerprint";
 import { LinkWalletCard } from "@/components/LinkWalletCard";
+import { WalletIdentity } from "@/components/WalletIdentity";
 
 const walletQO = (w: string) => queryOptions({
   queryKey: ["wallet", w],
@@ -57,6 +58,8 @@ function WalletPage() {
       <div className="mx-auto max-w-4xl px-6 py-8">
         <a href="/" className="text-sm text-muted-foreground hover:underline">← Back</a>
         <h1 className="mt-4 font-mono text-lg">{short(w)}</h1>
+
+        <WalletIdentity viewing={w} />
 
         {empty && <LinkWalletCard />}
 
