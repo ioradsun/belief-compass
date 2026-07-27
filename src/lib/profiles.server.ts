@@ -8,7 +8,7 @@
  * has no real identity.
  */
 import { publicClient, serviceClient } from "@/lib/supabase-clients";
-import type { WalletProfile } from "@/lib/conviction-feed";
+import type { WalletProfile } from "@/lib/wallet-identity";
 import { fetchPovUser } from "@/lib/pov.server";
 
 /** Max pov.co lookups per request; everything else comes from the cache. */

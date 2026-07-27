@@ -24,7 +24,8 @@ export function LinkWalletCard() {
   const valid = /^0x[a-f0-9]{40}$/.test(target);
 
   function go(addr: string) {
-    void navigate({ to: "/wallet/$addr", params: { addr } });
+    // The wallet view is the home "You" panel — focus the feed on this wallet.
+    void navigate({ to: "/", search: (prev) => ({ ...prev, wallet: addr }) });
   }
 
   function remember() {

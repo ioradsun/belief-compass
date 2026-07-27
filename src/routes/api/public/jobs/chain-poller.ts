@@ -3,17 +3,16 @@
  * - Acquires expiring lease on ingest_state.
  * - Reads Base logs for the proxy from max(last_block-12, deploy) → head.
  * - Builds deterministic canonical `events` and persists them ATOMICALLY via the
- *   ingest_chain_chunk() DB function, which in one transaction also maintains the
- *   temporary `trades` projection and reconciles reorg orphans.
+ *   ingest_chain_chunk() DB function, which in one transaction inserts the events
+ *   and reconciles reorg orphans.
  * - Phase 3: advances affected wallet_beliefs INCREMENTALLY — apply only the new
  *   canonical events on top of the current position (exactly once), never
  *   refolding full history. Reorg-orphaned pairs are marked needs_rebuild.
  * - Atomically advances cursor + clears lease.
  *
- * Phase 2: `events` is the source of truth. A chain trade is NO LONGER written to
- * feed_events — chronological reads come from `events` (see events.functions.ts).
- * `trades` remains ONLY as a compatibility projection for the position reducer +
- * belief rollup, maintained inside ingest_chain_chunk().
+ * `events` is the sole source of truth: chronological reads, positions, the read
+ * model, and windowed volume all derive from it. The legacy `trades` and
+ * `feed_events` projections have been retired.
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.server";
@@ -60,21 +59,29 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        try { assertIngestBearer(request); }
-        catch (r) { return r instanceof Response ? r : new Response("err", { status: 500 }); }
+        try {
+          assertIngestBearer(request);
+        } catch (r) {
+          return r instanceof Response ? r : new Response("err", { status: 500 });
+        }
 
         const sb = getServiceSupabase();
         const rid = runId();
         const started = Date.now();
 
         // 1. Claim lease
-        const leaseSql = await sb.rpc as unknown;
+        const leaseSql = (await sb.rpc) as unknown;
         void leaseSql;
         const { data: leased, error: leaseErr } = await sb
           .from("ingest_state")
-          .update({ lease_owner: rid, lease_expires_at: new Date(Date.now() + 120_000).toISOString() })
+          .update({
+            lease_owner: rid,
+            lease_expires_at: new Date(Date.now() + 120_000).toISOString(),
+          })
           .eq("id", 1)
-          .or(`lease_expires_at.is.null,lease_expires_at.lt.${new Date().toISOString()},lease_owner.eq.${rid}`)
+          .or(
+            `lease_expires_at.is.null,lease_expires_at.lt.${new Date().toISOString()},lease_owner.eq.${rid}`,
+          )
           .select("last_block")
           .maybeSingle();
 
@@ -84,9 +91,7 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
         try {
           const client = getBaseClient();
           const head = await client.getBlockNumber();
-          const from = leased.last_block
-            ? BigInt(leased.last_block) - REORG_DEPTH
-            : DEPLOY_BLOCK;
+          const from = leased.last_block ? BigInt(leased.last_block) - REORG_DEPTH : DEPLOY_BLOCK;
           const fromClamped = from < DEPLOY_BLOCK ? DEPLOY_BLOCK : from;
           const maxTo = fromClamped + MAX_BLOCKS_PER_RUN - 1n;
           const to = head < maxTo ? head : maxTo;
@@ -107,8 +112,6 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
           let eventsReplayed = 0;
           let eventsRestored = 0;
           let eventsOrphaned = 0;
-          let tradeProjInserted = 0;
-          let tradeProjRemoved = 0;
           let tradesDeferredNoBlockTime = 0;
           // Phase 3 incremental position counters.
           let positionEventsApplied = 0;
@@ -130,8 +133,6 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
             events_replayed: eventsReplayed,
             events_restored: eventsRestored,
             events_orphaned: eventsOrphaned,
-            trade_projections_inserted: tradeProjInserted,
-            trade_projections_removed: tradeProjRemoved,
             trades_deferred_no_block_time: tradesDeferredNoBlockTime,
             position_events_applied: positionEventsApplied,
             position_events_replayed: positionEventsReplayed,
@@ -176,7 +177,8 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
             const blockTimes = trades.length
               ? await fetchBlockTimes(
                   uniqueBlockNumbers(trades),
-                  async (b) => Number((await client.getBlock({ blockNumber: BigInt(b) })).timestamp),
+                  async (b) =>
+                    Number((await client.getBlock({ blockNumber: BigInt(b) })).timestamp),
                   BLOCK_TS_CONCURRENCY,
                 )
               : new Map<number, string>();
@@ -190,7 +192,9 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
             if (trades.length > 0) {
               const marketIds = new Set(trades.map((t) => t.onchain_id));
               const marketStubs = [...marketIds].map((id) => ({ onchain_id: Number(id) }));
-              await sb.from("markets").upsert(marketStubs, { onConflict: "onchain_id", ignoreDuplicates: true });
+              await sb
+                .from("markets")
+                .upsert(marketStubs, { onConflict: "onchain_id", ignoreDuplicates: true });
             }
 
             // 3. Build deterministic canonical events and persist them ATOMICALLY.
@@ -229,8 +233,6 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
                 events_replayed?: number;
                 events_restored?: number;
                 events_orphaned?: number;
-                trade_projections_inserted?: number;
-                trade_projections_removed?: number;
                 pairs?: [string, string][];
                 orphan_pairs?: [string, string][];
               };
@@ -238,14 +240,14 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
               eventsReplayed += r.events_replayed ?? 0;
               eventsRestored += r.events_restored ?? 0;
               eventsOrphaned += r.events_orphaned ?? 0;
-              tradeProjInserted += r.trade_projections_inserted ?? 0;
-              tradeProjRemoved += r.trade_projections_removed ?? 0;
               for (const [w, m] of r.pairs ?? []) affectedPairs.add(`${w}|${m}`);
 
               // Reorg: orphaned pairs are rebuilt (never algebraically reversed).
               // Mark them needs_rebuild='reorg' so the incremental applier skips
               // them and the targeted rebuilder folds remaining canonical history.
-              orphanPairs = (r.orphan_pairs ?? []).map(([w, mm]) => [w, Number(mm)] as [string, number]);
+              orphanPairs = (r.orphan_pairs ?? []).map(
+                ([w, mm]) => [w, Number(mm)] as [string, number],
+              );
             }
 
             // 4. INCREMENTAL position application (Phase 3). Instead of reloading
@@ -280,14 +282,17 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
             //     (activity from the new trades + positions from the applies).
             //     Coalesced per market — never one queue row per trade.
             const dirtyMarkets = [
-              ...new Set([
-                ...applyPairs.map((p) => p.market),
-                ...orphanPairs.map(([, mm]) => mm),
-              ]),
+              ...new Set([...applyPairs.map((p) => p.market), ...orphanPairs.map(([, mm]) => mm)]),
             ];
             if (dirtyMarkets.length > 0) {
-              await sb.rpc("enqueue_market_refresh", { p_market_ids: dirtyMarkets, p_kind: "activity" });
-              await sb.rpc("enqueue_market_refresh", { p_market_ids: dirtyMarkets, p_kind: "positions" });
+              await sb.rpc("enqueue_market_refresh", {
+                p_market_ids: dirtyMarkets,
+                p_kind: "activity",
+              });
+              await sb.rpc("enqueue_market_refresh", {
+                p_market_ids: dirtyMarkets,
+                p_kind: "positions",
+              });
               marketsMarkedDirty += dirtyMarkets.length;
             }
 
@@ -300,19 +305,25 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
             // Commit the cursor and refresh the lease (keep owning it for the
             // rest of this run). Guarded by lease_owner so a run whose lease
             // expired and was re-claimed elsewhere cannot rewind the cursor.
-            const adv = await sb.from("ingest_state")
+            const adv = await sb
+              .from("ingest_state")
               .update({
                 last_block: Number(end),
                 lease_expires_at: new Date(Date.now() + LEASE_MS).toISOString(),
               })
-              .eq("id", 1).eq("lease_owner", rid)
+              .eq("id", 1)
+              .eq("lease_owner", rid)
               .select("id")
               .maybeSingle();
             if (!adv.data) {
               // Lost the lease mid-run; stop rather than double-writing.
               return Response.json({
-                ok: true, from: Number(fromClamped), to: Number(cursor),
-                trades: totalTrades, pairs: totalPairs, lostLease: true,
+                ok: true,
+                from: Number(fromClamped),
+                to: Number(cursor),
+                trades: totalTrades,
+                pairs: totalPairs,
+                lostLease: true,
                 ...observability(),
                 ms: Date.now() - started,
               });
@@ -325,22 +336,29 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
           }
 
           // Release the lease (cursor already committed per-chunk above).
-          await sb.from("ingest_state")
+          await sb
+            .from("ingest_state")
             .update({ lease_owner: null, lease_expires_at: null })
-            .eq("id", 1).eq("lease_owner", rid);
+            .eq("id", 1)
+            .eq("lease_owner", rid);
 
           return Response.json({
-            ok: true, from: Number(fromClamped), to: Number(cursor),
-            trades: totalTrades, pairs: totalPairs,
+            ok: true,
+            from: Number(fromClamped),
+            to: Number(cursor),
+            trades: totalTrades,
+            pairs: totalPairs,
             ...observability(),
             ms: Date.now() - started,
           });
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : String(e);
           console.error("[chain-poller]", msg);
-          await sb.from("ingest_state")
+          await sb
+            .from("ingest_state")
             .update({ lease_owner: null, lease_expires_at: null })
-            .eq("id", 1).eq("lease_owner", rid);
+            .eq("id", 1)
+            .eq("lease_owner", rid);
           return Response.json({ ok: false, error: msg }, { status: 500 });
         }
       },

@@ -11,8 +11,6 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "verify:reducer": "tsx scripts/verify-reducer.ts",
-    "backfill:block-times": "tsx scripts/backfill-block-times.ts",
-    "backfill:events": "tsx scripts/backfill-events.ts",
     "check:data-flow": "tsx scripts/check-data-flow.ts",
     "check:positions": "tsx scripts/check-position-integrity.ts",
     "backfill:position-cursors": "tsx scripts/backfill-position-cursors.ts",

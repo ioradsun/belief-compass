@@ -76,11 +76,6 @@ export function marketCreatedSourceKey(marketId: number | bigint | string): stri
   return `pov:market:${String(marketId)}:created`;
 }
 
-/** legacy:feed_event:{id} — preserves a legacy feed row's identity. */
-export function legacyFeedEventSourceKey(id: number | string): string {
-  return `legacy:feed_event:${String(id)}`;
-}
-
 // ── Shapes ───────────────────────────────────────────────────────────────────
 /** The decoded-trade fields this module needs (a subset of CanonicalTrade). */
 export interface CanonicalTradeLike {
@@ -266,26 +261,4 @@ export function orphanedSourceKeys(stored: string[], canonical: Iterable<string>
   const keep = new Set<string>();
   for (const k of canonical) keep.add(k);
   return stored.filter((k) => !keep.has(k));
-}
-
-// ── Legacy feed_events classification (backfill) ─────────────────────────────
-export type FeedEventClass = "trade_duplicate" | "structured" | "legacy";
-
-/**
- * Classify an existing feed_events row for the backfill:
- *   • trade_duplicate — it restates a canonical chain trade (the chain trade
- *     event is the only fact; do NOT create a second event for it)
- *   • structured — a real non-trade fact with enough provenance to key
- *     deterministically (none exist in production today, but the branch is here)
- *   • legacy — narrative we can't confidently structure; preserve verbatim as
- *     source=legacy / kind=legacy_event, for feed continuity only
- */
-export function classifyLegacyFeedEvent(row: {
-  type: string | null;
-  event_key: string | null;
-}): FeedEventClass {
-  const t = (row.type ?? "").toLowerCase();
-  if (t === "backed" || t === "reduced") return "trade_duplicate";
-  if ((row.event_key ?? "").startsWith("trade:")) return "trade_duplicate";
-  return "legacy";
 }

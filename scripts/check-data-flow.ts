@@ -1,16 +1,16 @@
 /**
- * check-data-flow — Phase 2.5 data-flow integrity gate.
+ * check-data-flow — data-flow integrity gate.
  *
- * Verifies that the single permitted path holds in production:
- *   Base log → canonical event → temporary trade projection → position calc
- * and that no duplicate/alternate path has leaked back in.
+ * Verifies the single permitted path holds in production:
+ *   Base log → canonical event → position calc
+ * and that no duplicate/alternate path has leaked back in. The legacy `trades`
+ * and `feed_events` projections have been retired — canonical `events` is the
+ * only source, so the checks are event-only.
  *
  * Exits NONZERO when any critical invariant fails, so it can gate a deploy.
  *
  * Run:  npx tsx scripts/check-data-flow.ts   (or: npm run check:data-flow)
  * Env:  SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  (required)
- *       DATAFLOW_FEED_WINDOW_HOURS  window for "new trade-driven feed_events"
- *                                   check (default 24)
  */
 import { createClient } from "@supabase/supabase-js";
 
@@ -21,69 +21,36 @@ if (!url || !key) {
   process.exit(2);
 }
 const sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-const FEED_WINDOW_HOURS = Number(process.env.DATAFLOW_FEED_WINDOW_HOURS ?? "24");
 
 type Check = { name: string; ok: boolean; detail: string; critical: boolean };
 const checks: Check[] = [];
 const add = (name: string, ok: boolean, detail: string, critical = true) =>
   checks.push({ name, ok, detail, critical });
 
-async function headCount(build: () => unknown): Promise<number> {
-  const { count } = (await build()) as { count: number | null };
-  return count ?? 0;
-}
-
 async function run() {
-  // ── Canonical event parity (via events_health) ─────────────────────────────
+  // ── Canonical event health (via events_health) ─────────────────────────────
   const { data: health, error: hErr } = await sb.rpc("events_health");
   if (hErr) {
     add("events_health() available", false, hErr.message);
   } else {
     const h = health as Record<string, number>;
     add(
-      "canonical chain events all have a trade projection",
-      (h.chain_events_without_projection ?? 0) === 0,
-      `chain_events_without_projection=${h.chain_events_without_projection}`,
-    );
-    add(
-      "every trade projection has a canonical event",
-      (h.projections_without_canonical_event ?? 0) === 0,
-      `projections_without_canonical_event=${h.projections_without_canonical_event}`,
-    );
-    add(
-      "every trade projection has provenance (event_source_key)",
-      (h.projections_without_provenance ?? 0) === 0,
-      `projections_without_provenance=${h.projections_without_provenance}`,
-    );
-    add(
-      "projection occurred_at matches its canonical event",
-      (h.projections_with_mismatched_occurred_at ?? 0) === 0,
-      `projections_with_mismatched_occurred_at=${h.projections_with_mismatched_occurred_at}`,
-    );
-    add(
       "no canonical trade event is missing occurred_at",
       (h.canonical_trade_events_missing_occurred_at ?? 0) === 0,
       `canonical_trade_events_missing_occurred_at=${h.canonical_trade_events_missing_occurred_at}`,
     );
+    add(
+      "no canonical event is missing market_id",
+      (h.events_missing_market_id ?? 0) === 0,
+      `events_missing_market_id=${h.events_missing_market_id}`,
+    );
+    add(
+      "no canonical trade event is missing wallet",
+      (h.events_missing_wallet ?? 0) === 0,
+      `events_missing_wallet=${h.events_missing_wallet}`,
+    );
     console.log("[check-data-flow] events_health:", JSON.stringify(h));
   }
-
-  // ── Duplicate activity ─────────────────────────────────────────────────────
-  // No trade-driven feed_events should be created after the Phase 2 cutover; a
-  // rolling window catches any regression where something starts writing them.
-  const since = new Date(Date.now() - FEED_WINDOW_HOURS * 3600_000).toISOString();
-  const newTradeFeed = await headCount(() =>
-    sb
-      .from("feed_events")
-      .select("*", { count: "exact", head: true })
-      .in("type", ["backed", "reduced"])
-      .gte("created_at", since),
-  );
-  add(
-    `no trade-driven feed_events created in the last ${FEED_WINDOW_HOURS}h`,
-    newTradeFeed === 0,
-    `new trade-driven feed_events=${newTradeFeed}`,
-  );
 
   // Duplicate canonical identity is structurally impossible (source_key UNIQUE),
   // but verify there are no two canonical chain rows for one tx+log.

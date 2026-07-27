@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { MatchPerson, Pulse } from "@/lib/markets.functions";
-import { hueFor, initialsFor } from "@/lib/conviction-feed";
+import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { marketVitals, marketBadge, type PulseLevel } from "@/lib/market-vitals";
 
 // Pulse bar colour by aliveness. Amber for a living market (kept off the
@@ -240,8 +240,7 @@ function MatchStrip({
   const tribe = kind === "Tribe";
   const name = person.name || shortWallet(person.wallet);
   return (
-    <a
-      href={`/wallet/${person.wallet}`}
+    <div
       className={`flex items-center gap-2 border-b border-border px-4 py-2 text-[11px] ${
         tribe ? "bg-violet-500/10" : "bg-red-500/10"
       }`}
@@ -274,7 +273,7 @@ function MatchStrip({
         <span className={side === "YES" ? "text-emerald-600" : "text-rose-600"}>{side}</span>
       </span>
       <span className="shrink-0 tabular-nums text-muted-foreground">{person.score}%</span>
-    </a>
+    </div>
   );
 }
 
@@ -346,12 +345,9 @@ export function MarketCard({
   return (
     <article className="flex flex-col rounded-xl border border-border bg-card/40 transition-shadow hover:shadow-md">
       <header className="border-b border-border px-4 py-3">
-        <a
-          href={`/market/${row.onchain_id}`}
-          className="text-sm font-medium leading-snug hover:underline"
-        >
+        <div className="text-sm font-medium leading-snug">
           {row.markets?.title ?? `Market #${row.onchain_id}`}
-        </a>
+        </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
           {row.markets?.category && <span>{row.markets.category}</span>}
           <span>·</span>
