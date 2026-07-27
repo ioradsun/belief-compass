@@ -21,6 +21,7 @@ export function StoryDeck({
   winLabel,
   tribe,
   opp,
+  reasonByMarket,
 }: {
   rows: MarketRow[];
   pulses: Record<string, Pulse[]>;
@@ -28,6 +29,7 @@ export function StoryDeck({
   winLabel: string;
   tribe?: MatchPerson | null;
   opp?: MatchPerson | null;
+  reasonByMarket?: Record<number, string>;
 }) {
   const [i, setI] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -165,6 +167,7 @@ export function StoryDeck({
             stagger={0}
             tribe={tribe}
             opp={opp}
+            reason={reasonByMarket?.[Number(row.onchain_id)]}
           />
         </div>
 
@@ -185,7 +188,6 @@ export function StoryDeck({
         >
           ›
         </button>
-
       </div>
     </div>
   );
