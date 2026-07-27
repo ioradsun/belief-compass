@@ -89,6 +89,42 @@ export type Database = {
         }
         Relationships: []
       }
+      feed_events: {
+        Row: {
+          created_at: string
+          event_key: string
+          id: number
+          occurred_at: string
+          onchain_id: number | null
+          payload: Json | null
+          side: string | null
+          type: string
+          wallet: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_key: string
+          id?: number
+          occurred_at: string
+          onchain_id?: number | null
+          payload?: Json | null
+          side?: string | null
+          type: string
+          wallet?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_key?: string
+          id?: number
+          occurred_at?: string
+          onchain_id?: number | null
+          payload?: Json | null
+          side?: string | null
+          type?: string
+          wallet?: string | null
+        }
+        Relationships: []
+      }
       ingest_state: {
         Row: {
           id: number
@@ -142,75 +178,285 @@ export type Database = {
       }
       market_state: {
         Row: {
+          active_positions: number
+          avg_conviction_strength: number | null
+          avg_directional_days: number | null
           believers_mixed: number
           believers_no: number
           believers_yes: number
           boost_score: number | null
+          buy_count_1h: number
+          buy_count_24h: number
+          buy_sell_ratio_24h: number | null
+          calculated_at: string | null
+          capital_held_no: number | null
+          capital_held_total: number | null
+          capital_held_yes: number | null
           chg_1h: number | null
           chg_24h: number | null
           chg_24h_no: number | null
           chg_24h_yes: number | null
+          circulation_1h: number | null
+          circulation_24h: number | null
+          circulation_7d: number | null
+          directional_believers: number
           divergence: number | null
+          events_updated_at: string | null
+          first_trade_at: string | null
+          inactive_for_seconds: number | null
+          last_position_change_at: string | null
+          last_trade_at: string | null
+          live_line: string | null
+          live_line_kind: string | null
+          live_line_occurred_at: string | null
+          live_line_payload: Json | null
+          live_line_window: string | null
+          market_age_days: number | null
+          market_created_at: string | null
+          median_conviction_strength: number | null
+          median_directional_days: number | null
           money_yes_pct: number | null
+          needs_rebuild: boolean
           new_believers_1h: number
+          new_believers_24h: number
+          new_believers_7d: number
           no_capital_usd: number | null
           no_price_usd: number | null
           onchain_id: number
+          opportunity_calculated_at: string | null
+          opportunity_confidence: string | null
+          opportunity_eligible: boolean
+          opportunity_engine_version: number
+          opportunity_evidence: Json | null
+          opportunity_ineligible_reason: string | null
+          opportunity_previous_type: string | null
+          opportunity_reason: string | null
+          opportunity_reason_code: string | null
+          opportunity_sample_size: number | null
+          opportunity_score: number | null
+          opportunity_score_raw: number | null
+          opportunity_type: string | null
+          opportunity_type_since: string | null
+          opportunity_window: string | null
+          p75_directional_days: number | null
+          people_no_pct: number | null
+          people_yes_change_24h: number | null
           people_yes_pct: number | null
+          positions_updated_at: string | null
+          pov_updated_at: string | null
+          read_model_version: number
+          rebuild_reason: string | null
+          sell_count_1h: number
+          sell_count_24h: number
+          sell_rate_24h: number | null
+          side_balance: number | null
+          side_flips_24h: number
+          trade_count_1h: number
+          trade_count_24h: number
+          trade_count_7d: number
           trending_score: number | null
+          unique_wallets_1h: number
+          unique_wallets_24h: number
+          unique_wallets_7d: number
           updated_at: string
           velocity_5m: number
           volume_24h_usd: number | null
+          volume_eth_1h: number
+          volume_eth_24h: number
+          volume_eth_7d: number
           volume_total_usd: number | null
           yes_capital_usd: number | null
+          yes_price_change_1h: number | null
+          yes_price_change_24h: number | null
+          yes_price_change_7d: number | null
           yes_price_usd: number | null
         }
         Insert: {
+          active_positions?: number
+          avg_conviction_strength?: number | null
+          avg_directional_days?: number | null
           believers_mixed?: number
           believers_no?: number
           believers_yes?: number
           boost_score?: number | null
+          buy_count_1h?: number
+          buy_count_24h?: number
+          buy_sell_ratio_24h?: number | null
+          calculated_at?: string | null
+          capital_held_no?: number | null
+          capital_held_total?: number | null
+          capital_held_yes?: number | null
           chg_1h?: number | null
           chg_24h?: number | null
           chg_24h_no?: number | null
           chg_24h_yes?: number | null
+          circulation_1h?: number | null
+          circulation_24h?: number | null
+          circulation_7d?: number | null
+          directional_believers?: number
           divergence?: number | null
+          events_updated_at?: string | null
+          first_trade_at?: string | null
+          inactive_for_seconds?: number | null
+          last_position_change_at?: string | null
+          last_trade_at?: string | null
+          live_line?: string | null
+          live_line_kind?: string | null
+          live_line_occurred_at?: string | null
+          live_line_payload?: Json | null
+          live_line_window?: string | null
+          market_age_days?: number | null
+          market_created_at?: string | null
+          median_conviction_strength?: number | null
+          median_directional_days?: number | null
           money_yes_pct?: number | null
+          needs_rebuild?: boolean
           new_believers_1h?: number
+          new_believers_24h?: number
+          new_believers_7d?: number
           no_capital_usd?: number | null
           no_price_usd?: number | null
           onchain_id: number
+          opportunity_calculated_at?: string | null
+          opportunity_confidence?: string | null
+          opportunity_eligible?: boolean
+          opportunity_engine_version?: number
+          opportunity_evidence?: Json | null
+          opportunity_ineligible_reason?: string | null
+          opportunity_previous_type?: string | null
+          opportunity_reason?: string | null
+          opportunity_reason_code?: string | null
+          opportunity_sample_size?: number | null
+          opportunity_score?: number | null
+          opportunity_score_raw?: number | null
+          opportunity_type?: string | null
+          opportunity_type_since?: string | null
+          opportunity_window?: string | null
+          p75_directional_days?: number | null
+          people_no_pct?: number | null
+          people_yes_change_24h?: number | null
           people_yes_pct?: number | null
+          positions_updated_at?: string | null
+          pov_updated_at?: string | null
+          read_model_version?: number
+          rebuild_reason?: string | null
+          sell_count_1h?: number
+          sell_count_24h?: number
+          sell_rate_24h?: number | null
+          side_balance?: number | null
+          side_flips_24h?: number
+          trade_count_1h?: number
+          trade_count_24h?: number
+          trade_count_7d?: number
           trending_score?: number | null
+          unique_wallets_1h?: number
+          unique_wallets_24h?: number
+          unique_wallets_7d?: number
           updated_at?: string
           velocity_5m?: number
           volume_24h_usd?: number | null
+          volume_eth_1h?: number
+          volume_eth_24h?: number
+          volume_eth_7d?: number
           volume_total_usd?: number | null
           yes_capital_usd?: number | null
+          yes_price_change_1h?: number | null
+          yes_price_change_24h?: number | null
+          yes_price_change_7d?: number | null
           yes_price_usd?: number | null
         }
         Update: {
+          active_positions?: number
+          avg_conviction_strength?: number | null
+          avg_directional_days?: number | null
           believers_mixed?: number
           believers_no?: number
           believers_yes?: number
           boost_score?: number | null
+          buy_count_1h?: number
+          buy_count_24h?: number
+          buy_sell_ratio_24h?: number | null
+          calculated_at?: string | null
+          capital_held_no?: number | null
+          capital_held_total?: number | null
+          capital_held_yes?: number | null
           chg_1h?: number | null
           chg_24h?: number | null
           chg_24h_no?: number | null
           chg_24h_yes?: number | null
+          circulation_1h?: number | null
+          circulation_24h?: number | null
+          circulation_7d?: number | null
+          directional_believers?: number
           divergence?: number | null
+          events_updated_at?: string | null
+          first_trade_at?: string | null
+          inactive_for_seconds?: number | null
+          last_position_change_at?: string | null
+          last_trade_at?: string | null
+          live_line?: string | null
+          live_line_kind?: string | null
+          live_line_occurred_at?: string | null
+          live_line_payload?: Json | null
+          live_line_window?: string | null
+          market_age_days?: number | null
+          market_created_at?: string | null
+          median_conviction_strength?: number | null
+          median_directional_days?: number | null
           money_yes_pct?: number | null
+          needs_rebuild?: boolean
           new_believers_1h?: number
+          new_believers_24h?: number
+          new_believers_7d?: number
           no_capital_usd?: number | null
           no_price_usd?: number | null
           onchain_id?: number
+          opportunity_calculated_at?: string | null
+          opportunity_confidence?: string | null
+          opportunity_eligible?: boolean
+          opportunity_engine_version?: number
+          opportunity_evidence?: Json | null
+          opportunity_ineligible_reason?: string | null
+          opportunity_previous_type?: string | null
+          opportunity_reason?: string | null
+          opportunity_reason_code?: string | null
+          opportunity_sample_size?: number | null
+          opportunity_score?: number | null
+          opportunity_score_raw?: number | null
+          opportunity_type?: string | null
+          opportunity_type_since?: string | null
+          opportunity_window?: string | null
+          p75_directional_days?: number | null
+          people_no_pct?: number | null
+          people_yes_change_24h?: number | null
           people_yes_pct?: number | null
+          positions_updated_at?: string | null
+          pov_updated_at?: string | null
+          read_model_version?: number
+          rebuild_reason?: string | null
+          sell_count_1h?: number
+          sell_count_24h?: number
+          sell_rate_24h?: number | null
+          side_balance?: number | null
+          side_flips_24h?: number
+          trade_count_1h?: number
+          trade_count_24h?: number
+          trade_count_7d?: number
           trending_score?: number | null
+          unique_wallets_1h?: number
+          unique_wallets_24h?: number
+          unique_wallets_7d?: number
           updated_at?: string
           velocity_5m?: number
           volume_24h_usd?: number | null
+          volume_eth_1h?: number
+          volume_eth_24h?: number
+          volume_eth_7d?: number
           volume_total_usd?: number | null
           yes_capital_usd?: number | null
+          yes_price_change_1h?: number | null
+          yes_price_change_24h?: number | null
+          yes_price_change_7d?: number | null
           yes_price_usd?: number | null
         }
         Relationships: [
@@ -274,6 +520,36 @@ export type Database = {
         }
         Relationships: []
       }
+      match_queue: {
+        Row: {
+          attempts: number
+          done_at: string | null
+          enqueued_at: string
+          last_error: string | null
+          pending: boolean
+          started_at: string | null
+          wallet: string
+        }
+        Insert: {
+          attempts?: number
+          done_at?: string | null
+          enqueued_at?: string
+          last_error?: string | null
+          pending?: boolean
+          started_at?: string | null
+          wallet: string
+        }
+        Update: {
+          attempts?: number
+          done_at?: string | null
+          enqueued_at?: string
+          last_error?: string | null
+          pending?: boolean
+          started_at?: string | null
+          wallet?: string
+        }
+        Relationships: []
+      }
       price_snapshots: {
         Row: {
           captured_at: string
@@ -295,6 +571,87 @@ export type Database = {
           no_price_usd?: number | null
           onchain_id?: number
           yes_price_usd?: number | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          display_name: string | null
+          fetched_at: string
+          not_found: boolean
+          pfp_url: string | null
+          twitter_id: string | null
+          username: string | null
+          wallet: string
+        }
+        Insert: {
+          display_name?: string | null
+          fetched_at?: string
+          not_found?: boolean
+          pfp_url?: string | null
+          twitter_id?: string | null
+          username?: string | null
+          wallet: string
+        }
+        Update: {
+          display_name?: string | null
+          fetched_at?: string
+          not_found?: boolean
+          pfp_url?: string | null
+          twitter_id?: string | null
+          username?: string | null
+          wallet?: string
+        }
+        Relationships: []
+      }
+      trades: {
+        Row: {
+          block_hash: string
+          block_number: number
+          direction: string
+          eth_amount: number
+          ingested_at: string
+          log_index: number
+          occurred_at: string | null
+          onchain_id: number
+          raw_log: Json | null
+          side: string
+          token_amount: number
+          ts: string | null
+          tx_hash: string
+          wallet: string
+        }
+        Insert: {
+          block_hash: string
+          block_number: number
+          direction: string
+          eth_amount: number
+          ingested_at?: string
+          log_index: number
+          occurred_at?: string | null
+          onchain_id: number
+          raw_log?: Json | null
+          side: string
+          token_amount: number
+          ts?: string | null
+          tx_hash: string
+          wallet: string
+        }
+        Update: {
+          block_hash?: string
+          block_number?: number
+          direction?: string
+          eth_amount?: number
+          ingested_at?: string
+          log_index?: number
+          occurred_at?: string | null
+          onchain_id?: number
+          raw_log?: Json | null
+          side?: string
+          token_amount?: number
+          ts?: string | null
+          tx_hash?: string
+          wallet?: string
         }
         Relationships: []
       }
@@ -325,6 +682,60 @@ export type Database = {
           ts?: string
           type?: string
           wallet?: string | null
+        }
+        Relationships: []
+      }
+      viewer_dna_cache: {
+        Row: {
+          calculated_at: string
+          candidate_count: number
+          closest_matches: Json
+          domain_matches: Json
+          engine_version: number
+          expires_at: string
+          inverse_matches: Json
+          last_error: string | null
+          neutral_matches: Json
+          opp_matches: Json
+          scored_count: number
+          tribe_matches: Json
+          twin_matches: Json
+          viewer_dna_version: number
+          viewer_wallet: string
+        }
+        Insert: {
+          calculated_at?: string
+          candidate_count?: number
+          closest_matches?: Json
+          domain_matches?: Json
+          engine_version?: number
+          expires_at?: string
+          inverse_matches?: Json
+          last_error?: string | null
+          neutral_matches?: Json
+          opp_matches?: Json
+          scored_count?: number
+          tribe_matches?: Json
+          twin_matches?: Json
+          viewer_dna_version?: number
+          viewer_wallet: string
+        }
+        Update: {
+          calculated_at?: string
+          candidate_count?: number
+          closest_matches?: Json
+          domain_matches?: Json
+          engine_version?: number
+          expires_at?: string
+          inverse_matches?: Json
+          last_error?: string | null
+          neutral_matches?: Json
+          opp_matches?: Json
+          scored_count?: number
+          tribe_matches?: Json
+          twin_matches?: Json
+          viewer_dna_version?: number
+          viewer_wallet?: string
         }
         Relationships: []
       }
@@ -416,7 +827,15 @@ export type Database = {
           yes_cost?: number
           yes_shares?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "wallet_beliefs_last_event_fk"
+            columns: ["last_applied_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       wallet_denylist: {
         Row: {
@@ -463,60 +882,6 @@ export type Database = {
         }
         Relationships: []
       }
-      viewer_dna_cache: {
-        Row: {
-          calculated_at: string
-          candidate_count: number
-          closest_matches: Json
-          domain_matches: Json
-          engine_version: number
-          expires_at: string
-          inverse_matches: Json
-          last_error: string | null
-          neutral_matches: Json
-          opp_matches: Json
-          scored_count: number
-          tribe_matches: Json
-          twin_matches: Json
-          viewer_dna_version: number
-          viewer_wallet: string
-        }
-        Insert: {
-          calculated_at?: string
-          candidate_count?: number
-          closest_matches?: Json
-          domain_matches?: Json
-          engine_version?: number
-          expires_at?: string
-          inverse_matches?: Json
-          last_error?: string | null
-          neutral_matches?: Json
-          opp_matches?: Json
-          scored_count?: number
-          tribe_matches?: Json
-          twin_matches?: Json
-          viewer_dna_version?: number
-          viewer_wallet: string
-        }
-        Update: {
-          calculated_at?: string
-          candidate_count?: number
-          closest_matches?: Json
-          domain_matches?: Json
-          engine_version?: number
-          expires_at?: string
-          inverse_matches?: Json
-          last_error?: string | null
-          neutral_matches?: Json
-          opp_matches?: Json
-          scored_count?: number
-          tribe_matches?: Json
-          twin_matches?: Json
-          viewer_dna_version?: number
-          viewer_wallet?: string
-        }
-        Relationships: []
-      }
       wallet_match_version: {
         Row: {
           updated_at: string
@@ -542,54 +907,60 @@ export type Database = {
     Functions: {
       apply_position_events: {
         Args: {
-          p_wallet: string
-          p_market: number
-          p_expected_version: number
-          p_state: Json
-          p_cursor: Json
           p_applied_count: number
+          p_cursor: Json
+          p_expected_version: number
+          p_market: number
+          p_state: Json
           p_state_hash: string
+          p_wallet: string
         }
         Returns: Json
       }
       claim_market_refresh: {
         Args: { p_limit: number }
         Returns: {
-          market_id: number
           activity_dirty: boolean
+          market_id: number
           positions_dirty: boolean
           pov_dirty: boolean
           requested_at: string
         }[]
       }
-      enqueue_market_refresh: { Args: { p_market_ids: number[]; p_kind: string }; Returns: number }
-      find_match_candidates: {
-        Args: { p_viewer: string; p_min_shared?: number; p_max_candidates?: number }
-        Returns: {
-          wallet: string
-          shared_markets: number
-          same_side: number
-          opposite_side: number
-          weighted_evidence: number
-          last_shared_activity_at: string | null
-        }[]
+      enqueue_market_refresh: {
+        Args: { p_kind: string; p_market_ids: number[] }
+        Returns: number
       }
       eth_usd_calibration: { Args: never; Returns: number }
       events_health: { Args: never; Returns: Json }
-      mark_positions_dirty: { Args: { p_pairs: Json; p_reason: string }; Returns: number }
-      request_viewer_match_refresh: { Args: { p_wallet: string }; Returns: undefined }
-      market_event_windows: { Args: { p_market: number; p_now: string }; Returns: Json }
-      market_position_aggregates: { Args: { p_market: number; p_now: string }; Returns: Json }
-      market_transition_windows: { Args: { p_market: number; p_now: string }; Returns: Json }
+      find_match_candidates: {
+        Args: {
+          p_max_candidates?: number
+          p_min_shared?: number
+          p_viewer: string
+        }
+        Returns: {
+          last_shared_activity_at: string
+          opposite_side: number
+          same_side: number
+          shared_markets: number
+          wallet: string
+          weighted_evidence: number
+        }[]
+      }
       ingest_chain_chunk: {
         Args: {
+          p_chain_id: number
+          p_end: number
           p_events: Json
           p_present_keys: Json
-          p_chain_id: number
           p_start: number
-          p_end: number
         }
         Returns: Json
+      }
+      mark_positions_dirty: {
+        Args: { p_pairs: Json; p_reason: string }
+        Returns: number
       }
       market_change_window: {
         Args: { p_ids: number[]; p_since: string }
@@ -599,6 +970,18 @@ export type Database = {
           onchain_id: number
           since_at: string
         }[]
+      }
+      market_event_windows: {
+        Args: { p_market: number; p_now: string }
+        Returns: Json
+      }
+      market_position_aggregates: {
+        Args: { p_market: number; p_now: string }
+        Returns: Json
+      }
+      market_transition_windows: {
+        Args: { p_market: number; p_now: string }
+        Returns: Json
       }
       market_volume_window: {
         Args: { p_ids: number[]; p_since: string }
@@ -619,17 +1002,21 @@ export type Database = {
       }
       rebuild_position: {
         Args: {
-          p_wallet: string
+          p_applied_count: number
+          p_cursor: Json
+          p_empty: boolean
           p_market: number
           p_state: Json
-          p_cursor: Json
-          p_applied_count: number
           p_state_hash: string
-          p_empty: boolean
+          p_wallet: string
         }
         Returns: Json
       }
       recompute_price_changes: { Args: never; Returns: undefined }
+      request_viewer_match_refresh: {
+        Args: { p_wallet: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
