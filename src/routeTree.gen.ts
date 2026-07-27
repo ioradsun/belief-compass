@@ -18,6 +18,8 @@ import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/publ
 import { Route as ApiPublicJobsChainPollerRouteImport } from './routes/api/public/jobs/chain-poller'
 import { Route as ApiPublicJobsDnaMatcherRouteImport } from './routes/api/public/jobs/dna-matcher'
 import { Route as ApiPublicJobsMatchWorkerRouteImport } from './routes/api/public/jobs/match-worker'
+import { Route as ApiPublicJobsPositionRebuilderRouteImport } from './routes/api/public/jobs/position-rebuilder'
+import { Route as ApiPublicJobsPositionReconcileRouteImport } from './routes/api/public/jobs/position-reconcile'
 import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
 
 const IndexRoute = IndexRouteImport.update({
@@ -68,6 +70,18 @@ const ApiPublicJobsMatchWorkerRoute =
     path: '/api/public/jobs/match-worker',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicJobsPositionRebuilderRoute =
+  ApiPublicJobsPositionRebuilderRouteImport.update({
+    id: '/api/public/jobs/position-rebuilder',
+    path: '/api/public/jobs/position-rebuilder',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicJobsPositionReconcileRoute =
+  ApiPublicJobsPositionReconcileRouteImport.update({
+    id: '/api/public/jobs/position-reconcile',
+    path: '/api/public/jobs/position-reconcile',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicJobsPovPollerRoute = ApiPublicJobsPovPollerRouteImport.update({
   id: '/api/public/jobs/pov-poller',
   path: '/api/public/jobs/pov-poller',
@@ -84,6 +98,8 @@ export interface FileRoutesByFullPath {
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
   '/api/public/jobs/dna-matcher': typeof ApiPublicJobsDnaMatcherRoute
   '/api/public/jobs/match-worker': typeof ApiPublicJobsMatchWorkerRoute
+  '/api/public/jobs/position-rebuilder': typeof ApiPublicJobsPositionRebuilderRoute
+  '/api/public/jobs/position-reconcile': typeof ApiPublicJobsPositionReconcileRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
 }
 export interface FileRoutesByTo {
@@ -96,6 +112,8 @@ export interface FileRoutesByTo {
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
   '/api/public/jobs/dna-matcher': typeof ApiPublicJobsDnaMatcherRoute
   '/api/public/jobs/match-worker': typeof ApiPublicJobsMatchWorkerRoute
+  '/api/public/jobs/position-rebuilder': typeof ApiPublicJobsPositionRebuilderRoute
+  '/api/public/jobs/position-reconcile': typeof ApiPublicJobsPositionReconcileRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
 }
 export interface FileRoutesById {
@@ -109,6 +127,8 @@ export interface FileRoutesById {
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
   '/api/public/jobs/dna-matcher': typeof ApiPublicJobsDnaMatcherRoute
   '/api/public/jobs/match-worker': typeof ApiPublicJobsMatchWorkerRoute
+  '/api/public/jobs/position-rebuilder': typeof ApiPublicJobsPositionRebuilderRoute
+  '/api/public/jobs/position-reconcile': typeof ApiPublicJobsPositionReconcileRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
 }
 export interface FileRouteTypes {
@@ -123,6 +143,8 @@ export interface FileRouteTypes {
     | '/api/public/jobs/chain-poller'
     | '/api/public/jobs/dna-matcher'
     | '/api/public/jobs/match-worker'
+    | '/api/public/jobs/position-rebuilder'
+    | '/api/public/jobs/position-reconcile'
     | '/api/public/jobs/pov-poller'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -135,6 +157,8 @@ export interface FileRouteTypes {
     | '/api/public/jobs/chain-poller'
     | '/api/public/jobs/dna-matcher'
     | '/api/public/jobs/match-worker'
+    | '/api/public/jobs/position-rebuilder'
+    | '/api/public/jobs/position-reconcile'
     | '/api/public/jobs/pov-poller'
   id:
     | '__root__'
@@ -147,6 +171,8 @@ export interface FileRouteTypes {
     | '/api/public/jobs/chain-poller'
     | '/api/public/jobs/dna-matcher'
     | '/api/public/jobs/match-worker'
+    | '/api/public/jobs/position-rebuilder'
+    | '/api/public/jobs/position-reconcile'
     | '/api/public/jobs/pov-poller'
   fileRoutesById: FileRoutesById
 }
@@ -160,6 +186,8 @@ export interface RootRouteChildren {
   ApiPublicJobsChainPollerRoute: typeof ApiPublicJobsChainPollerRoute
   ApiPublicJobsDnaMatcherRoute: typeof ApiPublicJobsDnaMatcherRoute
   ApiPublicJobsMatchWorkerRoute: typeof ApiPublicJobsMatchWorkerRoute
+  ApiPublicJobsPositionRebuilderRoute: typeof ApiPublicJobsPositionRebuilderRoute
+  ApiPublicJobsPositionReconcileRoute: typeof ApiPublicJobsPositionReconcileRoute
   ApiPublicJobsPovPollerRoute: typeof ApiPublicJobsPovPollerRoute
 }
 
@@ -228,6 +256,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicJobsMatchWorkerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/jobs/position-rebuilder': {
+      id: '/api/public/jobs/position-rebuilder'
+      path: '/api/public/jobs/position-rebuilder'
+      fullPath: '/api/public/jobs/position-rebuilder'
+      preLoaderRoute: typeof ApiPublicJobsPositionRebuilderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/jobs/position-reconcile': {
+      id: '/api/public/jobs/position-reconcile'
+      path: '/api/public/jobs/position-reconcile'
+      fullPath: '/api/public/jobs/position-reconcile'
+      preLoaderRoute: typeof ApiPublicJobsPositionReconcileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/jobs/pov-poller': {
       id: '/api/public/jobs/pov-poller'
       path: '/api/public/jobs/pov-poller'
@@ -248,8 +290,20 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicJobsChainPollerRoute: ApiPublicJobsChainPollerRoute,
   ApiPublicJobsDnaMatcherRoute: ApiPublicJobsDnaMatcherRoute,
   ApiPublicJobsMatchWorkerRoute: ApiPublicJobsMatchWorkerRoute,
+  ApiPublicJobsPositionRebuilderRoute: ApiPublicJobsPositionRebuilderRoute,
+  ApiPublicJobsPositionReconcileRoute: ApiPublicJobsPositionReconcileRoute,
   ApiPublicJobsPovPollerRoute: ApiPublicJobsPovPollerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

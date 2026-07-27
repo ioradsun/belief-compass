@@ -390,51 +390,87 @@ export type Database = {
       }
       wallet_beliefs: {
         Row: {
+          applied_trade_count: number
           conviction: number
           days_held: number
           directional_since: string | null
           expressed_side: string
           first_backed_at: string | null
+          last_applied_block_number: number | null
+          last_applied_event_id: string | null
+          last_applied_log_index: number | null
+          last_applied_source_key: string | null
+          last_evaluated_at: string | null
           last_trade_at: string | null
+          needs_rebuild: boolean
           no_cost: number
           no_shares: number
           onchain_id: number
+          position_version: number
+          rebuild_reason: string | null
+          rebuild_requested_at: string | null
+          rebuilt_at: string | null
           stance: number | null
           stance_side: string | null
+          state_hash: string | null
           updated_at: string
           wallet: string
           yes_cost: number
           yes_shares: number
         }
         Insert: {
+          applied_trade_count?: number
           conviction?: number
           days_held?: number
           directional_since?: string | null
           expressed_side?: string
           first_backed_at?: string | null
+          last_applied_block_number?: number | null
+          last_applied_event_id?: string | null
+          last_applied_log_index?: number | null
+          last_applied_source_key?: string | null
+          last_evaluated_at?: string | null
           last_trade_at?: string | null
+          needs_rebuild?: boolean
           no_cost?: number
           no_shares?: number
           onchain_id: number
+          position_version?: number
+          rebuild_reason?: string | null
+          rebuild_requested_at?: string | null
+          rebuilt_at?: string | null
           stance?: number | null
           stance_side?: string | null
+          state_hash?: string | null
           updated_at?: string
           wallet: string
           yes_cost?: number
           yes_shares?: number
         }
         Update: {
+          applied_trade_count?: number
           conviction?: number
           days_held?: number
           directional_since?: string | null
           expressed_side?: string
           first_backed_at?: string | null
+          last_applied_block_number?: number | null
+          last_applied_event_id?: string | null
+          last_applied_log_index?: number | null
+          last_applied_source_key?: string | null
+          last_evaluated_at?: string | null
           last_trade_at?: string | null
+          needs_rebuild?: boolean
           no_cost?: number
           no_shares?: number
           onchain_id?: number
+          position_version?: number
+          rebuild_reason?: string | null
+          rebuild_requested_at?: string | null
+          rebuilt_at?: string | null
           stance?: number | null
           stance_side?: string | null
+          state_hash?: string | null
           updated_at?: string
           wallet?: string
           yes_cost?: number
@@ -525,8 +561,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_position_events: {
+        Args: {
+          p_wallet: string
+          p_market: number
+          p_expected_version: number
+          p_state: Json
+          p_cursor: Json
+          p_applied_count: number
+          p_state_hash: string
+        }
+        Returns: Json
+      }
       eth_usd_calibration: { Args: never; Returns: number }
       events_health: { Args: never; Returns: Json }
+      mark_positions_dirty: { Args: { p_pairs: Json; p_reason: string }; Returns: number }
       ingest_chain_chunk: {
         Args: {
           p_events: Json
@@ -562,6 +611,18 @@ export type Database = {
           onchain_id: number
           pct: number
         }[]
+      }
+      rebuild_position: {
+        Args: {
+          p_wallet: string
+          p_market: number
+          p_state: Json
+          p_cursor: Json
+          p_applied_count: number
+          p_state_hash: string
+          p_empty: boolean
+        }
+        Returns: Json
       }
       recompute_price_changes: { Args: never; Returns: undefined }
     }

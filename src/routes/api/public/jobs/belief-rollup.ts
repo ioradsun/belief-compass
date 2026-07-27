@@ -1,9 +1,14 @@
 /**
- * Job C — belief rollup. Bearer-guarded.
- * Reads current POV prices from market_state, runs evaluate() over affected
- * wallet_beliefs rows, updates stance/stance_side/conviction/days_held.
- * Then GROUP BY onchain_id refreshes market_state believer counts, People%,
- * divergence, velocity, new_believers_1h. Never emits feed_events itself.
+ * Job C — position EVALUATOR (Phase 3). Bearer-guarded.
+ *
+ * This job owns ONLY price- and time-driven evaluated state. It reads current POV
+ * prices from market_state, runs the pure evaluate() over affected wallet_beliefs
+ * rows, and updates stance/stance_side/conviction/days_held (evaluated fields) —
+ * plus the GROUP BY onchain_id market_state believer counts, People%, divergence,
+ * velocity, new_believers_1h. It NEVER reloads trade history, never calls
+ * applyTrade(), and never advances the position cursor or trade-driven reducer
+ * fields — those are owned incrementally by apply-events.server.ts (via the chain
+ * poller) and repaired by the targeted rebuilder. It never emits feed_events.
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.server";
