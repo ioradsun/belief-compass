@@ -108,13 +108,14 @@ export const Route = createFileRoute("/api/public/jobs/belief-rollup")({
           const divergence = peoplePct != null && p.moneyYesPct != null
             ? Math.abs(p.moneyYesPct - peoplePct) : null;
 
-          // Velocity: trades in last 5m by canonical EVENT time. A gte on
-          // occurred_at excludes rows with a NULL block time (not backfilled yet),
-          // so freshly-imported history never counts as recent activity.
+          // Velocity: canonical trade EVENTS in the last 5m by event time. Reads
+          // the events log (not the trades projection); is_canonical excludes
+          // reorg-orphaned trades. Phase 6.5: trades is no longer read here.
           const t5m = new Date(Date.now() - 5 * 60_000).toISOString();
-          const { count: velocity } = await sb.from("trades")
+          const { count: velocity } = await sb.from("events")
             .select("*", { count: "exact", head: true })
-            .eq("onchain_id", mid).gte("occurred_at", t5m);
+            .eq("is_canonical", true).eq("kind", "trade")
+            .eq("market_id", String(mid)).gte("occurred_at", t5m);
 
           // New believers in last hour: count of canonical BUY trade events by
           // event time. Reads the events log (feed_events no longer carries
