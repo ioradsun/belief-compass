@@ -742,8 +742,9 @@ export function ConvictionFeed({ wallet }: { wallet?: string }) {
 
       {viewer && data && !data.hasPeople && (
         <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-          No People or Opp for this wallet yet — it needs a few shared markets. Showing the market
-          at large.
+          {ensured?.matchesPending
+            ? "Finding who thinks like you — your matches compute in the background and appear here in a moment. Showing the market at large meanwhile."
+            : "No People or Opp for this wallet yet — it needs a few shared markets. Showing the market at large."}
         </div>
       )}
 
