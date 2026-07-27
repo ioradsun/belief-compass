@@ -342,11 +342,39 @@ export const getWallet = createServerFn({ method: "GET" })
         });
     }
 
+
+    // Live prices for every held market, so the portfolio panel does not depend
+    // on the market being present in the (50-row) feed page.
+    const stateById = new Map<
+      number,
+      {
+        yes_price_usd: number | null;
+        no_price_usd: number | null;
+        chg_24h_yes: number | null;
+        chg_24h_no: number | null;
+      }
+    >();
+    if (ids.length) {
+      const { data: st } = await sb
+        .from("market_state")
+        .select("onchain_id, yes_price_usd, no_price_usd, chg_24h_yes, chg_24h_no")
+        .in("onchain_id", ids);
+      for (const s of st ?? [])
+        stateById.set(Number(s.onchain_id), {
+          yes_price_usd: s.yes_price_usd == null ? null : Number(s.yes_price_usd),
+          no_price_usd: s.no_price_usd == null ? null : Number(s.no_price_usd),
+          chg_24h_yes: s.chg_24h_yes == null ? null : Number(s.chg_24h_yes),
+          chg_24h_no: s.chg_24h_no == null ? null : Number(s.chg_24h_no),
+        });
+    }
+
     const positions = (rows ?? []).map((r) => ({
       ...r,
       markets: metaById.get(Number(r.onchain_id)) ?? null,
+      state: stateById.get(Number(r.onchain_id)) ?? null,
     }));
     return { wallet, positions };
+
   });
 
 

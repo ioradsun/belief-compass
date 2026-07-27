@@ -10,6 +10,7 @@ import {
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { ConvictionFeed } from "@/components/ConvictionFeed";
 import { MyConvictions } from "@/components/MyConvictions";
+import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 
 
 const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
@@ -234,7 +235,8 @@ function Job({
 }
 
 function Feed() {
-  const { wallet } = Route.useSearch();
+  const { wallet: searchWallet } = Route.useSearch();
+  const wallet = useEffectiveWallet(searchWallet);
   const [win, setWin] = useState<VolumeWindow>("24h");
   const { data } = useSuspenseQuery(feedQO(wallet, win));
   const rows = data.data ?? [];
