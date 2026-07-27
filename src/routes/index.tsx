@@ -4,7 +4,7 @@ import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query"
 import { listFeed, listMarketPulses, type VolumeWindow } from "@/lib/markets.functions";
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
-import { StoryDeck } from "@/components/StoryDeck";
+import { MarketDeck } from "@/components/MarketDeck";
 import { PersonProfile } from "@/components/PersonProfile";
 import { DnaOverview } from "@/components/DnaOverview";
 // Phase 5: the SERVER owns opportunity classification + score. The client only
@@ -185,6 +185,20 @@ function Feed() {
   const { data: pulseData } = useQuery(pulsesQO(ids));
   const pulses = pulseData?.pulses ?? {};
 
+  // Single-market deck: the center shows exactly one market. ?m (set by a
+  // position, a Live row, search, or Next) picks it; otherwise the top of the
+  // queue. SKIP/Next advance through the current filtered order.
+  const marketRows = rows as unknown as MarketRow[];
+  const currentIdx = Math.max(
+    0,
+    marketRows.findIndex((r) => Number(r.onchain_id) === selectedMarket),
+  );
+  const currentRow = marketRows[currentIdx] ?? marketRows[0];
+  const nextMarket = () => {
+    if (marketRows.length)
+      selectMarket(Number(marketRows[(currentIdx + 1) % marketRows.length].onchain_id));
+  };
+
   // On mobile only the active tab's column is mounted-visible; from lg up all
   // three columns are always shown side by side.
   const show = (t: MobileTab) => (tab === t ? "flex" : "hidden");
@@ -292,39 +306,26 @@ function Feed() {
               cycle completes.
             </div>
           ) : (
-            <>
-              <div className="space-y-4">
-                {/* Lens = intent. Changing it re-ranks the whole feed by a new question. */}
-                <div className="rounded-lg border border-border px-3 py-3 lg:px-4">
-                  {lensPicker}
-                </div>
-
-                {/* Mobile: timeframe first, copy tucked underneath. */}
-                <div className="rounded-lg border border-border px-3 py-3 lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3 lg:px-4">
-                  {windowPicker}
-                  <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground lg:order-first lg:mt-0 lg:max-w-[60%] lg:text-xs">
-                    One market at a time — it advances on its own. Swipe, tap prev/next, or use the
-                    arrow keys; hovering or holding pauses the deck.
-                  </p>
-                </div>
-
-                <StoryDeck
-                  rows={rows as unknown as MarketRow[]}
-                  pulses={pulses}
-                  ethUsd={data.ethUsd ?? 0}
-                  winLabel={winLabel}
-                  tribe={data.tribe ?? null}
-                  opp={data.opp ?? null}
-                  reasonByMarket={reasonByMarket}
-                  selectedId={selectedMarket}
-                />
+            <div className="flex h-full min-h-0 flex-col gap-3">
+              {/* Discovery: filter + queue progress. */}
+              <div className="rounded-lg border border-border px-3 py-3 lg:px-4">{lensPicker}</div>
+              <div className="flex items-center justify-between px-1">
+                <span className="num text-[11px] text-[var(--text-muted)]">
+                  {currentIdx + 1} / {marketRows.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={nextMarket}
+                  className="rounded-md border border-border px-3 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text)]"
+                >
+                  Next →
+                </button>
               </div>
 
-              <p className="pb-2 text-xs text-muted-foreground">
-                Positions are trade-derived estimates; token transfers are not yet indexed.
-                "Wallets" counts directional believers, not people.
-              </p>
-            </>
+              {currentRow && (
+                <MarketDeck row={currentRow} ethUsd={data.ethUsd ?? 0} onSkip={nextMarket} />
+              )}
+            </div>
           )}
         </div>
       </main>
