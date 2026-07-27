@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { getWallet } from "@/lib/markets.functions";
 import { getMatchesForWallet } from "@/lib/match.functions";
 import { getCirclesForWallet, type CircleSummary } from "@/lib/circles.functions";
 import { Fingerprint } from "@/components/Fingerprint";
+import { LinkWalletCard } from "@/components/LinkWalletCard";
 
 const walletQO = (w: string) => queryOptions({
   queryKey: ["wallet", w],
@@ -41,44 +41,6 @@ export const Route = createFileRoute("/wallet/$addr")({
 
 function short(w: string) { return `${w.slice(0, 6)}…${w.slice(-4)}`; }
 
-/** Shown when the connected address has no indexed trades (common with smart wallets). */
-function NoHistory() {
-  const navigate = useNavigate();
-  const [value, setValue] = useState("");
-  const valid = /^0x[a-fA-F0-9]{40}$/.test(value.trim());
-  return (
-    <div className="mt-8 rounded-lg border border-dashed border-border p-6">
-      <div className="text-sm font-medium">No trading history for this address</div>
-      <p className="mt-2 max-w-prose text-sm text-muted-foreground">
-        Smart wallets (Coinbase Smart Wallet, passkey accounts) sign in with a different address
-        than the one you trade with on pov.co. Paste the wallet you trade with to see its
-        Conviction DNA.
-      </p>
-      <form
-        className="mt-4 flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (valid) void navigate({ to: "/wallet/$addr", params: { addr: value.trim().toLowerCase() } });
-        }}
-      >
-        <input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="0x…"
-          className="w-full max-w-sm rounded-md border border-border bg-background px-3 py-1.5 font-mono text-xs"
-        />
-        <button
-          type="submit"
-          disabled={!valid}
-          className="rounded-md border border-border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-        >
-          View
-        </button>
-      </form>
-    </div>
-  );
-}
-
 function WalletPage() {
   const { addr } = Route.useParams();
   const w = addr.toLowerCase();
@@ -96,7 +58,7 @@ function WalletPage() {
         <a href="/" className="text-sm text-muted-foreground hover:underline">← Back</a>
         <h1 className="mt-4 font-mono text-lg">{short(w)}</h1>
 
-        {empty && <NoHistory />}
+        {empty && <LinkWalletCard />}
 
 
         {/* Fingerprint + Tribe summary */}
