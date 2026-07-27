@@ -115,7 +115,7 @@ export function MyConvictions({
     queryKey: ["my-convictions", wallet ?? null, win],
     queryFn: async () => await getWallet({ data: { wallet: wallet as string, window: win } }),
     enabled: !!wallet,
-    refetchInterval: 30_000,
+    refetchInterval: 12_000,
   });
 
   const byId = new Map<number, MarketRow>();
