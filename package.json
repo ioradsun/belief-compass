@@ -17,7 +17,8 @@
     "check:positions": "tsx scripts/check-position-integrity.ts",
     "backfill:position-cursors": "tsx scripts/backfill-position-cursors.ts",
     "check:market-state": "tsx scripts/check-market-state.ts",
-    "check:opportunities": "tsx scripts/check-opportunities.ts"
+    "check:opportunities": "tsx scripts/check-opportunities.ts",
+    "check:ownership": "tsx scripts/check-ownership.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
