@@ -61,6 +61,10 @@ const plural = (n: number, u: string) => `${n} ${u}${n === 1 ? "" : "s"}`;
 /** Factual text for a row — real numbers only, no motive attribution. */
 export function liveRowText(r: Omit<LiveRow, "text">): string {
   switch (r.kind) {
+    case "round_trip": {
+      const amt = r.amountUsd && r.amountUsd > 0 ? ` ${fmtUsd(r.amountUsd)}` : "";
+      return `A wallet round-tripped${amt} on ${r.side ?? ""}`.trim();
+    }
     case "trade_burst": {
       const verb = r.side && r.payload.action === "SELL" ? "reduced" : "backed";
       const who = plural(r.walletCount ?? 1, "wallet");
@@ -80,17 +84,64 @@ export function liveRowText(r: Omit<LiveRow, "text">): string {
   }
 }
 
+const ROUND_TRIP_WINDOW_MS = 15 * 60_000;
+const ROUND_TRIP_TOLERANCE = 0.02; // 2% size difference still counts as a wash
+
+/**
+ * A wallet that buys and sells the same size on the same market+side within a
+ * few minutes is one round-trip, not two stories. Drop the exit event and mark
+ * the entry so the tape shows a single honest row instead of a mirrored pair.
+ */
+function collapseRoundTrips(events: LiveEventInput[]): {
+  kept: LiveEventInput[];
+  roundTrip: Set<string>;
+} {
+  const drop = new Set<string>();
+  const roundTrip = new Set<string>();
+  for (let a = 0; a < events.length; a += 1) {
+    const sell = events[a];
+    if (sell.kind !== "trade" || sell.action !== "SELL" || !sell.wallet) continue;
+    if (drop.has(sell.source_key)) continue;
+    for (let b = a + 1; b < events.length; b += 1) {
+      const buy = events[b];
+      if (
+        new Date(sell.occurred_at).getTime() - new Date(buy.occurred_at).getTime() >
+        ROUND_TRIP_WINDOW_MS
+      )
+        break;
+      if (
+        buy.kind !== "trade" ||
+        buy.action !== "BUY" ||
+        buy.wallet !== sell.wallet ||
+        buy.market_id !== sell.market_id ||
+        buy.side !== sell.side ||
+        roundTrip.has(buy.source_key)
+      )
+        continue;
+      const base = Math.max(buy.amount_eth, sell.amount_eth, Number.EPSILON);
+      if (Math.abs(buy.amount_eth - sell.amount_eth) / base > ROUND_TRIP_TOLERANCE) continue;
+      drop.add(sell.source_key);
+      roundTrip.add(buy.source_key);
+      break;
+    }
+  }
+  return { kept: events.filter((e) => !drop.has(e.source_key)), roundTrip };
+}
+
+
 const LARGE_TRADE_USD = 1000;
 
 /**
  * Collapse canonical events (in reverse-chronological order) into Live rows.
  * `ethUsd` converts ETH amounts to USD for the copy; grouping is deterministic.
  */
-export function groupLiveRows(events: LiveEventInput[], ethUsd: number): LiveRow[] {
+export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[] {
+  const { kept: events, roundTrip } = collapseRoundTrips(input);
   const rows: LiveRow[] = [];
   let i = 0;
   while (i < events.length) {
     const e = events[i];
+
 
     // Non-trade structured events pass through as their own rows (never grouped).
     if (e.kind !== "trade") {
@@ -121,6 +172,8 @@ export function groupLiveRows(events: LiveEventInput[], ethUsd: number): LiveRow
     }
 
     // Trade burst: consecutive trades, same market + side + action, within window.
+    // A round-trip entry always stands alone so its story stays honest.
+    const isRoundTrip = roundTrip.has(e.source_key);
     const wallets = new Set<string>();
     let trades = 0;
     let amountEth = 0;
@@ -133,6 +186,7 @@ export function groupLiveRows(events: LiveEventInput[], ethUsd: number): LiveRow
       events[j].market_id === e.market_id &&
       events[j].side === e.side &&
       events[j].action === e.action &&
+      !(j > i && (isRoundTrip || roundTrip.has(events[j].source_key))) &&
       new Date(latest).getTime() - new Date(events[j].occurred_at).getTime() <= GROUP_WINDOW_MS
     ) {
       const ev = events[j];
@@ -143,12 +197,13 @@ export function groupLiveRows(events: LiveEventInput[], ethUsd: number): LiveRow
       j += 1;
     }
     const amountUsd = amountEth * ethUsd;
-    const isLargeSingle = trades === 1 && amountUsd >= LARGE_TRADE_USD;
+    const isLargeSingle = !isRoundTrip && trades === 1 && amountUsd >= LARGE_TRADE_USD;
     const base: Omit<LiveRow, "text"> = {
       id: e.source_key,
-      kind: isLargeSingle ? "large_trade" : "trade_burst",
+      kind: isRoundTrip ? "round_trip" : isLargeSingle ? "large_trade" : "trade_burst",
       marketId: e.market_id,
       marketTitle: e.market_title ?? `Market #${e.market_id}`,
+
       occurredAt: latest,
       startedAt: earliest,
       side: e.side,

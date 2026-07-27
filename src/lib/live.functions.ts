@@ -146,6 +146,12 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           relationship,
         };
         r.face = face;
+        if (r.kind === "round_trip") {
+          // In and out at the same size — one honest line, not a mirrored pair.
+          const amt = r.amountUsd && r.amountUsd > 0 ? ` $${Math.round(r.amountUsd)}` : "";
+          r.text = `${face.name} round-tripped${amt} on ${r.side ?? ""}`.trim();
+          continue;
+        }
         r.text = composeLiveStory({
           actor: { name: face.name, relationship },
           side: r.side,
@@ -154,6 +160,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           amountUsd: r.amountUsd,
           market,
         }).text;
+
       } else {
         // Multi-wallet burst — the crowd.
         r.text = composeLiveStory({
