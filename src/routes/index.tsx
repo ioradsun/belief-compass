@@ -330,7 +330,7 @@ function Feed() {
         </header>
 
         <div className="space-y-5 lg:space-y-6">
-          <StatusPanel />
+
 
           {rows.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
