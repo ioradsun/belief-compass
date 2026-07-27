@@ -64,7 +64,7 @@ function ago(iso: string) {
 function personName(p: Pulse) {
   return p.name || shortWallet(p.wallet);
 }
-function pulseLine(p: Pulse, ethUsd: number) {
+export function pulseLine(p: Pulse, ethUsd: number) {
   const usd = ethUsd > 0 ? p.eth * ethUsd : 0;
   const size = usd > 0 ? fmtUsd(usd) : `${p.eth.toFixed(3)} ETH`;
   const verb = p.type === "reduced" ? "cut" : "backed";
@@ -72,7 +72,7 @@ function pulseLine(p: Pulse, ethUsd: number) {
 }
 
 /** Small face for a trader: real POV picture, else initials on a stable hue. */
-function Face({ p, size = 18 }: { p: Pulse; size?: number }) {
+export function Face({ p, size = 18 }: { p: Pulse; size?: number }) {
   const name = personName(p);
   if (p.pfpUrl)
     return (
