@@ -56,7 +56,7 @@ const feedQO = (wallet?: string, window: VolumeWindow = "24h") =>
     queryKey: ["feed", wallet ?? null, window],
     queryFn: async () => await listFeed({ data: { wallet, window } }),
     // Prices, capital and volume re-poll so the cards move on their own.
-    refetchInterval: 20_000,
+    refetchInterval: 8_000,
   });
 
 const pulsesQO = (ids: number[]) =>
@@ -64,7 +64,7 @@ const pulsesQO = (ids: number[]) =>
     queryKey: ["market-pulses", ids.join(",")],
     queryFn: async () => await listMarketPulses({ data: { ids: ids.slice(0, 120) } }),
     enabled: ids.length > 0,
-    refetchInterval: 20_000,
+    refetchInterval: 8_000,
   });
 
 export const Route = createFileRoute("/")({

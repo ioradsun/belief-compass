@@ -22,7 +22,7 @@ export function LiveTape({ onSelect }: { onSelect: (marketId: number) => void })
     queryKey: ["live-tape"],
     queryFn: () => listLiveEvents({ data: {} }),
     // New rows prepend; refetch keeps the tape fresh without new infra.
-    refetchInterval: 15_000,
+    refetchInterval: 6_000,
   });
   const rows = data?.rows ?? [];
 
