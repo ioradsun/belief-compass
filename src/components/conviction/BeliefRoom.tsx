@@ -52,6 +52,9 @@ export function BeliefRoom({
           {belief.data?.relationshipRead ? (
             <p className="mt-2 text-sm text-rel">{belief.data.relationshipRead}</p>
           ) : null}
+          {belief.data?.story ? (
+            <p className="mt-2 text-sm text-text-secondary">{belief.data.story}</p>
+          ) : null}
         </div>
       </header>
 
@@ -98,6 +101,14 @@ export function BeliefRoom({
               <p className="mt-1 font-num text-fine text-text-secondary">
                 {belief.data.history.newBelievers} new believers in the last hour
               </p>
+              {beliefId ? (
+                <a
+                  href={`/market/${beliefId}`}
+                  className="mt-3 inline-block text-fine text-text-secondary underline underline-offset-2 hover:text-text"
+                >
+                  Full market &amp; top believers ↗
+                </a>
+              ) : null}
             </section>
           </>
         )}

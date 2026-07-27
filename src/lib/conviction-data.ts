@@ -15,6 +15,7 @@ import {
   getRoomFeedFn,
   getViewerFn,
 } from "@/lib/conviction-contract.functions";
+import { ingestConvictionFn } from "@/lib/conviction-ingest.functions";
 import type { Belief, OnboardingBelief, Position, RoomStory, Viewer } from "@/lib/contract";
 
 /** Motion budget: 220–280ms. Price updates are coalesced into this window. */
@@ -63,6 +64,35 @@ export function useOnboardingBeliefs() {
 }
 
 /**
+ * On connect, seed the viewer's beliefs from POV positions (conviction for every
+ * user, immediately — no wait for the chain backfill), then refresh the viewer +
+ * positions so the UI reflects it. Runs once per address; matches (Tribe) fill
+ * in from the batch DNA matcher on its next cycle.
+ */
+export function useIngestOnConnect(address: string | null) {
+  const qc = useQueryClient();
+  const done = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!address || done.current === address) return;
+    done.current = address;
+    let cancelled = false;
+    void ingestConvictionFn({ data: { address } })
+      .then((res) => {
+        if (cancelled || !res || res.marketCount === 0) return;
+        qc.invalidateQueries({ queryKey: ["viewer", address] });
+        qc.invalidateQueries({ queryKey: ["positions", address] });
+      })
+      .catch(() => {
+        /* ingest is best-effort; the chain path still populates beliefs */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [address, qc]);
+}
+
+/**
  * Subscribe to the active belief and the viewer's positions. On any change —
  * including reconnect — we refetch and reconcile.
  */
@@ -85,7 +115,12 @@ export function useConvictionRealtime(beliefId: string | null, address: string |
     if (beliefId) {
       channel.on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "market_state", filter: `onchain_id=eq.${beliefId}` },
+        {
+          event: "*",
+          schema: "public",
+          table: "market_state",
+          filter: `onchain_id=eq.${beliefId}`,
+        },
         invalidate,
       );
       channel.on(

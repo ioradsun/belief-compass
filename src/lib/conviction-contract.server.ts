@@ -8,6 +8,8 @@
  */
 import { publicClient } from "@/lib/supabase-clients";
 import { resolveProfiles } from "@/lib/profiles.server";
+import { buildConvictionFeed } from "@/lib/feed.functions";
+import { composeCard } from "@/lib/feed-copy";
 import type {
   Belief,
   OnboardingBelief,
@@ -113,8 +115,10 @@ async function matchTable(viewer: string | null): Promise<Map<string, number>> {
   const { data } = await sb
     .from("wallet_matches")
     .select("matched_wallet, match_score, shared_markets, domain")
+    // Overall Tribe rows are written with domain = NULL by the batch matcher
+    // (dna-batch.server); per-domain Circle rows carry a domain. Overall only here.
     .eq("wallet", viewer)
-    .eq("domain", "overall")
+    .is("domain", null)
     .gte("shared_markets", MATCH_CONFIDENCE_MIN_SHARED)
     .order("match_score", { ascending: false })
     .limit(500);
@@ -178,7 +182,8 @@ export async function getPositions(address: string | null): Promise<Position[]> 
 
   return rows.map((r) => {
     const id = Number(r.onchain_id);
-    const side: SideKey = sideKey(r.expressed_side) ?? (Number(r.yes_shares) >= Number(r.no_shares) ? "y" : "n");
+    const side: SideKey =
+      sideKey(r.expressed_side) ?? (Number(r.yes_shares) >= Number(r.no_shares) ? "y" : "n");
     const shares = side === "y" ? Number(r.yes_shares ?? 0) : Number(r.no_shares ?? 0);
     const p = price.get(id);
     const value = shares * (side === "y" ? (p?.y ?? 0) : (p?.n ?? 0));
@@ -284,8 +289,12 @@ export async function getBelief(beliefId: string, address: string | null): Promi
   const peopleMap = await peopleFor([id], matches, qualified, viewerAddr);
   const all = peopleMap.get(id) ?? [];
 
-  const ySeries = sampleSeries((snaps ?? []).map((s) => Number(s.yes_price_usd ?? 0)).filter(Number.isFinite));
-  const nSeries = sampleSeries((snaps ?? []).map((s) => Number(s.no_price_usd ?? 0)).filter(Number.isFinite));
+  const ySeries = sampleSeries(
+    (snaps ?? []).map((s) => Number(s.yes_price_usd ?? 0)).filter(Number.isFinite),
+  );
+  const nSeries = sampleSeries(
+    (snaps ?? []).map((s) => Number(s.no_price_usd ?? 0)).filter(Number.isFinite),
+  );
 
   const yesPeople = qualified ? all.filter((p) => p.side === "y").slice(0, PEOPLE_PER_SIDE) : [];
   const noPeople = qualified ? all.filter((p) => p.side === "n").slice(0, PEOPLE_PER_SIDE) : [];
@@ -314,6 +323,33 @@ export async function getBelief(beliefId: string, address: string | null): Promi
   const by = Number(state?.believers_yes ?? 0);
   const bn = Number(state?.believers_no ?? 0);
 
+  // Belief-level narrative from the copy engine — the "why this matters" line
+  // (broad-vs-concentrated shape, money-vs-people tension, or the lead hook).
+  // Same engine the room feed uses; no authored quote is invented.
+  const beliefCopy = composeCard({
+    behavior: "flow",
+    actorName: null,
+    actorScale: "market",
+    actorRole: "market",
+    belief: (market.title as string) ?? `Belief #${id}`,
+    side: by >= bn ? "YES" : "NO",
+    capitalCommitted: null,
+    capitalWithdrawn: null,
+    backersTotal: by + bn,
+    believersYes: by,
+    believersNo: bn,
+    priceFell: Number(state?.chg_24h ?? 0) < 0,
+    priceChgPct: state?.chg_24h == null ? null : Number(state.chg_24h),
+    moneyYesPct: state?.money_yes_pct == null ? null : Number(state.money_yes_pct),
+    peopleYesPct: state?.people_yes_pct == null ? null : Number(state.people_yes_pct),
+    yesCapitalUsd: state?.yes_capital_usd == null ? null : Number(state.yes_capital_usd),
+    noCapitalUsd: state?.no_capital_usd == null ? null : Number(state.no_capital_usd),
+    convergence: false,
+    variantSeed: id,
+    isViewerHolding: false,
+  });
+  const story = beliefCopy.shape ?? beliefCopy.turn ?? beliefCopy.hook ?? null;
+
   return {
     id: String(id),
     category: (market.category as string) ?? "Uncategorised",
@@ -323,6 +359,7 @@ export async function getBelief(beliefId: string, address: string | null): Promi
     y: side("y"),
     n: side("n"),
     relationshipRead,
+    story,
     history: {
       // volume_24h_usd is stored in wei by the indexer; convert to USD here so
       // the client never does math.
@@ -340,59 +377,45 @@ export async function getBelief(beliefId: string, address: string | null): Promi
 /* ------------------------------ the room ------------------------------ */
 
 export async function getRoomFeed(address: string | null, limit = 24): Promise<RoomStory[]> {
-  const sb = publicClient();
-  const viewerAddr = norm(address);
-  const viewer = await getViewer(address);
-  const matches = await matchTable(viewer.profile === "qualified" ? viewerAddr : null);
+  // Sit on the conviction engine: it already folds events + state + beliefs +
+  // (viewer-relative) matches into ranked, sequenced cards with composed copy.
+  // We only map its FeedCard into the room's RoomStory — no storytelling here.
+  const { cards } = await buildConvictionFeed(norm(address));
 
-  const { data: events } = await sb
-    .from("feed_events")
-    .select("onchain_id, wallet, type, side, payload, occurred_at")
-    .order("occurred_at", { ascending: false })
-    .limit(limit * 3);
-
-  const rows = (events ?? []).slice(0, limit * 2);
-  if (rows.length === 0) return [];
-
-  const ids = [...new Set(rows.map((r) => Number(r.onchain_id)))];
-  const [{ data: markets }, profiles] = await Promise.all([
-    sb.from("markets").select("onchain_id, title").in("onchain_id", ids),
-    resolveProfiles(rows.map((r) => String(r.wallet ?? "")).filter(Boolean), 12),
-  ]);
-  const title = new Map((markets ?? []).map((m) => [Number(m.onchain_id), m.title as string]));
-
-  const stories: RoomStory[] = rows.map((r) => {
-    const w = norm(r.wallet) ?? "0x0";
-    const p = profiles.get(w);
-    const name = p?.displayName ?? alias(w);
-    const s = sideKey(r.side);
-    const sideLabel = s === "y" ? "YES" : s === "n" ? "NO" : "";
-    const payload = (r.payload ?? {}) as Record<string, unknown>;
-    const value = Number(payload.usd ?? payload.value_usd ?? 0);
-    const isTribe = matches.has(w);
-    const verb =
-      r.type === "exit" || r.type === "cut"
-        ? "stepped back from"
-        : r.type === "reversal" || r.type === "flip"
-          ? "changed side on"
-          : "stood behind";
+  return cards.slice(0, limit).map((c) => {
+    const bigMoney = c.wealth != null && c.wealth.usd >= 1000;
+    const marker: RoomStory["marker"] =
+      c.eventType === "tribe"
+        ? "tribe"
+        : c.eventType === "momentum" ||
+            c.eventType === "achievement" ||
+            c.eventType === "conflict" ||
+            bigMoney
+          ? "attention"
+          : "neutral";
+    const markerLabel =
+      c.eventType === "tribe"
+        ? "Tribe"
+        : c.eventType === "momentum"
+          ? "Momentum"
+          : c.eventType === "achievement"
+            ? "Milestone"
+            : c.eventType === "conflict"
+              ? "Split"
+              : marker === "attention"
+                ? "Money moving"
+                : "";
     return {
-      beliefId: String(r.onchain_id),
-      marker: isTribe ? "tribe" : value >= 1000 ? "attention" : "neutral",
-      markerLabel: isTribe ? "Tribe" : value >= 1000 ? "Attention" : "",
-      story: `${name} ${verb} ${sideLabel}`.trim(),
-      question: title.get(Number(r.onchain_id)) ?? `Belief #${r.onchain_id}`,
-      values: value > 0 ? usd(value) : "",
-      ago: ago(r.occurred_at as string),
+      beliefId: String(c.onchain_id),
+      marker,
+      markerLabel,
+      // The engine's composed hook IS the marketing copy — not a hand-rolled verb.
+      story: c.copy?.hook ?? c.story,
+      question: c.marketTitle,
+      values: c.wealth?.text ?? "",
+      ago: ago(c.occurredAt),
     };
   });
-
-  // Ranking is upstream: tribe first within recency, then everything else.
-  return stories
-    .map((s, i) => ({ s, i, w: s.marker === "tribe" ? 0 : s.marker === "attention" ? 1 : 2 }))
-    .sort((a, b) => a.w - b.w || a.i - b.i)
-    .slice(0, limit)
-    .map((x) => x.s);
 }
 
 /* ------------------------------ onboarding ------------------------------ */

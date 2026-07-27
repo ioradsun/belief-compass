@@ -5,7 +5,7 @@ import { BeliefRoom } from "./BeliefRoom";
 import { RoomPanel } from "./RoomPanel";
 import { SideDrawer } from "./SideDrawer";
 import { ConvictionWalletProvider, WalletBridge, useWallet } from "./WalletProvider";
-import { useConvictionRealtime, useViewer } from "@/lib/conviction-data";
+import { useConvictionRealtime, useIngestOnConnect, useViewer } from "@/lib/conviction-data";
 
 /**
  * AppShell — one application, no page navigation.
@@ -30,6 +30,7 @@ function Shell() {
   const close = useCallback(() => setDrawerOpen(false), []);
 
   const viewer = useViewer(address);
+  useIngestOnConnect(address);
   useConvictionRealtime(beliefId, address);
 
   const selectBelief = useCallback((id: string) => {
