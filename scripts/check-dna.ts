@@ -73,13 +73,17 @@ async function loadFactors(wallet: string): Promise<DnaFactor[]> {
 
 async function checkRetired() {
   for (const t of ["viewer_match_cache", "wallet_matches"]) {
+    // HEAD probes return a bodyless 404 for a dropped table, which supabase-js
+    // surfaces without an `error` object — so gate on the HTTP status too.
     const probe = await sb.from(t).select("*", { head: true, count: "exact" });
-    if (!probe.error) {
+    const missing = Boolean(probe.error) || probe.status === 404 || probe.status === 406;
+    if (!missing) {
       c.old_cache_table_present += 1;
       console.error(`[check-dna] ${t} still present (should be dropped)`);
     }
   }
 }
+
 
 type Rel = {
   wallet: string;
