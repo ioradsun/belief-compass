@@ -463,47 +463,56 @@ export type Database = {
         }
         Relationships: []
       }
-      viewer_match_cache: {
+      viewer_dna_cache: {
         Row: {
           calculated_at: string
           candidate_count: number
-          closest_match: Json | null
+          closest_matches: Json
           domain_matches: Json
+          engine_version: number
           expires_at: string
+          inverse_matches: Json
           last_error: string | null
-          match_engine_version: number
-          rival_matches: Json
+          neutral_matches: Json
+          opp_matches: Json
           scored_count: number
           tribe_matches: Json
-          viewer_position_version: number
+          twin_matches: Json
+          viewer_dna_version: number
           viewer_wallet: string
         }
         Insert: {
           calculated_at?: string
           candidate_count?: number
-          closest_match?: Json | null
+          closest_matches?: Json
           domain_matches?: Json
+          engine_version?: number
           expires_at?: string
+          inverse_matches?: Json
           last_error?: string | null
-          match_engine_version?: number
-          rival_matches?: Json
+          neutral_matches?: Json
+          opp_matches?: Json
           scored_count?: number
           tribe_matches?: Json
-          viewer_position_version?: number
+          twin_matches?: Json
+          viewer_dna_version?: number
           viewer_wallet: string
         }
         Update: {
           calculated_at?: string
           candidate_count?: number
-          closest_match?: Json | null
+          closest_matches?: Json
           domain_matches?: Json
+          engine_version?: number
           expires_at?: string
+          inverse_matches?: Json
           last_error?: string | null
-          match_engine_version?: number
-          rival_matches?: Json
+          neutral_matches?: Json
+          opp_matches?: Json
           scored_count?: number
           tribe_matches?: Json
-          viewer_position_version?: number
+          twin_matches?: Json
+          viewer_dna_version?: number
           viewer_wallet?: string
         }
         Relationships: []

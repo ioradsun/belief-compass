@@ -5,6 +5,8 @@ import { listFeed, listMarketPulses, type VolumeWindow } from "@/lib/markets.fun
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { StoryDeck } from "@/components/StoryDeck";
+import { PersonProfile } from "@/components/PersonProfile";
+import { DnaOverview } from "@/components/DnaOverview";
 // Phase 5: the SERVER owns opportunity classification + score. The client only
 // filters by the canonical type and reads the precomputed order — no scoreFeed().
 type OppFilter = "all" | "hot" | "early" | "hidden" | "contested" | "conviction" | "new";
@@ -38,7 +40,7 @@ const OPP_FILTERS: { key: OppFilter; emoji: string; label: string; question: str
   { key: "new", emoji: "🆕", label: "New", question: "What is genuinely recent?" },
 ];
 
-import { MyConvictions } from "@/components/MyConvictions";
+import { MyWorld } from "@/components/MyWorld";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 
 const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
@@ -66,12 +68,16 @@ const pulsesQO = (ids: number[]) =>
   });
 
 export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>): { wallet?: string; m?: number } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { wallet?: string; m?: number; p?: string; dna?: boolean } => ({
     wallet:
       typeof search.wallet === "string" && search.wallet.length > 3 ? search.wallet : undefined,
-    // Universal selected-market state: one URL param shared by every surface, so
-    // deep links + browser back/forward resolve the same center market.
+    // Universal center selection, shared by every surface so deep links + browser
+    // back/forward resolve the same object: ?m market, ?p person, ?dna overview.
     m: search.m != null && Number.isFinite(Number(search.m)) ? Number(search.m) : undefined,
+    p: typeof search.p === "string" && search.p.length > 3 ? search.p : undefined,
+    dna: search.dna === true || search.dna === "1" ? true : undefined,
   }),
   head: () => ({
     meta: [
@@ -107,14 +113,27 @@ const TABS: { key: MobileTab; label: string }[] = [
 ];
 
 function Feed() {
-  const { wallet: searchWallet, m: selectedMarket } = Route.useSearch();
+  const {
+    wallet: searchWallet,
+    m: selectedMarket,
+    p: selectedPerson,
+    dna: dnaOpen,
+  } = Route.useSearch();
   const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
-  // One selection flow for the whole app: clicking a position (You) or a Live row
-  // sets ?m, which the center deck resolves to. Also switches the mobile tab to
-  // Discover so the selected market is visible.
+  // One selection flow for the whole app. Clicking a position/Live row sets ?m; a
+  // person sets ?p; the DNA summary sets ?dna. Each clears the others and focuses
+  // the center (mobile: the Belief column). Browser back/forward walks history.
   const selectMarket = (marketId: number) => {
-    navigate({ search: (prev) => ({ ...prev, m: marketId }) });
+    navigate({ search: (prev) => ({ ...prev, m: marketId, p: undefined, dna: undefined }) });
+    setTab("belief");
+  };
+  const selectPerson = (personWallet: string) => {
+    navigate({ search: (prev) => ({ ...prev, p: personWallet, m: undefined, dna: undefined }) });
+    setTab("belief");
+  };
+  const openDna = () => {
+    navigate({ search: (prev) => ({ ...prev, dna: true, p: undefined, m: undefined }) });
     setTab("belief");
   };
   const [win, setWin] = useState<VolumeWindow>("24h");
@@ -194,17 +213,21 @@ function Feed() {
 
   return (
     <div className="grid h-[100dvh] w-full grid-cols-1 grid-rows-1 overflow-hidden bg-[var(--bg)] text-[var(--text)] lg:[grid-template-columns:minmax(210px,236px)_minmax(560px,1fr)_minmax(290px,326px)]">
-      {/* LEFT — My Convictions */}
+      {/* LEFT — You (Positions | Network) */}
       <aside
-        className={`${show("mine")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-4 py-5 lg:col-start-1 lg:flex lg:py-6`}
+        className={`${show("mine")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-4 py-5 lg:col-start-1 lg:flex lg:py-6`}
         style={{ borderRight: "1px solid var(--border)" }}
       >
-        <MyConvictions
+        <MyWorld
           wallet={wallet}
           rows={rows as unknown as MarketRow[]}
           window={win}
           winLabel={winLabel}
-          onSelect={selectMarket}
+          onSelectMarket={selectMarket}
+          selectedPerson={selectedPerson}
+          onSelectPerson={selectPerson}
+          onOpenDna={openDna}
+          initialNetwork={Boolean(selectedPerson || dnaOpen)}
         />
       </aside>
 
@@ -237,42 +260,51 @@ function Feed() {
         </header>
 
         <div className="space-y-5 lg:space-y-6">
-          {rows.length === 0 ? (
+          {/* Center focus: person profile, DNA overview, or the Discover deck. */}
+          {selectedPerson ? (
+            <PersonProfile wallet={selectedPerson} viewer={wallet} onSelectMarket={selectMarket} />
+          ) : dnaOpen ? (
+            <DnaOverview wallet={wallet} onSelectPerson={selectPerson} />
+          ) : rows.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
               No markets yet. The POV poller runs on a schedule — data will appear once the first
               cycle completes.
             </div>
           ) : (
-            <div className="space-y-4">
-              {/* Lens = intent. Changing it re-ranks the whole feed by a new question. */}
-              <div className="rounded-lg border border-border px-3 py-3 lg:px-4">{lensPicker}</div>
+            <>
+              <div className="space-y-4">
+                {/* Lens = intent. Changing it re-ranks the whole feed by a new question. */}
+                <div className="rounded-lg border border-border px-3 py-3 lg:px-4">
+                  {lensPicker}
+                </div>
 
-              {/* Mobile: timeframe first, copy tucked underneath. */}
-              <div className="rounded-lg border border-border px-3 py-3 lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3 lg:px-4">
-                {windowPicker}
-                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground lg:order-first lg:mt-0 lg:max-w-[60%] lg:text-xs">
-                  One market at a time — it advances on its own. Swipe, tap prev/next, or use the
-                  arrow keys; hovering or holding pauses the deck.
-                </p>
+                {/* Mobile: timeframe first, copy tucked underneath. */}
+                <div className="rounded-lg border border-border px-3 py-3 lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3 lg:px-4">
+                  {windowPicker}
+                  <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground lg:order-first lg:mt-0 lg:max-w-[60%] lg:text-xs">
+                    One market at a time — it advances on its own. Swipe, tap prev/next, or use the
+                    arrow keys; hovering or holding pauses the deck.
+                  </p>
+                </div>
+
+                <StoryDeck
+                  rows={rows as unknown as MarketRow[]}
+                  pulses={pulses}
+                  ethUsd={data.ethUsd ?? 0}
+                  winLabel={winLabel}
+                  tribe={data.tribe ?? null}
+                  opp={data.opp ?? null}
+                  reasonByMarket={reasonByMarket}
+                  selectedId={selectedMarket}
+                />
               </div>
 
-              <StoryDeck
-                rows={rows as unknown as MarketRow[]}
-                pulses={pulses}
-                ethUsd={data.ethUsd ?? 0}
-                winLabel={winLabel}
-                tribe={data.tribe ?? null}
-                opp={data.opp ?? null}
-                reasonByMarket={reasonByMarket}
-                selectedId={selectedMarket}
-              />
-            </div>
+              <p className="pb-2 text-xs text-muted-foreground">
+                Positions are trade-derived estimates; token transfers are not yet indexed.
+                "Wallets" counts directional believers, not people.
+              </p>
+            </>
           )}
-
-          <p className="pb-2 text-xs text-muted-foreground">
-            Positions are trade-derived estimates; token transfers are not yet indexed. "Wallets"
-            counts directional believers, not people.
-          </p>
         </div>
       </main>
 

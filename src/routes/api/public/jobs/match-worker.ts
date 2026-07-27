@@ -2,14 +2,14 @@
  * Job M2 — bounded viewer-match refresh worker (Phase 8). Bearer-guarded.
  *
  * Drains the match_queue: for each pending viewer, recomputes the bounded
- * viewer_match_cache via computeViewerMatches (shared-market candidates → exact
+ * viewer_dna_cache via computeViewerDna (shared-market candidates → exact
  * DNA over a bounded pool), then marks the row done. This is the ONLY background
  * matcher — there is no global all-wallet pass. connect + the feed's cache-miss
  * path enqueue here so the scan never blocks a request.
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.server";
-import { computeViewerMatches } from "@/lib/matches/compute-viewer-matches.server";
+import { computeViewerDna } from "@/lib/dna/compute-viewer-dna.server";
 
 const BATCH = 10; // wallets processed per tick — bounded so a tick stays short
 
@@ -40,7 +40,7 @@ export const Route = createFileRoute("/api/public/jobs/match-worker")({
         for (const wallet of wallets) {
           const startedAt = new Date().toISOString();
           try {
-            await computeViewerMatches(wallet);
+            await computeViewerDna(wallet);
             // Mark done. Guard on pending=true so a re-enqueue that arrived while
             // we were computing stays pending and gets picked up next tick.
             await sb

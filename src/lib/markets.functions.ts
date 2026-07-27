@@ -77,11 +77,11 @@ export const listFeed = createServerFn({ method: "GET" })
     let tribePerson: MatchPerson | null = null;
     let oppPerson: MatchPerson | null = null;
     if (viewer && rows.length) {
-      // Phase 8: read the bounded viewer cache (closest / Tribe / Rivals). The
-      // feed NEVER computes DNA inline — on a miss/stale it enqueues a bounded
-      // background refresh and renders globally without personalization.
-      const { readViewerCache } = await import("@/lib/matches/viewer-cache.server");
-      const cache = await readViewerCache(sb, viewer);
+      // Read the bounded viewer DNA cache (closest / tribe / opp). The feed NEVER
+      // computes DNA inline — on a miss/stale it enqueues a bounded background
+      // refresh and renders globally without personalization.
+      const { readViewerDnaCache } = await import("@/lib/dna/viewer-dna-cache.server");
+      const cache = await readViewerDnaCache(sb, viewer);
       if (!cache || !cache.fresh) {
         try {
           await sb.rpc("request_viewer_match_refresh", { p_wallet: viewer });
@@ -89,13 +89,13 @@ export const listFeed = createServerFn({ method: "GET" })
           /* best-effort; the connect path also enqueues */
         }
       }
-      const tribeEntry = cache?.closestMatch ?? cache?.tribe[0] ?? null;
-      const oppEntry = cache?.rivals[0] ?? null;
+      const tribeEntry = cache?.closest[0] ?? cache?.tribe[0] ?? null;
+      const oppEntry = cache?.opp[0] ?? cache?.inverse[0] ?? null;
       const tribe = tribeEntry
-        ? { matched_wallet: tribeEntry.wallet, match_score: tribeEntry.score }
+        ? { matched_wallet: tribeEntry.wallet, match_score: tribeEntry.agreement }
         : null;
       const opp = oppEntry
-        ? { matched_wallet: oppEntry.wallet, match_score: oppEntry.score }
+        ? { matched_wallet: oppEntry.wallet, match_score: oppEntry.agreement }
         : null;
       const focus = [tribe?.matched_wallet, opp?.matched_wallet].filter(Boolean) as string[];
       if (focus.length) {
