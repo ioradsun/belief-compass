@@ -25,6 +25,13 @@ export interface LiveEventInput {
   payload: Record<string, unknown> | null;
 }
 
+/** The viewer's network member behind a row (server-tagged; never for the crowd). */
+export interface LiveFace {
+  name: string;
+  avatarUrl: string | null;
+  relationship: "twin" | "tribe" | "opp" | "inverse";
+}
+
 export interface LiveRow {
   id: string;
   kind: string; // trade_burst | large_trade | market_created | side_shift
@@ -37,6 +44,10 @@ export interface LiveRow {
   tradeCount: number | null;
   amountEth: number | null;
   amountUsd: number | null;
+  /** The sole actor when this row is one wallet; null for multi-wallet bursts. */
+  wallet: string | null;
+  /** Set by the server when the actor is in the viewer's network. */
+  face?: LiveFace | null;
   text: string;
   payload: Record<string, JsonValue>;
 }
@@ -60,9 +71,9 @@ export function liveRowText(r: Omit<LiveRow, "text">): string {
       return `${r.amountUsd ? fmtUsd(r.amountUsd) : ""} ${verb} ${r.side ?? ""}`.trim();
     }
     case "market_created":
-      return "New market created";
+      return "New market just opened";
     case "side_shift":
-      return `A wallet switched to ${r.side ?? ""}`.trim();
+      return `A wallet flipped to ${r.side ?? ""}`.trim();
     default:
       return "";
   }
@@ -100,6 +111,7 @@ export function groupLiveRows(events: LiveEventInput[], ethUsd: number): LiveRow
         tradeCount: null,
         amountEth: null,
         amountUsd: null,
+        wallet: e.wallet,
         payload: { ...(e.payload ?? {}) } as Record<string, JsonValue>,
       };
       rows.push({ ...base, text: liveRowText(base) });
@@ -143,6 +155,8 @@ export function groupLiveRows(events: LiveEventInput[], ethUsd: number): LiveRow
       tradeCount: trades,
       amountEth,
       amountUsd,
+      // Sole actor when the row is one wallet — lets the server tag your network.
+      wallet: wallets.size === 1 ? [...wallets][0] : trades === 1 ? (e.wallet ?? null) : null,
       payload: { action: e.action, window_ms: GROUP_WINDOW_MS },
     };
     rows.push({ ...base, text: liveRowText(base) });

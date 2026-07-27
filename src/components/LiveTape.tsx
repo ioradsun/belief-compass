@@ -1,11 +1,13 @@
 /**
- * LiveTape — the right column. A compact chronological activity tape (Phase 7).
- * Reads the server-grouped LiveRow DTO (canonical events, occurrence order); it
- * does NOT rank, personalize, or render big market cards. Clicking a row selects
- * that market in the center (Discover).
+ * LiveTape — the right column. A compact chronological activity tape. Reads the
+ * server-grouped LiveRow DTO (canonical events, occurrence order); it does NOT
+ * rank. It IS lightly personalized: when a row's sole actor is in your network
+ * the server tags it with a real face + name ("Maya (Twin) backed YES"). Clicking
+ * a row selects that market in the center.
  */
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
+import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
 function ago(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -17,10 +19,16 @@ function ago(iso: string): string {
   return `${Math.floor(h / 24)}d`;
 }
 
-export function LiveTape({ onSelect }: { onSelect: (marketId: number) => void }) {
+export function LiveTape({
+  wallet,
+  onSelect,
+}: {
+  wallet?: string;
+  onSelect: (marketId: number) => void;
+}) {
   const { data, isLoading } = useQuery({
-    queryKey: ["live-tape"],
-    queryFn: () => listLiveEvents({ data: {} }),
+    queryKey: ["live-tape", wallet ?? null],
+    queryFn: () => listLiveEvents({ data: { wallet } }),
     // New rows prepend; refetch keeps the tape fresh without new infra.
     refetchInterval: 6_000,
   });
@@ -48,6 +56,23 @@ export function LiveTape({ onSelect }: { onSelect: (marketId: number) => void })
                 <span className="mt-0.5 w-8 shrink-0 text-[11px] tabular-nums text-[var(--text-muted)]">
                   {ago(r.occurredAt)}
                 </span>
+                {/* A real face only when the actor is in your network. */}
+                {r.face &&
+                  (r.face.avatarUrl ? (
+                    <img
+                      src={r.face.avatarUrl}
+                      alt=""
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span
+                      className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[7px] font-semibold text-white"
+                      style={{ background: `hsl(${hueFor(r.wallet ?? r.id)} 45% 45%)` }}
+                      aria-hidden
+                    >
+                      {initialsFor(r.face.name)}
+                    </span>
+                  ))}
                 <span className="min-w-0 flex-1">
                   <span
                     className={`text-[13px] ${

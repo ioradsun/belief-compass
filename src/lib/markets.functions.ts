@@ -8,6 +8,7 @@ import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { readLatestTradeEvents } from "@/lib/events.functions";
 import { toLegacyFeedEventRow } from "@/lib/events";
+import { composeMarketStory, type NetworkFace, type NetworkLabel } from "@/domain/story";
 
 export const VOLUME_WINDOWS = {
   "1h": 3_600_000,
@@ -76,6 +77,9 @@ export const listFeed = createServerFn({ method: "GET" })
     let oppBySide = new Map<number, "YES" | "NO">();
     let tribePerson: MatchPerson | null = null;
     let oppPerson: MatchPerson | null = null;
+    // The DNA labels behind the tribe/opp person, for the story's relationship beat.
+    let tribeRel: NetworkLabel = "tribe";
+    let oppRel: NetworkLabel = "opp";
     if (viewer && rows.length) {
       // Read the bounded viewer DNA cache (closest / tribe / opp). The feed NEVER
       // computes DNA inline — on a miss/stale it enqueues a bounded background
@@ -91,6 +95,8 @@ export const listFeed = createServerFn({ method: "GET" })
       }
       const tribeEntry = cache?.closest[0] ?? cache?.tribe[0] ?? null;
       const oppEntry = cache?.opp[0] ?? cache?.inverse[0] ?? null;
+      tribeRel = tribeEntry?.relationship === "twin" ? "twin" : "tribe";
+      oppRel = oppEntry?.relationship === "inverse" ? "inverse" : "opp";
       const tribe = tribeEntry
         ? { matched_wallet: tribeEntry.wallet, match_score: tribeEntry.agreement }
         : null;
@@ -197,6 +203,49 @@ export const listFeed = createServerFn({ method: "GET" })
       const n = noEth.get(id) ?? 0;
       const yesUsd = ethUsd > 0 ? y * ethUsd : null;
       const noUsd = ethUsd > 0 ? n * ethUsd : null;
+
+      // Narrative layer: your network active in THIS market → named faces (privacy
+      // rule: only your own people are named; the crowd stays a count).
+      const rr = r as Record<string, unknown>;
+      const network: NetworkFace[] = [];
+      const tSide = tribeBySide.get(id);
+      if (tribePerson && tSide)
+        network.push({
+          wallet: tribePerson.wallet,
+          name: tribePerson.name ?? aliasFor(tribePerson.wallet),
+          avatarUrl: tribePerson.pfpUrl,
+          relationship: tribeRel,
+          side: tSide,
+        });
+      const oSide = oppBySide.get(id);
+      if (oppPerson && oSide)
+        network.push({
+          wallet: oppPerson.wallet,
+          name: oppPerson.name ?? aliasFor(oppPerson.wallet),
+          avatarUrl: oppPerson.pfpUrl,
+          relationship: oppRel,
+          side: oSide,
+        });
+      const story = composeMarketStory({
+        recent: {
+          text: (rr.live_line as string | null) ?? null,
+          kind: (rr.live_line_kind as string | null) ?? null,
+          occurredAt: (rr.live_line_occurred_at as string | null) ?? null,
+        },
+        momentum: {
+          newBackers1h: (rr.new_believers_1h as number | null) ?? null,
+          newBackers24h: (rr.new_believers_24h as number | null) ?? null,
+          uniqueWallets24h: (rr.unique_wallets_24h as number | null) ?? null,
+          moneyYesPct: (rr.money_yes_pct as number | null) ?? null,
+          peopleYesPct: (rr.people_yes_pct as number | null) ?? null,
+          believersYes: (rr.believers_yes as number | null) ?? null,
+          believersNo: (rr.believers_no as number | null) ?? null,
+          volumeUsd: (rr.volume_total_usd as number | null) ?? null,
+        },
+        classification: (rr.opportunity_type as string | null) ?? null,
+        network,
+      });
+
       return {
         ...r,
         yes_volume_usd: yesUsd,
@@ -208,6 +257,7 @@ export const listFeed = createServerFn({ method: "GET" })
         chg_window_no: chgNo.get(id) ?? null,
         tribe_side: tribeBySide.get(id) ?? null,
         opp_side: oppBySide.get(id) ?? null,
+        story,
       };
     });
 
