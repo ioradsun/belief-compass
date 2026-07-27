@@ -18,6 +18,12 @@ type Position = {
   yes_shares: number | null;
   no_shares: number | null;
   markets?: { title?: string | null } | null;
+  state?: {
+    yes_price_usd: number | null;
+    no_price_usd: number | null;
+    chg_24h_yes: number | null;
+    chg_24h_no: number | null;
+  } | null;
 };
 
 function usd(n: number) {
@@ -62,15 +68,23 @@ export function MyConvictions({
     .map((p) => {
       const id = Number(p.onchain_id);
       const m = byId.get(id);
+      const st = p.state ?? null;
       const side = p.stance_side === "NO" ? "NO" : p.stance_side === "YES" ? "YES" : null;
-      if (!side || !m) return null;
+      if (!side) return null;
       const shares = Number((side === "YES" ? p.yes_shares : p.no_shares) ?? 0);
-      const price = Number((side === "YES" ? m.yes_price_usd : m.no_price_usd) ?? 0);
+      // Prefer the live feed row when the market is on screen, otherwise fall
+      // back to market_state so held markets outside the feed page still show.
+      const price = Number(
+        (side === "YES" ? m?.yes_price_usd : m?.no_price_usd) ??
+          (side === "YES" ? st?.yes_price_usd : st?.no_price_usd) ??
+          0,
+      );
       const value = shares * price;
       if (!(value > 0)) return null;
       const chg = Number(
-        (side === "YES" ? m.chg_window_yes : m.chg_window_no) ??
-          (side === "YES" ? m.chg_24h_yes : m.chg_24h_no) ??
+        (side === "YES" ? m?.chg_window_yes : m?.chg_window_no) ??
+          (side === "YES" ? m?.chg_24h_yes : m?.chg_24h_no) ??
+          (side === "YES" ? st?.chg_24h_yes : st?.chg_24h_no) ??
           0,
       );
       return {
