@@ -52,7 +52,7 @@ export const listFeed = createServerFn({ method: "GET" })
       live_line, live_line_kind, live_line_window, live_line_occurred_at,
       opportunity_type, opportunity_score, opportunity_reason, opportunity_reason_code,
       opportunity_window, opportunity_confidence, opportunity_sample_size, opportunity_eligible,
-      markets:onchain_id ( title, category, author_name, author_pfp )
+      markets:onchain_id ( title, category, author_name, author_pfp, pov_slug )
     `,
       )
       .order("volume_total_usd", { ascending: false, nullsFirst: false })
@@ -385,7 +385,7 @@ export const getWallet = createServerFn({ method: "GET" })
     if (ids.length) {
       const { data: mk } = await sb
         .from("markets")
-        .select("onchain_id, title, category")
+        .select("onchain_id, title, category, pov_slug")
         .in("onchain_id", ids);
       for (const m of mk ?? [])
         metaById.set(Number(m.onchain_id), {
