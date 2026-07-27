@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "verify:reducer": "tsx scripts/verify-reducer.ts"
+    "verify:reducer": "tsx scripts/verify-reducer.ts",
+    "backfill:block-times": "tsx scripts/backfill-block-times.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

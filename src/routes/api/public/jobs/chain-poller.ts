@@ -15,6 +15,11 @@ import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.s
 import { getBaseClient } from "@/chain/client";
 import { decodeTradeLog, PROXY_ADDRESS, TRADE_EVENTS, type CanonicalTrade } from "@/chain/decoder";
 import { applyTrade, emptyRow, type BeliefRow, type Trade } from "@/domain/domain";
+import { uniqueBlockNumbers, fetchBlockTimes, occurredAtFor } from "@/lib/block-time";
+
+// One block-timestamp fetch per unique block, this many in flight at once, so a
+// busy range never bursts the RPC.
+const BLOCK_TS_CONCURRENCY = 5;
 
 // Deploy block for the proxy on Base. Backfill from here on first run.
 // Unknown at build time — set conservatively; Job B skips ranges with no logs cheaply.
@@ -75,6 +80,13 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
           let cursor = leased.last_block ? BigInt(leased.last_block) : DEPLOY_BLOCK - 1n;
           let totalTrades = 0;
           let totalPairs = 0;
+          // Observability.
+          let logsReceived = 0;
+          let tradesDecoded = 0;
+          let uniqueBlocksFetched = 0;
+          let rowsOrphaned = 0;
+          let earliestOccurred: string | null = null;
+          let latestOccurred: string | null = null;
 
           // Scan in chunks. Each chunk is a DURABLE unit of progress: once its
           // trades are persisted and its derived rows rebuilt, we advance
@@ -98,6 +110,23 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
               const t = decodeTradeLog(log);
               if (t) trades.push(t);
             }
+            logsReceived += logs.length;
+            tradesDecoded += trades.length;
+
+            // Canonical EVENT time: fetch each unique block's timestamp exactly
+            // once (bounded concurrency), cached for this chunk. NEVER server time.
+            const blockTimes = trades.length
+              ? await fetchBlockTimes(
+                  uniqueBlockNumbers(trades),
+                  async (b) => Number((await client.getBlock({ blockNumber: BigInt(b) })).timestamp),
+                  BLOCK_TS_CONCURRENCY,
+                )
+              : new Map<number, string>();
+            uniqueBlocksFetched += blockTimes.size;
+            for (const t of blockTimes.values()) {
+              if (earliestOccurred == null || t < earliestOccurred) earliestOccurred = t;
+              if (latestOccurred == null || t > latestOccurred) latestOccurred = t;
+            }
 
             // 2. Delete non-canonical trades in [start,end] (reorg orphans).
             const keep = new Set(trades.map((t) => `${t.tx_hash}:${t.log_index}`));
@@ -110,6 +139,7 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
               if (keep.has(`${d.tx_hash}:${d.log_index}`)) continue;
               await sb.from("trades").delete()
                 .eq("tx_hash", d.tx_hash).eq("log_index", d.log_index);
+              rowsOrphaned += 1;
             }
 
             // 3. Upsert canonical trades + stub unknown markets.
@@ -130,7 +160,12 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
                 block_number: t.block_number,
                 block_hash: t.block_hash,
                 raw_log: t.raw_log,
-                ts: new Date().toISOString(), // placeholder — resolved below if we fetched block timestamps
+                // Canonical block time. Deterministic → replaying the reorg
+                // overlap writes the identical value (no spurious "new" activity).
+                occurred_at: occurredAtFor(t.block_number, blockTimes),
+                // ingested_at is intentionally OMITTED: it defaults to now() on
+                // insert and is left untouched on a conflicting replay, so an
+                // unchanged row keeps its original ingestion time.
               }));
               const up = await sb.from("trades").upsert(rows, { onConflict: "tx_hash,log_index" });
               if (up.error) throw up.error;
@@ -142,16 +177,22 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
               const [wallet, midStr] = key.split("|");
               const onchain_id = Number(midStr);
               const { data: allTrades } = await sb.from("trades")
-                .select("side, direction, eth_amount, token_amount, ts")
+                .select("side, direction, eth_amount, token_amount, occurred_at, ingested_at")
                 .eq("wallet", wallet).eq("onchain_id", onchain_id)
                 .order("block_number", { ascending: true })
                 .order("log_index", { ascending: true });
+              // Fold in canonical chain order (block_number, log_index). The
+              // reducer's `ts` becomes the belief timestamps (directional_since,
+              // first_backed_at), so it must be EVENT time. During the transition
+              // a not-yet-backfilled historical trade has occurred_at NULL; we
+              // stand in ingested_at only so the fold has a Date, and it self-
+              // corrects once the block-time backfill sets occurred_at.
               const tradeObjs: Trade[] = (allTrades ?? []).map((r) => ({
                 side: r.side as "YES" | "NO",
                 direction: r.direction as "BUY" | "SELL",
                 token_amount: Number(r.token_amount) / 1e18,
                 eth_amount: Number(r.eth_amount) / 1e18,
-                ts: new Date(r.ts as string),
+                ts: new Date((r.occurred_at ?? r.ingested_at) as string),
               }));
               const folded: BeliefRow = tradeObjs.reduce(applyTrade, emptyRow());
               await sb.from("wallet_beliefs").upsert({
@@ -177,7 +218,10 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
                 type: t.direction === "BUY" ? "backed" : "reduced",
                 side: t.side,
                 payload: { eth: t.eth_amount, tokens: t.token_amount },
-                occurred_at: new Date().toISOString(),
+                // Trade-driven feed events inherit the trade's canonical block
+                // time — never the poller's run time. created_at (row birth) is
+                // the DB default and stays operational.
+                occurred_at: occurredAtFor(t.block_number, blockTimes),
               }));
               await sb.from("feed_events").upsert(feedRows, { onConflict: "event_key" });
             }
@@ -199,6 +243,10 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
               return Response.json({
                 ok: true, from: Number(fromClamped), to: Number(cursor),
                 trades: totalTrades, pairs: totalPairs, lostLease: true,
+                logs_received: logsReceived, trades_decoded: tradesDecoded,
+                unique_blocks_fetched: uniqueBlocksFetched, rows_upserted: totalTrades,
+                rows_orphaned: rowsOrphaned,
+                earliest_occurred_at: earliestOccurred, latest_occurred_at: latestOccurred,
                 ms: Date.now() - started,
               });
             }
@@ -216,7 +264,13 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
 
           return Response.json({
             ok: true, from: Number(fromClamped), to: Number(cursor),
-            trades: totalTrades, pairs: totalPairs, ms: Date.now() - started,
+            trades: totalTrades, pairs: totalPairs,
+            // Observability — all event-time based.
+            logs_received: logsReceived, trades_decoded: tradesDecoded,
+            unique_blocks_fetched: uniqueBlocksFetched, rows_upserted: totalTrades,
+            rows_orphaned: rowsOrphaned,
+            earliest_occurred_at: earliestOccurred, latest_occurred_at: latestOccurred,
+            ms: Date.now() - started,
           });
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : String(e);

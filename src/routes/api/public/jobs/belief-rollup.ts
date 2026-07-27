@@ -98,11 +98,13 @@ export const Route = createFileRoute("/api/public/jobs/belief-rollup")({
           const divergence = peoplePct != null && p.moneyYesPct != null
             ? Math.abs(p.moneyYesPct - peoplePct) : null;
 
-          // Velocity: trades in last 5m
+          // Velocity: trades in last 5m by canonical EVENT time. A gte on
+          // occurred_at excludes rows with a NULL block time (not backfilled yet),
+          // so freshly-imported history never counts as recent activity.
           const t5m = new Date(Date.now() - 5 * 60_000).toISOString();
           const { count: velocity } = await sb.from("trades")
             .select("*", { count: "exact", head: true })
-            .eq("onchain_id", mid).gte("ts", t5m);
+            .eq("onchain_id", mid).gte("occurred_at", t5m);
 
           // New believers in last hour: count of "backed" events
           const t1h = new Date(Date.now() - 3600_000).toISOString();

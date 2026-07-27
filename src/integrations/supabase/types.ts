@@ -235,12 +235,14 @@ export type Database = {
           block_number: number
           direction: string
           eth_amount: number
+          ingested_at: string
           log_index: number
+          occurred_at: string | null
           onchain_id: number
           raw_log: Json | null
           side: string
           token_amount: number
-          ts: string
+          ts: string | null
           tx_hash: string
           wallet: string
         }
@@ -249,12 +251,14 @@ export type Database = {
           block_number: number
           direction: string
           eth_amount: number
+          ingested_at?: string
           log_index: number
+          occurred_at?: string | null
           onchain_id: number
           raw_log?: Json | null
           side: string
           token_amount: number
-          ts: string
+          ts?: string | null
           tx_hash: string
           wallet: string
         }
@@ -263,12 +267,14 @@ export type Database = {
           block_number?: number
           direction?: string
           eth_amount?: number
+          ingested_at?: string
           log_index?: number
+          occurred_at?: string | null
           onchain_id?: number
           raw_log?: Json | null
           side?: string
           token_amount?: number
-          ts?: string
+          ts?: string | null
           tx_hash?: string
           wallet?: string
         }

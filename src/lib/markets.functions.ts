@@ -430,7 +430,7 @@ export const getIngestStatus = createServerFn({ method: "GET" }).handler(async (
 
   const latestTrade = await sb
     .from("trades")
-    .select("block_number, ts")
+    .select("block_number, occurred_at")
     .order("block_number", { ascending: false })
     .order("log_index", { ascending: false })
     .limit(1)
@@ -478,7 +478,7 @@ export const getIngestStatus = createServerFn({ method: "GET" }).handler(async (
       phase: blocksBehind == null ? "checking" : blocksBehind <= 250 ? "live" : "backfilling",
       leaseActive,
       latestTradeBlock: latestTrade.data?.block_number ?? null,
-      latestTradeAt: latestTrade.data?.ts ?? null,
+      latestTradeAt: latestTrade.data?.occurred_at ?? null,
     },
   };
 });
