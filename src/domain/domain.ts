@@ -12,13 +12,13 @@
  *   (c) idempotent replay of ordered trades → same row
  */
 
-export const THRESHOLD = 0.10;
+export const THRESHOLD = 0.1;
 export const EPSILON = 1e-9;
 export const SIZE_CAP_USD = 1000;
 export const PERSISTENCE_CAP_DAYS = 90;
-export const CONVICTION_FLOOR = 0.60;
-export const CONVICTION_SIZE_W = 0.20;
-export const CONVICTION_PERSIST_W = 0.20;
+export const CONVICTION_FLOOR = 0.6;
+export const CONVICTION_SIZE_W = 0.2;
+export const CONVICTION_PERSIST_W = 0.2;
 
 export type Side = "YES" | "NO" | "MIXED" | "INACTIVE";
 export type Direction = "BUY" | "SELL";
@@ -38,7 +38,7 @@ export interface Trade {
   side: "YES" | "NO";
   direction: Direction;
   token_amount: number; // shares
-  eth_amount: number;   // USD-equivalent cost/proceeds (upstream converts)
+  eth_amount: number; // USD-equivalent cost/proceeds (upstream converts)
   ts: Date;
 }
 
@@ -51,14 +51,17 @@ export interface EvaluatedView {
   yes_value: number;
   no_value: number;
   position_value_usd: number;
-  stance: number;             // -1..+1, economic (from live prices)
+  stance: number; // -1..+1, economic (from live prices)
   stance_side: Side;
   days_held: number;
-  conviction: number;         // 0..1
+  conviction: number; // 0..1
 }
 
 export const emptyRow = (): BeliefRow => ({
-  yes_shares: 0, no_shares: 0, yes_cost: 0, no_cost: 0,
+  yes_shares: 0,
+  no_shares: 0,
+  yes_cost: 0,
+  no_cost: 0,
   expressed_side: "INACTIVE",
   directional_since: null,
   first_backed_at: null,
@@ -108,7 +111,10 @@ export function applyTrade(prior: BeliefRow, t: Trade): BeliefRow {
       if (before > EPSILON) {
         next.yes_cost = next.yes_cost * (1 - sold / before);
       }
-      if (next.yes_shares < EPSILON) { next.yes_shares = 0; next.yes_cost = 0; }
+      if (next.yes_shares < EPSILON) {
+        next.yes_shares = 0;
+        next.yes_cost = 0;
+      }
     }
   } else {
     const before = next.no_shares;
@@ -121,7 +127,10 @@ export function applyTrade(prior: BeliefRow, t: Trade): BeliefRow {
       if (before > EPSILON) {
         next.no_cost = next.no_cost * (1 - sold / before);
       }
-      if (next.no_shares < EPSILON) { next.no_shares = 0; next.no_cost = 0; }
+      if (next.no_shares < EPSILON) {
+        next.no_shares = 0;
+        next.no_cost = 0;
+      }
     }
   }
 
@@ -139,18 +148,18 @@ export function applyTrade(prior: BeliefRow, t: Trade): BeliefRow {
   // directional_since transitions per spec table
   if (priorSide === "INACTIVE" || priorSide === "MIXED") {
     if (newSide === "YES" || newSide === "NO") {
-      next.directional_since = t.ts;                     // set
+      next.directional_since = t.ts; // set
     } else {
-      next.directional_since = prior.directional_since;  // still null-ish
+      next.directional_since = prior.directional_since; // still null-ish
     }
   } else {
     // priorSide is YES or NO
     if (newSide === priorSide) {
-      next.directional_since = prior.directional_since;  // preserve
+      next.directional_since = prior.directional_since; // preserve
     } else if (newSide === "YES" || newSide === "NO") {
-      next.directional_since = t.ts;                     // flip
+      next.directional_since = t.ts; // flip
     } else {
-      next.directional_since = null;                     // exit → MIXED/INACTIVE
+      next.directional_since = null; // exit → MIXED/INACTIVE
     }
   }
 
@@ -162,41 +171,70 @@ export function reduce(trades: Trade[], initial: BeliefRow = emptyRow()): Belief
 }
 
 /**
+ * The conviction core: side-values + hold time → stance & conviction. This is
+ * the ONE place the formula lives, so both the on-chain path (evaluate, via
+ * shares × live price) and the POV-positions path (via POV's own
+ * currentValueUsd) produce the identical number. A position whose hold time is
+ * unknown honestly passes daysHeld = 0 → persistence 0 (conviction floor only).
+ */
+export function convictionFromValues(
+  yesValue: number,
+  noValue: number,
+  daysHeld: number,
+): { position_value_usd: number; stance: number; stance_side: Side; conviction: number } {
+  const position_value_usd = yesValue + noValue;
+  const stance = (yesValue - noValue) / Math.max(yesValue + noValue, EPSILON);
+  const stance_side = classifyByValue(yesValue, noValue);
+
+  const direction = Math.abs(stance);
+  const size = Math.min(1, Math.log(1 + position_value_usd) / Math.log(1 + SIZE_CAP_USD));
+  const persistence = Math.min(
+    1,
+    Math.log(1 + Math.max(0, daysHeld)) / Math.log(1 + PERSISTENCE_CAP_DAYS),
+  );
+  const conviction =
+    direction * (CONVICTION_FLOOR + CONVICTION_SIZE_W * size + CONVICTION_PERSIST_W * persistence);
+
+  return { position_value_usd, stance, stance_side, conviction };
+}
+
+/**
  * evaluate: project row + live prices → economic view.
  * Pure; NEVER mutates the row and NEVER changes expressed_side.
  */
 export function evaluate(row: BeliefRow, p: Prices, now: Date): EvaluatedView {
   const yes_value = row.yes_shares * (p.yesPriceUsd ?? 0);
-  const no_value  = row.no_shares  * (p.noPriceUsd ?? 0);
-  const position_value_usd = yes_value + no_value;
-  const stance = (yes_value - no_value) / Math.max(yes_value + no_value, EPSILON);
-  const stance_side = classifyByValue(yes_value, no_value);
+  const no_value = row.no_shares * (p.noPriceUsd ?? 0);
 
   const days_held = row.directional_since
     ? Math.max(0, (now.getTime() - row.directional_since.getTime()) / 86_400_000)
     : 0;
 
-  const direction = Math.abs(stance);
-  const size = Math.min(1, Math.log(1 + position_value_usd) / Math.log(1 + SIZE_CAP_USD));
-  const persistence = Math.min(1, Math.log(1 + days_held) / Math.log(1 + PERSISTENCE_CAP_DAYS));
-  const conviction = direction * (CONVICTION_FLOOR + CONVICTION_SIZE_W * size + CONVICTION_PERSIST_W * persistence);
-
-  return { yes_value, no_value, position_value_usd, stance, stance_side, days_held, conviction };
+  const core = convictionFromValues(yes_value, no_value, days_held);
+  return {
+    yes_value,
+    no_value,
+    position_value_usd: core.position_value_usd,
+    stance: core.stance,
+    stance_side: core.stance_side,
+    days_held,
+    conviction: core.conviction,
+  };
 }
 
 // ============ Conviction DNA matching ============
 
 export interface BeliefFactor {
   onchain_id: string | number;
-  stance: number;      // -1..+1
-  stance_side: Side;   // must be YES or NO to count
-  conviction: number;  // 0..1
+  stance: number; // -1..+1
+  stance_side: Side; // must be YES or NO to count
+  conviction: number; // 0..1
 }
 
 export interface MatchResult {
-  raw: number;          // -1..+1
-  raw_score: number;    // 0..100
-  match_score: number;  // 0..100 (confidence-adjusted)
+  raw: number; // -1..+1
+  raw_score: number; // 0..100
+  match_score: number; // 0..100 (confidence-adjusted)
   shared: number;
   agreements: number;
   disagreements: number;
@@ -205,10 +243,7 @@ export interface MatchResult {
 
 export const MIN_SHARED_MARKETS = 5;
 
-export function matchScore(
-  a: BeliefFactor[],
-  b: BeliefFactor[],
-): MatchResult {
+export function matchScore(a: BeliefFactor[], b: BeliefFactor[]): MatchResult {
   const byId = new Map<string, BeliefFactor>();
   for (const x of a) {
     if (x.stance_side === "YES" || x.stance_side === "NO") byId.set(String(x.onchain_id), x);
@@ -280,4 +315,3 @@ export function circleMatches<D extends string>(
   }
   return out;
 }
-

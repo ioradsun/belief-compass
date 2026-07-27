@@ -1,16 +1,33 @@
 import { describe, it, expect } from "vitest";
 import {
-  applyTrade, evaluate, emptyRow, reduce, matchScore, circleMatches,
+  applyTrade,
+  evaluate,
+  emptyRow,
+  reduce,
+  matchScore,
+  circleMatches,
+  convictionFromValues,
   MIN_SHARED_MARKETS,
-  type Trade, type BeliefRow, type BeliefFactor,
+  type Trade,
+  type BeliefRow,
+  type BeliefFactor,
 } from "./domain";
 
-
 const ts = (iso: string) => new Date(iso);
-const buy = (side: "YES" | "NO", shares: number, cost: number, at: string): Trade =>
-  ({ side, direction: "BUY", token_amount: shares, eth_amount: cost, ts: ts(at) });
-const sell = (side: "YES" | "NO", shares: number, proceeds: number, at: string): Trade =>
-  ({ side, direction: "SELL", token_amount: shares, eth_amount: proceeds, ts: ts(at) });
+const buy = (side: "YES" | "NO", shares: number, cost: number, at: string): Trade => ({
+  side,
+  direction: "BUY",
+  token_amount: shares,
+  eth_amount: cost,
+  ts: ts(at),
+});
+const sell = (side: "YES" | "NO", shares: number, proceeds: number, at: string): Trade => ({
+  side,
+  direction: "SELL",
+  token_amount: shares,
+  eth_amount: proceeds,
+  ts: ts(at),
+});
 
 describe("applyTrade — trade-driven state", () => {
   it("initial buy sets expressed_side, directional_since, first_backed_at", () => {
@@ -23,7 +40,8 @@ describe("applyTrade — trade-driven state", () => {
   });
 
   it("YES→YES add preserves directional_since", () => {
-    const t1 = ts("2026-01-01"), t2 = ts("2026-02-01");
+    const t1 = ts("2026-01-01"),
+      t2 = ts("2026-02-01");
     const r1 = applyTrade(emptyRow(), buy("YES", 100, 50, t1.toISOString()));
     const r2 = applyTrade(r1, buy("YES", 100, 60, t2.toISOString()));
     expect(r2.directional_since?.toISOString()).toBe(t1.toISOString());
@@ -77,6 +95,25 @@ describe("evaluate — price-driven view", () => {
     const r = applyTrade(emptyRow(), buy("YES", 1, 0.01, "2026-01-01"));
     const v = evaluate(r, { yesPriceUsd: 1, noPriceUsd: 1 }, ts("2026-01-01"));
     expect(v.conviction).toBeGreaterThanOrEqual(0.6 - 0.001);
+  });
+});
+
+describe("convictionFromValues — the shared formula both paths use", () => {
+  it("agrees with evaluate() for the same side-values (one formula, two callers)", () => {
+    const r = applyTrade(emptyRow(), buy("YES", 100, 50, "2026-01-01"));
+    const v = evaluate(r, { yesPriceUsd: 1, noPriceUsd: 0.5 }, ts("2026-01-31"));
+    // POV path feeds the identical values + measured days_held directly.
+    const c = convictionFromValues(v.yes_value, v.no_value, v.days_held);
+    expect(c.stance).toBeCloseTo(v.stance, 9);
+    expect(c.stance_side).toBe(v.stance_side);
+    expect(c.conviction).toBeCloseTo(v.conviction, 9);
+  });
+  it("unknown hold time (daysHeld 0) yields the persistence-free floor", () => {
+    const c = convictionFromValues(100, 0, 0);
+    // direction 1 × (0.60 + 0.20·size + 0.20·0) — strictly below a long-held equivalent.
+    const held = convictionFromValues(100, 0, 90);
+    expect(c.conviction).toBeLessThan(held.conviction);
+    expect(c.conviction).toBeGreaterThanOrEqual(0.6);
   });
 });
 
@@ -146,10 +183,16 @@ describe("Invariant (c): idempotent replay", () => {
 describe("matchScore", () => {
   it("returns insufficient when < 5 shared markets", () => {
     const a = Array.from({ length: 3 }, (_, i) => ({
-      onchain_id: i, stance: 1, stance_side: "YES" as const, conviction: 0.8,
+      onchain_id: i,
+      stance: 1,
+      stance_side: "YES" as const,
+      conviction: 0.8,
     }));
     const b = Array.from({ length: 3 }, (_, i) => ({
-      onchain_id: i, stance: 1, stance_side: "YES" as const, conviction: 0.8,
+      onchain_id: i,
+      stance: 1,
+      stance_side: "YES" as const,
+      conviction: 0.8,
     }));
     const m = matchScore(a, b);
     expect(m.shared).toBe(3);
@@ -159,10 +202,16 @@ describe("matchScore", () => {
 
   it("agreement across 10 markets scores high", () => {
     const a = Array.from({ length: 10 }, (_, i) => ({
-      onchain_id: i, stance: 1, stance_side: "YES" as const, conviction: 0.9,
+      onchain_id: i,
+      stance: 1,
+      stance_side: "YES" as const,
+      conviction: 0.9,
     }));
     const b = Array.from({ length: 10 }, (_, i) => ({
-      onchain_id: i, stance: 1, stance_side: "YES" as const, conviction: 0.9,
+      onchain_id: i,
+      stance: 1,
+      stance_side: "YES" as const,
+      conviction: 0.9,
     }));
     const m = matchScore(a, b);
     expect(m.raw).toBeCloseTo(1);
@@ -173,10 +222,16 @@ describe("matchScore", () => {
 
   it("total disagreement scores below 50", () => {
     const a = Array.from({ length: 10 }, (_, i) => ({
-      onchain_id: i, stance: 1, stance_side: "YES" as const, conviction: 0.9,
+      onchain_id: i,
+      stance: 1,
+      stance_side: "YES" as const,
+      conviction: 0.9,
     }));
     const b = Array.from({ length: 10 }, (_, i) => ({
-      onchain_id: i, stance: -1, stance_side: "NO" as const, conviction: 0.9,
+      onchain_id: i,
+      stance: -1,
+      stance_side: "NO" as const,
+      conviction: 0.9,
     }));
     const m = matchScore(a, b);
     expect(m.raw).toBeCloseTo(-1);
@@ -187,10 +242,16 @@ describe("matchScore", () => {
 
   it("thin evidence shrinks toward 50", () => {
     const a = Array.from({ length: 5 }, (_, i) => ({
-      onchain_id: i, stance: 1, stance_side: "YES" as const, conviction: 0.9,
+      onchain_id: i,
+      stance: 1,
+      stance_side: "YES" as const,
+      conviction: 0.9,
     }));
     const b = Array.from({ length: 5 }, (_, i) => ({
-      onchain_id: i, stance: 1, stance_side: "YES" as const, conviction: 0.9,
+      onchain_id: i,
+      stance: 1,
+      stance_side: "YES" as const,
+      conviction: 0.9,
     }));
     const m = matchScore(a, b);
     // 5/(5+8) = 0.385 confidence — heavily shrunk
@@ -201,7 +262,12 @@ describe("matchScore", () => {
 
 describe("circleMatches — per-domain honesty gate", () => {
   const mkFactors = (ids: number[], side: "YES" | "NO"): BeliefFactor[] =>
-    ids.map((i) => ({ onchain_id: i, stance: side === "YES" ? 1 : -1, stance_side: side, conviction: 0.9 }));
+    ids.map((i) => ({
+      onchain_id: i,
+      stance: side === "YES" ? 1 : -1,
+      stance_side: side,
+      conviction: 0.9,
+    }));
 
   // 1..5 = Money, 6..10 = Politics
   const domainOf = (id: string | number): "Money" | "Politics" | null => {
@@ -221,7 +287,6 @@ describe("circleMatches — per-domain honesty gate", () => {
     expect(money.match_score).toBeGreaterThan(60);
     expect(politics.insufficient).toBe(false);
     expect(politics.match_score).toBeLessThan(40);
-
   });
 
   it("Circle with < 5 shared markets → insufficient", () => {

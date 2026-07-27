@@ -21,6 +21,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useAccount } from "wagmi";
 import { listConvictionFeed } from "@/lib/feed.functions";
+import { ensureConviction } from "@/lib/conviction-ingest.functions";
 import {
   initialsFor,
   hueFor,
@@ -706,7 +707,19 @@ export function ConvictionFeed({ wallet }: { wallet?: string }) {
   // The connected wallet drives the viewer automatically; ?wallet= overrides it.
   const { address } = useAccount();
   const connected = address ? address.toLowerCase() : undefined;
-  const viewer = wallet ?? connected;
+  const inputWallet = wallet ?? connected;
+
+  // On connect (or override), resolve the canonical POV wallet and ingest that
+  // account's positions → conviction + matches, so ANY user lights up their
+  // People/Opp without waiting for the chain backfill. The resolved POV wallet
+  // (which may differ from the connected address) becomes the viewer key.
+  const { data: ensured } = useQuery({
+    queryKey: ["ensure-conviction", inputWallet ?? null],
+    queryFn: () => ensureConviction({ data: { wallet: inputWallet! } }),
+    enabled: Boolean(inputWallet),
+    staleTime: 5 * 60_000,
+  });
+  const viewer = ensured?.viewer ?? inputWallet;
 
   const { data, isLoading } = useQuery({
     queryKey: ["conviction-feed", viewer ?? null],
