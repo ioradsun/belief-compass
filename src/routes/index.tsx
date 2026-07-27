@@ -249,53 +249,45 @@ function Feed() {
 
       {/* CENTER — Belief */}
       <main
-        className={`${show("belief")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-6 lg:py-6`}
+        className={`${show("belief")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-6 lg:py-6`}
       >
-        <OmniHeader
-          lens={lens}
-          lenses={OPP_FILTERS}
-          onLens={setLens}
-          markets={rawRows as unknown as { onchain_id: number; title?: string | null }[]}
-          wallet={wallet}
-          onSelectMarket={selectMarket}
-          onSelectPerson={selectPerson}
-          onOpenMenu={() => setMenuOpen(true)}
-        />
-
-        <div className="space-y-5 lg:space-y-6">
-          {/* Center focus: person profile, DNA overview, or the Discover deck. */}
-          {selectedPerson ? (
-            <PersonProfile wallet={selectedPerson} viewer={wallet} onSelectMarket={selectMarket} />
-          ) : dnaOpen ? (
-            <DnaOverview wallet={wallet} onSelectPerson={selectPerson} />
-          ) : rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
-              No markets yet. The POV poller runs on a schedule — data will appear once the first
-              cycle completes.
-            </div>
-          ) : (
-            <div className="flex h-full min-h-0 flex-col gap-3">
-
-              <div className="flex items-center justify-between px-1">
-                <span className="num text-[11px] text-[var(--text-muted)]">
-                  {currentIdx + 1} / {marketRows.length}
-                </span>
-                <button
-                  type="button"
-                  onClick={nextMarket}
-                  className="rounded-md border border-border px-3 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text)]"
-                >
-                  Next →
-                </button>
-              </div>
-
-              {currentRow && (
-                <MarketDeck row={currentRow} ethUsd={data.ethUsd ?? 0} onSkip={nextMarket} />
-              )}
-            </div>
-          )}
+        <div className="shrink-0">
+          <OmniHeader
+            lens={lens}
+            lenses={OPP_FILTERS}
+            onLens={setLens}
+            markets={rawRows as unknown as { onchain_id: number; title?: string | null }[]}
+            wallet={wallet}
+            onSelectMarket={selectMarket}
+            onSelectPerson={selectPerson}
+            onOpenMenu={() => setMenuOpen(true)}
+          />
         </div>
+
+        {/* Center focus: person profile, DNA overview, or the single-market deck.
+            The deck owns its own internal scroll so its dock stays pinned. */}
+        {selectedPerson ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <PersonProfile wallet={selectedPerson} viewer={wallet} onSelectMarket={selectMarket} />
+          </div>
+        ) : dnaOpen ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <DnaOverview wallet={wallet} onSelectPerson={selectPerson} />
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
+            No markets yet. The POV poller runs on a schedule — data will appear once the first
+            cycle completes.
+          </div>
+        ) : (
+          currentRow && (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <MarketDeck row={currentRow} ethUsd={data.ethUsd ?? 0} onSkip={nextMarket} />
+            </div>
+          )
+        )}
       </main>
+
 
       {/* RIGHT — The Room */}
       <aside
