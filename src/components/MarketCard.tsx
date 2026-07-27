@@ -286,6 +286,7 @@ export function MarketCard({
   stagger,
   tribe,
   opp,
+  reason,
 }: {
   row: MarketRow;
   pulses: Pulse[];
@@ -294,6 +295,8 @@ export function MarketCard({
   stagger: number;
   tribe?: MatchPerson | null;
   opp?: MatchPerson | null;
+  /** Why this market surfaced for the active feed lens (Hot/Conviction/…). */
+  reason?: string;
 }) {
   const [i, setI] = useState(0);
   const [open, setOpen] = useState(false);
@@ -359,6 +362,13 @@ export function MarketCard({
           </span>
         </div>
       </header>
+
+      {/* Why this market surfaced for the active lens — intent, not a formula. */}
+      {reason && (
+        <div className="border-b border-border bg-muted/30 px-4 py-2 text-[11px] leading-snug text-foreground">
+          {reason}
+        </div>
+      )}
 
       {/* Vital sign: Pulse — is this market alive? A health bar + one-line story,
           no math for the reader. Badge (Battlefield / Ghost Town / …) when earned. */}

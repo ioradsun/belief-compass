@@ -10,10 +10,10 @@ import {
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { ConvictionFeed } from "@/components/ConvictionFeed";
 import { StoryDeck } from "@/components/StoryDeck";
+import { scoreFeed, LENSES, type LensKey, type MarketSignals } from "@/lib/feed-lenses";
 
 import { MyConvictions } from "@/components/MyConvictions";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
-
 
 const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
   { key: "1h", label: "1H" },
@@ -38,10 +38,6 @@ const pulsesQO = (ids: number[]) =>
     enabled: ids.length > 0,
     refetchInterval: 20_000,
   });
-
-
-
-
 
 const statusQO = queryOptions({
   queryKey: ["ingest-status"],
@@ -252,8 +248,59 @@ function Feed() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const { data } = useSuspenseQuery(feedQO(wallet, win));
-  const rows = data.data ?? [];
+  const rawRows = data.data ?? [];
   const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "24H";
+
+  // Intent engine: the active lens re-ranks the whole feed by its OWN question,
+  // not just the sort order. Each lens answers a different human question, and
+  // every card carries the human reason it surfaced for this lens.
+  const [lens, setLens] = useState<LensKey>("hot");
+  const hasViewer = Boolean(wallet);
+  const signals: MarketSignals[] = rawRows.map((r) => {
+    const rr = r as Record<string, unknown>;
+    const yesCap = Number(r.yes_capital_usd ?? 0);
+    const noCap = Number(r.no_capital_usd ?? 0);
+    // The Supabase join types `markets` as an array; take the first row.
+    const mm = (Array.isArray(rr.markets) ? rr.markets[0] : rr.markets) as
+      | { category?: string | null }
+      | null
+      | undefined;
+    return {
+      onchainId: Number(r.onchain_id),
+      category: mm?.category ?? null,
+      volumeTotalUsd: Number(r.volume_total_usd ?? 0),
+      volumeWindowUsd: Number((rr.window_volume_usd as number) ?? 0),
+      poolUsd: yesCap + noCap,
+      believers: Number(r.believers_yes ?? 0) + Number(r.believers_no ?? 0),
+      newBelievers: Number((rr.new_believers_1h as number) ?? 0),
+      velocity: Number((rr.velocity_5m as number) ?? 0),
+      convictionAvg: null,
+      avgDaysHeld: null,
+      ageDays: null,
+      flipRate: null,
+      tribeMatchPct: r.tribe_side ? (data.tribe?.score ?? null) : null,
+      oppMatchPct: r.opp_side ? (data.opp?.score ?? null) : null,
+      tribeSide: (r.tribe_side as "YES" | "NO" | null) ?? null,
+      oppSide: (r.opp_side as "YES" | "NO" | null) ?? null,
+      comments: null,
+      shares: null,
+    };
+  });
+  const scored = scoreFeed(lens, signals, { hasViewer });
+  const reasonByMarket: Record<number, string> = {};
+  for (const s of scored) reasonByMarket[s.onchainId] = s.reason;
+  const orderById = new Map(scored.map((s, i) => [s.onchainId, i]));
+  // Fall back to the server order when a lens produced nothing (e.g. a viewer
+  // lens with no connected wallet) so the feed is never blank.
+  const rows =
+    scored.length === 0
+      ? rawRows
+      : [...rawRows]
+          .filter((r) => orderById.has(Number(r.onchain_id)))
+          .sort(
+            (a, b) => orderById.get(Number(a.onchain_id))! - orderById.get(Number(b.onchain_id))!,
+          );
+  const lensNeedsWallet = scored.length === 0 && (lens === "tribe" || lens === "rivals");
 
   const ids = rows.map((r) => Number(r.onchain_id));
   const { data: pulseData } = useQuery(pulsesQO(ids));
@@ -282,10 +329,36 @@ function Feed() {
     </div>
   );
 
+  const activeLens = LENSES.find((l) => l.key === lens)!;
+  const lensPicker = (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+        {LENSES.map((l) => (
+          <button
+            key={l.key}
+            type="button"
+            onClick={() => setLens(l.key)}
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+              lens === l.key
+                ? "border-foreground bg-foreground text-background"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <span aria-hidden>{l.emoji}</span> {l.label}
+          </button>
+        ))}
+      </div>
+      {/* The lens exposes intent — the human question — never the formula. */}
+      <p className="px-0.5 text-[11px] text-muted-foreground">
+        {lensNeedsWallet
+          ? "Connect your wallet to see your Tribe and Rivals."
+          : activeLens.question}
+      </p>
+    </div>
+  );
+
   return (
-    <div
-      className="grid h-[100dvh] w-full grid-cols-1 grid-rows-1 overflow-hidden bg-[var(--bg)] text-[var(--text)] lg:[grid-template-columns:minmax(210px,236px)_minmax(560px,1fr)_minmax(290px,326px)]"
-    >
+    <div className="grid h-[100dvh] w-full grid-cols-1 grid-rows-1 overflow-hidden bg-[var(--bg)] text-[var(--text)] lg:[grid-template-columns:minmax(210px,236px)_minmax(560px,1fr)_minmax(290px,326px)]">
       {/* LEFT — My Convictions */}
       <aside
         className={`${show("mine")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-4 py-5 lg:col-start-1 lg:flex lg:py-6`}
@@ -330,8 +403,6 @@ function Feed() {
         </header>
 
         <div className="space-y-5 lg:space-y-6">
-
-
           {rows.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
               No markets yet. The POV poller runs on a schedule — data will appear once the first
@@ -339,6 +410,9 @@ function Feed() {
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Lens = intent. Changing it re-ranks the whole feed by a new question. */}
+              <div className="rounded-lg border border-border px-3 py-3 lg:px-4">{lensPicker}</div>
+
               {/* Mobile: timeframe first, copy tucked underneath. */}
               <div className="rounded-lg border border-border px-3 py-3 lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3 lg:px-4">
                 {windowPicker}
@@ -355,6 +429,7 @@ function Feed() {
                 winLabel={winLabel}
                 tribe={data.tribe ?? null}
                 opp={data.opp ?? null}
+                reasonByMarket={reasonByMarket}
               />
             </div>
           )}
@@ -419,6 +494,3 @@ function Feed() {
     </div>
   );
 }
-
-
-
