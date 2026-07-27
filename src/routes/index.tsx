@@ -234,10 +234,19 @@ function Job({
   );
 }
 
+type MobileTab = "mine" | "belief" | "room";
+
+const TABS: { key: MobileTab; label: string }[] = [
+  { key: "mine", label: "Mine" },
+  { key: "belief", label: "Belief" },
+  { key: "room", label: "The Room" },
+];
+
 function Feed() {
   const { wallet: searchWallet } = Route.useSearch();
   const wallet = useEffectiveWallet(searchWallet);
   const [win, setWin] = useState<VolumeWindow>("24h");
+  const [tab, setTab] = useState<MobileTab>("belief");
   const { data } = useSuspenseQuery(feedQO(wallet, win));
   const rows = data.data ?? [];
   const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "24H";
@@ -246,21 +255,36 @@ function Feed() {
   const { data: pulseData } = useQuery(pulsesQO(ids));
   const pulses = pulseData?.pulses ?? {};
 
+  // On mobile only the active tab's column is mounted-visible; from lg up all
+  // three columns are always shown side by side.
+  const show = (t: MobileTab) => (tab === t ? "flex" : "hidden");
 
-
-
+  const windowPicker = (
+    <div className="flex items-center gap-1 overflow-x-auto rounded-md border border-border p-0.5">
+      {WINDOW_OPTIONS.map((w) => (
+        <button
+          key={w.key}
+          type="button"
+          onClick={() => setWin(w.key)}
+          className={`shrink-0 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+            win === w.key
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {w.label}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div
-      className="grid h-[100dvh] w-full overflow-hidden bg-[var(--bg)] text-[var(--text)]"
-      style={{
-        gridTemplateColumns:
-          "minmax(210px,236px) minmax(560px,1fr) minmax(290px,326px)",
-      }}
+      className="grid h-[100dvh] w-full grid-cols-1 grid-rows-[1fr_auto] overflow-hidden bg-[var(--bg)] text-[var(--text)] lg:grid-rows-1 lg:[grid-template-columns:minmax(210px,236px)_minmax(560px,1fr)_minmax(290px,326px)]"
     >
       {/* LEFT — My Convictions */}
       <aside
-        className="col-start-1 h-full overflow-y-auto bg-[var(--bg)] px-4 py-6"
+        className={`${show("mine")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-4 py-5 lg:col-start-1 lg:flex lg:py-6`}
         style={{ borderRight: "1px solid var(--border)" }}
       >
         <MyConvictions
@@ -274,16 +298,18 @@ function Feed() {
       </aside>
 
       {/* CENTER — Belief */}
-      <main className="col-start-2 h-full overflow-y-auto bg-[var(--bg)] px-6 py-6">
-        <header className="mb-6">
-          <h1 className="text-3xl font-semibold tracking-tight">conviction</h1>
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">
+      <main
+        className={`${show("belief")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-6 lg:py-6`}
+      >
+        <header className="mb-5 lg:mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight lg:text-3xl">conviction</h1>
+          <p className="mt-2 text-[13px] text-[var(--text-secondary)] lg:text-sm">
             Markets tell you what moved. Conviction tells you why. Wealth tells you why people
             cared.
           </p>
         </header>
 
-        <div className="space-y-6">
+        <div className="space-y-5 lg:space-y-6">
           <StatusPanel />
 
           {rows.length === 0 ? (
@@ -293,30 +319,16 @@ function Feed() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
-                <div className="text-xs text-muted-foreground">
-                  Volume and price change are both scoped to the selected timeframe: on-chain ETH traded on that side (priced in USD) and the move in that side’s share price over the same window. Each card
-                  runs its own live feed — tap one to see every event.
-                </div>
-                <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
-                  {WINDOW_OPTIONS.map((w) => (
-                    <button
-                      key={w.key}
-                      type="button"
-                      onClick={() => setWin(w.key)}
-                      className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-                        win === w.key
-                          ? "bg-foreground text-background"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {w.label}
-                    </button>
-                  ))}
-                </div>
+              {/* Mobile: timeframe first, copy tucked underneath. */}
+              <div className="rounded-lg border border-border px-3 py-3 lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3 lg:px-4">
+                {windowPicker}
+                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground lg:order-first lg:mt-0 lg:max-w-[60%] lg:text-xs">
+                  Volume and price change are scoped to the selected timeframe. Each card runs its
+                  own live feed — tap one to see every event.
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 lg:gap-4 xl:grid-cols-2">
                 {rows.map((r, idx) => (
                   <MarketCard
                     key={r.onchain_id}
@@ -333,7 +345,7 @@ function Feed() {
             </div>
           )}
 
-          <p className="text-xs text-muted-foreground">
+          <p className="pb-2 text-xs text-muted-foreground">
             Positions are trade-derived estimates; token transfers are not yet indexed. "Wallets"
             counts directional believers, not people.
           </p>
@@ -342,7 +354,7 @@ function Feed() {
 
       {/* RIGHT — The Room */}
       <aside
-        className="col-start-3 h-full overflow-y-auto bg-[var(--bg)] px-4 py-6"
+        className={`${show("room")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-4 py-5 lg:col-start-3 lg:flex lg:py-6`}
         style={{ borderLeft: "1px solid var(--border)" }}
       >
         <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
@@ -350,7 +362,30 @@ function Feed() {
         </div>
         <ConvictionFeed wallet={wallet} />
       </aside>
+
+      {/* Mobile bottom navigation */}
+      <nav
+        className="row-start-2 grid grid-cols-3 bg-[var(--panel)] pb-[env(safe-area-inset-bottom)] lg:hidden"
+        style={{ borderTop: "1px solid var(--border)" }}
+      >
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            aria-current={tab === t.key ? "page" : undefined}
+            className={`py-3 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
+              tab === t.key
+                ? "text-[var(--text)] shadow-[inset_0_2px_0_0_var(--text)]"
+                : "text-[var(--text-muted)]"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
+
 
