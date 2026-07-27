@@ -249,6 +249,8 @@ function Feed() {
   const wallet = useEffectiveWallet(searchWallet);
   const [win, setWin] = useState<VolumeWindow>("24h");
   const [tab, setTab] = useState<MobileTab>("belief");
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const { data } = useSuspenseQuery(feedQO(wallet, win));
   const rows = data.data ?? [];
   const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "24H";
