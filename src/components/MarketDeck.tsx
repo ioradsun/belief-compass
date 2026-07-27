@@ -51,6 +51,10 @@ export function MarketDeck({
   const marketId = Number(row.onchain_id);
   const title = row.markets?.title ?? `Market #${marketId}`;
   const category = row.markets?.category ?? null;
+  // POV hosts the same market; the slug comes from their API via the poller.
+  const povSlug = row.markets?.pov_slug ?? null;
+  const povUrl = povSlug ? `https://pov.co/markets/${povSlug}` : "https://pov.co/";
+
   const pulse = pulseFor(
     (rr.opportunity_type as string | null) ?? null,
     (rr.opportunity_reason as string | null) ?? null,
@@ -138,15 +142,29 @@ export function MarketDeck({
     <div className="flex h-full min-h-0 flex-col gap-3">
       {/* Identity — pinned to the top of the column */}
       <div className="shrink-0">
-        {category && (
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            {category}
-          </div>
-        )}
+        <div className="mb-1 flex items-center gap-2">
+          {category && (
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+              {category}
+            </span>
+          )}
+          {/* Deep link to the market's own page on POV, for anyone who'd rather
+              trade there with their POV wallet. */}
+          <a
+            href={povUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="ml-auto rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            Trade on POV ↗
+          </a>
+        </div>
         <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
           {title}
         </h1>
       </div>
+
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
 

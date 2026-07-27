@@ -446,6 +446,7 @@ export type Database = {
           first_seen: string
           onchain_id: number
           our_metadata: Json | null
+          pov_slug: string | null
           pov_uuid: string | null
           source: string
           title: string | null
@@ -462,6 +463,7 @@ export type Database = {
           first_seen?: string
           onchain_id: number
           our_metadata?: Json | null
+          pov_slug?: string | null
           pov_uuid?: string | null
           source?: string
           title?: string | null
@@ -478,6 +480,7 @@ export type Database = {
           first_seen?: string
           onchain_id?: number
           our_metadata?: Json | null
+          pov_slug?: string | null
           pov_uuid?: string | null
           source?: string
           title?: string | null
