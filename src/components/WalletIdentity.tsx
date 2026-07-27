@@ -48,7 +48,7 @@ export function WalletIdentity({ viewing }: { viewing: string }) {
 
   const { data } = useQuery({
     queryKey: ["wallet-link", vendor],
-    queryFn: async () => await getWalletLink({ data: { connected: vendor as string } }),
+    queryFn: async () => await getWalletLink({ data: { wallet: vendor as string } }),
     enabled: !!vendor,
   });
 
