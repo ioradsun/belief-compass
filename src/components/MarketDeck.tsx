@@ -136,18 +136,20 @@ export function MarketDeck({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
+      {/* Identity — pinned to the top of the column */}
+      <div className="shrink-0">
+        {category && (
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            {category}
+          </div>
+        )}
+        <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
+          {title}
+        </h1>
+      </div>
+
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
-        {/* Identity */}
-        <div>
-          {category && (
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-              {category}
-            </div>
-          )}
-          <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
-            {title}
-          </h1>
-        </div>
+
 
         {/* Pulse — why this matters now */}
         <div
