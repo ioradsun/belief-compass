@@ -5,8 +5,9 @@
  * - Builds deterministic canonical `events` and persists them ATOMICALLY via the
  *   ingest_chain_chunk() DB function, which in one transaction also maintains the
  *   temporary `trades` projection and reconciles reorg orphans.
- * - Rebuilds affected wallet_beliefs by folding ALL that wallet-market's ordered
- *   canonical trades (the projection) through applyTrade.
+ * - Phase 3: advances affected wallet_beliefs INCREMENTALLY — apply only the new
+ *   canonical events on top of the current position (exactly once), never
+ *   refolding full history. Reorg-orphaned pairs are marked needs_rebuild.
  * - Atomically advances cursor + clears lease.
  *
  * Phase 2: `events` is the source of truth. A chain trade is NO LONGER written to
@@ -24,13 +25,13 @@ import {
   CHAIN_ID,
   type CanonicalTrade,
 } from "@/chain/decoder";
-import { applyTrade, emptyRow, type BeliefRow, type Trade } from "@/domain/domain";
 import { uniqueBlockNumbers, fetchBlockTimes, occurredAtFor } from "@/lib/block-time";
 import {
   tradeEventFromCanonical,
   chainTradeSourceKey,
   type ChainTradeEventInput,
 } from "@/lib/events";
+import { applyCanonicalTradeEvents } from "@/lib/positions/apply-events.server";
 
 // One block-timestamp fetch per unique block, this many in flight at once, so a
 // busy range never bursts the RPC.
@@ -109,6 +110,15 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
           let tradeProjInserted = 0;
           let tradeProjRemoved = 0;
           let tradesDeferredNoBlockTime = 0;
+          // Phase 3 incremental position counters.
+          let positionEventsApplied = 0;
+          let positionEventsReplayed = 0;
+          let positionsCreated = 0;
+          let positionsUpdated = 0;
+          let positionsMarkedDirty = 0;
+          let positionVersionConflicts = 0;
+          let positionsOutOfOrder = 0;
+          let fullHistoryReadsHotPath = 0;
 
           // Canonical-event-based observability, emitted on every return path.
           const observability = () => ({
@@ -122,6 +132,14 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
             trade_projections_inserted: tradeProjInserted,
             trade_projections_removed: tradeProjRemoved,
             trades_deferred_no_block_time: tradesDeferredNoBlockTime,
+            position_events_applied: positionEventsApplied,
+            position_events_replayed: positionEventsReplayed,
+            positions_created: positionsCreated,
+            positions_updated: positionsUpdated,
+            positions_marked_dirty: positionsMarkedDirty,
+            position_version_conflicts: positionVersionConflicts,
+            positions_out_of_order: positionsOutOfOrder,
+            full_history_reads_hot_path: fullHistoryReadsHotPath,
             earliest_occurred_at: earliestOccurred,
             latest_occurred_at: latestOccurred,
           });
@@ -194,6 +212,7 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
             }
 
             const affectedPairs = new Set<string>();
+            let orphanPairs: [string, number][] = [];
             if (presentKeys.length > 0) {
               const ing = await sb.rpc("ingest_chain_chunk", {
                 p_events: eventRows,
@@ -211,6 +230,7 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
                 trade_projections_inserted?: number;
                 trade_projections_removed?: number;
                 pairs?: [string, string][];
+                orphan_pairs?: [string, string][];
               };
               eventsInserted += r.events_inserted ?? 0;
               eventsReplayed += r.events_replayed ?? 0;
@@ -219,48 +239,39 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
               tradeProjInserted += r.trade_projections_inserted ?? 0;
               tradeProjRemoved += r.trade_projections_removed ?? 0;
               for (const [w, m] of r.pairs ?? []) affectedPairs.add(`${w}|${m}`);
+
+              // Reorg: orphaned pairs are rebuilt (never algebraically reversed).
+              // Mark them needs_rebuild='reorg' so the incremental applier skips
+              // them and the targeted rebuilder folds remaining canonical history.
+              orphanPairs = (r.orphan_pairs ?? []).map(([w, mm]) => [w, Number(mm)] as [string, number]);
             }
 
-            // 4. Rebuild affected (wallet, onchain_id) rows via full fold of the
-            //    trades projection. Pairs come from the atomic ingest (inserted,
-            //    restored AND orphaned), so a reorg removal re-folds too.
-            const pairs = affectedPairs;
-            for (const key of pairs) {
-              const [wallet, midStr] = key.split("|");
-              const onchain_id = Number(midStr);
-              const { data: allTrades } = await sb.from("trades")
-                .select("side, direction, eth_amount, token_amount, occurred_at")
-                .eq("wallet", wallet).eq("onchain_id", onchain_id)
-                .order("block_number", { ascending: true })
-                .order("log_index", { ascending: true });
-              // Fold in canonical chain order (block_number, log_index). The
-              // reducer's `ts` is EVENT time (occurred_at) — never ingested_at.
-              // The projection is derived from canonical events (occurred_at NOT
-              // NULL), and the Phase-1 block-time backfill fills any historical
-              // rows, so occurred_at is always present here; a residual NULL is
-              // skipped rather than silently folded as ingestion time.
-              const tradeObjs: Trade[] = (allTrades ?? [])
-                .filter((r) => r.occurred_at != null)
-                .map((r) => ({
-                  side: r.side as "YES" | "NO",
-                  direction: r.direction as "BUY" | "SELL",
-                  token_amount: Number(r.token_amount) / 1e18,
-                  eth_amount: Number(r.eth_amount) / 1e18,
-                  ts: new Date(r.occurred_at as string),
-                }));
-              const folded: BeliefRow = tradeObjs.reduce(applyTrade, emptyRow());
-              await sb.from("wallet_beliefs").upsert({
-                wallet, onchain_id,
-                yes_shares: folded.yes_shares,
-                no_shares: folded.no_shares,
-                yes_cost: folded.yes_cost,
-                no_cost: folded.no_cost,
-                expressed_side: folded.expressed_side,
-                directional_since: folded.directional_since?.toISOString() ?? null,
-                first_backed_at: folded.first_backed_at?.toISOString() ?? null,
-                last_trade_at: folded.last_trade_at?.toISOString() ?? null,
-                updated_at: new Date().toISOString(),
-              }, { onConflict: "wallet,onchain_id" });
+            // 4. INCREMENTAL position application (Phase 3). Instead of reloading
+            //    and refolding each pair's FULL trade history, apply only the new
+            //    canonical events on top of the current position, exactly once.
+            //    Reorg-orphaned pairs are marked dirty first so the applier skips
+            //    them; the rest advance incrementally (replays are no-ops).
+            if (orphanPairs.length > 0) {
+              await sb.rpc("mark_positions_dirty", {
+                p_pairs: orphanPairs.map(([w, mm]) => [w, String(mm)]),
+                p_reason: "reorg",
+              });
+              positionsMarkedDirty += orphanPairs.length;
+            }
+            const applyPairs = [...affectedPairs].map((k) => {
+              const [wallet, midStr] = k.split("|");
+              return { wallet, market: Number(midStr) };
+            });
+            if (applyPairs.length > 0) {
+              const pm = await applyCanonicalTradeEvents(sb, applyPairs);
+              positionEventsApplied += pm.events_applied;
+              positionEventsReplayed += pm.events_replayed;
+              positionsCreated += pm.positions_created;
+              positionsUpdated += pm.positions_updated;
+              positionsMarkedDirty += pm.positions_marked_dirty;
+              positionVersionConflicts += pm.version_conflicts;
+              positionsOutOfOrder += pm.events_out_of_order;
+              fullHistoryReadsHotPath += pm.full_history_reads_hot_path; // must stay 0
             }
 
             // 5. (removed) Trade-driven feed_events are no longer written. The
@@ -291,7 +302,7 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
             }
             cursor = end;
             totalTrades += eventRows.length;
-            totalPairs += pairs.size;
+            totalPairs += affectedPairs.size;
 
             if (end < to) await new Promise((r) => setTimeout(r, CHUNK_DELAY_MS));
           }
