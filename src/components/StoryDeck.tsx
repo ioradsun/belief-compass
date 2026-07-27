@@ -168,19 +168,24 @@ export function StoryDeck({
           />
         </div>
 
-        {/* Tap zones — sit behind interactive card content */}
+        {/* Edge steppers */}
         <button
           type="button"
           aria-label="Previous market"
           onClick={() => go(-1)}
-          className="absolute inset-y-0 left-0 -z-10 w-1/3"
-        />
+          className="absolute left-0 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--border)] bg-[var(--panel)] px-2 py-3 text-xs text-[var(--text-muted)] hover:text-[var(--text)] lg:block"
+        >
+          ‹
+        </button>
         <button
           type="button"
           aria-label="Next market"
           onClick={() => go(1)}
-          className="absolute inset-y-0 right-0 -z-10 w-2/3"
-        />
+          className="absolute right-0 top-1/2 hidden -translate-y-1/2 translate-x-1/2 rounded-full border border-[var(--border)] bg-[var(--panel)] px-2 py-3 text-xs text-[var(--text-muted)] hover:text-[var(--text)] lg:block"
+        >
+          ›
+        </button>
+
       </div>
     </div>
   );
