@@ -1,18 +1,19 @@
 /**
  * Live tape — server loader. Reads canonical `events` in reverse-chronological
  * order (occurred_at DESC, block DESC, log DESC — never ingested_at), excludes
- * reorg-orphaned events (is_canonical), joins market titles, and groups bursts via
- * the pure live-tape module. Every single-actor row is named (pov.co identity,
- * generated-alias fallback) so the tape reads like people — "John backed YES ·
- * $74" — not "1 wallet". When the actor is in the viewer's network the line also
- * carries their relationship ("Maya (Twin) …"). Multi-wallet bursts stay an
- * anonymous count. Live answers "what just happened?" — never ranked.
+ * reorg-orphaned events (is_canonical), groups bursts via the pure live-tape
+ * module, then turns each row into a FOMO-shaped story via composeLiveStory:
+ *   "John joined the YES army for $25 — YES is heating up, 12 joined this hour"
+ * The actor is named from pov.co (alias fallback); the momentum clause comes from
+ * market_state; the relationship tag ("(Twin)") is added when signed in. Multi-
+ * wallet bursts read as the crowd. Live answers "what just happened?" — never ranked.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { publicClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { groupLiveRows, type LiveEventInput, type LiveFace, type LiveRow } from "@/lib/live-tape";
+import { composeLiveStory, type LiveStoryInput } from "@/domain/story";
 
 type NetLabel = "twin" | "tribe" | "opp" | "inverse";
 
@@ -25,20 +26,7 @@ const input = z
   })
   .optional();
 
-const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
-
-/** Rewrite a single-actor row to lead with the person + their side + amount. */
-function personLine(row: LiveRow, name: string, relationship: NetLabel | null): string {
-  const who = relationship ? `${name} (${cap(relationship)})` : name;
-  const amt =
-    row.amountUsd && row.amountUsd > 0
-      ? ` · $${Math.round(row.amountUsd).toLocaleString("en-US")}`
-      : "";
-  if (row.kind === "side_shift") return `${who} flipped to ${row.side ?? ""}`.trim();
-  const sell = (row.payload as { action?: string }).action === "SELL";
-  const verb = sell ? "reduced" : "backed";
-  return `${who} ${verb} ${row.side ?? ""}${amt}`.trim();
-}
+type Momentum = NonNullable<LiveStoryInput["market"]>;
 
 export const listLiveEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof input>) => input.parse(d ?? {}))
@@ -62,12 +50,29 @@ export const listLiveEvents = createServerFn({ method: "GET" })
 
     const marketIds = [...new Set((rows ?? []).map((r) => Number(r.market_id)))];
     const titleById = new Map<number, string>();
+    const momentumById = new Map<number, Momentum>();
     if (marketIds.length > 0) {
-      const { data: mk } = await sb
-        .from("markets")
-        .select("onchain_id, title")
-        .in("onchain_id", marketIds);
-      for (const m of mk ?? []) titleById.set(Number(m.onchain_id), (m.title as string) ?? "");
+      const [mk, ms] = await Promise.all([
+        sb.from("markets").select("onchain_id, title").in("onchain_id", marketIds),
+        sb
+          .from("market_state")
+          .select(
+            "onchain_id, believers_yes, believers_no, new_believers_1h, money_yes_pct, people_yes_pct, opportunity_type",
+          )
+          .in("onchain_id", marketIds),
+      ]);
+      for (const m of mk.data ?? []) titleById.set(Number(m.onchain_id), (m.title as string) ?? "");
+      for (const s of ms.data ?? []) {
+        const r = s as Record<string, unknown>;
+        momentumById.set(Number(r.onchain_id), {
+          believersYes: (r.believers_yes as number | null) ?? null,
+          believersNo: (r.believers_no as number | null) ?? null,
+          newBackers1h: (r.new_believers_1h as number | null) ?? null,
+          moneyYesPct: (r.money_yes_pct as number | null) ?? null,
+          peopleYesPct: (r.people_yes_pct as number | null) ?? null,
+          opportunityType: (r.opportunity_type as string | null) ?? null,
+        });
+      }
     }
 
     const { data: eth } = await sb.rpc("eth_usd_calibration");
@@ -90,9 +95,9 @@ export const listLiveEvents = createServerFn({ method: "GET" })
 
     const live = groupLiveRows(events, ethUsd).slice(0, limit);
 
-    // Name every single-actor row so the tape reads like people. `wallet` is set
-    // only on single-actor rows (bursts stay a count). Relationship tags come
-    // from the viewer's bounded DNA cache when signed in — no new compute.
+    // Turn each row into a story. Single-actor rows get named (pov.co, alias
+    // fallback) + a relationship tag when the actor is in the viewer's network;
+    // bursts read as the crowd. The momentum clause comes from market_state.
     const actorWallets = [
       ...new Set(
         live
@@ -101,31 +106,38 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           .filter((w): w is string => !!w),
       ),
     ];
-    if (actorWallets.length > 0) {
-      const labelByWallet = new Map<string, NetLabel>();
-      if (viewer) {
-        const { data: cache } = await sb
-          .from("viewer_dna_cache")
-          .select("twin_matches, tribe_matches, opp_matches, inverse_matches")
-          .eq("viewer_wallet", viewer)
-          .maybeSingle();
-        if (cache) {
-          const add = (rows: unknown, label: NetLabel) => {
-            for (const r of (rows as { wallet?: string }[] | null) ?? [])
-              if (r.wallet) labelByWallet.set(String(r.wallet).toLowerCase(), label);
-          };
-          add(cache.twin_matches, "twin");
-          add(cache.tribe_matches, "tribe");
-          add(cache.opp_matches, "opp");
-          add(cache.inverse_matches, "inverse");
-        }
-      }
 
-      const { resolveProfiles } = await import("@/lib/profiles.server");
-      const profiles = await resolveProfiles(actorWallets, 15);
-      for (const r of live) {
-        const w = r.wallet?.toLowerCase();
-        if (!w || r.kind === "market_created") continue;
+    const labelByWallet = new Map<string, NetLabel>();
+    if (viewer && actorWallets.length > 0) {
+      const { data: cache } = await sb
+        .from("viewer_dna_cache")
+        .select("twin_matches, tribe_matches, opp_matches, inverse_matches")
+        .eq("viewer_wallet", viewer)
+        .maybeSingle();
+      if (cache) {
+        const add = (rows: unknown, label: NetLabel) => {
+          for (const r of (rows as { wallet?: string }[] | null) ?? [])
+            if (r.wallet) labelByWallet.set(String(r.wallet).toLowerCase(), label);
+        };
+        add(cache.twin_matches, "twin");
+        add(cache.tribe_matches, "tribe");
+        add(cache.opp_matches, "opp");
+        add(cache.inverse_matches, "inverse");
+      }
+    }
+
+    const profiles =
+      actorWallets.length > 0
+        ? await import("@/lib/profiles.server").then((m) => m.resolveProfiles(actorWallets, 15))
+        : new Map();
+
+    for (const r of live) {
+      if (r.kind === "market_created") continue; // "New market just opened" stands
+      const market = momentumById.get(Number(r.marketId)) ?? null;
+      const action = (r.payload as { action?: "BUY" | "SELL" }).action ?? null;
+      const w = r.wallet?.toLowerCase();
+
+      if (w) {
         const prof = profiles.get(w);
         const relationship = labelByWallet.get(w) ?? null;
         const face: LiveFace = {
@@ -134,7 +146,24 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           relationship,
         };
         r.face = face;
-        r.text = personLine(r, face.name, relationship);
+        r.text = composeLiveStory({
+          actor: { name: face.name, relationship },
+          side: r.side,
+          action,
+          flip: r.kind === "side_shift",
+          amountUsd: r.amountUsd,
+          market,
+        }).text;
+      } else {
+        // Multi-wallet burst — the crowd.
+        r.text = composeLiveStory({
+          actor: null,
+          walletCount: r.walletCount,
+          side: r.side,
+          action,
+          amountUsd: r.amountUsd,
+          market,
+        }).text;
       }
     }
 

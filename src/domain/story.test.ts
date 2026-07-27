@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { composeMarketStory, type StoryInput, type NetworkFace } from "./story";
+import {
+  composeMarketStory,
+  composeLiveStory,
+  type StoryInput,
+  type NetworkFace,
+  type LiveStoryInput,
+} from "./story";
 
 const face = (o: Partial<NetworkFace>): NetworkFace => ({
   wallet: "0xa",
@@ -118,6 +124,57 @@ describe("privacy rule", () => {
     );
     for (const b of s.beats) expect(b.text).not.toMatch(/0x[a-f0-9]/i);
     expect(s.beats.some((b) => b.text === "Maya (your Twin) is on YES")).toBe(false);
+  });
+});
+
+// ── Live-event story ──────────────────────────────────────────────────────────
+const liveBase = (o: Partial<LiveStoryInput> = {}): LiveStoryInput => ({
+  actor: { name: "John", relationship: null },
+  side: "YES",
+  action: "BUY",
+  amountUsd: 25,
+  market: null,
+  ...o,
+});
+
+describe("composeLiveStory", () => {
+  it("a buy reads as joining the army, with the stake", () => {
+    expect(composeLiveStory(liveBase()).text).toBe("John joined the YES army for $25");
+  });
+  it("adds the strongest momentum hook — urgency wins", () => {
+    const t = composeLiveStory(
+      liveBase({ market: { newBackers1h: 12, believersYes: 40, moneyYesPct: 70 } }),
+    ).text;
+    expect(t).toBe("John joined the YES army for $25 — YES is heating up, 12 joined this hour");
+  });
+  it("falls back to bandwagon social proof when no urgency", () => {
+    const t = composeLiveStory(liveBase({ market: { believersYes: 48 } })).text;
+    expect(t).toBe("John joined the YES army for $25 — 48 now hold YES");
+  });
+  it("a network member keeps their relationship tag", () => {
+    const t = composeLiveStory(liveBase({ actor: { name: "Maya", relationship: "twin" } })).text;
+    expect(t).toBe("Maya (Twin) joined the YES army for $25");
+  });
+  it("a sell cuts the side; a flip defects", () => {
+    expect(composeLiveStory(liveBase({ action: "SELL", side: "NO", amountUsd: 82 })).text).toBe(
+      "John cut NO for $82",
+    );
+    expect(composeLiveStory(liveBase({ flip: true, side: "YES", action: "BUY" })).text).toBe(
+      "John defected to YES for $25",
+    );
+  });
+  it("a burst has no name — the crowd piles in", () => {
+    const t = composeLiveStory(
+      liveBase({ actor: null, walletCount: 5, market: { believersYes: 30 } }),
+    ).text;
+    expect(t).toBe("5 wallets piled into YES for $25 — 30 now hold YES");
+  });
+  it("never fabricates hype", () => {
+    const banned = ["whale", "smart money", "moon", "degen", "pouring", "exploding", "guaranteed"];
+    const t = composeLiveStory(
+      liveBase({ market: { newBackers1h: 99, believersYes: 999, moneyYesPct: 99 } }),
+    ).text.toLowerCase();
+    for (const w of banned) expect(t).not.toContain(w);
   });
 });
 
