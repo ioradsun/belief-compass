@@ -1,5 +1,5 @@
 /**
- * Conviction DNA — candidate generation (pure, Phase 8).
+ * Conviction DNA — candidate generation (pure).
  *
  * ZERO IO. Turns "other wallets that share directional markets with the viewer"
  * into a bounded, deterministically-ranked candidate pool BEFORE any exact DNA
@@ -7,10 +7,11 @@
  * shared directional markets, weighted by market distinctiveness) survive.
  *
  * Candidate weighting is a RETRIEVAL heuristic only — it never appears as the
- * user-facing match score. The canonical exact score is `matchScore` (domain.ts).
+ * user-facing DNA score. The canonical exact score is `scoreRelationship`
+ * (src/domain/dna/score.ts).
  */
 import { EPSILON, type Side } from "./domain";
-import { MATCH } from "./match-config";
+import { DNA_THRESHOLDS, DNA_LIMITS } from "./dna/config";
 
 /** One (candidate wallet, shared market) directional observation. */
 export interface SharedBeliefRow {
@@ -66,8 +67,8 @@ export function aggregateCandidates(
   popularity: Map<number, number>,
   opts: AggregateOptions = {},
 ): MatchCandidate[] {
-  const minShared = opts.minShared ?? MATCH.MIN_SHARED_OVERALL;
-  const maxCandidates = opts.maxCandidates ?? MATCH.MAX_CANDIDATES;
+  const minShared = opts.minShared ?? DNA_THRESHOLDS.minSharedOverall;
+  const maxCandidates = opts.maxCandidates ?? DNA_LIMITS.maxExactScored;
 
   type Acc = {
     shared: number;
@@ -120,7 +121,7 @@ export function aggregateCandidates(
  */
 export function rankAndCapCandidates(
   candidates: MatchCandidate[],
-  maxCandidates: number = MATCH.MAX_CANDIDATES,
+  maxCandidates: number = DNA_LIMITS.maxExactScored,
 ): MatchCandidate[] {
   const sorted = [...candidates].sort((a, b) => {
     if (Math.abs(b.weightedSharedEvidence - a.weightedSharedEvidence) > EPSILON)

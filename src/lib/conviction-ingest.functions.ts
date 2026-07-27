@@ -79,14 +79,16 @@ export const ensureConviction = createServerFn({ method: "GET" })
       } catch {
         /* best-effort enqueue; the on-demand path still recomputes when needed */
       }
-      // Phase 8: People = the viewer's bounded cache already holds relationships.
+      // People = the viewer's bounded DNA cache already holds relationships.
       const { data: cache } = await sb
-        .from("viewer_match_cache")
-        .select("closest_match, tribe_matches")
+        .from("viewer_dna_cache")
+        .select("closest_matches, tribe_matches, twin_matches")
         .eq("viewer_wallet", viewer)
         .maybeSingle();
+      const closest = (cache?.closest_matches as unknown[] | null) ?? [];
       const tribe = (cache?.tribe_matches as unknown[] | null) ?? [];
-      const hasPeople = Boolean(cache?.closest_match) || tribe.length > 0;
+      const twin = (cache?.twin_matches as unknown[] | null) ?? [];
+      const hasPeople = closest.length > 0 || tribe.length > 0 || twin.length > 0;
       return {
         viewer,
         connected,

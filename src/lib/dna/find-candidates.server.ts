@@ -1,13 +1,13 @@
 /**
- * Candidate generation (server, Phase 8).
+ * Conviction DNA — candidate generation (server).
  *
- * ONE candidate generator for the whole app. Delegates the set-based shared-market
- * aggregation to the `find_match_candidates` SQL RPC so the heavy join + prune +
- * cap run in Postgres (index-only over the directional slice) and only a bounded
- * pool ever crosses into the app for exact scoring. No per-candidate queries.
+ * ONE candidate generator. Delegates the set-based shared-market aggregation to
+ * the `find_match_candidates` SQL RPC so the heavy join + prune + cap run in
+ * Postgres (index-only over the directional slice); only a bounded pool ever
+ * crosses into the app for exact scoring. No per-candidate queries.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { MATCH } from "@/domain/match-config";
+import { DNA_THRESHOLDS, DNA_LIMITS } from "@/domain/dna/config";
 import type { MatchCandidate } from "@/domain/candidates";
 
 export interface FindCandidateOptions {
@@ -15,18 +15,13 @@ export interface FindCandidateOptions {
   maxCandidates?: number;
 }
 
-/**
- * Return the viewer's bounded candidate pool: other wallets that share enough
- * directional markets, ranked by distinctiveness-weighted evidence. Never scores
- * every wallet — the RPC prunes below `minShared` and caps at `maxCandidates`.
- */
-export async function findMatchCandidates(
+export async function findDnaCandidates(
   sb: SupabaseClient,
   viewerWallet: string,
   opts: FindCandidateOptions = {},
 ): Promise<MatchCandidate[]> {
-  const minShared = opts.minShared ?? MATCH.MIN_SHARED_OVERALL;
-  const maxCandidates = opts.maxCandidates ?? MATCH.MAX_CANDIDATES;
+  const minShared = opts.minShared ?? DNA_THRESHOLDS.minSharedOverall;
+  const maxCandidates = opts.maxCandidates ?? DNA_LIMITS.maxExactScored;
 
   const { data, error } = await sb.rpc("find_match_candidates", {
     p_viewer: viewerWallet.toLowerCase(),
