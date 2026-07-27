@@ -62,11 +62,12 @@ export const ensureConviction = createServerFn({ method: "GET" })
     const sb = publicClient();
     const svc = serviceClient();
 
-    // Matching is the heavy part (a candidate scan), so it does NOT run on this
-    // connect path. We enqueue the wallet and let the background match-worker
-    // compute + cache wallet_matches; the feed reads that cache and refetches, so
-    // People/Opp light up within ~a minute without blocking connect. We still
-    // report the CURRENT cache so a returning user sees their People instantly.
+    // Matching is the heavy part (a bounded candidate scan), so it does NOT run
+    // on this connect path. We enqueue the viewer and let the background
+    // match-worker recompute the bounded viewer_match_cache; the feed reads that
+    // cache and refetches, so People light up within ~a minute without blocking
+    // connect. We still report the CURRENT cache so a returning user sees People
+    // instantly.
     const finish = async (positionCount: number, marketCount: number) => {
       try {
         await svc
@@ -78,17 +79,21 @@ export const ensureConviction = createServerFn({ method: "GET" })
       } catch {
         /* best-effort enqueue; the on-demand path still recomputes when needed */
       }
-      const { count } = await sb
-        .from("wallet_matches")
-        .select("*", { count: "exact", head: true })
-        .eq("wallet", viewer);
+      // Phase 8: People = the viewer's bounded cache already holds relationships.
+      const { data: cache } = await sb
+        .from("viewer_match_cache")
+        .select("closest_match, tribe_matches")
+        .eq("viewer_wallet", viewer)
+        .maybeSingle();
+      const tribe = (cache?.tribe_matches as unknown[] | null) ?? [];
+      const hasPeople = Boolean(cache?.closest_match) || tribe.length > 0;
       return {
         viewer,
         connected,
         profile,
         positionCount,
         marketCount,
-        hasPeople: (count ?? 0) > 0,
+        hasPeople,
         matchesPending: true,
         resolved: Boolean(povUser),
       };

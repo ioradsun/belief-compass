@@ -77,16 +77,26 @@ export const listFeed = createServerFn({ method: "GET" })
     let tribePerson: MatchPerson | null = null;
     let oppPerson: MatchPerson | null = null;
     if (viewer && rows.length) {
-      const { data: matches } = await sb
-        .from("wallet_matches")
-        .select("matched_wallet, match_score")
-        .eq("wallet", viewer)
-        .order("match_score", { ascending: false })
-        .limit(50);
-      const list = matches ?? [];
-      const tribe = list[0] ?? null;
-      const oppCand = list[list.length - 1] ?? null;
-      const opp = oppCand && Number(oppCand.match_score) < 50 ? oppCand : null;
+      // Phase 8: read the bounded viewer cache (closest / Tribe / Rivals). The
+      // feed NEVER computes DNA inline — on a miss/stale it enqueues a bounded
+      // background refresh and renders globally without personalization.
+      const { readViewerCache } = await import("@/lib/matches/viewer-cache.server");
+      const cache = await readViewerCache(sb, viewer);
+      if (!cache || !cache.fresh) {
+        try {
+          await sb.rpc("request_viewer_match_refresh", { p_wallet: viewer });
+        } catch {
+          /* best-effort; the connect path also enqueues */
+        }
+      }
+      const tribeEntry = cache?.closestMatch ?? cache?.tribe[0] ?? null;
+      const oppEntry = cache?.rivals[0] ?? null;
+      const tribe = tribeEntry
+        ? { matched_wallet: tribeEntry.wallet, match_score: tribeEntry.score }
+        : null;
+      const opp = oppEntry
+        ? { matched_wallet: oppEntry.wallet, match_score: oppEntry.score }
+        : null;
       const focus = [tribe?.matched_wallet, opp?.matched_wallet].filter(Boolean) as string[];
       if (focus.length) {
         const ids = rows.map((r) => Number(r.onchain_id));
@@ -446,7 +456,7 @@ export const getIngestStatus = createServerFn({ method: "GET" }).handler(async (
       sb.from("events").select("*", { count: "exact", head: true }).eq("is_canonical", true),
       // Legacy store (retained; no longer authoritative for trades).
       sb.from("feed_events").select("*", { count: "exact", head: true }),
-      sb.from("wallet_matches").select("*", { count: "exact", head: true }),
+      sb.from("viewer_match_cache").select("*", { count: "exact", head: true }),
       sb.from("market_state").select("*", { count: "exact", head: true }).gt("believers_yes", 0),
       sb
         .from("ingest_state")

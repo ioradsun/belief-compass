@@ -1,7 +1,14 @@
 import type { ReactElement } from "react";
 import { DOMAINS, type Domain } from "@/domain/categories";
 
-import type { CircleSummary } from "@/lib/circles.functions";
+/** Minimal per-domain shape the radial fingerprint renders (Phase 8). */
+export interface CircleSummary {
+  domain: Domain;
+  insufficient: boolean;
+  shared_markets: number;
+  top_ally: { wallet: string; match_score: number } | null;
+  top_rival?: { wallet: string; match_score: number } | null;
+}
 
 interface Props {
   circles: CircleSummary[];
@@ -23,7 +30,6 @@ export function Fingerprint({ circles, size = 260 }: Props) {
   const labels: ReactElement[] = [];
   const spokeEls: ReactElement[] = [];
 
-
   DOMAINS.forEach((dom, i) => {
     const angle = (i / DOMAINS.length) * Math.PI * 2 - Math.PI / 2;
     const c = byDomain.get(dom);
@@ -38,12 +44,13 @@ export function Fingerprint({ circles, size = 260 }: Props) {
     spokeEls.push(
       <line
         key={`ax-${dom}`}
-        x1={cx} y1={cy}
+        x1={cx}
+        y1={cy}
         x2={cx + Math.cos(angle) * rMax}
         y2={cy + Math.sin(angle) * rMax}
         stroke="currentColor"
         strokeOpacity={0.08}
-      />
+      />,
     );
 
     if (!ok) {
@@ -52,10 +59,14 @@ export function Fingerprint({ circles, size = 260 }: Props) {
       stubs.push(
         <line
           key={`stub-${dom}`}
-          x1={cx} y1={cy} x2={sx} y2={sy}
-          stroke="currentColor" strokeOpacity={0.25}
+          x1={cx}
+          y1={cy}
+          x2={sx}
+          y2={sy}
+          stroke="currentColor"
+          strokeOpacity={0.25}
           strokeDasharray="3 3"
-        />
+        />,
       );
     }
 
@@ -64,7 +75,8 @@ export function Fingerprint({ circles, size = 260 }: Props) {
     labels.push(
       <text
         key={`lb-${dom}`}
-        x={lx} y={ly}
+        x={lx}
+        y={ly}
         textAnchor="middle"
         dominantBaseline="middle"
         fontSize={9}
@@ -72,7 +84,7 @@ export function Fingerprint({ circles, size = 260 }: Props) {
         style={{ opacity: ok ? 1 : 0.5 }}
       >
         {dom}
-      </text>
+      </text>,
     );
   });
 
@@ -80,8 +92,15 @@ export function Fingerprint({ circles, size = 260 }: Props) {
     <svg width={size} height={size} className="text-foreground">
       {/* rings */}
       {[0.25, 0.5, 0.75, 1].map((f) => (
-        <circle key={f} cx={cx} cy={cy} r={rMax * f}
-          fill="none" stroke="currentColor" strokeOpacity={0.06} />
+        <circle
+          key={f}
+          cx={cx}
+          cy={cy}
+          r={rMax * f}
+          fill="none"
+          stroke="currentColor"
+          strokeOpacity={0.06}
+        />
       ))}
       {spokeEls}
       {stubs}

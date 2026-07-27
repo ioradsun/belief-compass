@@ -18,6 +18,7 @@
     "backfill:position-cursors": "tsx scripts/backfill-position-cursors.ts",
     "check:market-state": "tsx scripts/check-market-state.ts",
     "check:opportunities": "tsx scripts/check-opportunities.ts",
+    "check:matches": "tsx scripts/check-matches.ts",
     "check:ownership": "tsx scripts/check-ownership.ts"
   },
   "dependencies": {
