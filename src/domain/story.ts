@@ -213,3 +213,100 @@ export function composeMarketStory(input: StoryInput): MarketStory {
 
   return { beats, faces: network, crowd };
 }
+
+// ============================================================================
+// Live-event story — one line per Live-tape row.
+//
+// Turns a single on-chain action into a FOMO-shaped sentence:
+//   {who} {joined/doubled down/cut/defected} the {SIDE} army for ${amt}
+//   — {the single strongest true momentum hook}
+//
+// Every clause is TRUE (numbers come from the row + market_state). Gamified
+// framing (army / joined / defected / heating up) is allowed; fabricated hype
+// (whale / smart money / guaranteed / moon / pouring) is not.
+// ============================================================================
+
+export interface LiveStoryInput {
+  /** Named actor for a single-wallet row; null for a multi-wallet burst. */
+  actor?: { name: string; relationship: NetworkLabel | null } | null;
+  /** Wallets in a burst (for the crowd line); 1/undefined for a single actor. */
+  walletCount?: number | null;
+  side: Side | null;
+  action?: "BUY" | "SELL" | null;
+  /** A position_changed_side event — the actor switched sides. */
+  flip?: boolean;
+  amountUsd?: number | null;
+  market?: {
+    believersYes?: number | null;
+    believersNo?: number | null;
+    newBackers1h?: number | null;
+    moneyYesPct?: number | null;
+    peopleYesPct?: number | null;
+    opportunityType?: string | null;
+  } | null;
+}
+
+const capWord = (s: string) => s[0].toUpperCase() + s.slice(1);
+
+/** The single strongest true momentum hook for a Live line (or ""). */
+function liveMomentumClause(input: LiveStoryInput, side: Side): string {
+  const m = input.market;
+  if (!m) return "";
+  const sideBackers = side === "YES" ? num(m.believersYes) : num(m.believersNo);
+  const n1h = num(m.newBackers1h);
+  const moneyOnSide =
+    m.moneyYesPct == null ? 0 : side === "YES" ? num(m.moneyYesPct) : 100 - num(m.moneyYesPct);
+  const divergent =
+    m.peopleYesPct != null &&
+    m.moneyYesPct != null &&
+    (num(m.peopleYesPct) - 50) * (num(m.moneyYesPct) - 50) < 0;
+  const buy = !input.flip && input.action !== "SELL";
+
+  if (buy) {
+    // Urgency first, then bandwagon, then dominance.
+    if (n1h >= 3 || m.opportunityType === "hot")
+      return n1h >= 2 ? `${side} is heating up, ${n1h} joined this hour` : `${side} is heating up`;
+    if (sideBackers >= 5) return `${sideBackers} now hold ${side}`;
+    if (moneyOnSide >= 60) return `the money's ${Math.round(moneyOnSide)}% ${side}`;
+    return "";
+  }
+  // Selling / defecting — the contrarian or cooling angle.
+  if (divergent) {
+    const moneySide: Side = num(m.moneyYesPct) >= 50 ? "YES" : "NO";
+    return `the money leans ${moneySide}`;
+  }
+  if (sideBackers >= 5) return `${sideBackers} still hold ${side}`;
+  return "";
+}
+
+export function composeLiveStory(input: LiveStoryInput): { text: string; tone: BeatTone } {
+  const side = input.side;
+  const tone: BeatTone = side === "YES" ? "yes" : side === "NO" ? "no" : "neutral";
+  const stake =
+    input.amountUsd && input.amountUsd > 0
+      ? ` for $${Math.round(input.amountUsd).toLocaleString("en-US")}`
+      : "";
+  const clause = side ? liveMomentumClause(input, side) : "";
+  const tail = clause ? ` — ${clause}` : "";
+
+  // Crowd burst (no named actor).
+  if (!input.actor) {
+    const n = num(input.walletCount) || 1;
+    const verb = input.action === "SELL" ? "trimmed" : "piled into";
+    return {
+      text: `${n} ${n === 1 ? "wallet" : "wallets"} ${verb} ${side ?? ""}${stake}${tail}`.trim(),
+      tone,
+    };
+  }
+
+  const who = input.actor.relationship
+    ? `${input.actor.name} (${capWord(input.actor.relationship)})`
+    : input.actor.name;
+
+  let verbPhrase: string;
+  if (input.flip) verbPhrase = `defected to ${side ?? ""}`.trim();
+  else if (input.action === "SELL") verbPhrase = `cut ${side ?? ""}`.trim();
+  else verbPhrase = `joined the ${side ?? ""} army`.trim();
+
+  return { text: `${who} ${verbPhrase}${stake}${tail}`.trim(), tone };
+}
