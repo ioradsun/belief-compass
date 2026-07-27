@@ -4,18 +4,10 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { linkMessage } from "@/lib/wallet-link";
 
 const addr = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 
-/** Message the trading wallet must sign to prove ownership. */
-export function linkMessage(connected: string, linked: string, nonce: string) {
-  return [
-    "Conviction — link wallets",
-    `Trading wallet: ${linked.toLowerCase()}`,
-    `Connected wallet: ${connected.toLowerCase()}`,
-    `Nonce: ${nonce}`,
-  ].join("\n");
-}
 
 export const getWalletLink = createServerFn({ method: "GET" })
   .inputValidator((data) => z.object({ wallet: addr }).parse(data))
