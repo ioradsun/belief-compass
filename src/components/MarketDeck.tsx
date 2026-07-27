@@ -12,14 +12,22 @@ import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { CHAIN_ID } from "@/chain/decoder";
-import { useBuyQuote, useTrade, useTradeReady, useUserBalance } from "@/lib/chain-trade";
+import {
+  useBuyQuote,
+  useSellQuote,
+  useTrade,
+  useTradeReady,
+  useUserBalance,
+} from "@/lib/chain-trade";
 import {
   pulseFor,
   usdToWei,
+  weiToUsd,
   avgPriceUsd,
   fmtShares,
   fmtUsd,
   selectSide,
+  sharesForPct,
   type OrderSide,
 } from "@/domain/order";
 
@@ -49,6 +57,10 @@ export function MarketDeck({
 
   const [amount, setAmount] = useState(20);
   const [side, setSide] = useState<OrderSide | null>(null);
+  // Sell is a separate, deliberate mode — a percentage of the held side. Null
+  // means "not selling"; the buy dock owns the surface. Buying the opposite side
+  // never sells (they're separate token balances), so a flip can't silently exit.
+  const [sellPct, setSellPct] = useState<number | null>(null);
 
   const { openConnectModal } = useConnectModal();
   const { switchChain } = useSwitchChain();
@@ -59,9 +71,10 @@ export function MarketDeck({
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(marketId, side === "YES", side ? ethWei : 0n);
 
-  // Reset the order when the market changes.
+  // Reset both flows when the market changes.
   useEffect(() => {
     setSide(null);
+    setSellPct(null);
     trade.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketId]);
@@ -90,6 +103,35 @@ export function MarketDeck({
       : bal.no > 0n
         ? { side: "NO" as const, tokens: bal.no }
         : null;
+
+  // Sell quote (only while the sell panel is open on a held side).
+  const sellShares = held && sellPct != null ? sharesForPct(held.tokens, sellPct) : 0n;
+  const { proceeds, isLoading: sellQuoting } = useSellQuote(
+    marketId,
+    held?.side === "YES",
+    sellShares,
+  );
+
+  const openSell = () => {
+    setSide(null);
+    trade.reset();
+    setSellPct(100);
+  };
+  const closeSell = () => {
+    setSellPct(null);
+    trade.reset();
+  };
+  const onSellConfirm = async () => {
+    if (!ready.connected) return openConnectModal?.();
+    if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
+    if (held && proceeds != null && sellShares > 0n && !(trade.isSubmitting || trade.isMining)) {
+      try {
+        await trade.sell(marketId, held.side === "YES", sellShares, proceeds);
+      } catch {
+        /* surfaced via trade.error */
+      }
+    }
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -160,43 +202,72 @@ export function MarketDeck({
         )}
       </div>
 
-      {held && (
-        <div className="text-[12px] text-[var(--text-muted)]">
-          You already hold <b className="text-[var(--text)]">{held.side}</b> ·{" "}
-          {fmtShares(held.tokens)} shares
+      {held && sellPct == null && (
+        <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
+          <span>
+            You hold <b className="text-[var(--text)]">{held.side}</b> · {fmtShares(held.tokens)}{" "}
+            shares
+          </span>
+          <button
+            type="button"
+            onClick={openSell}
+            className="ml-auto rounded-[10px] px-3 py-1 text-[12px] font-semibold text-[var(--text-secondary)]"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            Sell
+          </button>
         </div>
       )}
 
-      {/* Decision dock */}
+      {/* Decision dock — buy by default; sell takes over when opened on a holding. */}
       <div className="mt-auto">
-        <Dock
-          side={side}
-          amount={amount}
-          setAmount={setAmount}
-          onSelect={(s) => setSide((cur) => selectSide(cur, s))}
-          onSkip={onSkip}
-          quote={quote}
-          quoting={quoting}
-          ethWei={ethWei}
-          ethUsd={ethUsd}
-          ready={ready}
-          trade={trade}
-          onConfirm={async () => {
-            if (!ready.connected) return openConnectModal?.();
-            if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
-            if (side && quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
-              try {
-                await trade.buy(marketId, side === "YES", ethWei, quote.tokens);
-              } catch {
-                /* surfaced via trade.error */
+        {held && sellPct != null ? (
+          <SellPanel
+            held={held}
+            pct={sellPct}
+            setPct={setSellPct}
+            proceeds={proceeds}
+            quoting={sellQuoting}
+            ethUsd={ethUsd}
+            ready={ready}
+            trade={trade}
+            onConfirm={onSellConfirm}
+            onCancel={closeSell}
+            onDone={() => {
+              void bal.refetch();
+              closeSell();
+            }}
+          />
+        ) : (
+          <Dock
+            side={side}
+            amount={amount}
+            setAmount={setAmount}
+            onSelect={(s) => setSide((cur) => selectSide(cur, s))}
+            onSkip={onSkip}
+            quote={quote}
+            quoting={quoting}
+            ethWei={ethWei}
+            ethUsd={ethUsd}
+            ready={ready}
+            trade={trade}
+            onConfirm={async () => {
+              if (!ready.connected) return openConnectModal?.();
+              if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
+              if (side && quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
+                try {
+                  await trade.buy(marketId, side === "YES", ethWei, quote.tokens);
+                } catch {
+                  /* surfaced via trade.error */
+                }
               }
-            }
-          }}
-          onDone={() => {
-            void bal.refetch();
-            onSkip();
-          }}
-        />
+            }}
+            onDone={() => {
+              void bal.refetch();
+              onSkip();
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -420,6 +491,132 @@ function Dock({
             {busy ? "Confirming…" : confirmLabel}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SellPanel({
+  held,
+  pct,
+  setPct,
+  proceeds,
+  quoting,
+  ethUsd,
+  ready,
+  trade,
+  onConfirm,
+  onCancel,
+  onDone,
+}: {
+  held: { side: OrderSide; tokens: bigint };
+  pct: number;
+  setPct: (n: number) => void;
+  proceeds: bigint | null;
+  quoting: boolean;
+  ethUsd: number;
+  ready: { connected: boolean; onBase: boolean };
+  trade: TradeApi;
+  onConfirm: () => void;
+  onCancel: () => void;
+  onDone: () => void;
+}) {
+  // Receipt.
+  if (trade.isSuccess) {
+    return (
+      <div
+        className="rounded-[16px] p-4"
+        style={{ border: "1px solid var(--border-strong,var(--border))" }}
+      >
+        <div className="flex items-center gap-3">
+          <span
+            className="grid h-7 w-7 place-items-center rounded-full"
+            style={{ background: "color-mix(in oklab,var(--text-muted) 18%,transparent)" }}
+          >
+            <span className="text-[var(--text-secondary)]">✓</span>
+          </span>
+          <div>
+            <div className="text-[15px] font-semibold text-[var(--text)]">Left {held.side}</div>
+            {proceeds != null && (
+              <div className="num text-[11px] text-[var(--text-muted)]">
+                Sold {pct}% · +{fmtUsd(weiToUsd(proceeds, ethUsd))}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onDone}
+            className="ml-auto rounded-[12px] px-4 py-2 text-[13px] font-semibold text-[var(--bg)]"
+            style={{ background: "var(--text)" }}
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const busy = trade.isSubmitting || trade.isMining;
+  const shares = sharesForPct(held.tokens, pct);
+  const confirmLabel = !ready.connected
+    ? "Connect wallet"
+    : !ready.onBase
+      ? "Switch to Base"
+      : `Sell ${pct}% of ${held.side}`;
+  const disabled = ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n);
+
+  return (
+    <div className="rounded-[16px] p-3" style={{ border: "1px solid var(--no)" }}>
+      <div className="mb-2 flex items-center gap-2 px-1">
+        <span className="text-[12px] font-semibold text-[var(--no)]">Sell {held.side}</span>
+        <span className="ml-auto flex gap-1">
+          {[25, 50, 100].map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPct(p)}
+              className="rounded-[8px] px-2 py-1 text-[11px] font-semibold"
+              style={
+                pct === p
+                  ? { background: "var(--no)", color: "#2d0808" }
+                  : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
+              }
+            >
+              {p === 100 ? "All" : `${p}%`}
+            </button>
+          ))}
+        </span>
+      </div>
+      <div className="mb-2 space-y-1 px-1">
+        <QuoteRow k="Selling" v={`${fmtShares(shares)} shares`} />
+        <QuoteRow
+          k="You receive"
+          v={quoting ? "…" : proceeds != null ? `≈ ${fmtUsd(weiToUsd(proceeds, ethUsd))}` : "—"}
+        />
+        {trade.isError && (
+          <div className="text-[11px] text-[var(--no)]">
+            {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="h-[52px] flex-1 rounded-[12px] text-[14px] font-medium text-[var(--text-secondary)]"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onConfirm}
+          className="h-[52px] flex-[2] rounded-[12px] text-[15px] font-semibold disabled:opacity-40"
+          style={{ background: "var(--no)", color: "#2d0808" }}
+        >
+          {busy ? "Selling…" : confirmLabel}
+        </button>
       </div>
     </div>
   );

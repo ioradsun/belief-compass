@@ -6,6 +6,7 @@ import {
   avgPriceUsd,
   pulseFor,
   selectSide,
+  sharesForPct,
   DEFAULT_SLIPPAGE_BPS,
 } from "./order";
 
@@ -63,6 +64,21 @@ describe("pulse", () => {
   });
   it("unknown/none → Steady", () => {
     expect(pulseFor(null, null).label).toBe("Steady");
+  });
+});
+
+describe("sharesForPct", () => {
+  const held = 1000n * 10n ** 18n;
+  it("takes a floored percentage of the holding", () => {
+    expect(sharesForPct(held, 100)).toBe(held);
+    expect(sharesForPct(held, 50)).toBe(held / 2n);
+    expect(sharesForPct(held, 25)).toBe(held / 4n);
+  });
+  it("clamps and guards", () => {
+    expect(sharesForPct(held, 0)).toBe(0n);
+    expect(sharesForPct(held, -5)).toBe(0n);
+    expect(sharesForPct(held, 250)).toBe(held);
+    expect(sharesForPct(0n, 100)).toBe(0n);
   });
 });
 
