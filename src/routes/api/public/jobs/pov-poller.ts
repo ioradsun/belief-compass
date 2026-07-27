@@ -166,7 +166,12 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
             ms: Date.now() - started,
           });
         } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : String(e);
+          const msg =
+            e instanceof Error
+              ? e.message
+              : typeof e === "object" && e !== null
+                ? JSON.stringify(e)
+                : String(e);
           console.error("[pov-poller]", msg);
           return Response.json({ ok: false, error: msg, seen, upserted }, { status: 500 });
         }
