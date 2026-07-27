@@ -1,25 +1,15 @@
 /**
- * LEFT PANEL — "My Convictions".
+ * LEFT PANEL — "You" (My Convictions). Phase 7.
  *
- * Presentation only: portfolio summary (neutral grey change line), then one
- * position card per open belief. Each card runs the SAME live pulse line as the
- * market cards (shared Face/pulseLine, same rotation cadence), and the same
- * window-scoped percentage. Green/red are reserved for the YES/NO pill.
+ * Presentation only: portfolio summary, then one compact position row per open
+ * belief. Each row shows the GLOBAL market_state live line (joined by getWallet —
+ * NO per-position activity query) and selects the market in the center on click.
  */
-import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import {
-  getWallet,
-  listMarketPulses,
-  type Pulse,
-  type VolumeWindow,
-} from "@/lib/markets.functions";
-import { Face, pulseLine, type MarketRow } from "@/components/MarketCard";
+import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
+import { type MarketRow } from "@/components/MarketCard";
 import { WalletConnectButton } from "@/components/WalletConnect";
 import { WalletIdentity } from "@/components/WalletIdentity";
-
-const ROTATE_MS = 4500;
 
 type Position = {
   onchain_id: number;
@@ -52,12 +42,15 @@ function signedPct(n: number | null) {
   return `${n < 0 ? "−" : "+"}${abs.toFixed(d)}%`;
 }
 
-/** One position card, with its own rotating pulse line. */
+/**
+ * One position row. The live line is the GLOBAL market_state live line (joined by
+ * getWallet) — no per-position activity query. Clicking selects the market in the
+ * center (Discover), not a separate detail page.
+ */
 function PositionCard({
   p,
-  ethUsd,
-  stagger,
   winLabel,
+  onSelect,
 }: {
   p: {
     id: number;
@@ -65,33 +58,16 @@ function PositionCard({
     value: number;
     chg: number | null;
     title: string;
-    pulses: Pulse[];
+    liveLine: string | null;
   };
-  ethUsd: number;
-  stagger: number;
   winLabel: string;
+  onSelect: (id: number) => void;
 }) {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    if (p.pulses.length <= 1) return;
-    let interval: ReturnType<typeof setInterval> | undefined;
-    const start = setTimeout(() => {
-      setI((n) => (n + 1) % p.pulses.length);
-      interval = setInterval(() => setI((n) => (n + 1) % p.pulses.length), ROTATE_MS);
-    }, stagger);
-    return () => {
-      clearTimeout(start);
-      if (interval) clearInterval(interval);
-    };
-  }, [p.pulses.length, stagger]);
-
-  const current = p.pulses[i % Math.max(1, p.pulses.length)];
-
   return (
-    <Link
-      to="/market/$id"
-      params={{ id: String(p.id) }}
-      className="block rounded-[14px] p-3 transition-colors"
+    <button
+      type="button"
+      onClick={() => onSelect(p.id)}
+      className="block w-full rounded-[14px] p-3 text-left transition-colors"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <div className="line-clamp-2 text-[13px] leading-snug text-[var(--text)]">{p.title}</div>
@@ -113,38 +89,27 @@ function PositionCard({
           {signedPct(p.chg)} <span className="text-[var(--text-muted)]">{winLabel}</span>
         </span>
       </div>
-      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
-        <span
-          className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${current ? "animate-pulse" : ""}`}
-          style={{ background: current ? "var(--yes)" : "var(--text-muted)" }}
-        />
-        {current ? (
-          <>
-            <Face p={current} size={16} />
-            <span className="truncate">{pulseLine(current, ethUsd)}</span>
-          </>
-        ) : (
-          <span className="truncate">quiet — no recent trades</span>
-        )}
-      </div>
-    </Link>
+      {/* One factual live line from market_state — omit the row when nothing meaningful. */}
+      {p.liveLine ? (
+        <div className="mt-2 truncate text-[11px] text-[var(--text-muted)]">{p.liveLine}</div>
+      ) : null}
+    </button>
   );
 }
 
 export function MyConvictions({
   wallet,
   rows,
-  pulses,
   window: win = "24h",
   winLabel = "24H",
-  ethUsd = 0,
+  onSelect,
 }: {
   wallet?: string;
   rows: MarketRow[];
-  pulses: Record<string, Pulse[]>;
   window?: VolumeWindow;
   winLabel?: string;
-  ethUsd?: number;
+  /** Universal selection: open the position's market in the center (Discover). */
+  onSelect: (id: number) => void;
 }) {
   const { data } = useQuery({
     queryKey: ["my-convictions", wallet ?? null, win],
@@ -184,6 +149,9 @@ export function MyConvictions({
         value,
         chg,
         title: p.markets?.title ?? `Market #${id}`,
+        // The GLOBAL market_state live line (joined by getWallet) — no per-position query.
+        liveLine:
+          ((st as { live_line?: string | null } | null)?.live_line as string | null) ?? null,
       };
     })
     .filter(Boolean) as {
@@ -192,26 +160,11 @@ export function MyConvictions({
     value: number;
     chg: number | null;
     title: string;
+    liveLine: string | null;
   }[];
 
   built.sort((a, b) => b.value - a.value);
-  const top = built.slice(0, 40);
-
-  // Same feed the market cards run on, but for the markets *I* hold — those are
-  // mostly outside the 50-row feed page, so they need their own pulse fetch.
-  const missing = top.map((p) => p.id).filter((id) => !pulses[String(id)]);
-  const { data: mine } = useQuery({
-    queryKey: ["my-pulses", missing.join(",")],
-    queryFn: async () => await listMarketPulses({ data: { ids: missing.slice(0, 40) } }),
-    enabled: missing.length > 0,
-    refetchInterval: 20_000,
-  });
-  const minePulses = mine?.pulses ?? {};
-
-  const positions = top.map((p) => ({
-    ...p,
-    pulses: pulses[String(p.id)] ?? minePulses[String(p.id)] ?? [],
-  }));
+  const positions = built.slice(0, 40);
 
   const total = built.reduce((s, p) => s + p.value, 0);
   const prev = built.reduce((s, p) => {
@@ -250,14 +203,8 @@ export function MyConvictions({
         </div>
       ) : (
         <div className="flex flex-col gap-2 pt-4">
-          {positions.map((p, idx) => (
-            <PositionCard
-              key={p.id}
-              p={p}
-              ethUsd={ethUsd}
-              stagger={(idx % 6) * 700}
-              winLabel={winLabel}
-            />
+          {positions.map((p) => (
+            <PositionCard key={p.id} p={p} winLabel={winLabel} onSelect={onSelect} />
           ))}
         </div>
       )}

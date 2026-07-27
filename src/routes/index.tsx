@@ -8,7 +8,7 @@ import {
   type VolumeWindow,
 } from "@/lib/markets.functions";
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
-import { ConvictionFeed } from "@/components/ConvictionFeed";
+import { LiveTape } from "@/components/LiveTape";
 import { StoryDeck } from "@/components/StoryDeck";
 // Phase 5: the SERVER owns opportunity classification + score. The client only
 // filters by the canonical type and reads the precomputed order — no scoreFeed().
@@ -77,9 +77,12 @@ const statusQO = queryOptions({
 });
 
 export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>): { wallet?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { wallet?: string; m?: number } => ({
     wallet:
       typeof search.wallet === "string" && search.wallet.length > 3 ? search.wallet : undefined,
+    // Universal selected-market state: one URL param shared by every surface, so
+    // deep links + browser back/forward resolve the same center market.
+    m: search.m != null && Number.isFinite(Number(search.m)) ? Number(search.m) : undefined,
   }),
   head: () => ({
     meta: [
@@ -272,8 +275,16 @@ const TABS: { key: MobileTab; label: string }[] = [
 ];
 
 function Feed() {
-  const { wallet: searchWallet } = Route.useSearch();
+  const { wallet: searchWallet, m: selectedMarket } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
+  // One selection flow for the whole app: clicking a position (You) or a Live row
+  // sets ?m, which the center deck resolves to. Also switches the mobile tab to
+  // Discover so the selected market is visible.
+  const selectMarket = (marketId: number) => {
+    navigate({ search: (prev) => ({ ...prev, m: marketId }) });
+    setTab("belief");
+  };
   const [win, setWin] = useState<VolumeWindow>("24h");
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -364,10 +375,9 @@ function Feed() {
         <MyConvictions
           wallet={wallet}
           rows={rows as unknown as MarketRow[]}
-          pulses={pulses}
           window={win}
           winLabel={winLabel}
-          ethUsd={data.ethUsd ?? 0}
+          onSelect={selectMarket}
         />
       </aside>
 
@@ -427,6 +437,7 @@ function Feed() {
                 tribe={data.tribe ?? null}
                 opp={data.opp ?? null}
                 reasonByMarket={reasonByMarket}
+                selectedId={selectedMarket}
               />
             </div>
           )}
@@ -444,9 +455,9 @@ function Feed() {
         style={{ borderLeft: "1px solid var(--border)" }}
       >
         <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-          The Room
+          Live
         </div>
-        <ConvictionFeed wallet={wallet} />
+        <LiveTape onSelect={selectMarket} />
       </aside>
 
       {/* Mobile slide-in menu (replaces the bottom tab bar) */}
