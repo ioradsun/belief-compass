@@ -222,29 +222,8 @@ function Feed() {
     </div>
   );
 
-  const activeLens = OPP_FILTERS.find((l) => l.key === lens)!;
-  const lensPicker = (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-        {OPP_FILTERS.map((l) => (
-          <button
-            key={l.key}
-            type="button"
-            onClick={() => setLens(l.key)}
-            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-              lens === l.key
-                ? "border-foreground bg-foreground text-background"
-                : "border-border text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span aria-hidden>{l.emoji}</span> {l.label}
-          </button>
-        ))}
-      </div>
-      {/* The lens exposes intent — the human question — never the formula. */}
-      <p className="px-0.5 text-[11px] text-muted-foreground">{activeLens.question}</p>
-    </div>
-  );
+
+
 
   return (
     <div className="grid h-[100dvh] w-full grid-cols-1 grid-rows-1 overflow-hidden bg-[var(--bg)] text-[var(--text)] lg:[grid-template-columns:minmax(210px,236px)_minmax(560px,1fr)_minmax(290px,326px)]">
