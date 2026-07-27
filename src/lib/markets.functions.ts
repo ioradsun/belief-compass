@@ -310,7 +310,14 @@ export const getMarket = createServerFn({ method: "GET" })
   });
 
 export const getWallet = createServerFn({ method: "GET" })
-  .inputValidator((d: { wallet: string }) => z.object({ wallet: z.string().min(3) }).parse(d))
+  .inputValidator((d: { wallet: string; window?: VolumeWindow }) =>
+    z
+      .object({
+        wallet: z.string().min(3),
+        window: z.enum(["1h", "24h", "7d", "30d", "all"]).optional(),
+      })
+      .parse(d),
+  )
   .handler(async ({ data }) => {
     const sb = publicClient();
     const wallet = data.wallet.toLowerCase();
@@ -368,12 +375,37 @@ export const getWallet = createServerFn({ method: "GET" })
         });
     }
 
+    // Window-scoped price moves, same RPC the market cards use, so the panel
+    // and the cards always agree on the percentage.
+    const win: VolumeWindow = data.window ?? "24h";
+    const winMs = VOLUME_WINDOWS[win];
+    const since = winMs == null ? null : new Date(Date.now() - winMs).toISOString();
+    const chgYes = new Map<number, number>();
+    const chgNo = new Map<number, number>();
+    if (ids.length) {
+      const { data: chg } = await sb.rpc("market_change_window", {
+        p_ids: ids,
+        p_since: since,
+      });
+      for (const c of (chg ?? []) as {
+        onchain_id: number;
+        chg_yes: number | null;
+        chg_no: number | null;
+      }[]) {
+        const id = Number(c.onchain_id);
+        if (c.chg_yes != null && Number.isFinite(Number(c.chg_yes))) chgYes.set(id, Number(c.chg_yes));
+        if (c.chg_no != null && Number.isFinite(Number(c.chg_no))) chgNo.set(id, Number(c.chg_no));
+      }
+    }
+
     const positions = (rows ?? []).map((r) => ({
       ...r,
       markets: metaById.get(Number(r.onchain_id)) ?? null,
       state: stateById.get(Number(r.onchain_id)) ?? null,
+      chg_window_yes: chgYes.get(Number(r.onchain_id)) ?? null,
+      chg_window_no: chgNo.get(Number(r.onchain_id)) ?? null,
     }));
-    return { wallet, positions };
+    return { wallet, positions, window: win };
 
   });
 

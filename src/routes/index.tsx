@@ -267,6 +267,9 @@ function Feed() {
           wallet={wallet}
           rows={rows as unknown as MarketRow[]}
           pulses={pulses}
+          window={win}
+          winLabel={winLabel}
+          ethUsd={data.ethUsd ?? 0}
         />
       </aside>
 
