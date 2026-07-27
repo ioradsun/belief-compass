@@ -135,11 +135,13 @@ const LARGE_TRADE_USD = 1000;
  * Collapse canonical events (in reverse-chronological order) into Live rows.
  * `ethUsd` converts ETH amounts to USD for the copy; grouping is deterministic.
  */
-export function groupLiveRows(events: LiveEventInput[], ethUsd: number): LiveRow[] {
+export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[] {
+  const { kept: events, roundTrip } = collapseRoundTrips(input);
   const rows: LiveRow[] = [];
   let i = 0;
   while (i < events.length) {
     const e = events[i];
+
 
     // Non-trade structured events pass through as their own rows (never grouped).
     if (e.kind !== "trade") {
