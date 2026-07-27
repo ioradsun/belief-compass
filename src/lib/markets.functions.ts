@@ -314,20 +314,41 @@ export const getWallet = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const sb = publicClient();
     const wallet = data.wallet.toLowerCase();
-    const { data: positions } = await sb
+    // NOTE: there is no FK from wallet_beliefs.onchain_id -> markets, so the
+    // market title/category must be fetched separately and stitched in.
+    const { data: rows } = await sb
       .from("wallet_beliefs")
       .select(
         `
         onchain_id, expressed_side, stance_side, stance, conviction, days_held,
-        yes_shares, no_shares, first_backed_at,
-        markets:onchain_id ( title, category )
+        yes_shares, no_shares, first_backed_at
       `,
       )
       .eq("wallet", wallet)
       .order("conviction", { ascending: false })
       .limit(200);
-    return { wallet, positions: positions ?? [] };
+
+    const ids = Array.from(new Set((rows ?? []).map((r) => Number(r.onchain_id))));
+    const metaById = new Map<number, { title: string | null; category: string | null }>();
+    if (ids.length) {
+      const { data: mk } = await sb
+        .from("markets")
+        .select("onchain_id, title, category")
+        .in("onchain_id", ids);
+      for (const m of mk ?? [])
+        metaById.set(Number(m.onchain_id), {
+          title: (m.title as string | null) ?? null,
+          category: (m.category as string | null) ?? null,
+        });
+    }
+
+    const positions = (rows ?? []).map((r) => ({
+      ...r,
+      markets: metaById.get(Number(r.onchain_id)) ?? null,
+    }));
+    return { wallet, positions };
   });
+
 
 const CHAIN_DEPLOY_BLOCK = 45_500_000;
 

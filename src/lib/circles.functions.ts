@@ -63,10 +63,11 @@ export const getCirclesForWallet = createServerFn({ method: "GET" })
     const wallet = data.wallet.toLowerCase();
     const pub = publicClient();
 
-    // 1. Viewer's directional beliefs + category via join
+    // 1. Viewer's directional beliefs (categories fetched separately — there is
+    // no FK from wallet_beliefs.onchain_id to markets, so PostgREST can't join).
     const { data: myBeliefs } = await pub
       .from("wallet_beliefs")
-      .select("onchain_id, stance, stance_side, conviction, last_trade_at, markets:onchain_id(category)")
+      .select("onchain_id, stance, stance_side, conviction, last_trade_at")
       .eq("wallet", wallet)
       .in("stance_side", ["YES", "NO"]);
 
@@ -78,12 +79,25 @@ export const getCirclesForWallet = createServerFn({ method: "GET" })
       return { wallet, overall_insufficient: true, overall_shared: 0, circles: emptyCircles, cached: false };
     }
 
+    const categoryById = new Map<number, string | null>();
+    {
+      const ids = Array.from(new Set(myBeliefs.map((r) => Number(r.onchain_id))));
+      for (let i = 0; i < ids.length; i += 500) {
+        const { data: mk } = await pub
+          .from("markets")
+          .select("onchain_id, category")
+          .in("onchain_id", ids.slice(i, i + 500));
+        for (const m of mk ?? [])
+          categoryById.set(Number(m.onchain_id), (m.category as string | null) ?? null);
+      }
+    }
+
     // Build viewer factor list + domain map
     const domainOf = new Map<number, Domain>();
     const myFactors: BeliefFactor[] = [];
     for (const r of myBeliefs) {
       const id = Number(r.onchain_id);
-      const cat = (r as { markets?: { category?: string | null } | null }).markets?.category ?? null;
+      const cat = categoryById.get(id) ?? null;
       const dom = categoryToDomain(cat);
       if (dom) domainOf.set(id, dom);
       myFactors.push({
@@ -93,6 +107,7 @@ export const getCirclesForWallet = createServerFn({ method: "GET" })
         conviction: Number(r.conviction ?? 0),
       });
     }
+
 
     const lastTradeAt = myBeliefs
       .map((r) => (r.last_trade_at ? new Date(r.last_trade_at as string).getTime() : 0))

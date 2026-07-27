@@ -162,15 +162,22 @@ function WalletPage() {
 
 function CircleCard({ c }: { c: CircleSummary }) {
   if (c.insufficient) {
+    const enoughOwn = c.shared_markets >= 5;
     return (
       <div className="rounded-lg border border-dashed border-border p-4">
-        <div className="text-sm font-medium">{c.domain}</div>
+        <div className="flex items-baseline justify-between">
+          <div className="text-sm font-medium">{c.domain}</div>
+          {enoughOwn && <div className="text-xs text-muted-foreground">{c.shared_markets} markets</div>}
+        </div>
         <div className="mt-1 text-xs text-muted-foreground">
-          Your {c.domain} fingerprint is still blurry — {c.shared_markets}/5 shared markets.
+          {enoughOwn
+            ? "No one else overlaps enough here yet — waiting on more believers."
+            : `Your ${c.domain} fingerprint is still blurry — ${c.shared_markets}/5 markets.`}
         </div>
       </div>
     );
   }
+
   return (
     <div className="rounded-lg border border-border p-4">
       <div className="flex items-baseline justify-between">
