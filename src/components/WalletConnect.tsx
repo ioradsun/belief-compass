@@ -38,7 +38,8 @@ function PovOnConnect() {
     handled.current = address;
     // Fire-and-forget lookup (cached by browser); jump to wallet page regardless.
     void lookupPovUser({ data: { wallet: address } }).catch(() => null);
-    void navigate({ to: "/wallet/$addr", params: { addr: address } });
+    // `replace` so the connect hop doesn't trap the back button in a loop.
+    void navigate({ to: "/wallet/$addr", params: { addr: address }, replace: true });
   }, [address, isConnected, navigate]);
 
   return null;
