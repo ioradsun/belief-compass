@@ -6,6 +6,9 @@ import "@rainbow-me/rainbowkit/styles.css";
 import { useNavigate } from "@tanstack/react-router";
 import { wagmiConfig } from "@/lib/wagmi";
 import { lookupPovUser } from "@/lib/pov-user.functions";
+import { getWalletLink } from "@/lib/wallet-link.functions";
+import { readLocalLink } from "@/lib/wallet-link";
+
 
 // Isolated query client for wagmi to avoid interfering with the app's router-level client.
 const wagmiQueryClient = new QueryClient();
@@ -38,9 +41,23 @@ function PovOnConnect() {
     handled.current = address;
     // Fire-and-forget lookup (cached by browser); jump to wallet page regardless.
     void lookupPovUser({ data: { wallet: address } }).catch(() => null);
-    // `replace` so the connect hop doesn't trap the back button in a loop.
-    void navigate({ to: "/wallet/$addr", params: { addr: address }, replace: true });
+    // If this login wallet is linked to a POV trading wallet, land there instead.
+    void (async () => {
+      const local = readLocalLink(address);
+      const linked =
+        local ??
+        (await getWalletLink({ data: { wallet: address.toLowerCase() } })
+          .then((r) => r.linked)
+          .catch(() => null));
+      // `replace` so the connect hop doesn't trap the back button in a loop.
+      void navigate({
+        to: "/wallet/$addr",
+        params: { addr: linked ?? address },
+        replace: true,
+      });
+    })();
   }, [address, isConnected, navigate]);
+
 
   return null;
 }
