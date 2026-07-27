@@ -17,7 +17,8 @@ const ev = (o: Partial<LiveEventInput> = {}): LiveEventInput => ({
   ...o,
 });
 
-const minutesBefore = (iso: string, m: number) => new Date(new Date(iso).getTime() - m * 60_000).toISOString();
+const minutesBefore = (iso: string, m: number) =>
+  new Date(new Date(iso).getTime() - m * 60_000).toISOString();
 
 describe("trade burst grouping", () => {
   it("groups consecutive same-market/side/action trades within the window", () => {
@@ -70,14 +71,20 @@ describe("structured transitions are never grouped away", () => {
     const rows = groupLiveRows(
       [
         ev({ kind: "trade", occurred_at: t }),
-        ev({ kind: "market_created", side: null, action: null, occurred_at: minutesBefore(t, 1), source_key: "pov:market:42:created" }),
+        ev({
+          kind: "market_created",
+          side: null,
+          action: null,
+          occurred_at: minutesBefore(t, 1),
+          source_key: "pov:market:42:created",
+        }),
         ev({ kind: "trade", occurred_at: minutesBefore(t, 2) }),
       ],
       1000,
     );
     // trade | market_created | trade — the transition splits the bursts.
     expect(rows.map((r) => r.kind)).toEqual(["trade_burst", "market_created", "trade_burst"]);
-    expect(rows[1].text).toBe("New market created");
+    expect(rows[1].text).toBe("New market just opened");
   });
 });
 
@@ -96,7 +103,10 @@ describe("chronology preserved", () => {
 
 describe("factual copy only", () => {
   it("never uses motive/hype language", () => {
-    const rows = groupLiveRows([ev({ amount_eth: 3 }), ev({ kind: "market_created", side: null })], 2000);
+    const rows = groupLiveRows(
+      [ev({ amount_eth: 3 }), ev({ kind: "market_created", side: null })],
+      2000,
+    );
     for (const r of rows) {
       const t = r.text.toLowerCase();
       for (const banned of ["whale", "smart money", "crowd", "losing faith", "loading up"]) {
@@ -117,6 +127,7 @@ describe("factual copy only", () => {
       tradeCount: 4,
       amountEth: 1,
       amountUsd: 500,
+      wallet: null,
       payload: { action: "SELL" },
     });
     expect(text).toContain("4 wallets reduced NO");

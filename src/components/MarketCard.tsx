@@ -12,6 +12,8 @@ import { useEffect, useRef, useState } from "react";
 import type { MatchPerson, Pulse } from "@/lib/markets.functions";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { marketVitals, marketBadge, type PulseLevel } from "@/lib/market-vitals";
+import { StoryStrip } from "@/components/StoryStrip";
+import type { MarketStory } from "@/domain/story";
 
 // Pulse bar colour by aliveness. Amber for a living market (kept off the
 // YES-emerald / NO-rose axis so it never reads as a side), fading to muted as
@@ -47,6 +49,7 @@ export type MarketRow = {
   window_volume_usd?: number | null;
   tribe_side?: "YES" | "NO" | null;
   opp_side?: "YES" | "NO" | null;
+  story?: MarketStory | null;
   markets?: { title?: string; category?: string } | null;
 };
 
@@ -359,6 +362,13 @@ export function MarketCard({
         </div>
       </header>
 
+      {/* The story: what just happened → momentum → your people (server-composed). */}
+      {row.story && (row.story.beats.length > 0 || row.story.crowd) && (
+        <div className="border-b border-border px-4 py-2.5">
+          <StoryStrip story={row.story} />
+        </div>
+      )}
+
       {/* Why this market surfaced for the active lens — intent, not a formula. */}
       {reason && (
         <div className="border-b border-border bg-muted/30 px-4 py-2 text-[11px] leading-snug text-foreground">
@@ -395,9 +405,6 @@ export function MarketCard({
         </div>
         <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">{vitals.pulse.line}</p>
       </div>
-
-      {tribe && row.tribe_side && <MatchStrip person={tribe} kind="Tribe" side={row.tribe_side} />}
-      {opp && row.opp_side && <MatchStrip person={opp} kind="Opp" side={row.opp_side} />}
 
       <div className="grid grid-cols-2 gap-2 p-3">
         <SideBlock

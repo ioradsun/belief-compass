@@ -8,17 +8,34 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { publicClient } from "@/lib/supabase-clients";
-import { groupLiveRows, type LiveEventInput, type LiveRow } from "@/lib/live-tape";
+import { aliasFor } from "@/lib/wallet-identity";
+import { groupLiveRows, type LiveEventInput, type LiveFace, type LiveRow } from "@/lib/live-tape";
 
 const LIVE_KINDS = ["trade", "market_created", "position_changed_side"];
 
-const input = z.object({ limit: z.number().int().min(1).max(300).optional() }).optional();
+const input = z
+  .object({
+    limit: z.number().int().min(1).max(300).optional(),
+    wallet: z.string().min(3).optional(),
+  })
+  .optional();
+
+/** Rewrite a row's line to lead with the viewer's network member. */
+function faceLine(row: LiveRow, face: LiveFace): string {
+  const label = face.relationship[0].toUpperCase() + face.relationship.slice(1);
+  const who = `${face.name} (${label})`;
+  if (row.kind === "side_shift") return `${who} flipped to ${row.side ?? ""}`.trim();
+  const sell = (row.payload as { action?: string }).action === "SELL";
+  const verb = sell ? "trimmed" : "backed";
+  return `${who} ${verb} ${row.side ?? ""}`.trim();
+}
 
 export const listLiveEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof input>) => input.parse(d ?? {}))
   .handler(async ({ data }) => {
     const sb = publicClient();
     const limit = data?.limit ?? 120;
+    const viewer = data?.wallet?.toLowerCase() ?? null;
 
     const { data: rows, error } = await sb
       .from("events")
@@ -61,5 +78,53 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       payload: (r.payload as Record<string, unknown>) ?? null,
     }));
 
-    return { rows: groupLiveRows(events, ethUsd).slice(0, limit), error: null };
+    const live = groupLiveRows(events, ethUsd).slice(0, limit);
+
+    // Personalize: tag rows whose sole actor is in the viewer's network with a
+    // real face + name (privacy: only YOUR people are named; the crowd stays a
+    // count). No new DNA compute — reads the bounded cache.
+    if (viewer) {
+      const { data: cache } = await sb
+        .from("viewer_dna_cache")
+        .select("twin_matches, tribe_matches, opp_matches, inverse_matches")
+        .eq("viewer_wallet", viewer)
+        .maybeSingle();
+      if (cache) {
+        const labelByWallet = new Map<string, LiveFace["relationship"]>();
+        const add = (rows: unknown, label: LiveFace["relationship"]) => {
+          for (const r of (rows as { wallet?: string }[] | null) ?? [])
+            if (r.wallet) labelByWallet.set(String(r.wallet).toLowerCase(), label);
+        };
+        add(cache.twin_matches, "twin");
+        add(cache.tribe_matches, "tribe");
+        add(cache.opp_matches, "opp");
+        add(cache.inverse_matches, "inverse");
+
+        const present = [
+          ...new Set(
+            live
+              .map((r) => r.wallet?.toLowerCase())
+              .filter((w): w is string => !!w && labelByWallet.has(w)),
+          ),
+        ];
+        if (present.length > 0) {
+          const { resolveProfiles } = await import("@/lib/profiles.server");
+          const profiles = await resolveProfiles(present, 10);
+          for (const r of live) {
+            const w = r.wallet?.toLowerCase();
+            if (!w || !labelByWallet.has(w)) continue;
+            const prof = profiles.get(w);
+            const face: LiveFace = {
+              name: prof?.displayName ?? aliasFor(w),
+              avatarUrl: prof?.pfpUrl ?? null,
+              relationship: labelByWallet.get(w)!,
+            };
+            r.face = face;
+            r.text = faceLine(r, face);
+          }
+        }
+      }
+    }
+
+    return { rows: live, error: null };
   });

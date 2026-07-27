@@ -125,15 +125,36 @@ function Feed() {
   // person sets ?p; the DNA summary sets ?dna. Each clears the others and focuses
   // the center (mobile: the Belief column). Browser back/forward walks history.
   const selectMarket = (marketId: number) => {
-    navigate({ search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({ ...prev, m: marketId, p: undefined, dna: undefined }) });
+    navigate({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({
+        ...prev,
+        m: marketId,
+        p: undefined,
+        dna: undefined,
+      }),
+    });
     setTab("belief");
   };
   const selectPerson = (personWallet: string) => {
-    navigate({ search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({ ...prev, p: personWallet, m: undefined, dna: undefined }) });
+    navigate({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({
+        ...prev,
+        p: personWallet,
+        m: undefined,
+        dna: undefined,
+      }),
+    });
     setTab("belief");
   };
   const openDna = () => {
-    navigate({ search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({ ...prev, dna: true, p: undefined, m: undefined }) });
+    navigate({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({
+        ...prev,
+        dna: true,
+        p: undefined,
+        m: undefined,
+      }),
+    });
     setTab("belief");
   };
   const [win, setWin] = useState<VolumeWindow>("24h");
@@ -316,7 +337,7 @@ function Feed() {
         <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
           Live
         </div>
-        <LiveTape onSelect={selectMarket} />
+        <LiveTape wallet={wallet} onSelect={selectMarket} />
       </aside>
 
       {/* Mobile slide-in menu (replaces the bottom tab bar) */}
