@@ -4,7 +4,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { publicClient } from "@/lib/supabase-clients";
+import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { readLatestTradeEvents } from "@/lib/events.functions";
 import { toLegacyFeedEventRow } from "@/lib/events";
@@ -36,7 +36,7 @@ export const listFeed = createServerFn({ method: "GET" })
       .parse(d ?? {}),
   )
   .handler(async ({ data: input }) => {
-    const sb = publicClient();
+    const sb = serviceClient();
 
     const { data, error } = await sb
       .from("market_state")
@@ -314,7 +314,7 @@ export const getWallet = createServerFn({ method: "GET" })
       .parse(d),
   )
   .handler(async ({ data }) => {
-    const sb = publicClient();
+    const sb = serviceClient();
     const wallet = data.wallet.toLowerCase();
     // NOTE: there is no FK from wallet_beliefs.onchain_id -> markets, so the
     // market title/category must be fetched separately and stitched in.
