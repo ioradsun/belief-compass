@@ -66,6 +66,8 @@ export type Belief = {
   n: Side;
   /** the persistent line; null when unqualified */
   relationshipRead: string | null;
+  /** belief-level narrative from the copy engine (shape / tension / hook); null when quiet */
+  story: string | null;
   history: {
     volumeToday: string;
     volumeChangePct: string;

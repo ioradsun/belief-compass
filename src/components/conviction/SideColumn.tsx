@@ -34,9 +34,7 @@ export function SideColumn({
         <Sparkline points={data.series} tone={isYes ? "yes" : "no"} />
       </div>
 
-      <p className="mt-3 font-num text-display leading-none text-text">
-        ${data.price.toFixed(4)}
-      </p>
+      <p className="mt-3 font-num text-display leading-none text-text">${data.price.toFixed(4)}</p>
       <p
         className={cn(
           "mt-2 font-num text-sm leading-none",
@@ -68,7 +66,12 @@ export function SideColumn({
                   size={24}
                   tone={p.matchPct != null ? "rel" : "neutral"}
                 />
-                <span className="min-w-0 flex-1 truncate text-sm text-text">{p.alias}</span>
+                <a
+                  href={`/wallet/${p.avatarSeed}`}
+                  className="min-w-0 flex-1 truncate text-sm text-text hover:underline"
+                >
+                  {p.alias}
+                </a>
                 <span className="font-num text-fine text-text-secondary">{p.positionLabel}</span>
                 {/* matchPct null → no ring, no number. Never an estimate. */}
                 {p.matchPct != null ? (
