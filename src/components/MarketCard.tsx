@@ -11,6 +11,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { MatchPerson, Pulse } from "@/lib/markets.functions";
 import { hueFor, initialsFor } from "@/lib/conviction-feed";
+import { marketVitals, marketBadge, type PulseLevel } from "@/lib/market-vitals";
+
+// Pulse bar colour by aliveness. Amber for a living market (kept off the
+// YES-emerald / NO-rose axis so it never reads as a side), fading to muted as
+// the market goes quiet. Green stays reserved for P&L, never for "alive".
+const PULSE_COLOR: Record<PulseLevel, string> = {
+  alive: "#f59e0b",
+  active: "#f59e0b",
+  quiet: "#9ca3af",
+  flatline: "#9ca3af",
+};
 
 const ROTATE_MS = 4500;
 
@@ -102,7 +113,6 @@ export function Face({ p, size = 18 }: { p: Pulse; size?: number }) {
   );
 }
 
-
 /** Flash helper: returns true for ~1s after `value` changes. */
 function useFlash(value: number | null | undefined) {
   const prev = useRef(value);
@@ -177,7 +187,9 @@ function SideBlock({
           className="text-xs font-medium tabular-nums"
           style={{ color: chg == null ? undefined : up ? "#059669" : "#dc2626" }}
         >
-          {chg == null ? "—" : `${up ? "▲+" : "▼−"}${Math.abs(chg) < 1 ? Math.abs(chg).toFixed(1) : Math.round(Math.abs(chg))}%`}
+          {chg == null
+            ? "—"
+            : `${up ? "▲+" : "▼−"}${Math.abs(chg) < 1 ? Math.abs(chg).toFixed(1) : Math.round(Math.abs(chg))}%`}
         </span>
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
           {winLabel}
@@ -286,7 +298,6 @@ export function MarketCard({
   const [i, setI] = useState(0);
   const [open, setOpen] = useState(false);
 
-
   // Each card rotates its own pulses; the stagger keeps the grid from ticking
   // in lockstep. Rotation pauses while the strip is expanded.
   useEffect(() => {
@@ -311,6 +322,24 @@ export function MarketCard({
   const current = pulses[i % Math.max(1, pulses.length)];
   const volFlash = useFlash(row.window_volume_usd ?? null);
 
+  // Vital signs — is this market alive? Turnover is cumulative (all money ever
+  // traded vs what's still held), so Pulse reads volume_total_usd. Battle split
+  // is money-weighted (capital on each side).
+  const vitalsInput = {
+    volumeUsd: Number(row.volume_total_usd ?? 0),
+    yesCapitalUsd: yesCap ?? 0,
+    noCapitalUsd: noCap ?? 0,
+    believers: totalB,
+    yesPct:
+      capTotal > 0 && yesCap != null
+        ? (yesCap / capTotal) * 100
+        : row.people_yes_pct == null
+          ? null
+          : Number(row.people_yes_pct),
+  };
+  const vitals = marketVitals(vitalsInput);
+  const badge = marketBadge(vitalsInput);
+
   return (
     <article className="flex flex-col rounded-xl border border-border bg-card/40 transition-shadow hover:shadow-md">
       <header className="border-b border-border px-4 py-3">
@@ -331,12 +360,38 @@ export function MarketCard({
         </div>
       </header>
 
-      {tribe && row.tribe_side && (
-        <MatchStrip person={tribe} kind="Tribe" side={row.tribe_side} />
-      )}
+      {/* Vital sign: Pulse — is this market alive? A health bar + one-line story,
+          no math for the reader. Badge (Battlefield / Ghost Town / …) when earned. */}
+      <div className="border-b border-border px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <span aria-hidden>{vitals.pulse.emoji}</span>
+          <span className="text-xs font-semibold">Pulse: {vitals.pulse.label}</span>
+          {badge && (
+            <span
+              className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-600"
+              title={badge.note}
+            >
+              {badge.emoji} {badge.label}
+            </span>
+          )}
+          <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">
+            {vitals.pulse.healthPct}%
+          </span>
+        </div>
+        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full transition-all duration-700"
+            style={{
+              width: `${Math.max(2, vitals.pulse.healthPct)}%`,
+              backgroundColor: PULSE_COLOR[vitals.pulse.level],
+            }}
+          />
+        </div>
+        <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">{vitals.pulse.line}</p>
+      </div>
+
+      {tribe && row.tribe_side && <MatchStrip person={tribe} kind="Tribe" side={row.tribe_side} />}
       {opp && row.opp_side && <MatchStrip person={opp} kind="Opp" side={row.opp_side} />}
-
-
 
       <div className="grid grid-cols-2 gap-2 p-3">
         <SideBlock
@@ -389,12 +444,10 @@ export function MarketCard({
             >
               {current && <Face p={current} />}
               <span className="min-w-0 flex-1 truncate">
-              <span
-                className={current?.side === "YES" ? "text-emerald-600" : "text-rose-600"}
-              >
-                {pulseLine(current!, ethUsd)}
-              </span>
-              <span className="text-muted-foreground"> · {ago(current!.at)} ago</span>
+                <span className={current?.side === "YES" ? "text-emerald-600" : "text-rose-600"}>
+                  {pulseLine(current!, ethUsd)}
+                </span>
+                <span className="text-muted-foreground"> · {ago(current!.at)} ago</span>
               </span>
             </span>
             <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
