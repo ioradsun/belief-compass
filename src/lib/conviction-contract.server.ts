@@ -113,8 +113,10 @@ async function matchTable(viewer: string | null): Promise<Map<string, number>> {
   const { data } = await sb
     .from("wallet_matches")
     .select("matched_wallet, match_score, shared_markets, domain")
+    // Overall Tribe rows are written with domain = NULL by the batch matcher
+    // (dna-batch.server); per-domain Circle rows carry a domain. Overall only here.
     .eq("wallet", viewer)
-    .eq("domain", "overall")
+    .is("domain", null)
     .gte("shared_markets", MATCH_CONFIDENCE_MIN_SHARED)
     .order("match_score", { ascending: false })
     .limit(500);
