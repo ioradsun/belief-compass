@@ -23,6 +23,7 @@ import {
   type PositionCursor,
   NULL_CURSOR,
 } from "@/lib/positions/position-core";
+import { transitionKind, type EconSide } from "@/lib/market-state/read-model";
 
 type SB = SupabaseClient;
 
@@ -69,6 +70,7 @@ interface LoadedPosition {
   version: number;
   needsRebuild: boolean;
   appliedCount: number;
+  priorStanceSide: EconSide;
 }
 
 function dbToBeliefRow(r: Record<string, unknown>): BeliefRow {
@@ -117,7 +119,7 @@ async function loadPosition(
   const { data, error } = await sb
     .from("wallet_beliefs")
     .select(
-      "yes_shares, no_shares, yes_cost, no_cost, expressed_side, directional_since, first_backed_at, last_trade_at, last_applied_event_id, last_applied_source_key, last_applied_block_number, last_applied_log_index, position_version, applied_trade_count, needs_rebuild",
+      "yes_shares, no_shares, yes_cost, no_cost, expressed_side, directional_since, first_backed_at, last_trade_at, stance_side, last_applied_event_id, last_applied_source_key, last_applied_block_number, last_applied_log_index, position_version, applied_trade_count, needs_rebuild",
     )
     .eq("wallet", wallet)
     .eq("onchain_id", market)
@@ -131,6 +133,7 @@ async function loadPosition(
       version: 0,
       needsRebuild: false,
       appliedCount: 0,
+      priorStanceSide: "INACTIVE",
     };
   }
   return {
@@ -146,7 +149,47 @@ async function loadPosition(
     version: Number(data.position_version ?? 0),
     needsRebuild: Boolean(data.needs_rebuild),
     appliedCount: Number(data.applied_trade_count ?? 0),
+    priorStanceSide: (data.stance_side as EconSide) ?? "INACTIVE",
   };
+}
+
+/**
+ * Emit a durable position-transition event when the evaluated (economic) side
+ * changes. These are the canonical facts behind new-believers / side-flips in the
+ * market read model — derived facts, NOT duplicate trade events. Deterministic
+ * source key tied to the new position version; timed at the triggering trade's
+ * canonical occurrence (never application time).
+ */
+async function emitTransition(
+  sb: SB,
+  wallet: string,
+  market: number,
+  prev: EconSide,
+  next: EconSide,
+  triggerEvent: TradeEventForApply,
+  newVersion: number,
+): Promise<void> {
+  const kind = transitionKind(prev, next);
+  if (!kind) return;
+  await sb.from("events").upsert(
+    {
+      source_key: `system:position:${wallet}:${market}:v${newVersion}:${kind}`,
+      source: "system",
+      kind,
+      market_id: String(market),
+      wallet,
+      occurred_at: triggerEvent.occurred_at,
+      block_number: triggerEvent.block_number,
+      log_index: triggerEvent.log_index,
+      payload: {
+        previous_side: prev,
+        new_side: next,
+        trigger_event_id: triggerEvent.event_id,
+        position_version: newVersion,
+      },
+    },
+    { onConflict: "source_key", ignoreDuplicates: true },
+  );
 }
 
 /** Canonical trade events strictly AFTER the cursor, in chain order (bounded). */
@@ -343,6 +386,25 @@ async function applyForPair(
     m.commits += 1;
     if (r.disposition === "created") m.positions_created += 1;
     else m.positions_updated += 1;
+
+    // Emit a durable transition fact if the evaluated economic side changed.
+    // Trade-driven (timed at the triggering trade's occurrence). Price-driven
+    // side changes are handled by the evaluator's counts, not fabricated windows.
+    if (evaluated) {
+      const prev = r.disposition === "created" ? ("INACTIVE" as EconSide) : pos.priorStanceSide;
+      const next = evaluated.stance_side as EconSide;
+      if (transitionKind(prev, next)) {
+        await emitTransition(
+          sb,
+          wallet,
+          market,
+          prev,
+          next,
+          pending[pending.length - 1],
+          r.new_version ?? pos.version + 1,
+        );
+      }
+    }
     return;
   }
   // Exhausted retries on version conflicts → hand to the rebuilder.

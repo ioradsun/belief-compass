@@ -119,6 +119,7 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
           let positionVersionConflicts = 0;
           let positionsOutOfOrder = 0;
           let fullHistoryReadsHotPath = 0;
+          let marketsMarkedDirty = 0;
 
           // Canonical-event-based observability, emitted on every return path.
           const observability = () => ({
@@ -140,6 +141,7 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
             position_version_conflicts: positionVersionConflicts,
             positions_out_of_order: positionsOutOfOrder,
             full_history_reads_hot_path: fullHistoryReadsHotPath,
+            markets_marked_dirty: marketsMarkedDirty,
             earliest_occurred_at: earliestOccurred,
             latest_occurred_at: latestOccurred,
           });
@@ -272,6 +274,21 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
               positionVersionConflicts += pm.version_conflicts;
               positionsOutOfOrder += pm.events_out_of_order;
               fullHistoryReadsHotPath += pm.full_history_reads_hot_path; // must stay 0
+            }
+
+            // 4b. Mark the read model dirty for every market touched this chunk
+            //     (activity from the new trades + positions from the applies).
+            //     Coalesced per market — never one queue row per trade.
+            const dirtyMarkets = [
+              ...new Set([
+                ...applyPairs.map((p) => p.market),
+                ...orphanPairs.map(([, mm]) => mm),
+              ]),
+            ];
+            if (dirtyMarkets.length > 0) {
+              await sb.rpc("enqueue_market_refresh", { p_market_ids: dirtyMarkets, p_kind: "activity" });
+              await sb.rpc("enqueue_market_refresh", { p_market_ids: dirtyMarkets, p_kind: "positions" });
+              marketsMarkedDirty += dirtyMarkets.length;
             }
 
             // 5. (removed) Trade-driven feed_events are no longer written. The

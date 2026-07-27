@@ -141,6 +141,32 @@ was unscheduled.
 
 **Diagnostics:** `npm run check:positions`, `npm run backfill:position-cursors`.
 
+## Phase 4 — one global market read model
+
+`market_state` is the single canonical global read model for current market facts
+(activity, participation, movement, live summary). One row per market, not
+viewer-specific. `markets` stays stable metadata + authoritative POV display.
+
+- **Ownership:** activity → canonical `events`; participation → `wallet_beliefs`;
+  display/price → POV. Every metric has one definition (`docs/market-state-metrics.md`).
+- **Transitions:** `events` gains `source='system'` position-transition kinds
+  (`position_became_directional` etc.), emitted by the applier at the triggering
+  trade's `occurred_at` — the durable basis for new-believers / side-flips.
+- **Update path (dirty queue, coalesced):** `market_refresh_queue` enqueued by the
+  chain poller (`activity`+`positions`), POV poller (`pov`), rebuilder
+  (`positions`); drained by `market-refresher` via `claim_market_refresh`
+  (SKIP LOCKED). `refresh-market.server.ts` recomputes one coherent row from the
+  aggregation RPCs + the pure read-model formulas + the factual live line, bumps
+  `read_model_version`, sets freshness. No per-trade queue rows; no broad sweeps.
+- **Reads:** `getMarketReadModel` / `listMarketReadModels` (`read.functions.ts`)
+  join `markets ⋈ market_state`. Owned positions receive the global `live_line`
+  through the existing set-based `market_state` join (no per-position query).
+  Chronological event lists stay on `events`.
+- **Diagnostics:** `npm run check:market-state`.
+- **Staged (deploy steps 6–7):** removing the duplicate window/price RPCs from the
+  center loader waits until the refresher has warmed `market_state` in prod, so
+  metrics never read empty pre-warm — matching the phase's own shadow→cutover order.
+
 ## Known items (still) for later phases
 
 - `ensureConviction` writes `wallet_beliefs` from POV positions (a non-chain

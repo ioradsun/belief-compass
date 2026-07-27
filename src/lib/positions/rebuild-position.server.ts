@@ -148,6 +148,8 @@ export async function rebuildPosition(
         ok: false,
         error: res.error.message,
       };
+    // A rebuilt position changes participation → refresh the market read model.
+    await sb.rpc("enqueue_market_refresh", { p_market_ids: [market], p_kind: "positions" });
     return { wallet: w, market, events: events.length, empty, ok: true };
   } catch (e) {
     return {
