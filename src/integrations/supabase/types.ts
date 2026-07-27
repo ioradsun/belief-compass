@@ -376,6 +376,33 @@ export type Database = {
         }
         Relationships: []
       }
+      wallet_links: {
+        Row: {
+          connected_wallet: string
+          created_at: string
+          id: string
+          linked_wallet: string
+          signature: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          connected_wallet: string
+          created_at?: string
+          id?: string
+          linked_wallet: string
+          signature?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          connected_wallet?: string
+          created_at?: string
+          id?: string
+          linked_wallet?: string
+          signature?: string | null
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       wallet_matches: {
         Row: {
           agreements: number
