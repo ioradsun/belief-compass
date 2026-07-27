@@ -25,11 +25,12 @@ export interface LiveEventInput {
   payload: Record<string, unknown> | null;
 }
 
-/** The viewer's network member behind a row (server-tagged; never for the crowd). */
+/** The person behind a single-actor row (server-tagged). `relationship` is set
+ * only when they're in the viewer's network; otherwise null (still named). */
 export interface LiveFace {
   name: string;
   avatarUrl: string | null;
-  relationship: "twin" | "tribe" | "opp" | "inverse";
+  relationship: "twin" | "tribe" | "opp" | "inverse" | null;
 }
 
 export interface LiveRow {

@@ -2,14 +2,19 @@
  * Live tape — server loader. Reads canonical `events` in reverse-chronological
  * order (occurred_at DESC, block DESC, log DESC — never ingested_at), excludes
  * reorg-orphaned events (is_canonical), joins market titles, and groups bursts via
- * the pure live-tape module. Returns the compact LiveRow DTO. No ranking, no
- * personalization — Live answers "what just happened?".
+ * the pure live-tape module. Every single-actor row is named (pov.co identity,
+ * generated-alias fallback) so the tape reads like people — "John backed YES ·
+ * $74" — not "1 wallet". When the actor is in the viewer's network the line also
+ * carries their relationship ("Maya (Twin) …"). Multi-wallet bursts stay an
+ * anonymous count. Live answers "what just happened?" — never ranked.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { publicClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { groupLiveRows, type LiveEventInput, type LiveFace, type LiveRow } from "@/lib/live-tape";
+
+type NetLabel = "twin" | "tribe" | "opp" | "inverse";
 
 const LIVE_KINDS = ["trade", "market_created", "position_changed_side"];
 
@@ -20,14 +25,19 @@ const input = z
   })
   .optional();
 
-/** Rewrite a row's line to lead with the viewer's network member. */
-function faceLine(row: LiveRow, face: LiveFace): string {
-  const label = face.relationship[0].toUpperCase() + face.relationship.slice(1);
-  const who = `${face.name} (${label})`;
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
+
+/** Rewrite a single-actor row to lead with the person + their side + amount. */
+function personLine(row: LiveRow, name: string, relationship: NetLabel | null): string {
+  const who = relationship ? `${name} (${cap(relationship)})` : name;
+  const amt =
+    row.amountUsd && row.amountUsd > 0
+      ? ` · $${Math.round(row.amountUsd).toLocaleString("en-US")}`
+      : "";
   if (row.kind === "side_shift") return `${who} flipped to ${row.side ?? ""}`.trim();
   const sell = (row.payload as { action?: string }).action === "SELL";
-  const verb = sell ? "trimmed" : "backed";
-  return `${who} ${verb} ${row.side ?? ""}`.trim();
+  const verb = sell ? "reduced" : "backed";
+  return `${who} ${verb} ${row.side ?? ""}${amt}`.trim();
 }
 
 export const listLiveEvents = createServerFn({ method: "GET" })
@@ -80,49 +90,51 @@ export const listLiveEvents = createServerFn({ method: "GET" })
 
     const live = groupLiveRows(events, ethUsd).slice(0, limit);
 
-    // Personalize: tag rows whose sole actor is in the viewer's network with a
-    // real face + name (privacy: only YOUR people are named; the crowd stays a
-    // count). No new DNA compute — reads the bounded cache.
-    if (viewer) {
-      const { data: cache } = await sb
-        .from("viewer_dna_cache")
-        .select("twin_matches, tribe_matches, opp_matches, inverse_matches")
-        .eq("viewer_wallet", viewer)
-        .maybeSingle();
-      if (cache) {
-        const labelByWallet = new Map<string, LiveFace["relationship"]>();
-        const add = (rows: unknown, label: LiveFace["relationship"]) => {
-          for (const r of (rows as { wallet?: string }[] | null) ?? [])
-            if (r.wallet) labelByWallet.set(String(r.wallet).toLowerCase(), label);
-        };
-        add(cache.twin_matches, "twin");
-        add(cache.tribe_matches, "tribe");
-        add(cache.opp_matches, "opp");
-        add(cache.inverse_matches, "inverse");
-
-        const present = [
-          ...new Set(
-            live
-              .map((r) => r.wallet?.toLowerCase())
-              .filter((w): w is string => !!w && labelByWallet.has(w)),
-          ),
-        ];
-        if (present.length > 0) {
-          const { resolveProfiles } = await import("@/lib/profiles.server");
-          const profiles = await resolveProfiles(present, 10);
-          for (const r of live) {
-            const w = r.wallet?.toLowerCase();
-            if (!w || !labelByWallet.has(w)) continue;
-            const prof = profiles.get(w);
-            const face: LiveFace = {
-              name: prof?.displayName ?? aliasFor(w),
-              avatarUrl: prof?.pfpUrl ?? null,
-              relationship: labelByWallet.get(w)!,
-            };
-            r.face = face;
-            r.text = faceLine(r, face);
-          }
+    // Name every single-actor row so the tape reads like people. `wallet` is set
+    // only on single-actor rows (bursts stay a count). Relationship tags come
+    // from the viewer's bounded DNA cache when signed in — no new compute.
+    const actorWallets = [
+      ...new Set(
+        live
+          .filter((r) => r.kind !== "market_created")
+          .map((r) => r.wallet?.toLowerCase())
+          .filter((w): w is string => !!w),
+      ),
+    ];
+    if (actorWallets.length > 0) {
+      const labelByWallet = new Map<string, NetLabel>();
+      if (viewer) {
+        const { data: cache } = await sb
+          .from("viewer_dna_cache")
+          .select("twin_matches, tribe_matches, opp_matches, inverse_matches")
+          .eq("viewer_wallet", viewer)
+          .maybeSingle();
+        if (cache) {
+          const add = (rows: unknown, label: NetLabel) => {
+            for (const r of (rows as { wallet?: string }[] | null) ?? [])
+              if (r.wallet) labelByWallet.set(String(r.wallet).toLowerCase(), label);
+          };
+          add(cache.twin_matches, "twin");
+          add(cache.tribe_matches, "tribe");
+          add(cache.opp_matches, "opp");
+          add(cache.inverse_matches, "inverse");
         }
+      }
+
+      const { resolveProfiles } = await import("@/lib/profiles.server");
+      const profiles = await resolveProfiles(actorWallets, 15);
+      for (const r of live) {
+        const w = r.wallet?.toLowerCase();
+        if (!w || r.kind === "market_created") continue;
+        const prof = profiles.get(w);
+        const relationship = labelByWallet.get(w) ?? null;
+        const face: LiveFace = {
+          name: prof?.displayName ?? aliasFor(w),
+          avatarUrl: prof?.pfpUrl ?? null,
+          relationship,
+        };
+        r.face = face;
+        r.text = personLine(r, face.name, relationship);
       }
     }
 
