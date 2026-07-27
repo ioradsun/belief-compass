@@ -38,10 +38,15 @@ export const Route = createFileRoute("/api/public/jobs/belief-rollup")({
           const { data } = await sb.from("markets").select("onchain_id");
           marketIds = (data ?? []).map((r) => Number(r.onchain_id));
         } else {
+          // Markets with a canonical trade in the last 2m, by EVENT time. Reads
+          // the canonical events log (the deprecated trades.ts is no longer
+          // written and would select nothing); is_canonical excludes orphans.
           const cutoff = new Date(Date.now() - 2 * 60_000).toISOString();
-          const { data } = await sb.from("trades")
-            .select("onchain_id").gte("ts", cutoff);
-          marketIds = [...new Set((data ?? []).map((r) => Number(r.onchain_id)))];
+          const { data } = await sb.from("events")
+            .select("market_id")
+            .eq("is_canonical", true).eq("kind", "trade")
+            .gte("occurred_at", cutoff);
+          marketIds = [...new Set((data ?? []).map((r) => Number(r.market_id)))];
         }
 
         if (marketIds.length === 0) return Response.json({ ok: true, markets: 0 });
@@ -98,17 +103,22 @@ export const Route = createFileRoute("/api/public/jobs/belief-rollup")({
           const divergence = peoplePct != null && p.moneyYesPct != null
             ? Math.abs(p.moneyYesPct - peoplePct) : null;
 
-          // Velocity: trades in last 5m
+          // Velocity: trades in last 5m by canonical EVENT time. A gte on
+          // occurred_at excludes rows with a NULL block time (not backfilled yet),
+          // so freshly-imported history never counts as recent activity.
           const t5m = new Date(Date.now() - 5 * 60_000).toISOString();
           const { count: velocity } = await sb.from("trades")
             .select("*", { count: "exact", head: true })
-            .eq("onchain_id", mid).gte("ts", t5m);
+            .eq("onchain_id", mid).gte("occurred_at", t5m);
 
-          // New believers in last hour: count of "backed" events
+          // New believers in last hour: count of canonical BUY trade events by
+          // event time. Reads the events log (feed_events no longer carries
+          // trades); is_canonical excludes reorg-orphaned trades.
           const t1h = new Date(Date.now() - 3600_000).toISOString();
-          const { count: nb1h } = await sb.from("feed_events")
+          const { count: nb1h } = await sb.from("events")
             .select("*", { count: "exact", head: true })
-            .eq("onchain_id", mid).eq("type", "backed").gte("occurred_at", t1h);
+            .eq("is_canonical", true).eq("kind", "trade").eq("action", "BUY")
+            .eq("market_id", String(mid)).gte("occurred_at", t1h);
 
           await sb.from("market_state").update({
             believers_yes: by, believers_no: bn, believers_mixed: bm,

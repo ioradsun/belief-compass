@@ -2,19 +2,39 @@
  * Job B — chain poller. Bearer-guarded.
  * - Acquires expiring lease on ingest_state.
  * - Reads Base logs for the proxy from max(last_block-12, deploy) → head.
- * - Upserts canonical trades; rebuilds affected wallet_beliefs by folding
- *   ALL that wallet-market's ordered canonical trades through applyTrade.
- * - Regenerates trade-driven feed_events with deterministic keys.
+ * - Builds deterministic canonical `events` and persists them ATOMICALLY via the
+ *   ingest_chain_chunk() DB function, which in one transaction also maintains the
+ *   temporary `trades` projection and reconciles reorg orphans.
+ * - Rebuilds affected wallet_beliefs by folding ALL that wallet-market's ordered
+ *   canonical trades (the projection) through applyTrade.
  * - Atomically advances cursor + clears lease.
  *
- * Note: full transactional atomicity across Supabase JS is best-effort; we
- * order operations so partial failures re-run cleanly on the next tick.
+ * Phase 2: `events` is the source of truth. A chain trade is NO LONGER written to
+ * feed_events — chronological reads come from `events` (see events.functions.ts).
+ * `trades` remains ONLY as a compatibility projection for the position reducer +
+ * belief rollup, maintained inside ingest_chain_chunk().
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.server";
 import { getBaseClient } from "@/chain/client";
-import { decodeTradeLog, PROXY_ADDRESS, TRADE_EVENTS, type CanonicalTrade } from "@/chain/decoder";
+import {
+  decodeTradeLog,
+  PROXY_ADDRESS,
+  TRADE_EVENTS,
+  CHAIN_ID,
+  type CanonicalTrade,
+} from "@/chain/decoder";
 import { applyTrade, emptyRow, type BeliefRow, type Trade } from "@/domain/domain";
+import { uniqueBlockNumbers, fetchBlockTimes, occurredAtFor } from "@/lib/block-time";
+import {
+  tradeEventFromCanonical,
+  chainTradeSourceKey,
+  type ChainTradeEventInput,
+} from "@/lib/events";
+
+// One block-timestamp fetch per unique block, this many in flight at once, so a
+// busy range never bursts the RPC.
+const BLOCK_TS_CONCURRENCY = 5;
 
 // Deploy block for the proxy on Base. Backfill from here on first run.
 // Unknown at build time — set conservatively; Job B skips ranges with no logs cheaply.
@@ -75,6 +95,36 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
           let cursor = leased.last_block ? BigInt(leased.last_block) : DEPLOY_BLOCK - 1n;
           let totalTrades = 0;
           let totalPairs = 0;
+          // Observability.
+          let logsReceived = 0;
+          let tradesDecoded = 0;
+          let uniqueBlocksFetched = 0;
+          let earliestOccurred: string | null = null;
+          let latestOccurred: string | null = null;
+          // Canonical-event ingest counters (from ingest_chain_chunk).
+          let eventsInserted = 0;
+          let eventsReplayed = 0;
+          let eventsRestored = 0;
+          let eventsOrphaned = 0;
+          let tradeProjInserted = 0;
+          let tradeProjRemoved = 0;
+          let tradesDeferredNoBlockTime = 0;
+
+          // Canonical-event-based observability, emitted on every return path.
+          const observability = () => ({
+            logs_received: logsReceived,
+            trades_decoded: tradesDecoded,
+            unique_blocks_fetched: uniqueBlocksFetched,
+            events_inserted: eventsInserted,
+            events_replayed: eventsReplayed,
+            events_restored: eventsRestored,
+            events_orphaned: eventsOrphaned,
+            trade_projections_inserted: tradeProjInserted,
+            trade_projections_removed: tradeProjRemoved,
+            trades_deferred_no_block_time: tradesDeferredNoBlockTime,
+            earliest_occurred_at: earliestOccurred,
+            latest_occurred_at: latestOccurred,
+          });
 
           // Scan in chunks. Each chunk is a DURABLE unit of progress: once its
           // trades are persisted and its derived rows rebuilt, we advance
@@ -98,61 +148,106 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
               const t = decodeTradeLog(log);
               if (t) trades.push(t);
             }
+            logsReceived += logs.length;
+            tradesDecoded += trades.length;
 
-            // 2. Delete non-canonical trades in [start,end] (reorg orphans).
-            const keep = new Set(trades.map((t) => `${t.tx_hash}:${t.log_index}`));
-            const { data: existing } = await sb
-              .from("trades")
-              .select("tx_hash, log_index")
-              .gte("block_number", Number(start))
-              .lte("block_number", Number(end));
-            for (const d of existing ?? []) {
-              if (keep.has(`${d.tx_hash}:${d.log_index}`)) continue;
-              await sb.from("trades").delete()
-                .eq("tx_hash", d.tx_hash).eq("log_index", d.log_index);
+            // Canonical EVENT time: fetch each unique block's timestamp exactly
+            // once (bounded concurrency), cached for this chunk. NEVER server time.
+            const blockTimes = trades.length
+              ? await fetchBlockTimes(
+                  uniqueBlockNumbers(trades),
+                  async (b) => Number((await client.getBlock({ blockNumber: BigInt(b) })).timestamp),
+                  BLOCK_TS_CONCURRENCY,
+                )
+              : new Map<number, string>();
+            uniqueBlocksFetched += blockTimes.size;
+            for (const t of blockTimes.values()) {
+              if (earliestOccurred == null || t < earliestOccurred) earliestOccurred = t;
+              if (latestOccurred == null || t > latestOccurred) latestOccurred = t;
             }
 
-            // 3. Upsert canonical trades + stub unknown markets.
+            // 2. Stub unknown markets so downstream joins/FKs resolve.
             if (trades.length > 0) {
               const marketIds = new Set(trades.map((t) => t.onchain_id));
               const marketStubs = [...marketIds].map((id) => ({ onchain_id: Number(id) }));
               await sb.from("markets").upsert(marketStubs, { onConflict: "onchain_id", ignoreDuplicates: true });
-
-              const rows = trades.map((t) => ({
-                tx_hash: t.tx_hash,
-                log_index: t.log_index,
-                onchain_id: Number(t.onchain_id),
-                wallet: t.wallet,
-                side: t.side,
-                direction: t.direction,
-                eth_amount: t.eth_amount,     // wei string; UI converts
-                token_amount: t.token_amount, // wei string
-                block_number: t.block_number,
-                block_hash: t.block_hash,
-                raw_log: t.raw_log,
-                ts: new Date().toISOString(), // placeholder — resolved below if we fetched block timestamps
-              }));
-              const up = await sb.from("trades").upsert(rows, { onConflict: "tx_hash,log_index" });
-              if (up.error) throw up.error;
             }
 
-            // 4. Rebuild affected (wallet, onchain_id) rows via full fold.
-            const pairs = new Set(trades.map((t) => `${t.wallet}|${t.onchain_id}`));
+            // 3. Build deterministic canonical events and persist them ATOMICALLY.
+            //    ingest_chain_chunk() inserts/reconciles the events, maintains the
+            //    trades compatibility projection, and marks reorg orphans — all in
+            //    one transaction — then returns the affected (wallet, market) pairs.
+            //    We only build events for trades we could timestamp; the full set
+            //    of canonical keys (present_keys) still protects a transiently
+            //    un-timestamped trade from being wrongly orphaned.
+            const presentKeys = trades.map((t) =>
+              chainTradeSourceKey(CHAIN_ID, t.tx_hash, t.log_index),
+            );
+            const eventRows: ChainTradeEventInput[] = [];
+            for (const t of trades) {
+              const occ = occurredAtFor(t.block_number, blockTimes);
+              if (!occ) {
+                tradesDeferredNoBlockTime += 1; // retried on a later overlap scan
+                continue;
+              }
+              eventRows.push(tradeEventFromCanonical(t, CHAIN_ID, occ));
+            }
+
+            const affectedPairs = new Set<string>();
+            if (presentKeys.length > 0) {
+              const ing = await sb.rpc("ingest_chain_chunk", {
+                p_events: eventRows,
+                p_present_keys: presentKeys,
+                p_chain_id: CHAIN_ID,
+                p_start: Number(start),
+                p_end: Number(end),
+              });
+              if (ing.error) throw ing.error;
+              const r = (ing.data ?? {}) as {
+                events_inserted?: number;
+                events_replayed?: number;
+                events_restored?: number;
+                events_orphaned?: number;
+                trade_projections_inserted?: number;
+                trade_projections_removed?: number;
+                pairs?: [string, string][];
+              };
+              eventsInserted += r.events_inserted ?? 0;
+              eventsReplayed += r.events_replayed ?? 0;
+              eventsRestored += r.events_restored ?? 0;
+              eventsOrphaned += r.events_orphaned ?? 0;
+              tradeProjInserted += r.trade_projections_inserted ?? 0;
+              tradeProjRemoved += r.trade_projections_removed ?? 0;
+              for (const [w, m] of r.pairs ?? []) affectedPairs.add(`${w}|${m}`);
+            }
+
+            // 4. Rebuild affected (wallet, onchain_id) rows via full fold of the
+            //    trades projection. Pairs come from the atomic ingest (inserted,
+            //    restored AND orphaned), so a reorg removal re-folds too.
+            const pairs = affectedPairs;
             for (const key of pairs) {
               const [wallet, midStr] = key.split("|");
               const onchain_id = Number(midStr);
               const { data: allTrades } = await sb.from("trades")
-                .select("side, direction, eth_amount, token_amount, ts")
+                .select("side, direction, eth_amount, token_amount, occurred_at")
                 .eq("wallet", wallet).eq("onchain_id", onchain_id)
                 .order("block_number", { ascending: true })
                 .order("log_index", { ascending: true });
-              const tradeObjs: Trade[] = (allTrades ?? []).map((r) => ({
-                side: r.side as "YES" | "NO",
-                direction: r.direction as "BUY" | "SELL",
-                token_amount: Number(r.token_amount) / 1e18,
-                eth_amount: Number(r.eth_amount) / 1e18,
-                ts: new Date(r.ts as string),
-              }));
+              // Fold in canonical chain order (block_number, log_index). The
+              // reducer's `ts` is EVENT time (occurred_at) — never ingested_at.
+              // The projection is derived from canonical events (occurred_at NOT
+              // NULL), and the Phase-1 block-time backfill fills any historical
+              // rows, so occurred_at is always present here; a residual NULL is
+              // skipped rather than silently folded as ingestion time.
+              const tradeObjs: Trade[] = (allTrades ?? [])
+                .filter((r) => r.occurred_at != null)
+                .map((r) => ({
+                  side: r.side as "YES" | "NO",
+                  direction: r.direction as "BUY" | "SELL",
+                  token_amount: Number(r.token_amount) / 1e18,
+                  eth_amount: Number(r.eth_amount) / 1e18,
+                  ts: new Date(r.occurred_at as string),
+                }));
               const folded: BeliefRow = tradeObjs.reduce(applyTrade, emptyRow());
               await sb.from("wallet_beliefs").upsert({
                 wallet, onchain_id,
@@ -168,19 +263,10 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
               }, { onConflict: "wallet,onchain_id" });
             }
 
-            // 5. Regenerate trade-driven feed_events (deterministic keys).
-            if (trades.length > 0) {
-              const feedRows = trades.map((t) => ({
-                event_key: `trade:${t.wallet}:${t.onchain_id}:${t.tx_hash}:${t.log_index}`,
-                onchain_id: Number(t.onchain_id),
-                wallet: t.wallet,
-                type: t.direction === "BUY" ? "backed" : "reduced",
-                side: t.side,
-                payload: { eth: t.eth_amount, tokens: t.token_amount },
-                occurred_at: new Date().toISOString(),
-              }));
-              await sb.from("feed_events").upsert(feedRows, { onConflict: "event_key" });
-            }
+            // 5. (removed) Trade-driven feed_events are no longer written. The
+            //    canonical `events` row created in step 3 is the single fact;
+            //    chronological reads come from events.functions.ts. Writing a
+            //    feed_events row here would duplicate the same trade.
 
             // 6. DURABLE advance: everything up to `end` is now fully processed.
             // Commit the cursor and refresh the lease (keep owning it for the
@@ -199,11 +285,12 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
               return Response.json({
                 ok: true, from: Number(fromClamped), to: Number(cursor),
                 trades: totalTrades, pairs: totalPairs, lostLease: true,
+                ...observability(),
                 ms: Date.now() - started,
               });
             }
             cursor = end;
-            totalTrades += trades.length;
+            totalTrades += eventRows.length;
             totalPairs += pairs.size;
 
             if (end < to) await new Promise((r) => setTimeout(r, CHUNK_DELAY_MS));
@@ -216,7 +303,9 @@ export const Route = createFileRoute("/api/public/jobs/chain-poller")({
 
           return Response.json({
             ok: true, from: Number(fromClamped), to: Number(cursor),
-            trades: totalTrades, pairs: totalPairs, ms: Date.now() - started,
+            trades: totalTrades, pairs: totalPairs,
+            ...observability(),
+            ms: Date.now() - started,
           });
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : String(e);

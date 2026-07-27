@@ -52,6 +52,7 @@ export interface CanonicalTrade {
   direction: "BUY" | "SELL";
   token_amount: string; // decimal string (wei of belief-token)
   eth_amount: string;   // decimal string (wei ETH)
+  price: string | null; // post-trade price (newPrice), decimal string; null if absent
   raw_log: unknown;
 }
 
@@ -74,6 +75,7 @@ export function decodeTradeLog(log: Log): CanonicalTrade | null {
     const amount = a.amount as bigint;
     const eth = (isBuy ? a.ethSpent : a.proceeds) as bigint;
     const marketId = a.marketId as bigint;
+    const newPrice = a.newPrice as bigint | undefined;
 
     return {
       tx_hash: log.transactionHash!,
@@ -86,6 +88,7 @@ export function decodeTradeLog(log: Log): CanonicalTrade | null {
       direction: isBuy ? "BUY" : "SELL",
       token_amount: amount.toString(),
       eth_amount: eth.toString(),
+      price: newPrice != null ? newPrice.toString() : null,
       raw_log: { address: log.address, topics: log.topics, data: log.data },
     };
   } catch {

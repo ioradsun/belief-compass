@@ -6,6 +6,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { publicClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/conviction-feed";
+import { readLatestTradeEvents } from "@/lib/events.functions";
+import { toLegacyFeedEventRow } from "@/lib/events";
 
 export const VOLUME_WINDOWS = {
   "1h": 3_600_000,
@@ -218,13 +220,10 @@ export const listMarketPulses = createServerFn({ method: "GET" })
     const ids = data.ids;
     if (ids.length === 0) return { pulses: {} as Record<string, Pulse[]> };
     const sb = publicClient();
-    const { data: rows, error } = await sb
-      .from("feed_events")
-      .select("onchain_id, wallet, type, side, payload, occurred_at, event_key")
-      .in("onchain_id", ids)
-      .order("occurred_at", { ascending: false })
-      .limit(1200);
-    if (error) return { pulses: {} as Record<string, Pulse[]> };
+    // Canonical trade activity from the events log, adapted to the legacy row
+    // shape the pulse strips are built from.
+    const facts = await readLatestTradeEvents(sb, { marketIds: ids, limit: 1200 });
+    const rows = facts.map(toLegacyFeedEventRow);
 
     const out: Record<string, Pulse[]> = {};
     const wanted = new Set<string>();
@@ -284,7 +283,7 @@ export const getMarket = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }) => {
     const sb = publicClient();
-    const [state, market, believers, events] = await Promise.all([
+    const [state, market, believers, eventFacts] = await Promise.all([
       sb.from("market_state").select("*").eq("onchain_id", data.onchain_id).maybeSingle(),
       sb.from("markets").select("*").eq("onchain_id", data.onchain_id).maybeSingle(),
       sb
@@ -294,18 +293,16 @@ export const getMarket = createServerFn({ method: "GET" })
         .in("stance_side", ["YES", "NO"])
         .order("conviction", { ascending: false })
         .limit(50),
-      sb
-        .from("feed_events")
-        .select("*")
-        .eq("onchain_id", data.onchain_id)
-        .order("occurred_at", { ascending: false })
-        .limit(30),
+      // Recent activity now reads canonical trade events; adapt to the DTO the
+      // market page already renders (id/wallet/type/side).
+      readLatestTradeEvents(sb, { marketIds: [data.onchain_id], limit: 30 }),
     ]);
+    const events = eventFacts.map((f) => ({ ...toLegacyFeedEventRow(f), id: f.source_key }));
     return {
       state: state.data ?? null,
       market: market.data ?? null,
       believers: believers.data ?? [],
-      events: events.data ?? [],
+      events,
     };
   });
 
@@ -414,23 +411,31 @@ const CHAIN_DEPLOY_BLOCK = 45_500_000;
 
 export const getIngestStatus = createServerFn({ method: "GET" }).handler(async () => {
   const sb = publicClient();
-  const [markets, trades, beliefs, feedEvents, matches, mstate, ingest] = await Promise.all([
-    sb.from("markets").select("*", { count: "exact", head: true }),
-    sb.from("trades").select("*", { count: "exact", head: true }),
-    sb.from("wallet_beliefs").select("*", { count: "exact", head: true }),
-    sb.from("feed_events").select("*", { count: "exact", head: true }),
-    sb.from("wallet_matches").select("*", { count: "exact", head: true }),
-    sb.from("market_state").select("*", { count: "exact", head: true }).gt("believers_yes", 0),
-    sb
-      .from("ingest_state")
-      .select("last_block, lease_owner, lease_expires_at")
-      .eq("id", 1)
-      .maybeSingle(),
-  ]);
+  const [markets, trades, beliefs, canonicalEvents, feedEvents, matches, mstate, ingest] =
+    await Promise.all([
+      sb.from("markets").select("*", { count: "exact", head: true }),
+      // trades is the compatibility projection — this is a diagnostic count.
+      sb.from("trades").select("*", { count: "exact", head: true }),
+      sb.from("wallet_beliefs").select("*", { count: "exact", head: true }),
+      // Canonical source of truth.
+      sb
+        .from("events")
+        .select("*", { count: "exact", head: true })
+        .eq("is_canonical", true),
+      // Legacy store (retained; no longer authoritative for trades).
+      sb.from("feed_events").select("*", { count: "exact", head: true }),
+      sb.from("wallet_matches").select("*", { count: "exact", head: true }),
+      sb.from("market_state").select("*", { count: "exact", head: true }).gt("believers_yes", 0),
+      sb
+        .from("ingest_state")
+        .select("last_block, lease_owner, lease_expires_at")
+        .eq("id", 1)
+        .maybeSingle(),
+    ]);
 
   const latestTrade = await sb
     .from("trades")
-    .select("block_number, ts")
+    .select("block_number, occurred_at")
     .order("block_number", { ascending: false })
     .order("log_index", { ascending: false })
     .limit(1)
@@ -466,6 +471,7 @@ export const getIngestStatus = createServerFn({ method: "GET" }).handler(async (
     markets: markets.count ?? 0,
     trades: trades.count ?? 0,
     beliefs: beliefs.count ?? 0,
+    events: canonicalEvents.count ?? 0,
     feedEvents: feedEvents.count ?? 0,
     matches: matches.count ?? 0,
     marketsWithBelievers: mstate.count ?? 0,
@@ -478,7 +484,7 @@ export const getIngestStatus = createServerFn({ method: "GET" }).handler(async (
       phase: blocksBehind == null ? "checking" : blocksBehind <= 250 ? "live" : "backfilling",
       leaseActive,
       latestTradeBlock: latestTrade.data?.block_number ?? null,
-      latestTradeAt: latestTrade.data?.ts ?? null,
+      latestTradeAt: latestTrade.data?.occurred_at ?? null,
     },
   };
 });
