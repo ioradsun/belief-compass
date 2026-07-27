@@ -321,7 +321,9 @@ export async function getBelief(beliefId: string, address: string | null): Promi
     n: side("n"),
     relationshipRead,
     history: {
-      volumeToday: usd(Number(state?.volume_24h_usd ?? 0)),
+      // volume_24h_usd is stored in wei by the indexer; convert to USD here so
+      // the client never does math.
+      volumeToday: usd((Number(state?.volume_24h_usd ?? 0) / 1e18) * ethUsd),
       volumeChangePct: pct(state?.chg_24h == null ? null : Number(state.chg_24h)),
       newBelievers: Number(state?.new_believers_1h ?? 0),
       believerSplit: `${by} YES · ${bn} NO`,
