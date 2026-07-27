@@ -89,42 +89,6 @@ export type Database = {
         }
         Relationships: []
       }
-      feed_events: {
-        Row: {
-          created_at: string
-          event_key: string
-          id: number
-          occurred_at: string
-          onchain_id: number | null
-          payload: Json | null
-          side: string | null
-          type: string
-          wallet: string | null
-        }
-        Insert: {
-          created_at?: string
-          event_key: string
-          id?: number
-          occurred_at: string
-          onchain_id?: number | null
-          payload?: Json | null
-          side?: string | null
-          type: string
-          wallet?: string | null
-        }
-        Update: {
-          created_at?: string
-          event_key?: string
-          id?: number
-          occurred_at?: string
-          onchain_id?: number | null
-          payload?: Json | null
-          side?: string | null
-          type?: string
-          wallet?: string | null
-        }
-        Relationships: []
-      }
       ingest_state: {
         Row: {
           id: number
@@ -331,60 +295,6 @@ export type Database = {
           no_price_usd?: number | null
           onchain_id?: number
           yes_price_usd?: number | null
-        }
-        Relationships: []
-      }
-      trades: {
-        Row: {
-          block_hash: string
-          block_number: number
-          direction: string
-          eth_amount: number
-          event_source_key: string | null
-          ingested_at: string
-          log_index: number
-          occurred_at: string | null
-          onchain_id: number
-          raw_log: Json | null
-          side: string
-          token_amount: number
-          ts: string | null
-          tx_hash: string
-          wallet: string
-        }
-        Insert: {
-          block_hash: string
-          block_number: number
-          direction: string
-          eth_amount: number
-          event_source_key?: string | null
-          ingested_at?: string
-          log_index: number
-          occurred_at?: string | null
-          onchain_id: number
-          raw_log?: Json | null
-          side: string
-          token_amount: number
-          ts?: string | null
-          tx_hash: string
-          wallet: string
-        }
-        Update: {
-          block_hash?: string
-          block_number?: number
-          direction?: string
-          eth_amount?: number
-          event_source_key?: string | null
-          ingested_at?: string
-          log_index?: number
-          occurred_at?: string | null
-          onchain_id?: number
-          raw_log?: Json | null
-          side?: string
-          token_amount?: number
-          ts?: string | null
-          tx_hash?: string
-          wallet?: string
         }
         Relationships: []
       }

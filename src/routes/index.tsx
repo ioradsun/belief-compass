@@ -1,12 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
-import {
-  listFeed,
-  listMarketPulses,
-  getIngestStatus,
-  type VolumeWindow,
-} from "@/lib/markets.functions";
+import { listFeed, listMarketPulses, type VolumeWindow } from "@/lib/markets.functions";
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { StoryDeck } from "@/components/StoryDeck";
@@ -70,12 +65,6 @@ const pulsesQO = (ids: number[]) =>
     refetchInterval: 20_000,
   });
 
-const statusQO = queryOptions({
-  queryKey: ["ingest-status"],
-  queryFn: async () => await getIngestStatus(),
-  refetchInterval: 15_000,
-});
-
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>): { wallet?: string; m?: number } => ({
     wallet:
@@ -108,163 +97,6 @@ export const Route = createFileRoute("/")({
   ),
   notFoundComponent: () => <div className="p-8">Not found.</div>,
 });
-
-function pct(n: number | null | undefined) {
-  if (n == null) return "—";
-  return `${Number(n).toFixed(0)}%`;
-}
-function fmtUsd(n: number | null | undefined) {
-  if (n == null) return "—";
-  const v = Number(n);
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
-  if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}k`;
-  return `$${v.toFixed(0)}`;
-}
-
-type JobState = "done" | "in-progress" | "pending";
-function Dot({ state }: { state: JobState }) {
-  const color =
-    state === "done"
-      ? "bg-emerald-500"
-      : state === "in-progress"
-        ? "bg-amber-500 animate-pulse"
-        : "bg-muted-foreground/40";
-  return <span className={`inline-block h-2 w-2 rounded-full ${color}`} />;
-}
-
-function StatusPanel() {
-  const { data, isLoading } = useQuery(statusQO);
-  const [expanded, setExpanded] = useState(false);
-  if (isLoading || !data) {
-    return (
-      <div className="rounded-lg border border-border p-4 text-xs text-muted-foreground">
-        Loading ingest status…
-      </div>
-    );
-  }
-
-  const chainPct = data.chain.progressPct ?? 0;
-  const chainLive = data.chain.phase === "live";
-  const chainState: JobState =
-    data.chain.blocksBehind == null ? "in-progress" : chainLive ? "done" : "in-progress";
-  const povState: JobState = data.markets > 0 ? "done" : "pending";
-  // Belief rollup is "done" once the chain is live AND beliefs have been folded.
-  const beliefState: JobState =
-    data.beliefs > 0 && chainLive ? "done" : data.beliefs > 0 ? "in-progress" : "pending";
-  // DNA matcher is on-demand — ready once the pipeline is live.
-  const matchState: JobState =
-    data.matches > 0 || (chainLive && data.beliefs > 0) ? "done" : "pending";
-
-  const allDone =
-    povState === "done" && chainState === "done" && beliefState === "done" && matchState === "done";
-
-  if (allDone && !expanded) {
-    return (
-      <button
-        type="button"
-        onClick={() => setExpanded(true)}
-        className="flex w-full items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-2.5 text-left transition-colors hover:bg-emerald-500/10"
-      >
-        <div className="flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-          <span className="text-sm font-medium">All systems live</span>
-          <span className="hidden text-xs text-muted-foreground sm:inline">
-            {data.markets.toLocaleString()} markets · {data.trades.toLocaleString()} trades ·{" "}
-            {data.beliefs.toLocaleString()} beliefs
-          </span>
-        </div>
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">details</span>
-      </button>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-border bg-muted/20 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Ingest status
-        </h2>
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] text-muted-foreground">auto-refresh 15s</span>
-          {allDone && (
-            <button
-              type="button"
-              onClick={() => setExpanded(false)}
-              className="text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
-            >
-              collapse
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Job
-          state={povState}
-          title="POV markets"
-          detail={`${data.markets.toLocaleString()} markets imported`}
-        />
-        <Job
-          state={chainState}
-          title={chainLive ? "Chain indexer (live)" : "Chain indexer (backfill)"}
-          detail={
-            data.chain.head
-              ? `${data.chain.leaseActive ? "scanning now" : "ready for next tick"} · block ${data.chain.lastBlock.toLocaleString()} / ${data.chain.head.toLocaleString()} · ${data.chain.blocksBehind?.toLocaleString()} behind`
-              : `block ${data.chain.lastBlock.toLocaleString()}`
-          }
-          progress={chainLive ? undefined : chainPct}
-        />
-        <Job
-          state={beliefState}
-          title="Belief rollup"
-          detail={`${data.beliefs.toLocaleString()} beliefs across ${data.marketsWithBelievers} markets · ${data.trades.toLocaleString()} trades`}
-        />
-        <Job
-          state={matchState}
-          title="DNA matcher"
-          detail={
-            data.matches > 0
-              ? `${data.matches.toLocaleString()} match rows cached`
-              : "ready — computes on demand when you open a wallet"
-          }
-        />
-      </div>
-    </div>
-  );
-}
-
-function Job({
-  state,
-  title,
-  detail,
-  progress,
-}: {
-  state: JobState;
-  title: string;
-  detail: string;
-  progress?: number;
-}) {
-  return (
-    <div className="rounded-md border border-border bg-background/60 p-3">
-      <div className="flex items-center gap-2">
-        <Dot state={state} />
-        <span className="text-sm font-medium">{title}</span>
-        <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">
-          {state === "done" ? "complete" : state === "in-progress" ? "running" : "pending"}
-        </span>
-      </div>
-      <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
-      {progress != null && (
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full bg-emerald-500 transition-all"
-            style={{ width: `${Math.max(2, progress).toFixed(1)}%` }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
 
 type MobileTab = "mine" | "belief" | "room";
 
@@ -308,7 +140,6 @@ function Feed() {
     const reason = (r as Record<string, unknown>).opportunity_reason;
     if (reason) reasonByMarket[Number(r.onchain_id)] = String(reason);
   }
-  const lensNeedsWallet = false;
 
   const ids = rows.map((r) => Number(r.onchain_id));
   const { data: pulseData } = useQuery(pulsesQO(ids));
@@ -357,11 +188,7 @@ function Feed() {
         ))}
       </div>
       {/* The lens exposes intent — the human question — never the formula. */}
-      <p className="px-0.5 text-[11px] text-muted-foreground">
-        {lensNeedsWallet
-          ? "Connect your wallet to see your Tribe and Rivals."
-          : activeLens.question}
-      </p>
+      <p className="px-0.5 text-[11px] text-muted-foreground">{activeLens.question}</p>
     </div>
   );
 

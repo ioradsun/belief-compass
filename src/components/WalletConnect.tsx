@@ -9,7 +9,6 @@ import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getWalletLink } from "@/lib/wallet-link.functions";
 import { readLocalLink } from "@/lib/wallet-link";
 
-
 // Isolated query client for wagmi to avoid interfering with the app's router-level client.
 const wagmiQueryClient = new QueryClient();
 
@@ -27,8 +26,8 @@ export function WalletProviders({ children }: { children: ReactNode }) {
 }
 
 /**
- * When a wallet connects, look up the POV profile and navigate to
- * /wallet/{addr}. Runs once per new address per session.
+ * When a wallet connects, look up the POV profile and focus the home feed on
+ * that wallet (the "You" panel). Runs once per new address per session.
  */
 function PovOnConnect() {
   const { address, isConnected } = useAccount();
@@ -49,9 +48,9 @@ function PovOnConnect() {
     } catch {
       /* storage unavailable — fall through and navigate once */
     }
-    // Fire-and-forget lookup (cached by browser); jump to wallet page regardless.
+    // Fire-and-forget lookup (cached by browser); focus the feed on this wallet.
     void lookupPovUser({ data: { wallet: address } }).catch(() => null);
-    // If this login wallet is linked to a POV trading wallet, land there instead.
+    // If this login wallet is linked to a POV trading wallet, focus that instead.
     void (async () => {
       const local = readLocalLink(address);
       const linked =
@@ -59,16 +58,15 @@ function PovOnConnect() {
         (await getWalletLink({ data: { wallet: address.toLowerCase() } })
           .then((r) => r.linked)
           .catch(() => null));
+      // The wallet view is the home "You" panel — point the feed at this wallet.
       // `replace` so the connect hop doesn't trap the back button in a loop.
       void navigate({
-        to: "/wallet/$addr",
-        params: { addr: linked ?? address },
+        to: "/",
+        search: (prev) => ({ ...prev, wallet: linked ?? address }),
         replace: true,
       });
     })();
   }, [address, isConnected, navigate]);
-
-
 
   return null;
 }

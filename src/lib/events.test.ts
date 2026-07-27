@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   chainTradeSourceKey,
   marketCreatedSourceKey,
-  legacyFeedEventSourceKey,
   normalizeHash,
   tradeEventFromCanonical,
   dedupeBySourceKey,
@@ -10,7 +9,6 @@ import {
   eventRecencyCompare,
   toLegacyFeedEventRow,
   orphanedSourceKeys,
-  classifyLegacyFeedEvent,
   EVENT_READ_COLUMNS,
   type CanonicalTradeLike,
   type EventFact,
@@ -37,10 +35,9 @@ describe("deterministic source keys", () => {
     expect(chainTradeSourceKey(8453, "0xAbC", 5)).toBe("chain:8453:0xabc:5");
     expect(chainTradeSourceKey(8453, "0xABC", 5)).toBe(chainTradeSourceKey(8453, "0xabc", 5));
   });
-  it("market-created and legacy keys are deterministic", () => {
+  it("market-created keys are deterministic", () => {
     expect(marketCreatedSourceKey(42)).toBe("pov:market:42:created");
     expect(marketCreatedSourceKey("42")).toBe("pov:market:42:created");
-    expect(legacyFeedEventSourceKey(9)).toBe("legacy:feed_event:9");
   });
   it("normalizeHash lowercases and trims", () => {
     expect(normalizeHash("  0xAbCd  ")).toBe("0xabcd");
@@ -239,22 +236,5 @@ describe("Phase 2.5 — canonical reads never fall back to ingestion time", () =
   });
   it("does not expose the raw payload column to clients", () => {
     expect(EVENT_READ_COLUMNS).not.toContain("payload");
-  });
-});
-
-describe("legacy feed_events classification", () => {
-  it("classifies backed/reduced as trade duplicates (no second event)", () => {
-    expect(classifyLegacyFeedEvent({ type: "backed", event_key: "trade:x" })).toBe(
-      "trade_duplicate",
-    );
-    expect(classifyLegacyFeedEvent({ type: "reduced", event_key: null })).toBe("trade_duplicate");
-  });
-  it("classifies a trade: keyed row as a duplicate even with an odd type", () => {
-    expect(classifyLegacyFeedEvent({ type: "weird", event_key: "trade:a:b" })).toBe(
-      "trade_duplicate",
-    );
-  });
-  it("classifies anything else as legacy narrative", () => {
-    expect(classifyLegacyFeedEvent({ type: "announcement", event_key: "sys:1" })).toBe("legacy");
   });
 });

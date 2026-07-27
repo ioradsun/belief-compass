@@ -11,8 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as MarketIdRouteImport } from './routes/market.$id'
-import { Route as WalletAddrRouteImport } from './routes/wallet.$addr'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
 import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/public/jobs/belief-rollup'
 import { Route as ApiPublicJobsChainPollerRouteImport } from './routes/api/public/jobs/chain-poller'
@@ -30,16 +28,6 @@ const IndexRoute = IndexRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MarketIdRoute = MarketIdRouteImport.update({
-  id: '/market/$id',
-  path: '/market/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WalletAddrRoute = WalletAddrRouteImport.update({
-  id: '/wallet/$addr',
-  path: '/wallet/$addr',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicBuildIdRoute = ApiPublicBuildIdRouteImport.update({
@@ -92,8 +80,6 @@ const ApiPublicJobsPovPollerRoute = ApiPublicJobsPovPollerRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/market/$id': typeof MarketIdRoute
-  '/wallet/$addr': typeof WalletAddrRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -106,8 +92,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/market/$id': typeof MarketIdRoute
-  '/wallet/$addr': typeof WalletAddrRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -121,8 +105,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/market/$id': typeof MarketIdRoute
-  '/wallet/$addr': typeof WalletAddrRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -137,8 +119,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/sitemap.xml'
-    | '/market/$id'
-    | '/wallet/$addr'
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -151,8 +131,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/sitemap.xml'
-    | '/market/$id'
-    | '/wallet/$addr'
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -165,8 +143,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/sitemap.xml'
-    | '/market/$id'
-    | '/wallet/$addr'
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -180,8 +156,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
-  MarketIdRoute: typeof MarketIdRoute
-  WalletAddrRoute: typeof WalletAddrRoute
   ApiPublicBuildIdRoute: typeof ApiPublicBuildIdRoute
   ApiPublicJobsBeliefRollupRoute: typeof ApiPublicJobsBeliefRollupRoute
   ApiPublicJobsChainPollerRoute: typeof ApiPublicJobsChainPollerRoute
@@ -206,20 +180,6 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/market/$id': {
-      id: '/market/$id'
-      path: '/market/$id'
-      fullPath: '/market/$id'
-      preLoaderRoute: typeof MarketIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/wallet/$addr': {
-      id: '/wallet/$addr'
-      path: '/wallet/$addr'
-      fullPath: '/wallet/$addr'
-      preLoaderRoute: typeof WalletAddrRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/build-id': {
@@ -284,8 +244,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
-  MarketIdRoute: MarketIdRoute,
-  WalletAddrRoute: WalletAddrRoute,
   ApiPublicBuildIdRoute: ApiPublicBuildIdRoute,
   ApiPublicJobsBeliefRollupRoute: ApiPublicJobsBeliefRollupRoute,
   ApiPublicJobsChainPollerRoute: ApiPublicJobsChainPollerRoute,
