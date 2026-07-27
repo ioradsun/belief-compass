@@ -38,7 +38,6 @@ export function SideDrawer({
           open ? "translate-x-0" : "-translate-x-[101%]",
           "wide:contents",
         )}
-        onClick={onClose}
       >
         {children}
       </div>
