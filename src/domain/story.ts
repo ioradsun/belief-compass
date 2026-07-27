@@ -218,7 +218,7 @@ export function composeMarketStory(input: StoryInput): MarketStory {
 // Live-event story — one line per Live-tape row.
 //
 // Turns a single on-chain action into a FOMO-shaped sentence:
-//   {who} {joined/doubled down/cut/defected} the {SIDE} army for ${amt}
+//   {who} {joined / left / defected to} the {SIDE} army for ${amt}
 //   — {the single strongest true momentum hook}
 //
 // Every clause is TRUE (numbers come from the row + market_state). Gamified
@@ -292,7 +292,7 @@ export function composeLiveStory(input: LiveStoryInput): { text: string; tone: B
   // Crowd burst (no named actor).
   if (!input.actor) {
     const n = num(input.walletCount) || 1;
-    const verb = input.action === "SELL" ? "trimmed" : "piled into";
+    const verb = input.action === "SELL" ? "pulled out of" : "piled into";
     return {
       text: `${n} ${n === 1 ? "wallet" : "wallets"} ${verb} ${side ?? ""}${stake}${tail}`.trim(),
       tone,
@@ -304,8 +304,9 @@ export function composeLiveStory(input: LiveStoryInput): { text: string; tone: B
     : input.actor.name;
 
   let verbPhrase: string;
+  // Consistent army metaphor: joined ↔ left, plus defected for a side switch.
   if (input.flip) verbPhrase = `defected to ${side ?? ""}`.trim();
-  else if (input.action === "SELL") verbPhrase = `cut ${side ?? ""}`.trim();
+  else if (input.action === "SELL") verbPhrase = `left the ${side ?? ""} army`.trim();
   else verbPhrase = `joined the ${side ?? ""} army`.trim();
 
   return { text: `${who} ${verbPhrase}${stake}${tail}`.trim(), tone };

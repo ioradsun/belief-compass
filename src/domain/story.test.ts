@@ -157,7 +157,7 @@ describe("composeLiveStory", () => {
   });
   it("a sell cuts the side; a flip defects", () => {
     expect(composeLiveStory(liveBase({ action: "SELL", side: "NO", amountUsd: 82 })).text).toBe(
-      "John cut NO for $82",
+      "John left the NO army for $82",
     );
     expect(composeLiveStory(liveBase({ flip: true, side: "YES", action: "BUY" })).text).toBe(
       "John defected to YES for $25",
