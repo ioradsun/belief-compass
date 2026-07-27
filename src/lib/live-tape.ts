@@ -61,6 +61,10 @@ const plural = (n: number, u: string) => `${n} ${u}${n === 1 ? "" : "s"}`;
 /** Factual text for a row — real numbers only, no motive attribution. */
 export function liveRowText(r: Omit<LiveRow, "text">): string {
   switch (r.kind) {
+    case "round_trip": {
+      const amt = r.amountUsd && r.amountUsd > 0 ? ` ${fmtUsd(r.amountUsd)}` : "";
+      return `A wallet round-tripped${amt} on ${r.side ?? ""}`.trim();
+    }
     case "trade_burst": {
       const verb = r.side && r.payload.action === "SELL" ? "reduced" : "backed";
       const who = plural(r.walletCount ?? 1, "wallet");
@@ -79,6 +83,51 @@ export function liveRowText(r: Omit<LiveRow, "text">): string {
       return "";
   }
 }
+
+const ROUND_TRIP_WINDOW_MS = 15 * 60_000;
+const ROUND_TRIP_TOLERANCE = 0.02; // 2% size difference still counts as a wash
+
+/**
+ * A wallet that buys and sells the same size on the same market+side within a
+ * few minutes is one round-trip, not two stories. Drop the exit event and mark
+ * the entry so the tape shows a single honest row instead of a mirrored pair.
+ */
+function collapseRoundTrips(events: LiveEventInput[]): {
+  kept: LiveEventInput[];
+  roundTrip: Set<string>;
+} {
+  const drop = new Set<string>();
+  const roundTrip = new Set<string>();
+  for (let a = 0; a < events.length; a += 1) {
+    const sell = events[a];
+    if (sell.kind !== "trade" || sell.action !== "SELL" || !sell.wallet) continue;
+    if (drop.has(sell.source_key)) continue;
+    for (let b = a + 1; b < events.length; b += 1) {
+      const buy = events[b];
+      if (
+        new Date(sell.occurred_at).getTime() - new Date(buy.occurred_at).getTime() >
+        ROUND_TRIP_WINDOW_MS
+      )
+        break;
+      if (
+        buy.kind !== "trade" ||
+        buy.action !== "BUY" ||
+        buy.wallet !== sell.wallet ||
+        buy.market_id !== sell.market_id ||
+        buy.side !== sell.side ||
+        roundTrip.has(buy.source_key)
+      )
+        continue;
+      const base = Math.max(buy.amount_eth, sell.amount_eth, Number.EPSILON);
+      if (Math.abs(buy.amount_eth - sell.amount_eth) / base > ROUND_TRIP_TOLERANCE) continue;
+      drop.add(sell.source_key);
+      roundTrip.add(buy.source_key);
+      break;
+    }
+  }
+  return { kept: events.filter((e) => !drop.has(e.source_key)), roundTrip };
+}
+
 
 const LARGE_TRADE_USD = 1000;
 
