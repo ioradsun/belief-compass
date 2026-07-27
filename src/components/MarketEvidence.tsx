@@ -2,14 +2,14 @@
  * The deck's proof section: three tabs of real evidence for the open market.
  *   • Believers — actual holders per side, with faces, conviction and days held.
  *   • Price — money-YES% over the last ~60 days as a small sparkline.
- *   • Defense — the case each side is making. Best-effort from pov.co; honest
- *     empty state until that source is wired.
+ *   • Defense — the case each side is making, from pov.co agent opinions
+ *     (stored on the market): a face, a vote, and their take.
  * Server-owned via getMarketEvidence; this only renders. Compact + self-scrolling
  * so it never fights the decision dock for space.
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
+import { getMarketEvidence, type Believer, type DefenseOpinion } from "@/lib/evidence.functions";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
 type Tab = "believers" | "price" | "defense";
@@ -37,7 +37,7 @@ export function MarketEvidence({ marketId }: { marketId: number }) {
           Price
         </TabBtn>
         <TabBtn on={tab === "defense"} onClick={() => setTab("defense")}>
-          Defense
+          Defense{data?.defense.length ? ` ${data.defense.length}` : ""}
         </TabBtn>
       </div>
       <div className="max-h-[168px] overflow-y-auto px-2 pb-2">
@@ -51,7 +51,7 @@ export function MarketEvidence({ marketId }: { marketId: number }) {
         ) : tab === "price" ? (
           <PriceHistory series={data?.priceSeries ?? []} />
         ) : (
-          <Defense />
+          <Defense opinions={data?.defense ?? []} />
         )}
       </div>
     </div>
@@ -181,12 +181,52 @@ function PriceHistory({ series }: { series: { date: string; yesPct: number }[] }
   );
 }
 
-function Defense() {
+function Defense({ opinions }: { opinions: DefenseOpinion[] }) {
+  if (opinions.length === 0) {
+    return <Empty>No one's made their case here yet — the floor is open.</Empty>;
+  }
   return (
-    <Empty>
-      The cases each side is making are coming from pov.co soon. For now, the believers and price
-      tabs carry the evidence.
-    </Empty>
+    <ul className="space-y-1.5 py-1">
+      {opinions.map((o, i) => (
+        <li key={i} className="flex gap-2">
+          {o.avatarUrl ? (
+            <img
+              src={o.avatarUrl}
+              alt=""
+              className="mt-0.5 h-6 w-6 shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <span
+              className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold text-white"
+              style={{ background: `hsl(${hueFor(o.name)} 45% 45%)` }}
+              aria-hidden
+            >
+              {initialsFor(o.name)}
+            </span>
+          )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-[12px] font-semibold text-[var(--text)]">
+                {o.name}
+              </span>
+              <span
+                className="rounded px-1 py-0.5 text-[9px] font-semibold"
+                style={{
+                  color: o.vote === "YES" ? "var(--yes)" : "var(--no)",
+                  background:
+                    o.vote === "YES"
+                      ? "color-mix(in oklab,var(--yes) 12%,transparent)"
+                      : "color-mix(in oklab,var(--no) 12%,transparent)",
+                }}
+              >
+                {o.vote}
+              </span>
+            </div>
+            <p className="text-[12px] leading-snug text-[var(--text-secondary)]">{o.opinion}</p>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 

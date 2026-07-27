@@ -30,11 +30,44 @@ export interface PricePoint {
   yesPct: number; // 0..100
 }
 
+/** One agent's take on the market — the "case" behind a side. From pov.co. */
+export interface DefenseOpinion {
+  name: string;
+  avatarUrl: string | null;
+  opinion: string;
+  vote: "YES" | "NO";
+}
+
 export interface MarketEvidence {
   believers: Believer[];
   believersYes: number;
   believersNo: number;
   priceSeries: PricePoint[];
+  defense: DefenseOpinion[];
+}
+
+/** Shape pov.co agent_opinions (jsonb) into Defense entries; tolerant of gaps. */
+function toDefense(raw: unknown): DefenseOpinion[] {
+  if (!Array.isArray(raw)) return [];
+  const out: DefenseOpinion[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const opinion = typeof o.opinion === "string" ? o.opinion.trim() : "";
+    if (!opinion) continue;
+    const name =
+      (typeof o.agentDisplayName === "string" && o.agentDisplayName) ||
+      (typeof o.agentUsername === "string" && o.agentUsername) ||
+      "Anonymous";
+    const vote = String(o.vote ?? "").toLowerCase() === "yes" ? "YES" : "NO";
+    out.push({
+      name,
+      avatarUrl: typeof o.agentPfpUrl === "string" ? o.agentPfpUrl : null,
+      opinion,
+      vote,
+    });
+  }
+  return out;
 }
 
 const BELIEVERS_LIMIT = 24;
@@ -46,7 +79,7 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
     const sb = publicClient();
     const id = data.marketId;
 
-    const [beliefsRes, seriesRes] = await Promise.all([
+    const [beliefsRes, seriesRes, marketRes] = await Promise.all([
       sb
         .from("wallet_beliefs")
         .select("wallet, stance_side, expressed_side, yes_shares, no_shares, conviction, days_held")
@@ -55,6 +88,7 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
         .order("conviction", { ascending: false })
         .limit(BELIEVERS_LIMIT),
       sb.rpc("price_series_daily", { p_ids: [id], p_days: 60 }),
+      sb.from("markets").select("agent_opinions").eq("onchain_id", id).maybeSingle(),
     ]);
 
     const rows = (beliefsRes.data ?? []) as Array<{
@@ -98,5 +132,9 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
       .filter((s) => s.pct != null)
       .map((s) => ({ date: String(s.bucket), yesPct: Number(s.pct) }));
 
-    return { believers, believersYes, believersNo, priceSeries };
+    const defense = toDefense(
+      (marketRes.data as { agent_opinions?: unknown } | null)?.agent_opinions,
+    );
+
+    return { believers, believersYes, believersNo, priceSeries, defense };
   });
