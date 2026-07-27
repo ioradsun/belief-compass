@@ -8,7 +8,7 @@ import { EmptyState } from "./EmptyState";
  */
 export function BeliefRoom({ onOpenDrawer }: { onOpenDrawer: () => void }) {
   return (
-    <main className="relative flex h-full min-h-0 flex-col overflow-hidden bg-bg">
+    <main className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-bg wide:col-start-2 wide:h-full">
       <header className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 border-b border-border px-4 py-4 wide:grid-cols-1 wide:px-8 wide:py-6">
         <IconButton label="Open panels" onClick={onOpenDrawer} className="wide:hidden">
           <Menu size={18} strokeWidth={1.8} />

@@ -27,17 +27,11 @@ export function AppShell() {
       className="grid h-[100dvh] grid-cols-1 overflow-hidden bg-bg wide:grid-cols-[minmax(210px,236px)_minmax(560px,1fr)_minmax(290px,326px)]"
     >
       {/* Centre is never inside the drawer wrapper. */}
-      <div className="col-auto min-h-0 wide:col-start-2">
-        <BeliefRoom onOpenDrawer={() => setDrawerOpen(true)} />
-      </div>
+      <BeliefRoom onOpenDrawer={() => setDrawerOpen(true)} />
 
       <SideDrawer open={drawerOpen} onClose={close}>
-        <div className="contents wide:col-start-1">
-          <LeftPanel />
-        </div>
-        <div className="contents wide:col-start-3">
-          <RoomPanel />
-        </div>
+        <LeftPanel />
+        <RoomPanel />
       </SideDrawer>
     </div>
   );

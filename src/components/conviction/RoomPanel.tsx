@@ -6,7 +6,7 @@ import { EmptyState } from "./EmptyState";
  */
 export function RoomPanel() {
   return (
-    <aside className="flex min-h-0 flex-1 flex-col wide:h-full border-border bg-panel wide:border-l">
+    <aside className="flex min-h-0 flex-1 flex-col wide:h-full wide:col-start-3 border-border bg-panel wide:border-l">
       <header className="border-b border-border px-4 py-4">
         <p className="label-micro">The Room</p>
         <p className="mt-1 text-sm text-text">Nobody has moved yet</p>
