@@ -9,30 +9,25 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as WalletAddrRouteImport } from './routes/wallet.$addr'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as MarketIdRouteImport } from './routes/market.$id'
+import { Route as WalletAddrRouteImport } from './routes/wallet.$addr'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
-import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
-import { Route as ApiPublicJobsMatchWorkerRouteImport } from './routes/api/public/jobs/match-worker'
-import { Route as ApiPublicJobsDnaMatcherRouteImport } from './routes/api/public/jobs/dna-matcher'
-import { Route as ApiPublicJobsChainPollerRouteImport } from './routes/api/public/jobs/chain-poller'
 import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/public/jobs/belief-rollup'
+import { Route as ApiPublicJobsChainPollerRouteImport } from './routes/api/public/jobs/chain-poller'
+import { Route as ApiPublicJobsDnaMatcherRouteImport } from './routes/api/public/jobs/dna-matcher'
+import { Route as ApiPublicJobsMatchWorkerRouteImport } from './routes/api/public/jobs/match-worker'
+import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
 
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WalletAddrRoute = WalletAddrRouteImport.update({
-  id: '/wallet/$addr',
-  path: '/wallet/$addr',
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MarketIdRoute = MarketIdRouteImport.update({
@@ -40,14 +35,31 @@ const MarketIdRoute = MarketIdRouteImport.update({
   path: '/market/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WalletAddrRoute = WalletAddrRouteImport.update({
+  id: '/wallet/$addr',
+  path: '/wallet/$addr',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicBuildIdRoute = ApiPublicBuildIdRouteImport.update({
   id: '/api/public/build-id',
   path: '/api/public/build-id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicJobsPovPollerRoute = ApiPublicJobsPovPollerRouteImport.update({
-  id: '/api/public/jobs/pov-poller',
-  path: '/api/public/jobs/pov-poller',
+const ApiPublicJobsBeliefRollupRoute =
+  ApiPublicJobsBeliefRollupRouteImport.update({
+    id: '/api/public/jobs/belief-rollup',
+    path: '/api/public/jobs/belief-rollup',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicJobsChainPollerRoute =
+  ApiPublicJobsChainPollerRouteImport.update({
+    id: '/api/public/jobs/chain-poller',
+    path: '/api/public/jobs/chain-poller',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicJobsDnaMatcherRoute = ApiPublicJobsDnaMatcherRouteImport.update({
+  id: '/api/public/jobs/dna-matcher',
+  path: '/api/public/jobs/dna-matcher',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicJobsMatchWorkerRoute =
@@ -56,23 +68,11 @@ const ApiPublicJobsMatchWorkerRoute =
     path: '/api/public/jobs/match-worker',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicJobsDnaMatcherRoute = ApiPublicJobsDnaMatcherRouteImport.update({
-  id: '/api/public/jobs/dna-matcher',
-  path: '/api/public/jobs/dna-matcher',
+const ApiPublicJobsPovPollerRoute = ApiPublicJobsPovPollerRouteImport.update({
+  id: '/api/public/jobs/pov-poller',
+  path: '/api/public/jobs/pov-poller',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicJobsChainPollerRoute =
-  ApiPublicJobsChainPollerRouteImport.update({
-    id: '/api/public/jobs/chain-poller',
-    path: '/api/public/jobs/chain-poller',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicJobsBeliefRollupRoute =
-  ApiPublicJobsBeliefRollupRouteImport.update({
-    id: '/api/public/jobs/belief-rollup',
-    path: '/api/public/jobs/belief-rollup',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -165,13 +165,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -179,11 +172,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/wallet/$addr': {
-      id: '/wallet/$addr'
-      path: '/wallet/$addr'
-      fullPath: '/wallet/$addr'
-      preLoaderRoute: typeof WalletAddrRouteImport
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/market/$id': {
@@ -193,6 +186,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/wallet/$addr': {
+      id: '/wallet/$addr'
+      path: '/wallet/$addr'
+      fullPath: '/wallet/$addr'
+      preLoaderRoute: typeof WalletAddrRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/build-id': {
       id: '/api/public/build-id'
       path: '/api/public/build-id'
@@ -200,25 +200,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicBuildIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/jobs/pov-poller': {
-      id: '/api/public/jobs/pov-poller'
-      path: '/api/public/jobs/pov-poller'
-      fullPath: '/api/public/jobs/pov-poller'
-      preLoaderRoute: typeof ApiPublicJobsPovPollerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/jobs/match-worker': {
-      id: '/api/public/jobs/match-worker'
-      path: '/api/public/jobs/match-worker'
-      fullPath: '/api/public/jobs/match-worker'
-      preLoaderRoute: typeof ApiPublicJobsMatchWorkerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/jobs/dna-matcher': {
-      id: '/api/public/jobs/dna-matcher'
-      path: '/api/public/jobs/dna-matcher'
-      fullPath: '/api/public/jobs/dna-matcher'
-      preLoaderRoute: typeof ApiPublicJobsDnaMatcherRouteImport
+    '/api/public/jobs/belief-rollup': {
+      id: '/api/public/jobs/belief-rollup'
+      path: '/api/public/jobs/belief-rollup'
+      fullPath: '/api/public/jobs/belief-rollup'
+      preLoaderRoute: typeof ApiPublicJobsBeliefRollupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/jobs/chain-poller': {
@@ -228,11 +214,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicJobsChainPollerRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/jobs/belief-rollup': {
-      id: '/api/public/jobs/belief-rollup'
-      path: '/api/public/jobs/belief-rollup'
-      fullPath: '/api/public/jobs/belief-rollup'
-      preLoaderRoute: typeof ApiPublicJobsBeliefRollupRouteImport
+    '/api/public/jobs/dna-matcher': {
+      id: '/api/public/jobs/dna-matcher'
+      path: '/api/public/jobs/dna-matcher'
+      fullPath: '/api/public/jobs/dna-matcher'
+      preLoaderRoute: typeof ApiPublicJobsDnaMatcherRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/jobs/match-worker': {
+      id: '/api/public/jobs/match-worker'
+      path: '/api/public/jobs/match-worker'
+      fullPath: '/api/public/jobs/match-worker'
+      preLoaderRoute: typeof ApiPublicJobsMatchWorkerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/jobs/pov-poller': {
+      id: '/api/public/jobs/pov-poller'
+      path: '/api/public/jobs/pov-poller'
+      fullPath: '/api/public/jobs/pov-poller'
+      preLoaderRoute: typeof ApiPublicJobsPovPollerRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
