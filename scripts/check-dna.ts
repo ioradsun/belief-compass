@@ -73,13 +73,17 @@ async function loadFactors(wallet: string): Promise<DnaFactor[]> {
 
 async function checkRetired() {
   for (const t of ["viewer_match_cache", "wallet_matches"]) {
-    const probe = await sb.from(t).select("*", { head: true, count: "exact" });
+    // A HEAD probe against a dropped table comes back as a bodyless 204 with no
+    // error, so use a real GET: a missing table then reports PGRST205/42P01.
+    const probe = await sb.from(t).select("*").limit(1);
     if (!probe.error) {
       c.old_cache_table_present += 1;
       console.error(`[check-dna] ${t} still present (should be dropped)`);
     }
   }
 }
+
+
 
 type Rel = {
   wallet: string;
