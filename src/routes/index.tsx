@@ -41,6 +41,8 @@ const OPP_FILTERS: { key: OppFilter; emoji: string; label: string; question: str
 ];
 
 import { MyWorld } from "@/components/MyWorld";
+import { OmniHeader } from "@/components/OmniHeader";
+
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 
 const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
