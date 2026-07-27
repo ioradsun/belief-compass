@@ -1,0 +1,1 @@
+ALTER TABLE public.markets ADD COLUMN IF NOT EXISTS pov_slug text;
