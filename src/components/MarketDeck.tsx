@@ -7,11 +7,13 @@
  * quote. Prices/quotes come from the contract (src/lib/chain-trade) — never the
  * client. Skip has no financial effect and just advances the queue.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
-import { MarketEvidence } from "@/components/MarketEvidence";
+import { MarketIntelligence, useHouseAnswer } from "@/components/MarketIntelligence";
+import type { BeliefAction } from "@/domain/house";
+
 import { CHAIN_ID } from "@/chain/decoder";
 import {
   useBuyQuote,
