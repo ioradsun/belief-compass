@@ -1,45 +1,39 @@
 /**
- * ACCOUNT — the single place every account-related thing lives.
+ * ACCOUNT — lives at the top-left of the left rail.
  *
- * Signed out: one honest "Connect wallet" affordance.
- * Signed in: a profile pic in the top-right. Opening it reveals identity
- * (username + POV wallet + vendor wallet), the link flow, and sign out.
- * Tapping the picture or the username opens that profile in the center.
+ * Collapsed: just a profile picture and name — the quietest possible anchor.
+ * Expanded: the account opens *inside* the rail (no floating layer), taking
+ * over the panel with identity, wallets, the link flow and sign out, and a
+ * clear way back. Everything account-related is behind this one affordance.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAccount, useDisconnect } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, ChevronLeft } from "lucide-react";
 import { lookupPovUser } from "@/lib/pov-user.functions";
 import { WalletIdentity } from "@/components/WalletIdentity";
-import { WalletConnectButton } from "@/components/WalletConnect";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
 function short(w: string) {
   return `${w.slice(0, 6)}…${w.slice(-4)}`;
 }
 
-export function AccountMenu({
+export function AccountRail({
   wallet,
   onOpenProfile,
+  open,
+  onOpenChange,
 }: {
   /** The effective (POV / trading) wallet being represented. */
   wallet?: string;
   onOpenProfile: (wallet: string) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
   const { disconnect } = useDisconnect();
-  const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => setMounted(true), []);
-  useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
 
   const me = (wallet ?? address ?? "").toLowerCase();
 
@@ -54,93 +48,93 @@ export function AccountMenu({
   const name = user?.username ?? user?.displayName ?? (me ? short(me) : "");
   const avatar = user?.pfpUrl ?? null;
 
-  if (!mounted || !isConnected) {
-    return (
-      <div className="shrink-0">
-        <WalletConnectButton />
-      </div>
-    );
-  }
-
-  const openProfile = () => {
-    if (me) onOpenProfile(me);
-    setOpen(false);
-  };
-
-  return (
-    <div className="relative shrink-0" ref={boxRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="Account"
-        className="grid h-10 w-10 place-items-center overflow-hidden rounded-full border border-[var(--border)] bg-[var(--surface)] transition-colors hover:border-[var(--text-muted)]"
+  const Avatar = ({ size }: { size: number }) =>
+    avatar ? (
+      <img
+        src={avatar}
+        alt=""
+        className="rounded-full object-cover"
+        style={{ width: size, height: size }}
+      />
+    ) : (
+      <span
+        className="grid place-items-center rounded-full font-semibold text-white"
+        style={{
+          width: size,
+          height: size,
+          fontSize: Math.round(size * 0.36),
+          background: `hsl(${hueFor(me || "0x0")} 45% 45%)`,
+        }}
+        aria-hidden
       >
-        {avatar ? (
-          <img src={avatar} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <span
-            className="grid h-full w-full place-items-center text-[12px] font-semibold text-white"
-            style={{ background: `hsl(${hueFor(me || "0x0")} 45% 45%)` }}
-            aria-hidden
-          >
-            {initialsFor(name)}
-          </span>
-        )}
-      </button>
+        {initialsFor(name)}
+      </span>
+    );
 
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-12 z-50 w-[320px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-3 shadow-xl"
+  if (open) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          className="-ml-1 mb-4 flex items-center gap-1 self-start rounded-md px-1 py-1 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
         >
-          {/* Identity — tapping it opens the profile in the center. */}
-          <button
-            type="button"
-            onClick={openProfile}
-            className="flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors hover:bg-[var(--surface)]"
-          >
-            {avatar ? (
-              <img src={avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
-            ) : (
-              <span
-                className="grid h-10 w-10 place-items-center rounded-full text-[12px] font-semibold text-white"
-                style={{ background: `hsl(${hueFor(me || "0x0")} 45% 45%)` }}
-                aria-hidden
-              >
-                {initialsFor(name)}
-              </span>
-            )}
-            <span className="min-w-0">
-              <span className="block truncate text-[14px] font-semibold text-[var(--text)]">
-                {name}
-              </span>
-              <span className="block text-[11px] text-[var(--text-muted)]">View my profile</span>
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Back
+        </button>
+
+        {/* Identity — tapping opens the profile in the center panel. */}
+        <button
+          type="button"
+          onClick={() => {
+            if (me) onOpenProfile(me);
+            onOpenChange(false);
+          }}
+          className="-mx-2 flex items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-[var(--surface)]"
+        >
+          <Avatar size={40} />
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] font-semibold text-[var(--text)]">
+              {name}
             </span>
-          </button>
+            <span className="block text-[11px] text-[var(--text-muted)]">View my profile</span>
+          </span>
+        </button>
 
-          <div className="my-2" style={{ borderTop: "1px solid var(--border)" }} />
+        <div className="my-3" style={{ borderTop: "1px solid var(--border)" }} />
 
-          {/* Wallets — POV (trading) and vendor (login), with the link flow. */}
-          <div className="max-h-[46vh] overflow-y-auto pr-0.5">
-            <WalletIdentity viewing={me} compact />
-          </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <WalletIdentity viewing={me} compact />
+        </div>
 
-          <div className="my-2" style={{ borderTop: "1px solid var(--border)" }} />
-
+        <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
           <button
             type="button"
             onClick={() => {
               disconnect();
-              setOpen(false);
+              onOpenChange(false);
             }}
-            className="w-full rounded-xl px-3 py-2 text-left text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]"
+            className="-mx-2 w-[calc(100%+1rem)] rounded-xl px-2 py-2 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]"
           >
             Sign out
           </button>
         </div>
-      )}
-    </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenChange(true)}
+      aria-expanded={false}
+      className="-mx-2 mb-4 flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface)]"
+    >
+      <Avatar size={28} />
+      <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-[var(--text)]">
+        {name}
+      </span>
+      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
+    </button>
   );
 }
