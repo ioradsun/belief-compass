@@ -72,7 +72,8 @@ export function MarketEvidence({ marketId, facts }: { marketId: number; facts?: 
         ) : tab === "believers" ? (
           <BelieversSplit believers={data?.believers ?? []} networkWallets={networkWallets} />
         ) : tab === "price" ? (
-          <PriceHistory series={data?.priceSeries ?? []} />
+          <PriceStory series={data?.priceSeries ?? []} facts={facts} />
+
         ) : (
           <Defense opinions={data?.defense ?? []} />
         )}
