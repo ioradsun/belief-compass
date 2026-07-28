@@ -12,7 +12,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { publicClient, serviceClient } from "@/lib/supabase-clients";
+import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 
 export interface Believer {
@@ -79,7 +79,6 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
     // wallet_beliefs is not publicly readable (RLS locked); this function only
     // ever returns the derived, non-sensitive face/side/conviction shape.
     const sb = serviceClient();
-    void publicClient;
     const id = data.marketId;
 
     const [beliefsRes, seriesRes, marketRes] = await Promise.all([
