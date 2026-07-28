@@ -10,6 +10,10 @@ import { aliasFor } from "@/lib/wallet-identity";
 import { readLatestTradeEvents } from "@/lib/events.functions";
 import { toLegacyFeedEventRow } from "@/lib/events";
 import { composeMarketStory, type NetworkFace, type NetworkLabel } from "@/domain/story";
+import { swrCache } from "@/lib/server-cache";
+
+/** SSR/anon feed snapshots live this long before a background refresh. */
+const ANON_FEED_TTL_MS = 5_000;
 
 export const VOLUME_WINDOWS = {
   "1h": 3_600_000,
@@ -38,12 +42,16 @@ export const listFeed = createServerFn({ method: "GET" })
       .parse(d ?? {}),
   )
   .handler(async ({ data: input }) => {
-    const sb = serviceClient();
+    const win: VolumeWindow = input?.window ?? "24h";
+    const viewer = input?.wallet?.toLowerCase() ?? null;
 
-    const { data, error } = await sb
-      .from("market_state")
-      .select(
-        `
+    const compute = async () => {
+      const sb = serviceClient();
+
+      const { data, error } = await sb
+        .from("market_state")
+        .select(
+          `
       onchain_id, yes_price_usd, no_price_usd, money_yes_pct, people_yes_pct, people_no_pct,
       believers_yes, believers_no, believers_mixed, directional_believers, divergence,
       volume_total_usd, trending_score, chg_1h, chg_24h, chg_24h_yes, chg_24h_no,
@@ -55,246 +63,254 @@ export const listFeed = createServerFn({ method: "GET" })
       opportunity_window, opportunity_confidence, opportunity_sample_size, opportunity_eligible,
       markets:onchain_id ( title, category, author_name, author_pfp, pov_slug )
     `,
-      )
-      .order("volume_total_usd", { ascending: false, nullsFirst: false })
-      .limit(50);
-    if (error)
-      return {
-        data: [],
-        error: error.message,
-        window: (input?.window ?? "24h") as VolumeWindow,
-        ethUsd: 0,
-        historyFrom: null as string | null,
-        tribe: null as MatchPerson | null,
-        opp: null as MatchPerson | null,
-      };
-
-    const rows = data ?? [];
-
-    // Viewer-relative: is the viewer's closest match (tribe) or most-opposed
-    // wallet (opp) among the believers of each market, and on which side?
-    const viewer = input?.wallet?.toLowerCase() ?? null;
-    const tribeBySide = new Map<number, "YES" | "NO">();
-    const oppBySide = new Map<number, "YES" | "NO">();
-    let tribePerson: MatchPerson | null = null;
-    let oppPerson: MatchPerson | null = null;
-    // The DNA labels behind the tribe/opp person, for the story's relationship beat.
-    let tribeRel: NetworkLabel = "tribe";
-    let oppRel: NetworkLabel = "opp";
-    if (viewer && rows.length) {
-      // Read the bounded viewer DNA cache (closest / tribe / opp). The feed NEVER
-      // computes DNA inline — on a miss/stale it enqueues a bounded background
-      // refresh and renders globally without personalization.
-      const { readViewerDnaCache } = await import("@/lib/dna/viewer-dna-cache.server");
-      const cache = await readViewerDnaCache(sb, viewer);
-      if (!cache || !cache.fresh) {
-        try {
-          await sb.rpc("request_viewer_match_refresh", { p_wallet: viewer });
-        } catch {
-          /* best-effort; the connect path also enqueues */
-        }
-      }
-      const tribeEntry = cache?.closest[0] ?? cache?.tribe[0] ?? null;
-      const oppEntry = cache?.opp[0] ?? cache?.inverse[0] ?? null;
-      tribeRel = tribeEntry?.relationship === "twin" ? "twin" : "tribe";
-      oppRel = oppEntry?.relationship === "inverse" ? "inverse" : "opp";
-      const tribe = tribeEntry
-        ? { matched_wallet: tribeEntry.wallet, match_score: tribeEntry.agreement }
-        : null;
-      const opp = oppEntry
-        ? { matched_wallet: oppEntry.wallet, match_score: oppEntry.agreement }
-        : null;
-      const focus = [tribe?.matched_wallet, opp?.matched_wallet].filter(Boolean) as string[];
-      if (focus.length) {
-        const ids = rows.map((r) => Number(r.onchain_id));
-        const { data: beliefs } = await sb
-          .from("wallet_beliefs")
-          .select("wallet, onchain_id, stance_side")
-          .in("wallet", focus)
-          .in("onchain_id", ids)
-          .in("stance_side", ["YES", "NO"]);
-        for (const b of beliefs ?? []) {
-          const w = String(b.wallet).toLowerCase();
-          const side = b.stance_side as "YES" | "NO";
-          if (tribe && w === tribe.matched_wallet.toLowerCase())
-            tribeBySide.set(Number(b.onchain_id), side);
-          if (opp && w === opp.matched_wallet.toLowerCase())
-            oppBySide.set(Number(b.onchain_id), side);
-        }
-
-        // Put a face and a name on the tribesman / opp so the cards can show them.
-        const { resolveProfiles } = await import("@/lib/profiles.server");
-        const profiles = await resolveProfiles(
-          focus.map((w) => w.toLowerCase()),
-          4,
-        );
-        const person = (w: string, score: number): MatchPerson => {
-          const prof = profiles.get(w.toLowerCase());
-          return {
-            wallet: w,
-            name: prof?.displayName ?? aliasFor(w),
-            pfpUrl: prof?.pfpUrl ?? null,
-            score: Math.round(score),
-          };
+        )
+        .order("volume_total_usd", { ascending: false, nullsFirst: false })
+        .limit(50);
+      if (error)
+        return {
+          data: [],
+          error: error.message,
+          window: (input?.window ?? "24h") as VolumeWindow,
+          ethUsd: 0,
+          historyFrom: null as string | null,
+          tribe: null as MatchPerson | null,
+          opp: null as MatchPerson | null,
         };
-        if (tribe) tribePerson = person(tribe.matched_wallet, Number(tribe.match_score));
-        if (opp) oppPerson = person(opp.matched_wallet, Number(opp.match_score));
-      }
-    }
 
-    // Per-side volume, first principles: YES and NO are separate books, so we sum
-    // the actual on-chain ETH notional traded on each side inside the selected
-    // window and convert to USD with a calibration derived from POV's own totals
-    // (Σ reported USD volume / Σ observed ETH volume).
-    const win: VolumeWindow = input?.window ?? "24h";
-    const ms = VOLUME_WINDOWS[win];
-    const since = ms == null ? null : new Date(Date.now() - ms).toISOString();
-    const ids = rows.map((r) => Number(r.onchain_id));
-    const yesEth = new Map<number, number>();
-    const noEth = new Map<number, number>();
-    const yesTrades = new Map<number, number>();
-    const noTrades = new Map<number, number>();
-    let ethUsd = 0;
-    // Window-scoped price moves: first snapshot inside the window vs the latest.
-    const chgYes = new Map<number, number>();
-    const chgNo = new Map<number, number>();
-    let historyFrom: string | null = null;
-    if (ids.length) {
-      // Perf: window price-moves and the ETH/USD calibration are PRECOMPUTED by
-      // cron (market_window_change / calc_cache). Reading them is two indexed
-      // lookups instead of two multi-second aggregate scans per request.
-      const [vol, cal, chg] = await Promise.all([
-        sb.rpc("market_volume_window", { p_ids: ids, p_since: since }),
-        sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
-        sb
-          .from("market_window_change")
-          .select("onchain_id, chg_yes, chg_no, since_at")
-          .eq("window_key", win)
-          .in("onchain_id", ids),
-      ]);
-      for (const t of (vol.data ?? []) as {
-        onchain_id: number;
-        side: string;
-        eth: number;
-        trade_count: number;
-      }[]) {
-        const id = Number(t.onchain_id);
-        const eth = Number(t.eth ?? 0);
-        if (!Number.isFinite(eth)) continue;
-        if (t.side === "NO") {
-          noEth.set(id, (noEth.get(id) ?? 0) + eth);
-          noTrades.set(id, (noTrades.get(id) ?? 0) + Number(t.trade_count ?? 0));
-        } else {
-          yesEth.set(id, (yesEth.get(id) ?? 0) + eth);
-          yesTrades.set(id, (yesTrades.get(id) ?? 0) + Number(t.trade_count ?? 0));
+      const rows = data ?? [];
+
+      // Viewer-relative: is the viewer's closest match (tribe) or most-opposed
+      // wallet (opp) among the believers of each market, and on which side?
+      const tribeBySide = new Map<number, "YES" | "NO">();
+      const oppBySide = new Map<number, "YES" | "NO">();
+      let tribePerson: MatchPerson | null = null;
+      let oppPerson: MatchPerson | null = null;
+      // The DNA labels behind the tribe/opp person, for the story's relationship beat.
+      let tribeRel: NetworkLabel = "tribe";
+      let oppRel: NetworkLabel = "opp";
+      if (viewer && rows.length) {
+        // Read the bounded viewer DNA cache (closest / tribe / opp). The feed NEVER
+        // computes DNA inline — on a miss/stale it enqueues a bounded background
+        // refresh and renders globally without personalization.
+        const { readViewerDnaCache } = await import("@/lib/dna/viewer-dna-cache.server");
+        const cache = await readViewerDnaCache(sb, viewer);
+        if (!cache || !cache.fresh) {
+          try {
+            await sb.rpc("request_viewer_match_refresh", { p_wallet: viewer });
+          } catch {
+            /* best-effort; the connect path also enqueues */
+          }
+        }
+        const tribeEntry = cache?.closest[0] ?? cache?.tribe[0] ?? null;
+        const oppEntry = cache?.opp[0] ?? cache?.inverse[0] ?? null;
+        tribeRel = tribeEntry?.relationship === "twin" ? "twin" : "tribe";
+        oppRel = oppEntry?.relationship === "inverse" ? "inverse" : "opp";
+        const tribe = tribeEntry
+          ? { matched_wallet: tribeEntry.wallet, match_score: tribeEntry.agreement }
+          : null;
+        const opp = oppEntry
+          ? { matched_wallet: oppEntry.wallet, match_score: oppEntry.agreement }
+          : null;
+        const focus = [tribe?.matched_wallet, opp?.matched_wallet].filter(Boolean) as string[];
+        if (focus.length) {
+          const ids = rows.map((r) => Number(r.onchain_id));
+          const { data: beliefs } = await sb
+            .from("wallet_beliefs")
+            .select("wallet, onchain_id, stance_side")
+            .in("wallet", focus)
+            .in("onchain_id", ids)
+            .in("stance_side", ["YES", "NO"]);
+          for (const b of beliefs ?? []) {
+            const w = String(b.wallet).toLowerCase();
+            const side = b.stance_side as "YES" | "NO";
+            if (tribe && w === tribe.matched_wallet.toLowerCase())
+              tribeBySide.set(Number(b.onchain_id), side);
+            if (opp && w === opp.matched_wallet.toLowerCase())
+              oppBySide.set(Number(b.onchain_id), side);
+          }
+
+          // Put a face and a name on the tribesman / opp so the cards can show them.
+          const { resolveProfiles } = await import("@/lib/profiles.server");
+          const profiles = await resolveProfiles(
+            focus.map((w) => w.toLowerCase()),
+            4,
+          );
+          const person = (w: string, score: number): MatchPerson => {
+            const prof = profiles.get(w.toLowerCase());
+            return {
+              wallet: w,
+              name: prof?.displayName ?? aliasFor(w),
+              pfpUrl: prof?.pfpUrl ?? null,
+              score: Math.round(score),
+            };
+          };
+          if (tribe) tribePerson = person(tribe.matched_wallet, Number(tribe.match_score));
+          if (opp) oppPerson = person(opp.matched_wallet, Number(opp.match_score));
         }
       }
-      ethUsd = Number((cal.data as { value?: number } | null)?.value ?? 0) || 0;
-      for (const c of (chg.data ?? []) as {
-        onchain_id: number;
-        chg_yes: number | null;
-        chg_no: number | null;
-        since_at: string | null;
-      }[]) {
-        const id = Number(c.onchain_id);
-        if (c.chg_yes != null && Number.isFinite(Number(c.chg_yes)))
-          chgYes.set(id, Number(c.chg_yes));
-        if (c.chg_no != null && Number.isFinite(Number(c.chg_no))) chgNo.set(id, Number(c.chg_no));
-        if (c.since_at && (historyFrom == null || c.since_at < historyFrom))
-          historyFrom = c.since_at;
+
+      // Per-side volume, first principles: YES and NO are separate books, so we sum
+      // the actual on-chain ETH notional traded on each side inside the selected
+      // window and convert to USD with a calibration derived from POV's own totals
+      // (Σ reported USD volume / Σ observed ETH volume).
+      const ms = VOLUME_WINDOWS[win];
+      const since = ms == null ? null : new Date(Date.now() - ms).toISOString();
+      const ids = rows.map((r) => Number(r.onchain_id));
+      const yesEth = new Map<number, number>();
+      const noEth = new Map<number, number>();
+      const yesTrades = new Map<number, number>();
+      const noTrades = new Map<number, number>();
+      let ethUsd = 0;
+      // Window-scoped price moves: first snapshot inside the window vs the latest.
+      const chgYes = new Map<number, number>();
+      const chgNo = new Map<number, number>();
+      let historyFrom: string | null = null;
+      if (ids.length) {
+        // Perf: window price-moves and the ETH/USD calibration are PRECOMPUTED by
+        // cron (market_window_change / calc_cache). Reading them is two indexed
+        // lookups instead of two multi-second aggregate scans per request.
+        const [vol, cal, chg] = await Promise.all([
+          sb.rpc("market_volume_window", { p_ids: ids, p_since: since }),
+          sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
+          sb
+            .from("market_window_change")
+            .select("onchain_id, chg_yes, chg_no, since_at")
+            .eq("window_key", win)
+            .in("onchain_id", ids),
+        ]);
+        for (const t of (vol.data ?? []) as {
+          onchain_id: number;
+          side: string;
+          eth: number;
+          trade_count: number;
+        }[]) {
+          const id = Number(t.onchain_id);
+          const eth = Number(t.eth ?? 0);
+          if (!Number.isFinite(eth)) continue;
+          if (t.side === "NO") {
+            noEth.set(id, (noEth.get(id) ?? 0) + eth);
+            noTrades.set(id, (noTrades.get(id) ?? 0) + Number(t.trade_count ?? 0));
+          } else {
+            yesEth.set(id, (yesEth.get(id) ?? 0) + eth);
+            yesTrades.set(id, (yesTrades.get(id) ?? 0) + Number(t.trade_count ?? 0));
+          }
+        }
+        ethUsd = Number((cal.data as { value?: number } | null)?.value ?? 0) || 0;
+        for (const c of (chg.data ?? []) as {
+          onchain_id: number;
+          chg_yes: number | null;
+          chg_no: number | null;
+          since_at: string | null;
+        }[]) {
+          const id = Number(c.onchain_id);
+          if (c.chg_yes != null && Number.isFinite(Number(c.chg_yes)))
+            chgYes.set(id, Number(c.chg_yes));
+          if (c.chg_no != null && Number.isFinite(Number(c.chg_no)))
+            chgNo.set(id, Number(c.chg_no));
+          if (c.since_at && (historyFrom == null || c.since_at < historyFrom))
+            historyFrom = c.since_at;
+        }
       }
-    }
 
-    const mapped = rows.map((r) => {
-      const id = Number(r.onchain_id);
-      const y = yesEth.get(id) ?? 0;
-      const n = noEth.get(id) ?? 0;
-      const yesUsd = ethUsd > 0 ? y * ethUsd : null;
-      const noUsd = ethUsd > 0 ? n * ethUsd : null;
+      const mapped = rows.map((r) => {
+        const id = Number(r.onchain_id);
+        const y = yesEth.get(id) ?? 0;
+        const n = noEth.get(id) ?? 0;
+        const yesUsd = ethUsd > 0 ? y * ethUsd : null;
+        const noUsd = ethUsd > 0 ? n * ethUsd : null;
 
-      // Narrative layer: your network active in THIS market → named faces (privacy
-      // rule: only your own people are named; the crowd stays a count).
-      const rr = r as Record<string, unknown>;
-      const network: NetworkFace[] = [];
-      const tSide = tribeBySide.get(id);
-      if (tribePerson && tSide)
-        network.push({
-          wallet: tribePerson.wallet,
-          name: tribePerson.name ?? aliasFor(tribePerson.wallet),
-          avatarUrl: tribePerson.pfpUrl,
-          relationship: tribeRel,
-          side: tSide,
+        // Narrative layer: your network active in THIS market → named faces (privacy
+        // rule: only your own people are named; the crowd stays a count).
+        const rr = r as Record<string, unknown>;
+        const network: NetworkFace[] = [];
+        const tSide = tribeBySide.get(id);
+        if (tribePerson && tSide)
+          network.push({
+            wallet: tribePerson.wallet,
+            name: tribePerson.name ?? aliasFor(tribePerson.wallet),
+            avatarUrl: tribePerson.pfpUrl,
+            relationship: tribeRel,
+            side: tSide,
+          });
+        const oSide = oppBySide.get(id);
+        if (oppPerson && oSide)
+          network.push({
+            wallet: oppPerson.wallet,
+            name: oppPerson.name ?? aliasFor(oppPerson.wallet),
+            avatarUrl: oppPerson.pfpUrl,
+            relationship: oppRel,
+            side: oSide,
+          });
+        const story = composeMarketStory({
+          recent: {
+            text: (rr.live_line as string | null) ?? null,
+            kind: (rr.live_line_kind as string | null) ?? null,
+            occurredAt: (rr.live_line_occurred_at as string | null) ?? null,
+          },
+          momentum: {
+            newBackers1h: (rr.new_believers_1h as number | null) ?? null,
+            newBackers24h: (rr.new_believers_24h as number | null) ?? null,
+            uniqueWallets24h: (rr.unique_wallets_24h as number | null) ?? null,
+            moneyYesPct: (rr.money_yes_pct as number | null) ?? null,
+            peopleYesPct: (rr.people_yes_pct as number | null) ?? null,
+            believersYes: (rr.believers_yes as number | null) ?? null,
+            believersNo: (rr.believers_no as number | null) ?? null,
+            volumeUsd: (rr.volume_total_usd as number | null) ?? null,
+          },
+          classification: (rr.opportunity_type as string | null) ?? null,
+          network,
         });
-      const oSide = oppBySide.get(id);
-      if (oppPerson && oSide)
-        network.push({
-          wallet: oppPerson.wallet,
-          name: oppPerson.name ?? aliasFor(oppPerson.wallet),
-          avatarUrl: oppPerson.pfpUrl,
-          relationship: oppRel,
-          side: oSide,
-        });
-      const story = composeMarketStory({
-        recent: {
-          text: (rr.live_line as string | null) ?? null,
-          kind: (rr.live_line_kind as string | null) ?? null,
-          occurredAt: (rr.live_line_occurred_at as string | null) ?? null,
-        },
-        momentum: {
-          newBackers1h: (rr.new_believers_1h as number | null) ?? null,
-          newBackers24h: (rr.new_believers_24h as number | null) ?? null,
-          uniqueWallets24h: (rr.unique_wallets_24h as number | null) ?? null,
-          moneyYesPct: (rr.money_yes_pct as number | null) ?? null,
-          peopleYesPct: (rr.people_yes_pct as number | null) ?? null,
-          believersYes: (rr.believers_yes as number | null) ?? null,
-          believersNo: (rr.believers_no as number | null) ?? null,
-          volumeUsd: (rr.volume_total_usd as number | null) ?? null,
-        },
-        classification: (rr.opportunity_type as string | null) ?? null,
-        network,
+
+        return {
+          ...r,
+          yes_volume_usd: yesUsd,
+          no_volume_usd: noUsd,
+          yes_trade_count: yesTrades.get(id) ?? 0,
+          no_trade_count: noTrades.get(id) ?? 0,
+          window_volume_usd: yesUsd == null && noUsd == null ? null : (yesUsd ?? 0) + (noUsd ?? 0),
+          chg_window_yes: chgYes.get(id) ?? null,
+          chg_window_no: chgNo.get(id) ?? null,
+          tribe_side: tribeBySide.get(id) ?? null,
+          opp_side: oppBySide.get(id) ?? null,
+          story,
+        };
+      });
+
+      // Phase 5: order by the SERVER-computed global opportunity score (eligible
+      // markets first, highest score first). The client performs no scoring. Markets
+      // without a computed/eligible score fall back to window volume so the feed is
+      // never empty pre-warm; stable tie-break by onchain_id.
+      mapped.sort((a, b) => {
+        const ae = (a as Record<string, unknown>).opportunity_eligible ? 1 : 0;
+        const be = (b as Record<string, unknown>).opportunity_eligible ? 1 : 0;
+        if (ae !== be) return be - ae;
+        const as = Number((a as Record<string, unknown>).opportunity_score ?? -1);
+        const bs = Number((b as Record<string, unknown>).opportunity_score ?? -1);
+        if (ae === 1 && bs !== as) return bs - as;
+        const av = a.window_volume_usd ?? -1;
+        const bv = b.window_volume_usd ?? -1;
+        if (bv !== av) return bv - av;
+        return Number(a.onchain_id) - Number(b.onchain_id);
       });
 
       return {
-        ...r,
-        yes_volume_usd: yesUsd,
-        no_volume_usd: noUsd,
-        yes_trade_count: yesTrades.get(id) ?? 0,
-        no_trade_count: noTrades.get(id) ?? 0,
-        window_volume_usd: yesUsd == null && noUsd == null ? null : (yesUsd ?? 0) + (noUsd ?? 0),
-        chg_window_yes: chgYes.get(id) ?? null,
-        chg_window_no: chgNo.get(id) ?? null,
-        tribe_side: tribeBySide.get(id) ?? null,
-        opp_side: oppBySide.get(id) ?? null,
-        story,
+        data: mapped,
+        error: null,
+        window: win,
+        ethUsd,
+        historyFrom,
+        tribe: tribePerson,
+        opp: oppPerson,
       };
-    });
-
-    // Phase 5: order by the SERVER-computed global opportunity score (eligible
-    // markets first, highest score first). The client performs no scoring. Markets
-    // without a computed/eligible score fall back to window volume so the feed is
-    // never empty pre-warm; stable tie-break by onchain_id.
-    mapped.sort((a, b) => {
-      const ae = (a as Record<string, unknown>).opportunity_eligible ? 1 : 0;
-      const be = (b as Record<string, unknown>).opportunity_eligible ? 1 : 0;
-      if (ae !== be) return be - ae;
-      const as = Number((a as Record<string, unknown>).opportunity_score ?? -1);
-      const bs = Number((b as Record<string, unknown>).opportunity_score ?? -1);
-      if (ae === 1 && bs !== as) return bs - as;
-      const av = a.window_volume_usd ?? -1;
-      const bv = b.window_volume_usd ?? -1;
-      if (bv !== av) return bv - av;
-      return Number(a.onchain_id) - Number(b.onchain_id);
-    });
-
-    return {
-      data: mapped,
-      error: null,
-      window: win,
-      ethUsd,
-      historyFrom,
-      tribe: tribePerson,
-      opp: oppPerson,
     };
+
+    // The anonymous feed is identical for everyone, so cache it in-process with a
+    // short stale-while-revalidate window: SSR (and the poll traffic) read a warm
+    // snapshot instead of a live multi-query round trip, which is what lets a
+    // first-time visitor's FIRST paint be a real market. Personalized (wallet)
+    // feeds bypass the cache — they're per-viewer and can't be shared.
+    if (viewer) return compute();
+    return swrCache(`feed:anon:${win}`, { ttlMs: ANON_FEED_TTL_MS }, compute);
   });
 
 // Base read-model shape for one market — everything the center deck needs to
