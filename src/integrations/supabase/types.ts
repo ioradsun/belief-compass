@@ -672,6 +672,7 @@ export type Database = {
           needs_rebuild: boolean
           no_cost: number
           no_shares: number
+          no_value_usd: number | null
           onchain_id: number
           position_version: number
           rebuild_reason: string | null
@@ -681,9 +682,12 @@ export type Database = {
           stance_side: string | null
           state_hash: string | null
           updated_at: string
+          value_source: string | null
+          value_updated_at: string | null
           wallet: string
           yes_cost: number
           yes_shares: number
+          yes_value_usd: number | null
         }
         Insert: {
           applied_trade_count?: number
@@ -701,6 +705,7 @@ export type Database = {
           needs_rebuild?: boolean
           no_cost?: number
           no_shares?: number
+          no_value_usd?: number | null
           onchain_id: number
           position_version?: number
           rebuild_reason?: string | null
@@ -710,9 +715,12 @@ export type Database = {
           stance_side?: string | null
           state_hash?: string | null
           updated_at?: string
+          value_source?: string | null
+          value_updated_at?: string | null
           wallet: string
           yes_cost?: number
           yes_shares?: number
+          yes_value_usd?: number | null
         }
         Update: {
           applied_trade_count?: number
@@ -730,6 +738,7 @@ export type Database = {
           needs_rebuild?: boolean
           no_cost?: number
           no_shares?: number
+          no_value_usd?: number | null
           onchain_id?: number
           position_version?: number
           rebuild_reason?: string | null
@@ -739,9 +748,12 @@ export type Database = {
           stance_side?: string | null
           state_hash?: string | null
           updated_at?: string
+          value_source?: string | null
+          value_updated_at?: string | null
           wallet?: string
           yes_cost?: number
           yes_shares?: number
+          yes_value_usd?: number | null
         }
         Relationships: [
           {

@@ -202,6 +202,12 @@ export const ensureConviction = createServerFn({ method: "GET" })
         onchain_id: id,
         yes_shares: a.yesShares,
         no_shares: a.noShares,
+        // POV is the authority on what a position is WORTH right now. Store its
+        // valuation so the panel never re-derives value from a market-wide price.
+        yes_value_usd: a.yesValue,
+        no_value_usd: a.noValue,
+        value_source: "pov",
+        value_updated_at: nowIso,
         // Preserve chain-owned cost basis; default 0 for POV-only rows.
         yes_cost: ex?.yes_cost ?? 0,
         no_cost: ex?.no_cost ?? 0,
