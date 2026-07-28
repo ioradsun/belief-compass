@@ -156,8 +156,9 @@ export function LinkWalletCard() {
         <p className="mt-2 text-xs text-muted-foreground">Connect a wallet to save a link.</p>
       )}
       <p className="mt-2 max-w-prose text-xs text-muted-foreground">
-        To verify, switch your wallet to the trading account first — the signature must come from
-        that address.
+        Verifying takes two steps: press Verify while on your login wallet, switch your wallet app
+        to the trading address, then press it again to sign. A signature only proves you own the
+        address — it doesn't let this app trade from it.
       </p>
       {msg && <p className="mt-2 text-xs text-emerald-600">{msg}</p>}
       {err && <p className="mt-2 text-xs text-destructive">{err}</p>}
