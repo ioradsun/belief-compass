@@ -68,39 +68,76 @@ export function MarketDeck({
   // means "not selling"; the buy dock owns the surface. Buying the opposite side
   // never sells (they're separate token balances), so a flip can't silently exit.
   const [sellPct, setSellPct] = useState<number | null>(null);
+  // The belief the viewer expressed here. Recorded once, moves no money.
+  const [answered, setAnswered] = useState<BeliefAction | null>(null);
 
   const { openConnectModal } = useConnectModal();
   const { switchChain } = useSwitchChain();
   const ready = useTradeReady();
   const trade = useTrade();
   const bal = useUserBalance(marketId);
+  const houseAnswer = useHouseAnswer(marketId);
 
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(marketId, side === "YES", side ? ethWei : 0n);
 
-  // Reset both flows when the market changes.
+  /**
+   * A belief action: records the answer and reveals the locked House read.
+   * Never triggers a purchase — backing money is a separate, explicit step.
+   */
+  const recordBelief = useCallback(
+    (action: BeliefAction, source: "button" | "keyboard" | "gesture") => {
+      setAnswered((prev) => {
+        if (prev) return prev; // one scored answer per market
+        houseAnswer.mutate({ action, source });
+        return action;
+      });
+    },
+    [houseAnswer],
+  );
+
+  const chooseSide = useCallback(
+    (s: OrderSide, source: "button" | "keyboard" | "gesture" = "button") => {
+      recordBelief(s, source);
+      setSide((cur) => selectSide(cur, s));
+    },
+    [recordBelief],
+  );
+
+  const chooseSkip = useCallback(
+    (source: "button" | "keyboard" | "gesture" = "button") => {
+      setSide(null);
+      recordBelief("SKIP", source);
+    },
+    [recordBelief],
+  );
+
+  // Reset every flow when the market changes.
   useEffect(() => {
     setSide(null);
     setSellPct(null);
+    setAnswered(null);
     trade.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketId]);
 
-  // Keyboard: ←/→ select, ↑ skip (never buys).
+  // Keyboard: ←/→ express a belief, ↑ skip (neither ever buys).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
       if (el && ["INPUT", "TEXTAREA"].includes(el.tagName)) return;
-      if (e.key === "ArrowLeft") setSide((s) => selectSide(s, "NO"));
-      else if (e.key === "ArrowRight") setSide((s) => selectSide(s, "YES"));
+      if (el?.getAttribute("role") === "tab") return;
+      if (e.key === "ArrowLeft") chooseSide("NO", "keyboard");
+      else if (e.key === "ArrowRight") chooseSide("YES", "keyboard");
       else if (e.key === "ArrowUp") {
         e.preventDefault();
-        onSkip();
+        chooseSkip("keyboard");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onSkip]);
+  }, [chooseSide, chooseSkip]);
+
 
   const relationshipBeat = row.story?.beats.find((b) => b.kind === "relationship")?.text ?? null;
   const eventBeat = row.story?.beats.find((b) => b.kind === "event")?.text ?? null;
