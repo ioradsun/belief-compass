@@ -12,7 +12,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { publicClient } from "@/lib/supabase-clients";
+import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 
 export interface Believer {
@@ -76,7 +76,10 @@ const BELIEVERS_LIMIT = 200;
 export const getMarketEvidence = createServerFn({ method: "GET" })
   .validator((raw: unknown) => z.object({ marketId: z.number().int().nonnegative() }).parse(raw))
   .handler(async ({ data }): Promise<MarketEvidence> => {
-    const sb = publicClient();
+    // wallet_beliefs is not publicly readable (RLS locked); this function only
+    // ever returns the derived, non-sensitive face/side/conviction shape.
+    const sb = serviceClient();
+    void publicClient;
     const id = data.marketId;
 
     const [beliefsRes, seriesRes, marketRes] = await Promise.all([
