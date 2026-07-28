@@ -14,14 +14,17 @@ import { base } from "wagmi/chains";
 import {
   wagmiConfig,
   lazyConnector,
+  prefetchWalletSdks,
   LAZY_COINBASE_ID,
   LAZY_WALLETCONNECT_ID,
   type LazyWalletKind,
 } from "@/lib/wagmi";
+import { WalletLogo, brandFor } from "@/components/WalletLogos";
 import { CONNECT_EVENT, requestConnect } from "@/lib/connect-bridge";
 import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getWalletLink } from "@/lib/wallet-link.functions";
 import { readLocalLink } from "@/lib/wallet-link";
+
 
 // Isolated query client for wagmi to avoid interfering with the app's router-level client.
 const wagmiQueryClient = new QueryClient();
@@ -151,9 +154,8 @@ function LazyWalletButton({
       onClick={onClick}
       className="flex min-h-[58px] items-center gap-3 rounded-xl px-3 text-left transition-colors hover:bg-accent disabled:cursor-wait disabled:opacity-60"
     >
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold text-foreground">
-        {label.slice(0, 2).toUpperCase()}
-      </span>
+      <WalletLogo brand={brandFor(label)} alt="" />
+
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-foreground">{label}</span>
         <span className="block truncate text-xs text-muted-foreground">
@@ -204,10 +206,16 @@ function WalletModalHost() {
   };
 
   useEffect(() => {
-    const onOpen = () => setOpen(true);
+    const onOpen = () => {
+      setOpen(true);
+      // Warm the wallet SDKs while the viewer reads the list, so the later tap
+      // opens Coinbase/WalletConnect inside the gesture instead of after an await.
+      prefetchWalletSdks();
+    };
     window.addEventListener(CONNECT_EVENT, onOpen);
     return () => window.removeEventListener(CONNECT_EVENT, onOpen);
   }, []);
+
 
   useEffect(() => {
     if (isConnected) setOpen(false);
@@ -277,9 +285,12 @@ function WalletModalHost() {
               }}
               className="flex min-h-[58px] items-center gap-3 rounded-xl px-3 text-left transition-colors hover:bg-accent disabled:cursor-wait disabled:opacity-60"
             >
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold text-foreground">
-                {walletName(connector.name, connector.id).slice(0, 2).toUpperCase()}
-              </span>
+              <WalletLogo
+                brand={brandFor(connector.name, connector.id)}
+                icon={typeof connector.icon === "string" ? connector.icon : undefined}
+                alt=""
+              />
+
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-foreground">
                   {walletName(connector.name, connector.id)}

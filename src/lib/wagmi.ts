@@ -32,5 +32,18 @@ export async function lazyConnector(kind: LazyWalletKind): Promise<CreateConnect
   const { coinbaseWallet, walletConnect } = await import("wagmi/connectors");
   return kind === "coinbase"
     ? coinbaseWallet({ appName: "Conviction", preference: "all" })
-    : walletConnect({ projectId, showQrModal: false });
+    : // showQrModal must stay TRUE: without a modal of our own, a false here means
+      // mobile users get no QR and no wallet deep-link list — the tap does nothing.
+      walletConnect({ projectId, showQrModal: true });
 }
+
+/**
+ * Warm the connector bundle ahead of the tap. On mobile, Coinbase's SDK opens a
+ * popup/deep-link that only survives if it happens inside the user gesture — an
+ * await on a ~720KB dynamic import breaks that chain and the browser blocks it.
+ * Prefetching on modal open makes the later `lazyConnector` call resolve instantly.
+ */
+export function prefetchWalletSdks(): void {
+  void import("wagmi/connectors").catch(() => null);
+}
+
