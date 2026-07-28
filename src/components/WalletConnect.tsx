@@ -206,10 +206,16 @@ function WalletModalHost() {
   };
 
   useEffect(() => {
-    const onOpen = () => setOpen(true);
+    const onOpen = () => {
+      setOpen(true);
+      // Warm the wallet SDKs while the viewer reads the list, so the later tap
+      // opens Coinbase/WalletConnect inside the gesture instead of after an await.
+      prefetchWalletSdks();
+    };
     window.addEventListener(CONNECT_EVENT, onOpen);
     return () => window.removeEventListener(CONNECT_EVENT, onOpen);
   }, []);
+
 
   useEffect(() => {
     if (isConnected) setOpen(false);
