@@ -1,6 +1,6 @@
 import { base } from "wagmi/chains";
 import { createConfig, http } from "wagmi";
-import { coinbaseWallet, metaMask, walletConnect, injected } from "wagmi/connectors";
+import { coinbaseWallet, walletConnect, injected } from "wagmi/connectors";
 
 const projectId =
   (import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string | undefined) ??
@@ -14,7 +14,10 @@ export const wagmiConfig = createConfig({
     // Prefer deep-link / extension over the popup-based smart-wallet flow, since
     // popups are blocked inside the Lovable preview iframe (especially on mobile).
     coinbaseWallet({ appName: "Conviction", preference: "all" }),
-    metaMask(),
+    // NB: the dedicated metaMask() connector is intentionally omitted — it statically
+    // pulls @metamask/sdk (~529KB) into the first-load bundle. injected() already
+    // covers the MetaMask browser extension + its in-app browser with zero SDK
+    // weight; MetaMask-mobile from an external browser connects via WalletConnect.
     walletConnect({ projectId, showQrModal: false }),
     injected(),
   ],
