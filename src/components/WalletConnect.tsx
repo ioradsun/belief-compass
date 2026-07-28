@@ -1,10 +1,23 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { WagmiProvider, useAccount, useConnect, useDisconnect } from "wagmi";
+import {
+  WagmiProvider,
+  useAccount,
+  useConfig,
+  useConnect,
+  useDisconnect,
+  useReconnect,
+} from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { base } from "wagmi/chains";
-import { wagmiConfig } from "@/lib/wagmi";
+import {
+  wagmiConfig,
+  lazyConnector,
+  LAZY_COINBASE_ID,
+  LAZY_WALLETCONNECT_ID,
+  type LazyWalletKind,
+} from "@/lib/wagmi";
 import { CONNECT_EVENT, requestConnect } from "@/lib/connect-bridge";
 import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getWalletLink } from "@/lib/wallet-link.functions";
@@ -20,9 +33,50 @@ export function WalletProviders({ children }: { children: ReactNode }) {
         {children}
         <PovOnConnect />
         <WalletModalHost />
+        <LazyReconnect />
       </QueryClientProvider>
     </WagmiProvider>
   );
+}
+
+/**
+ * Returning Coinbase / WalletConnect users: their connector isn't in the eager
+ * config (kept light for first load), so wagmi's own reconnectOnMount can't restore
+ * them. On idle, if the last session used one of those, lazily load it and reconnect
+ * — no auto-reconnect regression, and the SDK still stays off the first-paint path.
+ * Injected wallets reconnect through wagmi's built-in path with no help needed.
+ */
+function LazyReconnect() {
+  const config = useConfig();
+  const { reconnect } = useReconnect();
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const recent = (await config.storage?.getItem("recentConnectorId")) as string | undefined;
+        if (cancelled || !recent) return;
+        const kind: LazyWalletKind | null =
+          recent === LAZY_COINBASE_ID
+            ? "coinbase"
+            : recent === LAZY_WALLETCONNECT_ID
+              ? "walletConnect"
+              : null;
+        if (!kind) return;
+        const connector = await lazyConnector(kind);
+        if (!cancelled) reconnect({ connectors: [connector] });
+      } catch {
+        /* best effort */
+      }
+    };
+    const ric =
+      (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
+        .requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 400));
+    ric(() => void run());
+    return () => {
+      cancelled = true;
+    };
+  }, [config, reconnect]);
+  return null;
 }
 
 /**
@@ -76,6 +130,40 @@ function PovOnConnect() {
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
+/** A connect option whose wallet SDK is imported on click, not on first load. */
+function LazyWalletButton({
+  label,
+  note,
+  loading,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  note: string;
+  loading: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="flex min-h-[58px] items-center gap-3 rounded-xl px-3 text-left transition-colors hover:bg-accent disabled:cursor-wait disabled:opacity-60"
+    >
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold text-foreground">
+        {label.slice(0, 2).toUpperCase()}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-foreground">{label}</span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {loading ? "Loading…" : note}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 function walletName(name: string, id: string) {
   const v = `${id} ${name}`.toLowerCase();
   if (v.includes("coinbase")) return "Coinbase Wallet";
@@ -95,8 +183,25 @@ function walletNote(id: string, name: string) {
 
 function WalletModalHost() {
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState<LazyWalletKind | null>(null);
+  const [lazyError, setLazyError] = useState<string | null>(null);
   const { isConnected } = useAccount();
   const { connectors, connectAsync, isPending, error } = useConnect();
+
+  // Coinbase / WalletConnect load their SDK only on click, then connect on the fly.
+  const lazyConnect = async (kind: LazyWalletKind) => {
+    setPending(kind);
+    setLazyError(null);
+    try {
+      const connector = await lazyConnector(kind);
+      await connectAsync({ connector, chainId: base.id });
+      setOpen(false);
+    } catch (e) {
+      setLazyError(e instanceof Error ? e.message : "Could not connect that wallet.");
+    } finally {
+      setPending(null);
+    }
+  };
 
   useEffect(() => {
     const onOpen = () => setOpen(true);
@@ -123,6 +228,10 @@ function WalletModalHost() {
     const name = walletName(connector.name, connector.id);
     return all.findIndex((other) => walletName(other.name, other.id) === name) === index;
   });
+  // Only offer the lazy Coinbase button when an installed Coinbase extension
+  // (discovered via EIP-6963) isn't already covering it.
+  const hasInjectedCoinbase = visible.some((c) => walletName(c.name, c.id) === "Coinbase Wallet");
+  const busy = isPending || pending != null;
 
   return (
     <div
@@ -157,7 +266,7 @@ function WalletModalHost() {
             <button
               key={connector.uid}
               type="button"
-              disabled={isPending}
+              disabled={busy}
               onClick={async () => {
                 try {
                   await connectAsync({ connector, chainId: base.id });
@@ -181,14 +290,35 @@ function WalletModalHost() {
               </span>
             </button>
           ))}
+
+          {/* Lazy wallets — their SDK loads only on click. */}
+          {!hasInjectedCoinbase && (
+            <LazyWalletButton
+              label="Coinbase Wallet"
+              note="Smart Wallet or Coinbase app"
+              loading={pending === "coinbase"}
+              disabled={busy}
+              onClick={() => lazyConnect("coinbase")}
+            />
+          )}
+          <LazyWalletButton
+            label="WalletConnect"
+            note="Scan or open any supported wallet"
+            loading={pending === "walletConnect"}
+            disabled={busy}
+            onClick={() => lazyConnect("walletConnect")}
+          />
         </div>
 
         <div className="border-t border-border px-5 py-3">
-          {error ? (
-            <p className="text-xs leading-relaxed text-destructive">{error.message}</p>
+          {error || lazyError ? (
+            <p className="text-xs leading-relaxed text-destructive">
+              {lazyError ?? error?.message}
+            </p>
           ) : (
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Choose the wallet you use to sign in. You can link a separate POV trading wallet after.
+              Choose the wallet you use to sign in. You can link a separate POV trading wallet
+              after.
             </p>
           )}
         </div>
