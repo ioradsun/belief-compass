@@ -166,20 +166,24 @@ export function MarketDeck({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
-        {/* Pulse — why this matters now */}
-        <div
-          className="flex items-center gap-2 rounded-[12px] px-3 py-2.5"
-          style={{ border: "1px solid var(--border)" }}
-        >
-          <span
-            className="h-2 w-2 shrink-0 rounded-full"
-            style={{ background: PULSE_TONE[pulse.tone] }}
-            aria-hidden
-          />
-          <span className="text-[13px] font-semibold text-[var(--text)]">Pulse: {pulse.label}</span>
-          <span className="min-w-0 truncate text-[12px] text-[var(--text-secondary)]">
-            {pulse.why}
-          </span>
+        {/* Pulse — why this matters now, plus the day's traded activity */}
+        <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
+          <div className="flex items-center gap-2">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ background: PULSE_TONE[pulse.tone] }}
+              aria-hidden
+            />
+            <span className="text-[13px] font-semibold text-[var(--text)]">
+              Pulse: {pulse.label}
+            </span>
+            <span className="min-w-0 truncate text-[12px] text-[var(--text-secondary)]">
+              {pulse.why}
+            </span>
+          </div>
+          {eventBeat && (
+            <div className="mt-1 pl-4 text-[12px] text-[var(--text-muted)]">{eventBeat}</div>
+          )}
         </div>
 
         {/* Battlefield */}
@@ -204,24 +208,18 @@ export function MarketDeck({
           />
         </div>
 
-        {/* DNA / social evidence + recent activity — only when there's a real signal */}
-        {(relationshipBeat || eventBeat) && (
-          <div className="space-y-1.5">
-            {relationshipBeat && (
-              <div className="flex items-start gap-2 text-[13px]">
-                <span
-                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: "var(--rel,#9b87f5)" }}
-                  aria-hidden
-                />
-                <span className="text-[var(--text-secondary)]">{relationshipBeat}</span>
-              </div>
-            )}
-            {eventBeat && (
-              <div className="pl-3.5 text-[12px] text-[var(--text-muted)]">{eventBeat}</div>
-            )}
+        {/* DNA / social evidence — only when there's a real signal */}
+        {relationshipBeat && (
+          <div className="flex items-start gap-2 text-[13px]">
+            <span
+              className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ background: "var(--rel,#9b87f5)" }}
+              aria-hidden
+            />
+            <span className="text-[var(--text-secondary)]">{relationshipBeat}</span>
           </div>
         )}
+
 
         {/* Evidence: believers · price · defense */}
         <MarketEvidence marketId={marketId} />
