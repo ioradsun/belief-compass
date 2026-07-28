@@ -373,7 +373,8 @@ export const getWallet = createServerFn({ method: "GET" })
       .select(
         `
         onchain_id, expressed_side, stance_side, stance, conviction, days_held,
-        yes_shares, no_shares, first_backed_at
+        yes_shares, no_shares, first_backed_at,
+        yes_value_usd, no_value_usd, value_source, value_updated_at
       `,
       )
       .eq("wallet", wallet)
