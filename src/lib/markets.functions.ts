@@ -391,6 +391,53 @@ export const getMarketRow = createServerFn({ method: "GET" })
     return { row: row ?? null };
   });
 
+export interface MarketChange {
+  yesPrice: number | null;
+  noPrice: number | null;
+  /** Per-window price % change (first snapshot in window → latest). */
+  windows: Partial<Record<VolumeWindow, { yes: number | null; no: number | null }>>;
+}
+
+const numOrNull = (v: unknown): number | null =>
+  v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+
+/**
+ * One market's current per-share prices + its % price change over EVERY window
+ * (1h / 24h / 7d / 30d / all), so the deck can offer an instant window selector
+ * without refetching. The change is precomputed by cron in market_window_change
+ * as the first snapshot inside the window vs the latest — the honest definition
+ * traders expect.
+ */
+export const getMarketChange = createServerFn({ method: "GET" })
+  .inputValidator((d: { id: number }) => z.object({ id: z.number().int().nonnegative() }).parse(d))
+  .handler(async ({ data }): Promise<MarketChange> => {
+    const sb = serviceClient();
+    const [state, changes] = await Promise.all([
+      sb
+        .from("market_state")
+        .select("yes_price_usd, no_price_usd")
+        .eq("onchain_id", data.id)
+        .maybeSingle(),
+      sb
+        .from("market_window_change")
+        .select("window_key, chg_yes, chg_no")
+        .eq("onchain_id", data.id),
+    ]);
+    const windows: MarketChange["windows"] = {};
+    for (const c of (changes.data ?? []) as {
+      window_key: string;
+      chg_yes: number | null;
+      chg_no: number | null;
+    }[]) {
+      windows[c.window_key as VolumeWindow] = {
+        yes: numOrNull(c.chg_yes),
+        no: numOrNull(c.chg_no),
+      };
+    }
+    const s = state.data as { yes_price_usd: number | null; no_price_usd: number | null } | null;
+    return { yesPrice: numOrNull(s?.yes_price_usd), noPrice: numOrNull(s?.no_price_usd), windows };
+  });
+
 /**
  * Per-market pulse strips: the most recent real trade events for each of the
  * given markets, so every card in the grid can run its own little live feed.
