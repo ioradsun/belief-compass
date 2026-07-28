@@ -572,12 +572,13 @@ function Dock({
     );
   }
 
-  // Selected → review + Confirm / Cancel.
+  // Belief expressed → optional financial backing. Nothing is preselected and
+  // no transaction happens without this explicit confirmation.
   const confirmLabel = !ready.connected
     ? "Connect wallet"
     : !ready.onBase
       ? "Switch to Base"
-      : `Confirm ${side} · ${fmtUsd(amount)}`;
+      : `Back ${side} · ${fmtUsd(amount)}`;
   // Disabled only once connected + on Base but the quote isn't ready.
   const disabled = ready.connected && ready.onBase && (busy || !quote || ethWei <= 0n);
 
@@ -585,6 +586,12 @@ function Dock({
     <div className="rounded-[16px] p-3" style={{ border: "1px solid var(--border)" }}>
       {/* Quote review */}
       <div className="mb-2 space-y-1 px-1">
+        {answered === side && (
+          <div className="pb-1 text-[11px] text-[var(--text-muted)]">
+            Belief recorded: <b className="text-[var(--text)]">{side}</b>. Backing it with money is
+            optional.
+          </div>
+        )}
         <QuoteRow
           k="You pay"
           v={`${fmtUsd(amount)}  ·  ${(Number(ethWei) / 1e18).toFixed(4)} ETH`}
@@ -605,12 +612,13 @@ function Dock({
         <div className="flex flex-1 gap-2">
           <button
             type="button"
-            onClick={() => onSelect(side)}
+            onClick={onCancel}
             className="h-[52px] flex-1 rounded-[12px] text-[14px] font-medium text-[var(--text-secondary)]"
             style={{ border: "1px solid var(--border)" }}
           >
-            Cancel
+            Not now
           </button>
+
           <button
             type="button"
             disabled={disabled}
