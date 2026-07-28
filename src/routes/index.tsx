@@ -6,7 +6,7 @@ import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { MarketDeck } from "@/components/MarketDeck";
 import { PersonProfile } from "@/components/PersonProfile";
-import { AccountMenu } from "@/components/AccountMenu";
+import { AccountRail } from "@/components/AccountMenu";
 import { WalletConnectButton } from "@/components/WalletConnect";
 import { DnaOverview } from "@/components/DnaOverview";
 // Phase 5: the SERVER owns opportunity classification + score. The client only
@@ -245,6 +245,14 @@ function Feed() {
             <WalletConnectButton />
           </div>
         ) : (
+          <>
+            <AccountRail
+              wallet={wallet}
+              onOpenProfile={selectPerson}
+              open={accountOpen}
+              onOpenChange={setAccountOpen}
+            />
+            {!accountOpen && (
         <MyWorld
           wallet={wallet}
           rows={rows as unknown as MarketRow[]}
@@ -256,6 +264,8 @@ function Feed() {
           onOpenDna={openDna}
           initialNetwork={Boolean(selectedPerson || dnaOpen)}
         />
+            )}
+          </>
         )}
       </aside>
 
@@ -275,7 +285,6 @@ function Feed() {
               onSelectMarket={selectMarket}
               onSelectPerson={selectPerson}
               onOpenMenu={() => setMenuOpen(true)}
-              right={<AccountMenu wallet={wallet} onOpenProfile={selectPerson} />}
             />
           </div>
 
