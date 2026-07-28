@@ -285,9 +285,12 @@ function WalletModalHost() {
               }}
               className="flex min-h-[58px] items-center gap-3 rounded-xl px-3 text-left transition-colors hover:bg-accent disabled:cursor-wait disabled:opacity-60"
             >
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-sm font-semibold text-foreground">
-                {walletName(connector.name, connector.id).slice(0, 2).toUpperCase()}
-              </span>
+              <WalletLogo
+                brand={brandFor(connector.name, connector.id)}
+                icon={typeof connector.icon === "string" ? connector.icon : undefined}
+                alt=""
+              />
+
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-foreground">
                   {walletName(connector.name, connector.id)}
