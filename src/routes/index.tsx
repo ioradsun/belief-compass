@@ -193,10 +193,7 @@ function Feed() {
 
   const ids = rows.map((r) => Number(r.onchain_id));
   const { data: pulseData } = useQuery(pulsesQO(ids));
-  const stickyPulses = useSticky(
-    pulseData?.pulses,
-    (p) => !p || Object.keys(p).length === 0,
-  );
+  const stickyPulses = useSticky(pulseData?.pulses, (p) => !p || Object.keys(p).length === 0);
   const pulses = stickyPulses ?? {};
 
   // Single-market deck: the center shows exactly one market. ?m (set by a
@@ -236,9 +233,6 @@ function Feed() {
     </div>
   );
 
-
-
-
   return (
     <div className="grid h-[100dvh] w-full grid-cols-1 grid-rows-1 overflow-hidden bg-[var(--bg)] text-[var(--text)] lg:[grid-template-columns:264px_minmax(0,1fr)_344px]">
       {/* LEFT — You (Positions | Network) — fixed 264px rail */}
@@ -263,17 +257,17 @@ function Feed() {
               onOpenChange={setAccountOpen}
             />
             {!accountOpen && (
-        <MyWorld
-          wallet={wallet}
-          rows={rows as unknown as MarketRow[]}
-          window={win}
-          winLabel={winLabel}
-          onSelectMarket={selectMarket}
-          selectedPerson={selectedPerson}
-          onSelectPerson={selectPerson}
-          onOpenDna={openDna}
-          initialNetwork={Boolean(selectedPerson || dnaOpen)}
-        />
+              <MyWorld
+                wallet={wallet}
+                rows={rows as unknown as MarketRow[]}
+                window={win}
+                winLabel={winLabel}
+                onSelectMarket={selectMarket}
+                selectedPerson={selectedPerson}
+                onSelectPerson={selectPerson}
+                onOpenDna={openDna}
+                initialNetwork={Boolean(selectedPerson || dnaOpen)}
+              />
             )}
           </>
         )}
@@ -302,7 +296,11 @@ function Feed() {
               The deck owns its own internal scroll so its dock stays pinned. */}
           {selectedPerson ? (
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <PersonProfile wallet={selectedPerson} viewer={wallet} onSelectMarket={selectMarket} />
+              <PersonProfile
+                wallet={selectedPerson}
+                viewer={wallet}
+                onSelectMarket={selectMarket}
+              />
             </div>
           ) : dnaOpen ? (
             <div className="min-h-0 flex-1 overflow-y-auto">
@@ -316,7 +314,12 @@ function Feed() {
           ) : (
             currentRow && (
               <div className="flex min-h-0 flex-1 flex-col">
-                <MarketDeck row={currentRow} ethUsd={data.ethUsd ?? 0} onSkip={nextMarket} />
+                <MarketDeck
+                  row={currentRow}
+                  ethUsd={data.ethUsd ?? 0}
+                  onSkip={nextMarket}
+                  viewerWallet={wallet}
+                />
               </div>
             )
           )}
@@ -333,7 +336,6 @@ function Feed() {
         </div>
         <LiveTape wallet={wallet} onSelect={selectMarket} />
       </aside>
-
 
       {/* Mobile slide-in menu (replaces the bottom tab bar) */}
       {menuOpen && (

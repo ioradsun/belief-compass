@@ -44,10 +44,12 @@ export function MarketDeck({
   row,
   ethUsd,
   onSkip,
+  viewerWallet,
 }: {
   row: MarketRow;
   ethUsd: number;
   onSkip: () => void;
+  viewerWallet?: string;
 }) {
   const rr = row as Record<string, unknown>;
   const marketId = Number(row.onchain_id);
@@ -76,7 +78,7 @@ export function MarketDeck({
   const ready = useTradeReady();
   const trade = useTrade();
   const bal = useUserBalance(marketId);
-  const houseAnswer = useHouseAnswer(marketId);
+  const houseAnswer = useHouseAnswer(marketId, viewerWallet);
 
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(marketId, side === "YES", side ? ethWei : 0n);
@@ -269,7 +271,7 @@ export function MarketDeck({
         )}
 
         {/* One intelligence container: House Read · Believers · Defense */}
-        <MarketIntelligence marketId={marketId} />
+        <MarketIntelligence marketId={marketId} viewerWallet={viewerWallet} />
 
         {held && sellPct == null && (
           <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
