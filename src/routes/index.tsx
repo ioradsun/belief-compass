@@ -164,6 +164,7 @@ function Feed() {
   const [win, setWin] = useState<VolumeWindow>("24h");
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const { data } = useSuspenseQuery(feedQO(wallet, win));
   const rawRows = data.data ?? [];
