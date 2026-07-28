@@ -676,6 +676,30 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_overrides: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          updated_at: string
+          wallet: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          updated_at?: string
+          wallet: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          updated_at?: string
+          wallet?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           display_name: string | null

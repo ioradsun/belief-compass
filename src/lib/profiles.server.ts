@@ -36,7 +36,10 @@ export async function resolveProfiles(
   }
 
   const misses = list.filter((w) => !known.has(w)).slice(0, lazyCap);
-  if (misses.length === 0) return map;
+  if (misses.length === 0) {
+    await applyOverrides(map, list);
+    return map;
+  }
 
   const results = await Promise.allSettled(misses.map((w) => fetchPovUser(w)));
   const nowIso = new Date().toISOString();
@@ -66,5 +69,27 @@ export async function resolveProfiles(
       /* cache write is best-effort */
     }
   }
+  await applyOverrides(map, list);
   return map;
 }
+
+/** Self-set names/pictures win over anything resolved from POV. */
+async function applyOverrides(map: Map<string, WalletProfile>, wallets: string[]) {
+  try {
+    const { data } = await publicClient()
+      .from("profile_overrides")
+      .select("wallet, display_name, avatar_url")
+      .in("wallet", wallets);
+    for (const o of data ?? []) {
+      const w = String(o.wallet).toLowerCase();
+      const prev = map.get(w) ?? { displayName: null, pfpUrl: null };
+      map.set(w, {
+        displayName: (o.display_name as string | null) ?? prev.displayName,
+        pfpUrl: (o.avatar_url as string | null) ?? prev.pfpUrl,
+      });
+    }
+  } catch {
+    /* overrides are best-effort */
+  }
+}
+
