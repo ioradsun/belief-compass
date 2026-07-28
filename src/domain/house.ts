@@ -398,3 +398,116 @@ export function directionalAccuracy(rec: HouseRecord): number | null {
 export function dnaContribution(action: BeliefAction): "directional" | "behavioral" {
   return action === "SKIP" ? "behavioral" : "directional";
 }
+
+// ── Cold-start foundation ───────────────────────────────────────────────────
+//
+// With no (or thin) history the House can't read anyone, so a new viewer trains
+// it with five FREE belief choices on moderate, single-dimension POVs — never a
+// purchase, never a personality quiz. Each answer contributes WEIGHTED evidence
+// to several psychographic dimensions; no single answer assigns a label. The raw
+// answer, mapping version, and contributions are all stored so the mapping can be
+// revised later without losing the original data.
+
+/** Bump when the foundation → dimension weights change; old answers keep theirs. */
+export const FOUNDATION_MAPPING_VERSION = 1;
+
+export interface FoundationMapping {
+  key: string;
+  /** The belief prompt (moderate wording — no "almost all" / "completely"). */
+  prompt: string;
+  /** Primary dimension this POV is chosen to probe. */
+  probes: string;
+  /** Per-action weighted contributions to psychographic dimensions. */
+  dimensions: Record<BeliefAction, Record<string, number>>;
+}
+
+/** SKIP always signals "this territory doesn't pull you" — a small engagement debit. */
+const skipDisengage = (dim: string): Record<string, number> => ({ [dim]: -0.2 });
+
+export const FOUNDATION_MAPPINGS: FoundationMapping[] = [
+  {
+    key: "FOUND_WALLET",
+    prompt:
+      "If someone finds a wallet with $500, they will probably keep the cash before returning it.",
+    probes: "trust",
+    dimensions: {
+      YES: { interpersonalTrust: -0.55, hiddenMotiveSensitivity: 0.3, cynicalExpectation: 0.2 },
+      NO: { interpersonalTrust: 0.55, prosocialExpectation: 0.3, hiddenMotiveSensitivity: -0.1 },
+      SKIP: skipDisengage("trustEngagement"),
+    },
+  },
+  {
+    key: "MOTHERS_INSTINCT",
+    prompt: "A mother’s instinct is often more reliable than a doctor’s first opinion.",
+    probes: "intuition",
+    dimensions: {
+      YES: { intuitionTrust: 0.5, institutionalTrust: -0.3, expertiseDeference: -0.25 },
+      NO: { intuitionTrust: -0.4, institutionalTrust: 0.35, expertiseDeference: 0.3 },
+      SKIP: skipDisengage("intuitionEngagement"),
+    },
+  },
+  {
+    key: "LUCK_VS_WORK",
+    prompt: "Luck and timing matter more than hard work in becoming a billionaire.",
+    probes: "agency",
+    dimensions: {
+      YES: { agencyBelief: -0.5, luckBelief: 0.4, systemicView: 0.25 },
+      NO: { agencyBelief: 0.5, luckBelief: -0.35, meritocraticView: 0.3 },
+      SKIP: skipDisengage("agencyEngagement"),
+    },
+  },
+  {
+    key: "CURSIVE_VS_FINANCE",
+    prompt: "Schools should replace cursive lessons with financial literacy.",
+    probes: "disruption",
+    dimensions: {
+      YES: { disruptionAppetite: 0.5, traditionAttachment: -0.35, pragmatism: 0.3 },
+      NO: { disruptionAppetite: -0.4, traditionAttachment: 0.45 },
+      SKIP: skipDisengage("disruptionEngagement"),
+    },
+  },
+  {
+    key: "RESPECTED_VS_LIKED",
+    prompt: "Being respected is more valuable than being liked.",
+    probes: "status",
+    dimensions: {
+      YES: { statusOrientation: 0.5, belongingOrientation: -0.3, independenceOrientation: 0.25 },
+      NO: { belongingOrientation: 0.5, statusOrientation: -0.3, warmthOrientation: 0.25 },
+      SKIP: skipDisengage("statusEngagement"),
+    },
+  },
+];
+
+/** Contributions a single answer adds to the viewer's dimension vector. */
+export function applyFoundationAnswer(
+  mapping: FoundationMapping,
+  action: BeliefAction,
+): Record<string, number> {
+  return { ...mapping.dimensions[action] };
+}
+
+/** Fold many stored contributions into one dimension vector. */
+export function accumulateDimensions(
+  contributions: Array<Record<string, number>>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const c of contributions) {
+    for (const [k, v] of Object.entries(c)) out[k] = (out[k] ?? 0) + v;
+  }
+  return out;
+}
+
+/** The next foundation POV to ask, given the keys already answered. */
+export function nextFoundation(answeredKeys: string[]): FoundationMapping | null {
+  const done = new Set(answeredKeys);
+  return FOUNDATION_MAPPINGS.find((m) => !done.has(m.key)) ?? null;
+}
+
+/** Per-step copy shown while the foundation is being built (index 0 = after 1st). */
+export const FOUNDATION_PROGRESS_COPY = [
+  "The House noticed its first tell.",
+  "A pattern is beginning to form.",
+  "You’re giving the House something to work with.",
+  "One more move before the House takes its first shot.",
+  "House Read unlocked.",
+] as const;

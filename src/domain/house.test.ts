@@ -9,8 +9,47 @@ import {
   confidenceBand,
   BAND_COPY,
   MIN_CONFIDENCE,
+  FOUNDATION_ANSWERS,
+  FOUNDATION_MAPPINGS,
+  FOUNDATION_MAPPING_VERSION,
+  applyFoundationAnswer,
+  accumulateDimensions,
+  nextFoundation,
   type HouseSignals,
 } from "./house";
+
+describe("foundation cold-start", () => {
+  it("defines exactly the required, moderately-worded POVs", () => {
+    expect(FOUNDATION_MAPPINGS).toHaveLength(FOUNDATION_ANSWERS);
+    for (const m of FOUNDATION_MAPPINGS) {
+      expect(m.prompt).not.toMatch(/almost all|completely|feared/i);
+      expect(Object.keys(m.dimensions.YES).length).toBeGreaterThan(0);
+      expect(Object.keys(m.dimensions.NO).length).toBeGreaterThan(0);
+    }
+  });
+  it("YES and NO push a dimension in opposite directions", () => {
+    const m = FOUNDATION_MAPPINGS[0];
+    const yes = applyFoundationAnswer(m, "YES");
+    const no = applyFoundationAnswer(m, "NO");
+    expect(Math.sign(yes.interpersonalTrust)).toBe(-Math.sign(no.interpersonalTrust));
+  });
+  it("accumulates contributions across answers", () => {
+    const v = accumulateDimensions([
+      applyFoundationAnswer(FOUNDATION_MAPPINGS[0], "YES"),
+      applyFoundationAnswer(FOUNDATION_MAPPINGS[0], "YES"),
+    ]);
+    expect(v.interpersonalTrust).toBeCloseTo(-1.1, 6);
+  });
+  it("walks through the POVs and ends when all are answered", () => {
+    expect(nextFoundation([])?.key).toBe(FOUNDATION_MAPPINGS[0].key);
+    const allButLast = FOUNDATION_MAPPINGS.slice(0, -1).map((m) => m.key);
+    expect(nextFoundation(allButLast)?.key).toBe(FOUNDATION_MAPPINGS.at(-1)!.key);
+    expect(nextFoundation(FOUNDATION_MAPPINGS.map((m) => m.key))).toBeNull();
+  });
+  it("has a stable mapping version", () => {
+    expect(FOUNDATION_MAPPING_VERSION).toBe(1);
+  });
+});
 
 describe("confidence bands", () => {
   it("maps confidence to the right band at every threshold", () => {

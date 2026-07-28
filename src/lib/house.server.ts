@@ -19,6 +19,12 @@ import {
   foldRecord,
   revealHeadline,
   confidenceBand,
+  nextFoundation,
+  applyFoundationAnswer,
+  FOUNDATION_ANSWERS,
+  FOUNDATION_MAPPINGS,
+  FOUNDATION_MAPPING_VERSION,
+  FOUNDATION_PROGRESS_COPY,
   HOUSE_ENGINE_VERSION,
   type BeliefAction,
   type HouseConfidenceBand,
@@ -36,6 +42,17 @@ export interface HouseReadView {
   reasons: string[];
   /** Present when the House refused to name a side. Safe to show before reveal. */
   noRead: HouseRead["noRead"];
+  /**
+   * Present while the viewer is still training the House (no / thin history). The
+   * card shows this POV to answer for free; once complete the House starts reading.
+   */
+  foundation: {
+    key: string;
+    prompt: string;
+    answered: number;
+    required: number;
+    progressLine: string;
+  } | null;
   /**
    * Coarse confidence band — safe to show BEFORE a reveal (it leaks intensity,
    * never the side). Null when there's no directional read. Drives the FOMO copy.
@@ -79,6 +96,15 @@ async function answerHistory(sb: SupabaseClient, wallet: string): Promise<Answer
   return (data ?? []) as AnswerRow[];
 }
 
+/** Foundation POV keys this wallet has already answered. */
+async function foundationKeys(sb: SupabaseClient, wallet: string): Promise<string[]> {
+  const { data } = await sb
+    .from("house_foundation_answers")
+    .select("foundation_key")
+    .eq("wallet", wallet);
+  return ((data ?? []) as { foundation_key: string }[]).map((r) => r.foundation_key);
+}
+
 /** How the viewer's closest matches (twin + tribe) sit on this exact market. */
 async function relationshipLean(sb: SupabaseClient, wallet: string, marketId: number) {
   const cache = await readViewerDnaCache(sb, wallet);
@@ -118,6 +144,7 @@ async function buildSignals(
   wallet: string | null,
   marketId: number,
   category: string | null,
+  foundationCount = 0,
 ): Promise<HouseSignals> {
   if (!wallet) {
     return {
@@ -144,7 +171,9 @@ async function buildSignals(
   return {
     connected: true,
     category,
-    totalAnswers: overall.yes + overall.no + overall.skip,
+    // Completed foundation answers count toward the unlock gate, so once training
+    // is done the engine reads real markets instead of returning cold-start.
+    totalAnswers: overall.yes + overall.no + overall.skip + foundationCount,
     overall,
     inCategory,
     relationship: rel,
@@ -184,6 +213,7 @@ export async function loadHouseRead(
       confidence: null,
       reasons: [],
       noRead: read.noRead,
+      foundation: null,
       band: null,
       revealed: false,
       closed: false,
@@ -195,6 +225,43 @@ export async function loadHouseRead(
       category,
     };
   }
+
+  // Cold start: with no / thin history, train the House on the free foundation
+  // POVs before locking any market prediction.
+  const fKeys = await foundationKeys(sb, wallet);
+  const historyForGate = await answerHistory(sb, wallet);
+  const realAnswers = historyForGate.filter((h) => h.actual_action).length;
+  const trained = realAnswers + fKeys.length >= FOUNDATION_ANSWERS;
+  if (!trained) {
+    const next = nextFoundation(fKeys);
+    if (next) {
+      return {
+        marketId,
+        connected: true,
+        predicted: null,
+        confidence: null,
+        reasons: [],
+        noRead: null,
+        foundation: {
+          key: next.key,
+          prompt: next.prompt,
+          answered: fKeys.length,
+          required: FOUNDATION_ANSWERS,
+          progressLine: FOUNDATION_PROGRESS_COPY[Math.min(fKeys.length, FOUNDATION_ANSWERS - 1)],
+        },
+        band: null,
+        revealed: false,
+        closed: false,
+        finalizedVia: null,
+        actual: null,
+        outcome: null,
+        headline: null,
+        record: recordFor(historyForGate),
+        category,
+      };
+    }
+  }
+  const foundationCount = fKeys.length;
 
   const [{ data: existing }, history] = await Promise.all([
     sb
@@ -219,7 +286,7 @@ export async function loadHouseRead(
   let row = (existing ?? null) as Row | null;
 
   if (!row) {
-    const signals = await buildSignals(sb, wallet, marketId, category);
+    const signals = await buildSignals(sb, wallet, marketId, category, foundationCount);
     const read = predictHouse(signals);
     await sb.from("house_predictions").upsert(
       {
@@ -262,7 +329,7 @@ export async function loadHouseRead(
   // Recreate the honest no-read copy from the locked kind, without re-predicting.
   const noRead = row.predicted_action
     ? null
-    : predictHouse(await buildSignals(sb, wallet, marketId, category)).noRead;
+    : predictHouse(await buildSignals(sb, wallet, marketId, category, foundationCount)).noRead;
 
   // Coarse band is safe to leak pre-reveal (intensity only, never the side).
   const band = row.predicted_action ? confidenceBand(Number(row.confidence ?? 0)) : null;
@@ -283,6 +350,7 @@ export async function loadHouseRead(
     confidence: betRevealed ? Number(row.confidence ?? 0) : null,
     reasons: betRevealed ? ((row.reasons ?? []) as string[]) : [],
     noRead,
+    foundation: null,
     band,
     revealed: betRevealed,
     closed,
@@ -419,5 +487,35 @@ export async function finalizeHouseSkip(
       .is("actual_action", null);
   }
 
+  return loadHouseRead(wallet, marketId);
+}
+
+/**
+ * Record one FREE foundation belief (no money). Stores the raw answer, mapping
+ * version, and per-dimension contributions; one answer per (wallet, POV). Returns
+ * the refreshed read for `marketId` so the card advances to the next POV or the
+ * House unlocks. Ignores unknown keys.
+ */
+export async function recordFoundationAnswer(
+  walletRaw: string,
+  marketId: number,
+  key: string,
+  action: BeliefAction,
+): Promise<HouseReadView> {
+  const sb = serviceClient();
+  const wallet = walletRaw.toLowerCase();
+  const mapping = FOUNDATION_MAPPINGS.find((m) => m.key === key);
+  if (mapping) {
+    await sb.from("house_foundation_answers").upsert(
+      {
+        wallet,
+        foundation_key: mapping.key,
+        action,
+        mapping_version: FOUNDATION_MAPPING_VERSION,
+        dimension_contributions: applyFoundationAnswer(mapping, action),
+      },
+      { onConflict: "wallet,foundation_key", ignoreDuplicates: true },
+    );
+  }
   return loadHouseRead(wallet, marketId);
 }
