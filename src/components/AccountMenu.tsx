@@ -14,6 +14,7 @@ import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getPersonProfile } from "@/lib/dna.functions";
 import { WalletIdentity } from "@/components/WalletIdentity";
 import { ProfileEditor } from "@/components/ProfileEditor";
+import { getProfileOverride } from "@/lib/profile-edit.functions";
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 
 /** Never show a raw 0x address as a name — fall back to the neutral alias. */
