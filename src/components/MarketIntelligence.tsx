@@ -17,6 +17,7 @@ import { getHouseRead, finalizeBet, finalizeSkip, type HouseReadView } from "@/l
 import { getNetwork } from "@/lib/dna.functions";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { BelieversSplit, Defense } from "@/components/MarketEvidence";
+import { BAND_COPY } from "@/domain/house";
 
 type Mode = "house" | "believers" | "defense";
 
@@ -271,15 +272,22 @@ function HouseMode({ house, loading }: { house: HouseReadView | null; loading: b
   }
 
   // Hidden state — a read is waiting, but nothing about the side is in the DOM.
-  // Only a real bet unlocks it.
+  // Only a real bet unlocks it. The coarse band drives the FOMO headline.
   if (!house.revealed) {
+    const copy = house.band ? BAND_COPY[house.band] : null;
+    const strong = house.band === "READ" || house.band === "STRONG_READ";
     return (
       <div className="space-y-2">
-        <Kicker>House Read</Kicker>
-        <p className="text-[15px] font-semibold text-[var(--text)]">The House has a read on you.</p>
+        <Kicker>{copy?.headline ?? "House Read"}</Kicker>
+        <p className="text-[15px] font-semibold text-[var(--text)]">
+          {copy?.line ?? "The House has a read on you."}
+        </p>
         <div
           className="relative grid h-[54px] place-items-center overflow-hidden rounded-[10px]"
-          style={{ background: "var(--surface-2,var(--border))" }}
+          style={{
+            background: "var(--surface-2,var(--border))",
+            boxShadow: strong ? "inset 0 0 0 1.5px var(--text-muted)" : undefined,
+          }}
           aria-hidden
         >
           <span
