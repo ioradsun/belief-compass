@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
+import { useSticky, useStickyRows } from "@/hooks/useSticky";
 import { listFeed, listMarketPulses, type VolumeWindow } from "@/lib/markets.functions";
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
@@ -61,6 +62,8 @@ const feedQO = (wallet?: string, window: VolumeWindow = "24h") =>
     queryFn: async () => await listFeed({ data: { wallet, window } }),
     // Prices, capital and volume re-poll so the cards move on their own.
     refetchInterval: 8_000,
+    // Never blank the feed while a poll (or a window switch) is in flight.
+    placeholderData: (prev: unknown) => prev,
   });
 
 const pulsesQO = (ids: number[]) =>
@@ -69,6 +72,7 @@ const pulsesQO = (ids: number[]) =>
     queryFn: async () => await listMarketPulses({ data: { ids: ids.slice(0, 120) } }),
     enabled: ids.length > 0,
     refetchInterval: 8_000,
+    placeholderData: (prev: unknown) => prev,
   });
 
 export const Route = createFileRoute("/")({
@@ -167,7 +171,8 @@ function Feed() {
   const [accountOpen, setAccountOpen] = useState(false);
 
   const { data } = useSuspenseQuery(feedQO(wallet, win));
-  const rawRows = data.data ?? [];
+  // Sticky: hold the last good feed until the next refresh lands.
+  const rawRows = useStickyRows(data.data ?? []);
   const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "24H";
 
   // Intent engine: the active lens re-ranks the whole feed by its OWN question,
@@ -188,7 +193,11 @@ function Feed() {
 
   const ids = rows.map((r) => Number(r.onchain_id));
   const { data: pulseData } = useQuery(pulsesQO(ids));
-  const pulses = pulseData?.pulses ?? {};
+  const stickyPulses = useSticky(
+    pulseData?.pulses,
+    (p) => !p || Object.keys(p).length === 0,
+  );
+  const pulses = stickyPulses ?? {};
 
   // Single-market deck: the center shows exactly one market. ?m (set by a
   // position, a Live row, search, or Next) picks it; otherwise the top of the
