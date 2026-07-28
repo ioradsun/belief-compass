@@ -70,7 +70,7 @@ function toDefense(raw: unknown): DefenseOpinion[] {
   return out;
 }
 
-const BELIEVERS_LIMIT = 24;
+const BELIEVERS_LIMIT = 200;
 
 /** Real holders + price history for one market. Empty-safe on every field. */
 export const getMarketEvidence = createServerFn({ method: "GET" })
