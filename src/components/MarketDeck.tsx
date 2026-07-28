@@ -687,7 +687,7 @@ function SellPanel({
           disabled={disabled}
           onClick={onConfirm}
           className="h-[52px] flex-[2] rounded-[12px] text-[15px] font-semibold disabled:opacity-40"
-          style={{ background: "var(--no)", color: "#2d0808" }}
+          style={{ background: "var(--text)", color: "var(--bg)" }}
         >
           {busy ? "Selling…" : confirmLabel}
         </button>
