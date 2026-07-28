@@ -190,7 +190,7 @@ export function selectLiveLine(i: LiveLineInput): LiveLine | null {
       supported: true,
       kind: "new_believers",
       window: nbWindow,
-      line: `${plural(n, "wallet")} backed${sideTxt} in ${label}.`,
+      line: `${plural(n, "believer")} backed${sideTxt} ${label}.`,
       occurredAt: i.lastTradeAt,
       payload: {
         window: nbWindow,
