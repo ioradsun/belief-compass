@@ -74,6 +74,50 @@ export function sampleConfidence(n: number, k = 4): number {
   return n <= 0 ? 0 : n / (n + k);
 }
 
+/**
+ * Presentation band for the pre-reveal card. When the House HAS a read, low
+ * confidence changes only how loud the card is — never whether a pick exists.
+ * (A refused no-read is handled separately; bands describe a real prediction.)
+ */
+export type HouseConfidenceBand =
+  "SHOT_IN_THE_DARK" | "FLYING_BLIND" | "HUNCH" | "READ" | "STRONG_READ";
+
+/** Map a read's confidence (0..1) to its presentation band. */
+export function confidenceBand(confidence: number): HouseConfidenceBand {
+  const pct = clamp01(confidence) * 100;
+  if (pct < 50) return "SHOT_IN_THE_DARK";
+  if (pct < 60) return "FLYING_BLIND";
+  if (pct < 70) return "HUNCH";
+  if (pct < 85) return "READ";
+  return "STRONG_READ";
+}
+
+/** Pre-reveal copy per band. Never names the predicted side — that's the hook. */
+export const BAND_COPY: Record<HouseConfidenceBand, { headline: string; line: string }> = {
+  SHOT_IN_THE_DARK: {
+    headline: "Shot in the dark",
+    line: "We’re flying blind here, but we still made a call. Back a side to see it.",
+  },
+  FLYING_BLIND: {
+    headline: "Flying blind",
+    line: "You haven’t shown us much in this territory. We took a guess anyway.",
+  },
+  HUNCH: {
+    headline: "The House has a hunch",
+    line: "Something in your pattern points one way.",
+  },
+  READ: {
+    headline: "The House has a read",
+    line: "We think we know what you’ll do. Put money down to find out if we’re right.",
+  },
+  STRONG_READ: {
+    headline: "Prove the House wrong",
+    line: "Your pattern looks unusually clear on this one.",
+  },
+};
+
+export const HOUSE_TAGLINE = "The crowd predicts the market. The House predicts you.";
+
 function noRead(kind: NoReadKind, title: string, body: string, detail: string[] = []): HouseRead {
   return {
     action: null,
