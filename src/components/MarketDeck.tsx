@@ -360,6 +360,62 @@ function SideCard({
 
 type TradeApi = ReturnType<typeof useTrade>;
 
+/** Dollar input that accepts decimals (e.g. 0.25, 12.50). */
+function AmountField({
+  amount,
+  setAmount,
+}: {
+  amount: number;
+  setAmount: (n: number) => void;
+}) {
+  const [text, setText] = useState(amount ? String(amount) : "");
+
+  // Re-sync when the amount is changed from the outside.
+  useEffect(() => {
+    const parsed = parseFloat(text);
+    if ((Number.isNaN(parsed) ? 0 : parsed) !== amount) {
+      setText(amount ? String(amount) : "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amount]);
+
+  return (
+    <span
+      className="flex h-[52px] items-center gap-1 rounded-[12px] px-3"
+      style={{ border: "1px solid var(--border)" }}
+    >
+      <span className="num text-[15px] text-[var(--text-muted)]">$</span>
+      <input
+        inputMode="decimal"
+        value={text}
+        onChange={(e) => {
+          // Keep digits and a single decimal point, max 2 decimals.
+          let raw = e.target.value.replace(/[^0-9.]/g, "");
+          const first = raw.indexOf(".");
+          if (first !== -1) {
+            raw = raw.slice(0, first + 1) + raw.slice(first + 1).replace(/\./g, "");
+            const [int, dec] = raw.split(".");
+            raw = `${int}.${(dec ?? "").slice(0, 2)}`;
+          }
+          const n = parseFloat(raw);
+          if (!Number.isNaN(n) && n > 1_000_000) {
+            setText("1000000");
+            setAmount(1_000_000);
+            return;
+          }
+          setText(raw);
+          setAmount(Number.isNaN(n) ? 0 : n);
+        }}
+        onBlur={() => setText(amount ? String(amount) : "")}
+        aria-label="Amount in dollars"
+        className="num w-[86px] bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
+        placeholder="0"
+      />
+    </span>
+  );
+}
+
+
 function Dock({
   side,
   amount,
