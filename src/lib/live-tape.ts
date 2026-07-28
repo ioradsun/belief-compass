@@ -68,11 +68,11 @@ export function liveRowText(r: Omit<LiveRow, "text">): string {
   switch (r.kind) {
     case "round_trip": {
       const amt = r.amountUsd && r.amountUsd > 0 ? ` ${fmtUsd(r.amountUsd)}` : "";
-      return `A wallet round-tripped${amt} on ${r.side ?? ""}`.trim();
+      return `A believer round-tripped${amt} on ${r.side ?? ""}`.trim();
     }
     case "trade_burst": {
       const verb = r.side && r.payload.action === "SELL" ? "reduced" : "backed";
-      const who = plural(r.walletCount ?? 1, "wallet");
+      const who = plural(r.walletCount ?? 1, "believer");
       const amt = r.amountUsd && r.amountUsd > 0 ? ` · ${fmtUsd(r.amountUsd)}` : "";
       return `${who} ${verb} ${r.side ?? ""}${amt}`.trim();
     }
@@ -83,7 +83,7 @@ export function liveRowText(r: Omit<LiveRow, "text">): string {
     case "market_created":
       return "New market just opened";
     case "side_shift":
-      return `A wallet flipped to ${r.side ?? ""}`.trim();
+      return `A believer flipped to ${r.side ?? ""}`.trim();
     default:
       return "";
   }

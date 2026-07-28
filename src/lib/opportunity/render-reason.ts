@@ -27,14 +27,14 @@ export function renderReason(reasonCode: string | null, ev: Evidence): string {
   switch (reasonCode) {
     case "HOT_ACCELERATING_BREADTH":
     case "HOT_ACCELERATING_VOLUME":
-      return `${plural(n(ev.unique_wallets), "wallet")} traded in ${w}, up from a baseline of ${round(n(ev.baseline_wallets_per_hour), 1)}/hour.`;
+      return `${plural(n(ev.unique_wallets), "believer")} traded in ${w}, up from a baseline of ${round(n(ev.baseline_wallets_per_hour), 1)}/hour.`;
     case "EARLY_NEW_BELIEVERS":
       return `${plural(n(ev.new_believers), "new believer")} in ${w}, with ${n(ev.directional_believers)} directional so far.`;
     case "EARLY_BREADTH_WITH_LOW_MATURITY":
-      return `${plural(n(ev.unique_wallets), "wallet")} backed in ${w} while participation is still small.`;
+      return `${plural(n(ev.unique_wallets), "believer")} backed in ${w} while participation is still small.`;
     case "HIDDEN_HIGH_CIRCULATION_LOW_CAPITAL":
     case "HIDDEN_BREADTH_BELOW_VISIBILITY":
-      return `Circulated ${round(n(ev.circulation), 1)}× in ${w} across ${plural(n(ev.unique_wallets), "wallet")}, on a small book.`;
+      return `Circulated ${round(n(ev.circulation), 1)}× in ${w} across ${plural(n(ev.unique_wallets), "believer")}, on a small book.`;
     case "CONTESTED_BALANCED_ACTIVE_SIDES":
       return `${n(ev.believers_yes)} believers back YES and ${n(ev.believers_no)} back NO, with ${n(ev.trade_count_24h)} trades in the last 24 hours.`;
     case "CONTESTED_PEOPLE_MONEY_DISAGREEMENT":

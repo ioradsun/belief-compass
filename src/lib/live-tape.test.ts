@@ -36,7 +36,7 @@ describe("trade burst grouping", () => {
     expect(rows[0].walletCount).toBe(3);
     expect(rows[0].tradeCount).toBe(3);
     expect(rows[0].occurredAt).toBe(t); // latest
-    expect(rows[0].text).toContain("3 wallets backed YES");
+    expect(rows[0].text).toContain("3 believers backed YES");
   });
 
   it("does NOT group across different sides", () => {
@@ -130,6 +130,6 @@ describe("factual copy only", () => {
       wallet: null,
       payload: { action: "SELL" },
     });
-    expect(text).toContain("4 wallets reduced NO");
+    expect(text).toContain("4 believers reduced NO");
   });
 });
