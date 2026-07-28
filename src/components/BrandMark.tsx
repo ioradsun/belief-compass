@@ -26,25 +26,25 @@ export function BrandMark({
     >
       {/* top C — normal orientation, faces right */}
       <path
-        d="M15.54 4.96 A5 5 0 1 0 15.54 12.04"
+        d="M16.1 4.3 A5.2 5.2 0 1 0 16.1 12.7"
         stroke="currentColor"
-        strokeWidth="2.1"
+        strokeWidth="2.4"
         strokeLinecap="round"
       />
       {/* bottom C — horizontally inverted, faces left */}
       <path
-        d="M8.46 13.96 A5 5 0 1 1 8.46 21.04"
+        d="M7.9 12.9 A5.2 5.2 0 1 1 7.9 21.3"
         stroke="currentColor"
-        strokeWidth="2.1"
+        strokeWidth="2.4"
         strokeLinecap="round"
       />
       {/* single shared axis through both Cs */}
       <path
         d="M12 1.6 V22.4"
         stroke="currentColor"
-        strokeWidth="1.6"
+        strokeWidth="1.1"
         strokeLinecap="round"
-        opacity="0.9"
+        opacity="0.7"
       />
     </svg>
   );
