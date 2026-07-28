@@ -398,51 +398,64 @@ function Sparkline({ pts, delta, days }: { pts: number[]; delta: number; days: n
   );
 }
 
+/** The case for each side, in the same two columns as the decision itself. */
 function Defense({ opinions }: { opinions: DefenseOpinion[] }) {
   if (opinions.length === 0) {
     return <Empty>No one's made their case here yet — the floor is open.</Empty>;
   }
+  const yes = opinions.filter((o) => o.vote === "YES");
+  const no = opinions.filter((o) => o.vote === "NO");
   return (
-    <ul className="space-y-1.5 py-1">
-      {opinions.map((o, i) => (
-        <li key={i} className="flex gap-2">
-          {o.avatarUrl ? (
-            <img
-              src={o.avatarUrl}
-              alt=""
-              className="mt-0.5 h-6 w-6 shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <span
-              className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold text-white"
-              style={{ background: `hsl(${hueFor(o.name)} 45% 45%)` }}
-              aria-hidden
-            >
-              {initialsFor(o.name)}
-            </span>
-          )}
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="truncate text-[12px] font-semibold text-[var(--text)]">
-                {o.name}
-              </span>
-              <span
-                className="rounded px-1 py-0.5 text-[9px] font-semibold"
-                style={{
-                  color: o.vote === "YES" ? "var(--yes)" : "var(--no)",
-                  background: "var(--surface-2,var(--border))",
-                }}
-              >
-                {o.vote}
-              </span>
-            </div>
-            <p className="text-[12px] leading-snug text-[var(--text-secondary)]">{o.opinion}</p>
-          </div>
-        </li>
-      ))}
-    </ul>
+    <div className="grid grid-cols-2 gap-2 py-1">
+      <DefenseColumn side="YES" opinions={yes} />
+      <DefenseColumn side="NO" opinions={no} />
+    </div>
   );
 }
+
+function DefenseColumn({ side, opinions }: { side: "YES" | "NO"; opinions: DefenseOpinion[] }) {
+  const color = side === "YES" ? "var(--yes)" : "var(--no)";
+  return (
+    <div className="min-w-0">
+      <div className="mb-1 flex items-baseline justify-between px-0.5">
+        <span className="text-[11px] font-semibold" style={{ color }}>
+          {side}
+        </span>
+        <span className="num text-[11px] text-[var(--text-muted)]">{opinions.length}</span>
+      </div>
+      {opinions.length === 0 ? (
+        <div className="px-0.5 py-2 text-[11px] text-[var(--text-muted)]">No case made yet</div>
+      ) : (
+        <ul className="space-y-2">
+          {opinions.map((o, i) => (
+            <li key={i} className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                {o.avatarUrl ? (
+                  <img src={o.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
+                ) : (
+                  <span
+                    className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[8px] font-semibold text-white"
+                    style={{ background: `hsl(${hueFor(o.name)} 45% 45%)` }}
+                    aria-hidden
+                  >
+                    {initialsFor(o.name)}
+                  </span>
+                )}
+                <span className="truncate text-[12px] font-semibold text-[var(--text)]">
+                  {o.name}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[12px] leading-snug text-[var(--text-secondary)]">
+                {o.opinion}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
