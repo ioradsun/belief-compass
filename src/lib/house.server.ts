@@ -11,6 +11,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serviceClient } from "@/lib/supabase-clients";
 import { readViewerDnaCache } from "@/lib/dna/viewer-dna-cache.server";
+import { getBaseClient } from "@/chain/client";
+import { decodeTradeLog, PROXY_ADDRESS } from "@/chain/decoder";
 import {
   predictHouse,
   scoreHouse,
@@ -26,13 +28,17 @@ import {
 export interface HouseReadView {
   marketId: number;
   connected: boolean;
-  /** Locked prediction — only ever populated AFTER the viewer has answered. */
+  /** Locked prediction — only ever populated AFTER a real bet reveals it. */
   predicted: BeliefAction | null;
   confidence: number | null;
   reasons: string[];
   /** Present when the House refused to name a side. Safe to show before reveal. */
   noRead: HouseRead["noRead"];
+  /** True only once a verified BET has unlocked the pick (full reveal). */
   revealed: boolean;
+  /** True once the round is finalized by a bet OR a skip. */
+  closed: boolean;
+  finalizedVia: "bet" | "skip" | null;
   actual: BeliefAction | null;
   outcome: "correct" | "miss" | "unscored" | null;
   headline: { title: string; line: string } | null;
@@ -172,6 +178,8 @@ export async function loadHouseRead(
       reasons: [],
       noRead: read.noRead,
       revealed: false,
+      closed: false,
+      finalizedVia: null,
       actual: null,
       outcome: null,
       headline: null,
@@ -198,6 +206,7 @@ export async function loadHouseRead(
     actual_action: BeliefAction | null;
     outcome: "correct" | "miss" | "unscored" | null;
     revealed_at: string | null;
+    finalized_via: "bet" | "skip" | null;
   };
   let row = (existing ?? null) as Row | null;
 
@@ -233,46 +242,144 @@ export async function loadHouseRead(
         actual_action: null,
         outcome: null,
         revealed_at: null,
+        finalized_via: null,
       };
     }
   }
 
-  const revealed = !!row.actual_action;
+  // The pick unlocks ONLY on a verified bet. A skip closes the round but keeps
+  // the House's directional pick sealed — the FOMO is the point.
+  const closed = !!row.actual_action;
+  const betRevealed = row.finalized_via === "bet" && !!row.actual_action;
   // Recreate the honest no-read copy from the locked kind, without re-predicting.
   const noRead = row.predicted_action
     ? null
     : predictHouse(await buildSignals(sb, wallet, marketId, category)).noRead;
 
+  const headline: { title: string; line: string } | null = betRevealed
+    ? revealHeadline(row.predicted_action, row.actual_action!)
+    : closed
+      ? {
+          title: "You walked away",
+          line: "The House already made its call — but you never paid to see it.",
+        }
+      : null;
+
   return {
     marketId,
     connected: true,
-    predicted: revealed ? row.predicted_action : null,
-    confidence: revealed ? Number(row.confidence ?? 0) : null,
-    reasons: revealed ? ((row.reasons ?? []) as string[]) : [],
+    predicted: betRevealed ? row.predicted_action : null,
+    confidence: betRevealed ? Number(row.confidence ?? 0) : null,
+    reasons: betRevealed ? ((row.reasons ?? []) as string[]) : [],
     noRead,
-    revealed,
+    revealed: betRevealed,
+    closed,
+    finalizedVia: row.finalized_via,
     actual: row.actual_action,
     outcome: row.outcome,
-    headline: revealed ? revealHeadline(row.predicted_action, row.actual_action!) : null,
+    headline,
     record: recordFor(history),
     category,
   };
 }
 
 /**
- * Record the viewer's belief action once and score the LOCKED prediction.
- * Idempotent: answering twice never re-scores and never rewrites the prediction.
- * This is a belief action only — it moves no money.
+ * Independently verify a buy on Base: the tx must be a confirmed success sent by
+ * `wallet`, touching the belief-market contract, with a TokensBought log for
+ * THIS market on THIS side. Returns the on-chain shares + ETH, or throws — the
+ * client's claimed side/amount is never trusted, only the chain is.
  */
-export async function recordBeliefAnswer(
+async function verifyBuyOnChain(
+  wallet: string,
+  marketId: number,
+  side: BeliefAction,
+  txHash: string,
+): Promise<{ shares: string; ethWei: string }> {
+  if (side !== "YES" && side !== "NO") throw new Error("A bet must be YES or NO.");
+  const hash = txHash as `0x${string}`;
+  const receipt = await getBaseClient().getTransactionReceipt({ hash });
+  if (!receipt || receipt.status !== "success")
+    throw new Error("Transaction is not a confirmed success.");
+  if (receipt.from.toLowerCase() !== wallet.toLowerCase())
+    throw new Error("Transaction was not sent by this wallet.");
+
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== PROXY_ADDRESS) continue;
+    const t = decodeTradeLog(log);
+    if (
+      t &&
+      t.direction === "BUY" &&
+      t.onchain_id === String(marketId) &&
+      t.side === side &&
+      t.wallet === wallet.toLowerCase()
+    ) {
+      return { shares: t.token_amount, ethWei: t.eth_amount };
+    }
+  }
+  throw new Error("No matching buy for this market and side in the transaction.");
+}
+
+/**
+ * Finalize the round with a REAL bet and reveal the House's pick. Verifies the
+ * tx on-chain before recording anything. Idempotent: one finalize per prediction
+ * and one per tx (a unique index guards the hash). This is the only path that
+ * unlocks the predicted side.
+ */
+export async function finalizeHouseBet(
   walletRaw: string,
   marketId: number,
-  action: BeliefAction,
-  source: string,
+  side: BeliefAction,
+  txHash: string,
 ): Promise<HouseReadView> {
   const sb = serviceClient();
   const wallet = walletRaw.toLowerCase();
-  // Make sure a locked prediction exists first (created before the answer).
+  // Lock the prediction first (created before the bet is recorded).
+  await loadHouseRead(wallet, marketId);
+
+  const verified = await verifyBuyOnChain(wallet, marketId, side, txHash);
+
+  const { data: existing } = await sb
+    .from("house_predictions")
+    .select("predicted_action, actual_action")
+    .eq("wallet", wallet)
+    .eq("onchain_id", marketId)
+    .maybeSingle();
+  const row = existing as {
+    predicted_action: BeliefAction | null;
+    actual_action: BeliefAction | null;
+  } | null;
+
+  if (row && !row.actual_action) {
+    await sb
+      .from("house_predictions")
+      .update({
+        actual_action: side,
+        actual_side: side,
+        actual_tx_hash: txHash,
+        actual_shares: verified.shares,
+        actual_amount_wei: verified.ethWei,
+        outcome: scoreHouse(row.predicted_action, side),
+        revealed_at: new Date().toISOString(),
+        finalized_via: "bet",
+      })
+      .eq("wallet", wallet)
+      .eq("onchain_id", marketId)
+      .is("actual_action", null);
+  }
+
+  return loadHouseRead(wallet, marketId);
+}
+
+/**
+ * Finalize the round with a SKIP. Scores the locked prediction but keeps the
+ * directional pick SEALED — the viewer never paid to see it. Idempotent.
+ */
+export async function finalizeHouseSkip(
+  walletRaw: string,
+  marketId: number,
+): Promise<HouseReadView> {
+  const sb = serviceClient();
+  const wallet = walletRaw.toLowerCase();
   await loadHouseRead(wallet, marketId);
 
   const { data: existing } = await sb
@@ -290,10 +397,10 @@ export async function recordBeliefAnswer(
     await sb
       .from("house_predictions")
       .update({
-        actual_action: action,
-        outcome: scoreHouse(row.predicted_action, action),
+        actual_action: "SKIP",
+        outcome: scoreHouse(row.predicted_action, "SKIP"),
         revealed_at: new Date().toISOString(),
-        answer_source: source,
+        finalized_via: "skip",
       })
       .eq("wallet", wallet)
       .eq("onchain_id", marketId)
