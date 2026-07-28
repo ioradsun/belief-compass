@@ -331,10 +331,8 @@ function SideCard({
       aria-pressed={selected}
       className="flex flex-col gap-2 rounded-[14px] p-3 text-left transition-colors"
       style={{
-        border: `1.5px solid ${selected ? col : "var(--border)"}`,
-        background: selected
-          ? `color-mix(in oklab, ${col} 12%, transparent)`
-          : `color-mix(in oklab, ${col} 5%, transparent)`,
+        border: `1.5px solid ${selected ? "var(--border-strong,var(--border))" : "var(--border)"}`,
+        background: selected ? "var(--surface)" : "transparent",
       }}
     >
       <div className="text-[11px] font-semibold tracking-wide" style={{ color: col }}>
