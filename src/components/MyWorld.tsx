@@ -56,10 +56,6 @@ export function MyWorld({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="pb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-        You
-      </div>
-
       {/* Quiet segmented control */}
       <div
         className="mb-4 flex rounded-[10px] p-0.5"
