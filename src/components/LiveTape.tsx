@@ -7,6 +7,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
+import { useStickyRows } from "@/hooks/useSticky";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
 function ago(iso: string): string {
@@ -31,8 +32,10 @@ export function LiveTape({
     queryFn: () => listLiveEvents({ data: { wallet } }),
     // New rows prepend; refetch keeps the tape fresh without new infra.
     refetchInterval: 6_000,
+    placeholderData: (prev) => prev,
   });
-  const rows = data?.rows ?? [];
+  // Sticky: the tape holds its rows until fresh ones arrive.
+  const rows = useStickyRows(data?.rows);
 
   return (
     <div className="min-h-0 flex-1">
