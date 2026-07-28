@@ -457,10 +457,7 @@ function Dock({
           <span
             className="grid h-7 w-7 place-items-center rounded-full"
             style={{
-              background:
-                side === "YES"
-                  ? "color-mix(in oklab,var(--yes) 18%,transparent)"
-                  : "color-mix(in oklab,var(--no) 18%,transparent)",
+              background: "var(--surface)",
             }}
           >
             <span style={{ color: side === "YES" ? "var(--yes)" : "var(--no)" }}>✓</span>
@@ -553,8 +550,8 @@ function Dock({
             onClick={onConfirm}
             className="h-[52px] flex-[2] rounded-[12px] text-[15px] font-semibold disabled:opacity-40"
             style={{
-              background: side === "YES" ? "var(--yes)" : "var(--no)",
-              color: side === "YES" ? "#062815" : "#2d0808",
+              background: "var(--text)",
+              color: "var(--bg)",
             }}
           >
             {busy ? "Confirming…" : confirmLabel}
