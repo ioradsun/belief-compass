@@ -94,7 +94,6 @@ function TabBtn({
   );
 }
 
-
 /** Two columns that mirror the YES/NO decision: everyone on each side. */
 function BelieversSplit({
   believers,

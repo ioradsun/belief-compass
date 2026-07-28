@@ -220,7 +220,6 @@ export function MarketDeck({
           </div>
         )}
 
-
         {/* Evidence: believers · price · defense */}
         <MarketEvidence marketId={marketId} />
 
