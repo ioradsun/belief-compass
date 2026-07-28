@@ -13,6 +13,7 @@ import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
+import { useReadiness, CalibrationBanner } from "@/components/Calibration";
 import { expressBelief } from "@/lib/beliefs.functions";
 
 import { CHAIN_ID } from "@/chain/decoder";
@@ -92,6 +93,7 @@ export function MarketDeck({
   const trade = useTrade();
   const bal = useUserBalance(marketId);
   const house = useHouseFinalize(marketId, viewerWallet);
+  const { data: readiness } = useReadiness(viewerWallet);
 
   // A belief tap records a FREE expressed belief (no money) that feeds DNA /
   // Network / House. Refreshes the viewer's readiness so calibration progresses.
@@ -209,6 +211,13 @@ export function MarketDeck({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
+      {/* Calibration — persists atop the deck until the viewer is calibrated. */}
+      {viewerWallet && readiness && !readiness.calibrated && (
+        <div className="shrink-0">
+          <CalibrationBanner readiness={readiness} />
+        </div>
+      )}
+
       {/* Identity — pinned to the top of the column */}
       <div className="shrink-0">
         <div className="mb-1 flex items-center gap-2">

@@ -23,6 +23,7 @@ import {
 import { getNetwork } from "@/lib/dna.functions";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { BelieversSplit, Defense } from "@/components/MarketEvidence";
+import { useReadiness, CalibrationCard } from "@/components/Calibration";
 import { BAND_COPY } from "@/domain/house";
 
 type Mode = "house" | "believers" | "defense";
@@ -83,6 +84,7 @@ export function MarketIntelligence({
   const connected = useEffectiveWallet();
   const viewer = viewerWallet ?? connected;
   const actions = useHouseFinalize(marketId, viewerWallet);
+  const { data: readiness } = useReadiness(viewer);
 
   const tablistId = useId();
   const btnRefs = useRef<Record<Mode, HTMLButtonElement | null>>({
@@ -207,12 +209,18 @@ export function MarketIntelligence({
             {house && house.record.correct + house.record.miss > 0 && (
               <MiniScoreboard rec={house.record} />
             )}
-            <HouseMode
-              house={house ?? null}
-              loading={loadingHouse && !house}
-              onFoundation={actions.trainFoundation}
-              training={actions.training}
-            />
+            {viewer && readiness && !readiness.calibrated ? (
+              // Pre-calibration the House can't honestly read you — show the same
+              // calibration card as everywhere else, never a "New territory" no-read.
+              <CalibrationCard readiness={readiness} />
+            ) : (
+              <HouseMode
+                house={house ?? null}
+                loading={loadingHouse && !house}
+                onFoundation={actions.trainFoundation}
+                training={actions.training}
+              />
+            )}
           </div>
         ) : mode === "believers" ? (
           <BelieversMode
