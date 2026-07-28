@@ -2,7 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
-import { listFeed, listMarketPulses, type VolumeWindow } from "@/lib/markets.functions";
+import {
+  listFeed,
+  listMarketPulses,
+  getMarketRow,
+  type VolumeWindow,
+} from "@/lib/markets.functions";
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { MarketDeck } from "@/components/MarketDeck";
@@ -236,15 +241,26 @@ function Feed() {
         })()
       : feedRows;
 
-  const currentIdx = Math.max(
-    0,
-    marketRows.findIndex((r) => Number(r.onchain_id) === selectedMarket),
-  );
-  const currentRow = marketRows[currentIdx] ?? marketRows[0];
+  const foundIdx = marketRows.findIndex((r) => Number(r.onchain_id) === selectedMarket);
+  const currentIdx = Math.max(0, foundIdx);
   const nextMarket = () => {
     if (marketRows.length)
       selectMarket(Number(marketRows[(currentIdx + 1) % marketRows.length].onchain_id));
   };
+
+  // The selected market may be outside the loaded top-of-feed slice (e.g. opened
+  // from search) — fetch its row on demand so ANY market can open in the center.
+  const missing = selectedMarket != null && foundIdx === -1;
+  const { data: soloRow } = useQuery({
+    queryKey: ["market-row", selectedMarket],
+    queryFn: () => getMarketRow({ data: { id: selectedMarket as number } }),
+    enabled: missing,
+    staleTime: 15_000,
+  });
+  const currentRow =
+    foundIdx >= 0
+      ? marketRows[currentIdx]
+      : ((soloRow?.row as unknown as MarketRow | null) ?? marketRows[0]);
 
   // On mobile only the active tab's column is mounted-visible; from lg up all
   // three columns are always shown side by side.
@@ -328,7 +344,6 @@ function Feed() {
                 lens={lens}
                 lenses={OPP_FILTERS}
                 onLens={setLens}
-                markets={rawRows as unknown as { onchain_id: number; title?: string | null }[]}
                 wallet={wallet}
                 onSelectMarket={selectMarket}
                 onSelectPerson={selectPerson}

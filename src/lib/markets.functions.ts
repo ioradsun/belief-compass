@@ -74,8 +74,8 @@ export const listFeed = createServerFn({ method: "GET" })
     // Viewer-relative: is the viewer's closest match (tribe) or most-opposed
     // wallet (opp) among the believers of each market, and on which side?
     const viewer = input?.wallet?.toLowerCase() ?? null;
-    let tribeBySide = new Map<number, "YES" | "NO">();
-    let oppBySide = new Map<number, "YES" | "NO">();
+    const tribeBySide = new Map<number, "YES" | "NO">();
+    const oppBySide = new Map<number, "YES" | "NO">();
     let tribePerson: MatchPerson | null = null;
     let oppPerson: MatchPerson | null = null;
     // The DNA labels behind the tribe/opp person, for the story's relationship beat.
@@ -297,6 +297,100 @@ export const listFeed = createServerFn({ method: "GET" })
     };
   });
 
+// Base read-model shape for one market — everything the center deck needs to
+// render (prices, believers, capital, momentum, identity). Windowed volume, the
+// story beats and viewer DNA are feed-only enrichments the deck degrades without.
+const MARKET_ROW_SELECT = `
+  onchain_id, yes_price_usd, no_price_usd, money_yes_pct, people_yes_pct, people_no_pct,
+  believers_yes, believers_no, believers_mixed, directional_believers, divergence,
+  volume_total_usd, trending_score, chg_1h, chg_24h, chg_24h_yes, chg_24h_no,
+  yes_capital_usd, no_capital_usd, new_believers_1h, new_believers_24h,
+  unique_wallets_24h, circulation_24h, last_trade_at, velocity_5m,
+  live_line, live_line_kind, live_line_window, live_line_occurred_at,
+  opportunity_type, opportunity_score, opportunity_reason, opportunity_reason_code,
+  opportunity_window, opportunity_confidence, opportunity_sample_size, opportunity_eligible,
+  markets:onchain_id ( title, category, author_name, author_pfp, pov_slug )
+`;
+
+export interface MarketSearchHit {
+  onchain_id: number;
+  title: string;
+  category: string | null;
+  believers: number;
+  yesPrice: number | null;
+}
+
+/** Escape ilike wildcards so user input matches literally. */
+const escapeLike = (s: string) => s.replace(/[\\%_]/g, "\\$&");
+
+/**
+ * Full-catalog market search, ranked by INTENT: title prefix-matches first (you
+ * usually type the start of what you mean), then the most-alive market (directional
+ * believers) so the hottest match surfaces. Covers every market, not just the
+ * loaded feed slice — so anything you can name, you can open.
+ */
+export const searchMarkets = createServerFn({ method: "GET" })
+  .inputValidator((d: { query: string; limit?: number }) =>
+    z.object({ query: z.string(), limit: z.number().int().min(1).max(20).optional() }).parse(d),
+  )
+  .handler(async ({ data }): Promise<MarketSearchHit[]> => {
+    const term = data.query.trim();
+    if (term.length < 2) return [];
+    const sb = serviceClient();
+    const like = `%${escapeLike(term)}%`;
+    const { data: rows } = await sb
+      .from("market_state")
+      .select(
+        "onchain_id, believers_yes, believers_no, yes_price_usd, markets:onchain_id!inner ( title, category )",
+      )
+      .ilike("markets.title", like)
+      .order("directional_believers", { ascending: false, nullsFirst: false })
+      .limit(40);
+
+    const lower = term.toLowerCase();
+    const hits = (
+      (rows ?? []) as unknown as Array<{
+        onchain_id: number;
+        believers_yes: number | null;
+        believers_no: number | null;
+        yes_price_usd: number | null;
+        markets: { title: string | null; category: string | null } | null;
+      }>
+    )
+      .map((r) => {
+        const title = r.markets?.title ?? "";
+        return {
+          onchain_id: Number(r.onchain_id),
+          title,
+          category: r.markets?.category ?? null,
+          believers: (Number(r.believers_yes) || 0) + (Number(r.believers_no) || 0),
+          yesPrice: r.yes_price_usd == null ? null : Number(r.yes_price_usd),
+          _prefix: title.toLowerCase().startsWith(lower) ? 1 : 0,
+        };
+      })
+      // Prefix matches win; within a tier, the most-backed market first.
+      .sort((a, b) => b._prefix - a._prefix || b.believers - a.believers)
+      .slice(0, data.limit ?? 8);
+    return hits.map(({ _prefix, ...h }) => h);
+  });
+
+/**
+ * One market's read-model row, shaped like a feed row so the center deck can
+ * render ANY market — including ones outside the loaded top-of-feed slice (e.g.
+ * opened from search). Returns null when the market isn't in the read model yet.
+ */
+export const getMarketRow = createServerFn({ method: "GET" })
+  .inputValidator((d: { id: number }) => z.object({ id: z.number().int().nonnegative() }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = serviceClient();
+    const { data: row } = await sb
+      .from("market_state")
+      .select(MARKET_ROW_SELECT)
+      .eq("onchain_id", data.id)
+      .maybeSingle();
+    return { row: row ?? null };
+  });
+
 /**
  * Per-market pulse strips: the most recent real trade events for each of the
  * given markets, so every card in the grid can run its own little live feed.
@@ -407,7 +501,6 @@ export const getWallet = createServerFn({ method: "GET" })
         });
     }
 
-
     // Live prices for every held market, so the portfolio panel does not depend
     // on the market being present in the (50-row) feed page.
     const stateById = new Map<
@@ -469,7 +562,10 @@ export const getWallet = createServerFn({ method: "GET" })
     // POV is the authority on what a position is worth right now (it prices the
     // wallet's own tokens). Refresh live, best-effort: if POV is slow or down we
     // fall back to the stored value, and only then to shares x market price.
-    const povValue = new Map<number, { yes: number; no: number; yesShares: number; noShares: number }>();
+    const povValue = new Map<
+      number,
+      { yes: number; no: number; yesShares: number; noShares: number }
+    >();
     try {
       const pov = await fetchPovPositions(wallet, 4000);
       if (pov.length) {
