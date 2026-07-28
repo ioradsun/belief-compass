@@ -107,6 +107,33 @@ export type Database = {
         }
         Relationships: []
       }
+      expressed_beliefs: {
+        Row: {
+          onchain_id: number
+          side: string
+          source: string
+          updated_at: string
+          wallet: string
+          weight: number
+        }
+        Insert: {
+          onchain_id: number
+          side: string
+          source?: string
+          updated_at?: string
+          wallet: string
+          weight?: number
+        }
+        Update: {
+          onchain_id?: number
+          side?: string
+          source?: string
+          updated_at?: string
+          wallet?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       house_foundation_answers: {
         Row: {
           action: string
