@@ -284,8 +284,16 @@ export function composeLiveStory(input: LiveStoryInput): { text: string; tone: B
   const tone: BeatTone = side === "YES" ? "yes" : side === "NO" ? "no" : "neutral";
   const stake =
     input.amountUsd && input.amountUsd > 0
-      ? ` for $${Math.round(input.amountUsd).toLocaleString("en-US")}`
+      ? ` for $${
+          input.amountUsd >= 1000
+            ? input.amountUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })
+            : input.amountUsd.toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
+        }`
       : "";
+
   const clause = side ? liveMomentumClause(input, side) : "";
   const tail = clause ? ` — ${clause}` : "";
 
