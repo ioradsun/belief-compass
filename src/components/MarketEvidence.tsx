@@ -10,18 +10,32 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketEvidence, type Believer, type DefenseOpinion } from "@/lib/evidence.functions";
+import { getNetwork } from "@/lib/dna.functions";
+import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
 type Tab = "believers" | "price" | "defense";
 
 export function MarketEvidence({ marketId }: { marketId: number }) {
   const [tab, setTab] = useState<Tab>("believers");
+  const viewer = useEffectiveWallet();
   const { data, isLoading } = useQuery({
     queryKey: ["evidence", marketId],
     queryFn: () => getMarketEvidence({ data: { marketId } }),
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
+
+  // People already in the viewer's network float to the top of each column.
+  const { data: net } = useQuery({
+    queryKey: ["network", viewer ?? null, "all", "relevant", ""],
+    queryFn: () => getNetwork({ data: { wallet: viewer, limit: 60 } }),
+    enabled: !!viewer,
+    staleTime: 60_000,
+  });
+  const networkWallets = new Set(
+    (net?.people ?? []).map((p) => p.wallet.toLowerCase()),
+  );
 
   const counts = data
     ? { believers: data.believers.length, price: data.priceSeries.length }
@@ -40,14 +54,14 @@ export function MarketEvidence({ marketId }: { marketId: number }) {
           Defense{data?.defense.length ? ` ${data.defense.length}` : ""}
         </TabBtn>
       </div>
-      <div className="max-h-[168px] overflow-y-auto px-2 pb-2">
+      <div className="max-h-[220px] overflow-y-auto px-2 pb-2">
         {isLoading && !data ? (
           <div className="space-y-1.5 py-2">
             <div className="h-6 animate-pulse rounded bg-[var(--border)]/50" />
             <div className="h-6 w-2/3 animate-pulse rounded bg-[var(--border)]/50" />
           </div>
         ) : tab === "believers" ? (
-          <BelieversList believers={data?.believers ?? []} />
+          <BelieversSplit believers={data?.believers ?? []} networkWallets={networkWallets} />
         ) : tab === "price" ? (
           <PriceHistory series={data?.priceSeries ?? []} />
         ) : (
@@ -83,46 +97,93 @@ function TabBtn({
   );
 }
 
-function BelieversList({ believers }: { believers: Believer[] }) {
+/** Two columns that mirror the YES/NO decision: everyone on each side. */
+function BelieversSplit({
+  believers,
+  networkWallets,
+}: {
+  believers: Believer[];
+  networkWallets: Set<string>;
+}) {
   if (believers.length === 0) {
     return <Empty>No directional holders yet — be the first to take a side.</Empty>;
   }
+  const order = (a: Believer, b: Believer) => {
+    const an = networkWallets.has(a.wallet.toLowerCase()) ? 1 : 0;
+    const bn = networkWallets.has(b.wallet.toLowerCase()) ? 1 : 0;
+    return bn - an || b.conviction - a.conviction;
+  };
+  const yes = believers.filter((b) => b.side === "YES").sort(order);
+  const no = believers.filter((b) => b.side === "NO").sort(order);
+
   return (
-    <ul className="space-y-0.5 py-1">
-      {believers.map((b) => (
-        <li key={b.wallet} className="flex items-center gap-2 py-1">
-          {b.avatarUrl ? (
-            <img src={b.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
-          ) : (
-            <span
-              className="grid h-6 w-6 place-items-center rounded-full text-[9px] font-semibold text-white"
-              style={{ background: `hsl(${hueFor(b.wallet)} 45% 45%)` }}
-              aria-hidden
-            >
-              {initialsFor(b.name)}
-            </span>
-          )}
-          <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--text)]">{b.name}</span>
-          {b.daysHeld > 0 && (
-            <span className="num text-[10px] text-[var(--text-muted)]">{b.daysHeld}d</span>
-          )}
-          <span
-            className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
-            style={{
-              color: b.side === "YES" ? "var(--yes)" : "var(--no)",
-              background:
-                b.side === "YES"
-                  ? "color-mix(in oklab,var(--yes) 12%,transparent)"
-                  : "color-mix(in oklab,var(--no) 12%,transparent)",
-            }}
-          >
-            {b.side}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <div className="grid grid-cols-2 gap-2 py-1">
+      <SideColumn side="YES" people={yes} networkWallets={networkWallets} />
+      <SideColumn side="NO" people={no} networkWallets={networkWallets} />
+    </div>
   );
 }
+
+function SideColumn({
+  side,
+  people,
+  networkWallets,
+}: {
+  side: "YES" | "NO";
+  people: Believer[];
+  networkWallets: Set<string>;
+}) {
+  const color = side === "YES" ? "var(--yes)" : "var(--no)";
+  return (
+    <div className="min-w-0">
+      <div className="mb-1 flex items-baseline justify-between px-0.5">
+        <span className="text-[11px] font-semibold" style={{ color }}>
+          {side}
+        </span>
+        <span className="num text-[11px] text-[var(--text-muted)]">{people.length}</span>
+      </div>
+      {people.length === 0 ? (
+        <div className="px-0.5 py-2 text-[11px] text-[var(--text-muted)]">No one yet</div>
+      ) : (
+        <ul className="space-y-0.5">
+          {people.map((b) => {
+            const inNetwork = networkWallets.has(b.wallet.toLowerCase());
+            return (
+              <li
+                key={b.wallet}
+                className="flex items-center gap-1.5 rounded-[8px] px-1 py-1"
+                style={
+                  inNetwork
+                    ? { background: `color-mix(in oklab,${color} 8%,transparent)` }
+                    : undefined
+                }
+              >
+                {b.avatarUrl ? (
+                  <img src={b.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
+                ) : (
+                  <span
+                    className="grid h-5 w-5 place-items-center rounded-full text-[8px] font-semibold text-white"
+                    style={{ background: `hsl(${hueFor(b.wallet)} 45% 45%)` }}
+                    aria-hidden
+                  >
+                    {initialsFor(b.name)}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--text)]">
+                  {b.name}
+                </span>
+                {b.daysHeld > 0 && (
+                  <span className="num text-[10px] text-[var(--text-muted)]">{b.daysHeld}d</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 
 function PriceHistory({ series }: { series: { date: string; yesPct: number }[] }) {
   if (series.length < 2) {
