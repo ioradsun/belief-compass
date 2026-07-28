@@ -5,6 +5,7 @@
  * experience is one consistent "charge up your read", not a scatter of empty
  * states. Driven by getViewerReadiness — the one signal all three respect.
  */
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getViewerReadiness } from "@/lib/beliefs.functions";
 import { CALIBRATION_TARGET, type Readiness } from "@/domain/beliefs";
@@ -68,6 +69,88 @@ export function CalibrationCard({ readiness }: { readiness?: Readiness }) {
         <b className="text-[var(--no)]">Disagree</b> on any market — free, no money — to teach the
         app who you are. The more you answer, the sharper your network and the House get.
       </p>
+    </div>
+  );
+}
+
+/**
+ * One-time celebratory reveal fired the moment the viewer crosses into
+ * calibrated. Shown once per wallet (localStorage-guarded), so it lands on the
+ * live crossing but never nags on later visits. Everything under it has already
+ * lit up — this just names the moment.
+ */
+export function CalibrationReveal({ wallet }: { wallet?: string }) {
+  const { data: readiness } = useReadiness(wallet);
+  const [show, setShow] = useState(false);
+  const fired = useRef(false);
+  const key = wallet ? `calibrated-revealed:${wallet.toLowerCase()}` : null;
+
+  useEffect(() => {
+    if (!key || !readiness?.calibrated || fired.current) return;
+    if (typeof localStorage !== "undefined" && localStorage.getItem(key)) return;
+    fired.current = true;
+    setShow(true);
+  }, [key, readiness?.calibrated]);
+
+  if (!show) return null;
+  const dismiss = () => {
+    if (key && typeof localStorage !== "undefined") localStorage.setItem(key, "1");
+    setShow(false);
+  };
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="You're calibrated"
+      onClick={dismiss}
+      className="fixed inset-0 z-50 grid place-items-center p-6"
+      style={{
+        background: "color-mix(in oklab, var(--bg) 72%, transparent)",
+        backdropFilter: "blur(4px)",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[360px] rounded-[18px] p-6 text-center"
+        style={{
+          border: "1px solid var(--border)",
+          background: "var(--surface, var(--bg))",
+          boxShadow:
+            "0 0 0 1px color-mix(in oklab, var(--yes) 22%, transparent), 0 24px 60px rgba(0,0,0,0.35)",
+          animation: "cal-pop 380ms cubic-bezier(0.2,0.9,0.3,1.2) both",
+        }}
+      >
+        <div
+          className="mx-auto grid h-12 w-12 place-items-center rounded-full text-[22px] font-bold"
+          style={{
+            background: "color-mix(in oklab, var(--yes) 18%, transparent)",
+            color: "var(--yes)",
+          }}
+          aria-hidden
+        >
+          ✓
+        </div>
+        <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+          Calibrated
+        </div>
+        <h2 className="mt-1 text-[20px] font-semibold leading-tight text-[var(--text)]">
+          The app knows you now.
+        </h2>
+        <p className="mt-2 text-[13px] leading-snug text-[var(--text-secondary)]">
+          Your network is live and the House can read you. Every belief you take from here sharpens
+          both.
+        </p>
+        <button
+          type="button"
+          onClick={dismiss}
+          className="mt-5 w-full rounded-[12px] py-2.5 text-[14px] font-semibold"
+          style={{ background: "var(--text)", color: "var(--bg)" }}
+        >
+          See who thinks like you
+        </button>
+      </div>
+      <style>{`@keyframes cal-pop{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
+      @media (prefers-reduced-motion: reduce){[style*="cal-pop"]{animation:none!important}}`}</style>
     </div>
   );
 }

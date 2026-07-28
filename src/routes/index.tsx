@@ -6,6 +6,7 @@ import { listFeed, listMarketPulses, type VolumeWindow } from "@/lib/markets.fun
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { MarketDeck } from "@/components/MarketDeck";
+import { CalibrationReveal } from "@/components/Calibration";
 import { PersonProfile } from "@/components/PersonProfile";
 import { AccountRail } from "@/components/AccountMenu";
 import { WalletConnectButton } from "@/components/WalletConnect";
@@ -245,155 +246,156 @@ function Feed() {
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)]">
-    <LandingPanel
-      state={landing.hydrated ? landing.state : "collapsed"}
-      onEnter={enterProduct}
-      onCollapse={landing.collapse}
-      onExpand={landing.expand}
-    />
-    <div className="grid min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:264px_minmax(0,1fr)_344px]">
-      {/* LEFT — You (Positions | Network) — fixed 264px rail */}
-      <aside
-        className={`${show("mine")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
-        style={{ borderRight: "1px solid var(--border)" }}
-      >
-        {!wallet ? (
-          /* Signed out: nothing to show but the one thing to do. */
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
-            <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
-              Connect a wallet to see your convictions.
-            </p>
-            <WalletConnectButton />
-          </div>
-        ) : (
-          <>
-            <AccountRail
-              wallet={wallet}
-              onOpenProfile={selectPerson}
-              open={accountOpen}
-              onOpenChange={setAccountOpen}
-            />
-            {!accountOpen && (
-              <MyWorld
-                wallet={wallet}
-                rows={rows as unknown as MarketRow[]}
-                window={win}
-                winLabel={winLabel}
-                onSelectMarket={selectMarket}
-                selectedPerson={selectedPerson}
-                onSelectPerson={selectPerson}
-                onOpenDna={openDna}
-                initialNetwork={Boolean(selectedPerson || dnaOpen)}
-              />
-            )}
-          </>
-        )}
-      </aside>
-
-      {/* CENTER — Belief. Fluid column, but the reading measure is capped at
-          920px and centered so the deck never stretches on wide monitors. */}
-      <main
-        className={`${show("belief")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-8 lg:py-6`}
-      >
-        <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col">
-          <div className="shrink-0">
-            <OmniHeader
-              lens={lens}
-              lenses={OPP_FILTERS}
-              onLens={setLens}
-              markets={rawRows as unknown as { onchain_id: number; title?: string | null }[]}
-              wallet={wallet}
-              onSelectMarket={selectMarket}
-              onSelectPerson={selectPerson}
-              onOpenMenu={() => setMenuOpen(true)}
-            />
-          </div>
-
-          {/* Center focus: person profile, DNA overview, or the single-market deck.
-              The deck owns its own internal scroll so its dock stays pinned. */}
-          {selectedPerson ? (
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <PersonProfile
-                wallet={selectedPerson}
-                viewer={wallet}
-                onSelectMarket={selectMarket}
-              />
-            </div>
-          ) : dnaOpen ? (
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <DnaOverview wallet={wallet} onSelectPerson={selectPerson} />
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
-              No markets yet. The POV poller runs on a schedule — data will appear once the first
-              cycle completes.
+      <CalibrationReveal wallet={wallet} />
+      <LandingPanel
+        state={landing.hydrated ? landing.state : "collapsed"}
+        onEnter={enterProduct}
+        onCollapse={landing.collapse}
+        onExpand={landing.expand}
+      />
+      <div className="grid min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:264px_minmax(0,1fr)_344px]">
+        {/* LEFT — You (Positions | Network) — fixed 264px rail */}
+        <aside
+          className={`${show("mine")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
+          style={{ borderRight: "1px solid var(--border)" }}
+        >
+          {!wallet ? (
+            /* Signed out: nothing to show but the one thing to do. */
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
+              <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
+                Connect a wallet to see your convictions.
+              </p>
+              <WalletConnectButton />
             </div>
           ) : (
-            currentRow && (
-              <div className="flex min-h-0 flex-1 flex-col">
-                <MarketDeck
-                  row={currentRow}
-                  ethUsd={data?.ethUsd ?? 0}
-                  onSkip={nextMarket}
-                  viewerWallet={wallet}
+            <>
+              <AccountRail
+                wallet={wallet}
+                onOpenProfile={selectPerson}
+                open={accountOpen}
+                onOpenChange={setAccountOpen}
+              />
+              {!accountOpen && (
+                <MyWorld
+                  wallet={wallet}
+                  rows={rows as unknown as MarketRow[]}
+                  window={win}
+                  winLabel={winLabel}
+                  onSelectMarket={selectMarket}
+                  selectedPerson={selectedPerson}
+                  onSelectPerson={selectPerson}
+                  onOpenDna={openDna}
+                  initialNetwork={Boolean(selectedPerson || dnaOpen)}
+                />
+              )}
+            </>
+          )}
+        </aside>
+
+        {/* CENTER — Belief. Fluid column, but the reading measure is capped at
+          920px and centered so the deck never stretches on wide monitors. */}
+        <main
+          className={`${show("belief")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-8 lg:py-6`}
+        >
+          <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col">
+            <div className="shrink-0">
+              <OmniHeader
+                lens={lens}
+                lenses={OPP_FILTERS}
+                onLens={setLens}
+                markets={rawRows as unknown as { onchain_id: number; title?: string | null }[]}
+                wallet={wallet}
+                onSelectMarket={selectMarket}
+                onSelectPerson={selectPerson}
+                onOpenMenu={() => setMenuOpen(true)}
+              />
+            </div>
+
+            {/* Center focus: person profile, DNA overview, or the single-market deck.
+              The deck owns its own internal scroll so its dock stays pinned. */}
+            {selectedPerson ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <PersonProfile
+                  wallet={selectedPerson}
+                  viewer={wallet}
+                  onSelectMarket={selectMarket}
                 />
               </div>
-            )
-          )}
-        </div>
-      </main>
+            ) : dnaOpen ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <DnaOverview wallet={wallet} onSelectPerson={selectPerson} />
+              </div>
+            ) : rows.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
+                No markets yet. The POV poller runs on a schedule — data will appear once the first
+                cycle completes.
+              </div>
+            ) : (
+              currentRow && (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <MarketDeck
+                    row={currentRow}
+                    ethUsd={data?.ethUsd ?? 0}
+                    onSkip={nextMarket}
+                    viewerWallet={wallet}
+                  />
+                </div>
+              )
+            )}
+          </div>
+        </main>
 
-      {/* RIGHT — The Room — fixed 344px rail */}
-      <aside
-        className={`${show("room")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
-        style={{ borderLeft: "1px solid var(--border)" }}
-      >
-        <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-          Live
-        </div>
-        <LiveTape wallet={wallet} onSelect={selectMarket} />
-      </aside>
+        {/* RIGHT — The Room — fixed 344px rail */}
+        <aside
+          className={`${show("room")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
+          style={{ borderLeft: "1px solid var(--border)" }}
+        >
+          <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            Live
+          </div>
+          <LiveTape wallet={wallet} onSelect={selectMarket} />
+        </aside>
 
-      {/* Mobile slide-in menu (replaces the bottom tab bar) */}
-      {menuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button
-            type="button"
-            aria-label="Close menu"
-            onClick={() => setMenuOpen(false)}
-            className="absolute inset-0 bg-black/60"
-          />
-          <div
-            className="absolute inset-y-0 left-0 w-64 bg-[var(--panel)] p-4"
-            style={{ borderRight: "1px solid var(--border)" }}
-          >
-            <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-              Menu
-            </div>
-            <div className="space-y-1">
-              {TABS.map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => {
-                    setTab(t.key);
-                    setMenuOpen(false);
-                  }}
-                  aria-current={tab === t.key ? "page" : undefined}
-                  className={`block w-full rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors ${
-                    tab === t.key
-                      ? "bg-[var(--surface)] text-[var(--text)]"
-                      : "text-[var(--text-muted)]"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
+        {/* Mobile slide-in menu (replaces the bottom tab bar) */}
+        {menuOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <button
+              type="button"
+              aria-label="Close menu"
+              onClick={() => setMenuOpen(false)}
+              className="absolute inset-0 bg-black/60"
+            />
+            <div
+              className="absolute inset-y-0 left-0 w-64 bg-[var(--panel)] p-4"
+              style={{ borderRight: "1px solid var(--border)" }}
+            >
+              <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                Menu
+              </div>
+              <div className="space-y-1">
+                {TABS.map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => {
+                      setTab(t.key);
+                      setMenuOpen(false);
+                    }}
+                    aria-current={tab === t.key ? "page" : undefined}
+                    className={`block w-full rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                      tab === t.key
+                        ? "bg-[var(--surface)] text-[var(--text)]"
+                        : "text-[var(--text-muted)]"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
     </div>
   );
 }
