@@ -4,6 +4,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { fetchPovPositions } from "@/lib/pov.server";
 import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { readLatestTradeEvents } from "@/lib/events.functions";
@@ -459,8 +460,51 @@ export const getWallet = createServerFn({ method: "GET" })
       }
     }
 
+    // POV is the authority on what a position is worth right now (it prices the
+    // wallet's own tokens). Refresh live, best-effort: if POV is slow or down we
+    // fall back to the stored value, and only then to shares x market price.
+    const povValue = new Map<number, { yes: number; no: number; yesShares: number; noShares: number }>();
+    try {
+      const pov = await fetchPovPositions(wallet, 4000);
+      if (pov.length) {
+        const uuids = [...new Set(pov.map((p) => p.marketId))];
+        const idByUuid = new Map<string, number>();
+        for (let i = 0; i < uuids.length; i += 500) {
+          const { data: mk } = await sb
+            .from("markets")
+            .select("onchain_id, pov_uuid")
+            .in("pov_uuid", uuids.slice(i, i + 500));
+          for (const m of mk ?? [])
+            if (m.pov_uuid) idByUuid.set(String(m.pov_uuid), Number(m.onchain_id));
+        }
+        for (const p of pov) {
+          const id = idByUuid.get(p.marketId);
+          if (id == null) continue;
+          const a = povValue.get(id) ?? { yes: 0, no: 0, yesShares: 0, noShares: 0 };
+          if (p.side === "YES") {
+            a.yes += p.currentValueUsd;
+            a.yesShares += p.tokenBalance;
+          } else {
+            a.no += p.currentValueUsd;
+            a.noShares += p.tokenBalance;
+          }
+          povValue.set(id, a);
+        }
+      }
+    } catch {
+      /* best-effort: stored values still render */
+    }
+
     const positions = (rows ?? []).map((r) => ({
       ...r,
+      yes_shares: povValue.get(Number(r.onchain_id))?.yesShares ?? r.yes_shares,
+      no_shares: povValue.get(Number(r.onchain_id))?.noShares ?? r.no_shares,
+      yes_value_usd:
+        povValue.get(Number(r.onchain_id))?.yes ??
+        (r.yes_value_usd == null ? null : Number(r.yes_value_usd)),
+      no_value_usd:
+        povValue.get(Number(r.onchain_id))?.no ??
+        (r.no_value_usd == null ? null : Number(r.no_value_usd)),
       markets: metaById.get(Number(r.onchain_id)) ?? null,
       state: stateById.get(Number(r.onchain_id)) ?? null,
       chg_window_yes: chgYes.get(Number(r.onchain_id)) ?? null,
