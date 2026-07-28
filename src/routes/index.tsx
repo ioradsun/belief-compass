@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
 import {
@@ -14,10 +14,20 @@ import { MarketDeck } from "@/components/MarketDeck";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { CalibrationReveal, useReadiness } from "@/components/Calibration";
 import { getCalibrationQueue } from "@/lib/beliefs.functions";
-import { PersonProfile } from "@/components/PersonProfile";
-import { AccountRail } from "@/components/AccountMenu";
 import { WalletConnectButton } from "@/components/WalletConnect";
-import { DnaOverview } from "@/components/DnaOverview";
+
+// Deferred surfaces: none of these render for a first-time, signed-out visitor.
+// PersonProfile/DnaOverview need a ?p/?dna selection; MyWorld/AccountRail need a
+// connected wallet. Code-splitting them keeps the first-load JS to just the deck.
+const PersonProfile = lazy(() =>
+  import("@/components/PersonProfile").then((m) => ({ default: m.PersonProfile })),
+);
+const DnaOverview = lazy(() =>
+  import("@/components/DnaOverview").then((m) => ({ default: m.DnaOverview })),
+);
+const AccountRail = lazy(() =>
+  import("@/components/AccountMenu").then((m) => ({ default: m.AccountRail })),
+);
 // Phase 5: the SERVER owns opportunity classification + score. The client only
 // filters by the canonical type and reads the precomputed order — no scoreFeed().
 type OppFilter = "all" | "hot" | "early" | "hidden" | "contested" | "conviction" | "new";
@@ -51,7 +61,7 @@ const OPP_FILTERS: { key: OppFilter; emoji: string; label: string; question: str
   { key: "new", emoji: "🆕", label: "New", question: "What is genuinely recent?" },
 ];
 
-import { MyWorld } from "@/components/MyWorld";
+const MyWorld = lazy(() => import("@/components/MyWorld").then((m) => ({ default: m.MyWorld })));
 import { OmniHeader } from "@/components/OmniHeader";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
@@ -338,7 +348,7 @@ function Feed() {
               <WalletConnectButton />
             </div>
           ) : (
-            <>
+            <Suspense fallback={null}>
               <AccountRail
                 wallet={wallet}
                 onOpenProfile={selectPerson}
@@ -358,7 +368,7 @@ function Feed() {
                   initialNetwork={Boolean(selectedPerson || dnaOpen)}
                 />
               )}
-            </>
+            </Suspense>
           )}
         </aside>
 
@@ -384,15 +394,19 @@ function Feed() {
               The deck owns its own internal scroll so its dock stays pinned. */}
             {selectedPerson ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
-                <PersonProfile
-                  wallet={selectedPerson}
-                  viewer={wallet}
-                  onSelectMarket={selectMarket}
-                />
+                <Suspense fallback={<DeckSkeleton />}>
+                  <PersonProfile
+                    wallet={selectedPerson}
+                    viewer={wallet}
+                    onSelectMarket={selectMarket}
+                  />
+                </Suspense>
               </div>
             ) : dnaOpen ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
-                <DnaOverview wallet={wallet} onSelectPerson={selectPerson} />
+                <Suspense fallback={<DeckSkeleton />}>
+                  <DnaOverview wallet={wallet} onSelectPerson={selectPerson} />
+                </Suspense>
               </div>
             ) : rows.length === 0 ? (
               // While the feed is still loading (first paint), show a live-market
