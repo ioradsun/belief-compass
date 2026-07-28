@@ -167,7 +167,7 @@ describe("composeLiveStory", () => {
     const t = composeLiveStory(
       liveBase({ actor: null, walletCount: 5, market: { believersYes: 30 } }),
     ).text;
-    expect(t).toBe("5 wallets piled into YES for $25.00 — 30 now hold YES");
+    expect(t).toBe("5 believers piled into YES for $25.00 — 30 now hold YES");
   });
   it("never fabricates hype", () => {
     const banned = ["whale", "smart money", "moon", "degen", "pouring", "exploding", "guaranteed"];
