@@ -60,9 +60,21 @@ export function AccountRail({
     staleTime: 5 * 60_000,
   });
 
+  // What you set yourself always wins over the POV-resolved identity.
+  const { data: override } = useQuery({
+    queryKey: ["profile-override", me],
+    queryFn: async () => await getProfileOverride({ data: { wallet: me } }),
+    enabled: mounted && Boolean(me),
+    staleTime: 60_000,
+  });
+
   const user = data?.user ?? null;
-  const name = nameOf([user?.username, user?.displayName, profile?.displayName], me);
-  const avatar = user?.pfpUrl ?? profile?.avatarUrl ?? null;
+  const name = nameOf(
+    [override?.displayName, user?.username, user?.displayName, profile?.displayName],
+    me,
+  );
+  const avatar = override?.avatarUrl ?? user?.pfpUrl ?? profile?.avatarUrl ?? null;
+
 
   const Avatar = ({ size }: { size: number }) =>
     avatar ? (
