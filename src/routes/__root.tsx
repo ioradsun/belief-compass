@@ -14,6 +14,12 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { WalletProviders } from "../components/WalletConnect";
 import { VersionWatcher } from "../components/VersionWatcher";
 
+// Web fonts, loaded OFF the critical path. The system fallback stack in styles.css
+// (system-ui / -apple-system / Segoe UI …) paints instantly; Inter + JetBrains
+// Mono swap in when their CSS arrives, so a cross-origin stylesheet never blocks
+// first paint. `display=swap` keeps the font files non-blocking too.
+const FONT_HREF =
+  "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap";
 
 function NotFoundComponent() {
   return (
@@ -85,29 +91,30 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { httpEquiv: "Cache-Control", content: "no-cache, no-store, must-revalidate" },
       { httpEquiv: "Pragma", content: "no-cache" },
       { httpEquiv: "Expires", content: "0" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Conviction — see who actually believes" },
+      {
+        name: "description",
+        content:
+          "Prediction markets ranked by real believer conviction — money weight vs people weight, side by side.",
+      },
+      { property: "og:title", content: "Conviction — see who actually believes" },
+      {
+        property: "og:description",
+        content: "Prediction markets ranked by real believer conviction.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
+      // App CSS is same-origin, hashed + immutably cached — the only stylesheet on
+      // the critical path. Fonts are preconnected + preloaded but applied off-path
+      // (see RootShell), so first paint never waits on fonts.googleapis.com.
+      { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap",
-      },
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "preload", as: "style", href: FONT_HREF },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
-
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -120,6 +127,18 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        {/* Apply the web fonts without blocking first paint: attach the stylesheet
+            as media="print" (ignored for screen), then flip to "all" on load. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var l=document.createElement('link');l.rel='stylesheet';l.media='print';l.href=${JSON.stringify(
+              FONT_HREF,
+            )};l.onload=function(){l.media='all'};document.head.appendChild(l);}catch(e){}})();`,
+          }}
+        />
+        <noscript>
+          <link rel="stylesheet" href={FONT_HREF} />
+        </noscript>
       </head>
       <body>
         {children}
