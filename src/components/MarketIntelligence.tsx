@@ -119,22 +119,15 @@ export function MarketIntelligence({ marketId }: { marketId: number }) {
       style={{ border: "1px solid var(--border)", background: "var(--surface,transparent)" }}
       aria-label="Market intelligence"
     >
-      <header className="flex items-center gap-2 px-3 pt-2.5">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-          Market intelligence
-        </span>
-        {meta && (
-          <span className="num ml-auto truncate text-[11px] text-[var(--text-muted)]">{meta}</span>
-        )}
-      </header>
+      <div className="flex items-center gap-1 px-3 pt-2.5">
+        <div
+          role="tablist"
+          aria-label="Intelligence lens"
+          id={tablistId}
+          onKeyDown={onTabKey}
+          className="flex gap-1"
+        >
 
-      <div
-        role="tablist"
-        aria-label="Intelligence lens"
-        id={tablistId}
-        onKeyDown={onTabKey}
-        className="mt-2 flex gap-1 px-3"
-      >
         {tabs.map((t) => {
           const on = mode === t.id;
           return (
