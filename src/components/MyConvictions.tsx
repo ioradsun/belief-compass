@@ -23,6 +23,9 @@ type Position = {
   } | null;
   chg_window_yes?: number | null;
   chg_window_no?: number | null;
+  /** POV's own valuation of what this wallet holds on each side (authoritative). */
+  yes_value_usd?: number | null;
+  no_value_usd?: number | null;
 };
 
 function usd(n: number) {
@@ -144,7 +147,13 @@ export function MyConvictions({
           (side === "YES" ? st?.yes_price_usd : st?.no_price_usd) ??
           0,
       );
-      const value = shares * price;
+      // Value = what THIS wallet holds. POV prices the wallet's own tokens, so
+      // prefer its number; shares x market price is only a last-resort estimate.
+      const reported = side === "YES" ? p.yes_value_usd : p.no_value_usd;
+      const value =
+        reported != null && Number.isFinite(Number(reported)) && Number(reported) > 0
+          ? Number(reported)
+          : shares * price;
       if (!(value > 0)) return null;
       const raw =
         (side === "YES" ? m?.chg_window_yes : m?.chg_window_no) ??
