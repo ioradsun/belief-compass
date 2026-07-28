@@ -148,7 +148,18 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         r.face = face;
         if (r.kind === "round_trip") {
           // In and out at the same size — one honest line, not a mirrored pair.
-          const amt = r.amountUsd && r.amountUsd > 0 ? ` $${Math.round(r.amountUsd)}` : "";
+          const amt =
+            r.amountUsd && r.amountUsd > 0
+              ? ` $${
+                  r.amountUsd >= 1000
+                    ? r.amountUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })
+                    : r.amountUsd.toLocaleString("en-US", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })
+                }`
+              : "";
+
           r.text = `${face.name} round-tripped${amt} on ${r.side ?? ""}`.trim();
           continue;
         }
