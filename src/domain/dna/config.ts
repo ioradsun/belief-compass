@@ -56,6 +56,16 @@ export const DNA_THRESHOLDS: DnaThresholdConfig = {
 /** Per-domain (Circle) evidence floor — one shared market never makes a Circle. */
 export const DOMAIN_MIN_SHARED = 5;
 
+/**
+ * "Closest people" floor — the graceful fallback when no one crosses a real
+ * relationship band yet. Anyone sharing at least this many directional beliefs is
+ * eligible to appear as a closest match, so a new/thin viewer's Network is never
+ * empty and keeps morphing as they express more. Much lower than minSharedOverall
+ * (which still gates the strong Twin/Tribe/Opp/Inverse labels).
+ */
+export const CLOSEST_MIN_SHARED = 2;
+export const CLOSEST_LIMIT = 24;
+
 /** A "Circle" = a domain with at least this many qualified Twin/Tribe relationships. */
 export const CIRCLE_MIN_PEOPLE = 5;
 

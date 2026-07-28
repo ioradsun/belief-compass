@@ -15,7 +15,13 @@
  */
 import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { categoryToDomain } from "@/domain/categories";
-import { DNA_THRESHOLDS, DNA_LIMITS, type RelationshipLabel } from "@/domain/dna/config";
+import {
+  DNA_THRESHOLDS,
+  DNA_LIMITS,
+  CLOSEST_MIN_SHARED,
+  CLOSEST_LIMIT,
+  type RelationshipLabel,
+} from "@/domain/dna/config";
 import { scoreRelationship, type DnaFactor } from "@/domain/dna/score";
 import { mergeBeliefFactors, EXPRESSED_WEIGHT } from "@/domain/beliefs";
 import { classifyRelationship } from "@/domain/dna/classify";
@@ -110,14 +116,16 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
     ((mineExpressed ?? []) as ExpressedRow[]).map(expressedToFactor),
   );
 
-  if (viewerFactors.length < DNA_THRESHOLDS.minSharedOverall) {
+  // Enough for a "closest" read; strong Twin/Tribe labels still need more shared.
+  if (viewerFactors.length < CLOSEST_MIN_SHARED) {
     await writeViewerDnaCache(svc, viewer, version, EMPTY);
     return (await readViewerDnaCache(pub, viewer))!;
   }
   const viewerMarkets = viewerFactors.map((f) => Number(f.marketId));
 
-  // 2. Bounded candidate pool.
-  const candidates = await findDnaCandidates(pub, viewer);
+  // 2. Bounded candidate pool — low floor so thin-overlap people can still be
+  //    closest matches; the strong-band thresholds prune below.
+  const candidates = await findDnaCandidates(pub, viewer, { minShared: CLOSEST_MIN_SHARED });
   const candidateWallets = candidates.map((c) => c.wallet);
 
   // 3. Candidate directional factors (set-based, chunked for `in` size only).
@@ -175,17 +183,19 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
     insufficient: [],
   };
   const domainMembers: Record<string, DomainMember[]> = {};
+  // Everyone with meaningful overlap, regardless of whether they hit a strong
+  // band — this is the "closest people" fallback so the Network is never empty.
+  const closestPool: CachedRelationship[] = [];
   let scored = 0;
 
   for (const [wallet, factors] of candidateFactors) {
     const s = scoreRelationship(viewerFactors, factors);
     scored += 1;
-    if (s.sharedBeliefs < DNA_THRESHOLDS.minSharedOverall) continue;
+    if (s.sharedBeliefs < CLOSEST_MIN_SHARED) continue;
     const { relationship } = classifyRelationship({
       currentScore: s,
       previousRelationship: priorLabel.get(wallet),
     });
-    if (relationship === "insufficient") continue;
 
     const domains = scoreDomains(viewerFactors, factors, domainOf);
     const { aligned, opposed } = splitDomains(domains, 1);
@@ -197,7 +207,8 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
       oppositeSideBeliefs: s.oppositeSideBeliefs,
       confidence: s.confidence,
       evidenceLevel: s.evidenceLevel,
-      relationship,
+      // Un-banded people read as "neutral" (some overlap, no strong signal yet).
+      relationship: relationship === "insufficient" ? "neutral" : relationship,
       strongestAlignedDomain: aligned[0]
         ? { name: aligned[0].domain, agreement: aligned[0].agreement }
         : undefined,
@@ -205,14 +216,20 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
         ? { name: opposed[0].domain, agreement: opposed[0].agreement }
         : undefined,
     };
-    bucket[relationship].push(row);
 
-    // Domain Circles: aligned (twin/tribe) domain memberships feed the overview.
-    for (const d of domains) {
-      if (d.relationship !== "twin" && d.relationship !== "tribe") continue;
-      const arr = domainMembers[d.domain] ?? [];
-      arr.push({ wallet, agreement: d.agreement, relationship: d.relationship });
-      domainMembers[d.domain] = arr;
+    // Always eligible as a "closest" person.
+    closestPool.push(row);
+
+    // Strong labels still require the full evidence bar.
+    if (s.sharedBeliefs >= DNA_THRESHOLDS.minSharedOverall && relationship !== "insufficient") {
+      bucket[relationship].push(row);
+      // Domain Circles: aligned (twin/tribe) domain memberships feed the overview.
+      for (const d of domains) {
+        if (d.relationship !== "twin" && d.relationship !== "tribe") continue;
+        const arr = domainMembers[d.domain] ?? [];
+        arr.push({ wallet, agreement: d.agreement, relationship: d.relationship });
+        domainMembers[d.domain] = arr;
+      }
     }
   }
 
@@ -228,7 +245,9 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
   const neutral = bucket.neutral.sort(byAgreementDesc).slice(0, cap);
   const opp = bucket.opp.sort(byAgreementAsc).slice(0, cap);
   const inverse = bucket.inverse.sort(byAgreementAsc).slice(0, cap);
-  const closest = [...bucket.twin, ...bucket.tribe].sort(byAgreementDesc).slice(0, 10);
+  // Closest = the highest-agreement people who share ANY meaningful overlap, so
+  // there's always someone to show even before strong bands form.
+  const closest = closestPool.sort(byAgreementDesc).slice(0, CLOSEST_LIMIT);
 
   for (const d of Object.keys(domainMembers)) {
     domainMembers[d] = domainMembers[d].sort((a, b) => b.agreement - a.agreement).slice(0, cap);
