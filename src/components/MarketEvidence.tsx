@@ -106,7 +106,7 @@ function TabBtn({
 }
 
 /** Two columns that mirror the YES/NO decision: everyone on each side. */
-function BelieversSplit({
+export function BelieversSplit({
   believers,
   networkWallets,
 }: {
@@ -201,7 +201,7 @@ const cents = (p: number) => `${(p * 100).toFixed(0)}¢`;
  * dollar pays if you're right, how that price has moved, and whether the money
  * agrees with the crowd. Every number is real — nothing is modelled or implied.
  */
-function PriceStory({
+export function PriceStory({
   series,
   facts,
 }: {
@@ -399,7 +399,7 @@ function Sparkline({ pts, delta, days }: { pts: number[]; delta: number; days: n
 }
 
 /** The case for each side, in the same two columns as the decision itself. */
-function Defense({ opinions }: { opinions: DefenseOpinion[] }) {
+export function Defense({ opinions }: { opinions: DefenseOpinion[] }) {
   if (opinions.length === 0) {
     return <Empty>No one's made their case here yet — the floor is open.</Empty>;
   }

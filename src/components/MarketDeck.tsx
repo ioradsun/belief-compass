@@ -7,11 +7,13 @@
  * quote. Prices/quotes come from the contract (src/lib/chain-trade) — never the
  * client. Skip has no financial effect and just advances the queue.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
-import { MarketEvidence } from "@/components/MarketEvidence";
+import { MarketIntelligence, useHouseAnswer } from "@/components/MarketIntelligence";
+import type { BeliefAction } from "@/domain/house";
+
 import { CHAIN_ID } from "@/chain/decoder";
 import {
   useBuyQuote,
@@ -66,39 +68,75 @@ export function MarketDeck({
   // means "not selling"; the buy dock owns the surface. Buying the opposite side
   // never sells (they're separate token balances), so a flip can't silently exit.
   const [sellPct, setSellPct] = useState<number | null>(null);
+  // The belief the viewer expressed here. Recorded once, moves no money.
+  const [answered, setAnswered] = useState<BeliefAction | null>(null);
 
   const { openConnectModal } = useConnectModal();
   const { switchChain } = useSwitchChain();
   const ready = useTradeReady();
   const trade = useTrade();
   const bal = useUserBalance(marketId);
+  const houseAnswer = useHouseAnswer(marketId);
 
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(marketId, side === "YES", side ? ethWei : 0n);
 
-  // Reset both flows when the market changes.
+  /**
+   * A belief action: records the answer and reveals the locked House read.
+   * Never triggers a purchase — backing money is a separate, explicit step.
+   */
+  const recordBelief = useCallback(
+    (action: BeliefAction, source: "button" | "keyboard" | "gesture") => {
+      setAnswered((prev) => {
+        if (prev) return prev; // one scored answer per market
+        houseAnswer.mutate({ action, source });
+        return action;
+      });
+    },
+    [houseAnswer],
+  );
+
+  const chooseSide = useCallback(
+    (s: OrderSide, source: "button" | "keyboard" | "gesture" = "button") => {
+      recordBelief(s, source);
+      setSide((cur) => selectSide(cur, s));
+    },
+    [recordBelief],
+  );
+
+  const chooseSkip = useCallback(
+    (source: "button" | "keyboard" | "gesture" = "button") => {
+      setSide(null);
+      recordBelief("SKIP", source);
+    },
+    [recordBelief],
+  );
+
+  // Reset every flow when the market changes.
   useEffect(() => {
     setSide(null);
     setSellPct(null);
+    setAnswered(null);
     trade.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketId]);
 
-  // Keyboard: ←/→ select, ↑ skip (never buys).
+  // Keyboard: ←/→ express a belief, ↑ skip (neither ever buys).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
       if (el && ["INPUT", "TEXTAREA"].includes(el.tagName)) return;
-      if (e.key === "ArrowLeft") setSide((s) => selectSide(s, "NO"));
-      else if (e.key === "ArrowRight") setSide((s) => selectSide(s, "YES"));
+      if (el?.getAttribute("role") === "tab") return;
+      if (e.key === "ArrowLeft") chooseSide("NO", "keyboard");
+      else if (e.key === "ArrowRight") chooseSide("YES", "keyboard");
       else if (e.key === "ArrowUp") {
         e.preventDefault();
-        onSkip();
+        chooseSkip("keyboard");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onSkip]);
+  }, [chooseSide, chooseSkip]);
 
   const relationshipBeat = row.story?.beats.find((b) => b.kind === "relationship")?.text ?? null;
   const eventBeat = row.story?.beats.find((b) => b.kind === "event")?.text ?? null;
@@ -195,7 +233,7 @@ export function MarketDeck({
             believers={row.believers_yes}
             capital={row.yes_capital_usd ?? null}
             selected={side === "YES"}
-            onSelect={() => setSide((s) => selectSide(s, "YES"))}
+            onSelect={() => chooseSide("YES")}
           />
           <SideCard
             label="NO"
@@ -204,8 +242,21 @@ export function MarketDeck({
             believers={row.believers_no}
             capital={row.no_capital_usd ?? null}
             selected={side === "NO"}
-            onSelect={() => setSide((s) => selectSide(s, "NO"))}
+            onSelect={() => chooseSide("NO")}
           />
+        </div>
+
+        {/* Compact financial context — never the reason to act */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-muted)]">
+          {(rr.volume_24h_usd as number | null) ? (
+            <span className="num">{fmtUsd(rr.volume_24h_usd as number)} 24h volume</span>
+          ) : null}
+          {(rr.volume_total_usd as number | null) ? (
+            <span className="num">{fmtUsd(rr.volume_total_usd as number)} all-time</span>
+          ) : null}
+          {(rr.trade_count_24h as number | null) ? (
+            <span className="num">{rr.trade_count_24h as number} trades today</span>
+          ) : null}
         </div>
 
         {/* DNA / social evidence — only when there's a real signal */}
@@ -220,20 +271,8 @@ export function MarketDeck({
           </div>
         )}
 
-        {/* Evidence: believers · price · defense */}
-        <MarketEvidence
-          marketId={marketId}
-          facts={{
-            yesPrice: row.yes_price_usd ?? null,
-            noPrice: row.no_price_usd ?? null,
-            chgYes: row.chg_window_yes ?? row.chg_24h_yes ?? null,
-            yesCapital: row.yes_capital_usd ?? null,
-            noCapital: row.no_capital_usd ?? null,
-            volumeUsd: (rr.volume_total_usd as number | null) ?? null,
-            moneyYesPct: (rr.money_yes_pct as number | null) ?? null,
-            peopleYesPct: (rr.people_yes_pct as number | null) ?? null,
-          }}
-        />
+        {/* One intelligence container: House Read · Believers · Defense */}
+        <MarketIntelligence marketId={marketId} />
 
         {held && sellPct == null && (
           <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
@@ -272,16 +311,39 @@ export function MarketDeck({
               closeSell();
             }}
           />
+        ) : answered === "SKIP" ? (
+          /* Skipped: a belief action with no financial effect. */
+          <div
+            className="flex items-center gap-3 rounded-[16px] p-4"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            <div className="min-w-0">
+              <div className="text-[14px] font-semibold text-[var(--text)]">You passed</div>
+              <div className="text-[12px] text-[var(--text-muted)]">
+                The House read is revealed above. Nothing was bought.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onSkip}
+              className="ml-auto shrink-0 rounded-[12px] px-4 py-2 text-[13px] font-semibold"
+              style={{ background: "var(--text)", color: "var(--bg)" }}
+            >
+              Next market
+            </button>
+          </div>
         ) : (
           <Dock
             side={side}
+            answered={answered}
             amount={amount}
             setAmount={setAmount}
             onSelect={(s) => {
               trade.reset();
-              setSide((cur) => selectSide(cur, s));
+              chooseSide(s);
             }}
-            onSkip={onSkip}
+            onCancel={() => setSide(null)}
+            onSkip={() => chooseSkip("button")}
             quote={quote}
             quoting={quoting}
             ethWei={ethWei}
@@ -417,9 +479,11 @@ function AmountField({ amount, setAmount }: { amount: number; setAmount: (n: num
 
 function Dock({
   side,
+  answered,
   amount,
   setAmount,
   onSelect,
+  onCancel,
   onSkip,
   quote,
   quoting,
@@ -431,9 +495,11 @@ function Dock({
   onDone,
 }: {
   side: OrderSide | null;
+  answered: BeliefAction | null;
   amount: number;
   setAmount: (n: number) => void;
   onSelect: (s: OrderSide) => void;
+  onCancel: () => void;
   onSkip: () => void;
   quote: { tokens: bigint; fee: bigint; refund: bigint } | null;
   quoting: boolean;
@@ -502,12 +568,13 @@ function Dock({
     );
   }
 
-  // Selected → review + Confirm / Cancel.
+  // Belief expressed → optional financial backing. Nothing is preselected and
+  // no transaction happens without this explicit confirmation.
   const confirmLabel = !ready.connected
     ? "Connect wallet"
     : !ready.onBase
       ? "Switch to Base"
-      : `Confirm ${side} · ${fmtUsd(amount)}`;
+      : `Back ${side} · ${fmtUsd(amount)}`;
   // Disabled only once connected + on Base but the quote isn't ready.
   const disabled = ready.connected && ready.onBase && (busy || !quote || ethWei <= 0n);
 
@@ -515,6 +582,12 @@ function Dock({
     <div className="rounded-[16px] p-3" style={{ border: "1px solid var(--border)" }}>
       {/* Quote review */}
       <div className="mb-2 space-y-1 px-1">
+        {answered === side && (
+          <div className="pb-1 text-[11px] text-[var(--text-muted)]">
+            Belief recorded: <b className="text-[var(--text)]">{side}</b>. Backing it with money is
+            optional.
+          </div>
+        )}
         <QuoteRow
           k="You pay"
           v={`${fmtUsd(amount)}  ·  ${(Number(ethWei) / 1e18).toFixed(4)} ETH`}
@@ -535,12 +608,13 @@ function Dock({
         <div className="flex flex-1 gap-2">
           <button
             type="button"
-            onClick={() => onSelect(side)}
+            onClick={onCancel}
             className="h-[52px] flex-1 rounded-[12px] text-[14px] font-medium text-[var(--text-secondary)]"
             style={{ border: "1px solid var(--border)" }}
           >
-            Cancel
+            Not now
           </button>
+
           <button
             type="button"
             disabled={disabled}

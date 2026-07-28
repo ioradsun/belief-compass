@@ -89,6 +89,54 @@ export type Database = {
         }
         Relationships: []
       }
+      house_predictions: {
+        Row: {
+          actual_action: string | null
+          answer_source: string | null
+          category: string | null
+          confidence: number
+          created_at: string
+          engine_version: number
+          no_read_kind: string | null
+          onchain_id: number
+          outcome: string | null
+          predicted_action: string | null
+          reasons: Json
+          revealed_at: string | null
+          wallet: string
+        }
+        Insert: {
+          actual_action?: string | null
+          answer_source?: string | null
+          category?: string | null
+          confidence?: number
+          created_at?: string
+          engine_version?: number
+          no_read_kind?: string | null
+          onchain_id: number
+          outcome?: string | null
+          predicted_action?: string | null
+          reasons?: Json
+          revealed_at?: string | null
+          wallet: string
+        }
+        Update: {
+          actual_action?: string | null
+          answer_source?: string | null
+          category?: string | null
+          confidence?: number
+          created_at?: string
+          engine_version?: number
+          no_read_kind?: string | null
+          onchain_id?: number
+          outcome?: string | null
+          predicted_action?: string | null
+          reasons?: Json
+          revealed_at?: string | null
+          wallet?: string
+        }
+        Relationships: []
+      }
       ingest_state: {
         Row: {
           id: number
