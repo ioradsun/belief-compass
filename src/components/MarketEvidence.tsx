@@ -154,7 +154,7 @@ function SideColumn({
                 className="flex items-center gap-1.5 rounded-[8px] px-1 py-1"
                 style={
                   inNetwork
-                    ? { background: `color-mix(in oklab,${color} 8%,transparent)` }
+                    ? { background: "var(--surface-2,var(--border))" }
                     : undefined
                 }
               >
