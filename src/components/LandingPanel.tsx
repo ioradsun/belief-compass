@@ -44,9 +44,9 @@ export function LandingPanel({
         }`}
       >
         {/* identity row — persists across both states */}
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+        <div className="flex items-center gap-4">
           <div
-            className={`flex min-w-0 items-center transition-[gap] duration-500 motion-reduce:transition-none ${
+            className={`flex min-w-0 flex-1 items-center transition-[gap] duration-500 motion-reduce:transition-none ${
               expanded ? "gap-3" : "gap-2.5"
             }`}
           >
@@ -60,36 +60,13 @@ export function LandingPanel({
               </span>
             )}
             {!expanded && (
-              <span className="ml-auto hidden shrink-0 pr-3 text-[11px] text-[var(--text-muted)] xl:block">
+              <span className="ml-auto hidden shrink-0 text-[11px] text-[var(--text-muted)] xl:block">
                 Powered by pov.co and $DEGEN
               </span>
             )}
           </div>
-
-          <span
-            aria-hidden="true"
-            className="shrink-0 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[var(--text-muted)]"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              aria-hidden="true"
-              className={`transition-transform duration-500 motion-reduce:transition-none ${
-                expanded ? "rotate-180" : ""
-              }`}
-            >
-              <path
-                d="M4 6l4 4 4-4"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </span>
         </div>
+
 
 
         {/* expanding region — same component, changing shape */}
