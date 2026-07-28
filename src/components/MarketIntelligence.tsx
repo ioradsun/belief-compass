@@ -158,7 +158,6 @@ export function MarketIntelligence({ marketId }: { marketId: number }) {
         )}
       </div>
 
-
       <div
         role="tabpanel"
         id={`${tablistId}-panel`}
