@@ -47,6 +47,8 @@ import { MyWorld } from "@/components/MyWorld";
 import { OmniHeader } from "@/components/OmniHeader";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
+import { LandingPanel } from "@/components/LandingPanel";
+import { useLandingPanelState } from "@/hooks/useLandingPanelState";
 
 const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
   { key: "1h", label: "1H" },
@@ -130,6 +132,10 @@ function Feed() {
   } = Route.useSearch();
   const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
+  // Brand introduction layer. Intentional product interactions (opening a
+  // market, a person, DNA) collapse it; nothing else does.
+  const landing = useLandingPanelState();
+  const enterProduct = landing.collapse;
   // One selection flow for the whole app. Clicking a position/Live row sets ?m; a
   // person sets ?p; the DNA summary sets ?dna. Each clears the others and focuses
   // the center (mobile: the Belief column). Browser back/forward walks history.
@@ -143,6 +149,7 @@ function Feed() {
       }),
     });
     setTab("belief");
+    enterProduct();
   };
   const selectPerson = (personWallet: string) => {
     navigate({
@@ -154,6 +161,7 @@ function Feed() {
       }),
     });
     setTab("belief");
+    enterProduct();
   };
   const openDna = () => {
     navigate({
@@ -165,6 +173,7 @@ function Feed() {
       }),
     });
     setTab("belief");
+    enterProduct();
   };
   const [win, setWin] = useState<VolumeWindow>("24h");
   const [tab, setTab] = useState<MobileTab>("belief");
@@ -235,7 +244,14 @@ function Feed() {
   );
 
   return (
-    <div className="grid h-[100dvh] w-full grid-cols-1 grid-rows-1 overflow-hidden bg-[var(--bg)] text-[var(--text)] lg:[grid-template-columns:264px_minmax(0,1fr)_344px]">
+    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)]">
+    <LandingPanel
+      state={landing.hydrated ? landing.state : "collapsed"}
+      onEnter={enterProduct}
+      onCollapse={landing.collapse}
+      onExpand={landing.expand}
+    />
+    <div className="grid min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:264px_minmax(0,1fr)_344px]">
       {/* LEFT — You (Positions | Network) — fixed 264px rail */}
       <aside
         className={`${show("mine")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
@@ -377,6 +393,7 @@ function Feed() {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }
