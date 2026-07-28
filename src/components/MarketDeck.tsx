@@ -251,9 +251,6 @@ export function MarketDeck({
           {(rr.volume_24h_usd as number | null) ? (
             <span className="num">{fmtUsd(rr.volume_24h_usd as number)} 24h volume</span>
           ) : null}
-          {(rr.volume_total_usd as number | null) ? (
-            <span className="num">{fmtUsd(rr.volume_total_usd as number)} all-time</span>
-          ) : null}
           {(rr.trade_count_24h as number | null) ? (
             <span className="num">{rr.trade_count_24h as number} trades today</span>
           ) : null}
