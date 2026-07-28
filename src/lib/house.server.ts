@@ -19,12 +19,9 @@ import {
   foldRecord,
   revealHeadline,
   confidenceBand,
-  nextFoundation,
   applyFoundationAnswer,
-  FOUNDATION_ANSWERS,
   FOUNDATION_MAPPINGS,
   FOUNDATION_MAPPING_VERSION,
-  FOUNDATION_PROGRESS_COPY,
   HOUSE_ENGINE_VERSION,
   type BeliefAction,
   type HouseConfidenceBand,
@@ -105,6 +102,46 @@ async function foundationKeys(sb: SupabaseClient, wallet: string): Promise<strin
   return ((data ?? []) as { foundation_key: string }[]).map((r) => r.foundation_key);
 }
 
+/**
+ * The viewer's directional belief history — on-chain positions ∪ free expressed
+ * beliefs, deduped (on-chain wins), excluding the current market, tagged with
+ * category. This is what lets the House read someone after they calibrate:
+ * calibration records beliefs, and those beliefs ARE the House's signal.
+ */
+async function beliefHistory(
+  sb: SupabaseClient,
+  wallet: string,
+  currentMarketId: number,
+): Promise<{ category: string | null; side: "YES" | "NO" }[]> {
+  const [onchain, expressed] = await Promise.all([
+    sb
+      .from("wallet_beliefs")
+      .select("onchain_id, stance_side")
+      .eq("wallet", wallet)
+      .in("stance_side", ["YES", "NO"]),
+    sb.from("expressed_beliefs").select("onchain_id, side").eq("wallet", wallet),
+  ]);
+  const side = new Map<number, "YES" | "NO">();
+  for (const r of (expressed.data ?? []) as { onchain_id: number; side: string }[])
+    side.set(Number(r.onchain_id), r.side === "NO" ? "NO" : "YES");
+  for (const r of (onchain.data ?? []) as { onchain_id: number; stance_side: string }[])
+    side.set(Number(r.onchain_id), r.stance_side === "NO" ? "NO" : "YES"); // on-chain overrides
+  side.delete(currentMarketId);
+  const ids = [...side.keys()];
+  if (ids.length === 0) return [];
+
+  const catOf = new Map<number, string | null>();
+  for (let i = 0; i < ids.length; i += 500) {
+    const { data } = await sb
+      .from("markets")
+      .select("onchain_id, category")
+      .in("onchain_id", ids.slice(i, i + 500));
+    for (const m of (data ?? []) as { onchain_id: number; category: string | null }[])
+      catOf.set(Number(m.onchain_id), m.category);
+  }
+  return ids.map((id) => ({ category: catOf.get(id) ?? null, side: side.get(id)! }));
+}
+
 /** How the viewer's closest matches (twin + tribe) sit on this exact market. */
 async function relationshipLean(sb: SupabaseClient, wallet: string, marketId: number) {
   const cache = await readViewerDnaCache(sb, wallet);
@@ -155,9 +192,10 @@ async function buildSignals(
       inCategory: { yes: 0, no: 0, skip: 0 },
     };
   }
-  const [history, rel] = await Promise.all([
+  const [history, rel, beliefs] = await Promise.all([
     answerHistory(sb, wallet),
     relationshipLean(sb, wallet, marketId),
+    beliefHistory(sb, wallet, marketId),
   ]);
   const overall = { yes: 0, no: 0, skip: 0 };
   const inCategory = { yes: 0, no: 0, skip: 0 };
@@ -168,11 +206,17 @@ async function buildSignals(
     overall[key]++;
     if (category && row.category === category) inCategory[key]++;
   }
+  // The viewer's beliefs (calibration + on-chain) are directional signal too.
+  for (const b of beliefs) {
+    const key = b.side === "NO" ? "no" : "yes";
+    overall[key]++;
+    if (category && b.category === category) inCategory[key]++;
+  }
   return {
     connected: true,
     category,
-    // Completed foundation answers count toward the unlock gate, so once training
-    // is done the engine reads real markets instead of returning cold-start.
+    // Beliefs + completed foundation answers count toward the unlock gate, so once
+    // the viewer has calibrated the engine reads markets instead of cold-starting.
     totalAnswers: overall.yes + overall.no + overall.skip + foundationCount,
     overall,
     inCategory,
@@ -226,42 +270,10 @@ export async function loadHouseRead(
     };
   }
 
-  // Cold start: with no / thin history, train the House on the free foundation
-  // POVs before locking any market prediction.
-  const fKeys = await foundationKeys(sb, wallet);
-  const historyForGate = await answerHistory(sb, wallet);
-  const realAnswers = historyForGate.filter((h) => h.actual_action).length;
-  const trained = realAnswers + fKeys.length >= FOUNDATION_ANSWERS;
-  if (!trained) {
-    const next = nextFoundation(fKeys);
-    if (next) {
-      return {
-        marketId,
-        connected: true,
-        predicted: null,
-        confidence: null,
-        reasons: [],
-        noRead: null,
-        foundation: {
-          key: next.key,
-          prompt: next.prompt,
-          answered: fKeys.length,
-          required: FOUNDATION_ANSWERS,
-          progressLine: FOUNDATION_PROGRESS_COPY[Math.min(fKeys.length, FOUNDATION_ANSWERS - 1)],
-        },
-        band: null,
-        revealed: false,
-        closed: false,
-        finalizedVia: null,
-        actual: null,
-        outcome: null,
-        headline: null,
-        record: recordFor(historyForGate),
-        category,
-      };
-    }
-  }
-  const foundationCount = fKeys.length;
+  // Cold start is owned by the shared calibration flow (the House Read section
+  // shows the belief quiz until the viewer is calibrated), so the House no longer
+  // gates on its own foundation here. Foundation answers still count as signal.
+  const foundationCount = (await foundationKeys(sb, wallet)).length;
 
   const [{ data: existing }, history] = await Promise.all([
     sb

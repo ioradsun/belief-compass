@@ -74,17 +74,23 @@ export const getViewerReadiness = createServerFn({ method: "GET" })
 
 const CALIBRATION_QUEUE_SIZE = 16;
 
+export interface CalibrationQuestion {
+  marketId: number;
+  title: string;
+  category: string | null;
+}
+
 /**
- * A curated, domain-diverse queue of markets for calibration: the most active
+ * A curated, domain-diverse queue of calibration questions: the most active
  * markets the viewer hasn't answered yet, round-robined across domains so the
  * first beliefs spread the viewer's DNA across the map instead of clustering.
- * Returns onchain ids in answer order; the center walks them while calibrating.
+ * The House Read section walks these; the center orders its queue by them.
  */
 export const getCalibrationQueue = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) =>
     z.object({ wallet: z.string().min(3).nullable().optional() }).parse(raw),
   )
-  .handler(async ({ data }): Promise<number[]> => {
+  .handler(async ({ data }): Promise<CalibrationQuestion[]> => {
     if (!data.wallet) return [];
     const sb = serviceClient();
     const wallet = data.wallet.toLowerCase();
@@ -96,7 +102,7 @@ export const getCalibrationQueue = createServerFn({ method: "GET" })
         .eq("wallet", wallet)
         .in("stance_side", ["YES", "NO"]),
       sb.from("expressed_beliefs").select("onchain_id").eq("wallet", wallet),
-      sb.from("markets").select("onchain_id, category").limit(600),
+      sb.from("markets").select("onchain_id, category, title").limit(600),
       sb.from("market_state").select("onchain_id, believers_yes, believers_no"),
     ]);
 
@@ -118,27 +124,30 @@ export const getCalibrationQueue = createServerFn({ method: "GET" })
       );
     }
 
-    // Bucket un-answered markets by domain, each bucket sorted by activity.
-    const byDomain = new Map<string, number[]>();
-    for (const m of (marketsRes.data ?? []) as { onchain_id: number; category: string | null }[]) {
+    // Bucket un-answered, titled markets by domain, each bucket sorted by activity.
+    const byDomain = new Map<string, CalibrationQuestion[]>();
+    for (const m of (marketsRes.data ?? []) as {
+      onchain_id: number;
+      category: string | null;
+      title: string | null;
+    }[]) {
       const id = Number(m.onchain_id);
-      if (answered.has(id)) continue;
+      if (answered.has(id) || !m.title) continue;
       const domain = categoryToDomain(m.category) ?? "other";
       const arr = byDomain.get(domain) ?? [];
-      arr.push(id);
+      arr.push({ marketId: id, title: m.title, category: m.category });
       byDomain.set(domain, arr);
     }
     for (const arr of byDomain.values()) {
-      arr.sort((a, b) => (activity.get(b) ?? 0) - (activity.get(a) ?? 0));
+      arr.sort((a, b) => (activity.get(b.marketId) ?? 0) - (activity.get(a.marketId) ?? 0));
     }
 
     // Round-robin across domains so early answers span the map.
     const buckets = [...byDomain.values()];
-    const out: number[] = [];
+    const out: CalibrationQuestion[] = [];
     for (let i = 0; out.length < CALIBRATION_QUEUE_SIZE && buckets.some((b) => b.length); i++) {
-      const b = buckets[i % buckets.length];
-      const id = b.shift();
-      if (id != null) out.push(id);
+      const q = buckets[i % buckets.length].shift();
+      if (q) out.push(q);
     }
     return out;
   });

@@ -226,7 +226,7 @@ function Feed() {
   const marketRows =
     calibrating && calQueue?.length
       ? (() => {
-          const rank = new Map(calQueue.map((id, i) => [id, i]));
+          const rank = new Map(calQueue.map((q, i) => [q.marketId, i]));
           const inQueue = feedRows
             .filter((r) => rank.has(Number(r.onchain_id)))
             .sort((a, b) => rank.get(Number(a.onchain_id))! - rank.get(Number(b.onchain_id))!);

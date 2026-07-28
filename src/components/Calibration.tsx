@@ -154,30 +154,3 @@ export function CalibrationReveal({ wallet }: { wallet?: string }) {
     </div>
   );
 }
-
-/** Slim banner — sits atop the center deck while the user is answering. */
-export function CalibrationBanner({ readiness }: { readiness?: Readiness }) {
-  return (
-    <div
-      className="flex items-center gap-3 rounded-[12px] px-3 py-2"
-      style={{ border: "1px solid var(--border)", background: "var(--surface,transparent)" }}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-            Calibrating
-          </span>
-          <span className="num text-[11px] font-semibold text-[var(--text-secondary)]">
-            {readiness?.count ?? 0} / {readiness?.target ?? CALIBRATION_TARGET}
-          </span>
-        </div>
-        <div className="mt-1.5">
-          <Bar progress={readiness?.progress ?? 0} />
-        </div>
-        <p className="mt-1 truncate text-[11px] text-[var(--text-muted)]">
-          {remainingLine(readiness)}
-        </p>
-      </div>
-    </div>
-  );
-}

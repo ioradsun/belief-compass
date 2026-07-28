@@ -23,7 +23,9 @@ import {
 import { getNetwork } from "@/lib/dna.functions";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { BelieversSplit, Defense } from "@/components/MarketEvidence";
-import { useReadiness, CalibrationCard } from "@/components/Calibration";
+import { useReadiness } from "@/components/Calibration";
+import { expressBelief, getCalibrationQueue } from "@/lib/beliefs.functions";
+import { type Readiness } from "@/domain/beliefs";
 import { BAND_COPY } from "@/domain/house";
 
 type Mode = "house" | "believers" | "defense";
@@ -122,19 +124,25 @@ export function MarketIntelligence({
   const believers = evidence?.believers ?? [];
   const defense = evidence?.defense ?? [];
 
+  const calibrating = !!viewer && !!readiness && !readiness.calibrated;
   const meta =
     mode === "believers"
       ? `${believers.length} believer${believers.length === 1 ? "" : "s"}`
       : mode === "defense"
         ? `${defense.length} case${defense.length === 1 ? "" : "s"}`
-        : house?.revealed && house.confidence != null && house.predicted
-          ? `Confidence ${Math.round(house.confidence * 100)}%`
-          : house?.record && house.record.correct + house.record.miss > 0
-            ? `House record ${house.record.correct}–${house.record.miss}`
-            : "";
+        : calibrating
+          ? `${readiness!.remaining} to unlock`
+          : house?.revealed && house.confidence != null && house.predicted
+            ? `Confidence ${Math.round(house.confidence * 100)}%`
+            : house?.record && house.record.correct + house.record.miss > 0
+              ? `House record ${house.record.correct}–${house.record.miss}`
+              : "";
 
   const tabs: { id: Mode; label: string }[] = [
-    { id: "house", label: "House Read" },
+    {
+      id: "house",
+      label: calibrating ? `House Read · ${readiness!.remaining} left` : "House Read",
+    },
     { id: "believers", label: "Believers" },
     { id: "defense", label: "Defense" },
   ];
@@ -205,23 +213,23 @@ export function MarketIntelligence({
         className="min-h-[188px] max-h-[260px] overflow-y-auto px-3 pb-3 pt-2"
       >
         {mode === "house" ? (
-          <div className="space-y-2">
-            {house && house.record.correct + house.record.miss > 0 && (
-              <MiniScoreboard rec={house.record} />
-            )}
-            {viewer && readiness && !readiness.calibrated ? (
-              // Pre-calibration the House can't honestly read you — show the same
-              // calibration card as everywhere else, never a "New territory" no-read.
-              <CalibrationCard readiness={readiness} />
-            ) : (
+          viewer && readiness && !readiness.calibrated ? (
+            // Pre-calibration, House Read IS the calibration: answer free belief
+            // questions right here and watch the House learn you.
+            <CalibrationQuiz viewer={viewer} readiness={readiness} />
+          ) : (
+            <div className="space-y-2">
+              {house && house.record.correct + house.record.miss > 0 && (
+                <MiniScoreboard rec={house.record} />
+              )}
               <HouseMode
                 house={house ?? null}
                 loading={loadingHouse && !house}
                 onFoundation={actions.trainFoundation}
                 training={actions.training}
               />
-            )}
-          </div>
+            </div>
+          )
         ) : mode === "believers" ? (
           <BelieversMode
             believers={believers}
@@ -242,6 +250,117 @@ function Skeleton() {
       <div className="h-5 w-1/2 animate-pulse rounded bg-[var(--border)]/60 motion-reduce:animate-none" />
       <div className="h-5 animate-pulse rounded bg-[var(--border)]/40 motion-reduce:animate-none" />
       <div className="h-5 w-2/3 animate-pulse rounded bg-[var(--border)]/40 motion-reduce:animate-none" />
+    </div>
+  );
+}
+
+/* ── Cold start — House Read IS the calibration ──────────────────────────── */
+
+/**
+ * The magical front door: one belief question at a time, right in the House Read
+ * box, framed as the House learning you. Every answer is free and moves the
+ * meter; you volunteer because the payoff (it predicts YOU) is irresistible and
+ * the cost is a single tap. Answers feed DNA / Network / House alike.
+ */
+function CalibrationQuiz({ viewer, readiness }: { viewer: string; readiness: Readiness }) {
+  const qc = useQueryClient();
+  const {
+    data: queue,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ["cal-queue", viewer.toLowerCase()],
+    queryFn: () => getCalibrationQueue({ data: { wallet: viewer } }),
+    staleTime: 60_000,
+  });
+  const [handled, setHandled] = useState<Set<number>>(new Set());
+  const answer = useMutation({
+    mutationFn: (v: { marketId: number; side: "YES" | "NO" }) =>
+      expressBelief({
+        data: { wallet: viewer, marketId: v.marketId, side: v.side, source: "calibration" },
+      }),
+    onSuccess: (r) => {
+      if (r) qc.setQueryData(["readiness", viewer.toLowerCase()], r);
+    },
+  });
+
+  const current = (queue ?? []).find((q) => !handled.has(q.marketId));
+  const mark = (id: number) => setHandled((s) => new Set(s).add(id));
+
+  // Ran out of the local batch but not calibrated yet → pull a fresh set.
+  useEffect(() => {
+    if (queue && !current && !isLoading) void refetch();
+  }, [queue, current, isLoading, refetch]);
+
+  const done = readiness.count;
+  const target = readiness.target;
+
+  const choice = (label: string, side: "YES" | "NO", color: string) => (
+    <button
+      type="button"
+      onClick={() => {
+        if (!current) return;
+        answer.mutate({ marketId: current.marketId, side });
+        mark(current.marketId);
+      }}
+      className="flex-1 rounded-[10px] py-2.5 text-[13px] font-semibold transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
+      style={{ border: `1px solid ${color}`, color }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Kicker>The House is learning you</Kicker>
+        <span className="num text-[11px] font-semibold text-[var(--text-secondary)]">
+          {done} / {target}
+        </span>
+      </div>
+      <div className="flex gap-1" aria-hidden>
+        {Array.from({ length: target }).map((_, i) => (
+          <span
+            key={i}
+            className="h-1.5 flex-1 rounded-full transition-colors duration-300 motion-reduce:transition-none"
+            style={{ background: i < done ? "var(--yes)" : "var(--border)" }}
+          />
+        ))}
+      </div>
+
+      {!current ? (
+        <p className="py-6 text-center text-[13px] text-[var(--text-muted)]">
+          Lining up your next belief…
+        </p>
+      ) : (
+        <div className="space-y-2.5">
+          {current.category && (
+            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+              {current.category}
+            </div>
+          )}
+          <p className="text-[16px] font-semibold leading-snug text-[var(--text)]">
+            “{current.title}”
+          </p>
+          <div className="flex gap-2">
+            {choice("Disagree", "NO", "var(--no)")}
+            <button
+              type="button"
+              onClick={() => current && mark(current.marketId)}
+              className="rounded-[10px] px-3 py-2.5 text-[13px] font-medium text-[var(--text-muted)] transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
+              style={{ border: "1px solid var(--border)" }}
+            >
+              Pass
+            </button>
+            {choice("Agree", "YES", "var(--yes)")}
+          </div>
+          <p className="text-[11px] text-[var(--text-muted)]">
+            {readiness.remaining <= 1
+              ? "One more and the House can read your every move."
+              : `${readiness.remaining} to unlock your network and the House. Free — no money, ever.`}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
