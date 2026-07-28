@@ -40,6 +40,20 @@ const PULSE_TONE: Record<string, string> = {
   neutral: "var(--text-muted)",
 };
 
+/**
+ * Momentum tags — the six canonical opportunity classifications from the
+ * server-side engine. Color is a second signal only; the word carries meaning.
+ */
+const MOMENTUM: Record<string, { label: string; hue: string; hint: string }> = {
+  hot: { label: "Hot", hue: "#f97316", hint: "Activity is accelerating right now" },
+  early: { label: "Early", hue: "#22d3ee", hint: "Real growth, still small and immature" },
+  hidden: { label: "Hidden", hue: "#a78bfa", hint: "Heavy turnover for its visible size" },
+  contested: { label: "Contested", hue: "#f43f5e", hint: "Both sides balanced and active" },
+  conviction: { label: "Conviction", hue: "#34d399", hint: "Holders persisting under challenge" },
+  new: { label: "New", hue: "#94a3b8", hint: "Opened in the last 72 hours" },
+};
+
+
 export function MarketDeck({
   row,
   ethUsd,
@@ -177,6 +191,8 @@ export function MarketDeck({
     }
   };
 
+  const momentum = MOMENTUM[(rr.opportunity_type as string | null) ?? ""] ?? null;
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {/* Identity — pinned to the top of the column */}
@@ -187,18 +203,27 @@ export function MarketDeck({
               {category}
             </span>
           )}
-          {/* Deep link to the market's own page on POV, for anyone who'd rather
-              trade there with their POV wallet. */}
-          <a
-            href={povUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="ml-auto rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
-            style={{ border: "1px solid var(--border)" }}
-          >
-            Trade on POV ↗
-          </a>
+          {/* Momentum tag — the market's own classification, stated plainly. */}
+          {momentum && (
+            <span
+              title={momentum.hint}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
+              style={{
+                color: momentum.hue,
+                background: `color-mix(in oklab, ${momentum.hue} 13%, transparent)`,
+                border: `1px solid color-mix(in oklab, ${momentum.hue} 32%, transparent)`,
+              }}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: momentum.hue }}
+                aria-hidden
+              />
+              {momentum.label}
+            </span>
+          )}
         </div>
+
         <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
           {title}
         </h1>
