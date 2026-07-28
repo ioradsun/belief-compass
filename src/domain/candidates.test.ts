@@ -106,7 +106,7 @@ describe("candidate generation", () => {
   });
 
   it("rankAndCapCandidates never exceeds the cap", () => {
-    const many: MatchCandidate[] = range(1000).map((i) => ({
+    const many: MatchCandidate[] = range(DNA_LIMITS.maxExactScored + 50).map((i) => ({
       wallet: `0x${i}`,
       sharedMarkets: 5,
       sameSideMarkets: 5,
