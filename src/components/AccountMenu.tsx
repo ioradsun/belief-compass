@@ -9,8 +9,9 @@
 import { useEffect, useState } from "react";
 import { useAccount, useDisconnect } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronLeft } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { lookupPovUser } from "@/lib/pov-user.functions";
+import { getPersonProfile } from "@/lib/dna.functions";
 import { WalletIdentity } from "@/components/WalletIdentity";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
