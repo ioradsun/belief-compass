@@ -36,7 +36,10 @@ export async function resolveProfiles(
   }
 
   const misses = list.filter((w) => !known.has(w)).slice(0, lazyCap);
-  if (misses.length === 0) return map;
+  if (misses.length === 0) {
+    await applyOverrides(map, list);
+    return map;
+  }
 
   const results = await Promise.allSettled(misses.map((w) => fetchPovUser(w)));
   const nowIso = new Date().toISOString();
