@@ -13,36 +13,46 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
-import { getHouseRead, answerBelief, type HouseReadView } from "@/lib/house.functions";
+import { getHouseRead, finalizeBet, finalizeSkip, type HouseReadView } from "@/lib/house.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { BelieversSplit, Defense } from "@/components/MarketEvidence";
-import type { BeliefAction } from "@/domain/house";
 
 type Mode = "house" | "believers" | "defense";
 
 export const houseKey = (wallet: string | undefined, marketId: number) =>
   ["house", wallet ?? null, marketId] as const;
 
-/** Records a belief action (never money) and refreshes the locked House read. */
-export function useHouseAnswer(marketId: number, viewerWallet?: string) {
+/**
+ * Finalize the round. A verified BET reveals the House pick; a SKIP closes the
+ * round but keeps the pick sealed. Both refresh the locked read in the cache.
+ */
+export function useHouseFinalize(marketId: number, viewerWallet?: string) {
   const connected = useEffectiveWallet();
   const wallet = viewerWallet ?? connected;
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (vars: {
-      action: BeliefAction;
-      source?: "button" | "keyboard" | "gesture";
-    }) => {
+  const store = (data: HouseReadView | null) => {
+    if (data) qc.setQueryData(houseKey(wallet, marketId), data);
+  };
+  const bet = useMutation({
+    mutationFn: async (vars: { side: "YES" | "NO"; txHash: string }) => {
       if (!wallet) return null;
-      return answerBelief({
-        data: { wallet, marketId, action: vars.action, source: vars.source ?? "button" },
-      });
+      return finalizeBet({ data: { wallet, marketId, side: vars.side, txHash: vars.txHash } });
     },
-    onSuccess: (data) => {
-      if (data) qc.setQueryData(houseKey(wallet, marketId), data);
-    },
+    onSuccess: store,
   });
+  const skip = useMutation({
+    mutationFn: async () => {
+      if (!wallet) return null;
+      return finalizeSkip({ data: { wallet, marketId } });
+    },
+    onSuccess: store,
+  });
+  return {
+    betReveal: (side: "YES" | "NO", txHash: string) => bet.mutate({ side, txHash }),
+    skip: () => skip.mutate(),
+    revealing: bet.isPending,
+  };
 }
 
 export function MarketIntelligence({
@@ -208,8 +218,8 @@ function HouseMode({ house, loading }: { house: HouseReadView | null; loading: b
   const rec = house.record;
   const played = rec.correct + rec.miss;
 
-  // Honest no-read — shown before OR after the answer; it never scores.
-  if (!house.revealed && house.noRead) {
+  // Honest no-read — shown before the round closes; it never scores.
+  if (!house.revealed && !house.closed && house.noRead) {
     return (
       <div className="space-y-1.5">
         <Kicker>{house.noRead.title}</Kicker>
@@ -224,7 +234,44 @@ function HouseMode({ house, loading }: { house: HouseReadView | null; loading: b
     );
   }
 
-  // Hidden state — nothing about the predicted side is in the DOM.
+  // Sealed — the round closed on a SKIP, so the pick is gone. This is the hook:
+  // you had a read waiting and you never paid to see it.
+  if (!house.revealed && house.closed) {
+    return (
+      <div className="space-y-2">
+        <Kicker>{house.headline?.title ?? "Sealed"}</Kicker>
+        <p className="text-[15px] font-semibold leading-snug text-[var(--text)]">
+          {house.headline?.line ?? "The House kept its read. You never paid to see it."}
+        </p>
+        <div
+          className="relative grid h-[48px] place-items-center overflow-hidden rounded-[10px]"
+          style={{ background: "var(--surface-2,var(--border))" }}
+          aria-hidden
+        >
+          <span
+            className="select-none text-[20px] font-semibold tracking-[0.35em] text-[var(--text-muted)]"
+            style={{ filter: "blur(10px)" }}
+          >
+            {house.category ? "●●●" : "●●●"}
+          </span>
+        </div>
+        <p className="text-[12px] text-[var(--text-muted)]">
+          Next time, put money down to find out if the House had you.
+        </p>
+        {played > 0 && (
+          <Record
+            correct={rec.correct}
+            miss={rec.miss}
+            streak={rec.streak}
+            surprise={rec.surpriseStreak}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Hidden state — a read is waiting, but nothing about the side is in the DOM.
+  // Only a real bet unlocks it.
   if (!house.revealed) {
     return (
       <div className="space-y-2">
@@ -241,10 +288,21 @@ function HouseMode({ house, loading }: { house: HouseReadView | null; loading: b
           >
             ●●●
           </span>
+          <span
+            className="absolute inset-0 grid place-items-center text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]"
+            style={{ textShadow: "0 0 12px var(--surface-2,var(--border))" }}
+          >
+            Sealed
+          </span>
         </div>
-        <p className="text-[12px] text-[var(--text-muted)]">Make your call to reveal ours.</p>
+        <p className="text-[12px] font-semibold text-[var(--text)]">
+          Back a side to reveal our pick.
+        </p>
+        <p className="text-[11px] text-[var(--text-muted)]">
+          Skip and the read stays sealed — you’ll never know if we had you.
+        </p>
         <p className="sr-only" role="note">
-          The House prediction is hidden. Choose YES, NO, or SKIP to reveal it.
+          The House prediction is hidden. Place a bet on YES or NO to reveal it.
         </p>
         {played > 0 && <Record correct={rec.correct} miss={rec.miss} streak={rec.streak} />}
       </div>

@@ -1,18 +1,17 @@
 /**
  * CENTER — single-market decision deck.
  *
- * One market at a time: Pulse (why now) → Battlefield (both sides) → your DNA
- * evidence → a persistent dock (shared amount, NO / SKIP / YES). A gesture/button/
- * key only SELECTS a side; buying requires an explicit Confirm after an on-chain
+ * One market at a time: Pulse (why now) → Battlefield (both sides) → the House
+ * Read → a persistent dock (shared amount, NO / SKIP / YES). A gesture/button/key
+ * only SELECTS a side; buying requires an explicit Confirm after an on-chain
  * quote. Prices/quotes come from the contract (src/lib/chain-trade) — never the
- * client. Skip has no financial effect and just advances the queue.
+ * client. The House pick unlocks ONLY on a confirmed bet; a skip seals it.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
-import { MarketIntelligence, useHouseAnswer } from "@/components/MarketIntelligence";
-import type { BeliefAction } from "@/domain/house";
+import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
 
 import { CHAIN_ID } from "@/chain/decoder";
 import {
@@ -53,7 +52,6 @@ const MOMENTUM: Record<string, { label: string; hue: string; hint: string }> = {
   new: { label: "New", hue: "#94a3b8", hint: "Opened in the last 72 hours" },
 };
 
-
 export function MarketDeck({
   row,
   ethUsd,
@@ -84,69 +82,65 @@ export function MarketDeck({
   // means "not selling"; the buy dock owns the surface. Buying the opposite side
   // never sells (they're separate token balances), so a flip can't silently exit.
   const [sellPct, setSellPct] = useState<number | null>(null);
-  // The belief the viewer expressed here. Recorded once, moves no money.
-  const [answered, setAnswered] = useState<BeliefAction | null>(null);
+  // The viewer walked away here (skip finalizes the round; the pick stays sealed).
+  const [skipped, setSkipped] = useState(false);
 
   const { switchChain } = useSwitchChain();
   const ready = useTradeReady();
   const trade = useTrade();
   const bal = useUserBalance(marketId);
-  const houseAnswer = useHouseAnswer(marketId, viewerWallet);
+  const house = useHouseFinalize(marketId, viewerWallet);
 
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(marketId, side === "YES", side ? ethWei : 0n);
 
-  /**
-   * A belief action: records the answer and reveals the locked House read.
-   * Never triggers a purchase — backing money is a separate, explicit step.
-   */
-  const recordBelief = useCallback(
-    (action: BeliefAction, source: "button" | "keyboard" | "gesture") => {
-      setAnswered((prev) => {
-        if (prev) return prev; // one scored answer per market
-        houseAnswer.mutate({ action, source });
-        return action;
-      });
-    },
-    [houseAnswer],
-  );
+  // Selecting a side only opens the order — it never reveals the House pick and
+  // never buys. Only a confirmed on-chain bet unlocks the read.
+  const chooseSide = useCallback((s: OrderSide) => {
+    setSide((cur) => selectSide(cur, s));
+  }, []);
 
-  const chooseSide = useCallback(
-    (s: OrderSide, source: "button" | "keyboard" | "gesture" = "button") => {
-      recordBelief(s, source);
-      setSide((cur) => selectSide(cur, s));
-    },
-    [recordBelief],
-  );
+  // Skip finalizes the round: the House pick stays sealed (you never paid to see
+  // it). This is the FOMO lever, so it's a deliberate, explicit action.
+  const chooseSkip = useCallback(() => {
+    setSide(null);
+    setSkipped(true);
+    house.skip();
+  }, [house]);
 
-  const chooseSkip = useCallback(
-    (source: "button" | "keyboard" | "gesture" = "button") => {
-      setSide(null);
-      recordBelief("SKIP", source);
-    },
-    [recordBelief],
-  );
+  // Reveal the House pick exactly once, when a bet confirms on-chain.
+  const betRevealed = useRef(false);
 
   // Reset every flow when the market changes.
   useEffect(() => {
     setSide(null);
     setSellPct(null);
-    setAnswered(null);
+    setSkipped(false);
+    betRevealed.current = false;
     trade.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketId]);
 
-  // Keyboard: ←/→ express a belief, ↑ skip (neither ever buys).
+  // On a confirmed buy, finalize the bet → the House read unlocks above.
+  useEffect(() => {
+    if (trade.isSuccess && trade.hash && side && !betRevealed.current) {
+      betRevealed.current = true;
+      house.betReveal(side, trade.hash);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trade.isSuccess, trade.hash, side]);
+
+  // Keyboard: ←/→ select a side, ↑ skip. None of them buy or reveal.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
       if (el && ["INPUT", "TEXTAREA"].includes(el.tagName)) return;
       if (el?.getAttribute("role") === "tab") return;
-      if (e.key === "ArrowLeft") chooseSide("NO", "keyboard");
-      else if (e.key === "ArrowRight") chooseSide("YES", "keyboard");
+      if (e.key === "ArrowLeft") chooseSide("NO");
+      else if (e.key === "ArrowRight") chooseSide("YES");
       else if (e.key === "ArrowUp") {
         e.preventDefault();
-        chooseSkip("keyboard");
+        chooseSkip();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -334,16 +328,16 @@ export function MarketDeck({
               closeSell();
             }}
           />
-        ) : answered === "SKIP" ? (
-          /* Skipped: a belief action with no financial effect. */
+        ) : skipped ? (
+          /* Walked away: the round is closed and the House pick stays sealed. */
           <div
             className="flex items-center gap-3 rounded-[16px] p-4"
             style={{ border: "1px solid var(--border)" }}
           >
             <div className="min-w-0">
-              <div className="text-[14px] font-semibold text-[var(--text)]">You passed</div>
+              <div className="text-[14px] font-semibold text-[var(--text)]">You walked away</div>
               <div className="text-[12px] text-[var(--text-muted)]">
-                The House read is revealed above. Nothing was bought.
+                The House kept its read — you never paid to see it.
               </div>
             </div>
             <button
@@ -358,7 +352,6 @@ export function MarketDeck({
         ) : (
           <Dock
             side={side}
-            answered={answered}
             amount={amount}
             setAmount={setAmount}
             onSelect={(s) => {
@@ -366,7 +359,7 @@ export function MarketDeck({
               chooseSide(s);
             }}
             onCancel={() => setSide(null)}
-            onSkip={() => chooseSkip("button")}
+            onSkip={() => chooseSkip()}
             quote={quote}
             quoting={quoting}
             ethWei={ethWei}
@@ -502,7 +495,6 @@ function AmountField({ amount, setAmount }: { amount: number; setAmount: (n: num
 
 function Dock({
   side,
-  answered,
   amount,
   setAmount,
   onSelect,
@@ -518,7 +510,6 @@ function Dock({
   onDone,
 }: {
   side: OrderSide | null;
-  answered: BeliefAction | null;
   amount: number;
   setAmount: (n: number) => void;
   onSelect: (s: OrderSide) => void;
@@ -550,7 +541,9 @@ function Dock({
             <span style={{ color: side === "YES" ? "var(--yes)" : "var(--no)" }}>✓</span>
           </span>
           <div>
-            <div className="text-[15px] font-semibold text-[var(--text)]">Joined {side}</div>
+            <div className="text-[15px] font-semibold text-[var(--text)]">
+              Joined {side} · House read revealed ↑
+            </div>
             {quote && (
               <div className="num text-[11px] text-[var(--text-muted)]">
                 {fmtShares(quote.tokens)} shares at $
@@ -605,12 +598,9 @@ function Dock({
     <div className="rounded-[16px] p-3" style={{ border: "1px solid var(--border)" }}>
       {/* Quote review */}
       <div className="mb-2 space-y-1 px-1">
-        {answered === side && (
-          <div className="pb-1 text-[11px] text-[var(--text-muted)]">
-            Belief recorded: <b className="text-[var(--text)]">{side}</b>. Backing it with money is
-            optional.
-          </div>
-        )}
+        <div className="pb-1 text-[11px] font-semibold text-[var(--text)]">
+          Back {side} to reveal the House’s pick.
+        </div>
         <QuoteRow
           k="You pay"
           v={`${fmtUsd(amount)}  ·  ${(Number(ethWei) / 1e18).toFixed(4)} ETH`}
