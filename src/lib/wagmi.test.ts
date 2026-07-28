@@ -17,12 +17,12 @@ import {
  *  - WalletConnect's own modal must stay on, otherwise a mobile tap does nothing.
  */
 describe("wallet connectors", () => {
-  it("keeps heavy SDKs out of the eager config", () => {
-    const ids = wagmiConfig.connectors.map((c) => c.id);
+  it("keeps heavy SDKs out of the eager config (and connectors off the SSR graph)", () => {
+    const ids = (wagmiConfig.connectors as readonly { id: string }[]).map((c) => c.id);
     expect(ids).not.toContain(LAZY_COINBASE_ID);
     expect(ids).not.toContain(LAZY_WALLETCONNECT_ID);
-    expect(ids.length).toBeGreaterThan(0);
   });
+
 
   it("prefetch never throws (it runs on modal open, in render path)", () => {
     expect(() => prefetchWalletSdks()).not.toThrow();

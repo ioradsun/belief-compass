@@ -1,22 +1,26 @@
 import { base } from "wagmi/chains";
 import { createConfig, http, type CreateConnectorFn } from "wagmi";
-import { injected } from "wagmi/connectors";
 
 const projectId =
   (import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string | undefined) ??
   "3fbb6bba6f1de962d911bb5b5c9dd651";
 
 /**
- * First-load perf: only `injected()` is eager. It carries no SDK weight and, with
- * wagmi's EIP-6963 discovery (default on), surfaces EVERY installed browser-extension
- * wallet (MetaMask, Coinbase extension, Rabby, Brave, …). The heavy Coinbase (~720KB)
- * and WalletConnect (~360KB) SDKs are imported ON DEMAND — only when the viewer picks
- * that wallet — via connect({ connector }), which wagmi sets up on the fly. Returning
- * Coinbase/WalletConnect users are reconnected on idle (see WalletProviders).
+ * `wagmi/connectors` is imported DYNAMICALLY everywhere in this file — never at
+ * module scope. Two reasons:
+ *  1. Server safety: the connectors bundle must never be evaluated during SSR.
+ *     It pulls in Coinbase/WalletConnect/porto SDKs, which the worker bundler
+ *     mis-chunks (`ReferenceError: init_call is not defined` → every page 500s).
+ *  2. First-load perf: the heavy Coinbase (~720KB) and WalletConnect (~360KB)
+ *     SDKs only load when the viewer picks that wallet.
+ * EIP-6963 discovery (on by default) still surfaces every installed browser
+ * extension wallet; `ensureInjectedConnector()` adds the generic injected
+ * connector on the client for wallets that don't announce themselves.
  */
 export const wagmiConfig = createConfig({
   chains: [base],
-  connectors: [injected()],
+  connectors: [],
+  multiInjectedProviderDiscovery: true,
   transports: { [base.id]: http() },
   ssr: true,
 });
@@ -26,6 +30,27 @@ export const LAZY_COINBASE_ID = "coinbaseWalletSDK";
 export const LAZY_WALLETCONNECT_ID = "walletConnect";
 
 export type LazyWalletKind = "coinbase" | "walletConnect";
+
+/**
+ * Client-only: register the generic injected connector once, after hydration.
+ * Keeps `wagmi/connectors` out of the SSR module graph.
+ */
+let injectedAdded = false;
+export async function ensureInjectedConnector(): Promise<void> {
+  if (typeof window === "undefined" || injectedAdded) return;
+  injectedAdded = true;
+  try {
+    const { injected } = await import("wagmi/connectors");
+    const internal = wagmiConfig._internal.connectors;
+    const connector = internal.setup(injected());
+    internal.setState((prev) =>
+      prev.some((c) => c.id === connector.id) ? prev : [...prev, connector],
+    );
+  } catch {
+    /* discovery-based connectors still work */
+  }
+}
+
 
 /** Dynamically import a heavy connector's SDK and return its CreateConnectorFn. */
 export async function lazyConnector(kind: LazyWalletKind): Promise<CreateConnectorFn> {

@@ -15,10 +15,12 @@ import {
   wagmiConfig,
   lazyConnector,
   prefetchWalletSdks,
+  ensureInjectedConnector,
   LAZY_COINBASE_ID,
   LAZY_WALLETCONNECT_ID,
   type LazyWalletKind,
 } from "@/lib/wagmi";
+
 import { WalletLogo, brandFor } from "@/components/WalletLogos";
 import { CONNECT_EVENT, requestConnect } from "@/lib/connect-bridge";
 import { lookupPovUser } from "@/lib/pov-user.functions";
@@ -54,6 +56,11 @@ function LazyReconnect() {
   const { reconnect } = useReconnect();
   useEffect(() => {
     let cancelled = false;
+    // Register the injected connector right away (it's kept out of the SSR graph,
+    // so wagmi's own reconnectOnMount can't see it at provider mount).
+    void ensureInjectedConnector().then(() => {
+      if (!cancelled) reconnect();
+    });
     const run = async () => {
       try {
         const recent = (await config.storage?.getItem("recentConnectorId")) as string | undefined;
@@ -79,6 +86,7 @@ function LazyReconnect() {
       cancelled = true;
     };
   }, [config, reconnect]);
+
   return null;
 }
 
