@@ -25,8 +25,9 @@ export const houseKey = (wallet: string | undefined, marketId: number) =>
   ["house", wallet ?? null, marketId] as const;
 
 /** Records a belief action (never money) and refreshes the locked House read. */
-export function useHouseAnswer(marketId: number) {
-  const wallet = useEffectiveWallet();
+export function useHouseAnswer(marketId: number, viewerWallet?: string) {
+  const connected = useEffectiveWallet();
+  const wallet = viewerWallet ?? connected;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (vars: {
@@ -44,9 +45,17 @@ export function useHouseAnswer(marketId: number) {
   });
 }
 
-export function MarketIntelligence({ marketId }: { marketId: number }) {
+export function MarketIntelligence({
+  marketId,
+  viewerWallet,
+}: {
+  marketId: number;
+  viewerWallet?: string;
+}) {
   const [mode, setMode] = useState<Mode>("house");
-  const viewer = useEffectiveWallet();
+  const connected = useEffectiveWallet();
+  const viewer = viewerWallet ?? connected;
+
   const tablistId = useId();
   const btnRefs = useRef<Record<Mode, HTMLButtonElement | null>>({
     house: null,
