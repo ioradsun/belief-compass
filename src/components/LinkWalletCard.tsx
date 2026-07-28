@@ -136,7 +136,11 @@ export function LinkWalletCard() {
           disabled={!valid || !isConnected || busy}
           className="rounded-md border border-primary bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
         >
-          {busy ? "Waiting for signature…" : "Verify by signing"}
+          {busy
+            ? "Waiting for signature…"
+            : switched
+              ? "Sign to verify"
+              : "Verify by signing"}
         </button>
         <button
           type="button"
