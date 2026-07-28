@@ -269,7 +269,10 @@ export function MarketDeck({
             side={side}
             amount={amount}
             setAmount={setAmount}
-            onSelect={(s) => setSide((cur) => selectSide(cur, s))}
+            onSelect={(s) => {
+              trade.reset();
+              setSide((cur) => selectSide(cur, s));
+            }}
             onSkip={onSkip}
             quote={quote}
             quoting={quoting}
