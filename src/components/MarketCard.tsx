@@ -64,7 +64,7 @@ function fmtUsd(n: number | null | undefined) {
   const v = Number(n);
   if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
   if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}k`;
-  return `$${v.toFixed(0)}`;
+  return `$${v.toFixed(2)}`;
 }
 function fmtShare(n: number | null | undefined) {
   if (n == null) return "—";

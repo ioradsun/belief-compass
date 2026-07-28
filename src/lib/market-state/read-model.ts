@@ -130,9 +130,14 @@ export interface LiveLine {
 }
 
 function usd(n: number): string {
-  const r = Math.round(n);
-  return "$" + r.toLocaleString("en-US");
+  return (
+    "$" +
+    (n >= 1000
+      ? n.toLocaleString("en-US", { maximumFractionDigits: 0 })
+      : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+  );
 }
+
 function plural(n: number, unit: string): string {
   return `${n} ${unit}${n === 1 ? "" : "s"}`;
 }

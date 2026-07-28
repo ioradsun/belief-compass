@@ -29,12 +29,21 @@ type Position = {
 
 function usd(n: number) {
   const v = Math.abs(n);
-  const s = v >= 1000 ? v.toLocaleString(undefined, { maximumFractionDigits: 0 }) : v.toFixed(0);
+  const s =
+    v >= 1000
+      ? v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `${n < 0 ? "−" : ""}$${s}`;
 }
 function signedUsd(n: number) {
-  return `${n < 0 ? "−" : "+"}$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  const v = Math.abs(n);
+  const s =
+    v >= 1000
+      ? v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${n < 0 ? "−" : "+"}$${s}`;
 }
+
 function signedPct(n: number | null) {
   if (n == null || !Number.isFinite(n)) return "—";
   const abs = Math.abs(n);
