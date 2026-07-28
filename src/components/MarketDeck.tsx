@@ -234,7 +234,7 @@ export function MarketDeck({
             believers={row.believers_yes}
             capital={row.yes_capital_usd ?? null}
             selected={side === "YES"}
-            onSelect={() => setSide((s) => selectSide(s, "YES"))}
+            onSelect={() => chooseSide("YES")}
           />
           <SideCard
             label="NO"
@@ -243,8 +243,21 @@ export function MarketDeck({
             believers={row.believers_no}
             capital={row.no_capital_usd ?? null}
             selected={side === "NO"}
-            onSelect={() => setSide((s) => selectSide(s, "NO"))}
+            onSelect={() => chooseSide("NO")}
           />
+        </div>
+
+        {/* Compact financial context — never the reason to act */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-muted)]">
+          {(rr.volume_24h_usd as number | null) ? (
+            <span className="num">{fmtUsd(rr.volume_24h_usd as number)} 24h volume</span>
+          ) : null}
+          {(rr.volume_total_usd as number | null) ? (
+            <span className="num">{fmtUsd(rr.volume_total_usd as number)} all-time</span>
+          ) : null}
+          {(rr.trade_count_24h as number | null) ? (
+            <span className="num">{rr.trade_count_24h as number} trades today</span>
+          ) : null}
         </div>
 
         {/* DNA / social evidence — only when there's a real signal */}
@@ -259,20 +272,9 @@ export function MarketDeck({
           </div>
         )}
 
-        {/* Evidence: believers · price · defense */}
-        <MarketEvidence
-          marketId={marketId}
-          facts={{
-            yesPrice: row.yes_price_usd ?? null,
-            noPrice: row.no_price_usd ?? null,
-            chgYes: row.chg_window_yes ?? row.chg_24h_yes ?? null,
-            yesCapital: row.yes_capital_usd ?? null,
-            noCapital: row.no_capital_usd ?? null,
-            volumeUsd: (rr.volume_total_usd as number | null) ?? null,
-            moneyYesPct: (rr.money_yes_pct as number | null) ?? null,
-            peopleYesPct: (rr.people_yes_pct as number | null) ?? null,
-          }}
-        />
+        {/* One intelligence container: House Read · Believers · Defense */}
+        <MarketIntelligence marketId={marketId} />
+
 
         {held && sellPct == null && (
           <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
