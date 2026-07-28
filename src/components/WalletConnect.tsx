@@ -14,14 +14,17 @@ import { base } from "wagmi/chains";
 import {
   wagmiConfig,
   lazyConnector,
+  prefetchWalletSdks,
   LAZY_COINBASE_ID,
   LAZY_WALLETCONNECT_ID,
   type LazyWalletKind,
 } from "@/lib/wagmi";
+import { WalletLogo, brandFor } from "@/components/WalletLogos";
 import { CONNECT_EVENT, requestConnect } from "@/lib/connect-bridge";
 import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getWalletLink } from "@/lib/wallet-link.functions";
 import { readLocalLink } from "@/lib/wallet-link";
+
 
 // Isolated query client for wagmi to avoid interfering with the app's router-level client.
 const wagmiQueryClient = new QueryClient();
