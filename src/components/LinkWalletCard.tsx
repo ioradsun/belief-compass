@@ -35,19 +35,46 @@ export function LinkWalletCard() {
     go(target);
   }
 
+  // The signature has to come from the trading wallet itself. wagmi can only
+  // sign with the account that is currently connected, so we park the login
+  // address, ask the user to switch, then sign once the accounts line up.
+  const PENDING = "conviction:pending-link";
+  const pendingOrigin =
+    typeof window !== "undefined" ? window.sessionStorage.getItem(PENDING) : null;
+  const originLogin = pendingOrigin && pendingOrigin !== connected ? pendingOrigin : null;
+  const switched = Boolean(originLogin && connected === target);
+
   async function verify() {
     if (!valid || !connected) return;
-    setBusy(true);
     setErr(null);
     setMsg(null);
+
+    if (connected !== target) {
+      // Still on the login wallet — remember it and hand off to the wallet app.
+      window.sessionStorage.setItem(PENDING, connected);
+      setMsg(
+        "Now switch your wallet to the trading address and press “Verify by signing” again.",
+      );
+      return;
+    }
+
+    const origin = originLogin;
+    if (!origin) {
+      setErr(
+        "Start from your login wallet: connect it, enter the trading address, then switch and sign.",
+      );
+      return;
+    }
+
+    setBusy(true);
     try {
       const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
       const signature = await signMessageAsync({
-        message: linkMessage(connected, target, nonce),
-        account: target as `0x${string}`,
+        message: linkMessage(origin, target, nonce),
       });
-      await linkWallet({ data: { connected, linked: target, nonce, signature } });
-      writeLocalLink(connected, target);
+      await linkWallet({ data: { connected: origin, linked: target, nonce, signature } });
+      writeLocalLink(origin, target);
+      window.sessionStorage.removeItem(PENDING);
       setMsg("Verified — this link now follows you across devices.");
       go(target);
     } catch (e) {
