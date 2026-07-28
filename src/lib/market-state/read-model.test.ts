@@ -136,7 +136,7 @@ describe("live line: fully supported by structured evidence", () => {
     )!;
     expect(ll.kind).toBe("new_believers");
     expect(ll.window).toBe("1h");
-    expect(ll.line).toBe("18 wallets backed YES in the last hour.");
+    expect(ll.line).toBe("18 believers backed YES in the last hour.");
     expect(ll.payload).toMatchObject({ window: "1h", wallets: 18, side: "YES", trade_count: 27 });
   });
 

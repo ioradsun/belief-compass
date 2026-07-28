@@ -184,13 +184,13 @@ export function selectLiveLine(i: LiveLineInput): LiveLine | null {
     const n = i.newBelievers[nbWindow];
     const sideTxt = i.newBelieversSide ? ` ${i.newBelieversSide}` : "";
     const label =
-      nbWindow === "1h" ? "the last hour" : nbWindow === "24h" ? "today" : "the last 7 days";
+      nbWindow === "1h" ? "in the last hour" : nbWindow === "24h" ? "today" : "in the last 7 days";
     c.push({
       priority: nbWindow === "1h" ? 90 : nbWindow === "24h" ? 70 : 50,
       supported: true,
       kind: "new_believers",
       window: nbWindow,
-      line: `${plural(n, "wallet")} backed${sideTxt} in ${label}.`,
+      line: `${plural(n, "believer")} backed${sideTxt} ${label}.`,
       occurredAt: i.lastTradeAt,
       payload: {
         window: nbWindow,
