@@ -110,11 +110,16 @@ export type Database = {
       house_predictions: {
         Row: {
           actual_action: string | null
+          actual_amount_wei: number | null
+          actual_shares: number | null
+          actual_side: string | null
+          actual_tx_hash: string | null
           answer_source: string | null
           category: string | null
           confidence: number
           created_at: string
           engine_version: number
+          finalized_via: string | null
           no_read_kind: string | null
           onchain_id: number
           outcome: string | null
@@ -125,11 +130,16 @@ export type Database = {
         }
         Insert: {
           actual_action?: string | null
+          actual_amount_wei?: number | null
+          actual_shares?: number | null
+          actual_side?: string | null
+          actual_tx_hash?: string | null
           answer_source?: string | null
           category?: string | null
           confidence?: number
           created_at?: string
           engine_version?: number
+          finalized_via?: string | null
           no_read_kind?: string | null
           onchain_id: number
           outcome?: string | null
@@ -140,11 +150,16 @@ export type Database = {
         }
         Update: {
           actual_action?: string | null
+          actual_amount_wei?: number | null
+          actual_shares?: number | null
+          actual_side?: string | null
+          actual_tx_hash?: string | null
           answer_source?: string | null
           category?: string | null
           confidence?: number
           created_at?: string
           engine_version?: number
+          finalized_via?: string | null
           no_read_kind?: string | null
           onchain_id?: number
           outcome?: string | null
