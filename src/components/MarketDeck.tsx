@@ -165,10 +165,7 @@ export function MarketDeck({
         </h1>
       </div>
 
-
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
-
-
         {/* Pulse — why this matters now */}
         <div
           className="flex items-center gap-2 rounded-[12px] px-3 py-2.5"
@@ -225,7 +222,6 @@ export function MarketDeck({
             )}
           </div>
         )}
-
 
         {/* Evidence: believers · price · defense */}
         <MarketEvidence marketId={marketId} />
@@ -362,13 +358,7 @@ function SideCard({
 type TradeApi = ReturnType<typeof useTrade>;
 
 /** Dollar input that accepts decimals (e.g. 0.25, 12.50). */
-function AmountField({
-  amount,
-  setAmount,
-}: {
-  amount: number;
-  setAmount: (n: number) => void;
-}) {
+function AmountField({ amount, setAmount }: { amount: number; setAmount: (n: number) => void }) {
   const [text, setText] = useState(amount ? String(amount) : "");
 
   // Re-sync when the amount is changed from the outside.
@@ -415,7 +405,6 @@ function AmountField({
     </span>
   );
 }
-
 
 function Dock({
   side,
@@ -486,7 +475,6 @@ function Dock({
 
   const busy = trade.isSubmitting || trade.isMining;
   const amtField = <AmountField amount={amount} setAmount={setAmount} />;
-
 
   // Neutral: NO · SKIP · YES.
   if (!side) {
@@ -632,7 +620,10 @@ function SellPanel({
   const disabled = ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n);
 
   return (
-    <div className="rounded-[16px] p-3" style={{ border: "1px solid var(--border-strong,var(--border))" }}>
+    <div
+      className="rounded-[16px] p-3"
+      style={{ border: "1px solid var(--border-strong,var(--border))" }}
+    >
       <div className="mb-2 flex items-center gap-2 px-1">
         <span className="text-[12px] font-semibold text-[var(--text)]">
           Sell{" "}
