@@ -40,7 +40,11 @@ export interface HouseReadView {
   category: string | null;
 }
 
-type AnswerRow = { category: string | null; actual_action: BeliefAction | null; predicted_action: BeliefAction | null };
+type AnswerRow = {
+  category: string | null;
+  actual_action: BeliefAction | null;
+  predicted_action: BeliefAction | null;
+};
 
 async function marketCategory(sb: SupabaseClient, marketId: number): Promise<string | null> {
   const { data } = await sb
@@ -277,7 +281,10 @@ export async function recordBeliefAnswer(
     .eq("wallet", wallet)
     .eq("onchain_id", marketId)
     .maybeSingle();
-  const row = existing as { predicted_action: BeliefAction | null; actual_action: BeliefAction | null } | null;
+  const row = existing as {
+    predicted_action: BeliefAction | null;
+    actual_action: BeliefAction | null;
+  } | null;
 
   if (row && !row.actual_action) {
     await sb

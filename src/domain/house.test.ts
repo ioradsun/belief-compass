@@ -76,7 +76,11 @@ describe("predictHouse — reads", () => {
   });
 
   it("still reads from personal history when relationship data is missing", () => {
-    const r = predictHouse({ ...base, inCategory: { yes: 10, no: 0, skip: 0 }, relationship: null });
+    const r = predictHouse({
+      ...base,
+      inCategory: { yes: 10, no: 0, skip: 0 },
+      relationship: null,
+    });
     expect(r.action).toBe("YES");
   });
 

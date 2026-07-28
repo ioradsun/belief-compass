@@ -29,7 +29,10 @@ export function useHouseAnswer(marketId: number) {
   const wallet = useEffectiveWallet();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (vars: { action: BeliefAction; source?: "button" | "keyboard" | "gesture" }) => {
+    mutationFn: async (vars: {
+      action: BeliefAction;
+      source?: "button" | "keyboard" | "gesture";
+    }) => {
       if (!wallet) return null;
       return answerBelief({
         data: { wallet, marketId, action: vars.action, source: vars.source ?? "button" },
@@ -275,14 +278,25 @@ function HouseMode({ house, loading }: { house: HouseReadView | null; loading: b
       {house.reasons.length > 0 && (
         <ul className="space-y-1 pt-0.5">
           {house.reasons.map((r) => (
-            <li key={r} className="flex gap-2 text-[12px] leading-snug text-[var(--text-secondary)]">
-              <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[var(--text-muted)]" aria-hidden />
+            <li
+              key={r}
+              className="flex gap-2 text-[12px] leading-snug text-[var(--text-secondary)]"
+            >
+              <span
+                className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[var(--text-muted)]"
+                aria-hidden
+              />
               {r}
             </li>
           ))}
         </ul>
       )}
-      <Record correct={rec.correct} miss={rec.miss} streak={rec.streak} surprise={rec.surpriseStreak} />
+      <Record
+        correct={rec.correct}
+        miss={rec.miss}
+        streak={rec.streak}
+        surprise={rec.surpriseStreak}
+      />
     </div>
   );
 }

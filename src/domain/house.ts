@@ -75,7 +75,13 @@ export function sampleConfidence(n: number, k = 4): number {
 }
 
 function noRead(kind: NoReadKind, title: string, body: string, detail: string[] = []): HouseRead {
-  return { action: null, confidence: 0, reasons: [], noRead: { kind, title, body, detail }, version: HOUSE_ENGINE_VERSION };
+  return {
+    action: null,
+    confidence: 0,
+    reasons: [],
+    noRead: { kind, title, body, detail },
+    version: HOUSE_ENGINE_VERSION,
+  };
 }
 
 /**
@@ -170,7 +176,9 @@ export function predictHouse(s: HouseSignals): HouseRead {
       [
         `Your own ${cat ?? "recent"} history leans ${personalLean > 0 ? "YES" : "NO"}.`,
         `Your closest matches lean ${relLean > 0 ? "YES" : "NO"}.`,
-        c.skip > 0 ? `You have skipped this category ${c.skip} time${c.skip === 1 ? "" : "s"}.` : "",
+        c.skip > 0
+          ? `You have skipped this category ${c.skip} time${c.skip === 1 ? "" : "s"}.`
+          : "",
       ].filter(Boolean),
     );
   }
@@ -283,7 +291,11 @@ export const EMPTY_RECORD: HouseRecord = {
   noRead: 0,
   streak: 0,
   surpriseStreak: 0,
-  byAction: { YES: { correct: 0, total: 0 }, NO: { correct: 0, total: 0 }, SKIP: { correct: 0, total: 0 } },
+  byAction: {
+    YES: { correct: 0, total: 0 },
+    NO: { correct: 0, total: 0 },
+    SKIP: { correct: 0, total: 0 },
+  },
 };
 
 /**
@@ -295,7 +307,11 @@ export function foldRecord(
 ): HouseRecord {
   const rec: HouseRecord = {
     ...EMPTY_RECORD,
-    byAction: { YES: { correct: 0, total: 0 }, NO: { correct: 0, total: 0 }, SKIP: { correct: 0, total: 0 } },
+    byAction: {
+      YES: { correct: 0, total: 0 },
+      NO: { correct: 0, total: 0 },
+      SKIP: { correct: 0, total: 0 },
+    },
   };
   let streakOpen = true;
   let surpriseOpen = true;

@@ -138,7 +138,6 @@ export function MarketDeck({
     return () => window.removeEventListener("keydown", onKey);
   }, [chooseSide, chooseSkip]);
 
-
   const relationshipBeat = row.story?.beats.find((b) => b.kind === "relationship")?.text ?? null;
   const eventBeat = row.story?.beats.find((b) => b.kind === "event")?.text ?? null;
   const held =
@@ -275,7 +274,6 @@ export function MarketDeck({
         {/* One intelligence container: House Read · Believers · Defense */}
         <MarketIntelligence marketId={marketId} />
 
-
         {held && sellPct == null && (
           <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
             <span>
@@ -369,7 +367,6 @@ export function MarketDeck({
             }}
           />
         )}
-
       </div>
     </div>
   );
@@ -513,7 +510,6 @@ function Dock({
   onConfirm: () => void;
   onDone: () => void;
 }) {
-
   // Receipt.
   if (trade.isSuccess && side) {
     return (
