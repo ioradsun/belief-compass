@@ -77,16 +77,8 @@ export function LiveTape({
                     </span>
                   ))}
                 <span className="min-w-0 flex-1">
-                  <span
-                    className={`text-[13px] ${
-                      r.side === "YES"
-                        ? "text-emerald-500"
-                        : r.side === "NO"
-                          ? "text-rose-500"
-                          : "text-[var(--text-secondary)]"
-                    }`}
-                  >
-                    {r.text}
+                  <span className="text-[13px] text-[var(--text-secondary)]">
+                    <SideText text={r.text} />
                   </span>
                   <span className="block truncate text-[11px] text-[var(--text-muted)]">
                     {r.marketTitle}
