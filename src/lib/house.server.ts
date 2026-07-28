@@ -18,8 +18,10 @@ import {
   scoreHouse,
   foldRecord,
   revealHeadline,
+  confidenceBand,
   HOUSE_ENGINE_VERSION,
   type BeliefAction,
+  type HouseConfidenceBand,
   type HouseRead,
   type HouseSignals,
   type HouseRecord,
@@ -34,6 +36,11 @@ export interface HouseReadView {
   reasons: string[];
   /** Present when the House refused to name a side. Safe to show before reveal. */
   noRead: HouseRead["noRead"];
+  /**
+   * Coarse confidence band — safe to show BEFORE a reveal (it leaks intensity,
+   * never the side). Null when there's no directional read. Drives the FOMO copy.
+   */
+  band: HouseConfidenceBand | null;
   /** True only once a verified BET has unlocked the pick (full reveal). */
   revealed: boolean;
   /** True once the round is finalized by a bet OR a skip. */
@@ -177,6 +184,7 @@ export async function loadHouseRead(
       confidence: null,
       reasons: [],
       noRead: read.noRead,
+      band: null,
       revealed: false,
       closed: false,
       finalizedVia: null,
@@ -256,6 +264,9 @@ export async function loadHouseRead(
     ? null
     : predictHouse(await buildSignals(sb, wallet, marketId, category)).noRead;
 
+  // Coarse band is safe to leak pre-reveal (intensity only, never the side).
+  const band = row.predicted_action ? confidenceBand(Number(row.confidence ?? 0)) : null;
+
   const headline: { title: string; line: string } | null = betRevealed
     ? revealHeadline(row.predicted_action, row.actual_action!)
     : closed
@@ -272,6 +283,7 @@ export async function loadHouseRead(
     confidence: betRevealed ? Number(row.confidence ?? 0) : null,
     reasons: betRevealed ? ((row.reasons ?? []) as string[]) : [],
     noRead,
+    band,
     revealed: betRevealed,
     closed,
     finalizedVia: row.finalized_via,
