@@ -232,7 +232,7 @@ function PriceHistory({ series }: { series: { date: string; yesPct: number }[] }
         <path
           d={path}
           fill="none"
-          stroke={delta >= 0 ? "var(--yes)" : "var(--no)"}
+          stroke="var(--text-secondary)"
           strokeWidth={2}
           strokeLinejoin="round"
           strokeLinecap="round"
