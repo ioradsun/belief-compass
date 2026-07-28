@@ -8,10 +8,12 @@
  * client. The House pick unlocks ONLY on a confirmed bet; a skip seals it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
+import { expressBelief } from "@/lib/beliefs.functions";
 
 import { CHAIN_ID } from "@/chain/decoder";
 import {
@@ -91,14 +93,32 @@ export function MarketDeck({
   const bal = useUserBalance(marketId);
   const house = useHouseFinalize(marketId, viewerWallet);
 
+  // A belief tap records a FREE expressed belief (no money) that feeds DNA /
+  // Network / House. Refreshes the viewer's readiness so calibration progresses.
+  const qc = useQueryClient();
+  const express = useMutation({
+    mutationFn: (s: OrderSide) =>
+      expressBelief({ data: { wallet: viewerWallet as string, marketId, side: s } }),
+    onSuccess: (r) => {
+      if (viewerWallet) qc.setQueryData(["readiness", viewerWallet.toLowerCase()], r);
+    },
+  });
+
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(marketId, side === "YES", side ? ethWei : 0n);
 
-  // Selecting a side only opens the order — it never reveals the House pick and
-  // never buys. Only a confirmed on-chain bet unlocks the read.
-  const chooseSide = useCallback((s: OrderSide) => {
-    setSide((cur) => selectSide(cur, s));
-  }, []);
+  // Selecting a side opens the order AND records a free expressed belief (which
+  // feeds DNA / Network / calibration). It never reveals the House pick and never
+  // buys — only a confirmed on-chain bet unlocks the read.
+  const chooseSide = useCallback(
+    (s: OrderSide) => {
+      if (viewerWallet) express.mutate(s);
+      setSide((cur) => selectSide(cur, s));
+    },
+    // express is stable enough; excluding it avoids re-binding keyboard handlers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewerWallet],
+  );
 
   // Skip finalizes the round: the House pick stays sealed (you never paid to see
   // it). This is the FOMO lever, so it's a deliberate, explicit action.
