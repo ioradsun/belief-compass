@@ -8,8 +8,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
 import { type MarketRow } from "@/components/MarketCard";
-import { WalletConnectButton } from "@/components/WalletConnect";
-import { WalletIdentity } from "@/components/WalletIdentity";
 
 type Position = {
   onchain_id: number;
@@ -198,15 +196,8 @@ export function MyConvictions({
 
       <div style={{ borderTop: "1px solid var(--border)" }} />
 
-      {/* Vendor + POV wallet, with the link flow one tap away */}
-      <WalletIdentity viewing={wallet ?? ""} compact />
-
       {/* 2 — Position cards */}
-      {!wallet ? (
-        <div className="pt-4">
-          <WalletConnectButton />
-        </div>
-      ) : positions.length === 0 ? (
+      {positions.length === 0 ? (
         <div className="pt-4 text-[11px] text-[var(--text-muted)]">
           No open positions in the live markets yet.
         </div>

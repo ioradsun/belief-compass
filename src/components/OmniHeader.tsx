@@ -3,7 +3,7 @@
  * quiet lens dropdown docked inside it. No hero copy, no chip row: the header
  * asks a single question ("what are you looking for?") and gets out of the way.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getNetwork } from "@/lib/dna.functions";
 
@@ -22,6 +22,7 @@ export function OmniHeader({
   onSelectMarket,
   onSelectPerson,
   onOpenMenu,
+  right,
 }: {
   lens: Lens;
   lenses: LensOption[];
@@ -31,6 +32,8 @@ export function OmniHeader({
   onSelectMarket: (id: number) => void;
   onSelectPerson: (w: string) => void;
   onOpenMenu: () => void;
+  /** Top-right slot — the account affordance. */
+  right?: ReactNode;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -132,6 +135,8 @@ export function OmniHeader({
             </svg>
           </button>
         </div>
+
+        {right}
       </div>
 
       {/* Lens menu — the filter, stated as a question. */}
