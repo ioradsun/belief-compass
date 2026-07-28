@@ -123,7 +123,7 @@ export function MyConvictions({
     queryFn: async () => await getWallet({ data: { wallet: wallet as string, window: win } }),
     enabled: !!wallet,
     refetchInterval: 12_000,
-    placeholderData: (prev: unknown) => prev,
+    placeholderData: (prev) => prev,
   });
 
   const byId = new Map<number, MarketRow>();

@@ -32,7 +32,7 @@ export function LiveTape({
     queryFn: () => listLiveEvents({ data: { wallet } }),
     // New rows prepend; refetch keeps the tape fresh without new infra.
     refetchInterval: 6_000,
-    placeholderData: (prev: unknown) => prev,
+    placeholderData: (prev) => prev,
   });
   // Sticky: the tape holds its rows until fresh ones arrive.
   const rows = useStickyRows(data?.rows);

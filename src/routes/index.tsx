@@ -63,7 +63,7 @@ const feedQO = (wallet?: string, window: VolumeWindow = "24h") =>
     // Prices, capital and volume re-poll so the cards move on their own.
     refetchInterval: 8_000,
     // Never blank the feed while a poll (or a window switch) is in flight.
-    placeholderData: (prev: unknown) => prev,
+    placeholderData: (prev) => prev,
   });
 
 const pulsesQO = (ids: number[]) =>
@@ -72,7 +72,7 @@ const pulsesQO = (ids: number[]) =>
     queryFn: async () => await listMarketPulses({ data: { ids: ids.slice(0, 120) } }),
     enabled: ids.length > 0,
     refetchInterval: 8_000,
-    placeholderData: (prev: unknown) => prev,
+    placeholderData: (prev) => prev,
   });
 
 export const Route = createFileRoute("/")({
