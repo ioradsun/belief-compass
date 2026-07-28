@@ -189,38 +189,194 @@ function SideColumn({
   );
 }
 
-function PriceHistory({ series }: { series: { date: string; yesPct: number }[] }) {
-  if (series.length < 2) {
-    return <Empty>Not enough price history yet — it builds as the market trades.</Empty>;
-  }
+const usd = (n: number) =>
+  "$" +
+  (n >= 1000
+    ? n.toLocaleString("en-US", { maximumFractionDigits: 0 })
+    : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+
+const cents = (p: number) => `${(p * 100).toFixed(0)}¢`;
+
+/**
+ * The price tab as a trader reads it: what the market says the odds are, what a
+ * dollar pays if you're right, how that price has moved, and whether the money
+ * agrees with the crowd. Every number is real — nothing is modelled or implied.
+ */
+function PriceStory({
+  series,
+  facts,
+}: {
+  series: { date: string; yesPct: number }[];
+  facts?: PriceFacts;
+}) {
+  const yes = facts?.yesPrice ?? null;
+  const no = facts?.noPrice ?? null;
+  const chg = facts?.chgYes ?? null;
+  const payoutYes = yes && yes > 0 ? 1 / yes : null;
+  const payoutNo = no && no > 0 ? 1 / no : null;
+
+  const pts = series.map((s) => Math.max(0, Math.min(100, s.yesPct)));
+  const hi = pts.length ? Math.max(...pts) : null;
+  const lo = pts.length ? Math.min(...pts) : null;
+  const last = pts.length ? pts[pts.length - 1] : yes != null ? yes * 100 : null;
+  const delta = pts.length >= 2 ? pts[pts.length - 1] - pts[0] : null;
+
+  const yesCap = facts?.yesCapital ?? 0;
+  const noCap = facts?.noCapital ?? 0;
+  const capTotal = yesCap + noCap;
+  const moneyYes =
+    facts?.moneyYesPct ?? (capTotal > 0 ? (yesCap / capTotal) * 100 : null);
+  const peopleYes = facts?.peopleYesPct ?? null;
+
+  return (
+    <div className="space-y-3 py-2">
+      {/* The odds, and what they pay */}
+      <div className="grid grid-cols-2 gap-2">
+        <PriceQuote
+          label="YES"
+          price={yes}
+          payout={payoutYes}
+          chg={chg}
+          color="var(--yes)"
+        />
+        <PriceQuote
+          label="NO"
+          price={no}
+          payout={payoutNo}
+          chg={chg == null ? null : -chg}
+          color="var(--no)"
+        />
+      </div>
+
+      {/* Where this price sits inside its own 60-day range */}
+      {hi != null && lo != null && last != null && hi > lo && (
+        <div>
+          <div className="mb-1 flex items-baseline justify-between text-[11px] text-[var(--text-muted)]">
+            <span className="num">Low {lo.toFixed(0)}%</span>
+            <span>{series.length}-day range</span>
+            <span className="num">High {hi.toFixed(0)}%</span>
+          </div>
+          <div className="relative h-1.5 rounded-full" style={{ background: "var(--border)" }}>
+            <span
+              className="absolute top-1/2 h-3 w-[3px] -translate-y-1/2 rounded-full"
+              style={{
+                left: `${((last - lo) / (hi - lo)) * 100}%`,
+                background: "var(--text)",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* The trend itself */}
+      {series.length >= 2 ? (
+        <Sparkline pts={pts} delta={delta ?? 0} days={series.length} />
+      ) : (
+        <div className="text-[12px] text-[var(--text-muted)]">
+          Not enough price history yet — it builds as the market trades.
+        </div>
+      )}
+
+      {/* Where the money actually is, and whether it agrees with the crowd */}
+      {capTotal > 0 && moneyYes != null && (
+        <div>
+          <div className="mb-1 flex items-baseline justify-between text-[11px]">
+            <span className="text-[var(--text-muted)]">Money at risk</span>
+            <span className="num text-[var(--text-secondary)]">
+              {usd(yesCap)} YES · {usd(noCap)} NO
+            </span>
+          </div>
+          <div
+            className="flex h-1.5 overflow-hidden rounded-full"
+            style={{ background: "var(--border)" }}
+          >
+            <span style={{ width: `${moneyYes}%`, background: "var(--yes)" }} />
+            <span style={{ width: `${100 - moneyYes}%`, background: "var(--no)" }} />
+          </div>
+          {peopleYes != null && (
+            <div className="mt-1 text-[11px] text-[var(--text-muted)]">
+              <span className="num">{moneyYes.toFixed(0)}%</span> of the money is on YES, but only{" "}
+              <span className="num">{peopleYes.toFixed(0)}%</span> of the people are — the gap is
+              where the edge hides.
+            </div>
+          )}
+        </div>
+      )}
+
+      {facts?.volumeUsd ? (
+        <div className="text-[11px] text-[var(--text-muted)]">
+          <span className="num">{usd(facts.volumeUsd)}</span> traded here all-time.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PriceQuote({
+  label,
+  price,
+  payout,
+  chg,
+  color,
+}: {
+  label: string;
+  price: number | null;
+  payout: number | null;
+  chg: number | null;
+  color: string;
+}) {
+  return (
+    <div className="rounded-[10px] px-2.5 py-2" style={{ border: "1px solid var(--border)" }}>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-[11px] font-semibold" style={{ color }}>
+          {label}
+        </span>
+        <span className="num text-[16px] font-semibold text-[var(--text)]">
+          {price == null ? "—" : cents(price)}
+        </span>
+        {chg != null && (
+          <span
+            className="num ml-auto text-[11px] font-semibold"
+            style={{ color: chg >= 0 ? "var(--yes)" : "var(--no)" }}
+          >
+            {chg >= 0 ? "+" : "−"}
+            {Math.abs(chg).toFixed(1)}%
+          </span>
+        )}
+      </div>
+      <div className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+        {payout == null ? (
+          "—"
+        ) : (
+          <>
+            $1 pays <span className="num text-[var(--text-secondary)]">${payout.toFixed(2)}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Sparkline({ pts, delta, days }: { pts: number[]; delta: number; days: number }) {
   const w = 280;
-  const h = 96;
+  const h = 72;
   const pad = 4;
-  const xs = series.map((_, i) => pad + (i * (w - 2 * pad)) / (series.length - 1));
-  const ys = series.map((p) => {
-    const v = Math.max(0, Math.min(100, p.yesPct));
-    return pad + ((100 - v) * (h - 2 * pad)) / 100;
-  });
-  const path = xs
-    .map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${ys[i].toFixed(1)}`)
-    .join(" ");
-  const last = series[series.length - 1].yesPct;
-  const first = series[0].yesPct;
-  const delta = last - first;
+  const xs = pts.map((_, i) => pad + (i * (w - 2 * pad)) / (pts.length - 1));
+  const ys = pts.map((v) => pad + ((100 - v) * (h - 2 * pad)) / 100);
+  const line = xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" ");
+  const area = `${line} L${xs[xs.length - 1].toFixed(1)} ${h - pad} L${xs[0].toFixed(1)} ${h - pad} Z`;
   const mid = pad + ((100 - 50) * (h - 2 * pad)) / 100;
 
   return (
-    <div className="py-1">
-      <div className="mb-1 flex items-baseline justify-between px-1">
-        <span className="num text-[13px] font-semibold text-[var(--text)]">
-          {last.toFixed(0)}% YES
-        </span>
+    <div>
+      <div className="mb-1 flex items-baseline justify-between text-[11px]">
+        <span className="text-[var(--text-muted)]">YES over {days}d</span>
         <span
-          className="num text-[11px] font-semibold"
+          className="num font-semibold"
           style={{ color: delta >= 0 ? "var(--yes)" : "var(--no)" }}
         >
           {delta >= 0 ? "+" : "−"}
-          {Math.abs(delta).toFixed(0)} pts · {series.length}d
+          {Math.abs(delta).toFixed(0)} pts
         </span>
       </div>
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full" role="img" aria-label="YES share over time">
@@ -233,18 +389,21 @@ function PriceHistory({ series }: { series: { date: string; yesPct: number }[] }
           strokeDasharray="3 3"
           strokeWidth={1}
         />
+        <path d={area} fill="var(--text-secondary)" opacity={0.08} />
         <path
-          d={path}
+          d={line}
           fill="none"
           stroke="var(--text-secondary)"
           strokeWidth={2}
           strokeLinejoin="round"
           strokeLinecap="round"
         />
+        <circle cx={xs[xs.length - 1]} cy={ys[ys.length - 1]} r={2.5} fill="var(--text)" />
       </svg>
     </div>
   );
 }
+
 
 function Defense({ opinions }: { opinions: DefenseOpinion[] }) {
   if (opinions.length === 0) {
