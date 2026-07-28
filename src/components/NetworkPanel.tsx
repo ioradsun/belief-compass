@@ -12,6 +12,7 @@ import { getNetwork, type NetworkPersonRow } from "@/lib/dna.functions";
 import { RELATIONSHIP_TEXT, relationshipTone, relationshipAria, ago } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { WalletConnectButton } from "@/components/WalletConnect";
+import { useReadiness, CalibrationCard } from "@/components/Calibration";
 
 type RelFilter = "all" | "twin" | "tribe" | "opp" | "inverse";
 type Sort = "relevant" | "closest" | "active" | "newest";
@@ -56,6 +57,8 @@ export function NetworkPanel({
     };
   }, [rawQuery]);
 
+  const { data: readiness } = useReadiness(wallet);
+
   const { data, isLoading } = useQuery({
     queryKey: ["network", wallet ?? null, filter, sort, query],
     queryFn: () => getNetwork({ data: { wallet, relationship: filter, sort, query, limit: 40 } }),
@@ -85,6 +88,16 @@ export function NetworkPanel({
           Connect your wallet to find people who see the world like you.
         </div>
         <WalletConnectButton />
+      </div>
+    );
+  }
+
+  // Before calibration the Network can't be honest — show the shared calibration
+  // card instead of a blank list, so the surface never feels half-built.
+  if (readiness && !readiness.calibrated) {
+    return (
+      <div className="pt-2">
+        <CalibrationCard readiness={readiness} />
       </div>
     );
   }
