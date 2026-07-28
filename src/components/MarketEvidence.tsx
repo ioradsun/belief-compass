@@ -40,8 +40,8 @@ export function MarketEvidence({ marketId }: { marketId: number }) {
     : { believers: 0, price: 0 };
 
   return (
-    <div className="rounded-[12px]" style={{ border: "1px solid var(--border)" }}>
-      <div className="flex gap-1 p-1">
+    <div>
+      <div className="flex gap-4 border-b" style={{ borderColor: "var(--border)" }}>
         <TabBtn on={tab === "believers"} onClick={() => setTab("believers")}>
           Believers{counts.believers ? ` ${counts.believers}` : ""}
         </TabBtn>
@@ -52,7 +52,7 @@ export function MarketEvidence({ marketId }: { marketId: number }) {
           Defense{data?.defense.length ? ` ${data.defense.length}` : ""}
         </TabBtn>
       </div>
-      <div className="max-h-[220px] overflow-y-auto px-2 pb-2">
+      <div className="max-h-[220px] overflow-y-auto pt-1.5">
         {isLoading && !data ? (
           <div className="space-y-1.5 py-2">
             <div className="h-6 animate-pulse rounded bg-[var(--border)]/50" />
@@ -83,17 +83,17 @@ function TabBtn({
     <button
       type="button"
       onClick={onClick}
-      className="flex-1 rounded-[9px] py-1.5 text-[12px] font-semibold transition-colors"
-      style={
-        on
-          ? { background: "var(--surface-2,var(--border))", color: "var(--text)" }
-          : { color: "var(--text-muted)" }
-      }
+      className="-mb-px border-b-2 pb-1.5 text-[12px] font-semibold transition-colors"
+      style={{
+        borderColor: on ? "var(--text)" : "transparent",
+        color: on ? "var(--text)" : "var(--text-muted)",
+      }}
     >
       {children}
     </button>
   );
 }
+
 
 /** Two columns that mirror the YES/NO decision: everyone on each side. */
 function BelieversSplit({
