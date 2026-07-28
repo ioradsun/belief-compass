@@ -213,9 +213,10 @@ export function MarketIntelligence({
         className="min-h-[188px] max-h-[260px] overflow-y-auto px-3 pb-3 pt-2"
       >
         {mode === "house" ? (
-          viewer && readiness && !readiness.calibrated ? (
+          viewer && readiness && !readiness.calibrated && !house?.revealed && !house?.closed ? (
             // Pre-calibration, House Read IS the calibration: answer free belief
-            // questions right here and watch the House learn you.
+            // questions right here and watch the House learn you. But once this
+            // market's round is revealed/closed (a bet or skip), show that instead.
             <CalibrationQuiz viewer={viewer} readiness={readiness} />
           ) : (
             <div className="space-y-2">
