@@ -10,11 +10,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMarketChange } from "@/lib/markets.functions";
+import { getMarketEvidence } from "@/lib/evidence.functions";
+import { getNetwork } from "@/lib/dna.functions";
 import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
+import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
+import { convictionSignal, type ConvictionSignal } from "@/domain/conviction";
 
 import { CHAIN_ID } from "@/chain/decoder";
 import {
@@ -128,6 +132,32 @@ export function MarketDeck({
   const noPrice = change?.noPrice ?? row.no_price_usd;
   const yesChg = w?.yes ?? (rr.chg_24h_yes as number | null) ?? null;
   const noChg = w?.no ?? (rr.chg_24h_no as number | null) ?? null;
+
+  // Conviction slot — the "diamond hands" read under each side. Reuses the same
+  // evidence + network queries the intelligence panel already runs (React Query
+  // dedupes by key), so it costs no extra fetch. The pick is a pure ranking:
+  // your-network → diamond-hands champion (time × size) → momentum → nothing.
+  const connected = useEffectiveWallet();
+  const viewer = viewerWallet ?? connected;
+  const { data: evidence } = useQuery({
+    queryKey: ["evidence", marketId],
+    queryFn: () => getMarketEvidence({ data: { marketId } }),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  });
+  const { data: net } = useQuery({
+    queryKey: ["network", viewer ?? null, "all", "relevant", ""],
+    queryFn: () => getNetwork({ data: { wallet: viewer, limit: 60 } }),
+    enabled: !!viewer,
+    staleTime: 60_000,
+  });
+  const network = new Map(
+    (net?.people ?? []).map((p) => [p.wallet.toLowerCase(), p.relationship as string]),
+  );
+  const holders = evidence?.believers ?? [];
+  const yesSignal = convictionSignal(holders, "YES", { network, momentumPct: yesChg });
+  const noSignal = convictionSignal(holders, "NO", { network, momentumPct: noChg });
 
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(marketId, side === "YES", side ? ethWei : 0n);
@@ -305,6 +335,7 @@ export function MarketDeck({
               chg={yesChg}
               believers={row.believers_yes}
               capital={row.yes_capital_usd ?? null}
+              signal={yesSignal}
               selected={side === "YES"}
               onSelect={() => chooseSide("YES")}
             />
@@ -314,6 +345,7 @@ export function MarketDeck({
               chg={noChg}
               believers={row.believers_no}
               capital={row.no_capital_usd ?? null}
+              signal={noSignal}
               selected={side === "NO"}
               onSelect={() => chooseSide("NO")}
             />
@@ -481,6 +513,7 @@ function SideCard({
   chg,
   believers,
   capital,
+  signal,
   selected,
   onSelect,
 }: {
@@ -489,6 +522,7 @@ function SideCard({
   chg: number | null;
   believers: number | null;
   capital: number | null;
+  signal: ConvictionSignal | null;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -528,7 +562,54 @@ function SideCard({
       <div className="num text-[11px] text-[var(--text-muted)]">
         {believers ?? 0} believers{capital ? ` · ${fmtUsd(capital)}` : ""}
       </div>
+      <ConvictionSlot signal={signal} col={col} />
     </button>
+  );
+}
+
+/**
+ * The conviction line: the single truest thing about who is standing on this
+ * side. A trusted face gets a colored ring; the diamond-hands champion shows a
+ * 💎 and their hold time; a dead side reserves the row height (so the two cards
+ * stay aligned) but renders nothing.
+ */
+function ConvictionSlot({ signal, col }: { signal: ConvictionSignal | null; col: string }) {
+  if (!signal) return <div className="h-5" aria-hidden />;
+  const emoji = signal.kind === "network" ? "" : signal.kind === "diamond" ? "💎 " : "";
+  const person = signal.name ?? "";
+  return (
+    <div
+      className="flex h-5 items-center gap-1.5 overflow-hidden"
+      title={person ? `${signal.label} · ${person}` : signal.label}
+    >
+      {signal.avatarUrl ? (
+        <img
+          src={signal.avatarUrl}
+          alt=""
+          className="h-4 w-4 shrink-0 rounded-full object-cover"
+          style={signal.yours ? { boxShadow: `0 0 0 1.5px ${col}` } : undefined}
+        />
+      ) : signal.kind !== "momentum" ? (
+        <span
+          className="h-4 w-4 shrink-0 rounded-full"
+          style={{
+            background: "var(--surface-2,var(--border))",
+            boxShadow: signal.yours ? `0 0 0 1.5px ${col}` : undefined,
+          }}
+          aria-hidden
+        />
+      ) : null}
+      <span
+        className="truncate text-[10px] font-semibold"
+        style={{ color: signal.yours ? col : "var(--text-secondary)" }}
+      >
+        {emoji}
+        {signal.label}
+      </span>
+      {signal.detail && (
+        <span className="num shrink-0 text-[10px] text-[var(--text-muted)]">{signal.detail}</span>
+      )}
+    </div>
   );
 }
 
