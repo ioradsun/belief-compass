@@ -40,6 +40,20 @@ const PULSE_TONE: Record<string, string> = {
   neutral: "var(--text-muted)",
 };
 
+/**
+ * Momentum tags — the six canonical opportunity classifications from the
+ * server-side engine. Color is a second signal only; the word carries meaning.
+ */
+const MOMENTUM: Record<string, { label: string; hue: string; hint: string }> = {
+  hot: { label: "Hot", hue: "#f97316", hint: "Activity is accelerating right now" },
+  early: { label: "Early", hue: "#22d3ee", hint: "Real growth, still small and immature" },
+  hidden: { label: "Hidden", hue: "#a78bfa", hint: "Heavy turnover for its visible size" },
+  contested: { label: "Contested", hue: "#f43f5e", hint: "Both sides balanced and active" },
+  conviction: { label: "Conviction", hue: "#34d399", hint: "Holders persisting under challenge" },
+  new: { label: "New", hue: "#94a3b8", hint: "Opened in the last 72 hours" },
+};
+
+
 export function MarketDeck({
   row,
   ethUsd,
