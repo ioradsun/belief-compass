@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      calc_cache: {
+        Row: {
+          key: string
+          updated_at: string
+          value: number | null
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value?: number | null
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: number | null
+        }
+        Relationships: []
+      }
       events: {
         Row: {
           action: string | null
@@ -480,6 +498,33 @@ export type Database = {
             referencedColumns: ["onchain_id"]
           },
         ]
+      }
+      market_window_change: {
+        Row: {
+          chg_no: number | null
+          chg_yes: number | null
+          onchain_id: number
+          since_at: string | null
+          updated_at: string
+          window_key: string
+        }
+        Insert: {
+          chg_no?: number | null
+          chg_yes?: number | null
+          onchain_id: number
+          since_at?: string | null
+          updated_at?: string
+          window_key: string
+        }
+        Update: {
+          chg_no?: number | null
+          chg_yes?: number | null
+          onchain_id?: number
+          since_at?: string | null
+          updated_at?: string
+          window_key?: string
+        }
+        Relationships: []
       }
       markets: {
         Row: {
@@ -989,6 +1034,8 @@ export type Database = {
         Returns: Json
       }
       recompute_price_changes: { Args: never; Returns: undefined }
+      refresh_eth_usd_calibration: { Args: never; Returns: number }
+      refresh_market_window_change: { Args: never; Returns: undefined }
       request_viewer_match_refresh: {
         Args: { p_wallet: string }
         Returns: undefined
