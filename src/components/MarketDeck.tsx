@@ -221,7 +221,20 @@ export function MarketDeck({
         )}
 
         {/* Evidence: believers · price · defense */}
-        <MarketEvidence marketId={marketId} />
+        <MarketEvidence
+          marketId={marketId}
+          facts={{
+            yesPrice: row.yes_price_usd ?? null,
+            noPrice: row.no_price_usd ?? null,
+            chgYes: row.chg_window_yes ?? row.chg_24h_yes ?? null,
+            yesCapital: row.yes_capital_usd ?? null,
+            noCapital: row.no_capital_usd ?? null,
+            volumeUsd: (rr.volume_total_usd as number | null) ?? null,
+            moneyYesPct: (rr.money_yes_pct as number | null) ?? null,
+            peopleYesPct: (rr.people_yes_pct as number | null) ?? null,
+          }}
+        />
+
 
         {held && sellPct == null && (
           <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
