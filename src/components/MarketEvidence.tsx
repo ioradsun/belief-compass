@@ -274,10 +274,7 @@ function Defense({ opinions }: { opinions: DefenseOpinion[] }) {
                 className="rounded px-1 py-0.5 text-[9px] font-semibold"
                 style={{
                   color: o.vote === "YES" ? "var(--yes)" : "var(--no)",
-                  background:
-                    o.vote === "YES"
-                      ? "color-mix(in oklab,var(--yes) 12%,transparent)"
-                      : "color-mix(in oklab,var(--no) 12%,transparent)",
+                  background: "var(--surface-2,var(--border))",
                 }}
               >
                 {o.vote}
