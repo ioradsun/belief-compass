@@ -113,7 +113,10 @@ export function LandingPanel({
               <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
                 <button
                   type="button"
-                  onClick={onEnter}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEnter();
+                  }}
                   tabIndex={expanded ? 0 : -1}
                   className="rounded-full bg-[var(--text)] px-6 py-3 text-[14px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] motion-reduce:transition-none"
                 >
