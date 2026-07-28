@@ -73,7 +73,6 @@ export function MarketEvidence({ marketId, facts }: { marketId: number; facts?: 
           <BelieversSplit believers={data?.believers ?? []} networkWallets={networkWallets} />
         ) : tab === "price" ? (
           <PriceStory series={data?.priceSeries ?? []} facts={facts} />
-
         ) : (
           <Defense opinions={data?.defense ?? []} />
         )}
@@ -224,21 +223,14 @@ function PriceStory({
   const yesCap = facts?.yesCapital ?? 0;
   const noCap = facts?.noCapital ?? 0;
   const capTotal = yesCap + noCap;
-  const moneyYes =
-    facts?.moneyYesPct ?? (capTotal > 0 ? (yesCap / capTotal) * 100 : null);
+  const moneyYes = facts?.moneyYesPct ?? (capTotal > 0 ? (yesCap / capTotal) * 100 : null);
   const peopleYes = facts?.peopleYesPct ?? null;
 
   return (
     <div className="space-y-3 py-2">
       {/* The odds, and what they pay */}
       <div className="grid grid-cols-2 gap-2">
-        <PriceQuote
-          label="YES"
-          price={yes}
-          payout={payoutYes}
-          chg={chg}
-          color="var(--yes)"
-        />
+        <PriceQuote label="YES" price={yes} payout={payoutYes} chg={chg} color="var(--yes)" />
         <PriceQuote
           label="NO"
           price={no}
@@ -363,7 +355,9 @@ function Sparkline({ pts, delta, days }: { pts: number[]; delta: number; days: n
   const pad = 4;
   const xs = pts.map((_, i) => pad + (i * (w - 2 * pad)) / (pts.length - 1));
   const ys = pts.map((v) => pad + ((100 - v) * (h - 2 * pad)) / 100);
-  const line = xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" ");
+  const line = xs
+    .map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${ys[i].toFixed(1)}`)
+    .join(" ");
   const area = `${line} L${xs[xs.length - 1].toFixed(1)} ${h - pad} L${xs[0].toFixed(1)} ${h - pad} Z`;
   const mid = pad + ((100 - 50) * (h - 2 * pad)) / 100;
 
@@ -403,7 +397,6 @@ function Sparkline({ pts, delta, days }: { pts: number[]; delta: number; days: n
     </div>
   );
 }
-
 
 function Defense({ opinions }: { opinions: DefenseOpinion[] }) {
   if (opinions.length === 0) {

@@ -235,7 +235,6 @@ export function MarketDeck({
           }}
         />
 
-
         {held && sellPct == null && (
           <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
             <span>
