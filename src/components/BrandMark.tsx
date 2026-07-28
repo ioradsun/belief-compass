@@ -26,14 +26,14 @@ export function BrandMark({
     >
       {/* top C — normal orientation, faces right */}
       <path
-        d="M16.1 4.3 A5.2 5.2 0 1 0 16.1 12.7"
+        d="M15.06 4.3 A5.2 5.2 0 1 0 15.06 12.7"
         stroke="currentColor"
         strokeWidth="2.4"
         strokeLinecap="round"
       />
       {/* bottom C — horizontally inverted, faces left */}
       <path
-        d="M7.9 12.9 A5.2 5.2 0 1 1 7.9 21.3"
+        d="M8.94 12.9 A5.2 5.2 0 1 1 8.94 21.3"
         stroke="currentColor"
         strokeWidth="2.4"
         strokeLinecap="round"
