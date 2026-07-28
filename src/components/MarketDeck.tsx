@@ -635,9 +635,14 @@ function SellPanel({
   const disabled = ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n);
 
   return (
-    <div className="rounded-[16px] p-3" style={{ border: "1px solid var(--no)" }}>
+    <div className="rounded-[16px] p-3" style={{ border: "1px solid var(--border-strong,var(--border))" }}>
       <div className="mb-2 flex items-center gap-2 px-1">
-        <span className="text-[12px] font-semibold text-[var(--no)]">Sell {held.side}</span>
+        <span className="text-[12px] font-semibold text-[var(--text)]">
+          Sell{" "}
+          <span style={{ color: held.side === "YES" ? "var(--yes)" : "var(--no)" }}>
+            {held.side}
+          </span>
+        </span>
         <span className="ml-auto flex gap-1">
           {[25, 50, 100].map((p) => (
             <button
@@ -647,7 +652,7 @@ function SellPanel({
               className="rounded-[8px] px-2 py-1 text-[11px] font-semibold"
               style={
                 pct === p
-                  ? { background: "var(--no)", color: "#2d0808" }
+                  ? { background: "var(--text)", color: "var(--bg)" }
                   : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
               }
             >
