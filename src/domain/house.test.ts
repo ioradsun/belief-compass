@@ -6,9 +6,31 @@ import {
   revealHeadline,
   dnaContribution,
   directionalAccuracy,
+  confidenceBand,
+  BAND_COPY,
   MIN_CONFIDENCE,
   type HouseSignals,
 } from "./house";
+
+describe("confidence bands", () => {
+  it("maps confidence to the right band at every threshold", () => {
+    expect(confidenceBand(0.42)).toBe("SHOT_IN_THE_DARK");
+    expect(confidenceBand(0.5)).toBe("FLYING_BLIND");
+    expect(confidenceBand(0.59)).toBe("FLYING_BLIND");
+    expect(confidenceBand(0.6)).toBe("HUNCH");
+    expect(confidenceBand(0.69)).toBe("HUNCH");
+    expect(confidenceBand(0.7)).toBe("READ");
+    expect(confidenceBand(0.84)).toBe("READ");
+    expect(confidenceBand(0.85)).toBe("STRONG_READ");
+    expect(confidenceBand(1)).toBe("STRONG_READ");
+  });
+  it("has copy for every band that never names a side", () => {
+    for (const band of Object.keys(BAND_COPY) as (keyof typeof BAND_COPY)[]) {
+      expect(BAND_COPY[band].headline.length).toBeGreaterThan(0);
+      expect(BAND_COPY[band].line).not.toMatch(/\b(YES|NO)\b/);
+    }
+  });
+});
 
 const base: HouseSignals = {
   connected: true,
