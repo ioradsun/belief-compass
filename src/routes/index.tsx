@@ -6,6 +6,8 @@ import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { MarketDeck } from "@/components/MarketDeck";
 import { PersonProfile } from "@/components/PersonProfile";
+import { AccountMenu } from "@/components/AccountMenu";
+import { WalletConnectButton } from "@/components/WalletConnect";
 import { DnaOverview } from "@/components/DnaOverview";
 // Phase 5: the SERVER owns opportunity classification + score. The client only
 // filters by the canonical type and reads the precomputed order — no scoreFeed().
@@ -234,6 +236,15 @@ function Feed() {
         className={`${show("mine")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
         style={{ borderRight: "1px solid var(--border)" }}
       >
+        {!wallet ? (
+          /* Signed out: nothing to show but the one thing to do. */
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
+            <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
+              Connect a wallet to see your convictions.
+            </p>
+            <WalletConnectButton />
+          </div>
+        ) : (
         <MyWorld
           wallet={wallet}
           rows={rows as unknown as MarketRow[]}
@@ -245,6 +256,7 @@ function Feed() {
           onOpenDna={openDna}
           initialNetwork={Boolean(selectedPerson || dnaOpen)}
         />
+        )}
       </aside>
 
       {/* CENTER — Belief. Fluid column, but the reading measure is capped at
@@ -263,6 +275,7 @@ function Feed() {
               onSelectMarket={selectMarket}
               onSelectPerson={selectPerson}
               onOpenMenu={() => setMenuOpen(true)}
+              right={<AccountMenu wallet={wallet} onOpenProfile={selectPerson} />}
             />
           </div>
 
