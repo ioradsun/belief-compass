@@ -107,6 +107,33 @@ export type Database = {
         }
         Relationships: []
       }
+      house_foundation_answers: {
+        Row: {
+          action: string
+          answered_at: string
+          dimension_contributions: Json
+          foundation_key: string
+          mapping_version: number
+          wallet: string
+        }
+        Insert: {
+          action: string
+          answered_at?: string
+          dimension_contributions?: Json
+          foundation_key: string
+          mapping_version: number
+          wallet: string
+        }
+        Update: {
+          action?: string
+          answered_at?: string
+          dimension_contributions?: Json
+          foundation_key?: string
+          mapping_version?: number
+          wallet?: string
+        }
+        Relationships: []
+      }
       house_predictions: {
         Row: {
           actual_action: string | null
