@@ -302,7 +302,7 @@ export function composeLiveStory(input: LiveStoryInput): { text: string; tone: B
     const n = num(input.walletCount) || 1;
     const verb = input.action === "SELL" ? "pulled out of" : "piled into";
     return {
-      text: `${n} ${n === 1 ? "wallet" : "wallets"} ${verb} ${side ?? ""}${stake}${tail}`.trim(),
+      text: `${n} ${n === 1 ? "believer" : "believers"} ${verb} ${side ?? ""}${stake}${tail}`.trim(),
       tone,
     };
   }

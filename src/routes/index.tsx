@@ -93,12 +93,12 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Prediction markets ranked by directional wallet conviction. Money weight vs people weight, side by side.",
+          "Prediction markets ranked by directional believer conviction. Money weight vs people weight, side by side.",
       },
       { property: "og:title", content: "Conviction — see who actually believes" },
       {
         property: "og:description",
-        content: "Prediction markets ranked by directional wallet conviction.",
+        content: "Prediction markets ranked by directional believer conviction.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
