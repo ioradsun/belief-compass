@@ -708,14 +708,14 @@ function DockBtn({
   const style =
     tone === "yes"
       ? {
-          border: "1px solid color-mix(in oklab,var(--yes) 45%,transparent)",
-          background: "color-mix(in oklab,var(--yes) 10%,transparent)",
+          border: "1px solid var(--border-strong,var(--border))",
+          background: "var(--surface)",
           color: "var(--yes)",
         }
       : tone === "no"
         ? {
-            border: "1px solid color-mix(in oklab,var(--no) 45%,transparent)",
-            background: "color-mix(in oklab,var(--no) 10%,transparent)",
+            border: "1px solid var(--border-strong,var(--border))",
+            background: "var(--surface)",
             color: "var(--no)",
           }
         : { border: "1px solid var(--border)", color: "var(--text-secondary)" };
