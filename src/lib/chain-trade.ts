@@ -92,45 +92,89 @@ export function useUserBalance(marketId: number | null) {
  * from the quote; `sell` floors proceeds. Never called except from an explicit
  * Confirm press. Returns the tx hash + a receipt-tracking status.
  */
+/** True when a wallet error is the user declining/closing the request. */
+export function isUserRejection(err: unknown): boolean {
+  const e = err as { code?: number; name?: string; message?: string; shortMessage?: string } | null;
+  if (!e) return false;
+  if (e.code === 4001) return true;
+  const text = `${e.name ?? ""} ${e.shortMessage ?? ""} ${e.message ?? ""}`.toLowerCase();
+  return (
+    text.includes("user rejected") ||
+    text.includes("user denied") ||
+    text.includes("rejected the request") ||
+    text.includes("userrejectedrequest")
+  );
+}
+
 export function useTrade() {
   const { writeContractAsync, isPending, error, reset } = useWriteContract();
   const [hash, setHash] = useState<`0x${string}` | undefined>(undefined);
+  // Own submit flag: some wallets (smart-wallet popups) never settle wagmi's
+  // isPending if the window is dismissed, which would freeze the dock forever.
+  const [submitting, setSubmitting] = useState(false);
+  const [localError, setLocalError] = useState<Error | null>(null);
   const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
 
+  async function send(fn: () => Promise<`0x${string}`>) {
+    setLocalError(null);
+    setSubmitting(true);
+    try {
+      const h = await fn();
+      setHash(h);
+      return h;
+    } catch (e) {
+      setLocalError(
+        isUserRejection(e)
+          ? new Error("Signature declined — nothing was sent.")
+          : e instanceof Error
+            ? e
+            : new Error("Transaction failed."),
+      );
+      reset();
+      throw e;
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function buy(marketId: number, yes: boolean, ethWei: bigint, quotedTokens: bigint) {
-    const h = await writeContractAsync({
-      ...CONTRACT,
-      functionName: "buy",
-      args: [BigInt(marketId), yes, minOut(quotedTokens)],
-      value: ethWei,
-      chainId: CHAIN_ID,
-    });
-    setHash(h);
-    return h;
+    return send(() =>
+      writeContractAsync({
+        ...CONTRACT,
+        functionName: "buy",
+        args: [BigInt(marketId), yes, minOut(quotedTokens)],
+        value: ethWei,
+        chainId: CHAIN_ID,
+      }),
+    );
   }
 
   async function sell(marketId: number, yes: boolean, tokenAmount: bigint, quotedProceeds: bigint) {
-    const h = await writeContractAsync({
-      ...CONTRACT,
-      functionName: "sell",
-      args: [BigInt(marketId), yes, tokenAmount, minOut(quotedProceeds)],
-      chainId: CHAIN_ID,
-    });
-    setHash(h);
-    return h;
+    return send(() =>
+      writeContractAsync({
+        ...CONTRACT,
+        functionName: "sell",
+        args: [BigInt(marketId), yes, tokenAmount, minOut(quotedProceeds)],
+        chainId: CHAIN_ID,
+      }),
+    );
   }
+
+  const combinedError = localError ?? error ?? receipt.error ?? null;
 
   return {
     buy,
     sell,
     hash,
-    isSubmitting: isPending,
+    isSubmitting: submitting || (isPending && !localError),
     isMining: receipt.isLoading,
     isSuccess: receipt.isSuccess,
-    isError: !!error || receipt.isError,
-    error: error ?? receipt.error ?? null,
+    isError: !!combinedError || receipt.isError,
+    error: combinedError,
     reset: () => {
       setHash(undefined);
+      setLocalError(null);
+      setSubmitting(false);
       reset();
     },
   };
