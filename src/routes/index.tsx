@@ -6,6 +6,7 @@ import { listFeed, listMarketPulses, type VolumeWindow } from "@/lib/markets.fun
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { MarketDeck } from "@/components/MarketDeck";
+import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { CalibrationReveal, useReadiness } from "@/components/Calibration";
 import { getCalibrationQueue } from "@/lib/beliefs.functions";
 import { PersonProfile } from "@/components/PersonProfile";
@@ -350,10 +351,19 @@ function Feed() {
                 <DnaOverview wallet={wallet} onSelectPerson={selectPerson} />
               </div>
             ) : rows.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
-                No markets yet. The POV poller runs on a schedule — data will appear once the first
-                cycle completes.
-              </div>
+              // While the feed is still loading (first paint), show a live-market
+              // skeleton, not a "nothing here" card. Only show the real empty
+              // message once data has actually arrived empty.
+              data === undefined ? (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <DeckSkeleton />
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
+                  No markets yet. The POV poller runs on a schedule — data will appear once the
+                  first cycle completes.
+                </div>
+              )
             ) : (
               currentRow && (
                 <div className="flex min-h-0 flex-1 flex-col">
