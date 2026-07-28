@@ -63,7 +63,7 @@ export const DOMAIN_MIN_SHARED = 5;
  * empty and keeps morphing as they express more. Much lower than minSharedOverall
  * (which still gates the strong Twin/Tribe/Opp/Inverse labels).
  */
-export const CLOSEST_MIN_SHARED = 2;
+export const CLOSEST_MIN_SHARED = 1;
 export const CLOSEST_LIMIT = 24;
 
 /** A "Circle" = a domain with at least this many qualified Twin/Tribe relationships. */
@@ -71,7 +71,8 @@ export const CIRCLE_MIN_PEOPLE = 5;
 
 /** Candidate generation + retention caps (bounded scale). */
 export const DNA_LIMITS = {
-  maxExactScored: 300,
+  // Score the whole believer universe (currently in the hundreds), not a slice.
+  maxExactScored: 2000,
   maxRetainedOverall: 100,
   maxPerGroup: 30,
 } as const;
