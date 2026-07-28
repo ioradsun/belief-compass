@@ -431,25 +431,8 @@ function Dock({
   }
 
   const busy = trade.isSubmitting || trade.isMining;
-  const amtField = (
-    <span
-      className="flex h-[52px] items-center gap-1 rounded-[12px] px-3"
-      style={{ border: "1px solid var(--border)" }}
-    >
-      <span className="num text-[15px] text-[var(--text-muted)]">$</span>
-      <input
-        inputMode="numeric"
-        value={amount ? amount.toLocaleString("en-US") : ""}
-        onChange={(e) => {
-          const v = parseInt(e.target.value.replace(/[^0-9]/g, ""), 10);
-          setAmount(Number.isNaN(v) ? 0 : Math.min(v, 1_000_000));
-        }}
-        aria-label="Amount in dollars"
-        className="num w-[86px] bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
-        placeholder="0"
-      />
-    </span>
-  );
+  const amtField = <AmountField amount={amount} setAmount={setAmount} />;
+
 
   // Neutral: NO · SKIP · YES.
   if (!side) {
