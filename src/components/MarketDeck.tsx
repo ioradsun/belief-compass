@@ -207,22 +207,25 @@ export function MarketDeck({
           />
         </div>
 
-        {/* DNA / social evidence + recent activity */}
-        <div className="space-y-1.5">
-          <div className="flex items-start gap-2 text-[13px]">
-            <span
-              className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-              style={{ background: "var(--rel,#9b87f5)" }}
-              aria-hidden
-            />
-            <span className="text-[var(--text-secondary)]">
-              {relationshipBeat ?? "No reliable DNA signal here yet."}
-            </span>
+        {/* DNA / social evidence + recent activity — only when there's a real signal */}
+        {(relationshipBeat || eventBeat) && (
+          <div className="space-y-1.5">
+            {relationshipBeat && (
+              <div className="flex items-start gap-2 text-[13px]">
+                <span
+                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: "var(--rel,#9b87f5)" }}
+                  aria-hidden
+                />
+                <span className="text-[var(--text-secondary)]">{relationshipBeat}</span>
+              </div>
+            )}
+            {eventBeat && (
+              <div className="pl-3.5 text-[12px] text-[var(--text-muted)]">{eventBeat}</div>
+            )}
           </div>
-          {eventBeat && (
-            <div className="pl-3.5 text-[12px] text-[var(--text-muted)]">{eventBeat}</div>
-          )}
-        </div>
+        )}
+
 
         {/* Evidence: believers · price · defense */}
         <MarketEvidence marketId={marketId} />
