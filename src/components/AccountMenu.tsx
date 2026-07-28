@@ -13,10 +13,15 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getPersonProfile } from "@/lib/dna.functions";
 import { WalletIdentity } from "@/components/WalletIdentity";
-import { hueFor, initialsFor } from "@/lib/wallet-identity";
+import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 
-function short(w: string) {
-  return `${w.slice(0, 6)}…${w.slice(-4)}`;
+/** Never show a raw 0x address as a name — fall back to the neutral alias. */
+function nameOf(candidates: (string | null | undefined)[], wallet: string) {
+  for (const c of candidates) {
+    const v = c?.trim();
+    if (v && !/^0x[a-f0-9]{6,}/i.test(v)) return v;
+  }
+  return wallet ? aliasFor(wallet) : "";
 }
 
 export function AccountRail({
@@ -55,11 +60,7 @@ export function AccountRail({
   });
 
   const user = data?.user ?? null;
-  const name =
-    user?.username ??
-    user?.displayName ??
-    profile?.displayName ??
-    (me ? short(me) : "");
+  const name = nameOf([user?.username, user?.displayName, profile?.displayName], me);
   const avatar = user?.pfpUrl ?? profile?.avatarUrl ?? null;
 
   const Avatar = ({ size }: { size: number }) =>
