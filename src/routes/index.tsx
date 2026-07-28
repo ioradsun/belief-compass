@@ -6,7 +6,8 @@ import { listFeed, listMarketPulses, type VolumeWindow } from "@/lib/markets.fun
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { MarketDeck } from "@/components/MarketDeck";
-import { CalibrationReveal } from "@/components/Calibration";
+import { CalibrationReveal, useReadiness } from "@/components/Calibration";
+import { getCalibrationQueue } from "@/lib/beliefs.functions";
 import { PersonProfile } from "@/components/PersonProfile";
 import { AccountRail } from "@/components/AccountMenu";
 import { WalletConnectButton } from "@/components/WalletConnect";
@@ -210,7 +211,30 @@ function Feed() {
   // Single-market deck: the center shows exactly one market. ?m (set by a
   // position, a Live row, search, or Next) picks it; otherwise the top of the
   // queue. SKIP/Next advance through the current filtered order.
-  const marketRows = rows as unknown as MarketRow[];
+  const feedRows = rows as unknown as MarketRow[];
+
+  // While calibrating, walk a curated, domain-diverse queue of un-answered
+  // markets first, so the viewer's early beliefs spread across the map.
+  const { data: readiness } = useReadiness(wallet);
+  const calibrating = !!wallet && !!readiness && !readiness.calibrated;
+  const { data: calQueue } = useQuery({
+    queryKey: ["cal-queue", wallet ?? null],
+    queryFn: () => getCalibrationQueue({ data: { wallet: wallet ?? null } }),
+    enabled: calibrating,
+    staleTime: 60_000,
+  });
+  const marketRows =
+    calibrating && calQueue?.length
+      ? (() => {
+          const rank = new Map(calQueue.map((id, i) => [id, i]));
+          const inQueue = feedRows
+            .filter((r) => rank.has(Number(r.onchain_id)))
+            .sort((a, b) => rank.get(Number(a.onchain_id))! - rank.get(Number(b.onchain_id))!);
+          const rest = feedRows.filter((r) => !rank.has(Number(r.onchain_id)));
+          return [...inQueue, ...rest];
+        })()
+      : feedRows;
+
   const currentIdx = Math.max(
     0,
     marketRows.findIndex((r) => Number(r.onchain_id) === selectedMarket),
