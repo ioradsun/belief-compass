@@ -60,7 +60,7 @@ export function MarketDeck({
     (rr.opportunity_reason as string | null) ?? null,
   );
 
-  const [amount, setAmount] = useState(20);
+  const [amount, setAmount] = useState(1);
   const [side, setSide] = useState<OrderSide | null>(null);
   // Sell is a separate, deliberate mode — a percentage of the held side. Null
   // means "not selling"; the buy dock owns the surface. Buying the opposite side
