@@ -174,8 +174,14 @@ function bucketFor(cache: ViewerDnaCache, filter: z.infer<typeof RelFilter>): Ca
       return cache.inverse;
     case "neutral":
       return cache.neutral;
-    default:
-      return [...cache.twin, ...cache.tribe, ...cache.opp, ...cache.inverse];
+    default: {
+      // Strong matches first; then fall back to (and include) closest people so
+      // the Network is never empty while the DNA is still forming.
+      const strong = [...cache.twin, ...cache.tribe, ...cache.opp, ...cache.inverse];
+      const seen = new Set(strong.map((r) => r.wallet.toLowerCase()));
+      const closest = cache.closest.filter((r) => !seen.has(r.wallet.toLowerCase()));
+      return [...strong, ...closest];
+    }
   }
 }
 

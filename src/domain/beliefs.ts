@@ -11,8 +11,12 @@ import type { DnaFactor } from "@/domain/dna/score";
 /** Fixed conviction weight for a free expressed belief (vs on-chain 0..1). */
 export const EXPRESSED_WEIGHT = 0.15;
 
-/** Directional beliefs (on-chain + expressed) that make the app "calibrated". */
-export const CALIBRATION_TARGET = 8;
+/**
+ * Directional beliefs (on-chain + expressed) that make the app "calibrated".
+ * Matched to the DNA minimum (minSharedOverall) so the moment the reveal fires,
+ * the Network can actually compute closest people — no dead payoff.
+ */
+export const CALIBRATION_TARGET = 5;
 
 /**
  * Merge on-chain and expressed factors, deduped by market. On-chain always wins
