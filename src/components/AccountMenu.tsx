@@ -115,8 +115,10 @@ export function AccountRail({
       {open && (
         <>
           <div className="min-h-0 flex-1 overflow-y-auto">
+            {me && <ProfileEditor wallet={me} fallbackName={name} />}
             <WalletIdentity viewing={me} compact />
           </div>
+
 
           <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
             <button
