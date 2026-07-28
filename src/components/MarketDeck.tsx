@@ -482,9 +482,11 @@ function AmountField({ amount, setAmount }: { amount: number; setAmount: (n: num
 
 function Dock({
   side,
+  answered,
   amount,
   setAmount,
   onSelect,
+  onCancel,
   onSkip,
   quote,
   quoting,
@@ -496,9 +498,11 @@ function Dock({
   onDone,
 }: {
   side: OrderSide | null;
+  answered: BeliefAction | null;
   amount: number;
   setAmount: (n: number) => void;
   onSelect: (s: OrderSide) => void;
+  onCancel: () => void;
   onSkip: () => void;
   quote: { tokens: bigint; fee: bigint; refund: bigint } | null;
   quoting: boolean;
@@ -509,6 +513,7 @@ function Dock({
   onConfirm: () => void;
   onDone: () => void;
 }) {
+
   // Receipt.
   if (trade.isSuccess && side) {
     return (
