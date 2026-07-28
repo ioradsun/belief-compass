@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
 import {
@@ -14,10 +14,20 @@ import { MarketDeck } from "@/components/MarketDeck";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { CalibrationReveal, useReadiness } from "@/components/Calibration";
 import { getCalibrationQueue } from "@/lib/beliefs.functions";
-import { PersonProfile } from "@/components/PersonProfile";
-import { AccountRail } from "@/components/AccountMenu";
 import { WalletConnectButton } from "@/components/WalletConnect";
-import { DnaOverview } from "@/components/DnaOverview";
+
+// Deferred surfaces: none of these render for a first-time, signed-out visitor.
+// PersonProfile/DnaOverview need a ?p/?dna selection; MyWorld/AccountRail need a
+// connected wallet. Code-splitting them keeps the first-load JS to just the deck.
+const PersonProfile = lazy(() =>
+  import("@/components/PersonProfile").then((m) => ({ default: m.PersonProfile })),
+);
+const DnaOverview = lazy(() =>
+  import("@/components/DnaOverview").then((m) => ({ default: m.DnaOverview })),
+);
+const AccountRail = lazy(() =>
+  import("@/components/AccountMenu").then((m) => ({ default: m.AccountRail })),
+);
 // Phase 5: the SERVER owns opportunity classification + score. The client only
 // filters by the canonical type and reads the precomputed order — no scoreFeed().
 type OppFilter = "all" | "hot" | "early" | "hidden" | "contested" | "conviction" | "new";
@@ -51,7 +61,7 @@ const OPP_FILTERS: { key: OppFilter; emoji: string; label: string; question: str
   { key: "new", emoji: "🆕", label: "New", question: "What is genuinely recent?" },
 ];
 
-import { MyWorld } from "@/components/MyWorld";
+const MyWorld = lazy(() => import("@/components/MyWorld").then((m) => ({ default: m.MyWorld })));
 import { OmniHeader } from "@/components/OmniHeader";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
@@ -114,8 +124,28 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  // NO loader: the feed is fetched on the client after first paint. Blocking SSR
-  // on the feed query made TTFB the whole page-load budget.
+  // SSR the anonymous feed so a first-time visitor's FIRST HTML paint is a real
+  // market, not a skeleton — no client round-trip, no waiting on the JS bundle.
+  // It's cheap because listFeed serves the anon feed from a warm in-process
+  // stale-while-revalidate cache, so this loader is a snapshot read, not the
+  // multi-query round trip that once made SSR's TTFB the whole page budget.
+  // Personalized (wallet) feeds still fetch on the client after connect.
+  loader: async () => {
+    try {
+      // Bound the SSR cost: when the cache is warm this resolves in ~0ms with real
+      // content; on a cold/slow instance the timeout wins so the shell still ships
+      // fast (client fills it in), and the in-flight compute primes the cache for
+      // the next visitor. Either way the loader never owns the TTFB budget.
+      const feed = await Promise.race([
+        listFeed({ data: { window: "24h" } }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 200)),
+      ]);
+      return { feed };
+    } catch {
+      return { feed: null };
+    }
+  },
+  staleTime: 10_000,
   component: Feed,
   errorComponent: ({ error }) => (
     <div className="p-8 text-sm text-destructive">Feed failed: {String(error)}</div>
@@ -188,7 +218,16 @@ function Feed() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
-  const { data } = useQuery(feedQO(wallet, win));
+  // The SSR loader prefetched the anonymous 24h feed; adopt it as initialData so
+  // the very first render (server AND client) paints the real deck with no
+  // round-trip. Only the anon 24h query matches what the loader fetched — a
+  // wallet or a different window falls through to a normal client fetch.
+  const loaderData = Route.useLoaderData();
+  const initialFeed = !wallet && win === "24h" ? (loaderData?.feed ?? undefined) : undefined;
+  const { data } = useQuery({
+    ...feedQO(wallet, win),
+    ...(initialFeed ? { initialData: initialFeed } : {}),
+  });
   // Sticky: hold the last good feed until the next refresh lands.
   const rawRows = useStickyRows(data?.data ?? []);
   const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "24H";
@@ -309,7 +348,7 @@ function Feed() {
               <WalletConnectButton />
             </div>
           ) : (
-            <>
+            <Suspense fallback={null}>
               <AccountRail
                 wallet={wallet}
                 onOpenProfile={selectPerson}
@@ -329,7 +368,7 @@ function Feed() {
                   initialNetwork={Boolean(selectedPerson || dnaOpen)}
                 />
               )}
-            </>
+            </Suspense>
           )}
         </aside>
 
@@ -355,15 +394,19 @@ function Feed() {
               The deck owns its own internal scroll so its dock stays pinned. */}
             {selectedPerson ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
-                <PersonProfile
-                  wallet={selectedPerson}
-                  viewer={wallet}
-                  onSelectMarket={selectMarket}
-                />
+                <Suspense fallback={<DeckSkeleton />}>
+                  <PersonProfile
+                    wallet={selectedPerson}
+                    viewer={wallet}
+                    onSelectMarket={selectMarket}
+                  />
+                </Suspense>
               </div>
             ) : dnaOpen ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
-                <DnaOverview wallet={wallet} onSelectPerson={selectPerson} />
+                <Suspense fallback={<DeckSkeleton />}>
+                  <DnaOverview wallet={wallet} onSelectPerson={selectPerson} />
+                </Suspense>
               </div>
             ) : rows.length === 0 ? (
               // While the feed is still loading (first paint), show a live-market
