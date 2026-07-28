@@ -104,7 +104,8 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(feedQO()),
+  // NO loader: the feed is fetched on the client after first paint. Blocking SSR
+  // on the feed query made TTFB the whole page-load budget.
   component: Feed,
   errorComponent: ({ error }) => (
     <div className="p-8 text-sm text-destructive">Feed failed: {String(error)}</div>
@@ -170,9 +171,9 @@ function Feed() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
-  const { data } = useSuspenseQuery(feedQO(wallet, win));
+  const { data } = useQuery(feedQO(wallet, win));
   // Sticky: hold the last good feed until the next refresh lands.
-  const rawRows = useStickyRows(data.data ?? []);
+  const rawRows = useStickyRows(data?.data ?? []);
   const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "24H";
 
   // Intent engine: the active lens re-ranks the whole feed by its OWN question,
@@ -316,7 +317,7 @@ function Feed() {
               <div className="flex min-h-0 flex-1 flex-col">
                 <MarketDeck
                   row={currentRow}
-                  ethUsd={data.ethUsd ?? 0}
+                  ethUsd={data?.ethUsd ?? 0}
                   onSkip={nextMarket}
                   viewerWallet={wallet}
                 />
