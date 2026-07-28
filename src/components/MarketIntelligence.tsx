@@ -13,7 +13,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
-import { getHouseRead, finalizeBet, finalizeSkip, type HouseReadView } from "@/lib/house.functions";
+import {
+  getHouseRead,
+  finalizeBet,
+  finalizeSkip,
+  recordFoundation,
+  type HouseReadView,
+} from "@/lib/house.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { BelieversSplit, Defense } from "@/components/MarketEvidence";
@@ -49,9 +55,19 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
     },
     onSuccess: store,
   });
+  const foundation = useMutation({
+    mutationFn: async (vars: { key: string; action: "YES" | "NO" | "SKIP" }) => {
+      if (!wallet) return null;
+      return recordFoundation({ data: { wallet, marketId, key: vars.key, action: vars.action } });
+    },
+    onSuccess: store,
+  });
   return {
     betReveal: (side: "YES" | "NO", txHash: string) => bet.mutate({ side, txHash }),
     skip: () => skip.mutate(),
+    trainFoundation: (key: string, action: "YES" | "NO" | "SKIP") =>
+      foundation.mutate({ key, action }),
+    training: foundation.isPending,
     revealing: bet.isPending,
   };
 }
@@ -66,6 +82,7 @@ export function MarketIntelligence({
   const [mode, setMode] = useState<Mode>("house");
   const connected = useEffectiveWallet();
   const viewer = viewerWallet ?? connected;
+  const actions = useHouseFinalize(marketId, viewerWallet);
 
   const tablistId = useId();
   const btnRefs = useRef<Record<Mode, HTMLButtonElement | null>>({
@@ -186,7 +203,17 @@ export function MarketIntelligence({
         className="min-h-[188px] max-h-[260px] overflow-y-auto px-3 pb-3 pt-2"
       >
         {mode === "house" ? (
-          <HouseMode house={house ?? null} loading={loadingHouse && !house} />
+          <div className="space-y-2">
+            {house && house.record.correct + house.record.miss > 0 && (
+              <MiniScoreboard rec={house.record} />
+            )}
+            <HouseMode
+              house={house ?? null}
+              loading={loadingHouse && !house}
+              onFoundation={actions.trainFoundation}
+              training={actions.training}
+            />
+          </div>
         ) : mode === "believers" ? (
           <BelieversMode
             believers={believers}
@@ -213,11 +240,25 @@ function Skeleton() {
 
 /* ── Mode 1 — House Read ─────────────────────────────────────────────────── */
 
-function HouseMode({ house, loading }: { house: HouseReadView | null; loading: boolean }) {
+function HouseMode({
+  house,
+  loading,
+  onFoundation,
+  training,
+}: {
+  house: HouseReadView | null;
+  loading: boolean;
+  onFoundation: (key: string, action: "YES" | "NO" | "SKIP") => void;
+  training: boolean;
+}) {
   if (loading || !house) return <Skeleton />;
 
   const rec = house.record;
-  const played = rec.correct + rec.miss;
+
+  // Cold start — train the House on free foundation POVs before it reads markets.
+  if (house.foundation) {
+    return <FoundationCard f={house.foundation} onAnswer={onFoundation} busy={training} />;
+  }
 
   // Honest no-read — shown before the round closes; it never scores.
   if (!house.revealed && !house.closed && house.noRead) {
@@ -230,7 +271,6 @@ function HouseMode({ house, loading }: { house: HouseReadView | null; loading: b
             {d}
           </p>
         ))}
-        {played > 0 && <Record correct={rec.correct} miss={rec.miss} />}
       </div>
     );
   }
@@ -259,14 +299,6 @@ function HouseMode({ house, loading }: { house: HouseReadView | null; loading: b
         <p className="text-[12px] text-[var(--text-muted)]">
           Next time, put money down to find out if the House had you.
         </p>
-        {played > 0 && (
-          <Record
-            correct={rec.correct}
-            miss={rec.miss}
-            streak={rec.streak}
-            surprise={rec.surpriseStreak}
-          />
-        )}
       </div>
     );
   }
@@ -312,7 +344,6 @@ function HouseMode({ house, loading }: { house: HouseReadView | null; loading: b
         <p className="sr-only" role="note">
           The House prediction is hidden. Place a bet on YES or NO to reveal it.
         </p>
-        {played > 0 && <Record correct={rec.correct} miss={rec.miss} streak={rec.streak} />}
       </div>
     );
   }
@@ -368,6 +399,78 @@ function HouseMode({ house, loading }: { house: HouseReadView | null; loading: b
         streak={rec.streak}
         surprise={rec.surpriseStreak}
       />
+    </div>
+  );
+}
+
+/** Super-small persistent tally for the House section. You win when the House misses. */
+function MiniScoreboard({ rec }: { rec: HouseReadView["record"] }) {
+  return (
+    <div
+      className="flex items-center gap-2 rounded-[8px] px-2 py-1"
+      style={{ background: "var(--surface-2,var(--border))" }}
+    >
+      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+        You vs House
+      </span>
+      <span className="num ml-auto text-[11px] font-semibold text-[var(--text)]">
+        You {rec.miss} · House {rec.correct}
+      </span>
+      {rec.streak >= 2 && (
+        <span className="num text-[10px] font-semibold text-[var(--text-secondary)]">
+          🔥 {rec.streak}
+        </span>
+      )}
+      {rec.surpriseStreak >= 2 && (
+        <span className="num text-[10px] font-semibold text-[var(--text-secondary)]">
+          😮 {rec.surpriseStreak}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Cold-start training: one free belief POV with YES / NO / SKIP. Moves no money. */
+function FoundationCard({
+  f,
+  onAnswer,
+  busy,
+}: {
+  f: NonNullable<HouseReadView["foundation"]>;
+  onAnswer: (key: string, action: "YES" | "NO" | "SKIP") => void;
+  busy: boolean;
+}) {
+  const btn = (action: "YES" | "NO" | "SKIP", label: string, color: string) => (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => onAnswer(f.key, action)}
+      className="flex-1 rounded-[10px] py-2 text-[13px] font-semibold transition-colors disabled:opacity-40"
+      style={{ border: `1px solid ${color}`, color }}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center justify-between">
+        <Kicker>Teach the House</Kicker>
+        <span className="num text-[11px] text-[var(--text-muted)]">
+          {f.answered} of {f.required}
+        </span>
+      </div>
+      <p className="text-[15px] font-semibold leading-snug text-[var(--text)]">“{f.prompt}”</p>
+      <p className="text-[11px] text-[var(--text-muted)]">
+        Free — this trains your House Read. It moves no money.
+      </p>
+      <div className="flex gap-2 pt-0.5">
+        {btn("YES", "Agree", "var(--yes)")}
+        {btn("SKIP", "Skip", "var(--text-muted)")}
+        {btn("NO", "Disagree", "var(--no)")}
+      </div>
+      {f.answered > 0 && (
+        <p className="text-[11px] text-[var(--text-secondary)]">{f.progressLine}</p>
+      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   loadHouseRead,
   finalizeHouseBet,
   finalizeHouseSkip,
+  recordFoundationAnswer,
   type HouseReadView,
 } from "@/lib/house.server";
 
@@ -54,3 +55,19 @@ export const finalizeSkip = createServerFn({ method: "POST" })
       .parse(raw),
   )
   .handler(async ({ data }) => finalizeHouseSkip(data.wallet, data.marketId));
+
+/** Answer one free foundation POV to train the House (cold start). */
+export const recordFoundation = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({
+        wallet: z.string().min(3),
+        marketId: z.number().int().nonnegative(),
+        key: z.string().min(1),
+        action: z.enum(["YES", "NO", "SKIP"]),
+      })
+      .parse(raw),
+  )
+  .handler(async ({ data }) =>
+    recordFoundationAnswer(data.wallet, data.marketId, data.key, data.action),
+  );
