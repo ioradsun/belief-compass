@@ -1,9 +1,9 @@
 /**
  * The deck's proof section: three tabs of real evidence for the open market.
+ *   • Price — the trader's view: current odds, payout per $1, 60-day range and
+ *     trend, plus where the money actually sits.
  *   • Believers — actual holders per side, with faces, conviction and days held.
- *   • Price — money-YES% over the last ~60 days as a small sparkline.
- *   • Defense — the case each side is making, from pov.co agent opinions
- *     (stored on the market): a face, a vote, and their take.
+ *   • Defense — the case each side is making, from pov.co agent opinions.
  * Server-owned via getMarketEvidence; this only renders. Compact + self-scrolling
  * so it never fights the decision dock for space.
  */
@@ -16,8 +16,20 @@ import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
 type Tab = "believers" | "price" | "defense";
 
-export function MarketEvidence({ marketId }: { marketId: number }) {
-  const [tab, setTab] = useState<Tab>("believers");
+/** Everything the price story needs, straight from the market read-model row. */
+export interface PriceFacts {
+  yesPrice: number | null;
+  noPrice: number | null;
+  chgYes: number | null;
+  yesCapital: number | null;
+  noCapital: number | null;
+  volumeUsd: number | null;
+  moneyYesPct: number | null;
+  peopleYesPct: number | null;
+}
+
+export function MarketEvidence({ marketId, facts }: { marketId: number; facts?: PriceFacts }) {
+  const [tab, setTab] = useState<Tab>("price");
   const viewer = useEffectiveWallet();
   const { data, isLoading } = useQuery({
     queryKey: ["evidence", marketId],
@@ -35,19 +47,18 @@ export function MarketEvidence({ marketId }: { marketId: number }) {
   });
   const networkWallets = new Set((net?.people ?? []).map((p) => p.wallet.toLowerCase()));
 
-  const counts = data
-    ? { believers: data.believers.length, price: data.priceSeries.length }
-    : { believers: 0, price: 0 };
+  const counts = data ? { believers: data.believers.length } : { believers: 0 };
 
   return (
     <div>
       <div className="flex gap-4 border-b" style={{ borderColor: "var(--border)" }}>
-        <TabBtn on={tab === "believers"} onClick={() => setTab("believers")}>
-          Believers{counts.believers ? ` ${counts.believers}` : ""}
-        </TabBtn>
         <TabBtn on={tab === "price"} onClick={() => setTab("price")}>
           Price
         </TabBtn>
+        <TabBtn on={tab === "believers"} onClick={() => setTab("believers")}>
+          Believers{counts.believers ? ` ${counts.believers}` : ""}
+        </TabBtn>
+
         <TabBtn on={tab === "defense"} onClick={() => setTab("defense")}>
           Defense{data?.defense.length ? ` ${data.defense.length}` : ""}
         </TabBtn>
