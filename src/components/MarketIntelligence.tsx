@@ -127,33 +127,37 @@ export function MarketIntelligence({ marketId }: { marketId: number }) {
           onKeyDown={onTabKey}
           className="flex gap-1"
         >
-
-        {tabs.map((t) => {
-          const on = mode === t.id;
-          return (
-            <button
-              key={t.id}
-              ref={(el) => {
-                btnRefs.current[t.id] = el;
-              }}
-              type="button"
-              role="tab"
-              id={`${tablistId}-${t.id}`}
-              aria-selected={on}
-              aria-controls={`${tablistId}-panel`}
-              tabIndex={on ? 0 : -1}
-              onClick={() => setMode(t.id)}
-              className="rounded-[9px] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors motion-reduce:transition-none"
-              style={{
-                background: on ? "var(--surface-2,var(--border))" : "transparent",
-                color: on ? "var(--text)" : "var(--text-muted)",
-              }}
-            >
-              {t.label}
-            </button>
-          );
-        })}
+          {tabs.map((t) => {
+            const on = mode === t.id;
+            return (
+              <button
+                key={t.id}
+                ref={(el) => {
+                  btnRefs.current[t.id] = el;
+                }}
+                type="button"
+                role="tab"
+                id={`${tablistId}-${t.id}`}
+                aria-selected={on}
+                aria-controls={`${tablistId}-panel`}
+                tabIndex={on ? 0 : -1}
+                onClick={() => setMode(t.id)}
+                className="rounded-[9px] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors motion-reduce:transition-none"
+                style={{
+                  background: on ? "var(--surface-2,var(--border))" : "transparent",
+                  color: on ? "var(--text)" : "var(--text-muted)",
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+        {meta && (
+          <span className="num ml-auto truncate text-[11px] text-[var(--text-muted)]">{meta}</span>
+        )}
       </div>
+
 
       <div
         role="tabpanel"
