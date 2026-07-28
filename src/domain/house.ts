@@ -329,3 +329,12 @@ export function directionalAccuracy(rec: HouseRecord): number | null {
   if (total === 0) return null;
   return (rec.byAction.YES.correct + rec.byAction.NO.correct) / total;
 }
+
+/**
+ * What an answer teaches. YES/NO feed directional Conviction DNA; SKIP only ever
+ * updates readability/recommendation signals — it is never an agreement,
+ * a disagreement, a neutral belief, or a shared directional market.
+ */
+export function dnaContribution(action: BeliefAction): "directional" | "behavioral" {
+  return action === "SKIP" ? "behavioral" : "directional";
+}
