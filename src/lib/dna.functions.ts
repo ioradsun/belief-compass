@@ -51,29 +51,41 @@ type Activity = {
 };
 
 /** Most-recent public trade per wallet, with market titles (one query). */
+type ActivityRow = {
+  wallet: string;
+  market_id: string;
+  side: string | null;
+  action: string | null;
+  occurred_at: string;
+};
+
+/** Latest canonical trade per wallet — one DB-side row each (DISTINCT ON). */
 async function latestActivityByWallet(sb: Sb, wallets: string[]): Promise<Map<string, Activity>> {
   const out = new Map<string, Activity>();
   if (wallets.length === 0) return out;
-  const { data } = await sb
-    .from("events")
-    .select("wallet, market_id, side, action, occurred_at")
-    .in(
-      "wallet",
-      wallets.map((w) => w.toLowerCase()),
-    )
-    .eq("is_canonical", true)
-    .eq("kind", "trade")
-    .order("occurred_at", { ascending: false })
-    .limit(2000);
-  const rows = (data ?? []) as {
-    wallet: string;
-    market_id: string;
-    side: string | null;
-    action: string | null;
-    occurred_at: string;
-  }[];
+  const lower = wallets.map((w) => w.toLowerCase());
+
+  // Preferred: the DB returns exactly one (newest) trade per wallet via the
+  // (wallet, occurred_at DESC) index — no over-fetch, no client-side dedup.
+  let rows: ActivityRow[] | null = null;
+  const rpc = await sb.rpc("latest_trade_activity", { p_wallets: lower });
+  if (!rpc.error && rpc.data) {
+    rows = rpc.data as ActivityRow[];
+  } else {
+    // Fallback (e.g. before the migration lands): bounded recent scan + dedup.
+    const { data } = await sb
+      .from("events")
+      .select("wallet, market_id, side, action, occurred_at")
+      .in("wallet", lower)
+      .eq("is_canonical", true)
+      .eq("kind", "trade")
+      .order("occurred_at", { ascending: false })
+      .limit(2000);
+    rows = (data ?? []) as ActivityRow[];
+  }
+
   const marketIds = new Set<number>();
-  const first = new Map<string, (typeof rows)[number]>();
+  const first = new Map<string, ActivityRow>();
   for (const r of rows) {
     const w = String(r.wallet).toLowerCase();
     if (!first.has(w)) {

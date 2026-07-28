@@ -162,3 +162,29 @@ export async function readLatestTradeEvents(
   if (error) return [];
   return (rows ?? []).map((r) => toFact(r as unknown as Row));
 }
+
+/**
+ * The newest `perMarket` canonical trades for EACH market — one row-bounded
+ * result per market, not the N globally-newest sliced afterward. Uses the
+ * latest_trades_per_market LATERAL RPC (index skip-scan); falls back to the
+ * bounded global scan if the RPC isn't deployed yet.
+ */
+export async function readLatestTradesPerMarket(
+  sb: ReturnType<typeof publicClient>,
+  marketIds: number[],
+  perMarket: number,
+): Promise<EventFact[]> {
+  if (marketIds.length === 0) return [];
+  const rpc = await sb.rpc("latest_trades_per_market", {
+    p_ids: marketIds.map((n) => String(n)),
+    p_per: perMarket,
+  });
+  if (!rpc.error && rpc.data) {
+    return (rpc.data as Row[]).map(toFact);
+  }
+  // Fallback (pre-migration): the old bounded global scan.
+  return readLatestTradeEvents(sb, {
+    marketIds,
+    limit: Math.min(perMarket * marketIds.length + 200, MAX_LIMIT),
+  });
+}

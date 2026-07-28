@@ -37,8 +37,11 @@ export const listLiveEvents = createServerFn({ method: "GET" })
 
     const { data: rows, error } = await sb
       .from("events")
+      // NOTE: `payload` (raw_log) is deliberately NOT selected. The live story only
+      // ever needs the `action` column (grouping derives payload.action from it);
+      // the raw log is pure over-the-wire weight for limit*3 rows.
       .select(
-        "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index, payload",
+        "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index",
       )
       .eq("is_canonical", true)
       .in("kind", LIVE_KINDS)
@@ -75,8 +78,15 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       }
     }
 
-    const { data: eth } = await sb.rpc("eth_usd_calibration");
-    const ethUsd = Number(eth ?? 0) || 0;
+    // ETH/USD comes from the cron-refreshed snapshot (calc_cache), NOT the live
+    // eth_usd_calibration() aggregate — that RPC scans the entire events trade
+    // history joined to market_state on every load. Same value listFeed reads.
+    const { data: cal } = await sb
+      .from("calc_cache")
+      .select("value")
+      .eq("key", "eth_usd")
+      .maybeSingle();
+    const ethUsd = Number((cal as { value?: number } | null)?.value ?? 0) || 0;
 
     const events: LiveEventInput[] = (rows ?? []).map((r) => ({
       source_key: r.source_key as string,
@@ -90,7 +100,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       action: (r.action as "BUY" | "SELL" | null) ?? null,
       amount_eth: Number(r.amount_eth ?? 0) / 1e18,
       wallet: (r.wallet as string) ?? null,
-      payload: (r.payload as Record<string, unknown>) ?? null,
+      payload: null,
     }));
 
     const live = groupLiveRows(events, ethUsd).slice(0, limit);
@@ -171,7 +181,6 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           amountUsd: r.amountUsd,
           market,
         }).text;
-
       } else {
         // Multi-wallet burst — the crowd.
         r.text = composeLiveStory({
