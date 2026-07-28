@@ -93,10 +93,10 @@ export function FacePile({ story }: { story: MarketStory }) {
       )}
       {crowd && (
         <span className="text-[11px] text-[var(--text-muted)]">
-          <span style={{ color: crowdTone }} className="font-medium">
-            {crowd.count}
-          </span>{" "}
-          backed {crowd.side}
+          <span className="num font-medium text-[var(--text-secondary)]">{crowd.count}</span> backed{" "}
+          <span className="font-semibold" style={{ color: crowdTone }}>
+            {crowd.side}
+          </span>
         </span>
       )}
     </div>
