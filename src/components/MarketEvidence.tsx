@@ -33,9 +33,7 @@ export function MarketEvidence({ marketId }: { marketId: number }) {
     enabled: !!viewer,
     staleTime: 60_000,
   });
-  const networkWallets = new Set(
-    (net?.people ?? []).map((p) => p.wallet.toLowerCase()),
-  );
+  const networkWallets = new Set((net?.people ?? []).map((p) => p.wallet.toLowerCase()));
 
   const counts = data
     ? { believers: data.believers.length, price: data.priceSeries.length }
@@ -152,11 +150,7 @@ function SideColumn({
               <li
                 key={b.wallet}
                 className="flex items-center gap-1.5 rounded-[8px] px-1 py-1"
-                style={
-                  inNetwork
-                    ? { background: `color-mix(in oklab,${color} 8%,transparent)` }
-                    : undefined
-                }
+                style={inNetwork ? { background: "var(--surface-2,var(--border))" } : undefined}
               >
                 {b.avatarUrl ? (
                   <img src={b.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
@@ -183,7 +177,6 @@ function SideColumn({
     </div>
   );
 }
-
 
 function PriceHistory({ series }: { series: { date: string; yesPct: number }[] }) {
   if (series.length < 2) {
@@ -232,7 +225,7 @@ function PriceHistory({ series }: { series: { date: string; yesPct: number }[] }
         <path
           d={path}
           fill="none"
-          stroke={delta >= 0 ? "var(--yes)" : "var(--no)"}
+          stroke="var(--text-secondary)"
           strokeWidth={2}
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -274,10 +267,7 @@ function Defense({ opinions }: { opinions: DefenseOpinion[] }) {
                 className="rounded px-1 py-0.5 text-[9px] font-semibold"
                 style={{
                   color: o.vote === "YES" ? "var(--yes)" : "var(--no)",
-                  background:
-                    o.vote === "YES"
-                      ? "color-mix(in oklab,var(--yes) 12%,transparent)"
-                      : "color-mix(in oklab,var(--no) 12%,transparent)",
+                  background: "var(--surface-2,var(--border))",
                 }}
               >
                 {o.vote}

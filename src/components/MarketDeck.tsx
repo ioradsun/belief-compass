@@ -165,10 +165,7 @@ export function MarketDeck({
         </h1>
       </div>
 
-
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
-
-
         {/* Pulse — why this matters now */}
         <div
           className="flex items-center gap-2 rounded-[12px] px-3 py-2.5"
@@ -225,7 +222,6 @@ export function MarketDeck({
             )}
           </div>
         )}
-
 
         {/* Evidence: believers · price · defense */}
         <MarketEvidence marketId={marketId} />
@@ -331,10 +327,8 @@ function SideCard({
       aria-pressed={selected}
       className="flex flex-col gap-2 rounded-[14px] p-3 text-left transition-colors"
       style={{
-        border: `1.5px solid ${selected ? col : "var(--border)"}`,
-        background: selected
-          ? `color-mix(in oklab, ${col} 12%, transparent)`
-          : `color-mix(in oklab, ${col} 5%, transparent)`,
+        border: `1.5px solid ${selected ? "var(--border-strong,var(--border))" : "var(--border)"}`,
+        background: selected ? "var(--surface)" : "transparent",
       }}
     >
       <div className="text-[11px] font-semibold tracking-wide" style={{ color: col }}>
@@ -364,13 +358,7 @@ function SideCard({
 type TradeApi = ReturnType<typeof useTrade>;
 
 /** Dollar input that accepts decimals (e.g. 0.25, 12.50). */
-function AmountField({
-  amount,
-  setAmount,
-}: {
-  amount: number;
-  setAmount: (n: number) => void;
-}) {
+function AmountField({ amount, setAmount }: { amount: number; setAmount: (n: number) => void }) {
   const [text, setText] = useState(amount ? String(amount) : "");
 
   // Re-sync when the amount is changed from the outside.
@@ -418,7 +406,6 @@ function AmountField({
   );
 }
 
-
 function Dock({
   side,
   amount,
@@ -459,10 +446,7 @@ function Dock({
           <span
             className="grid h-7 w-7 place-items-center rounded-full"
             style={{
-              background:
-                side === "YES"
-                  ? "color-mix(in oklab,var(--yes) 18%,transparent)"
-                  : "color-mix(in oklab,var(--no) 18%,transparent)",
+              background: "var(--surface)",
             }}
           >
             <span style={{ color: side === "YES" ? "var(--yes)" : "var(--no)" }}>✓</span>
@@ -491,7 +475,6 @@ function Dock({
 
   const busy = trade.isSubmitting || trade.isMining;
   const amtField = <AmountField amount={amount} setAmount={setAmount} />;
-
 
   // Neutral: NO · SKIP · YES.
   if (!side) {
@@ -555,8 +538,8 @@ function Dock({
             onClick={onConfirm}
             className="h-[52px] flex-[2] rounded-[12px] text-[15px] font-semibold disabled:opacity-40"
             style={{
-              background: side === "YES" ? "var(--yes)" : "var(--no)",
-              color: side === "YES" ? "#062815" : "#2d0808",
+              background: "var(--text)",
+              color: "var(--bg)",
             }}
           >
             {busy ? "Confirming…" : confirmLabel}
@@ -637,9 +620,17 @@ function SellPanel({
   const disabled = ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n);
 
   return (
-    <div className="rounded-[16px] p-3" style={{ border: "1px solid var(--no)" }}>
+    <div
+      className="rounded-[16px] p-3"
+      style={{ border: "1px solid var(--border-strong,var(--border))" }}
+    >
       <div className="mb-2 flex items-center gap-2 px-1">
-        <span className="text-[12px] font-semibold text-[var(--no)]">Sell {held.side}</span>
+        <span className="text-[12px] font-semibold text-[var(--text)]">
+          Sell{" "}
+          <span style={{ color: held.side === "YES" ? "var(--yes)" : "var(--no)" }}>
+            {held.side}
+          </span>
+        </span>
         <span className="ml-auto flex gap-1">
           {[25, 50, 100].map((p) => (
             <button
@@ -649,7 +640,7 @@ function SellPanel({
               className="rounded-[8px] px-2 py-1 text-[11px] font-semibold"
               style={
                 pct === p
-                  ? { background: "var(--no)", color: "#2d0808" }
+                  ? { background: "var(--text)", color: "var(--bg)" }
                   : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
               }
             >
@@ -684,7 +675,7 @@ function SellPanel({
           disabled={disabled}
           onClick={onConfirm}
           className="h-[52px] flex-[2] rounded-[12px] text-[15px] font-semibold disabled:opacity-40"
-          style={{ background: "var(--no)", color: "#2d0808" }}
+          style={{ background: "var(--text)", color: "var(--bg)" }}
         >
           {busy ? "Selling…" : confirmLabel}
         </button>
@@ -705,14 +696,14 @@ function DockBtn({
   const style =
     tone === "yes"
       ? {
-          border: "1px solid color-mix(in oklab,var(--yes) 45%,transparent)",
-          background: "color-mix(in oklab,var(--yes) 10%,transparent)",
+          border: "1px solid var(--border-strong,var(--border))",
+          background: "var(--surface)",
           color: "var(--yes)",
         }
       : tone === "no"
         ? {
-            border: "1px solid color-mix(in oklab,var(--no) 45%,transparent)",
-            background: "color-mix(in oklab,var(--no) 10%,transparent)",
+            border: "1px solid var(--border-strong,var(--border))",
+            background: "var(--surface)",
             color: "var(--no)",
           }
         : { border: "1px solid var(--border)", color: "var(--text-secondary)" };

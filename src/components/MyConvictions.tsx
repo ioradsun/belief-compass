@@ -86,10 +86,7 @@ function PositionCard({
           className="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide"
           style={{
             color: p.side === "YES" ? "var(--yes)" : "var(--no)",
-            background:
-              p.side === "YES"
-                ? "color-mix(in oklab, var(--yes) 16%, transparent)"
-                : "color-mix(in oklab, var(--no) 16%, transparent)",
+            background: "var(--surface-2,var(--border))",
           }}
         >
           {p.side}
