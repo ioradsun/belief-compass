@@ -8,6 +8,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { serviceClient } from "@/lib/supabase-clients";
+import { categoryToDomain } from "@/domain/categories";
 import { EXPRESSED_WEIGHT, readinessFor, type Readiness } from "@/domain/beliefs";
 
 type Sb = ReturnType<typeof serviceClient>;
@@ -69,4 +70,75 @@ export const getViewerReadiness = createServerFn({ method: "GET" })
     if (!data.wallet) return readinessFor(0);
     const sb = serviceClient();
     return readinessFor(await beliefMarketCount(sb, data.wallet.toLowerCase()));
+  });
+
+const CALIBRATION_QUEUE_SIZE = 16;
+
+/**
+ * A curated, domain-diverse queue of markets for calibration: the most active
+ * markets the viewer hasn't answered yet, round-robined across domains so the
+ * first beliefs spread the viewer's DNA across the map instead of clustering.
+ * Returns onchain ids in answer order; the center walks them while calibrating.
+ */
+export const getCalibrationQueue = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) =>
+    z.object({ wallet: z.string().min(3).nullable().optional() }).parse(raw),
+  )
+  .handler(async ({ data }): Promise<number[]> => {
+    if (!data.wallet) return [];
+    const sb = serviceClient();
+    const wallet = data.wallet.toLowerCase();
+
+    const [answeredOn, answeredEx, marketsRes, stateRes] = await Promise.all([
+      sb
+        .from("wallet_beliefs")
+        .select("onchain_id")
+        .eq("wallet", wallet)
+        .in("stance_side", ["YES", "NO"]),
+      sb.from("expressed_beliefs").select("onchain_id").eq("wallet", wallet),
+      sb.from("markets").select("onchain_id, category").limit(600),
+      sb.from("market_state").select("onchain_id, believers_yes, believers_no"),
+    ]);
+
+    const answered = new Set<number>();
+    for (const r of (answeredOn.data ?? []) as { onchain_id: number }[])
+      answered.add(Number(r.onchain_id));
+    for (const r of (answeredEx.data ?? []) as { onchain_id: number }[])
+      answered.add(Number(r.onchain_id));
+
+    const activity = new Map<number, number>();
+    for (const s of (stateRes.data ?? []) as {
+      onchain_id: number;
+      believers_yes: number | null;
+      believers_no: number | null;
+    }[]) {
+      activity.set(
+        Number(s.onchain_id),
+        (Number(s.believers_yes) || 0) + (Number(s.believers_no) || 0),
+      );
+    }
+
+    // Bucket un-answered markets by domain, each bucket sorted by activity.
+    const byDomain = new Map<string, number[]>();
+    for (const m of (marketsRes.data ?? []) as { onchain_id: number; category: string | null }[]) {
+      const id = Number(m.onchain_id);
+      if (answered.has(id)) continue;
+      const domain = categoryToDomain(m.category) ?? "other";
+      const arr = byDomain.get(domain) ?? [];
+      arr.push(id);
+      byDomain.set(domain, arr);
+    }
+    for (const arr of byDomain.values()) {
+      arr.sort((a, b) => (activity.get(b) ?? 0) - (activity.get(a) ?? 0));
+    }
+
+    // Round-robin across domains so early answers span the map.
+    const buckets = [...byDomain.values()];
+    const out: number[] = [];
+    for (let i = 0; out.length < CALIBRATION_QUEUE_SIZE && buckets.some((b) => b.length); i++) {
+      const b = buckets[i % buckets.length];
+      const id = b.shift();
+      if (id != null) out.push(id);
+    }
+    return out;
   });
