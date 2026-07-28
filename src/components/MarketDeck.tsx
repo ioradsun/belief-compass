@@ -8,7 +8,8 @@
  * client. The House pick unlocks ONLY on a confirmed bet; a skip seals it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getMarketChange } from "@/lib/markets.functions";
 import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
@@ -45,6 +46,15 @@ const PULSE_TONE: Record<string, string> = {
  * Momentum tags — the six canonical opportunity classifications from the
  * server-side engine. Color is a second signal only; the word carries meaning.
  */
+type WinKey = "1h" | "24h" | "7d" | "30d" | "all";
+const WINDOWS: { key: WinKey; label: string }[] = [
+  { key: "1h", label: "1H" },
+  { key: "24h", label: "1D" },
+  { key: "7d", label: "1W" },
+  { key: "30d", label: "1M" },
+  { key: "all", label: "All" },
+];
+
 const MOMENTUM: Record<string, { label: string; hue: string; hint: string }> = {
   hot: { label: "Hot", hue: "#f97316", hint: "Activity is accelerating right now" },
   early: { label: "Early", hue: "#22d3ee", hint: "Real growth, still small and immature" },
@@ -103,6 +113,21 @@ export function MarketDeck({
       if (viewerWallet) qc.setQueryData(["readiness", viewerWallet.toLowerCase()], r);
     },
   });
+
+  // Per-share price + % change over a trader-chosen window (1H/1D/1W/1M/All).
+  // All windows come in one fetch, so switching is instant; live-refreshed.
+  const [win, setWin] = useState<WinKey>("24h");
+  const { data: change } = useQuery({
+    queryKey: ["market-change", marketId],
+    queryFn: () => getMarketChange({ data: { id: marketId } }),
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+  });
+  const w = change?.windows[win];
+  const yesPrice = change?.yesPrice ?? row.yes_price_usd;
+  const noPrice = change?.noPrice ?? row.no_price_usd;
+  const yesChg = w?.yes ?? (rr.chg_24h_yes as number | null) ?? null;
+  const noChg = w?.no ?? (rr.chg_24h_no as number | null) ?? null;
 
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(marketId, side === "YES", side ? ethWei : 0n);
@@ -265,25 +290,34 @@ export function MarketDeck({
         </div>
 
         {/* Battlefield */}
-        <div className="grid min-h-0 grid-cols-2 gap-2">
-          <SideCard
-            label="YES"
-            price={row.yes_price_usd}
-            chg={row.chg_window_yes ?? row.chg_24h_yes ?? null}
-            believers={row.believers_yes}
-            capital={row.yes_capital_usd ?? null}
-            selected={side === "YES"}
-            onSelect={() => chooseSide("YES")}
-          />
-          <SideCard
-            label="NO"
-            price={row.no_price_usd}
-            chg={row.chg_window_no ?? row.chg_24h_no ?? null}
-            believers={row.believers_no}
-            capital={row.no_capital_usd ?? null}
-            selected={side === "NO"}
-            onSelect={() => chooseSide("NO")}
-          />
+        <div className="space-y-1.5">
+          {/* Says what the numbers ARE, and lets the trader pick the horizon. */}
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-[var(--text-muted)]">
+              Price / share · change over
+            </span>
+            <WindowSelector win={win} onWin={setWin} />
+          </div>
+          <div className="grid min-h-0 grid-cols-2 gap-2">
+            <SideCard
+              label="YES"
+              price={yesPrice}
+              chg={yesChg}
+              believers={row.believers_yes}
+              capital={row.yes_capital_usd ?? null}
+              selected={side === "YES"}
+              onSelect={() => chooseSide("YES")}
+            />
+            <SideCard
+              label="NO"
+              price={noPrice}
+              chg={noChg}
+              believers={row.believers_no}
+              capital={row.no_capital_usd ?? null}
+              selected={side === "NO"}
+              onSelect={() => chooseSide("NO")}
+            />
+          </div>
         </div>
 
         {/* Compact financial context — never the reason to act */}
@@ -408,6 +442,39 @@ export function MarketDeck({
   );
 }
 
+/** Compact horizon picker: 1H · 1D · 1W · 1M · All. */
+function WindowSelector({ win, onWin }: { win: WinKey; onWin: (w: WinKey) => void }) {
+  return (
+    <div
+      className="flex items-center gap-0.5 rounded-full p-0.5"
+      style={{ border: "1px solid var(--border)" }}
+      role="tablist"
+      aria-label="Change window"
+    >
+      {WINDOWS.map((o) => {
+        const on = win === o.key;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            onClick={() => onWin(o.key)}
+            className="num rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors"
+            style={
+              on
+                ? { background: "var(--surface-2,var(--border))", color: "var(--text)" }
+                : { color: "var(--text-muted)" }
+            }
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function SideCard({
   label,
   price,
@@ -445,14 +512,17 @@ function SideCard({
         <span className="num text-[22px] font-semibold leading-none text-[var(--text)]">
           {price == null ? "—" : `$${Number(price).toFixed(2)}`}
         </span>
-        {chg != null && Number.isFinite(chg) && (
+        {chg != null && Number.isFinite(chg) ? (
           <span
             className="num text-[11px] font-semibold"
-            style={{ color: chg >= 0 ? "var(--yes)" : "var(--no)" }}
+            style={{
+              color: chg > 0 ? "var(--yes)" : chg < 0 ? "var(--no)" : "var(--text-muted)",
+            }}
           >
-            {chg >= 0 ? "+" : "−"}
-            {Math.abs(chg).toFixed(1)}%
+            {chg > 0 ? "▲" : chg < 0 ? "▼" : "•"} {Math.abs(chg).toFixed(1)}%
           </span>
+        ) : (
+          <span className="num text-[11px] text-[var(--text-muted)]">—</span>
         )}
       </div>
       <div className="num text-[11px] text-[var(--text-muted)]">
