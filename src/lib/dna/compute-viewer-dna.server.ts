@@ -17,6 +17,7 @@ import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { categoryToDomain } from "@/domain/categories";
 import { DNA_THRESHOLDS, DNA_LIMITS, type RelationshipLabel } from "@/domain/dna/config";
 import { scoreRelationship, type DnaFactor } from "@/domain/dna/score";
+import { mergeBeliefFactors, EXPRESSED_WEIGHT } from "@/domain/beliefs";
 import { classifyRelationship } from "@/domain/dna/classify";
 import { scoreDomains, splitDomains } from "@/domain/dna/domains";
 import { findDnaCandidates } from "./find-candidates.server";
@@ -55,6 +56,13 @@ const toFactor = (r: BeliefRow): DnaFactor => ({
   conviction: Math.abs(Number(r.conviction ?? 0)),
 });
 
+type ExpressedRow = { wallet?: string; onchain_id: number; side: string; weight: number | null };
+const expressedToFactor = (r: ExpressedRow): DnaFactor => ({
+  marketId: Number(r.onchain_id),
+  side: r.side === "NO" ? "NO" : "YES",
+  conviction: Math.abs(Number(r.weight ?? EXPRESSED_WEIGHT)),
+});
+
 async function loadDomains(
   sb: ReturnType<typeof publicClient>,
   marketIds: number[],
@@ -87,13 +95,20 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
       for (const r of group) priorLabel.set(r.wallet, r.relationship);
   }
 
-  // 1. Viewer directional factors.
-  const { data: mine } = await svc
-    .from("wallet_beliefs")
-    .select("onchain_id, stance_side, conviction")
-    .eq("wallet", viewer)
-    .in("stance_side", ["YES", "NO"]);
-  const viewerFactors = ((mine ?? []) as BeliefRow[]).map(toFactor);
+  // 1. Viewer directional factors — on-chain positions ∪ free expressed beliefs
+  //    (expressed at a low weight; an on-chain position always overrides).
+  const [{ data: mine }, { data: mineExpressed }] = await Promise.all([
+    svc
+      .from("wallet_beliefs")
+      .select("onchain_id, stance_side, conviction")
+      .eq("wallet", viewer)
+      .in("stance_side", ["YES", "NO"]),
+    svc.from("expressed_beliefs").select("onchain_id, side, weight").eq("wallet", viewer),
+  ]);
+  const viewerFactors = mergeBeliefFactors(
+    ((mine ?? []) as BeliefRow[]).map(toFactor),
+    ((mineExpressed ?? []) as ExpressedRow[]).map(expressedToFactor),
+  );
 
   if (viewerFactors.length < DNA_THRESHOLDS.minSharedOverall) {
     await writeViewerDnaCache(svc, viewer, version, EMPTY);
@@ -106,22 +121,44 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
   const candidateWallets = candidates.map((c) => c.wallet);
 
   // 3. Candidate directional factors (set-based, chunked for `in` size only).
-  const candidateFactors = new Map<string, DnaFactor[]>();
+  //    On-chain ∪ expressed per candidate, on-chain overriding on a shared market.
+  const candidateOnChain = new Map<string, DnaFactor[]>();
+  const candidateExpressed = new Map<string, DnaFactor[]>();
   for (let i = 0; i < candidateWallets.length; i += 200) {
     const chunk = candidateWallets.slice(i, i + 200);
     if (chunk.length === 0) break;
-    const { data } = await svc
-      .from("wallet_beliefs")
-      .select("wallet, onchain_id, stance_side, conviction")
-      .in("wallet", chunk)
-      .in("onchain_id", viewerMarkets)
-      .in("stance_side", ["YES", "NO"]);
-    for (const r of (data ?? []) as BeliefRow[]) {
+    const [{ data: onchain }, { data: expressed }] = await Promise.all([
+      svc
+        .from("wallet_beliefs")
+        .select("wallet, onchain_id, stance_side, conviction")
+        .in("wallet", chunk)
+        .in("onchain_id", viewerMarkets)
+        .in("stance_side", ["YES", "NO"]),
+      svc
+        .from("expressed_beliefs")
+        .select("wallet, onchain_id, side, weight")
+        .in("wallet", chunk)
+        .in("onchain_id", viewerMarkets),
+    ]);
+    for (const r of (onchain ?? []) as BeliefRow[]) {
       const w = String(r.wallet).toLowerCase();
-      const arr = candidateFactors.get(w) ?? [];
+      const arr = candidateOnChain.get(w) ?? [];
       arr.push(toFactor(r));
-      candidateFactors.set(w, arr);
+      candidateOnChain.set(w, arr);
     }
+    for (const r of (expressed ?? []) as ExpressedRow[]) {
+      const w = String(r.wallet).toLowerCase();
+      const arr = candidateExpressed.get(w) ?? [];
+      arr.push(expressedToFactor(r));
+      candidateExpressed.set(w, arr);
+    }
+  }
+  const candidateFactors = new Map<string, DnaFactor[]>();
+  for (const w of new Set([...candidateOnChain.keys(), ...candidateExpressed.keys()])) {
+    candidateFactors.set(
+      w,
+      mergeBeliefFactors(candidateOnChain.get(w) ?? [], candidateExpressed.get(w) ?? []),
+    );
   }
 
   // 4. Domain map for the viewer's markets (covers all shared markets).
