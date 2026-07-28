@@ -8,7 +8,7 @@ manual pass on real hardware (deep-links can't be fully faked headless).
 
 ```bash
 # app already running on :8080 (or set BASE_URL to the preview/published URL)
-node tests/e2e/coinbase-mobile-connect.mjs
+python3 tests/e2e/coinbase_mobile_connect.py
 bunx vitest run src/lib/wagmi.test.ts
 ```
 
@@ -16,15 +16,25 @@ The e2e script emulates iPhone 13 + Pixel 7 and asserts, per platform:
 
 | Check | Regression it guards |
 | --- | --- |
+| Visible "Connect wallet" entry point | no way to reach the picker on a phone |
 | Coinbase row visible & enabled | picker rendered empty / option missing |
 | Tap target ≥ 44px | "not clickable in preview mobile" |
 | Brand logo present | blank rows in the picker |
 | Tap triggers deep-link / SDK handoff | SDK import awaited outside the gesture → popup blocked |
-| Not stuck on "Loading…" | connector promise never settles |
+| Recovers after cancel (WARN-only) | stuck spinner after a rejected request |
 | Return re-arms the connector | returning users land signed out |
 | No crash on return | reconnect throws on rehydrate |
 
 Screenshots for every step land in `tests/e2e/screenshots/`. Exit code 0 = pass.
+`WARN` rows are observations headless can't decide (it cannot close the native
+Coinbase surface) — confirm those in the manual pass; they never fail the run.
+
+**Known failure as of the last run:** on both iPhone 13 and Pixel 7 emulation the
+"Connect wallet" button lives only in the desktop-only left rail (`hidden lg:flex`),
+so a phone has no visible way to open the picker. Everything downstream of that
+passes — the script falls back to firing the app's `conviction:open-connect` event.
+Fix the mobile entry point (header avatar or the hamburger drawer) and this check
+turns green.
 
 The vitest file locks the connector config itself: Coinbase/WalletConnect stay
 out of the eager bundle, `preference: "all"` (Coinbase **app** stays selectable,
