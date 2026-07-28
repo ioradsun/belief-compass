@@ -92,3 +92,41 @@ export function LiveTape({
     </div>
   );
 }
+
+/**
+ * Colour discipline: the only tinted glyphs in the tape are the words YES / NO
+ * and signed percentages. Everything else stays neutral so the eye isn't asked
+ * to decode a wall of red and green.
+ */
+function SideText({ text }: { text: string }) {
+  const parts = text.split(/(\bYES\b|\bNO\b|[+−-]?\d+(?:\.\d+)?%)/g);
+  return (
+    <>
+      {parts.map((p, i) => {
+        if (p === "YES" || p === "NO") {
+          return (
+            <span
+              key={i}
+              className="font-semibold"
+              style={{ color: p === "YES" ? "var(--yes)" : "var(--no)" }}
+            >
+              {p}
+            </span>
+          );
+        }
+        if (/^[+−-]?\d+(?:\.\d+)?%$/.test(p)) {
+          return (
+            <span
+              key={i}
+              className="num font-semibold"
+              style={{ color: p.startsWith("−") || p.startsWith("-") ? "var(--no)" : "var(--yes)" }}
+            >
+              {p}
+            </span>
+          );
+        }
+        return <span key={i}>{p}</span>;
+      })}
+    </>
+  );
+}
