@@ -160,10 +160,17 @@ export const listFeed = createServerFn({ method: "GET" })
     const chgNo = new Map<number, number>();
     let historyFrom: string | null = null;
     if (ids.length) {
+      // Perf: window price-moves and the ETH/USD calibration are PRECOMPUTED by
+      // cron (market_window_change / calc_cache). Reading them is two indexed
+      // lookups instead of two multi-second aggregate scans per request.
       const [vol, cal, chg] = await Promise.all([
         sb.rpc("market_volume_window", { p_ids: ids, p_since: since }),
-        sb.rpc("eth_usd_calibration"),
-        sb.rpc("market_change_window", { p_ids: ids, p_since: since }),
+        sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
+        sb
+          .from("market_window_change")
+          .select("onchain_id, chg_yes, chg_no, since_at")
+          .eq("window_key", win)
+          .in("onchain_id", ids),
       ]);
       for (const t of (vol.data ?? []) as {
         onchain_id: number;
@@ -182,7 +189,7 @@ export const listFeed = createServerFn({ method: "GET" })
           yesTrades.set(id, (yesTrades.get(id) ?? 0) + Number(t.trade_count ?? 0));
         }
       }
-      ethUsd = Number(cal.data ?? 0) || 0;
+      ethUsd = Number((cal.data as { value?: number } | null)?.value ?? 0) || 0;
       for (const c of (chg.data ?? []) as {
         onchain_id: number;
         chg_yes: number | null;
@@ -436,18 +443,17 @@ export const getWallet = createServerFn({ method: "GET" })
         });
     }
 
-    // Window-scoped price moves, same RPC the market cards use, so the panel
-    // and the cards always agree on the percentage.
+    // Window-scoped price moves, from the SAME precomputed table the market
+    // cards read, so the panel and the cards always agree on the percentage.
     const win: VolumeWindow = data.window ?? "24h";
-    const winMs = VOLUME_WINDOWS[win];
-    const since = winMs == null ? null : new Date(Date.now() - winMs).toISOString();
     const chgYes = new Map<number, number>();
     const chgNo = new Map<number, number>();
     if (ids.length) {
-      const { data: chg } = await sb.rpc("market_change_window", {
-        p_ids: ids,
-        p_since: since,
-      });
+      const { data: chg } = await sb
+        .from("market_window_change")
+        .select("onchain_id, chg_yes, chg_no")
+        .eq("window_key", win)
+        .in("onchain_id", ids);
       for (const c of (chg ?? []) as {
         onchain_id: number;
         chg_yes: number | null;

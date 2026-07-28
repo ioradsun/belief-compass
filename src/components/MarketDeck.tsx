@@ -8,7 +8,7 @@
  * client. Skip has no financial effect and just advances the queue.
  */
 import { useCallback, useEffect, useState } from "react";
-import { useConnectModal } from "@rainbow-me/rainbowkit";
+import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseAnswer } from "@/components/MarketIntelligence";
@@ -73,7 +73,6 @@ export function MarketDeck({
   // The belief the viewer expressed here. Recorded once, moves no money.
   const [answered, setAnswered] = useState<BeliefAction | null>(null);
 
-  const { openConnectModal } = useConnectModal();
   const { switchChain } = useSwitchChain();
   const ready = useTradeReady();
   const trade = useTrade();
@@ -167,7 +166,7 @@ export function MarketDeck({
     trade.reset();
   };
   const onSellConfirm = async () => {
-    if (!ready.connected) return openConnectModal?.();
+    if (!ready.connected) return requestConnect();
     if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
     if (held && proceeds != null && sellShares > 0n && !(trade.isSubmitting || trade.isMining)) {
       try {
@@ -350,7 +349,7 @@ export function MarketDeck({
             ready={ready}
             trade={trade}
             onConfirm={async () => {
-              if (!ready.connected) return openConnectModal?.();
+              if (!ready.connected) return requestConnect();
               if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
               if (side && quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
                 try {
