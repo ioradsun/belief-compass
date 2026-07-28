@@ -456,7 +456,6 @@ function DefenseColumn({ side, opinions }: { side: "YES" | "NO"; opinions: Defen
   );
 }
 
-
 function Empty({ children }: { children: React.ReactNode }) {
   return (
     <div className="px-2 py-4 text-center text-[12px] leading-relaxed text-[var(--text-muted)]">
