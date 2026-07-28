@@ -55,7 +55,12 @@ export interface LiveRow {
 
 const GROUP_WINDOW_MS = 10 * 60_000; // 10 minutes
 
-const fmtUsd = (n: number): string => "$" + Math.round(n).toLocaleString("en-US");
+const fmtUsd = (n: number): string =>
+  "$" +
+  (n >= 1000
+    ? n.toLocaleString("en-US", { maximumFractionDigits: 0 })
+    : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+
 const plural = (n: number, u: string) => `${n} ${u}${n === 1 ? "" : "s"}`;
 
 /** Factual text for a row — real numbers only, no motive attribution. */
