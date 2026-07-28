@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { convictionSignal, type ConvictionHolder } from "./conviction";
+import {
+  convictionSignal,
+  whaleWallets,
+  type ConvictionHolder,
+  type SidePosition,
+} from "./conviction";
 
 const h = (over: Partial<ConvictionHolder>): ConvictionHolder => ({
   wallet: "0xabc",
@@ -69,6 +74,71 @@ describe("convictionSignal — network takes priority", () => {
     const s = convictionSignal([h({ shares: 200, daysHeld: 20 })], "YES", { network });
     expect(s?.kind).toBe("diamond"); // falls through to the diamond tier
     expect(s?.yours).toBe(false);
+  });
+});
+
+describe("whaleWallets — big money, relative to the market", () => {
+  const p = (wallet: string, side: "YES" | "NO", valueUsd: number): SidePosition => ({
+    wallet,
+    side,
+    valueUsd,
+  });
+
+  it("flags a position that towers over its side's median", () => {
+    const whales = whaleWallets([
+      p("0xbig", "YES", 3000),
+      p("0xa", "YES", 100),
+      p("0xb", "YES", 120),
+      p("0xc", "YES", 90),
+    ]);
+    expect(whales.has("0xbig")).toBe(true);
+    expect(whales.has("0xa")).toBe(false);
+  });
+
+  it("flags a lone big holder with no peers (absolute floor)", () => {
+    const whales = whaleWallets([p("0xsolo", "NO", 8000)]);
+    expect(whales.has("0xsolo")).toBe(true);
+  });
+
+  it("does not crown a small dominant position below the USD floor", () => {
+    const whales = whaleWallets([p("0xtop", "YES", 40), p("0xrest", "YES", 5)]);
+    expect(whales.size).toBe(0);
+  });
+
+  it("caps the number of whales per side", () => {
+    const positions = Array.from({ length: 5 }, (_, i) => p(`0x${i}`, "YES", 10000));
+    expect(whaleWallets(positions).size).toBe(2);
+  });
+
+  it("judges each side independently and ignores zero/negative values", () => {
+    const whales = whaleWallets([
+      p("0xyes", "YES", 9000),
+      p("0xno", "NO", 0),
+      p("0xno2", "NO", 12000),
+    ]);
+    expect(whales.has("0xyes")).toBe(true);
+    expect(whales.has("0xno")).toBe(false);
+    expect(whales.has("0xno2")).toBe(true);
+  });
+});
+
+describe("convictionSignal — whale vs diamond hands", () => {
+  it("calls a fresh big holder a whale, not diamond hands", () => {
+    const s = convictionSignal([h({ shares: 9999, daysHeld: 2, whale: true })], "YES");
+    expect(s?.kind).toBe("whale");
+    expect(s?.label).toBe("Whale");
+  });
+
+  it("still calls a long-held whale diamond hands (conviction is earned)", () => {
+    const s = convictionSignal([h({ shares: 9999, daysHeld: 30, whale: true })], "YES");
+    expect(s?.kind).toBe("diamond");
+    expect(s?.label).toBe("Diamond hands");
+  });
+
+  it("keeps a network match ahead of the whale label", () => {
+    const network = new Map([["0xabc", "twin"]]);
+    const s = convictionSignal([h({ whale: true, daysHeld: 1 })], "YES", { network });
+    expect(s?.kind).toBe("network");
   });
 });
 

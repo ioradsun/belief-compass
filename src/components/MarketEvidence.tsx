@@ -119,7 +119,8 @@ export function BelieversSplit({
   const order = (a: Believer, b: Believer) => {
     const an = networkWallets.has(a.wallet.toLowerCase()) ? 1 : 0;
     const bn = networkWallets.has(b.wallet.toLowerCase()) ? 1 : 0;
-    return bn - an || b.conviction - a.conviction;
+    // Your people first, then the whales (big money reads the room), then conviction.
+    return bn - an || Number(b.whale) - Number(a.whale) || b.conviction - a.conviction;
   };
   const yes = believers.filter((b) => b.side === "YES").sort(order);
   const no = believers.filter((b) => b.side === "NO").sort(order);
@@ -171,6 +172,11 @@ function SideColumn({
                     aria-hidden
                   >
                     {initialsFor(b.name)}
+                  </span>
+                )}
+                {b.whale && (
+                  <span className="shrink-0 text-[11px]" title="Whale — big money on this side">
+                    🐋
                   </span>
                 )}
                 <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--text)]">

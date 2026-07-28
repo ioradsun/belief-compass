@@ -575,7 +575,7 @@ function SideCard({
  */
 function ConvictionSlot({ signal, col }: { signal: ConvictionSignal | null; col: string }) {
   if (!signal) return <div className="h-5" aria-hidden />;
-  const emoji = signal.kind === "network" ? "" : signal.kind === "diamond" ? "💎 " : "";
+  const emoji = signal.kind === "diamond" ? "💎 " : signal.kind === "whale" ? "🐋 " : "";
   const person = signal.name ?? "";
   return (
     <div

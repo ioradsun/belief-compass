@@ -14,6 +14,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
+import { whaleWallets, type SidePosition } from "@/domain/conviction";
 
 export interface Believer {
   wallet: string;
@@ -23,6 +24,10 @@ export interface Believer {
   shares: number;
   conviction: number;
   daysHeld: number;
+  /** USD value of the held side, when POV has priced it (0 when unknown). */
+  valueUsd: number;
+  /** Big money on the line relative to this market's side (server-flagged). */
+  whale: boolean;
 }
 
 export interface PricePoint {
@@ -84,7 +89,9 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
     const [beliefsRes, seriesRes, marketRes] = await Promise.all([
       sb
         .from("wallet_beliefs")
-        .select("wallet, stance_side, expressed_side, yes_shares, no_shares, conviction, days_held")
+        .select(
+          "wallet, stance_side, expressed_side, yes_shares, no_shares, yes_value_usd, no_value_usd, conviction, days_held",
+        )
         .eq("onchain_id", id)
         .in("stance_side", ["YES", "NO"])
         .order("conviction", { ascending: false })
@@ -99,6 +106,8 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
       expressed_side: string | null;
       yes_shares: number | null;
       no_shares: number | null;
+      yes_value_usd: number | null;
+      no_value_usd: number | null;
       conviction: number | null;
       days_held: number | null;
     }>;
@@ -111,6 +120,14 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
       8,
     );
 
+    // Whale = big money on the line, judged relative to each side of THIS market.
+    const positions: SidePosition[] = rows.map((r) => {
+      const side = (r.stance_side ?? r.expressed_side) === "YES" ? "YES" : "NO";
+      const valueUsd = Number(side === "YES" ? r.yes_value_usd : r.no_value_usd) || 0;
+      return { wallet: r.wallet, side, valueUsd: Math.max(0, valueUsd) };
+    });
+    const whales = whaleWallets(positions);
+
     let believersYes = 0;
     let believersNo = 0;
     const believers: Believer[] = rows.map((r) => {
@@ -118,6 +135,7 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
       if (side === "YES") believersYes++;
       else believersNo++;
       const p = profiles.get(r.wallet.toLowerCase());
+      const valueUsd = Math.max(0, Number(side === "YES" ? r.yes_value_usd : r.no_value_usd) || 0);
       return {
         wallet: r.wallet,
         name: p?.displayName ?? aliasFor(r.wallet),
@@ -126,6 +144,8 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
         shares: Number(side === "YES" ? r.yes_shares : r.no_shares) || 0,
         conviction: Number(r.conviction) || 0,
         daysHeld: Math.max(0, Math.round(Number(r.days_held) || 0)),
+        valueUsd,
+        whale: whales.has(r.wallet.toLowerCase()),
       };
     });
 
