@@ -8,10 +8,12 @@
 import type { MarketStory, StoryBeat, BeatTone } from "@/domain/story";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
+// Beat dots stay neutral on purpose: only YES/NO words and percentages carry
+// colour, so the feed reads as text instead of a traffic-light board.
 const TONE_DOT: Record<BeatTone, string> = {
-  yes: "var(--yes)",
-  no: "var(--no)",
-  hot: "#f59e0b",
+  yes: "var(--text-muted)",
+  no: "var(--text-muted)",
+  hot: "var(--text-secondary)",
   neutral: "var(--text-muted)",
 };
 
