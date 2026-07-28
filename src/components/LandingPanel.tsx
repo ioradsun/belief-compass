@@ -28,7 +28,18 @@ export function LandingPanel({
       style={{ borderBottom: "1px solid var(--border)" }}
     >
       <div
-        className={`mx-auto w-full max-w-[1180px] px-4 transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none lg:px-8 ${
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        aria-label={expanded ? "Collapse introduction" : "Expand introduction"}
+        onClick={expanded ? onCollapse : onExpand}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            expanded ? onCollapse() : onExpand();
+          }
+        }}
+        className={`mx-auto w-full max-w-[1180px] cursor-pointer px-4 transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none motion-reduce:transition-none lg:px-8 ${
           expanded ? "py-8 lg:py-12" : "py-2.5"
         }`}
       >
@@ -43,20 +54,11 @@ export function LandingPanel({
               size={expanded ? 40 : 22}
               className="shrink-0 text-[var(--text)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
             />
-            <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
-              <span
-                className={`truncate font-medium tracking-tight text-[var(--text)] transition-all duration-500 motion-reduce:transition-none ${
-                  expanded ? "text-[15px]" : "text-[13px]"
-                }`}
-              >
-                conviction.company
+            {!expanded && (
+              <span className="truncate text-[12px] text-[var(--text-secondary)]">
+                Conviction needs company.
               </span>
-              {!expanded && (
-                <span className="truncate text-[12px] text-[var(--text-secondary)]">
-                  Conviction needs company.
-                </span>
-              )}
-            </div>
+            )}
             {!expanded && (
               <span className="ml-auto hidden shrink-0 pr-3 text-[11px] text-[var(--text-muted)] xl:block">
                 Powered by pov.co and $DEGEN
@@ -64,12 +66,9 @@ export function LandingPanel({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={expanded ? onCollapse : onExpand}
-            aria-expanded={expanded}
-            aria-label={expanded ? "Collapse introduction" : "Expand introduction"}
-            className="shrink-0 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[var(--text-muted)] transition-colors hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)]"
+          <span
+            aria-hidden="true"
+            className="shrink-0 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[var(--text-muted)]"
           >
             <svg
               width="14"
@@ -89,8 +88,9 @@ export function LandingPanel({
                 strokeLinejoin="round"
               />
             </svg>
-          </button>
+          </span>
         </div>
+
 
         {/* expanding region — same component, changing shape */}
         <div
@@ -113,7 +113,10 @@ export function LandingPanel({
               <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
                 <button
                   type="button"
-                  onClick={onEnter}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEnter();
+                  }}
                   tabIndex={expanded ? 0 : -1}
                   className="rounded-full bg-[var(--text)] px-6 py-3 text-[14px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] motion-reduce:transition-none"
                 >
