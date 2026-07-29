@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { groupLiveRows, liveRowText, type LiveEventInput } from "./live-tape";
+import {
+  groupLiveRows,
+  liveRowText,
+  mergeLiveRows,
+  type LiveEventInput,
+  type LiveRow,
+} from "./live-tape";
 
 const ev = (o: Partial<LiveEventInput> = {}): LiveEventInput => ({
   source_key: Math.random().toString(36),
@@ -167,5 +173,52 @@ describe("factual copy only", () => {
       payload: { count: 40, gained: 22 },
     });
     expect(text).toBe("The NO tribe doubled today");
+  });
+});
+
+describe("mergeLiveRows (delta sync)", () => {
+  const lr = (id: string, occurredAt: string, text = id): LiveRow => ({
+    id,
+    kind: "trade_burst",
+    marketId: "42",
+    marketTitle: "m",
+    occurredAt,
+    startedAt: occurredAt,
+    side: "YES",
+    walletCount: 1,
+    tradeCount: 1,
+    amountEth: 0.1,
+    amountUsd: 100,
+    wallet: "0xa",
+    text,
+    payload: {},
+  });
+  const t = (m: number) => `2026-02-01T12:${String(m).padStart(2, "0")}:00.000Z`;
+
+  it("keeps the immutable tail and prepends the fresh head, newest first", () => {
+    const prev = [lr("e", t(30)), lr("d", t(20)), lr("c", t(10)), lr("b", t(5)), lr("a", t(1))];
+    const since = t(15); // c, b, a are the stable tail (< since)
+    const fresh = [lr("g", t(40)), lr("f", t(35)), lr("e", t(30))];
+    const out = mergeLiveRows(prev, fresh, since, 100);
+    expect(out.map((r) => r.id)).toEqual(["g", "f", "e", "c", "b", "a"]);
+  });
+
+  it("lets fresh win on id collisions (a grown/re-grouped burst)", () => {
+    const prev = [lr("e", t(30), "1 believer backed YES")];
+    const fresh = [lr("e", t(30), "4 believers backed YES")];
+    const out = mergeLiveRows(prev, fresh, t(20), 100);
+    expect(out).toHaveLength(1);
+    expect(out[0].text).toBe("4 believers backed YES");
+  });
+
+  it("is a no-op when the server returns nothing fresh (never drops the head)", () => {
+    const prev = [lr("e", t(30)), lr("d", t(20))];
+    expect(mergeLiveRows(prev, [], t(15), 100).map((r) => r.id)).toEqual(["e", "d"]);
+  });
+
+  it("trims to the limit", () => {
+    const prev = [lr("c", t(10)), lr("b", t(5)), lr("a", t(1))];
+    const fresh = [lr("e", t(30)), lr("d", t(20))];
+    expect(mergeLiveRows(prev, fresh, t(15), 3).map((r) => r.id)).toEqual(["e", "d", "c"]);
   });
 });
