@@ -63,9 +63,19 @@ export function LandingPanel({
               className="shrink-0 text-[var(--text)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
             />
             {!expanded && (
-              <span className="truncate text-[12px] text-[var(--text-secondary)]">
+              <span className="hidden shrink-0 truncate text-[12px] text-[var(--text-secondary)] md:block">
                 Conviction needs company.
               </span>
+            )}
+            {!expanded && search && (
+              <div
+                className="ml-auto flex min-w-0 max-w-[560px] flex-1 items-center"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                role="presentation"
+              >
+                {search}
+              </div>
             )}
             {!expanded && (
               <span className="ml-auto hidden shrink-0 text-[11px] text-[var(--text-muted)] xl:block">
@@ -73,6 +83,7 @@ export function LandingPanel({
               </span>
             )}
           </div>
+
         </div>
 
 
