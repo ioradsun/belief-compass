@@ -28,7 +28,7 @@ import { expressBelief, getCalibrationQueue } from "@/lib/beliefs.functions";
 import { type Readiness } from "@/domain/beliefs";
 import { BAND_COPY } from "@/domain/house";
 
-type Mode = "house" | "believers" | "defense";
+type Mode = "house" | "stream" | "believers" | "defense";
 
 export const houseKey = (wallet: string | undefined, marketId: number) =>
   ["house", wallet ?? null, marketId] as const;
@@ -91,6 +91,7 @@ export function MarketIntelligence({
   const tablistId = useId();
   const btnRefs = useRef<Record<Mode, HTMLButtonElement | null>>({
     house: null,
+    stream: null,
     believers: null,
     defense: null,
   });
@@ -126,7 +127,9 @@ export function MarketIntelligence({
 
   const calibrating = !!viewer && !!readiness && !readiness.calibrated;
   const meta =
-    mode === "believers"
+    mode === "stream"
+      ? ""
+      : mode === "believers"
       ? `${believers.length} believer${believers.length === 1 ? "" : "s"}`
       : mode === "defense"
         ? `${defense.length} case${defense.length === 1 ? "" : "s"}`
@@ -143,6 +146,7 @@ export function MarketIntelligence({
       id: "house",
       label: calibrating ? `House Read · ${readiness!.remaining} left` : "House Read",
     },
+    { id: "stream", label: "Belief Stream" },
     { id: "believers", label: "Believers" },
     { id: "defense", label: "Defense" },
   ];
@@ -231,6 +235,15 @@ export function MarketIntelligence({
               />
             </div>
           )
+        ) : mode === "stream" ? (
+          <LiveTape
+            marketIds={[marketId]}
+            limit={30}
+            showTitles={false}
+            skeletonRows={4}
+            emptyText="No trades on this market yet."
+            onSelect={() => {}}
+          />
         ) : mode === "believers" ? (
           <BelieversMode
             believers={believers}
