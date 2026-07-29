@@ -178,6 +178,10 @@ export async function refreshMarket(
       new_believers_1h: nb["1h"],
       new_believers_24h: nb["24h"],
       new_believers_7d: nb["7d"],
+      // Per-side 24h intake — powers the position card's "👋 +N today" for the
+      // exact side the wallet holds (not the market-wide figure).
+      new_believers_yes_24h: num(t.new_believers_yes_24h),
+      new_believers_no_24h: num(t.new_believers_no_24h),
       side_flips_24h: num(t.side_flips_24h),
       // circulation (USD volume ÷ USD capital; null when capital is zero)
       circulation_1h: circulation(volUsd["1h"], totalCapitalUsd || null),

@@ -21,6 +21,10 @@ type Position = {
     no_price_usd: number | null;
     chg_24h_yes: number | null;
     chg_24h_no: number | null;
+    believers_yes?: number | null;
+    believers_no?: number | null;
+    new_believers_yes_24h?: number | null;
+    new_believers_no_24h?: number | null;
   } | null;
   chg_window_yes?: number | null;
   chg_window_no?: number | null;
@@ -70,6 +74,8 @@ function PositionCard({
     chg: number | null;
     title: string;
     liveLine: string | null;
+    believers: number | null;
+    newToday: number | null;
   };
   winLabel: string;
   onSelect: (id: number) => void;
@@ -97,6 +103,18 @@ function PositionCard({
           {signedPct(p.chg)} <span className="text-[var(--text-muted)]">{winLabel}</span>
         </span>
       </div>
+      {/* Quiet tribe health for the side held — awareness, never an action. The
+        "+N today" only appears when someone actually joined this side today. */}
+      {p.believers != null && p.believers > 0 ? (
+        <div className="num mt-2 flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+          <span>👥 {p.believers.toLocaleString("en-US")} believers</span>
+          {p.newToday != null && p.newToday > 0 && (
+            <span className="text-[var(--text-secondary)]">
+              👋 +{p.newToday.toLocaleString("en-US")} today
+            </span>
+          )}
+        </div>
+      ) : null}
       {/* One factual live line from market_state — omit the row when nothing meaningful. */}
       {p.liveLine ? (
         <div className="mt-2 truncate text-[11px] text-[var(--text-muted)]">{p.liveLine}</div>
@@ -158,6 +176,15 @@ export function MyConvictions({
         (side === "YES" ? p.chg_window_yes : p.chg_window_no) ??
         null;
       const chg = raw == null || !Number.isFinite(Number(raw)) ? null : Number(raw);
+      // Tribe health for the SIDE held: the believer count and today's intake on
+      // that side. Prefer the read-model state; fall back to the feed row's
+      // believer count when the market is on screen.
+      const believers =
+        (side === "YES" ? st?.believers_yes : st?.believers_no) ??
+        (side === "YES" ? m?.believers_yes : m?.believers_no) ??
+        null;
+      const newToday =
+        (side === "YES" ? st?.new_believers_yes_24h : st?.new_believers_no_24h) ?? null;
       return {
         id,
         side,
@@ -167,6 +194,8 @@ export function MyConvictions({
         // The GLOBAL market_state live line (joined by getWallet) — no per-position query.
         liveLine:
           ((st as { live_line?: string | null } | null)?.live_line as string | null) ?? null,
+        believers: believers == null ? null : Number(believers),
+        newToday: newToday == null ? null : Number(newToday),
       };
     })
     .filter(Boolean) as {
@@ -176,6 +205,8 @@ export function MyConvictions({
     chg: number | null;
     title: string;
     liveLine: string | null;
+    believers: number | null;
+    newToday: number | null;
   }[];
 
   built.sort((a, b) => b.value - a.value);
