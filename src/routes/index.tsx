@@ -433,7 +433,11 @@ function Feed() {
                     ethUsd={data?.ethUsd ?? 0}
                     onSkip={nextMarket}
                     viewerWallet={wallet}
+                    lens={lens}
+                    lenses={OPP_FILTERS}
+                    onLens={setLens}
                   />
+
                 </div>
               )
             )}
