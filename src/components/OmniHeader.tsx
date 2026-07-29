@@ -1,7 +1,10 @@
 /**
- * OmniHeader — one line, one job. A search field for markets and people, with a
- * quiet lens dropdown docked inside it. No hero copy, no chip row: the header
- * asks a single question ("what are you looking for?") and gets out of the way.
+ * OmniHeader — one line, one job. A search field for markets and people.
+ *
+ * The search is global (it queries the whole catalog and all people), so it now
+ * lives in the app's top bar rather than inside the center column. The lens
+ * picker — which only re-ranks the deck below — is exported separately so it can
+ * stay next to the thing it filters.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -12,19 +15,94 @@ export type Lens = "all" | "hot" | "early" | "hidden" | "contested" | "convictio
 
 export type LensOption = { key: Lens; emoji: string; label: string; question: string };
 
-export function OmniHeader({
+/** The deck's filter. Lives with the deck, not with the global search. */
+export function LensPicker({
   lens,
   lenses,
   onLens,
+}: {
+  lens: Lens;
+  lenses: LensOption[];
+  onLens: (l: Lens) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const active = lenses.find((l) => l.key === lens)!;
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--panel)] hover:text-[var(--text)]"
+      >
+        <span aria-hidden>{active.emoji}</span>
+        <span>{active.label}</span>
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          className="h-3 w-3"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path d="m6 9 6 6 6-6" strokeLinecap="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className="absolute left-0 top-9 z-40 w-72 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl"
+        >
+          {lenses.map((l) => (
+            <button
+              key={l.key}
+              type="button"
+              role="option"
+              aria-selected={l.key === lens}
+              onClick={() => {
+                onLens(l.key);
+                setOpen(false);
+              }}
+              className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
+                l.key === lens ? "bg-[var(--surface)]" : "hover:bg-[var(--surface)]"
+              }`}
+            >
+              <span aria-hidden className="mt-0.5 text-sm">
+                {l.emoji}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[13px] font-medium text-[var(--text)]">{l.label}</span>
+                <span className="block truncate text-[11px] text-[var(--text-muted)]">
+                  {l.question}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function OmniHeader({
   wallet,
   onSelectMarket,
   onSelectPerson,
   onOpenMenu,
   right,
 }: {
-  lens: Lens;
-  lenses: LensOption[];
-  onLens: (l: Lens) => void;
   wallet?: string;
   onSelectMarket: (id: number) => void;
   onSelectPerson: (w: string) => void;
@@ -34,10 +112,8 @@ export function OmniHeader({
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const [lensOpen, setLensOpen] = useState(false);
   const [active_i, setActiveI] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
-  const active = lenses.find((l) => l.key === lens)!;
 
   // Debounce the query into the searches so we don't fire on every keystroke.
   const [term, setTerm] = useState("");
@@ -48,10 +124,7 @@ export function OmniHeader({
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
-      if (!boxRef.current?.contains(e.target as Node)) {
-        setOpen(false);
-        setLensOpen(false);
-      }
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -109,13 +182,13 @@ export function OmniHeader({
   };
 
   return (
-    <header className="relative mb-5 lg:mb-6" ref={boxRef}>
+    <div className="relative min-w-0 flex-1" ref={boxRef}>
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={onOpenMenu}
           aria-label="Open menu"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--border)] lg:hidden"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--border)] lg:hidden"
         >
           <span className="space-y-1">
             <span className="block h-px w-4 bg-current" />
@@ -124,8 +197,7 @@ export function OmniHeader({
           </span>
         </button>
 
-        {/* Search + lens live in one continuous pill. */}
-        <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] pl-4 pr-1.5">
+        <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-4">
           <svg
             aria-hidden
             viewBox="0 0 24 24"
@@ -149,71 +221,14 @@ export function OmniHeader({
             aria-label="Search markets and people"
             className="min-w-0 flex-1 bg-transparent text-sm text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
           />
-          <button
-            type="button"
-            onClick={() => {
-              setLensOpen((v) => !v);
-              setOpen(false);
-            }}
-            aria-haspopup="listbox"
-            aria-expanded={lensOpen}
-            className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--panel)] hover:text-[var(--text)]"
-          >
-            <span aria-hidden>{active.emoji}</span>
-            <span className="hidden sm:inline">{active.label}</span>
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              className="h-3 w-3"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="m6 9 6 6 6-6" strokeLinecap="round" />
-            </svg>
-          </button>
         </div>
 
         {right}
       </div>
 
-      {/* Lens menu — the filter, stated as a question. */}
-      {lensOpen && (
-        <div
-          role="listbox"
-          className="absolute right-0 top-12 z-40 w-72 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl"
-        >
-          {lenses.map((l) => (
-            <button
-              key={l.key}
-              type="button"
-              role="option"
-              aria-selected={l.key === lens}
-              onClick={() => {
-                onLens(l.key);
-                setLensOpen(false);
-              }}
-              className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
-                l.key === lens ? "bg-[var(--surface)]" : "hover:bg-[var(--surface)]"
-              }`}
-            >
-              <span aria-hidden className="mt-0.5 text-sm">
-                {l.emoji}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[13px] font-medium text-[var(--text)]">{l.label}</span>
-                <span className="block truncate text-[11px] text-[var(--text-muted)]">
-                  {l.question}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Results */}
       {showResults && (
-        <div className="absolute inset-x-0 top-12 z-40 max-h-[60vh] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl">
+        <div className="absolute inset-x-0 top-11 z-50 max-h-[60vh] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl">
           {marketHits.length === 0 && peopleHits.length === 0 ? (
             <p className="px-3 py-3 text-[13px] text-[var(--text-muted)]">No matches.</p>
           ) : null}
@@ -288,6 +303,6 @@ export function OmniHeader({
           )}
         </div>
       )}
-    </header>
+    </div>
   );
 }
