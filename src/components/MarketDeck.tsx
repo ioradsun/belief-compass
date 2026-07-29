@@ -40,7 +40,10 @@ import {
   type OrderSide,
 } from "@/domain/order";
 
+import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
+
 const PULSE_TONE: Record<string, string> = {
+
   hot: "#f59e0b",
   warm: "var(--top-voice, #d7ae58)",
   neutral: "var(--text-muted)",
