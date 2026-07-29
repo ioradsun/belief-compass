@@ -37,7 +37,8 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     const limit = data?.limit ?? 120;
     const viewer = data?.wallet?.toLowerCase() ?? null;
 
-    const { data: rows, error } = await sb
+    const scope = data?.marketIds?.map((n) => String(n)) ?? null;
+    let q = sb
       .from("events")
       // NOTE: `payload` (raw_log) is deliberately NOT selected. The live story only
       // ever needs the `action` column (grouping derives payload.action from it);
@@ -46,7 +47,9 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index",
       )
       .eq("is_canonical", true)
-      .in("kind", LIVE_KINDS)
+      .in("kind", LIVE_KINDS);
+    if (scope) q = q.in("market_id", scope);
+    const { data: rows, error } = await q
       .order("occurred_at", { ascending: false })
       .order("block_number", { ascending: false, nullsFirst: false })
       .order("log_index", { ascending: false, nullsFirst: false })
