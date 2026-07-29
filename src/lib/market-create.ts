@@ -73,7 +73,8 @@ export function sniffMime(bytes: Uint8Array): string | null {
   if (ascii(4, 4) === "ftyp") {
     const brand = ascii(8, 4);
     if (brand.startsWith("avif") || brand.startsWith("avis")) return "image/avif";
-    if (brand.startsWith("M4A")) return "audio/mp4";
+    const b4 = brand.toUpperCase();
+    if (b4.startsWith("M4A") || b4.startsWith("M4B")) return "audio/mp4";
     return "video/mp4";
   }
   if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return "video/webm";
