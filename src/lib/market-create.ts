@@ -37,8 +37,16 @@ export const ALLOWED_MIME: Record<Exclude<MediaKind, "link">, string[]> = {
 /** Never accepted: SVG/HTML can carry script, archives can carry anything. */
 const BLOCKED_SNIFF = ["image/svg+xml", "text/html", "application/zip", "application/x-msdownload"];
 
+/** File-dialog filter. Extensions are included because some platforms report
+ *  an empty or non-standard MIME type for .m4a/.aac files. */
+const ACCEPT_EXT: Record<Exclude<MediaKind, "link">, string[]> = {
+  image: [],
+  audio: [".m4a", ".mp3", ".aac", ".wav", ".ogg", ".mp4"],
+  video: [],
+};
+
 export function accept(kind: Exclude<MediaKind, "link">): string {
-  return ALLOWED_MIME[kind].join(",");
+  return [...ALLOWED_MIME[kind], ...ACCEPT_EXT[kind]].join(",");
 }
 
 export function kindForMime(mime: string): Exclude<MediaKind, "link"> | null {
