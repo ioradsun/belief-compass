@@ -350,12 +350,10 @@ export function MarketDeck({
           </div>
           <p className="mt-1 pl-4 text-[12px] leading-snug text-[var(--text-secondary)] [overflow-wrap:anywhere]">
             {pulse.why}
+            {eventBeat && (
+              <span className="text-[var(--text-muted)]"> {eventBeat}</span>
+            )}
           </p>
-          {eventBeat && (
-            <p className="mt-0.5 pl-4 text-[12px] leading-snug text-[var(--text-muted)]">
-              {eventBeat}
-            </p>
-          )}
         </div>
 
 
