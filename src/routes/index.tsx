@@ -190,6 +190,7 @@ function Feed() {
         p: undefined,
         dna: undefined,
         create: undefined,
+        terms: undefined,
       }),
     });
     setTab("belief");
@@ -203,6 +204,7 @@ function Feed() {
         m: undefined,
         dna: undefined,
         create: undefined,
+        terms: undefined,
       }),
     });
     setTab("belief");
@@ -216,6 +218,7 @@ function Feed() {
         p: undefined,
         m: undefined,
         create: undefined,
+        terms: undefined,
       }),
     });
     setTab("belief");
@@ -228,6 +231,7 @@ function Feed() {
       search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
         ...prev,
         create: true,
+        terms: undefined,
         dna: undefined,
         p: undefined,
         m: undefined,
@@ -241,6 +245,7 @@ function Feed() {
       search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
         ...prev,
         create: undefined,
+        terms: undefined,
       }),
     });
   };
