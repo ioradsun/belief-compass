@@ -9,7 +9,7 @@
  *     recompute a prediction after the fact.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { decodeFunctionData } from "viem";
+import { decodeFunctionData, parseAbi } from "viem";
 import { serviceClient } from "@/lib/supabase-clients";
 import { readViewerDnaCache } from "@/lib/dna/viewer-dna-cache.server";
 import {
@@ -386,11 +386,11 @@ async function verifyBetTransaction(
   txHash: string,
 ): Promise<void> {
   if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new Error("That transaction isn't valid.");
-  const [{ getBaseClient }, { PROXY_ADDRESS }, { TRADE_ABI }] = await Promise.all([
+  const [{ getBaseClient }, { PROXY_ADDRESS }] = await Promise.all([
     import("@/chain/client"),
     import("@/chain/decoder"),
-    import("@/lib/chain-trade"),
   ]);
+  const BUY_ABI = parseAbi(["function buy(uint256 marketId, bool yes, uint256 minTokens) payable"]);
   const client = getBaseClient();
   const hash = txHash as `0x${string}`;
 
@@ -404,7 +404,7 @@ async function verifyBetTransaction(
 
   let decoded: { functionName: string; args?: readonly unknown[] };
   try {
-    decoded = decodeFunctionData({ abi: TRADE_ABI, data: tx.input });
+    decoded = decodeFunctionData({ abi: BUY_ABI, data: tx.input });
   } catch {
     throw new Error("That transaction isn't a belief-market buy.");
   }
