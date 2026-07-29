@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { WalletProviders } from "../components/WalletConnect";
 import { VersionWatcher } from "../components/VersionWatcher";
+import { restoreQueryCache, startQueryPersist } from "../lib/query-persist";
 
 // Web fonts, loaded OFF the critical path. The system fallback stack in styles.css
 // (system-ui / -apple-system / Segoe UI …) paints instantly; Inter + JetBrains
@@ -154,6 +155,16 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // Instant-on-return: re-hydrate last session's cache the moment we mount (so
+  // client panels paint their last-seen state instead of skeletons), then mirror
+  // the cache forward. Restore runs in an effect so the first client render still
+  // matches the SSR HTML (no hydration mismatch); the fill lands on the next frame
+  // and the panels revalidate on their own via staleTime / refetchInterval.
+  useEffect(() => {
+    restoreQueryCache(queryClient);
+    return startQueryPersist(queryClient);
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>
