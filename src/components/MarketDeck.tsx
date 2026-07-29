@@ -261,6 +261,12 @@ export function MarketDeck({
   };
 
   const momentum = MOMENTUM[(rr.opportunity_type as string | null) ?? ""] ?? null;
+  // One chip: the market's momentum tag when no lens is applied, the active lens
+  // once you pick one. Same vocabulary, same place — no duplicated row above.
+  const lensMomentum = lens && lens !== "all" ? MOMENTUM[lens] : null;
+  const chipTone = lensMomentum?.hue ?? momentum?.hue;
+  const chipLabel = lensMomentum?.label ?? momentum?.label;
+  const chipHint = lensMomentum?.hint ?? momentum?.hint;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -272,26 +278,40 @@ export function MarketDeck({
               {category}
             </span>
           )}
-          {/* Momentum tag — the market's own classification, stated plainly. */}
-          {momentum && (
-            <span
-              title={momentum.hint}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
-              style={{
-                color: momentum.hue,
-                background: `color-mix(in oklab, ${momentum.hue} 13%, transparent)`,
-                border: `1px solid color-mix(in oklab, ${momentum.hue} 32%, transparent)`,
-              }}
-            >
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: momentum.hue }}
-                aria-hidden
+          {lens && lenses && onLens ? (
+            <span className="ml-auto">
+              <LensPicker
+                lens={lens}
+                lenses={lenses}
+                onLens={onLens}
+                tone={chipTone}
+                label={chipLabel}
+                title={chipHint}
+                align="right"
               />
-              {momentum.label}
             </span>
+          ) : (
+            momentum && (
+              <span
+                title={momentum.hint}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
+                style={{
+                  color: momentum.hue,
+                  background: `color-mix(in oklab, ${momentum.hue} 13%, transparent)`,
+                  border: `1px solid color-mix(in oklab, ${momentum.hue} 32%, transparent)`,
+                }}
+              >
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ background: momentum.hue }}
+                  aria-hidden
+                />
+                {momentum.label}
+              </span>
+            )
           )}
         </div>
+
 
         <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
           {title}
