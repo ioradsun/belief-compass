@@ -228,7 +228,12 @@ export function MyConvictions({
       ) : (
         <div className="flex flex-col gap-2 pt-4">
           {positions.map((p) => (
-            <PositionCard key={p.id} p={p} winLabel={winLabel} onSelect={onSelect} />
+            <PositionCard
+              key={p.id}
+              p={{ ...p, liveLine: tapeById.get(p.id) ?? p.liveLine }}
+              winLabel={winLabel}
+              onSelect={onSelect}
+            />
           ))}
         </div>
       )}
