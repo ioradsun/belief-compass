@@ -320,29 +320,9 @@ export function MarketDeck({
           )}
         </div>
 
-        {/* Live tape — this market only, newest first. Titles are redundant here. */}
-        <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
-          <div className="mb-1.5 flex items-center gap-2">
-            <span
-              className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
-              style={{ background: "var(--yes)" }}
-              aria-hidden
-            />
-            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-              Live on this market
-            </span>
-          </div>
-          <div className="max-h-[168px] overflow-y-auto">
-            <LiveTape
-              marketIds={[marketId]}
-              limit={20}
-              showTitles={false}
-              skeletonRows={3}
-              emptyText="No trades on this market yet."
-              onSelect={() => {}}
-            />
-          </div>
-        </div>
+        {/* Live tape — one line for this market; expands over the deck. */}
+        <MarketLiveStrip marketId={marketId} open={liveOpen} onOpenChange={setLiveOpen} />
+
 
         {/* Battlefield */}
         <div className="space-y-1.5">
