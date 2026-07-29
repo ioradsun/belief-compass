@@ -446,6 +446,14 @@ function Feed() {
           className={`${show("room")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
           style={{ borderLeft: "1px solid var(--border)" }}
         >
+          <a
+            href="https://pov.co/create"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mb-5 flex items-center justify-center gap-1.5 rounded-full bg-[var(--text)] px-4 py-2.5 text-[13px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] motion-reduce:transition-none"
+          >
+            <span aria-hidden="true">+</span> Conviction Market
+          </a>
           <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
             Live
           </div>
