@@ -43,6 +43,7 @@ import {
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
 import { ReportMarket } from "@/components/ReportMarket";
+import { PostPurchase } from "@/components/PostPurchase";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 
 const PULSE_TONE: Record<string, string> = {
@@ -284,6 +285,28 @@ export function MarketDeck({
       }
     }
   };
+
+  // A completed BUY takes over the whole center: the purchase becomes belonging,
+  // not a receipt. (A sell keeps its own compact receipt in the dock below.)
+  if (trade.isSuccess && side != null && sellPct == null) {
+    const shareUrl =
+      typeof window !== "undefined"
+        ? `${window.location.origin}${window.location.pathname}?m=${marketId}`
+        : `?m=${marketId}`;
+    return (
+      <PostPurchase
+        side={side}
+        title={title}
+        believers={side === "YES" ? row.believers_yes : row.believers_no}
+        faces={holders.filter((b) => b.side === side)}
+        shareUrl={shareUrl}
+        onNext={() => {
+          void bal.refetch();
+          onSkip();
+        }}
+      />
+    );
+  }
 
   const momentum = MOMENTUM[(rr.opportunity_type as string | null) ?? ""] ?? null;
   // One chip: the market's momentum tag when no lens is applied, the active lens
