@@ -7,12 +7,18 @@
  * your network) get a faint "about you" highlight but stay in time order. Text
  * wraps naturally with generous spacing; clicking a row selects that market.
  */
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { useStickyRows } from "@/hooks/useSticky";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { classifyLiveRow } from "@/domain/live-taxonomy";
-import type { LiveRow } from "@/lib/live-tape";
+import { mergeLiveRows, LIVE_DELTA_OVERLAP_MS, type LiveRow } from "@/lib/live-tape";
+
+type LiveResult = { rows: LiveRow[]; error: string | null };
+
+/** Beyond this gap since our newest cached event, a delta would be large — just
+ *  do a full fetch (the persisted cache already gave the instant paint). */
+const MAX_DELTA_SPAN_MS = 30 * 60_000;
 
 function ago(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -44,9 +50,31 @@ export function LiveTape({
   skeletonRows?: number;
 }) {
   const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
+  const qc = useQueryClient();
+  const key = ["live-tape", wallet ?? null, scopeKey, limit ?? null];
   const { data, isLoading } = useQuery({
-    queryKey: ["live-tape", wallet ?? null, scopeKey, limit ?? null],
-    queryFn: () => listLiveEvents({ data: { wallet, marketIds: scopeKey ?? undefined, limit } }),
+    queryKey: key,
+    queryFn: async (): Promise<LiveResult> => {
+      // Delta sync (global tape only): re-fetch just the overlap window since our
+      // newest cached event and merge onto the immutable tail — moving a few rows
+      // instead of the whole list every 6s. Falls back to a full fetch for the
+      // scoped tapes, a cold cache, or a long absence.
+      const prev = qc.getQueryData<LiveResult>(key)?.rows ?? [];
+      const newestMs = prev.length ? Date.parse(prev[0].occurredAt) : 0;
+      const canDelta =
+        scopeKey === null && prev.length > 0 && Date.now() - newestMs <= MAX_DELTA_SPAN_MS;
+      if (canDelta) {
+        const sinceIso = new Date(newestMs - LIVE_DELTA_OVERLAP_MS).toISOString();
+        const res = (await listLiveEvents({
+          data: { wallet, limit, since: sinceIso },
+        })) as LiveResult;
+        if (res.error) return { rows: prev, error: res.error };
+        return { rows: mergeLiveRows(prev, res.rows, sinceIso, limit ?? 120), error: null };
+      }
+      return (await listLiveEvents({
+        data: { wallet, marketIds: scopeKey ?? undefined, limit },
+      })) as LiveResult;
+    },
     // New rows prepend; refetch keeps the tape fresh without new infra.
     refetchInterval: 6_000,
     placeholderData: (prev) => prev,

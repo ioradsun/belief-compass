@@ -55,6 +55,36 @@ export interface LiveRow {
 
 const GROUP_WINDOW_MS = 10 * 60_000; // 10 minutes
 
+/**
+ * Delta-sync overlap. A poll fetches only events newer than (newest − OVERLAP).
+ * It MUST exceed every window that can retroactively re-group a row (the 10-min
+ * burst window and the 15-min round-trip window), so the server re-groups the
+ * boundary exactly as a full fetch would and the cached tail is truly immutable.
+ */
+export const LIVE_DELTA_OVERLAP_MS = 16 * 60_000; // 16 minutes
+
+/**
+ * Merge a delta-sync poll: `fresh` is the authoritative re-grouping of everything
+ * at/after `sinceIso`; `prev` is the client's cached full list. Keep prev's
+ * immutable tail (older than sinceIso), replace the head with fresh, dedupe by id
+ * (fresh wins), newest first, trimmed to `limit`. If the server returned nothing
+ * fresh, the poll is a no-op — never drop the head we already have.
+ */
+export function mergeLiveRows(
+  prev: LiveRow[],
+  fresh: LiveRow[],
+  sinceIso: string,
+  limit: number,
+): LiveRow[] {
+  if (fresh.length === 0) return prev.slice(0, limit);
+  const byId = new Map<string, LiveRow>();
+  for (const r of fresh) byId.set(r.id, r);
+  for (const r of prev) if (r.occurredAt < sinceIso && !byId.has(r.id)) byId.set(r.id, r);
+  return [...byId.values()]
+    .sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : a.occurredAt > b.occurredAt ? -1 : 0))
+    .slice(0, limit);
+}
+
 const fmtUsd = (n: number): string =>
   "$" +
   (n >= 1000

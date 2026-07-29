@@ -31,6 +31,14 @@ const input = z
     wallet: z.string().min(3).optional(),
     /** Scope the tape to specific markets (center deck, position rows). */
     marketIds: z.array(z.number().int()).min(1).max(60).optional(),
+    /**
+     * Delta sync: only events at/after this ISO time. The client passes its
+     * newest event minus an OVERLAP that exceeds every grouping window, so the
+     * server re-groups the boundary exactly as a full fetch would — the client
+     * then merges these fresh head rows onto its cached (immutable) tail. Omit
+     * for a full fetch.
+     */
+    since: z.string().datetime().optional(),
   })
   .optional();
 
@@ -55,6 +63,9 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       .eq("is_canonical", true)
       .in("kind", LIVE_KINDS);
     if (scope) q = q.in("market_id", scope);
+    // Delta: bound by the overlap window instead of over-reading the full list.
+    // The window is small, so this fetches only what changed since last poll.
+    if (data?.since) q = q.gte("occurred_at", data.since);
     const { data: rows, error } = await q
       .order("occurred_at", { ascending: false })
       .order("block_number", { ascending: false, nullsFirst: false })
