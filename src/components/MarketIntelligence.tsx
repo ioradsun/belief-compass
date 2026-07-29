@@ -95,6 +95,8 @@ export function MarketIntelligence({
   viewerWallet?: string;
 }) {
   const [mode, setMode] = useState<Mode>("house");
+  const isMobile = useIsMobile();
+
   const connected = useEffectiveWallet();
   const viewer = viewerWallet ?? connected;
   const actions = useHouseFinalize(marketId, viewerWallet);
