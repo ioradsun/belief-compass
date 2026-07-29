@@ -15,6 +15,7 @@ import { getNetwork } from "@/lib/dna.functions";
 import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
+import { LiveTape } from "@/components/LiveTape";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
