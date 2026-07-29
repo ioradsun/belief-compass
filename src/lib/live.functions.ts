@@ -124,7 +124,8 @@ export const listLiveEvents = createServerFn({ method: "GET" })
 
     const labelByWallet = new Map<string, NetLabel>();
     if (viewer && actorWallets.length > 0) {
-      const { data: cache } = await sb
+      const { serviceClient } = await import("@/lib/supabase-clients");
+      const { data: cache } = await serviceClient()
         .from("viewer_dna_cache")
         .select("twin_matches, tribe_matches, opp_matches, inverse_matches")
         .eq("viewer_wallet", viewer)
