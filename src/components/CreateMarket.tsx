@@ -46,11 +46,14 @@ export function CreateMarket({
   ethUsd,
   onCreated,
   onCancel,
+  onOpenTerms,
 }: {
   ethUsd: number;
   onCreated: (marketId: number) => void;
   onCancel: () => void;
+  onOpenTerms?: () => void;
 }) {
+
   const { isConnected } = useAccount();
   const { ensureSession, address } = useWalletSession();
   const econ = useCreateEconomics();
