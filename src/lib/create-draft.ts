@@ -50,7 +50,6 @@ export interface Probe {
 
 let draft: Draft = EMPTY_DRAFT;
 let probe: Probe | null = null;
-if (typeof window !== "undefined") (window as any).__draftModule = ((window as any).__draftModule ?? 0) + 1;
 /** Suggestion keys the user has waved away for this draft. */
 let dismissed = false;
 
@@ -90,7 +89,6 @@ export function setProbe(next: Probe | null) {
       next.linkUrl === probe.linkUrl);
   if (same) return;
   probe = next;
-  if (typeof window !== "undefined") (window as any).__probe = next;
   emit();
 }
 

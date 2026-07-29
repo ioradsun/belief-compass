@@ -274,7 +274,6 @@ export async function findMarketSuggestions(
   const question = (input.question ?? "").trim();
   const hasMedia = !!input.sha256 || !!input.linkUrl;
   if (question.length < 8 && !hasMedia) return [];
-  console.log("[suggest] q=", JSON.stringify(question));
 
   const db = serviceClient();
   // Keyword-targeted candidates beat a blind page of rows: an arbitrary
