@@ -215,8 +215,8 @@ export function MarketIntelligence({
                   color: on ? "var(--text)" : "var(--text-muted)",
                 }}
               >
-                <span className="sm:hidden">{t.short}</span>
-                <span className="hidden sm:inline">{t.label}</span>
+                {isMobile ? t.short : t.label}
+
               </button>
 
             );
