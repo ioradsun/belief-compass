@@ -28,6 +28,12 @@ describe("classifyLiveRow", () => {
     expect(m.icon).toBe("🏆");
   });
 
+  it("treats a tribe doubling as a community event", () => {
+    const d = classifyLiveRow({ kind: "tribe_doubled", walletCount: null });
+    expect(d.klass).toBe("community");
+    expect(d.icon).toBe("🎉");
+  });
+
   it("treats a new market and a crowd of new believers as community", () => {
     expect(classifyLiveRow({ kind: "market_created", walletCount: null }).klass).toBe("community");
     const crowd = classifyLiveRow({

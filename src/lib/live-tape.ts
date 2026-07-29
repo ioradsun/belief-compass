@@ -84,6 +84,8 @@ export function liveRowText(r: Omit<LiveRow, "text">): string {
       const n = Number(r.payload.threshold ?? 0);
       return `${r.side ?? ""} just passed ${n.toLocaleString("en-US")} believers`.trim();
     }
+    case "tribe_doubled":
+      return `The ${r.side ?? ""} tribe doubled today`.trim();
     case "market_created":
       return "New market just opened";
     case "side_shift":

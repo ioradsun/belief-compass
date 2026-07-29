@@ -43,6 +43,7 @@ export function classifyLiveRow(r: LiveRowLike): LiveKindView {
 
   // Community — belonging & growth.
   if (r.kind === "believer_milestone") return { klass: "community", icon: "🏆" };
+  if (r.kind === "tribe_doubled") return { klass: "community", icon: "🎉" };
   if (r.kind === "market_created") return { klass: "community", icon: "🚀" };
   if (r.kind === "trade_burst" && action !== "SELL" && (r.walletCount ?? 1) > 1) {
     // Several believers arriving together reads as the tribe growing.

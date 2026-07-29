@@ -24,10 +24,15 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
 
         const out = await refreshDirtyBatch(sb, limit);
 
-        // Emit believer-milestone community events for any side that just crossed
-        // a rung. Cheap scan of market_state; idempotent by source_key.
-        const { data: milestones } = await sb.rpc("detect_believer_milestones");
+        // Emit community events off the just-refreshed counts: believer-rung
+        // milestones and same-day tribe doublings. Both cheap scans of
+        // market_state, idempotent by source_key.
+        const [{ data: milestones }, { data: doublings }] = await Promise.all([
+          sb.rpc("detect_believer_milestones"),
+          sb.rpc("detect_tribe_doublings"),
+        ]);
         const milestonesEmitted = Number(milestones ?? 0) || 0;
+        const doublingsEmitted = Number(doublings ?? 0) || 0;
 
         const { count: remaining } = await sb
           .from("market_refresh_queue")
@@ -47,6 +52,7 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
           markets_refreshed: out.ok,
           market_refresh_failures: out.failed,
           milestones_emitted: milestonesEmitted,
+          tribe_doublings_emitted: doublingsEmitted,
           processed: out.processed,
           dirty_markets_remaining: remaining ?? 0,
           oldest_dirty_market_age_ms: oldestAgeMs,
