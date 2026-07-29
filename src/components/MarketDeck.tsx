@@ -1155,9 +1155,18 @@ function ConvictionMedia({ onchainId, title }: { onchainId: number; title: strin
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--border)]">
       {media.kind === "image" && (
-        <img src={src} alt={title} loading="lazy" className="max-h-[240px] w-full object-cover" />
+        <img
+          src={src}
+          alt={title}
+          width={640}
+          height={360}
+          decoding="async"
+          className="max-h-[240px] w-full object-cover"
+        />
       )}
-      {media.kind === "video" && <video src={src} controls className="max-h-[240px] w-full" />}
+      {media.kind === "video" && (
+        <video src={src} controls className="max-h-[240px] w-full" style={{ aspectRatio: "16 / 9" }} />
+      )}
       {media.kind === "audio" && <audio src={src} controls className="w-full" />}
     </div>
   );
