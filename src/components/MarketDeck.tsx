@@ -367,29 +367,33 @@ export function MarketDeck({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
-        {/* Pulse — why this matters now, plus the day's traded activity */}
-        <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
-          {/* A label is a label and a sentence is a sentence: never let them
-            compete for the same line. The tag stays on one line (nowrap), the
-            prose gets the full measure below it and wraps like real text. */}
-          <div className="flex items-center gap-2">
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ background: PULSE_TONE[pulse.tone] }}
-              aria-hidden
-            />
-            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-              Pulse
-            </span>
-            <span className="truncate text-[13px] font-semibold text-[var(--text)]">
-              {pulse.label}
-            </span>
+        {/* Pulse — why this matters now, plus the day's traded activity. Hidden in
+          Case File mode: it's market-wide context, so it would only add noise to a
+          center that should be dedicated to the decision while investigating. */}
+        {!caseOpen && (
+          <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
+            {/* A label is a label and a sentence is a sentence: never let them
+              compete for the same line. The tag stays on one line (nowrap), the
+              prose gets the full measure below it and wraps like real text. */}
+            <div className="flex items-center gap-2">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ background: PULSE_TONE[pulse.tone] }}
+                aria-hidden
+              />
+              <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                Pulse
+              </span>
+              <span className="truncate text-[13px] font-semibold text-[var(--text)]">
+                {pulse.label}
+              </span>
+            </div>
+            <p className="mt-1 pl-4 text-[12px] leading-snug text-[var(--text-secondary)] [overflow-wrap:anywhere]">
+              {pulse.why}
+              {eventBeat && <span className="text-[var(--text-muted)]"> {eventBeat}</span>}
+            </p>
           </div>
-          <p className="mt-1 pl-4 text-[12px] leading-snug text-[var(--text-secondary)] [overflow-wrap:anywhere]">
-            {pulse.why}
-            {eventBeat && <span className="text-[var(--text-muted)]"> {eventBeat}</span>}
-          </p>
-        </div>
+        )}
 
         {/* Battlefield */}
         <div className="space-y-1.5">
@@ -400,7 +404,10 @@ export function MarketDeck({
             </span>
             <WindowSelector win={win} onWin={setWin} />
           </div>
-          <ConvictionMedia onchainId={Number(row.onchain_id)} title={String((rr.title as string | null) ?? "Market media")} />
+          <ConvictionMedia
+            onchainId={Number(row.onchain_id)}
+            title={String((rr.title as string | null) ?? "Market media")}
+          />
 
           <div className="grid min-h-0 grid-cols-2 gap-2">
             <SideCard
@@ -439,8 +446,9 @@ export function MarketDeck({
           </span>
         </div>
 
-        {/* DNA / social evidence — only when there's a real signal */}
-        {relationshipBeat && (
+        {/* DNA / social evidence — only when there's a real signal. Hidden in Case
+          File mode: this relationship evidence now lives in each side's Your Network. */}
+        {!caseOpen && relationshipBeat && (
           <div className="flex items-start gap-2 text-[13px]">
             <span
               className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
@@ -1089,7 +1097,6 @@ function AvailRow({ ethUsd }: { ethUsd: number }) {
       : `${fmtUsd(eth * ethUsd)}  ·  ${eth.toFixed(4)} ETH`;
   return <QuoteRow k="Avail" v={v} />;
 }
-
 
 /**
  * Media attached on Conviction (not POV). Rendered from a short-lived signed

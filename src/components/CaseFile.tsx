@@ -5,12 +5,13 @@
  * that already exists elsewhere in the app. Nothing here is calculated, fetched
  * fresh, or invented: it reuses the exact same React Query keys the deck already
  * runs (so no duplicate requests), reuses the existing per-side renderers
- * (SideColumn / DefenseColumn from MarketEvidence), and reads capital + momentum
- * straight off the market row the center already has.
+ * (SideColumn / DefenseColumn from MarketEvidence), and reads the side-specific
+ * capital + price move straight off the market row the center already has.
  *
- * The columns are ordered identically on both sides — People → Your Network →
- * Capital → Momentum → Evidence — so YES (left) and NO (right) read as two halves
- * of the same case.
+ * Layout is identical on both sides so YES (left) and NO (right) read as two
+ * halves of one case: a FIXED comparative summary (Capital · People · Money ·
+ * Move) pinned at the top — same height both sides so the numbers line up across
+ * the center — then the deeper People → Your Network → Evidence scrolls below.
  */
 import { useQuery } from "@tanstack/react-query";
 import { getMarketEvidence } from "@/lib/evidence.functions";
@@ -101,7 +102,10 @@ export function CaseColumn({
     .filter((b) => networkWallets.has(b.wallet.toLowerCase()))
     .map((b) => ({ believer: b, person: relByWallet.get(b.wallet.toLowerCase())! }));
 
-  // Capital + momentum — straight off the market row the center already holds.
+  // Comparative summary — all genuinely SIDE-SPECIFIC fields, straight off the
+  // market row the center already holds. (Deliberately NOT new_believers_24h or
+  // live_line: those are market-wide on the row, not per side — showing them under
+  // one side would misrepresent shared activity as directional evidence.)
   const rr = row as Record<string, unknown>;
   const capital = num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
   const believersCount = num(side === "YES" ? rr.believers_yes : rr.believers_no);
@@ -110,8 +114,6 @@ export function CaseColumn({
   const chg =
     num(side === "YES" ? rr.chg_window_yes : rr.chg_window_no) ??
     num(side === "YES" ? rr.chg_24h_yes : rr.chg_24h_no);
-  const newBackers24h = num(rr.new_believers_24h);
-  const liveLine = (rr.live_line as string | null) ?? null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -122,8 +124,52 @@ export function CaseColumn({
         <span className="text-[13px] font-semibold text-[var(--text)]">Case</span>
       </div>
 
+      {/* Fixed comparative summary — the highest-level side facts (Capital · People
+        · Money · Move). Every row always renders (— when absent) so the YES and NO
+        summaries are the SAME height and line up across the center for comparison.
+        Capital / Momentum live here, not in the scroll, so they never drift apart. */}
+      <div
+        className="mb-3 shrink-0 rounded-[12px] p-3"
+        style={{
+          border: `1px solid color-mix(in oklab, ${color} 30%, var(--border))`,
+          background: `color-mix(in oklab, ${color} 5%, transparent)`,
+        }}
+      >
+        <div className="flex items-end justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            Capital
+          </span>
+          <span className="num text-[22px] font-semibold leading-none text-[var(--text)]">
+            {capital != null ? fmtUsd(capital) : "—"}
+          </span>
+        </div>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+          <SummaryStat
+            label="People"
+            value={believersCount != null ? String(believersCount) : "—"}
+          />
+          <SummaryStat
+            label="Money"
+            value={moneySide != null ? `${moneySide.toFixed(0)}%` : "—"}
+            color={color}
+          />
+          <SummaryStat
+            label="Move"
+            value={
+              chg != null
+                ? `${chg > 0 ? "▲" : chg < 0 ? "▼" : "•"} ${Math.abs(chg).toFixed(1)}%`
+                : "—"
+            }
+            color={
+              chg == null ? undefined : chg > 0 ? "var(--yes)" : chg < 0 ? "var(--no)" : undefined
+            }
+          />
+        </div>
+      </div>
+
+      {/* Deeper evidence scrolls below the fixed summary. Same order both sides. */}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5">
-        {/* 1. People — reuse the deck's own per-side believer list. */}
+        {/* People — reuse the deck's own per-side believer list. */}
         <Section title="People" count={believers.length}>
           {believers.length === 0 ? (
             <Muted>No one on this side yet.</Muted>
@@ -132,7 +178,7 @@ export function CaseColumn({
           )}
         </Section>
 
-        {/* 2. Your Network — existing matches who back this side. */}
+        {/* Your Network — existing matches who back this side. */}
         <Section title="Your Network" count={networkHere.length || null}>
           {!viewerWallet ? (
             <Muted>Connect a wallet to see who in your network is here.</Muted>
@@ -165,63 +211,7 @@ export function CaseColumn({
           )}
         </Section>
 
-        {/* 3. Capital — existing side liquidity + money split off the row. */}
-        <Section title="Capital">
-          <div className="space-y-1 px-0.5 text-[12px]">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[var(--text-muted)]">On this side</span>
-              <span className="num text-[var(--text)]">
-                {capital != null ? fmtUsd(capital) : "—"}
-              </span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-[var(--text-muted)]">Believers</span>
-              <span className="num text-[var(--text)]">{believersCount ?? "—"}</span>
-            </div>
-            {moneySide != null && (
-              <div className="flex items-baseline justify-between">
-                <span className="text-[var(--text-muted)]">Share of money</span>
-                <span className="num" style={{ color }}>
-                  {moneySide.toFixed(0)}%
-                </span>
-              </div>
-            )}
-          </div>
-        </Section>
-
-        {/* 4. Momentum — existing side price move + recent activity off the row. */}
-        <Section title="Momentum">
-          <div className="space-y-1 px-0.5 text-[12px]">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[var(--text-muted)]">Price move</span>
-              {chg != null ? (
-                <span
-                  className="num font-semibold"
-                  style={{
-                    color: chg > 0 ? "var(--yes)" : chg < 0 ? "var(--no)" : "var(--text-muted)",
-                  }}
-                >
-                  {chg > 0 ? "▲" : chg < 0 ? "▼" : "•"} {Math.abs(chg).toFixed(1)}%
-                </span>
-              ) : (
-                <span className="num text-[var(--text-muted)]">—</span>
-              )}
-            </div>
-            {newBackers24h != null && newBackers24h > 0 && (
-              <div className="flex items-baseline justify-between">
-                <span className="text-[var(--text-muted)]">New believers · 24h</span>
-                <span className="num text-[var(--text)]">{newBackers24h}</span>
-              </div>
-            )}
-            {liveLine && (
-              <p className="pt-0.5 text-[11px] leading-snug text-[var(--text-secondary)]">
-                {liveLine}
-              </p>
-            )}
-          </div>
-        </Section>
-
-        {/* 5. Evidence — reuse the deck's own per-side Defense case. */}
+        {/* Evidence — reuse the deck's own per-side Defense case. */}
         <Section title="Evidence" count={defense.length || null}>
           {defense.length === 0 ? (
             <Muted>No case made for {side} yet.</Muted>
@@ -229,6 +219,19 @@ export function CaseColumn({
             <DefenseColumn side={side} opinions={defense} />
           )}
         </Section>
+      </div>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="rounded-[8px] py-1.5" style={{ background: "var(--surface-2,var(--border))" }}>
+      <div className="num text-[13px] font-semibold" style={{ color: color ?? "var(--text)" }}>
+        {value}
+      </div>
+      <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
+        {label}
       </div>
     </div>
   );
