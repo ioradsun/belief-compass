@@ -18,15 +18,19 @@ export function LandingPanel({
   onEnter,
   onCollapse,
   onExpand,
+  onCreate,
   search,
 }: {
   state: LandingPanelState;
   onEnter: () => void;
   onCollapse: () => void;
   onExpand: () => void;
+  /** Opens the market-creation flow in the center column. */
+  onCreate?: () => void;
   /** Global search slot, shown only in the collapsed bar. */
   search?: ReactNode;
 }) {
+
   const expanded = state === "expanded";
 
 
