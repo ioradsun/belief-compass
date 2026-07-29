@@ -78,9 +78,13 @@ describe("inline balance guard", () => {
 describe("createMarket args — exact verified order", () => {
   it("assembles [questionId, yesAgent, noAgent, curve, yes] with V1 agent defaults", () => {
     const curve = "0x00000000000000000000000000000000000000c5" as const;
-    expect(
-      createMarketArgs({ questionId: "conviction-x-1", curve, yes: true }),
-    ).toEqual(["conviction-x-1", V1_YES_AGENT, V1_NO_AGENT, curve, true]);
+    expect(createMarketArgs({ questionId: "conviction-x-1", curve, yes: true })).toEqual([
+      "conviction-x-1",
+      V1_YES_AGENT,
+      V1_NO_AGENT,
+      curve,
+      true,
+    ]);
   });
   it("honors explicit agent overrides and the NO side", () => {
     const curve = "0x00000000000000000000000000000000000000c5" as const;
