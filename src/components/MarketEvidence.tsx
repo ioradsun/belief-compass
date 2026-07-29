@@ -133,7 +133,7 @@ export function BelieversSplit({
   );
 }
 
-function SideColumn({
+export function SideColumn({
   side,
   people,
   networkWallets,
@@ -419,7 +419,13 @@ export function Defense({ opinions }: { opinions: DefenseOpinion[] }) {
   );
 }
 
-function DefenseColumn({ side, opinions }: { side: "YES" | "NO"; opinions: DefenseOpinion[] }) {
+export function DefenseColumn({
+  side,
+  opinions,
+}: {
+  side: "YES" | "NO";
+  opinions: DefenseOpinion[];
+}) {
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
   return (
     <div className="min-w-0">
