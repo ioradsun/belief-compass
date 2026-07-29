@@ -1234,6 +1234,7 @@ export type Database = {
         }[]
       }
       detect_believer_milestones: { Args: never; Returns: number }
+      detect_tribe_doublings: { Args: never; Returns: number }
       enqueue_market_refresh: {
         Args: { p_kind: string; p_market_ids: number[] }
         Returns: number
