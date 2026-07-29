@@ -109,7 +109,7 @@ export const Route = createFileRoute("/")({
     m: search.m != null && Number.isFinite(Number(search.m)) ? Number(search.m) : undefined,
     p: typeof search.p === "string" && search.p.length > 3 ? search.p : undefined,
     dna: search.dna === true || search.dna === "1" ? true : undefined,
-    create: search.create === true || search.create === "1" ? true : undefined,
+    create: search.create === true || search.create === "1" || search.create === 1 ? true : undefined,
   }),
   head: () => ({
     meta: [
