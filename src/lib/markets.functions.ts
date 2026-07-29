@@ -579,6 +579,12 @@ export const getWallet = createServerFn({ method: "GET" })
         no_price_usd: number | null;
         chg_24h_yes: number | null;
         chg_24h_no: number | null;
+        // Quiet tribe health for the position card: side believer counts + the
+        // per-side new-believers-today intake (all read-model, no extra query).
+        believers_yes: number | null;
+        believers_no: number | null;
+        new_believers_yes_24h: number | null;
+        new_believers_no_24h: number | null;
         // The GLOBAL factual live line from the read model — attached to each
         // owned position via THIS set-based join (never a per-position query).
         live_line: string | null;
@@ -590,7 +596,7 @@ export const getWallet = createServerFn({ method: "GET" })
       const { data: st } = await sb
         .from("market_state")
         .select(
-          "onchain_id, yes_price_usd, no_price_usd, chg_24h_yes, chg_24h_no, live_line, live_line_kind, live_line_occurred_at",
+          "onchain_id, yes_price_usd, no_price_usd, chg_24h_yes, chg_24h_no, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, live_line, live_line_kind, live_line_occurred_at",
         )
         .in("onchain_id", ids);
       for (const s of st ?? [])
@@ -599,6 +605,12 @@ export const getWallet = createServerFn({ method: "GET" })
           no_price_usd: s.no_price_usd == null ? null : Number(s.no_price_usd),
           chg_24h_yes: s.chg_24h_yes == null ? null : Number(s.chg_24h_yes),
           chg_24h_no: s.chg_24h_no == null ? null : Number(s.chg_24h_no),
+          believers_yes: s.believers_yes == null ? null : Number(s.believers_yes),
+          believers_no: s.believers_no == null ? null : Number(s.believers_no),
+          new_believers_yes_24h:
+            s.new_believers_yes_24h == null ? null : Number(s.new_believers_yes_24h),
+          new_believers_no_24h:
+            s.new_believers_no_24h == null ? null : Number(s.new_believers_no_24h),
           live_line: (s.live_line as string | null) ?? null,
           live_line_kind: (s.live_line_kind as string | null) ?? null,
           live_line_occurred_at: (s.live_line_occurred_at as string | null) ?? null,
