@@ -344,6 +344,27 @@ export type Database = {
         }
         Relationships: []
       }
+      market_milestone: {
+        Row: {
+          market_id: string
+          reached_at: string
+          side: string
+          threshold: number
+        }
+        Insert: {
+          market_id: string
+          reached_at?: string
+          side: string
+          threshold: number
+        }
+        Update: {
+          market_id?: string
+          reached_at?: string
+          side?: string
+          threshold?: number
+        }
+        Relationships: []
+      }
       market_refresh_queue: {
         Row: {
           activity_dirty: boolean
@@ -1179,6 +1200,7 @@ export type Database = {
           requested_at: string
         }[]
       }
+      detect_believer_milestones: { Args: never; Returns: number }
       enqueue_market_refresh: {
         Args: { p_kind: string; p_market_ids: number[] }
         Returns: number
