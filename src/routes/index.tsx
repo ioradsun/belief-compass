@@ -452,14 +452,30 @@ function Feed() {
 
             {/* Center focus: person profile, DNA overview, or the single-market deck.
               The deck owns its own internal scroll so its dock stays pinned. */}
-            {createOpen ? (
+            {termsOpen ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <button
+                  type="button"
+                  onClick={closeTerms}
+                  className="mb-4 flex items-center gap-1.5 text-[13px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+                >
+                  <span aria-hidden>←</span> Back
+                </button>
+                <h1 className="mb-3 text-[24px] font-semibold tracking-[-0.02em] text-[var(--text)]">
+                  Terms &amp; risk
+                </h1>
+                <TermsContent />
+              </div>
+            ) : createOpen ? (
               <Suspense fallback={<DeckSkeleton />}>
                 <CreateMarket
                   ethUsd={data?.ethUsd ?? 0}
                   onCreated={(marketId) => selectMarket(marketId)}
                   onCancel={closeCreate}
+                  onOpenTerms={openTerms}
                 />
               </Suspense>
+
             ) : selectedPerson ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <Suspense fallback={<DeckSkeleton />}>
