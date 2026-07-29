@@ -345,7 +345,7 @@ export function MarketDeck({
             type="button"
             onClick={onToggleCase}
             aria-pressed={caseOpen}
-            className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+            className="mt-1.5 hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors lg:inline-flex"
             style={{
               borderColor: caseOpen ? "var(--text)" : "var(--border)",
               color: caseOpen ? "var(--text)" : "var(--text-secondary)",

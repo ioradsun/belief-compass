@@ -72,6 +72,7 @@ const MyWorld = lazy(() => import("@/components/MyWorld").then((m) => ({ default
 import { OmniHeader } from "@/components/OmniHeader";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
+import { useIsDesktop } from "@/hooks/use-mobile";
 import { LandingPanel } from "@/components/LandingPanel";
 import { useLandingPanelState } from "@/hooks/useLandingPanelState";
 
@@ -195,6 +196,10 @@ function Feed() {
 
   const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
+  // Case File is DESKTOP-ONLY: a research surface for side-by-side comparison. A
+  // phone is for action, so it never exposes Case File (button, columns, or the
+  // ?case flag). Desktop is >= lg, where the three columns actually sit together.
+  const isDesktop = useIsDesktop();
   // Case File is a pure presentation toggle — it only changes where existing
   // intelligence is shown, so it just flips the URL flag (preserved across switches).
   const toggleCase = () => {
@@ -419,7 +424,13 @@ function Feed() {
   // columns become the YES/NO case for the current market (existing intelligence,
   // reorganized). On mobile the Mine/Room tabs relabel to YES Case / NO Case.
   const caseActive =
-    !!caseOpen && !selectedPerson && !dnaOpen && !createOpen && !termsOpen && !!currentRow;
+    isDesktop &&
+    !!caseOpen &&
+    !selectedPerson &&
+    !dnaOpen &&
+    !createOpen &&
+    !termsOpen &&
+    !!currentRow;
 
   const windowPicker = (
     <div className="flex items-center gap-1 overflow-x-auto rounded-md border border-border p-0.5">
@@ -584,7 +595,7 @@ function Feed() {
                     lenses={OPP_FILTERS}
                     onLens={setLens}
                     caseOpen={caseActive}
-                    onToggleCase={toggleCase}
+                    onToggleCase={isDesktop ? toggleCase : undefined}
                   />
                 </div>
               )
@@ -652,11 +663,7 @@ function Feed() {
                         : "text-[var(--text-muted)]"
                     }`}
                   >
-                    {caseActive && t.key === "mine"
-                      ? "YES Case"
-                      : caseActive && t.key === "room"
-                        ? "NO Case"
-                        : t.label}
+                    {t.label}
                   </button>
                 ))}
               </div>
