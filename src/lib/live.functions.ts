@@ -17,7 +17,7 @@ import { composeLiveStory, type LiveStoryInput } from "@/domain/story";
 
 type NetLabel = "twin" | "tribe" | "opp" | "inverse";
 
-const LIVE_KINDS = ["trade", "market_created", "position_changed_side"];
+const LIVE_KINDS = ["trade", "market_created", "position_changed_side", "believer_milestone"];
 
 const input = z
   .object({
@@ -40,11 +40,11 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     const scope = data?.marketIds?.map((n) => String(n)) ?? null;
     let q = sb
       .from("events")
-      // NOTE: `payload` (raw_log) is deliberately NOT selected. The live story only
-      // ever needs the `action` column (grouping derives payload.action from it);
-      // the raw log is pure over-the-wire weight for limit*3 rows.
+      // NOTE: the full `payload` (raw_log) is deliberately NOT selected — the raw
+      // log is pure over-the-wire weight for limit*3 rows. We select only the one
+      // JSON sub-field a milestone row needs (its threshold), which is tiny.
       .select(
-        "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index",
+        "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index, milestone_threshold:payload->>threshold",
       )
       .eq("is_canonical", true)
       .in("kind", LIVE_KINDS);
@@ -105,7 +105,12 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       action: (r.action as "BUY" | "SELL" | null) ?? null,
       amount_eth: Number(r.amount_eth ?? 0) / 1e18,
       wallet: (r.wallet as string) ?? null,
-      payload: null,
+      // System milestones carry their threshold in payload so the copy can render
+      // it; trades keep payload null (their raw_log was never fetched).
+      payload:
+        r.kind === "believer_milestone"
+          ? { threshold: Number((r as Record<string, unknown>).milestone_threshold ?? 0) }
+          : null,
     }));
 
     const live = groupLiveRows(events, ethUsd).slice(0, limit);
@@ -148,7 +153,8 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         : new Map();
 
     for (const r of live) {
-      if (r.kind === "market_created") continue; // "New market just opened" stands
+      // System rows already carry their final factual copy (no actor to name).
+      if (r.kind === "market_created" || r.kind === "believer_milestone") continue;
       const market = momentumById.get(Number(r.marketId)) ?? null;
       const action = (r.payload as { action?: "BUY" | "SELL" }).action ?? null;
       const w = r.wallet?.toLowerCase();

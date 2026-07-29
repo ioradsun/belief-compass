@@ -132,4 +132,22 @@ describe("factual copy only", () => {
     });
     expect(text).toContain("4 believers reduced NO");
   });
+  it("liveRowText renders a believer milestone with its threshold", () => {
+    const text = liveRowText({
+      id: "milestone:1:YES:500",
+      kind: "believer_milestone",
+      marketId: "1",
+      marketTitle: "m",
+      occurredAt: "t",
+      startedAt: "t",
+      side: "YES",
+      walletCount: null,
+      tradeCount: null,
+      amountEth: null,
+      amountUsd: null,
+      wallet: null,
+      payload: { threshold: 500 },
+    });
+    expect(text).toBe("YES just passed 500 believers");
+  });
 });

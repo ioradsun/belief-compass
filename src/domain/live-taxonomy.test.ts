@@ -22,6 +22,12 @@ describe("classifyLiveRow", () => {
     expect(network.icon).toBe("🤝");
   });
 
+  it("treats a believer milestone as a community event", () => {
+    const m = classifyLiveRow({ kind: "believer_milestone", walletCount: null });
+    expect(m.klass).toBe("community");
+    expect(m.icon).toBe("🏆");
+  });
+
   it("treats a new market and a crowd of new believers as community", () => {
     expect(classifyLiveRow({ kind: "market_created", walletCount: null }).klass).toBe("community");
     const crowd = classifyLiveRow({
