@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { BrandMark } from "@/components/BrandMark";
 import type { LandingPanelState } from "@/hooks/useLandingPanelState";
 
@@ -8,19 +9,26 @@ import type { LandingPanelState } from "@/hooks/useLandingPanelState";
  * always mounted — expanding and collapsing only re-scales it and opens/closes
  * the region beneath, so the header is never swapped for a different component.
  * The live product stays mounted and interactive underneath at all times.
+ *
+ * When collapsed it also hosts the global search slot: search spans the whole
+ * catalog, so it belongs in the app frame rather than inside the center column.
  */
 export function LandingPanel({
   state,
   onEnter,
   onCollapse,
   onExpand,
+  search,
 }: {
   state: LandingPanelState;
   onEnter: () => void;
   onCollapse: () => void;
   onExpand: () => void;
+  /** Global search slot, shown only in the collapsed bar. */
+  search?: ReactNode;
 }) {
   const expanded = state === "expanded";
+
 
   return (
     <header
