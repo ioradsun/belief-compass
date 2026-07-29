@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
+import { TermsContent } from "@/components/TermsContent";
+
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
 import {
