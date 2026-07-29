@@ -821,6 +821,7 @@ function Dock({
         <div className="pb-1 text-[11px] font-semibold text-[var(--text)]">
           Back {side} to reveal the House’s pick.
         </div>
+        <AvailRow ethUsd={ethUsd} />
         <QuoteRow
           k="You pay"
           v={`${fmtUsd(amount)}  ·  ${(Number(ethWei) / 1e18).toFixed(4)} ETH`}
