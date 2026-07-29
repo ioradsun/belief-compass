@@ -344,6 +344,27 @@ export type Database = {
         }
         Relationships: []
       }
+      market_milestone: {
+        Row: {
+          market_id: string
+          reached_at: string
+          side: string
+          threshold: number
+        }
+        Insert: {
+          market_id: string
+          reached_at?: string
+          side: string
+          threshold: number
+        }
+        Update: {
+          market_id?: string
+          reached_at?: string
+          side?: string
+          threshold?: number
+        }
+        Relationships: []
+      }
       market_refresh_queue: {
         Row: {
           activity_dirty: boolean
@@ -457,6 +478,8 @@ export type Database = {
           new_believers_1h: number
           new_believers_24h: number
           new_believers_7d: number
+          new_believers_no_24h: number
+          new_believers_yes_24h: number
           no_capital_usd: number | null
           no_price_usd: number | null
           onchain_id: number
@@ -551,6 +574,8 @@ export type Database = {
           new_believers_1h?: number
           new_believers_24h?: number
           new_believers_7d?: number
+          new_believers_no_24h?: number
+          new_believers_yes_24h?: number
           no_capital_usd?: number | null
           no_price_usd?: number | null
           onchain_id: number
@@ -645,6 +670,8 @@ export type Database = {
           new_believers_1h?: number
           new_believers_24h?: number
           new_believers_7d?: number
+          new_believers_no_24h?: number
+          new_believers_yes_24h?: number
           no_capital_usd?: number | null
           no_price_usd?: number | null
           onchain_id?: number
@@ -1152,6 +1179,33 @@ export type Database = {
         }
         Relationships: []
       }
+      welcomes: {
+        Row: {
+          created_at: string
+          id: string
+          market_id: string
+          recipient_wallet: string
+          side: string
+          welcomer_wallet: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          market_id: string
+          recipient_wallet: string
+          side: string
+          welcomer_wallet: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          market_id?: string
+          recipient_wallet?: string
+          side?: string
+          welcomer_wallet?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1179,6 +1233,8 @@ export type Database = {
           requested_at: string
         }[]
       }
+      detect_believer_milestones: { Args: never; Returns: number }
+      detect_tribe_doublings: { Args: never; Returns: number }
       enqueue_market_refresh: {
         Args: { p_kind: string; p_market_ids: number[] }
         Returns: number
