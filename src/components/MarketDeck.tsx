@@ -13,7 +13,7 @@ import { getMarketChange } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { requestConnect } from "@/lib/connect-bridge";
-import { useSwitchChain } from "wagmi";
+import { useSwitchChain, useAccount, useBalance } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
@@ -821,6 +821,7 @@ function Dock({
         <div className="pb-1 text-[11px] font-semibold text-[var(--text)]">
           Back {side} to reveal the House’s pick.
         </div>
+        <AvailRow ethUsd={ethUsd} />
         <QuoteRow
           k="You pay"
           v={`${fmtUsd(amount)}  ·  ${(Number(ethWei) / 1e18).toFixed(4)} ETH`}
@@ -1042,4 +1043,21 @@ function QuoteRow({ k, v }: { k: string; v: string }) {
       <span className="num text-[12px] font-semibold text-[var(--text-secondary)]">{v}</span>
     </div>
   );
+}
+
+/** Spendable ETH in the connected wallet, shown in USD above "You pay". */
+function AvailRow({ ethUsd }: { ethUsd: number }) {
+  const { address, isConnected } = useAccount();
+  const { data, isLoading } = useBalance({
+    address,
+    chainId: CHAIN_ID,
+    query: { enabled: !!address, refetchInterval: 20_000 },
+  });
+  const eth = data ? Number(data.value) / 1e18 : 0;
+  const v = !isConnected
+    ? "Connect wallet"
+    : isLoading || !data
+      ? "…"
+      : `${fmtUsd(eth * ethUsd)}  ·  ${eth.toFixed(4)} ETH`;
+  return <QuoteRow k="Avail" v={v} />;
 }
