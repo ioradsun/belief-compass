@@ -387,10 +387,7 @@ function Feed() {
           className={`${show("belief")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-8 lg:py-6`}
         >
           <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col">
-            {/* The lens only re-ranks the deck below, so it stays with the deck. */}
-            <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
-              <LensPicker lens={lens} lenses={OPP_FILTERS} onLens={setLens} />
-            </div>
+
 
 
             {/* Center focus: person profile, DNA overview, or the single-market deck.
