@@ -84,7 +84,9 @@ export function DuplicateSuggestions({ onSelect }: { onSelect: (marketId: number
                 {m.believers != null && m.believers > 0 && (
                   <>
                     <span className="text-[var(--text-muted)]">·</span>
-                    <span className="num">{m.believers} believers</span>
+                    <span className="num">
+                      {m.believers} {m.believers === 1 ? "believer" : "believers"}
+                    </span>
                   </>
                 )}
                 {m.yesPct != null && (
