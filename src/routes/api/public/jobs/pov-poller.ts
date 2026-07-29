@@ -159,14 +159,10 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
             eventRows.length = 0;
           }
 
-          // Compute chg_1h/24h from snapshots for markets touched (batch SQL)
-          (await sb.rpc) as unknown; // no-op; the per-market compute below is done via SQL update
-          const { error: chgErr } = (await sb
-            .rpc("recompute_price_changes")
-            .select("*")
-            .maybeSingle()) as { error?: unknown };
-          // recompute function may not exist yet; ignore if missing.
-          void chgErr;
+          // Compute share-price performance from snapshots. This used to swallow
+          // failures, which made stalled percentage changes look like a UI bug.
+          const { error: chgErr } = await sb.rpc("recompute_price_changes");
+          if (chgErr) throw chgErr;
 
           // Prune snapshots >30d
           await sb
