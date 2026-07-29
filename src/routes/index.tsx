@@ -249,6 +249,27 @@ function Feed() {
       }),
     });
   };
+  // Terms read in the center column, so leaving the create form is never
+  // required to read what you're agreeing to. Back returns to the form.
+  const openTerms = () => {
+    navigate({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
+        ...prev,
+        terms: true,
+      }),
+    });
+    setTab("belief");
+    enterProduct();
+  };
+  const closeTerms = () => {
+    navigate({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
+        ...prev,
+        terms: undefined,
+      }),
+    });
+  };
+
   const [win, setWin] = useState<VolumeWindow>("24h");
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
