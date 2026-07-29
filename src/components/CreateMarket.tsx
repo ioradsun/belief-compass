@@ -365,8 +365,9 @@ export function CreateMarket({
 
       {/* Question */}
       <label className="mt-5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-        Question
+        What&apos;s your conviction?
       </label>
+
       <textarea
         value={question}
         maxLength={QUESTION_MAX}
