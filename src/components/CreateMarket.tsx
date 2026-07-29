@@ -14,7 +14,7 @@ import { useWalletSession } from "@/hooks/useWalletSession";
 import { requestConnect } from "@/lib/connect-bridge";
 import { fmtUsd, usdToWei } from "@/domain/order";
 import {
-  DISCLAIMERS,
+  
   MEDIA_LIMITS,
   QUESTION_MAX,
   accept,
