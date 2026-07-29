@@ -58,14 +58,15 @@ export function CreateMarket({
   const { create, phase, error: chainError } = useCreateMarket();
 
   const [question, setQuestion] = useState("");
-  const [description, setDescription] = useState("");
+  const [description] = useState("");
   const [side, setSide] = useState<"YES" | "NO">("YES");
   const [amount, setAmount] = useState<number>(0);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
-  const [linkDraft, setLinkDraft] = useState("");
-  const [agreed, setAgreed] = useState(false);
+  const [type, setType] = useState<"text" | "media">("text");
+  const [linkDraft, setLinkDraft] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [pickKind, setPickKind] = useState<Exclude<MediaKind, "link">>("image");
 
   const minSeedEth = econ.minSeedWei != null ? Number(econ.minSeedWei) / 1e18 : null;
   const minUsd = minSeedEth != null && ethUsd > 0 ? minSeedEth * ethUsd : null;
