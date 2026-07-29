@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MatchPerson, Pulse } from "@/lib/markets.functions";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
+import { relationshipTone } from "@/lib/dna-labels";
 import { marketVitals, marketBadge, type PulseLevel } from "@/lib/market-vitals";
 import { StoryStrip } from "@/components/StoryStrip";
 import type { MarketStory } from "@/domain/story";
@@ -56,7 +57,6 @@ export type MarketRow = {
     /** POV page slug — powers the "Trade on POV" deep link. */
     pov_slug?: string | null;
   } | null;
-
 };
 
 function fmtUsd(n: number | null | undefined) {
@@ -180,15 +180,20 @@ function SideBlock({
         >
           {side}
         </span>
-        {badge && (
-          <span
-            className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
-              badge === "Tribe" ? "bg-violet-500/15 text-violet-600" : "bg-red-500/15 text-red-600"
-            }`}
-          >
-            {badge}
-          </span>
-        )}
+        {badge &&
+          (() => {
+            // Use the shared relationship token (aligned → YES color, opposed → NO
+            // color) so this badge matches the Network panel — one visual language.
+            const t = relationshipTone(badge === "Tribe" ? "tribe" : "opp");
+            return (
+              <span
+                className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                style={{ color: t.fg, background: t.bg }}
+              >
+                {badge}
+              </span>
+            );
+          })()}
       </div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-lg font-semibold tabular-nums">{fmtShare(price)}</span>
@@ -390,7 +395,7 @@ export function MarketCard({
           <span className="text-xs font-semibold">Pulse: {vitals.pulse.label}</span>
           {badge && (
             <span
-              className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-600"
+              className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600"
               title={badge.note}
             >
               {badge.emoji} {badge.label}
