@@ -110,6 +110,8 @@ export const Route = createFileRoute("/")({
     p: typeof search.p === "string" && search.p.length > 3 ? search.p : undefined,
     dna: search.dna === true || search.dna === "1" ? true : undefined,
     create: search.create === true || search.create === "1" || search.create === 1 ? true : undefined,
+    terms: search.terms === true || search.terms === "1" ? true : undefined,
+
   }),
   head: () => ({
     meta: [
