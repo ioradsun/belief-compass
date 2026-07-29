@@ -1179,6 +1179,33 @@ export type Database = {
         }
         Relationships: []
       }
+      welcomes: {
+        Row: {
+          created_at: string
+          id: string
+          market_id: string
+          recipient_wallet: string
+          side: string
+          welcomer_wallet: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          market_id: string
+          recipient_wallet: string
+          side: string
+          welcomer_wallet: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          market_id?: string
+          recipient_wallet?: string
+          side?: string
+          welcomer_wallet?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
