@@ -62,7 +62,7 @@ const OPP_FILTERS: { key: OppFilter; emoji: string; label: string; question: str
 ];
 
 const MyWorld = lazy(() => import("@/components/MyWorld").then((m) => ({ default: m.MyWorld })));
-import { OmniHeader, LensPicker } from "@/components/OmniHeader";
+import { OmniHeader } from "@/components/OmniHeader";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { LandingPanel } from "@/components/LandingPanel";
