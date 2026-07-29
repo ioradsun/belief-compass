@@ -73,12 +73,20 @@ export function MarketDeck({
   ethUsd,
   onSkip,
   viewerWallet,
+  lens,
+  lenses,
+  onLens,
 }: {
   row: MarketRow;
   ethUsd: number;
   onSkip: () => void;
   viewerWallet?: string;
+  /** When provided, the momentum chip doubles as the deck's lens filter. */
+  lens?: Lens;
+  lenses?: LensOption[];
+  onLens?: (l: Lens) => void;
 }) {
+
   const rr = row as Record<string, unknown>;
   const marketId = Number(row.onchain_id);
   const title = row.markets?.title ?? `Market #${marketId}`;
