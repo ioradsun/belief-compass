@@ -13,6 +13,7 @@ import {
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
+import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
 import { CaseColumn, type CaseSection } from "@/components/CaseFile";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
@@ -515,17 +516,21 @@ function Feed() {
                 onOpenChange={setAccountOpen}
               />
               {!accountOpen && (
-                <MyWorld
-                  wallet={wallet}
-                  rows={rows as unknown as MarketRow[]}
-                  window={win}
-                  winLabel={winLabel}
-                  onSelectMarket={selectMarket}
-                  selectedPerson={selectedPerson}
-                  onSelectPerson={selectPerson}
-                  onOpenDna={openDna}
-                  initialNetwork={Boolean(selectedPerson || dnaOpen)}
-                />
+                <>
+                  {/* Recipient side of belonging — one aggregated line, dismissible. */}
+                  <WelcomeReceived wallet={wallet} />
+                  <MyWorld
+                    wallet={wallet}
+                    rows={rows as unknown as MarketRow[]}
+                    window={win}
+                    winLabel={winLabel}
+                    onSelectMarket={selectMarket}
+                    selectedPerson={selectedPerson}
+                    onSelectPerson={selectPerson}
+                    onOpenDna={openDna}
+                    initialNetwork={Boolean(selectedPerson || dnaOpen)}
+                  />
+                </>
               )}
             </Suspense>
           )}
@@ -631,6 +636,8 @@ function Feed() {
             />
           ) : (
             <>
+              {/* Welcome the newest believers on a side you back — one tap. */}
+              <WelcomePrompt wallet={wallet} />
               {/* Duplicate suggestions sit above the feed while creating; the feed
                 below keeps running and is never replaced. */}
               <DuplicateSuggestions onSelect={selectMarket} />
