@@ -42,6 +42,8 @@ import {
 } from "@/domain/order";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
+import { ReportMarket } from "@/components/ReportMarket";
+import { getConvictionMarket } from "@/lib/market-create.functions";
 
 const PULSE_TONE: Record<string, string> = {
 
@@ -377,6 +379,8 @@ export function MarketDeck({
             </span>
             <WindowSelector win={win} onWin={setWin} />
           </div>
+          <ConvictionMedia onchainId={Number(row.onchain_id)} title={String(row.title ?? "")} />
+
           <div className="grid min-h-0 grid-cols-2 gap-2">
             <SideCard
               label="YES"
@@ -409,6 +413,9 @@ export function MarketDeck({
           {(rr.trade_count_24h as number | null) ? (
             <span className="num">{rr.trade_count_24h as number} trades today</span>
           ) : null}
+          <span className="ml-auto">
+            <ReportMarket onchainId={Number(row.onchain_id)} wallet={viewerWallet} />
+          </span>
         </div>
 
         {/* DNA / social evidence — only when there's a real signal */}
@@ -1060,4 +1067,47 @@ function AvailRow({ ethUsd }: { ethUsd: number }) {
       ? "…"
       : `${fmtUsd(eth * ethUsd)}  ·  ${eth.toFixed(4)} ETH`;
   return <QuoteRow k="Avail" v={v} />;
+}
+
+
+/**
+ * Media attached on Conviction (not POV). Rendered from a short-lived signed
+ * URL and only for markets whose off-chain row is active and un-hidden.
+ */
+function ConvictionMedia({ onchainId, title }: { onchainId: number; title: string }) {
+  const { data } = useQuery({
+    queryKey: ["conviction-market", onchainId],
+    queryFn: () => getConvictionMarket({ data: { onchainId } }),
+    staleTime: 5 * 60_000,
+  });
+  const market = data?.market as
+    | { media: { kind?: string; url?: string; title?: string } | null; mediaUrl: string | null }
+    | null
+    | undefined;
+  const media = market?.media;
+  if (!media?.kind) return null;
+
+  if (media.kind === "link") {
+    return (
+      <a
+        href={media.url}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="block truncate rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[12px] text-[var(--text-secondary)]"
+      >
+        {media.title ?? media.url}
+      </a>
+    );
+  }
+  const src = market?.mediaUrl;
+  if (!src) return null;
+  return (
+    <div className="overflow-hidden rounded-lg border border-[var(--border)]">
+      {media.kind === "image" && (
+        <img src={src} alt={title} loading="lazy" className="max-h-[240px] w-full object-cover" />
+      )}
+      {media.kind === "video" && <video src={src} controls className="max-h-[240px] w-full" />}
+      {media.kind === "audio" && <audio src={src} controls className="w-full" />}
+    </div>
+  );
 }
