@@ -36,6 +36,22 @@ export const reviewMarketQuestion = createServerFn({ method: "POST" })
     return { review, duplicates };
   });
 
+/**
+ * Ranked "you might rather back this" suggestions for the right rail.
+ * Advisory only — creation stays permissionless, so this never gates anything.
+ */
+export const suggestExistingMarkets = createServerFn({ method: "POST" })
+  .inputValidator((data: { question: string; sha256?: string | null; linkUrl?: string | null }) => ({
+    question: clean(data.question, QUESTION_MAX),
+    sha256: data.sha256 ? clean(data.sha256, 80) : null,
+    linkUrl: data.linkUrl ? clean(data.linkUrl, 500) : null,
+  }))
+  .handler(async ({ data }) => {
+    const { findMarketSuggestions } = await import("@/lib/market-create.server");
+    return findMarketSuggestions(data, 3);
+  });
+
+
 /** Reserve an off-chain draft + its immutable questionId. */
 export const createMarketDraft = createServerFn({ method: "POST" })
   .inputValidator(
@@ -127,6 +143,7 @@ export const attachMarketMedia = createServerFn({ method: "POST" })
       width?: number | null;
       height?: number | null;
       alt?: string | null;
+      sha256?: string | null;
     }) => data,
   )
   .handler(async ({ data }) => {
@@ -162,6 +179,9 @@ export const attachMarketMedia = createServerFn({ method: "POST" })
       width: data.width ?? null,
       height: data.height ?? null,
       alt: clean(data.alt, 200) || null,
+      // Bytes fingerprint: lets the next person uploading the same file be
+      // pointed at this market instead of forking the conversation.
+      sha256: data.sha256 ? clean(data.sha256, 80) : null,
     };
     const { error } = await db
       .from("conviction_markets")

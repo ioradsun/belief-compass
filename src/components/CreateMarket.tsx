@@ -32,6 +32,13 @@ import {
   signMarketUpload,
 } from "@/lib/market-create.functions";
 import {
+  clearDraft,
+  getDraft,
+  hashFile,
+  setDraft,
+  setProbe,
+} from "@/lib/create-draft";
+import {
   DEFAULT_CURVE,
   useCreateEconomics,
   useCreateMarket,
@@ -39,7 +46,13 @@ import {
 } from "@/chain/market-create";
 
 type Attachment =
-  | { kind: Exclude<MediaKind, "link">; file: File; previewUrl: string; durationSeconds: number | null }
+  | {
+      kind: Exclude<MediaKind, "link">;
+      file: File;
+      previewUrl: string;
+      durationSeconds: number | null;
+      sha256: string | null;
+    }
   | { kind: "link"; url: string };
 
 export function CreateMarket({
@@ -60,12 +73,17 @@ export function CreateMarket({
   const balance = useEthBalance();
   const { create, phase, error: chainError } = useCreateMarket();
 
-  const [question, setQuestion] = useState("");
+  // Hydrated from the session draft so leaving to read an existing market (or
+  // the terms) never costs the user what they had typed.
+  const saved = getDraft();
+  const [question, setQuestion] = useState(saved.question);
   const [description] = useState("");
-  const [side, setSide] = useState<"YES" | "NO">("YES");
-  const [amount, setAmount] = useState<number>(0);
-  const [attachment, setAttachment] = useState<Attachment | null>(null);
-  const [type, setType] = useState<"text" | "media">("text");
+  const [side, setSide] = useState<"YES" | "NO">(saved.side);
+  const [amount, setAmount] = useState<number>(saved.amount);
+  const [attachment, setAttachment] = useState<Attachment | null>(
+    (saved.attachment as Attachment | null) ?? null,
+  );
+  const [type, setType] = useState<"text" | "media">(saved.type);
   const [linkDraft, setLinkDraft] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -88,9 +106,24 @@ export function CreateMarket({
   // button unless the content is hard-blocked server-side.
   const [debounced, setDebounced] = useState("");
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(question.trim()), 700);
+    const t = setTimeout(() => setDebounced(question.trim()), 500);
     return () => clearTimeout(t);
   }, [question]);
+  // Keep the session draft in sync, and publish the (debounced) probe the
+  // right rail searches on. Media counts immediately — it's a strong signal.
+  useEffect(() => {
+    setDraft({ question, side, amount, type, attachment });
+  }, [question, side, amount, type, attachment]);
+  useEffect(() => {
+    setProbe({
+      question: debounced,
+      sha256: attachment && attachment.kind !== "link" ? (attachment.sha256 ?? null) : null,
+      linkUrl: attachment?.kind === "link" ? attachment.url : null,
+    });
+  }, [debounced, attachment]);
+  // Leaving the create view stops the search; the rail falls back to the feed.
+  useEffect(() => () => setProbe(null), []);
+
   const { data: review } = useQuery({
     queryKey: ["question-review", debounced],
     queryFn: () => reviewMarketQuestion({ data: { question: debounced } }),
@@ -115,7 +148,8 @@ export function CreateMarket({
           );
         }
       }
-      setAttachment({ kind, file, previewUrl, durationSeconds });
+      const sha256 = await hashFile(file);
+      setAttachment({ kind, file, previewUrl, durationSeconds, sha256 });
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : "That file can't be used.");
     }
@@ -155,6 +189,7 @@ export function CreateMarket({
               questionId,
               path: signed.path,
               durationSeconds: attachment.durationSeconds,
+              sha256: attachment.sha256,
             },
           });
         }
@@ -189,7 +224,10 @@ export function CreateMarket({
         throw e;
       }
     },
-    onSuccess: (marketId) => onCreated(marketId),
+    onSuccess: (marketId) => {
+      clearDraft();
+      onCreated(marketId);
+    },
   });
 
   const busy = submit.isPending || phase === "checking" || phase === "signing" || phase === "confirming";
@@ -400,21 +438,6 @@ export function CreateMarket({
           {question.length}/{QUESTION_MAX}
         </span>
       </div>
-
-      {!!review?.duplicates?.length && (
-        <div className="mt-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            Already asked?
-          </div>
-          <ul className="mt-1.5 space-y-1">
-            {review.duplicates.map((d) => (
-              <li key={`${d.questionId ?? d.onchainId}`} className="truncate text-[12px] text-[var(--text-secondary)]">
-                {d.title}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {/* Your side */}
       <label className="mt-5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">

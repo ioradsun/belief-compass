@@ -204,3 +204,183 @@ export async function fetchLinkPreview(url: string) {
     site: parsed.hostname,
   };
 }
+
+/** Character trigrams — catches rewordings that share no whole tokens. */
+function trigrams(text: string): Set<string> {
+  const t = ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+  const out = new Set<string>();
+  for (let i = 0; i + 3 <= t.length; i++) out.add(t.slice(i, i + 3));
+  return out;
+}
+
+function dice(a: Set<string>, b: Set<string>): number {
+  if (!a.size || !b.size) return 0;
+  let shared = 0;
+  for (const x of a) if (b.has(x)) shared++;
+  return (2 * shared) / (a.size + b.size);
+}
+
+/**
+ * How alike two questions read. Jaccard alone misses "do people cheat more
+ * than they admit?" vs "women cheat more than men", so we take the best of
+ * token-Dice and character-trigram overlap.
+ */
+export function suggestionScore(a: string, b: string): number {
+  return Math.max(dice(tokens(a), tokens(b)), dice(trigrams(a), trigrams(b)), similarity(a, b));
+}
+
+export interface SuggestionInput {
+  question: string;
+  /** SHA-256 of an attached upload, when the user has one. */
+  sha256?: string | null;
+  /** An attached https link. */
+  linkUrl?: string | null;
+}
+
+export interface MarketSuggestion {
+  onchainId: number;
+  title: string;
+  /** Why it surfaced, for the card's eyebrow. */
+  reason: "same-media" | "same-link" | "similar";
+  score: number;
+  thumbUrl: string | null;
+  backedUsd: number | null;
+  believers: number | null;
+  yesPct: number | null;
+}
+
+function normalizeUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    u.hash = "";
+    u.search = "";
+    return `${u.hostname.replace(/^www\./, "")}${u.pathname.replace(/\/$/, "")}`.toLowerCase();
+  } catch {
+    return raw.trim().toLowerCase();
+  }
+}
+
+/**
+ * Ranked "you might rather back this" candidates.
+ *
+ * Three signals, strongest first: identical uploaded bytes, the same external
+ * link, then question-text overlap. Stats come from the same `market_state`
+ * read model the rest of the app renders — nothing here is invented.
+ */
+export async function findMarketSuggestions(
+  input: SuggestionInput,
+  limit = 3,
+): Promise<MarketSuggestion[]> {
+  const question = (input.question ?? "").trim();
+  const hasMedia = !!input.sha256 || !!input.linkUrl;
+  if (question.length < 8 && !hasMedia) return [];
+
+  const db = serviceClient();
+  // Keyword-targeted candidates beat a blind page of rows: an arbitrary
+  // `limit(N)` slice can miss the one market that actually matches.
+  const keywords = [...tokens(question)]
+    .filter((t) => t.length > 3)
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 6);
+  const titleOr = keywords.map((k) => `title.ilike.%${k}%`).join(",");
+  const questionOr = keywords.map((k) => `question.ilike.%${k}%`).join(",");
+
+  const [pov, povRecent, own] = await Promise.all([
+    titleOr
+      ? db.from("markets").select("onchain_id, title").not("title", "is", null).or(titleOr).limit(400)
+      : Promise.resolve({ data: [] as { onchain_id: number | null; title: string | null }[] }),
+    db
+      .from("markets")
+      .select("onchain_id, title")
+      .not("title", "is", null)
+      .order("onchain_id", { ascending: false })
+      .limit(400),
+    db
+      .from("conviction_markets")
+      .select("onchain_id, question, media")
+      .not("onchain_id", "is", null)
+      .eq("hidden", false)
+      .order("created_at", { ascending: false })
+      .limit(400),
+  ]);
+
+
+  const best = new Map<number, { title: string; score: number; reason: MarketSuggestion["reason"]; media: unknown }>();
+  const consider = (
+    id: number | null,
+    title: string,
+    score: number,
+    reason: MarketSuggestion["reason"],
+    media: unknown = null,
+  ) => {
+    if (id == null || !Number.isFinite(id) || !title) return;
+    const prev = best.get(id);
+    if (!prev || score > prev.score) best.set(id, { title, score, reason, media });
+  };
+
+  for (const r of [...(pov.data ?? []), ...(povRecent.data ?? [])]) {
+    consider(r.onchain_id != null ? Number(r.onchain_id) : null, String(r.title), suggestionScore(question, String(r.title)), "similar");
+  }
+
+
+  const wantLink = input.linkUrl ? normalizeUrl(input.linkUrl) : null;
+  for (const r of (own.data ?? []) as {
+    onchain_id: number | null;
+    question: string;
+    media: Record<string, unknown> | null;
+  }[]) {
+    const id = r.onchain_id != null ? Number(r.onchain_id) : null;
+    const media = r.media ?? null;
+    const mediaHash = media && typeof media.sha256 === "string" ? media.sha256 : null;
+    const mediaUrl = media && typeof media.url === "string" ? media.url : null;
+    if (input.sha256 && mediaHash && mediaHash === input.sha256) {
+      consider(id, r.question, 1, "same-media", media);
+      continue;
+    }
+    if (wantLink && mediaUrl && normalizeUrl(mediaUrl) === wantLink) {
+      consider(id, r.question, 0.98, "same-link", media);
+      continue;
+    }
+    consider(id, r.question, suggestionScore(question, r.question), "similar", media);
+  }
+
+  const ranked = [...best.entries()]
+    .map(([onchainId, v]) => ({ onchainId, ...v }))
+    .filter((m) => m.score >= 0.34)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+  if (!ranked.length) return [];
+
+  const { data: states } = await db
+    .from("market_state")
+    .select("onchain_id, volume_total_usd, believers_yes, believers_no, believers_mixed, money_yes_pct")
+    .in("onchain_id", ranked.map((m) => m.onchainId));
+  const stateById = new Map((states ?? []).map((s) => [Number(s.onchain_id), s]));
+
+  const out: MarketSuggestion[] = [];
+  for (const m of ranked) {
+    const s = stateById.get(m.onchainId);
+    const media = m.media as Record<string, unknown> | null;
+    let thumbUrl: string | null = null;
+    if (media) {
+      if (typeof media.image === "string") thumbUrl = media.image;
+      else if (media.kind === "image" && typeof media.path === "string") {
+        thumbUrl = await signMediaUrl(media.path, 3600).catch(() => null);
+      }
+    }
+    out.push({
+      onchainId: m.onchainId,
+      title: m.title,
+      reason: m.reason,
+      score: m.score,
+      thumbUrl,
+      backedUsd: s?.volume_total_usd != null ? Number(s.volume_total_usd) : null,
+      believers:
+        s != null
+          ? Number(s.believers_yes ?? 0) + Number(s.believers_no ?? 0) + Number(s.believers_mixed ?? 0)
+          : null,
+      yesPct: s?.money_yes_pct != null ? Number(s.money_yes_pct) : null,
+    });
+  }
+  return out;
+}

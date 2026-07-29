@@ -1,0 +1,122 @@
+/**
+ * The in-progress create-market draft, kept outside React.
+ *
+ * Two jobs:
+ *   1. Survive unmounts. Clicking a duplicate suggestion swaps the center
+ *      column to that market — the form unmounts — and the user must be able
+ *      to come back to exactly what they had typed.
+ *   2. Publish a "probe" (question / media fingerprint / link) that the right
+ *      rail subscribes to, so the suggestion search lives next to the feed
+ *      without the create form owning that UI.
+ *
+ * Module-level and session-scoped on purpose: a draft is not worth a round
+ * trip, and it should not outlive the tab.
+ */
+import { useSyncExternalStore } from "react";
+
+export interface DraftAttachment {
+  kind: "image" | "video" | "audio" | "link";
+  /** Absent for links. */
+  file?: File;
+  previewUrl?: string;
+  url?: string;
+  durationSeconds?: number | null;
+  /** SHA-256 of the exact bytes — the strongest duplicate signal we have. */
+  sha256?: string | null;
+}
+
+export interface Draft {
+  question: string;
+  side: "YES" | "NO";
+  amount: number;
+  type: "text" | "media";
+  attachment: DraftAttachment | null;
+}
+
+export const EMPTY_DRAFT: Draft = {
+  question: "",
+  side: "YES",
+  amount: 0,
+  type: "text",
+  attachment: null,
+};
+
+/** What the suggestion search runs on. Null means "not creating right now". */
+export interface Probe {
+  question: string;
+  sha256: string | null;
+  linkUrl: string | null;
+}
+
+let draft: Draft = EMPTY_DRAFT;
+let probe: Probe | null = null;
+/** Suggestion keys the user has waved away for this draft. */
+let dismissed = false;
+
+const listeners = new Set<() => void>();
+function emit() {
+  for (const l of listeners) l();
+}
+function subscribe(l: () => void) {
+  listeners.add(l);
+  return () => listeners.delete(l);
+}
+
+export function getDraft(): Draft {
+  return draft;
+}
+
+export function setDraft(patch: Partial<Draft>) {
+  draft = { ...draft, ...patch };
+  emit();
+}
+
+export function clearDraft() {
+  draft = EMPTY_DRAFT;
+  probe = null;
+  dismissed = false;
+  emit();
+}
+
+/** Called by the form as the user types / attaches; null when it unmounts. */
+export function setProbe(next: Probe | null) {
+  const same =
+    (next === null && probe === null) ||
+    (next != null &&
+      probe != null &&
+      next.question === probe.question &&
+      next.sha256 === probe.sha256 &&
+      next.linkUrl === probe.linkUrl);
+  if (same) return;
+  probe = next;
+  emit();
+}
+
+export function dismissSuggestions() {
+  dismissed = true;
+  emit();
+}
+
+function snapshot() {
+  return probe;
+}
+const serverSnapshot = () => null;
+
+/** Right-rail subscription: the live probe, or null when dismissed/idle. */
+export function useSuggestionProbe(): Probe | null {
+  const p = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+  return dismissed ? null : p;
+}
+
+/** SHA-256 of a file, hex. Used to catch the same upload under new wording. */
+export async function hashFile(file: File): Promise<string | null> {
+  try {
+    const buf = await file.arrayBuffer();
+    const digest = await crypto.subtle.digest("SHA-256", buf);
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    return null;
+  }
+}

@@ -12,6 +12,7 @@ import {
 } from "@/lib/markets.functions";
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
+import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
 import { MarketDeck } from "@/components/MarketDeck";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { CalibrationReveal, useReadiness } from "@/components/Calibration";
@@ -534,6 +535,9 @@ function Feed() {
           className={`${show("room")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
           style={{ borderLeft: "1px solid var(--border)" }}
         >
+          {/* Duplicate suggestions sit above the feed while creating; the feed
+            below keeps running and is never replaced. */}
+          <DuplicateSuggestions onSelect={selectMarket} />
           <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
             Live
           </div>
