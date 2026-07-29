@@ -18,6 +18,7 @@ import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
+import { useWalletSession } from "@/hooks/useWalletSession";
 import { convictionSignal, type ConvictionSignal } from "@/domain/conviction";
 
 import { CHAIN_ID } from "@/chain/decoder";
@@ -121,9 +122,17 @@ export function MarketDeck({
   // A belief tap records a FREE expressed belief (no money) that feeds DNA /
   // Network / House. Refreshes the viewer's readiness so calibration progresses.
   const qc = useQueryClient();
+  const { ensureSession } = useWalletSession();
   const express = useMutation({
-    mutationFn: (s: OrderSide) =>
-      expressBelief({ data: { wallet: viewerWallet as string, marketId, side: s } }),
+    mutationFn: async (s: OrderSide) =>
+      expressBelief({
+        data: {
+          wallet: viewerWallet as string,
+          marketId,
+          side: s,
+          session: await ensureSession(),
+        },
+      }),
     onSuccess: (r) => {
       if (viewerWallet) qc.setQueryData(["readiness", viewerWallet.toLowerCase()], r);
     },

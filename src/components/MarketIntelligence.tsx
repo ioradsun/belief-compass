@@ -26,6 +26,7 @@ import { BelieversSplit, Defense } from "@/components/MarketEvidence";
 import { LiveTape } from "@/components/LiveTape";
 import { useReadiness } from "@/components/Calibration";
 import { expressBelief, getCalibrationQueue } from "@/lib/beliefs.functions";
+import { useWalletSession } from "@/hooks/useWalletSession";
 import { type Readiness } from "@/domain/beliefs";
 import { BAND_COPY } from "@/domain/house";
 
@@ -41,6 +42,7 @@ export const houseKey = (wallet: string | undefined, marketId: number) =>
 export function useHouseFinalize(marketId: number, viewerWallet?: string) {
   const connected = useEffectiveWallet();
   const wallet = viewerWallet ?? connected;
+  const { ensureSession } = useWalletSession();
   const qc = useQueryClient();
   const store = (data: HouseReadView | null) => {
     if (data) qc.setQueryData(houseKey(wallet, marketId), data);
@@ -48,21 +50,28 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
   const bet = useMutation({
     mutationFn: async (vars: { side: "YES" | "NO"; txHash: string }) => {
       if (!wallet) return null;
-      return finalizeBet({ data: { wallet, marketId, side: vars.side, txHash: vars.txHash } });
+      const session = await ensureSession();
+      return finalizeBet({
+        data: { wallet, marketId, side: vars.side, txHash: vars.txHash, session },
+      });
     },
     onSuccess: store,
   });
   const skip = useMutation({
     mutationFn: async () => {
       if (!wallet) return null;
-      return finalizeSkip({ data: { wallet, marketId } });
+      const session = await ensureSession();
+      return finalizeSkip({ data: { wallet, marketId, session } });
     },
     onSuccess: store,
   });
   const foundation = useMutation({
     mutationFn: async (vars: { key: string; action: "YES" | "NO" | "SKIP" }) => {
       if (!wallet) return null;
-      return recordFoundation({ data: { wallet, marketId, key: vars.key, action: vars.action } });
+      const session = await ensureSession();
+      return recordFoundation({
+        data: { wallet, marketId, key: vars.key, action: vars.action, session },
+      });
     },
     onSuccess: store,
   });
@@ -279,6 +288,7 @@ function Skeleton() {
  */
 function CalibrationQuiz({ viewer, readiness }: { viewer: string; readiness: Readiness }) {
   const qc = useQueryClient();
+  const { ensureSession } = useWalletSession();
   const {
     data: queue,
     isLoading,
@@ -290,9 +300,15 @@ function CalibrationQuiz({ viewer, readiness }: { viewer: string; readiness: Rea
   });
   const [handled, setHandled] = useState<Set<number>>(new Set());
   const answer = useMutation({
-    mutationFn: (v: { marketId: number; side: "YES" | "NO" }) =>
+    mutationFn: async (v: { marketId: number; side: "YES" | "NO" }) =>
       expressBelief({
-        data: { wallet: viewer, marketId: v.marketId, side: v.side, source: "calibration" },
+        data: {
+          wallet: viewer,
+          marketId: v.marketId,
+          side: v.side,
+          source: "calibration",
+          session: await ensureSession(),
+        },
       }),
     onSuccess: (r) => {
       if (r) qc.setQueryData(["readiness", viewer.toLowerCase()], r);
