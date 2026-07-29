@@ -14,6 +14,7 @@ import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
 import { MarketDeck } from "@/components/MarketDeck";
+import { CaseColumn } from "@/components/CaseFile";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { CalibrationReveal, useReadiness } from "@/components/Calibration";
 import { getCalibrationQueue } from "@/lib/beliefs.functions";
@@ -101,10 +102,19 @@ const pulsesQO = (ids: number[]) =>
     placeholderData: (prev) => prev,
   });
 
+/** The universal center-selection search params, shared across every surface. */
+type Search = {
+  wallet?: string;
+  m?: number;
+  p?: string;
+  dna?: boolean;
+  create?: boolean;
+  terms?: boolean;
+  case?: boolean;
+};
+
 export const Route = createFileRoute("/")({
-  validateSearch: (
-    search: Record<string, unknown>,
-  ): { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean } => ({
+  validateSearch: (search: Record<string, unknown>): Search => ({
     wallet:
       typeof search.wallet === "string" && search.wallet.length > 3 ? search.wallet : undefined,
     // Universal center selection, shared by every surface so deep links + browser
@@ -112,9 +122,11 @@ export const Route = createFileRoute("/")({
     m: search.m != null && Number.isFinite(Number(search.m)) ? Number(search.m) : undefined,
     p: typeof search.p === "string" && search.p.length > 3 ? search.p : undefined,
     dna: search.dna === true || search.dna === "1" ? true : undefined,
-    create: search.create === true || search.create === "1" || search.create === 1 ? true : undefined,
+    create:
+      search.create === true || search.create === "1" || search.create === 1 ? true : undefined,
     terms: search.terms === true || search.terms === "1" ? true : undefined,
-
+    // Case File mode — preserved in the URL so it survives market switches + back/forward.
+    case: search.case === true || search.case === "1" ? true : undefined,
   }),
   head: () => ({
     meta: [
@@ -178,10 +190,16 @@ function Feed() {
     dna: dnaOpen,
     create: createOpen,
     terms: termsOpen,
+    case: caseOpen,
   } = Route.useSearch();
 
   const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
+  // Case File is a pure presentation toggle — it only changes where existing
+  // intelligence is shown, so it just flips the URL flag (preserved across switches).
+  const toggleCase = () => {
+    navigate({ search: (prev: Search) => ({ ...prev, case: prev.case ? undefined : true }) });
+  };
   // Brand introduction layer. Intentional product interactions (opening a
   // market, a person, DNA) collapse it; nothing else does.
   const landing = useLandingPanelState();
@@ -191,7 +209,7 @@ function Feed() {
   // the center (mobile: the Belief column). Browser back/forward walks history.
   const selectMarket = (marketId: number) => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
+      search: (prev: Search) => ({
         ...prev,
         m: marketId,
         p: undefined,
@@ -205,7 +223,7 @@ function Feed() {
   };
   const selectPerson = (personWallet: string) => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
+      search: (prev: Search) => ({
         ...prev,
         p: personWallet,
         m: undefined,
@@ -219,7 +237,7 @@ function Feed() {
   };
   const openDna = () => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
+      search: (prev: Search) => ({
         ...prev,
         dna: true,
         p: undefined,
@@ -369,6 +387,12 @@ function Feed() {
   // three columns are always shown side by side.
   const show = (t: MobileTab) => (tab === t ? "flex" : "hidden");
 
+  // Case File mode only applies to the single-market view. When on, the side
+  // columns become the YES/NO case for the current market (existing intelligence,
+  // reorganized). On mobile the Mine/Room tabs relabel to YES Case / NO Case.
+  const caseActive =
+    !!caseOpen && !selectedPerson && !dnaOpen && !createOpen && !termsOpen && !!currentRow;
+
   const windowPicker = (
     <div className="flex items-center gap-1 overflow-x-auto rounded-md border border-border p-0.5">
       {WINDOW_OPTIONS.map((w) => (
@@ -413,7 +437,17 @@ function Feed() {
           className={`${show("mine")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
           style={{ borderRight: "1px solid var(--border)" }}
         >
-          {!wallet ? (
+          {caseActive && currentRow ? (
+            // YES Case — the existing YES-supporting intelligence, reorganized.
+            // Keyed on the market so switching resets the column scroll to top.
+            <CaseColumn
+              key={Number(currentRow.onchain_id)}
+              side="YES"
+              marketId={Number(currentRow.onchain_id)}
+              row={currentRow}
+              viewerWallet={wallet}
+            />
+          ) : !wallet ? (
             /* Signed out: nothing to show but the one thing to do. */
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
               <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
@@ -452,9 +486,6 @@ function Feed() {
           className={`${show("belief")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-8 lg:py-6`}
         >
           <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col">
-
-
-
             {/* Center focus: person profile, DNA overview, or the single-market deck.
               The deck owns its own internal scroll so its dock stays pinned. */}
             {termsOpen ? (
@@ -522,8 +553,9 @@ function Feed() {
                     lens={lens}
                     lenses={OPP_FILTERS}
                     onLens={setLens}
+                    caseOpen={caseActive}
+                    onToggleCase={toggleCase}
                   />
-
                 </div>
               )
             )}
@@ -532,16 +564,30 @@ function Feed() {
 
         {/* RIGHT — The Room — fixed 344px rail */}
         <aside
-          className={`${show("room")} row-start-1 min-h-0 flex-col overflow-y-auto bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
+          className={`${show("room")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
           style={{ borderLeft: "1px solid var(--border)" }}
         >
-          {/* Duplicate suggestions sit above the feed while creating; the feed
-            below keeps running and is never replaced. */}
-          <DuplicateSuggestions onSelect={selectMarket} />
-          <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            Live
-          </div>
-          <LiveTape wallet={wallet} onSelect={selectMarket} />
+          {caseActive && currentRow ? (
+            // NO Case replaces the Live feed while investigating. Closing Case File
+            // restores the Live feed (LiveTape remounts, polling resumes).
+            <CaseColumn
+              key={Number(currentRow.onchain_id)}
+              side="NO"
+              marketId={Number(currentRow.onchain_id)}
+              row={currentRow}
+              viewerWallet={wallet}
+            />
+          ) : (
+            <>
+              {/* Duplicate suggestions sit above the feed while creating; the feed
+                below keeps running and is never replaced. */}
+              <DuplicateSuggestions onSelect={selectMarket} />
+              <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                Live
+              </div>
+              <LiveTape wallet={wallet} onSelect={selectMarket} />
+            </>
+          )}
         </aside>
 
         {/* Mobile slide-in menu (replaces the bottom tab bar) */}
@@ -576,7 +622,11 @@ function Feed() {
                         : "text-[var(--text-muted)]"
                     }`}
                   >
-                    {t.label}
+                    {caseActive && t.key === "mine"
+                      ? "YES Case"
+                      : caseActive && t.key === "room"
+                        ? "NO Case"
+                        : t.label}
                   </button>
                 ))}
               </div>

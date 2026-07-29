@@ -90,9 +90,12 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
 export function MarketIntelligence({
   marketId,
   viewerWallet,
+  caseOpen = false,
 }: {
   marketId: number;
   viewerWallet?: string;
+  /** In Case File mode the per-side Believers/Defense move to the side columns. */
+  caseOpen?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>("house");
   const isMobile = useIsMobile();
@@ -112,6 +115,12 @@ export function MarketIntelligence({
 
   // A new market resets the lens back to the House.
   useEffect(() => setMode("house"), [marketId]);
+
+  // In Case File mode the Believers/Defense evidence lives in the side columns,
+  // so those tabs are hidden here — snap back to House if one was active.
+  useEffect(() => {
+    if (caseOpen) setMode((m) => (m === "believers" || m === "defense" ? "house" : m));
+  }, [caseOpen]);
 
   const { data: evidence, isLoading: loadingEvidence } = useQuery({
     queryKey: ["evidence", marketId],
@@ -144,18 +153,18 @@ export function MarketIntelligence({
     mode === "stream"
       ? ""
       : mode === "believers"
-      ? `${believers.length} believer${believers.length === 1 ? "" : "s"}`
-      : mode === "defense"
-        ? `${defense.length} case${defense.length === 1 ? "" : "s"}`
-        : calibrating
-          ? `${readiness!.remaining} to unlock`
-          : house?.revealed && house.confidence != null && house.predicted
-            ? `Confidence ${Math.round(house.confidence * 100)}%`
-            : house?.record && house.record.correct + house.record.miss > 0
-              ? `House record ${house.record.correct}–${house.record.miss}`
-              : "";
+        ? `${believers.length} believer${believers.length === 1 ? "" : "s"}`
+        : mode === "defense"
+          ? `${defense.length} case${defense.length === 1 ? "" : "s"}`
+          : calibrating
+            ? `${readiness!.remaining} to unlock`
+            : house?.revealed && house.confidence != null && house.predicted
+              ? `Confidence ${Math.round(house.confidence * 100)}%`
+              : house?.record && house.record.correct + house.record.miss > 0
+                ? `House record ${house.record.correct}–${house.record.miss}`
+                : "";
 
-  const tabs: { id: Mode; label: string; short: string }[] = [
+  const allTabs: { id: Mode; label: string; short: string }[] = [
     {
       id: "house",
       label: calibrating ? `House Read · ${readiness!.remaining} left` : "House Read",
@@ -165,7 +174,8 @@ export function MarketIntelligence({
     { id: "believers", label: "Believers", short: "Believers" },
     { id: "defense", label: "Defense", short: "Defense" },
   ];
-
+  // Case File relocates the per-side evidence to the columns; hide it here.
+  const tabs = allTabs.filter((t) => !(caseOpen && (t.id === "believers" || t.id === "defense")));
 
   const onTabKey = (e: React.KeyboardEvent) => {
     const i = tabs.findIndex((t) => t.id === mode);
@@ -216,9 +226,7 @@ export function MarketIntelligence({
                 }}
               >
                 {isMobile ? t.short : t.label}
-
               </button>
-
             );
           })}
         </div>

@@ -46,7 +46,6 @@ import { ReportMarket } from "@/components/ReportMarket";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 
 const PULSE_TONE: Record<string, string> = {
-
   hot: "#f59e0b",
   warm: "var(--top-voice, #d7ae58)",
   neutral: "var(--text-muted)",
@@ -82,6 +81,8 @@ export function MarketDeck({
   lens,
   lenses,
   onLens,
+  caseOpen = false,
+  onToggleCase,
 }: {
   row: MarketRow;
   ethUsd: number;
@@ -91,8 +92,10 @@ export function MarketDeck({
   lens?: Lens;
   lenses?: LensOption[];
   onLens?: (l: Lens) => void;
+  /** Case File mode: the YES/NO evidence moves to the side columns. */
+  caseOpen?: boolean;
+  onToggleCase?: () => void;
 }) {
-
   const rr = row as Record<string, unknown>;
   const marketId = Number(row.onchain_id);
   const title = row.markets?.title ?? `Market #${marketId}`;
@@ -334,10 +337,33 @@ export function MarketDeck({
           )}
         </div>
 
-
         <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
           {title}
         </h1>
+        {onToggleCase && (
+          <button
+            type="button"
+            onClick={onToggleCase}
+            aria-pressed={caseOpen}
+            className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+            style={{
+              borderColor: caseOpen ? "var(--text)" : "var(--border)",
+              color: caseOpen ? "var(--text)" : "var(--text-secondary)",
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+            >
+              <path d="M4 5h11l5 5v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />
+              <path d="M14 5v5h5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {caseOpen ? "Close Case File" : "Open Case File"}
+          </button>
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
@@ -361,14 +387,9 @@ export function MarketDeck({
           </div>
           <p className="mt-1 pl-4 text-[12px] leading-snug text-[var(--text-secondary)] [overflow-wrap:anywhere]">
             {pulse.why}
-            {eventBeat && (
-              <span className="text-[var(--text-muted)]"> {eventBeat}</span>
-            )}
+            {eventBeat && <span className="text-[var(--text-muted)]"> {eventBeat}</span>}
           </p>
         </div>
-
-
-
 
         {/* Battlefield */}
         <div className="space-y-1.5">
@@ -431,7 +452,7 @@ export function MarketDeck({
         )}
 
         {/* One intelligence container: House Read · Believers · Defense */}
-        <MarketIntelligence marketId={marketId} viewerWallet={viewerWallet} />
+        <MarketIntelligence marketId={marketId} viewerWallet={viewerWallet} caseOpen={caseOpen} />
 
         {held && sellPct == null && (
           <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
