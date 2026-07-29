@@ -305,10 +305,11 @@ export async function findMarketSuggestions(
   const db = serviceClient();
   // Keyword-targeted candidates beat a blind page of rows: an arbitrary
   // `limit(N)` slice can miss the one market that actually matches.
-  const keywords = [...tokens(question)]
+  const keywords = [...contentTokens(question)]
     .filter((t) => t.length > 3)
     .sort((a, b) => b.length - a.length)
     .slice(0, 6);
+
   const titleOr = keywords.map((k) => `title.ilike.%${k}%`).join(",");
   const questionOr = keywords.map((k) => `question.ilike.%${k}%`).join(",");
 
