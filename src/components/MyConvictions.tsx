@@ -6,6 +6,7 @@
  * NO per-position activity query) and selects the market in the center on click.
  */
 import { useQuery } from "@tanstack/react-query";
+import { listLiveEvents } from "@/lib/live.functions";
 import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
 import { type MarketRow } from "@/components/MarketCard";
 
