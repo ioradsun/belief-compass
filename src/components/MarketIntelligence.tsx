@@ -205,14 +205,16 @@ export function MarketIntelligence({
                 aria-controls={`${tablistId}-panel`}
                 tabIndex={on ? 0 : -1}
                 onClick={() => setMode(t.id)}
-                className="rounded-[9px] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors motion-reduce:transition-none"
+                className="whitespace-nowrap rounded-[9px] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors motion-reduce:transition-none"
                 style={{
                   background: on ? "var(--surface-2,var(--border))" : "transparent",
                   color: on ? "var(--text)" : "var(--text-muted)",
                 }}
               >
-                {t.label}
+                <span className="sm:hidden">{t.short}</span>
+                <span className="hidden sm:inline">{t.label}</span>
               </button>
+
             );
           })}
         </div>
