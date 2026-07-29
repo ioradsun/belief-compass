@@ -170,34 +170,31 @@ export function CaseColumn({
       </div>
 
       {/* Fixed comparative summary — the highest-level side facts (Capital · People
-        · Money · Move). Every row always renders (— when absent) so the YES and NO
-        summaries are the SAME height and line up across the center for comparison.
-        Capital / Momentum live here, not in the scroll, so they never drift apart. */}
+        · Money · Move). Every stat always renders (— when absent) so the YES and NO
+        summaries are the SAME height and line up across the center. Calm by design:
+        a neutral hairline + faint side tint carry column identity (not a heavy
+        colored box), and the stats sit on open space, not nested tiles. */}
       <div
-        className="mb-3 shrink-0 rounded-[12px] p-3"
+        className="mb-4 shrink-0 rounded-[12px] p-3"
         style={{
-          border: `1px solid color-mix(in oklab, ${color} 30%, var(--border))`,
-          background: `color-mix(in oklab, ${color} 5%, transparent)`,
+          border: "1px solid var(--border)",
+          background: `color-mix(in oklab, ${color} 4%, transparent)`,
         }}
       >
         <div className="flex items-end justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
             Capital
           </span>
           <span className="num text-[22px] font-semibold leading-none text-[var(--text)]">
             {capital != null ? fmtUsd(capital) : "—"}
           </span>
         </div>
-        <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <SummaryStat
             label="People"
             value={believersCount != null ? String(believersCount) : "—"}
           />
-          <SummaryStat
-            label="Money"
-            value={moneySide != null ? `${moneySide.toFixed(0)}%` : "—"}
-            color={color}
-          />
+          <SummaryStat label="Money" value={moneySide != null ? `${moneySide.toFixed(0)}%` : "—"} />
           <SummaryStat
             label="Move"
             value={
@@ -260,7 +257,7 @@ export function CaseColumn({
                   <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--text)]">
                     {p.displayName}
                   </span>
-                  <span className="text-[10px] font-semibold" style={{ color }}>
+                  <span className="text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                     {REL_LABEL[p.relationship] ?? p.relationship}
                   </span>
                 </li>
@@ -289,12 +286,15 @@ export function CaseColumn({
 }
 
 function SummaryStat({ label, value, color }: { label: string; value: string; color?: string }) {
+  // Flat: value sits on open space (no nested tile), label recedes (small, muted,
+  // not bold). Strong color only when `color` is passed (Move direction) — the
+  // rest reads through contrast, so nothing decorative competes for the eye.
   return (
-    <div className="rounded-[8px] py-1.5" style={{ background: "var(--surface-2,var(--border))" }}>
-      <div className="num text-[13px] font-semibold" style={{ color: color ?? "var(--text)" }}>
+    <div>
+      <div className="num text-[14px] font-semibold" style={{ color: color ?? "var(--text)" }}>
         {value}
       </div>
-      <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
+      <div className="mt-1 text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
         {label}
       </div>
     </div>
