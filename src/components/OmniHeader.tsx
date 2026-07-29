@@ -132,32 +132,50 @@ export function LensPicker({
           role="listbox"
           className={`absolute ${align === "right" ? "right-0" : "left-0"} top-9 z-40 w-72 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl`}
         >
-
-          {lenses.map((l) => (
+          {/* "All" isn't an option you pick — it's the state you return to. */}
+          {lenses
+            .filter((l) => l.key !== "all")
+            .map((l) => (
+              <button
+                key={l.key}
+                type="button"
+                role="option"
+                aria-selected={l.key === lens}
+                onClick={() => {
+                  onLens(l.key === lens ? "all" : l.key);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
+                  l.key === lens ? "bg-[var(--surface)]" : "hover:bg-[var(--surface)]"
+                }`}
+              >
+                <span aria-hidden className="mt-0.5 text-sm">
+                  {l.emoji}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-medium text-[var(--text)]">{l.label}</span>
+                  <span className="block truncate text-[11px] text-[var(--text-muted)]">
+                    {l.question}
+                  </span>
+                </span>
+                {l.key === lens && (
+                  <span className="mt-0.5 text-[11px] text-[var(--text-muted)]">✓</span>
+                )}
+              </button>
+            ))}
+          {lens !== "all" && (
             <button
-              key={l.key}
               type="button"
-              role="option"
-              aria-selected={l.key === lens}
               onClick={() => {
-                onLens(l.key);
+                onLens("all");
                 setOpen(false);
               }}
-              className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
-                l.key === lens ? "bg-[var(--surface)]" : "hover:bg-[var(--surface)]"
-              }`}
+              className="mt-1 w-full rounded-lg border-t border-[var(--border)] px-3 py-2 text-left text-[12px] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text)]"
             >
-              <span aria-hidden className="mt-0.5 text-sm">
-                {l.emoji}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[13px] font-medium text-[var(--text)]">{l.label}</span>
-                <span className="block truncate text-[11px] text-[var(--text-muted)]">
-                  {l.question}
-                </span>
-              </span>
+              Clear filter — show everything
             </button>
-          ))}
+          )}
+
         </div>
       )}
     </div>
