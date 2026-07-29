@@ -1,14 +1,18 @@
 /**
- * LiveTape — the right column. A compact chronological activity tape. Reads the
- * server-grouped LiveRow DTO (canonical events, occurrence order); it does NOT
- * rank. It IS lightly personalized: when a row's sole actor is in your network
- * the server tags it with a real face + name ("Maya (Twin) backed YES"). Clicking
- * a row selects that market in the center.
+ * LiveTape — the right column: the living story of conviction. One chronological
+ * stream of the server-grouped LiveRow DTO (canonical events, occurrence order);
+ * it does NOT rank or reorder. Each row is read at a glance through a leading
+ * glyph and a subtle class treatment (personal · community · market) from the
+ * pure taxonomy — the user never picks a view. Personal rows (a Twin / someone in
+ * your network) get a faint "about you" highlight but stay in time order. Text
+ * wraps naturally with generous spacing; clicking a row selects that market.
  */
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { useStickyRows } from "@/hooks/useSticky";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
+import { classifyLiveRow } from "@/domain/live-taxonomy";
+import type { LiveRow } from "@/lib/live-tape";
 
 function ago(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -42,8 +46,7 @@ export function LiveTape({
   const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
   const { data, isLoading } = useQuery({
     queryKey: ["live-tape", wallet ?? null, scopeKey, limit ?? null],
-    queryFn: () =>
-      listLiveEvents({ data: { wallet, marketIds: scopeKey ?? undefined, limit } }),
+    queryFn: () => listLiveEvents({ data: { wallet, marketIds: scopeKey ?? undefined, limit } }),
     // New rows prepend; refetch keeps the tape fresh without new infra.
     refetchInterval: 6_000,
     placeholderData: (prev) => prev,
@@ -62,50 +65,87 @@ export function LiveTape({
       ) : rows.length === 0 ? (
         <p className="text-xs text-[var(--text-muted)]">{emptyText}</p>
       ) : (
-        <ul className="space-y-0.5">
-          {rows.map((r) => (
-            <li key={r.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(Number(r.marketId))}
-                className="flex w-full items-start gap-2 rounded px-1.5 py-1.5 text-left transition-colors hover:bg-[var(--border)]/30"
-              >
-                <span className="mt-0.5 w-8 shrink-0 text-[11px] tabular-nums text-[var(--text-muted)]">
-                  {ago(r.occurredAt)}
-                </span>
-                {/* A real face only when the actor is in your network. */}
-                {r.face &&
-                  (r.face.avatarUrl ? (
-                    <img
-                      src={r.face.avatarUrl}
-                      alt=""
-                      className="mt-0.5 h-4 w-4 shrink-0 rounded-full object-cover"
-                    />
-                  ) : (
-                    <span
-                      className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[7px] font-semibold text-white"
-                      style={{ background: `hsl(${hueFor(r.wallet ?? r.id)} 45% 45%)` }}
-                      aria-hidden
-                    >
-                      {initialsFor(r.face.name)}
-                    </span>
-                  ))}
-                <span className="min-w-0 flex-1">
-                  <span className="text-[13px] text-[var(--text-secondary)]">
-                    <SideText text={r.text} />
+        <ul className="space-y-1">
+          {rows.map((r) => {
+            const view = classifyLiveRow(r);
+            const personal = view.klass === "personal";
+            return (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(Number(r.marketId))}
+                  className="flex w-full items-start gap-2 rounded-[8px] px-1.5 py-1.5 text-left transition-colors hover:bg-[var(--border)]/30"
+                  // Personal rows carry a faint "this is about you" wash — the only
+                  // class with a background. Community and market rows stay flat so
+                  // nothing competes; priority is emphasis, never re-ordering.
+                  style={
+                    personal
+                      ? { background: "color-mix(in oklab, var(--rel,#9b87f5) 8%, transparent)" }
+                      : undefined
+                  }
+                >
+                  <span className="mt-px w-7 shrink-0 text-[11px] tabular-nums text-[var(--text-muted)]">
+                    {ago(r.occurredAt)}
                   </span>
-                  {showTitles && (
-                    <span className="block truncate text-[11px] text-[var(--text-muted)]">
-                      {r.marketTitle}
+
+                  {/* Leading glyph = the category at a glance. A real face when the
+                    actor is in your network (the strongest "someone" signal),
+                    otherwise the taxonomy icon. */}
+                  <LeadGlyph r={r} icon={view.icon} />
+
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className="block text-[13px] leading-[1.45]"
+                      style={{ color: personal ? "var(--text)" : "var(--text-secondary)" }}
+                    >
+                      <SideText text={r.text} />
                     </span>
-                  )}
-                </span>
-              </button>
-            </li>
-          ))}
+                    {showTitles && (
+                      <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]">
+                        {r.marketTitle}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * The leading glyph, one consistent 20px slot so wrapped text left-aligns for
+ * easy scanning. A real face when the actor is in your network (a person is the
+ * truest "about you" signal), otherwise the taxonomy's category emoji.
+ */
+function LeadGlyph({ r, icon }: { r: LiveRow; icon: string }) {
+  if (r.face) {
+    return r.face.avatarUrl ? (
+      <img
+        src={r.face.avatarUrl}
+        alt=""
+        className="mt-px h-5 w-5 shrink-0 rounded-full object-cover"
+      />
+    ) : (
+      <span
+        className="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-[8px] font-semibold text-white"
+        style={{ background: `hsl(${hueFor(r.wallet ?? r.id)} 45% 45%)` }}
+        aria-hidden
+      >
+        {initialsFor(r.face.name)}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="mt-px grid h-5 w-5 shrink-0 place-items-center text-[13px] leading-none"
+      aria-hidden
+    >
+      {icon}
+    </span>
   );
 }
 
