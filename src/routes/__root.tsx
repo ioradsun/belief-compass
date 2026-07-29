@@ -104,6 +104,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      {
+        name: "google-site-verification",
+        content: "bwpgUKb-7YZYYBznOf1on_p1g7RrNKJsw7pkJJFvhd4",
+      },
     ],
     links: [
       // App CSS is same-origin, hashed + immutably cached — the only stylesheet on
