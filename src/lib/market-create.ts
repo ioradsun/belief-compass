@@ -21,7 +21,16 @@ export const MAX_IMAGE_EDGE = 4096;
 
 export const ALLOWED_MIME: Record<Exclude<MediaKind, "link">, string[]> = {
   image: ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"],
-  audio: ["audio/mpeg", "audio/mp4", "audio/aac", "audio/wav", "audio/x-wav", "audio/ogg"],
+  audio: [
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/m4a",
+    "audio/x-m4a",
+    "audio/aac",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/ogg",
+  ],
   video: ["video/mp4", "video/webm"],
 };
 
