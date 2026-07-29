@@ -174,7 +174,9 @@ function Feed() {
     p: selectedPerson,
     dna: dnaOpen,
     create: createOpen,
+    terms: termsOpen,
   } = Route.useSearch();
+
   const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
   // Brand introduction layer. Intentional product interactions (opening a
