@@ -13,7 +13,7 @@ import { getMarketChange } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { requestConnect } from "@/lib/connect-bridge";
-import { useSwitchChain } from "wagmi";
+import { useSwitchChain, useAccount, useBalance } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
