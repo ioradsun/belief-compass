@@ -61,6 +61,9 @@ const OPP_FILTERS: { key: OppFilter; emoji: string; label: string; question: str
   { key: "new", emoji: "🆕", label: "New", question: "What is genuinely recent?" },
 ];
 
+const CreateMarket = lazy(() =>
+  import("@/components/CreateMarket").then((m) => ({ default: m.CreateMarket })),
+);
 const MyWorld = lazy(() => import("@/components/MyWorld").then((m) => ({ default: m.MyWorld })));
 import { OmniHeader } from "@/components/OmniHeader";
 
@@ -98,7 +101,7 @@ const pulsesQO = (ids: number[]) =>
 export const Route = createFileRoute("/")({
   validateSearch: (
     search: Record<string, unknown>,
-  ): { wallet?: string; m?: number; p?: string; dna?: boolean } => ({
+  ): { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean } => ({
     wallet:
       typeof search.wallet === "string" && search.wallet.length > 3 ? search.wallet : undefined,
     // Universal center selection, shared by every surface so deep links + browser
@@ -106,6 +109,7 @@ export const Route = createFileRoute("/")({
     m: search.m != null && Number.isFinite(Number(search.m)) ? Number(search.m) : undefined,
     p: typeof search.p === "string" && search.p.length > 3 ? search.p : undefined,
     dna: search.dna === true || search.dna === "1" ? true : undefined,
+    create: search.create === true || search.create === "1" ? true : undefined,
   }),
   head: () => ({
     meta: [
@@ -167,6 +171,7 @@ function Feed() {
     m: selectedMarket,
     p: selectedPerson,
     dna: dnaOpen,
+    create: createOpen,
   } = Route.useSearch();
   const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
@@ -179,11 +184,12 @@ function Feed() {
   // the center (mobile: the Belief column). Browser back/forward walks history.
   const selectMarket = (marketId: number) => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
         ...prev,
         m: marketId,
         p: undefined,
         dna: undefined,
+        create: undefined,
       }),
     });
     setTab("belief");
@@ -191,11 +197,12 @@ function Feed() {
   };
   const selectPerson = (personWallet: string) => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
         ...prev,
         p: personWallet,
         m: undefined,
         dna: undefined,
+        create: undefined,
       }),
     });
     setTab("belief");
@@ -203,15 +210,39 @@ function Feed() {
   };
   const openDna = () => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
         ...prev,
         dna: true,
+        p: undefined,
+        m: undefined,
+        create: undefined,
+      }),
+    });
+    setTab("belief");
+    enterProduct();
+  };
+  // Creating a market is a first-class center-column destination, not a modal:
+  // it deep-links, survives refresh, and back returns you to the deck.
+  const openCreate = () => {
+    navigate({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
+        ...prev,
+        create: true,
+        dna: undefined,
         p: undefined,
         m: undefined,
       }),
     });
     setTab("belief");
     enterProduct();
+  };
+  const closeCreate = () => {
+    navigate({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
+        ...prev,
+        create: undefined,
+      }),
+    });
   };
   const [win, setWin] = useState<VolumeWindow>("24h");
   const [tab, setTab] = useState<MobileTab>("belief");
@@ -332,6 +363,7 @@ function Feed() {
         onEnter={enterProduct}
         onCollapse={landing.collapse}
         onExpand={landing.expand}
+        onCreate={openCreate}
         search={
           <OmniHeader
             wallet={wallet}
@@ -392,7 +424,15 @@ function Feed() {
 
             {/* Center focus: person profile, DNA overview, or the single-market deck.
               The deck owns its own internal scroll so its dock stays pinned. */}
-            {selectedPerson ? (
+            {createOpen ? (
+              <Suspense fallback={<DeckSkeleton />}>
+                <CreateMarket
+                  ethUsd={data?.ethUsd ?? 0}
+                  onCreated={(marketId) => selectMarket(marketId)}
+                  onCancel={closeCreate}
+                />
+              </Suspense>
+            ) : selectedPerson ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <Suspense fallback={<DeckSkeleton />}>
                   <PersonProfile
