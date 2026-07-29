@@ -584,7 +584,7 @@ function MiniScoreboard({ rec }: { rec: HouseReadView["record"] }) {
       className="flex items-center gap-2 rounded-[8px] px-2 py-1"
       style={{ background: "var(--surface-2,var(--border))" }}
     >
-      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
         You vs House
       </span>
       <span className="num ml-auto text-[11px] font-semibold text-[var(--text)]">

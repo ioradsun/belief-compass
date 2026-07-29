@@ -252,7 +252,7 @@ function PersonRow({
             {p.displayName}
           </span>
           <span
-            className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
             style={{ color: tone.fg, background: tone.bg }}
           >
             {badge}
