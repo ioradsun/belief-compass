@@ -14,7 +14,7 @@ import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
 import { MarketDeck } from "@/components/MarketDeck";
-import { CaseColumn } from "@/components/CaseFile";
+import { CaseColumn, type CaseSection } from "@/components/CaseFile";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { CalibrationReveal, useReadiness } from "@/components/Calibration";
 import { getCalibrationQueue } from "@/lib/beliefs.functions";
@@ -204,6 +204,8 @@ function Feed() {
   // intelligence is shown, so it just flips the URL flag (preserved across switches).
   const toggleCase = () => {
     navigate({ search: (prev: Search) => ({ ...prev, case: prev.case ? undefined : true }) });
+    // Each Case File session opens with everything collapsed (summary-first).
+    setCaseSection(null);
   };
   // Brand introduction layer. Intentional product interactions (opening a
   // market, a person, DNA) collapse it; nothing else does.
@@ -332,6 +334,11 @@ function Feed() {
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  // The one Case File section open on BOTH columns (null = all collapsed). Lifting
+  // it here is what keeps YES and NO synchronized — you only ever compare like with
+  // like. Toggling the open one closes it; opening another closes the previous.
+  const [caseSection, setCaseSection] = useState<CaseSection | null>(null);
+  const toggleCaseSection = (s: CaseSection) => setCaseSection((prev) => (prev === s ? null : s));
 
   // The SSR loader prefetched the anonymous 24h feed; adopt it as initialData so
   // the very first render (server AND client) paints the real deck with no
@@ -488,6 +495,8 @@ function Feed() {
               marketId={Number(currentRow.onchain_id)}
               row={currentRow}
               viewerWallet={wallet}
+              openSection={caseSection}
+              onToggleSection={toggleCaseSection}
             />
           ) : !wallet ? (
             /* Signed out: nothing to show but the one thing to do. */
@@ -617,6 +626,8 @@ function Feed() {
               marketId={Number(currentRow.onchain_id)}
               row={currentRow}
               viewerWallet={wallet}
+              openSection={caseSection}
+              onToggleSection={toggleCaseSection}
             />
           ) : (
             <>
