@@ -119,27 +119,53 @@ async function marketTitles(sb: Sb, ids: number[]): Promise<Map<number, string>>
   return out;
 }
 
+/**
+ * A viewer's directional beliefs = traded positions (wallet_beliefs) PLUS
+ * calibration/expressed answers (expressed_beliefs). A traded position wins
+ * when both exist for the same market.
+ */
 async function loadFactors(sb: Sb, wallet: string): Promise<DnaFactor[]> {
-  const { data } = await sb
-    .from("wallet_beliefs")
-    .select("onchain_id, stance_side, conviction")
-    .eq("wallet", wallet.toLowerCase())
-    .in("stance_side", ["YES", "NO"]);
-  return (data ?? []).map((r) => ({
-    marketId: Number(r.onchain_id),
-    side: r.stance_side === "NO" ? "NO" : "YES",
-    conviction: Math.abs(Number(r.conviction ?? 0)),
-  }));
+  const w = wallet.toLowerCase();
+  const [traded, expressed] = await Promise.all([
+    sb
+      .from("wallet_beliefs")
+      .select("onchain_id, stance_side, conviction")
+      .eq("wallet", w)
+      .in("stance_side", ["YES", "NO"]),
+    sb.from("expressed_beliefs").select("onchain_id, side, weight").eq("wallet", w),
+  ]);
+
+  const byMarket = new Map<number, DnaFactor>();
+  for (const r of (expressed.data ?? []) as {
+    onchain_id: number;
+    side: string;
+    weight: number | null;
+  }[]) {
+    if (r.side !== "YES" && r.side !== "NO") continue;
+    byMarket.set(Number(r.onchain_id), {
+      marketId: Number(r.onchain_id),
+      side: r.side,
+      conviction: Math.abs(Number(r.weight ?? 0)),
+    });
+  }
+  for (const r of (traded.data ?? []) as {
+    onchain_id: number;
+    stance_side: string;
+    conviction: number | null;
+  }[]) {
+    byMarket.set(Number(r.onchain_id), {
+      marketId: Number(r.onchain_id),
+      side: r.stance_side === "NO" ? "NO" : "YES",
+      conviction: Math.abs(Number(r.conviction ?? 0)),
+    });
+  }
+  return [...byMarket.values()];
 }
 
 async function expressedBeliefCount(sb: Sb, wallet: string): Promise<number> {
-  const { count } = await sb
-    .from("wallet_beliefs")
-    .select("*", { count: "exact", head: true })
-    .eq("wallet", wallet.toLowerCase())
-    .in("stance_side", ["YES", "NO"]);
-  return count ?? 0;
+  return (await loadFactors(sb, wallet)).length;
 }
+
 
 // ── /api/me/network ──────────────────────────────────────────────────────────
 
