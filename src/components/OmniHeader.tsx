@@ -15,15 +15,29 @@ export type Lens = "all" | "hot" | "early" | "hidden" | "contested" | "convictio
 
 export type LensOption = { key: Lens; emoji: string; label: string; question: string };
 
-/** The deck's filter. Lives with the deck, not with the global search. */
+/**
+ * The deck's filter. It now doubles as the market's momentum tag: the chip
+ * shows the market's own classification when no lens is applied, and the active
+ * lens once you pick one. One chip, one place, no duplicated vocabulary.
+ */
 export function LensPicker({
   lens,
   lenses,
   onLens,
+  tone,
+  label,
+  title,
+  align = "left",
 }: {
   lens: Lens;
   lenses: LensOption[];
   onLens: (l: Lens) => void;
+  /** Accent color of the chip (momentum hue). Defaults to the neutral border look. */
+  tone?: string;
+  /** Override the chip's text (e.g. the market's momentum label when lens is "all"). */
+  label?: string;
+  title?: string;
+  align?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -37,6 +51,14 @@ export function LensPicker({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
+  const toned = tone
+    ? {
+        color: tone,
+        background: `color-mix(in oklab, ${tone} 13%, transparent)`,
+        border: `1px solid color-mix(in oklab, ${tone} 32%, transparent)`,
+      }
+    : undefined;
+
   return (
     <div className="relative" ref={ref}>
       <button
@@ -44,14 +66,25 @@ export function LensPicker({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--panel)] hover:text-[var(--text)]"
+        aria-label="Filter markets"
+        title={title}
+        style={toned}
+        className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors ${
+          toned
+            ? ""
+            : "border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--panel)] hover:text-[var(--text)]"
+        }`}
       >
-        <span aria-hidden>{active.emoji}</span>
-        <span>{active.label}</span>
+        {tone ? (
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone }} aria-hidden />
+        ) : (
+          <span aria-hidden>{active.emoji}</span>
+        )}
+        <span>{label ?? active.label}</span>
         <svg
           aria-hidden
           viewBox="0 0 24 24"
-          className="h-3 w-3"
+          className="h-3 w-3 opacity-70"
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
@@ -63,8 +96,9 @@ export function LensPicker({
       {open && (
         <div
           role="listbox"
-          className="absolute left-0 top-9 z-40 w-72 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl"
+          className={`absolute ${align === "right" ? "right-0" : "left-0"} top-9 z-40 w-72 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl`}
         >
+
           {lenses.map((l) => (
             <button
               key={l.key}
