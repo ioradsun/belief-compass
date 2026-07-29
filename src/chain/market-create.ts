@@ -39,7 +39,13 @@ export const YES_AGENT = "79a5cb85-824d-4c51-a9de-ed8276cfe33a";
 export const NO_AGENT = "1f6f0306-6db1-44e1-82dc-768783090c93";
 
 export interface CreateEconomics {
-  /** Minimum seed the contract accepts, in wei. */
+  /**
+   * Smallest msg.value the contract will actually accept, in wei.
+   *
+   * The contract takes the trade fee off the top and compares what's LEFT to
+   * minSeedEth(), so sending exactly minSeedEth() reverts with
+   * "Insufficient ETH for min seed". This is the grossed-up figure.
+   */
   minSeedWei: bigint | null;
   /** Trade fee in bps (contract-wide). */
   feeBps: number | null;
@@ -47,6 +53,16 @@ export interface CreateEconomics {
   creatorFeeBps: number | null;
   isLoading: boolean;
 }
+
+/** Gross up a net-of-fee minimum so the post-fee remainder still clears it. */
+export function grossSeedWei(netMinWei: bigint, feeBps: number | null): bigint {
+  if (feeBps == null || feeBps <= 0 || feeBps >= 10_000) return netMinWei;
+  const denom = BigInt(10_000 - feeBps);
+  // Ceiling division, then one wei of headroom for the contract's own rounding.
+  return (netMinWei * 10_000n + denom - 1n) / denom + 1n;
+}
+
+
 
 /** Live economics: minimum seed + the creator's real cut. Never hardcoded. */
 export function useCreateEconomics(): CreateEconomics {
