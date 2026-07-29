@@ -32,6 +32,105 @@ export type Database = {
         }
         Relationships: []
       }
+      conviction_markets: {
+        Row: {
+          category: string
+          category_source: string
+          chain_id: number
+          contract_address: string
+          created_at: string
+          creator_fee_bps: number | null
+          creator_wallet: string
+          curve_address: string | null
+          description: string | null
+          format: string
+          hidden: boolean
+          last_error: string | null
+          media: Json | null
+          moderation_status: string
+          no_agent: string | null
+          no_token: string | null
+          onchain_id: number | null
+          pov_boost: boolean
+          pov_boost_spend_degen: string | null
+          question: string
+          question_id: string
+          seed_eth_wei: string | null
+          side: string
+          stake_amount_usd: number | null
+          status: string
+          transaction_hash: string | null
+          updated_at: string
+          usd_per_eth_at_creation: number | null
+          yes_agent: string | null
+          yes_token: string | null
+        }
+        Insert: {
+          category?: string
+          category_source?: string
+          chain_id?: number
+          contract_address: string
+          created_at?: string
+          creator_fee_bps?: number | null
+          creator_wallet: string
+          curve_address?: string | null
+          description?: string | null
+          format?: string
+          hidden?: boolean
+          last_error?: string | null
+          media?: Json | null
+          moderation_status?: string
+          no_agent?: string | null
+          no_token?: string | null
+          onchain_id?: number | null
+          pov_boost?: boolean
+          pov_boost_spend_degen?: string | null
+          question: string
+          question_id: string
+          seed_eth_wei?: string | null
+          side?: string
+          stake_amount_usd?: number | null
+          status?: string
+          transaction_hash?: string | null
+          updated_at?: string
+          usd_per_eth_at_creation?: number | null
+          yes_agent?: string | null
+          yes_token?: string | null
+        }
+        Update: {
+          category?: string
+          category_source?: string
+          chain_id?: number
+          contract_address?: string
+          created_at?: string
+          creator_fee_bps?: number | null
+          creator_wallet?: string
+          curve_address?: string | null
+          description?: string | null
+          format?: string
+          hidden?: boolean
+          last_error?: string | null
+          media?: Json | null
+          moderation_status?: string
+          no_agent?: string | null
+          no_token?: string | null
+          onchain_id?: number | null
+          pov_boost?: boolean
+          pov_boost_spend_degen?: string | null
+          question?: string
+          question_id?: string
+          seed_eth_wei?: string | null
+          side?: string
+          stake_amount_usd?: number | null
+          status?: string
+          transaction_hash?: string | null
+          updated_at?: string
+          usd_per_eth_at_creation?: number | null
+          yes_agent?: string | null
+          yes_token?: string | null
+        }
+        Relationships: []
+      }
       events: {
         Row: {
           action: string | null
@@ -272,6 +371,45 @@ export type Database = {
           positions_dirty?: boolean
           pov_dirty?: boolean
           requested_at?: string
+        }
+        Relationships: []
+      }
+      market_reports: {
+        Row: {
+          created_at: string
+          details: string | null
+          id: string
+          onchain_id: number | null
+          question_id: string | null
+          reason: string
+          reporter_wallet: string | null
+          resolution_note: string | null
+          resolved: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          onchain_id?: number | null
+          question_id?: string | null
+          reason: string
+          reporter_wallet?: string | null
+          resolution_note?: string | null
+          resolved?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          onchain_id?: number | null
+          question_id?: string | null
+          reason?: string
+          reporter_wallet?: string | null
+          resolution_note?: string | null
+          resolved?: boolean
+          updated_at?: string
         }
         Relationships: []
       }
