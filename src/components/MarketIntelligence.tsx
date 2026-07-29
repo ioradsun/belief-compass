@@ -151,15 +151,17 @@ export function MarketIntelligence({
               ? `House record ${house.record.correct}–${house.record.miss}`
               : "";
 
-  const tabs: { id: Mode; label: string }[] = [
+  const tabs: { id: Mode; label: string; short: string }[] = [
     {
       id: "house",
       label: calibrating ? `House Read · ${readiness!.remaining} left` : "House Read",
+      short: calibrating ? `House · ${readiness!.remaining}` : "House",
     },
-    { id: "stream", label: "Belief Stream" },
-    { id: "believers", label: "Believers" },
-    { id: "defense", label: "Defense" },
+    { id: "stream", label: "Belief Stream", short: "Stream" },
+    { id: "believers", label: "Believers", short: "Believers" },
+    { id: "defense", label: "Defense", short: "Defense" },
   ];
+
 
   const onTabKey = (e: React.KeyboardEvent) => {
     const i = tabs.findIndex((t) => t.id === mode);
@@ -203,14 +205,16 @@ export function MarketIntelligence({
                 aria-controls={`${tablistId}-panel`}
                 tabIndex={on ? 0 : -1}
                 onClick={() => setMode(t.id)}
-                className="rounded-[9px] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors motion-reduce:transition-none"
+                className="whitespace-nowrap rounded-[9px] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors motion-reduce:transition-none"
                 style={{
                   background: on ? "var(--surface-2,var(--border))" : "transparent",
                   color: on ? "var(--text)" : "var(--text-muted)",
                 }}
               >
-                {t.label}
+                <span className="sm:hidden">{t.short}</span>
+                <span className="hidden sm:inline">{t.label}</span>
               </button>
+
             );
           })}
         </div>
