@@ -459,16 +459,11 @@ function Feed() {
         }
       />
 
-      <div
-        className={`grid min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden ${
-          // Case File is a courtroom: both cases get equal visual authority. Normal
-          // mode keeps the asymmetric personal/room rails.
-          caseActive
-            ? "lg:[grid-template-columns:320px_minmax(0,1fr)_320px]"
-            : "lg:[grid-template-columns:264px_minmax(0,1fr)_344px]"
-        }`}
-      >
-        {/* LEFT — You (Positions | Network) — fixed 264px rail */}
+      {/* One rail width for both sides in every mode — a single source of truth
+        (no 264 vs 344 asymmetry). It also means the Case File's YES/NO columns get
+        equal visual authority automatically, with no mode-specific grid. */}
+      <div className="grid min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:320px_minmax(0,1fr)_320px]">
+        {/* LEFT — You (Positions | Network) — fixed 320px rail */}
         <aside
           className={`${show("mine")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
           style={{ borderRight: "1px solid var(--border)" }}
@@ -597,7 +592,7 @@ function Feed() {
           </div>
         </main>
 
-        {/* RIGHT — The Room — fixed 344px rail */}
+        {/* RIGHT — The Room — fixed 320px rail */}
         <aside
           className={`${show("room")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
           style={{ borderLeft: "1px solid var(--border)" }}
