@@ -475,7 +475,7 @@ export function CreateMarket({
         type="button"
         disabled={!canSubmit && isConnected}
         onClick={() => (isConnected ? submit.mutate() : requestConnect())}
-        className="mt-4 w-full rounded-full bg-[var(--text)] px-4 py-3 text-[14px] font-semibold text-[var(--bg)] transition-opacity hover:opacity-90 disabled:opacity-40"
+        className="mt-4 block w-full max-w-[320px] rounded-full bg-[var(--text)] px-4 py-3 text-center text-[14px] font-semibold text-[var(--bg)] transition-opacity hover:opacity-90 disabled:opacity-40 sm:mx-auto"
       >
         {!isConnected
           ? "Connect wallet"
@@ -484,6 +484,7 @@ export function CreateMarket({
               econ.creatorFeeBps != null ? ` · earn ${(econ.creatorFeeBps / 100).toFixed(2)}%` : ""
             }`)}
       </button>
+
       <p className="mt-2 text-center text-[11px] text-[var(--text-muted)]">
         Market{type === "media" ? " and uploaded media" : ""} live
         {type === "media" ? "" : "s"} on conviction.company (not POV.co). Trades are public
