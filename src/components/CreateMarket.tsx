@@ -486,7 +486,7 @@ export function CreateMarket({
             }`)}
       </button>
 
-      <p className="mt-2 text-center text-[11px] text-[var(--text-muted)]">
+      <p className="mt-auto pt-6 text-center text-[11px] text-[var(--text-muted)]">
         Market{type === "media" ? " and uploaded media" : ""} live
         {type === "media" ? "" : "s"} on conviction.company (not POV.co). Trades are public
         on-chain.{" "}
