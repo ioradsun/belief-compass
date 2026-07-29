@@ -69,7 +69,7 @@ export function LandingPanel({
             )}
             {!expanded && search && (
               <div
-                className="ml-auto flex min-w-0 max-w-[560px] flex-1 items-center"
+                className="ml-auto flex min-w-0 flex-1 items-center lg:w-[344px] lg:max-w-[344px] lg:flex-none"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
                 role="presentation"
@@ -77,6 +77,7 @@ export function LandingPanel({
                 {search}
               </div>
             )}
+
             {!expanded && (
               <span className="ml-auto hidden shrink-0 text-[11px] text-[var(--text-muted)] xl:block">
                 Powered by pov.co and $DEGEN
