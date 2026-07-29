@@ -233,7 +233,7 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
     const wallet = await assertWalletOwnership(data.wallet, data.token);
     const { serviceClient } = await import("@/lib/supabase-clients");
     const db = serviceClient();
-    const { error } = await db
+    const { data: row, error } = await db
       .from("conviction_markets")
       .update({
         onchain_id: data.marketId,
@@ -249,10 +249,44 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
         last_error: null,
       })
       .eq("question_id", data.questionId)
-      .eq("creator_wallet", wallet);
+      .eq("creator_wallet", wallet)
+      .select("question, category, category_source")
+      .maybeSingle();
     if (error) throw new Error(error.message);
+
+    // The chain indexer creates a bare `markets` row with no title — POV owns
+    // titles, and this market was never born on POV. Publish ours, or the feed
+    // and every deck render it untitled (which reads as "missing").
+    await db
+      .from("markets")
+      .upsert(
+        {
+          onchain_id: data.marketId,
+          title: row?.question ?? null,
+          category: row?.category ?? null,
+          category_source: row?.category_source ?? "conviction",
+          author_wallet: wallet,
+          source: "conviction",
+          created_at: new Date().toISOString(),
+        },
+        { onConflict: "onchain_id" },
+      )
+      .then(() => undefined);
+
+    // Build the read-model row now rather than waiting behind the refresh
+    // queue: the creator is about to land on this market.
+    try {
+      const { refreshMarket } = await import("@/lib/market-state/refresh-market.server");
+      const { data: eth } = await db.rpc("eth_usd_calibration");
+      await refreshMarket(db, data.marketId, Number(eth ?? 0) || 0);
+    } catch {
+      await db
+        .rpc("enqueue_market_refresh", { p_market_ids: [data.marketId], p_kind: "activity" })
+        .then(() => undefined);
+    }
     return { ok: true as const };
   });
+
 
 /** Remember a failed attempt so the draft can be resumed instead of re-typed. */
 export const recordCreateFailure = createServerFn({ method: "POST" })
