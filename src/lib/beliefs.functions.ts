@@ -38,12 +38,15 @@ export const expressBelief = createServerFn({ method: "POST" })
         marketId: z.number().int().nonnegative(),
         side: z.enum(["YES", "NO"]),
         source: z.enum(["tap", "calibration"]).default("tap"),
+        /** Proof the caller controls `wallet` (see useWalletSession). */
+        session: z.string().min(16).max(2000),
       })
       .parse(raw),
   )
   .handler(async ({ data }): Promise<Readiness> => {
+    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+    const wallet = await assertWalletOwnership(data.wallet, data.session);
     const sb = serviceClient();
-    const wallet = data.wallet.toLowerCase();
     await sb.from("expressed_beliefs").upsert(
       {
         wallet,

@@ -91,10 +91,10 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
   const viewer = viewerWallet.toLowerCase();
   const pub = publicClient();
   const svc = serviceClient();
-  const version = await getViewerDnaVersion(pub, viewer);
+  const version = await getViewerDnaVersion(svc, viewer);
 
   // Prior labels → hysteresis (a held relationship survives to its exit band).
-  const prior = await readViewerDnaCache(pub, viewer);
+  const prior = await readViewerDnaCache(svc, viewer);
   const priorLabel = new Map<string, RelationshipLabel>();
   if (prior) {
     for (const group of [prior.twin, prior.tribe, prior.neutral, prior.opp, prior.inverse])
@@ -119,13 +119,13 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
   // Enough for a "closest" read; strong Twin/Tribe labels still need more shared.
   if (viewerFactors.length < CLOSEST_MIN_SHARED) {
     await writeViewerDnaCache(svc, viewer, version, EMPTY);
-    return (await readViewerDnaCache(pub, viewer))!;
+    return (await readViewerDnaCache(svc, viewer))!;
   }
   const viewerMarkets = viewerFactors.map((f) => Number(f.marketId));
 
   // 2. Bounded candidate pool — low floor so thin-overlap people can still be
   //    closest matches; the strong-band thresholds prune below.
-  const candidates = await findDnaCandidates(pub, viewer, { minShared: CLOSEST_MIN_SHARED });
+  const candidates = await findDnaCandidates(svc, viewer, { minShared: CLOSEST_MIN_SHARED });
   const candidateWallets = candidates.map((c) => c.wallet);
 
   // 3. Candidate directional factors (set-based, chunked for `in` size only).
@@ -266,5 +266,5 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
   };
 
   await writeViewerDnaCache(svc, viewer, version, out);
-  return (await readViewerDnaCache(pub, viewer))!;
+  return (await readViewerDnaCache(svc, viewer))!;
 }

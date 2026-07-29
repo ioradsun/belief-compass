@@ -37,12 +37,15 @@ export const finalizeBet = createServerFn({ method: "POST" })
         marketId: z.number().int().nonnegative(),
         side: z.enum(["YES", "NO"]),
         txHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/, "invalid tx hash"),
+        session: z.string().min(16).max(2000),
       })
       .parse(raw),
   )
-  .handler(async ({ data }) =>
-    finalizeHouseBet(data.wallet, data.marketId, data.side, data.txHash),
-  );
+  .handler(async ({ data }) => {
+    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+    const wallet = await assertWalletOwnership(data.wallet, data.session);
+    return finalizeHouseBet(wallet, data.marketId, data.side, data.txHash);
+  });
 
 /** Close the round with a skip; the directional pick stays sealed. */
 export const finalizeSkip = createServerFn({ method: "POST" })
@@ -51,10 +54,15 @@ export const finalizeSkip = createServerFn({ method: "POST" })
       .object({
         wallet: z.string().min(3),
         marketId: z.number().int().nonnegative(),
+        session: z.string().min(16).max(2000),
       })
       .parse(raw),
   )
-  .handler(async ({ data }) => finalizeHouseSkip(data.wallet, data.marketId));
+  .handler(async ({ data }) => {
+    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+    const wallet = await assertWalletOwnership(data.wallet, data.session);
+    return finalizeHouseSkip(wallet, data.marketId);
+  });
 
 /** Answer one free foundation POV to train the House (cold start). */
 export const recordFoundation = createServerFn({ method: "POST" })
@@ -65,9 +73,12 @@ export const recordFoundation = createServerFn({ method: "POST" })
         marketId: z.number().int().nonnegative(),
         key: z.string().min(1),
         action: z.enum(["YES", "NO", "SKIP"]),
+        session: z.string().min(16).max(2000),
       })
       .parse(raw),
   )
-  .handler(async ({ data }) =>
-    recordFoundationAnswer(data.wallet, data.marketId, data.key, data.action),
-  );
+  .handler(async ({ data }) => {
+    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+    const wallet = await assertWalletOwnership(data.wallet, data.session);
+    return recordFoundationAnswer(wallet, data.marketId, data.key, data.action);
+  });
