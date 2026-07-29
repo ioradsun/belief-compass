@@ -15,7 +15,7 @@ import { getNetwork } from "@/lib/dna.functions";
 import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
-import { LiveTape } from "@/components/LiveTape";
+import { MarketLiveStrip } from "@/components/MarketLiveStrip";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
@@ -122,6 +122,7 @@ export function MarketDeck({
   // Per-share price + % change over a trader-chosen window (1H/1D/1W/1M/All).
   // All windows come in one fetch, so switching is instant; live-refreshed.
   const [win, setWin] = useState<WinKey>("24h");
+  const [liveOpen, setLiveOpen] = useState(false);
   const { data: change } = useQuery({
     queryKey: ["market-change", marketId],
     queryFn: () => getMarketChange({ data: { id: marketId } }),
