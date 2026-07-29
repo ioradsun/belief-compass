@@ -253,7 +253,14 @@ function Feed() {
   // it deep-links, survives refresh, and back returns you to the deck.
   const openCreate = () => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
+      search: (prev: {
+        wallet?: string;
+        m?: number;
+        p?: string;
+        dna?: boolean;
+        create?: boolean;
+        terms?: boolean;
+      }) => ({
         ...prev,
         create: true,
         terms: undefined,
@@ -267,7 +274,14 @@ function Feed() {
   };
   const closeCreate = () => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
+      search: (prev: {
+        wallet?: string;
+        m?: number;
+        p?: string;
+        dna?: boolean;
+        create?: boolean;
+        terms?: boolean;
+      }) => ({
         ...prev,
         create: undefined,
         terms: undefined,
@@ -278,7 +292,14 @@ function Feed() {
   // required to read what you're agreeing to. Back returns to the form.
   const openTerms = () => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
+      search: (prev: {
+        wallet?: string;
+        m?: number;
+        p?: string;
+        dna?: boolean;
+        create?: boolean;
+        terms?: boolean;
+      }) => ({
         ...prev,
         terms: true,
       }),
@@ -288,7 +309,14 @@ function Feed() {
   };
   const closeTerms = () => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
+      search: (prev: {
+        wallet?: string;
+        m?: number;
+        p?: string;
+        dna?: boolean;
+        create?: boolean;
+        terms?: boolean;
+      }) => ({
         ...prev,
         terms: undefined,
       }),
@@ -431,7 +459,15 @@ function Feed() {
         }
       />
 
-      <div className="grid min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:264px_minmax(0,1fr)_344px]">
+      <div
+        className={`grid min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden ${
+          // Case File is a courtroom: both cases get equal visual authority. Normal
+          // mode keeps the asymmetric personal/room rails.
+          caseActive
+            ? "lg:[grid-template-columns:320px_minmax(0,1fr)_320px]"
+            : "lg:[grid-template-columns:264px_minmax(0,1fr)_344px]"
+        }`}
+      >
         {/* LEFT — You (Positions | Network) — fixed 264px rail */}
         <aside
           className={`${show("mine")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
@@ -511,7 +547,6 @@ function Feed() {
                   onOpenTerms={openTerms}
                 />
               </Suspense>
-
             ) : selectedPerson ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <Suspense fallback={<DeckSkeleton />}>
