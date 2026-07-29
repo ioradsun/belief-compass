@@ -481,11 +481,13 @@ export function CreateMarket({
             }`)}
       </button>
       <p className="mt-2 text-center text-[11px] text-[var(--text-muted)]">
-        {DISCLAIMERS.notPov}{" "}
+        Market and uploaded media live on conviction.company (not POV.co). Trades are public
+        on-chain.{" "}
         <a href="/terms" target="_blank" rel="noreferrer" className="underline">
           Terms
         </a>
       </p>
+
     </div>
   );
 }
