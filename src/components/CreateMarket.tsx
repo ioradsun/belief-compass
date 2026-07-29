@@ -218,7 +218,8 @@ export function CreateMarket({
 
   return (
     <div
-      className="min-h-0 flex-1 overflow-y-auto pb-8"
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-6"
+
       onPaste={(e) => {
         if (type !== "media") return;
         const f = e.clipboardData.files?.[0];
