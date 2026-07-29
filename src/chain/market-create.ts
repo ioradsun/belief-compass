@@ -193,8 +193,9 @@ export function useCreateMarket() {
       setError(null);
       setPhase("checking");
       try {
-        const [minSeed, whitelisted, existing, balance] = await Promise.all([
+        const [minSeed, feeBps, whitelisted, existing, balance] = await Promise.all([
           client.readContract({ ...CONTRACT, functionName: "minSeedEth" }) as Promise<bigint>,
+          client.readContract({ ...CONTRACT, functionName: "feeBps" }) as Promise<bigint>,
           client.readContract({
             ...CONTRACT,
             functionName: "whitelistedCurves",
@@ -209,9 +210,12 @@ export function useCreateMarket() {
         ]);
         if (!whitelisted) throw new Error("That bonding curve isn't whitelisted on the contract.");
         if (existing !== 0n) throw new Error("That question ID is already taken on-chain.");
-        if (seedWei < minSeed) {
-          throw new Error(`Seed must be at least ${Number(minSeed) / 1e18} ETH.`);
+        // The fee comes off the top before the contract compares to minSeedEth.
+        const requiredWei = grossSeedWei(minSeed, Number(feeBps));
+        if (seedWei < requiredWei) {
+          throw new Error(`Seed must be at least ${Number(requiredWei) / 1e18} ETH.`);
         }
+
         if (balance < seedWei) throw new Error("Insufficient balance for this seed.");
 
         // Unaudited contract: never send without a successful simulation.
