@@ -1072,6 +1072,35 @@ export type Database = {
         }
         Returns: Json
       }
+      latest_trade_activity: {
+        Args: { p_wallets: string[] }
+        Returns: {
+          action: string
+          market_id: string
+          occurred_at: string
+          side: string
+          wallet: string
+        }[]
+      }
+      latest_trades_per_market: {
+        Args: { p_ids: string[]; p_per: number }
+        Returns: {
+          action: string
+          amount_eth: number
+          block_number: number
+          chain_id: number
+          kind: string
+          log_index: number
+          market_id: string
+          occurred_at: string
+          price: number
+          shares: number
+          side: string
+          source: string
+          source_key: string
+          wallet: string
+        }[]
+      }
       mark_positions_dirty: {
         Args: { p_pairs: Json; p_reason: string }
         Returns: number
