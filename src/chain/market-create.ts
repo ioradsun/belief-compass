@@ -39,7 +39,13 @@ export const YES_AGENT = "79a5cb85-824d-4c51-a9de-ed8276cfe33a";
 export const NO_AGENT = "1f6f0306-6db1-44e1-82dc-768783090c93";
 
 export interface CreateEconomics {
-  /** Minimum seed the contract accepts, in wei. */
+  /**
+   * Smallest msg.value the contract will actually accept, in wei.
+   *
+   * The contract takes the trade fee off the top and compares what's LEFT to
+   * minSeedEth(), so sending exactly minSeedEth() reverts with
+   * "Insufficient ETH for min seed". This is the grossed-up figure.
+   */
   minSeedWei: bigint | null;
   /** Trade fee in bps (contract-wide). */
   feeBps: number | null;
@@ -47,6 +53,16 @@ export interface CreateEconomics {
   creatorFeeBps: number | null;
   isLoading: boolean;
 }
+
+/** Gross up a net-of-fee minimum so the post-fee remainder still clears it. */
+export function grossSeedWei(netMinWei: bigint, feeBps: number | null): bigint {
+  if (feeBps == null || feeBps <= 0 || feeBps >= 10_000) return netMinWei;
+  const denom = BigInt(10_000 - feeBps);
+  // Ceiling division, then one wei of headroom for the contract's own rounding.
+  return (netMinWei * 10_000n + denom - 1n) / denom + 1n;
+}
+
+
 
 /** Live economics: minimum seed + the creator's real cut. Never hardcoded. */
 export function useCreateEconomics(): CreateEconomics {
@@ -68,7 +84,9 @@ export function useCreateEconomics(): CreateEconomics {
       ? (feeBps * Number(share.data as bigint)) / Number(denom.data as bigint)
       : null;
   return {
-    minSeedWei: (min.data as bigint | undefined) ?? null,
+    minSeedWei:
+      min.data != null ? grossSeedWei(min.data as bigint, feeBps) : null,
+
     feeBps,
     creatorFeeBps,
     isLoading: min.isLoading || fee.isLoading || share.isLoading || denom.isLoading,
@@ -175,8 +193,9 @@ export function useCreateMarket() {
       setError(null);
       setPhase("checking");
       try {
-        const [minSeed, whitelisted, existing, balance] = await Promise.all([
+        const [minSeed, feeBps, whitelisted, existing, balance] = await Promise.all([
           client.readContract({ ...CONTRACT, functionName: "minSeedEth" }) as Promise<bigint>,
+          client.readContract({ ...CONTRACT, functionName: "feeBps" }) as Promise<bigint>,
           client.readContract({
             ...CONTRACT,
             functionName: "whitelistedCurves",
@@ -191,9 +210,12 @@ export function useCreateMarket() {
         ]);
         if (!whitelisted) throw new Error("That bonding curve isn't whitelisted on the contract.");
         if (existing !== 0n) throw new Error("That question ID is already taken on-chain.");
-        if (seedWei < minSeed) {
-          throw new Error(`Seed must be at least ${Number(minSeed) / 1e18} ETH.`);
+        // The fee comes off the top before the contract compares to minSeedEth.
+        const requiredWei = grossSeedWei(minSeed, Number(feeBps));
+        if (seedWei < requiredWei) {
+          throw new Error(`Seed must be at least ${Number(requiredWei) / 1e18} ETH.`);
         }
+
         if (balance < seedWei) throw new Error("Insufficient balance for this seed.");
 
         // Unaudited contract: never send without a successful simulation.
