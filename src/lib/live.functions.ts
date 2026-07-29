@@ -17,7 +17,13 @@ import { composeLiveStory, type LiveStoryInput } from "@/domain/story";
 
 type NetLabel = "twin" | "tribe" | "opp" | "inverse";
 
-const LIVE_KINDS = ["trade", "market_created", "position_changed_side", "believer_milestone"];
+const LIVE_KINDS = [
+  "trade",
+  "market_created",
+  "position_changed_side",
+  "believer_milestone",
+  "tribe_doubled",
+];
 
 const input = z
   .object({
@@ -154,7 +160,12 @@ export const listLiveEvents = createServerFn({ method: "GET" })
 
     for (const r of live) {
       // System rows already carry their final factual copy (no actor to name).
-      if (r.kind === "market_created" || r.kind === "believer_milestone") continue;
+      if (
+        r.kind === "market_created" ||
+        r.kind === "believer_milestone" ||
+        r.kind === "tribe_doubled"
+      )
+        continue;
       const market = momentumById.get(Number(r.marketId)) ?? null;
       const action = (r.payload as { action?: "BUY" | "SELL" }).action ?? null;
       const w = r.wallet?.toLowerCase();

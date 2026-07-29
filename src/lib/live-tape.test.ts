@@ -150,4 +150,22 @@ describe("factual copy only", () => {
     });
     expect(text).toBe("YES just passed 500 believers");
   });
+  it("liveRowText renders a tribe doubling", () => {
+    const text = liveRowText({
+      id: "tribe_doubled:1:NO:2026-01-01",
+      kind: "tribe_doubled",
+      marketId: "1",
+      marketTitle: "m",
+      occurredAt: "t",
+      startedAt: "t",
+      side: "NO",
+      walletCount: null,
+      tradeCount: null,
+      amountEth: null,
+      amountUsd: null,
+      wallet: null,
+      payload: { count: 40, gained: 22 },
+    });
+    expect(text).toBe("The NO tribe doubled today");
+  });
 });
