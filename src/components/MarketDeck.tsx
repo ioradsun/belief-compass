@@ -379,7 +379,7 @@ export function MarketDeck({
             </span>
             <WindowSelector win={win} onWin={setWin} />
           </div>
-          <ConvictionMedia onchainId={Number(row.onchain_id)} title={String(row.title ?? "")} />
+          <ConvictionMedia onchainId={Number(row.onchain_id)} title={String((rr.title as string | null) ?? "Market media")} />
 
           <div className="grid min-h-0 grid-cols-2 gap-2">
             <SideCard
