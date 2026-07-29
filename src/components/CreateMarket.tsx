@@ -218,7 +218,8 @@ export function CreateMarket({
 
   return (
     <div
-      className="min-h-0 flex-1 overflow-y-auto pb-8"
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-6"
+
       onPaste={(e) => {
         if (type !== "media") return;
         const f = e.clipboardData.files?.[0];
@@ -485,7 +486,7 @@ export function CreateMarket({
             }`)}
       </button>
 
-      <p className="mt-2 text-center text-[11px] text-[var(--text-muted)]">
+      <p className="mt-auto pt-6 text-center text-[11px] text-[var(--text-muted)]">
         Market{type === "media" ? " and uploaded media" : ""} live
         {type === "media" ? "" : "s"} on conviction.company (not POV.co). Trades are public
         on-chain.{" "}
