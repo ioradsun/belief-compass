@@ -9,6 +9,7 @@
  *     recompute a prediction after the fact.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { decodeFunctionData } from "viem";
 import { serviceClient } from "@/lib/supabase-clients";
 import { readViewerDnaCache } from "@/lib/dna/viewer-dna-cache.server";
 import {
@@ -373,6 +374,46 @@ export async function loadHouseRead(
   };
 }
 
+
+/**
+ * Prove the reveal was paid for: the tx must exist on Base, have succeeded, be
+ * addressed to the pinned belief-market proxy, and decode to `buy(marketId, yes, …)`
+ * for exactly this market and side. Anything else refuses the reveal.
+ */
+async function verifyBetTransaction(
+  marketId: number,
+  side: BeliefAction,
+  txHash: string,
+): Promise<void> {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new Error("That transaction isn't valid.");
+  const [{ getBaseClient }, { PROXY_ADDRESS }, { TRADE_ABI }] = await Promise.all([
+    import("@/chain/client"),
+    import("@/chain/decoder"),
+    import("@/lib/chain-trade"),
+  ]);
+  const client = getBaseClient();
+  const hash = txHash as `0x${string}`;
+
+  const receipt = await client.getTransactionReceipt({ hash }).catch(() => null);
+  if (!receipt || receipt.status !== "success")
+    throw new Error("That transaction hasn't confirmed on Base yet.");
+
+  const tx = await client.getTransaction({ hash }).catch(() => null);
+  if (!tx?.to || tx.to.toLowerCase() !== PROXY_ADDRESS.toLowerCase())
+    throw new Error("That transaction isn't a belief-market trade.");
+
+  let decoded: { functionName: string; args?: readonly unknown[] };
+  try {
+    decoded = decodeFunctionData({ abi: TRADE_ABI, data: tx.input });
+  } catch {
+    throw new Error("That transaction isn't a belief-market buy.");
+  }
+  if (decoded.functionName !== "buy") throw new Error("Only a buy reveals the House pick.");
+  const args = (decoded.args ?? []) as [bigint, boolean, bigint];
+  if (Number(args[0]) !== marketId) throw new Error("That buy was on a different market.");
+  if ((args[1] ? "YES" : "NO") !== side) throw new Error("That buy was on the other side.");
+}
+
 /**
  * Finalize the round with a bet and reveal the House's pick — the only path that
  * unlocks the predicted side. Idempotent: one finalize per prediction and one per
@@ -390,11 +431,11 @@ export async function finalizeHouseBet(
   // Lock the prediction first (created before the bet is recorded).
   await loadHouseRead(wallet, marketId);
 
-  // The client fires this only after its own wallet has CONFIRMED the buy
-  // (useWaitForTransactionReceipt), so we reveal instantly off that confirmation
-  // rather than re-verifying on-chain server-side — that second round-trip was
-  // slow and broke for smart wallets whose tx sender isn't the buyer. The tx hash
-  // is still stored (and uniquely indexed) so one confirmed tx reveals once.
+  // The pick only unlocks against a REAL, mined buy on this market. We verify the
+  // transaction on Base server-side (receipt succeeded, it touched the pinned
+  // belief-market proxy, and it decodes to a buy of this market on this side)
+  // before revealing anything. The hash is uniquely indexed so one tx reveals once.
+  await verifyBetTransaction(marketId, side, txHash);
   const { data: existing } = await sb
     .from("house_predictions")
     .select("predicted_action, actual_action")

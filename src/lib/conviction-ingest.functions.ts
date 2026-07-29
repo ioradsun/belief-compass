@@ -80,7 +80,7 @@ export const ensureConviction = createServerFn({ method: "GET" })
         /* best-effort enqueue; the on-demand path still recomputes when needed */
       }
       // People = the viewer's bounded DNA cache already holds relationships.
-      const { data: cache } = await sb
+      const { data: cache } = await svc
         .from("viewer_dna_cache")
         .select("closest_matches, tribe_matches, twin_matches")
         .eq("viewer_wallet", viewer)
