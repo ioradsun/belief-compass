@@ -9,7 +9,7 @@
  * The contract is verified but NOT audited — every send is simulated first.
  */
 import { useCallback, useState } from "react";
-import { decodeEventLog, type TransactionReceipt } from "viem";
+import { decodeEventLog, type Abi, type TransactionReceipt } from "viem";
 import {
   useAccount,
   useBalance,
@@ -20,7 +20,7 @@ import {
 import abi from "./abi.json" with { type: "json" };
 import { PROXY_ADDRESS, CHAIN_ID } from "./decoder";
 
-const ABI = abi as unknown as readonly Record<string, unknown>[];
+const ABI = abi as unknown as Abi;
 const CONTRACT = { address: PROXY_ADDRESS, abi: ABI } as const;
 
 /**
