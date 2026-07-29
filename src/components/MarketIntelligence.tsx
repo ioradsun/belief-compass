@@ -151,15 +151,17 @@ export function MarketIntelligence({
               ? `House record ${house.record.correct}–${house.record.miss}`
               : "";
 
-  const tabs: { id: Mode; label: string }[] = [
+  const tabs: { id: Mode; label: string; short: string }[] = [
     {
       id: "house",
       label: calibrating ? `House Read · ${readiness!.remaining} left` : "House Read",
+      short: calibrating ? `House · ${readiness!.remaining}` : "House",
     },
-    { id: "stream", label: "Belief Stream" },
-    { id: "believers", label: "Believers" },
-    { id: "defense", label: "Defense" },
+    { id: "stream", label: "Belief Stream", short: "Stream" },
+    { id: "believers", label: "Believers", short: "Believers" },
+    { id: "defense", label: "Defense", short: "Defense" },
   ];
+
 
   const onTabKey = (e: React.KeyboardEvent) => {
     const i = tabs.findIndex((t) => t.id === mode);
