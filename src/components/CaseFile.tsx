@@ -23,6 +23,9 @@ import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
 type Side = "YES" | "NO";
 
+/** The one investigation section open at a time — SHARED across both columns. */
+export type CaseSection = "people" | "network" | "evidence";
+
 /** Existing relationship labels → the case's language (no new metrics). */
 const REL_LABEL: Record<string, string> = {
   twin: "Twin",
@@ -32,24 +35,61 @@ const REL_LABEL: Record<string, string> = {
   neutral: "Match",
 };
 
-function Section({
+/**
+ * One collapsible investigation section. The open/closed state is OWNED by the
+ * parent (index.tsx) and shared with the opposite column, so YES and NO always
+ * show the same section — you only ever compare like with like. Height animates
+ * via the grid-template-rows 0fr→1fr trick (CSS-only, ~200ms, no measurement).
+ */
+function AccordionSection({
+  id,
   title,
   count,
+  open,
+  onToggle,
   children,
 }: {
+  id: CaseSection;
   title: string;
   count?: number | null;
+  open: boolean;
+  onToggle: (s: CaseSection) => void;
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-1.5">
-      <div className="flex items-baseline justify-between px-0.5">
-        <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          {title}
-        </h3>
+    <section>
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between rounded-[8px] px-0.5 py-1.5 text-left transition-colors hover:bg-[var(--surface-2,var(--border))]"
+      >
+        <span className="flex items-center gap-1.5">
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            className="h-3 w-3 shrink-0 text-[var(--text-muted)] transition-transform duration-200 ease-out motion-reduce:transition-none"
+            style={{ transform: open ? "rotate(90deg)" : "none" }}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+          >
+            <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            {title}
+          </span>
+        </span>
         {count != null && <span className="num text-[10px] text-[var(--text-muted)]">{count}</span>}
+      </button>
+      <div
+        className="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+      >
+        <div className="overflow-hidden">
+          <div className="pt-1.5">{children}</div>
+        </div>
       </div>
-      {children}
     </section>
   );
 }
@@ -66,11 +106,16 @@ export function CaseColumn({
   marketId,
   row,
   viewerWallet,
+  openSection,
+  onToggleSection,
 }: {
   side: Side;
   marketId: number;
   row: MarketRow;
   viewerWallet?: string;
+  /** The section open on BOTH columns (shared parent state); null = all collapsed. */
+  openSection: CaseSection | null;
+  onToggleSection: (s: CaseSection) => void;
 }) {
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
 
@@ -167,19 +212,32 @@ export function CaseColumn({
         </div>
       </div>
 
-      {/* Deeper evidence scrolls below the fixed summary. Same order both sides. */}
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5">
+      {/* Investigation sections — collapsed by default; exactly one open, the SAME
+        one on both columns (parent-owned openSection). People vs People, etc. */}
+      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-0.5">
         {/* People — reuse the deck's own per-side believer list. */}
-        <Section title="People" count={believers.length}>
+        <AccordionSection
+          id="people"
+          title="People"
+          count={believers.length}
+          open={openSection === "people"}
+          onToggle={onToggleSection}
+        >
           {believers.length === 0 ? (
             <Muted>No one on this side yet.</Muted>
           ) : (
             <SideColumn side={side} people={believers} networkWallets={networkWallets} />
           )}
-        </Section>
+        </AccordionSection>
 
         {/* Your Network — existing matches who back this side. */}
-        <Section title="Your Network" count={networkHere.length || null}>
+        <AccordionSection
+          id="network"
+          title="Your Network"
+          count={networkHere.length || null}
+          open={openSection === "network"}
+          onToggle={onToggleSection}
+        >
           {!viewerWallet ? (
             <Muted>Connect a wallet to see who in your network is here.</Muted>
           ) : networkHere.length === 0 ? (
@@ -209,16 +267,22 @@ export function CaseColumn({
               ))}
             </ul>
           )}
-        </Section>
+        </AccordionSection>
 
         {/* Evidence — reuse the deck's own per-side Defense case. */}
-        <Section title="Evidence" count={defense.length || null}>
+        <AccordionSection
+          id="evidence"
+          title="Evidence"
+          count={defense.length || null}
+          open={openSection === "evidence"}
+          onToggle={onToggleSection}
+        >
           {defense.length === 0 ? (
             <Muted>No case made for {side} yet.</Muted>
           ) : (
             <DefenseColumn side={side} opinions={defense} />
           )}
-        </Section>
+        </AccordionSection>
       </div>
     </div>
   );
