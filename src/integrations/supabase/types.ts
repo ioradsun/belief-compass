@@ -478,6 +478,8 @@ export type Database = {
           new_believers_1h: number
           new_believers_24h: number
           new_believers_7d: number
+          new_believers_no_24h: number
+          new_believers_yes_24h: number
           no_capital_usd: number | null
           no_price_usd: number | null
           onchain_id: number
@@ -572,6 +574,8 @@ export type Database = {
           new_believers_1h?: number
           new_believers_24h?: number
           new_believers_7d?: number
+          new_believers_no_24h?: number
+          new_believers_yes_24h?: number
           no_capital_usd?: number | null
           no_price_usd?: number | null
           onchain_id: number
@@ -666,6 +670,8 @@ export type Database = {
           new_believers_1h?: number
           new_believers_24h?: number
           new_believers_7d?: number
+          new_believers_no_24h?: number
+          new_believers_yes_24h?: number
           no_capital_usd?: number | null
           no_price_usd?: number | null
           onchain_id?: number
