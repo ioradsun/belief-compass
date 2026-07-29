@@ -6,6 +6,7 @@
  * NO per-position activity query) and selects the market in the center on click.
  */
 import { useQuery } from "@tanstack/react-query";
+import { listLiveEvents } from "@/lib/live.functions";
 import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
 import { type MarketRow } from "@/components/MarketCard";
 
@@ -180,6 +181,22 @@ export function MyConvictions({
   built.sort((a, b) => b.value - a.value);
   const positions = built.slice(0, 40);
 
+  // Per-position live line: the newest real event on each held market. Falls back
+  // to the global market_state line when a market has had no recent activity.
+  const tapeIds = positions.slice(0, 40).map((p) => p.id);
+  const { data: tape } = useQuery({
+    queryKey: ["positions-tape", [...tapeIds].sort((a, b) => a - b)],
+    queryFn: () => listLiveEvents({ data: { marketIds: tapeIds, limit: 120 } }),
+    enabled: tapeIds.length > 0,
+    refetchInterval: 8_000,
+    placeholderData: (prev) => prev,
+  });
+  const tapeById = new Map<number, string>();
+  for (const r of tape?.rows ?? []) {
+    const id = Number(r.marketId);
+    if (!tapeById.has(id)) tapeById.set(id, r.text);
+  }
+
   const total = built.reduce((s, p) => s + p.value, 0);
   const prev = built.reduce((s, p) => {
     const f = 1 + (p.chg ?? 0) / 100;
@@ -211,7 +228,12 @@ export function MyConvictions({
       ) : (
         <div className="flex flex-col gap-2 pt-4">
           {positions.map((p) => (
-            <PositionCard key={p.id} p={p} winLabel={winLabel} onSelect={onSelect} />
+            <PositionCard
+              key={p.id}
+              p={{ ...p, liveLine: tapeById.get(p.id) ?? p.liveLine }}
+              winLabel={winLabel}
+              onSelect={onSelect}
+            />
           ))}
         </div>
       )}

@@ -15,6 +15,7 @@ import { getNetwork } from "@/lib/dna.functions";
 import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
+import { LiveTape } from "@/components/LiveTape";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
@@ -317,6 +318,30 @@ export function MarketDeck({
           {eventBeat && (
             <div className="mt-1 pl-4 text-[12px] text-[var(--text-muted)]">{eventBeat}</div>
           )}
+        </div>
+
+        {/* Live tape — this market only, newest first. Titles are redundant here. */}
+        <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
+          <div className="mb-1.5 flex items-center gap-2">
+            <span
+              className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
+              style={{ background: "var(--yes)" }}
+              aria-hidden
+            />
+            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+              Live on this market
+            </span>
+          </div>
+          <div className="max-h-[168px] overflow-y-auto">
+            <LiveTape
+              marketIds={[marketId]}
+              limit={20}
+              showTitles={false}
+              skeletonRows={3}
+              emptyText="No trades on this market yet."
+              onSelect={() => {}}
+            />
+          </div>
         </div>
 
         {/* Battlefield */}

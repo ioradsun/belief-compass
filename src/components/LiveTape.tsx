@@ -23,13 +23,27 @@ function ago(iso: string): string {
 export function LiveTape({
   wallet,
   onSelect,
+  marketIds,
+  limit,
+  showTitles = true,
+  emptyText = "No recent activity yet.",
+  skeletonRows = 8,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
+  /** Scope the tape to one market (center deck) or a set (positions). */
+  marketIds?: number[];
+  limit?: number;
+  /** Hide the market title line when the tape already sits under that market. */
+  showTitles?: boolean;
+  emptyText?: string;
+  skeletonRows?: number;
 }) {
+  const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
   const { data, isLoading } = useQuery({
-    queryKey: ["live-tape", wallet ?? null],
-    queryFn: () => listLiveEvents({ data: { wallet } }),
+    queryKey: ["live-tape", wallet ?? null, scopeKey, limit ?? null],
+    queryFn: () =>
+      listLiveEvents({ data: { wallet, marketIds: scopeKey ?? undefined, limit } }),
     // New rows prepend; refetch keeps the tape fresh without new infra.
     refetchInterval: 6_000,
     placeholderData: (prev) => prev,
@@ -41,12 +55,12 @@ export function LiveTape({
     <div className="min-h-0 flex-1">
       {isLoading && rows.length === 0 ? (
         <ul className="space-y-2" aria-hidden>
-          {Array.from({ length: 8 }).map((_, i) => (
+          {Array.from({ length: skeletonRows }).map((_, i) => (
             <li key={i} className="h-8 animate-pulse rounded bg-[var(--border)]/40" />
           ))}
         </ul>
       ) : rows.length === 0 ? (
-        <p className="text-xs text-[var(--text-muted)]">No recent activity yet.</p>
+        <p className="text-xs text-[var(--text-muted)]">{emptyText}</p>
       ) : (
         <ul className="space-y-0.5">
           {rows.map((r) => (
@@ -80,9 +94,11 @@ export function LiveTape({
                   <span className="text-[13px] text-[var(--text-secondary)]">
                     <SideText text={r.text} />
                   </span>
-                  <span className="block truncate text-[11px] text-[var(--text-muted)]">
-                    {r.marketTitle}
-                  </span>
+                  {showTitles && (
+                    <span className="block truncate text-[11px] text-[var(--text-muted)]">
+                      {r.marketTitle}
+                    </span>
+                  )}
                 </span>
               </button>
             </li>
