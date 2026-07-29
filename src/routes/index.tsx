@@ -332,7 +332,16 @@ function Feed() {
         onEnter={enterProduct}
         onCollapse={landing.collapse}
         onExpand={landing.expand}
+        search={
+          <OmniHeader
+            wallet={wallet}
+            onSelectMarket={selectMarket}
+            onSelectPerson={selectPerson}
+            onOpenMenu={() => setMenuOpen(true)}
+          />
+        }
       />
+
       <div className="grid min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:264px_minmax(0,1fr)_344px]">
         {/* LEFT — You (Positions | Network) — fixed 264px rail */}
         <aside
