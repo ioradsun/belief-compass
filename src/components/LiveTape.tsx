@@ -94,9 +94,11 @@ export function LiveTape({
                   <span className="text-[13px] text-[var(--text-secondary)]">
                     <SideText text={r.text} />
                   </span>
-                  <span className="block truncate text-[11px] text-[var(--text-muted)]">
-                    {r.marketTitle}
-                  </span>
+                  {showTitles && (
+                    <span className="block truncate text-[11px] text-[var(--text-muted)]">
+                      {r.marketTitle}
+                    </span>
+                  )}
                 </span>
               </button>
             </li>
