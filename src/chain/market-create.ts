@@ -84,7 +84,9 @@ export function useCreateEconomics(): CreateEconomics {
       ? (feeBps * Number(share.data as bigint)) / Number(denom.data as bigint)
       : null;
   return {
-    minSeedWei: (min.data as bigint | undefined) ?? null,
+    minSeedWei:
+      min.data != null ? grossSeedWei(min.data as bigint, feeBps) : null,
+
     feeBps,
     creatorFeeBps,
     isLoading: min.isLoading || fee.isLoading || share.isLoading || denom.isLoading,
