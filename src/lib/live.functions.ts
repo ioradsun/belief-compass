@@ -23,6 +23,8 @@ const input = z
   .object({
     limit: z.number().int().min(1).max(300).optional(),
     wallet: z.string().min(3).optional(),
+    /** Scope the tape to specific markets (center deck, position rows). */
+    marketIds: z.array(z.number().int()).min(1).max(60).optional(),
   })
   .optional();
 
