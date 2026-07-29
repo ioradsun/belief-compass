@@ -191,7 +191,7 @@ export function CreateMarket({
 
   const busy = submit.isPending || phase === "checking" || phase === "signing" || phase === "confirming";
   const canSubmit =
-    isConnected && question.trim().length >= 8 && agreed && !belowMin && !overBalance && !busy;
+    isConnected && question.trim().length >= 8 && !belowMin && !overBalance && !busy;
 
   const phaseLabel = useMemo(() => {
     if (phase === "checking") return "Checking the contract…";
@@ -206,109 +206,128 @@ export function CreateMarket({
     chainError ??
     (submit.error instanceof Error ? submit.error.message.split("\n")[0] : null);
 
+  const openPicker = (kind: Exclude<MediaKind, "link">) => {
+    setPickKind(kind);
+    setLinkDraft(null);
+    // Let the accept attribute update before the dialog opens.
+    requestAnimationFrame(() => fileRef.current?.click());
+  };
+
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto pb-8">
+    <div
+      className="min-h-0 flex-1 overflow-y-auto pb-8"
+      onPaste={(e) => {
+        if (type !== "media") return;
+        const f = e.clipboardData.files?.[0];
+        if (f) void pickFile(f);
+      }}
+      onDragOver={(e) => type === "media" && e.preventDefault()}
+      onDrop={(e) => {
+        if (type !== "media") return;
+        e.preventDefault();
+        const f = e.dataTransfer.files?.[0];
+        if (f) void pickFile(f);
+      }}
+    >
       <div className="flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold text-[var(--text)]">New Conviction market</h2>
         <button
           type="button"
           onClick={onCancel}
           className="text-[12px] text-[var(--text-muted)] hover:text-[var(--text)]"
         >
-          Cancel
+          ← Cancel
         </button>
+        <h2 className="text-[15px] font-semibold text-[var(--text)]">Create market</h2>
+        <span className="w-[52px]" />
       </div>
 
-      {/* The claim */}
+      {/* Type */}
       <label className="mt-5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-        The claim
+        Type
       </label>
-      <textarea
-        value={question}
-        maxLength={QUESTION_MAX}
-        rows={2}
-        onChange={(e) => setQuestion(e.target.value)}
-        placeholder="Say the thing people will argue about."
-        className="mt-2 w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[16px] leading-snug text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--border-strong)]"
-      />
-      <div className="mt-1 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
-        <span>{review?.review.category ? `Reads as ${review.review.category}` : "One sharp claim"}</span>
-        <span className="num">
-          {question.length}/{QUESTION_MAX}
-        </span>
+      <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1">
+        {(["text", "media"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => {
+              setType(t);
+              if (t === "text") {
+                setAttachment(null);
+                setLinkDraft(null);
+              }
+            }}
+            className={`rounded-md py-2 text-[13px] font-semibold capitalize transition-colors ${
+              type === t
+                ? "bg-[var(--text)] text-[var(--bg)]"
+                : "text-[var(--text-muted)] hover:text-[var(--text)]"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
       </div>
 
-      {review && !review.review.ok && review.review.reason && (
-        <div className="mt-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-[12px] text-[var(--text-secondary)]">
-          {review.review.reason}
-          {review.review.suggestion && (
+      {/* Media picker — only when media leads */}
+      {type === "media" && !attachment && (
+        <div className="mt-3 rounded-xl border border-dashed border-[var(--border-strong)] p-4 text-center">
+          <div className="text-[12px] text-[var(--text-muted)]">
+            Add media <span className="opacity-70">— drop, paste, or pick</span>
+          </div>
+          <div className="mt-2.5 flex flex-wrap justify-center gap-2">
+            {(
+              [
+                ["image", "Image"],
+                ["video", "Video"],
+                ["audio", "Audio"],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => openPicker(k)}
+                className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-[12px] text-[var(--text)] hover:border-[var(--border-strong)]"
+              >
+                {label}
+              </button>
+            ))}
             <button
               type="button"
-              onClick={() => setQuestion(review.review.suggestion!)}
-              className="mt-2 block text-left text-[12px] text-[var(--text)] underline"
+              onClick={() => setLinkDraft("")}
+              className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-[12px] text-[var(--text)] hover:border-[var(--border-strong)]"
             >
-              Use: “{review.review.suggestion}”
+              Link
             </button>
+          </div>
+          {linkDraft !== null && (
+            <input
+              autoFocus
+              value={linkDraft}
+              onChange={(e) => setLinkDraft(e.target.value)}
+              onBlur={() => {
+                const v = (linkDraft ?? "").trim();
+                if (v.startsWith("https://")) setAttachment({ kind: "link", url: v });
+              }}
+              placeholder="https://…"
+              className="mt-2.5 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[13px] outline-none placeholder:text-[var(--text-muted)]"
+            />
           )}
         </div>
       )}
 
-      {!!review?.duplicates?.length && (
-        <div className="mt-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            Already asked?
-          </div>
-          <ul className="mt-1.5 space-y-1">
-            {review.duplicates.map((d) => (
-              <li key={`${d.questionId ?? d.onchainId}`} className="truncate text-[12px] text-[var(--text-secondary)]">
-                {d.title}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <textarea
-        value={description}
-        maxLength={500}
-        rows={2}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="Context (optional)"
-        className="mt-3 w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[13px] text-[var(--text-secondary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--border-strong)]"
+      <input
+        ref={fileRef}
+        type="file"
+        className="hidden"
+        accept={accept(pickKind)}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void pickFile(f);
+          e.target.value = "";
+        }}
       />
 
-      {/* Media */}
-      <div className="mt-5 flex flex-wrap items-center gap-2">
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          accept={[accept("image"), accept("audio"), accept("video")].join(",")}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void pickFile(f);
-            e.target.value = "";
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="rounded-full border border-[var(--border-strong)] px-3 py-1.5 text-[12px] text-[var(--text)]"
-        >
-          + Image, audio or video
-        </button>
-        <input
-          value={linkDraft}
-          onChange={(e) => setLinkDraft(e.target.value)}
-          onBlur={() => {
-            const v = linkDraft.trim();
-            if (v.startsWith("https://")) setAttachment({ kind: "link", url: v });
-          }}
-          placeholder="or paste an https link"
-          className="min-w-[180px] flex-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-[12px] outline-none placeholder:text-[var(--text-muted)]"
-        />
-      </div>
-      {attachment && (
+      {type === "media" && attachment && (
         <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
           <div className="flex items-center justify-between">
             <span className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
@@ -341,8 +360,62 @@ export function CreateMarket({
         </div>
       )}
 
-      {/* Your side + seed */}
-      <div className="mt-6 grid grid-cols-2 gap-2">
+      {/* Question */}
+      <label className="mt-5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        Question
+      </label>
+      <textarea
+        value={question}
+        maxLength={QUESTION_MAX}
+        rows={2}
+        onChange={(e) => setQuestion(e.target.value)}
+        placeholder="Must be answerable with yes or no"
+        className="mt-2 w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[16px] leading-snug text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--border-strong)]"
+      />
+      <div className="mt-1.5 flex items-center justify-between text-[11.5px]">
+        <span className="flex items-center gap-1.5">
+          {review?.review.ok && <span className="text-[var(--yes)]">✓ AI-checked</span>}
+          {review?.review.suggestion && (
+            <>
+              {review.review.ok && <span className="text-[var(--text-muted)]">·</span>}
+              <button
+                type="button"
+                onClick={() => setQuestion(review.review.suggestion!)}
+                className="text-[var(--text)] underline"
+              >
+                Polish
+              </button>
+            </>
+          )}
+          {review && !review.review.ok && !review.review.suggestion && review.review.reason && (
+            <span className="text-[var(--text-muted)]">{review.review.reason}</span>
+          )}
+        </span>
+        <span className="num text-[var(--text-muted)]">
+          {question.length}/{QUESTION_MAX}
+        </span>
+      </div>
+
+      {!!review?.duplicates?.length && (
+        <div className="mt-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            Already asked?
+          </div>
+          <ul className="mt-1.5 space-y-1">
+            {review.duplicates.map((d) => (
+              <li key={`${d.questionId ?? d.onchainId}`} className="truncate text-[12px] text-[var(--text-secondary)]">
+                {d.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Your side */}
+      <label className="mt-5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        Your side
+      </label>
+      <div className="mt-2 grid grid-cols-2 gap-2">
         {(["YES", "NO"] as const).map((s) => (
           <button
             key={s}
@@ -356,22 +429,14 @@ export function CreateMarket({
                 : "border-[var(--border)] text-[var(--text-muted)]"
             }`}
           >
-            {s}
+            {s === "YES" ? "Yes" : "No"}
           </button>
         ))}
       </div>
 
-      <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
-        <div className="flex items-center justify-between text-[12px] text-[var(--text-muted)]">
-          <span>Seed</span>
-          <span className="num">
-            {balance.wei != null && ethUsd > 0
-              ? `Avail ${fmtUsd((Number(balance.wei) / 1e18) * ethUsd)}`
-              : "Avail —"}
-          </span>
-        </div>
-        <div className="mt-2 flex items-center gap-2">
-          <span className="text-[18px] text-[var(--text-muted)]">$</span>
+      <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[16px] text-[var(--text-muted)]">$</span>
           <input
             inputMode="decimal"
             value={amount ? String(amount) : ""}
@@ -379,43 +444,22 @@ export function CreateMarket({
               const v = e.target.value.replace(/[^0-9.]/g, "");
               setAmount(v ? Math.round(Number(v) * 100) / 100 : 0);
             }}
-            className="w-full bg-transparent text-[22px] font-semibold text-[var(--text)] outline-none num"
+            className="num w-full bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
             placeholder="0"
           />
           <span className="num shrink-0 text-[12px] text-[var(--text-muted)]">
-            {(Number(seedWei) / 1e18).toFixed(4)} ETH
+            ≈ {(Number(seedWei) / 1e18).toFixed(4)} ETH
           </span>
         </div>
-        <div className="mt-2 space-y-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
-          {minUsd != null && (
-            <div>
-              Contract minimum {minSeedEth} ETH{ethUsd > 0 ? ` (≈ ${fmtUsd(minUsd)})` : ""}. Your seed
-              buys your opening {side} position.
-            </div>
-          )}
-          {econ.creatorFeeBps != null && (
-            <div>
-              You earn {(econ.creatorFeeBps / 100).toFixed(2)}% of every trade in this market, forever.
-            </div>
-          )}
-        </div>
       </div>
-
-      {/* Risk */}
-      <label className="mt-5 flex cursor-pointer items-start gap-2.5">
-        <input
-          type="checkbox"
-          checked={agreed}
-          onChange={(e) => setAgreed(e.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--text)]"
-        />
-        <span className="text-[11.5px] leading-relaxed text-[var(--text-muted)]">
-          {DISCLAIMERS.financial} {DISCLAIMERS.ugc}{" "}
-          <a href="/terms" target="_blank" rel="noreferrer" className="underline">
-            Terms &amp; risk
-          </a>
+      <div className="mt-1.5 flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+        <span>{minUsd != null ? `Min ${fmtUsd(minUsd)}` : "\u00a0"}</span>
+        <span className="num">
+          {balance.wei != null && ethUsd > 0
+            ? `Avail ${fmtUsd((Number(balance.wei) / 1e18) * ethUsd)}`
+            : "Avail —"}
         </span>
-      </label>
+      </div>
 
       {belowMin && amount > 0 && (
         <p className="mt-2 text-[12px] text-[var(--no)]">Seed is below the contract minimum.</p>
@@ -431,10 +475,16 @@ export function CreateMarket({
       >
         {!isConnected
           ? "Connect wallet"
-          : (phaseLabel ?? `Create market · ${side} · ${fmtUsd(amount)}`)}
+          : (phaseLabel ??
+            `Create & back ${side === "YES" ? "yes" : "no"}${
+              econ.creatorFeeBps != null ? ` · earn ${(econ.creatorFeeBps / 100).toFixed(2)}%` : ""
+            }`)}
       </button>
       <p className="mt-2 text-center text-[11px] text-[var(--text-muted)]">
-        {DISCLAIMERS.notPov}
+        {DISCLAIMERS.notPov}{" "}
+        <a href="/terms" target="_blank" rel="noreferrer" className="underline">
+          Terms
+        </a>
       </p>
     </div>
   );
