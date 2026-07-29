@@ -332,23 +332,32 @@ export function MarketDeck({
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
         {/* Pulse — why this matters now, plus the day's traded activity */}
         <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
+          {/* A label is a label and a sentence is a sentence: never let them
+            compete for the same line. The tag stays on one line (nowrap), the
+            prose gets the full measure below it and wraps like real text. */}
           <div className="flex items-center gap-2">
             <span
               className="h-2 w-2 shrink-0 rounded-full"
               style={{ background: PULSE_TONE[pulse.tone] }}
               aria-hidden
             />
-            <span className="text-[13px] font-semibold text-[var(--text)]">
-              Pulse: {pulse.label}
+            <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+              Pulse
             </span>
-            <span className="min-w-0 truncate text-[12px] text-[var(--text-secondary)]">
-              {pulse.why}
+            <span className="truncate text-[13px] font-semibold text-[var(--text)]">
+              {pulse.label}
             </span>
           </div>
+          <p className="mt-1 pl-4 text-[12px] leading-snug text-[var(--text-secondary)] [overflow-wrap:anywhere]">
+            {pulse.why}
+          </p>
           {eventBeat && (
-            <div className="mt-1 pl-4 text-[12px] text-[var(--text-muted)]">{eventBeat}</div>
+            <p className="mt-0.5 pl-4 text-[12px] leading-snug text-[var(--text-muted)]">
+              {eventBeat}
+            </p>
           )}
         </div>
+
 
 
 
