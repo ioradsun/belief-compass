@@ -221,13 +221,40 @@ function dice(a: Set<string>, b: Set<string>): number {
 }
 
 /**
- * How alike two questions read. Jaccard alone misses "do people cheat more
- * than they admit?" vs "women cheat more than men", so we take the best of
- * token-Dice and character-trigram overlap.
+ * Words that carry question *shape*, not subject matter. "Should political
+ * parties be required to…" and "Should AI tools be required to…" share almost
+ * every one of these, which is exactly how unrelated markets used to surface.
+ */
+const TEMPLATE = new Set([
+  "should","would","could","shall","must","can","may","might","need","needs","required","require",
+  "requires","allowed","allow","allows","banned","ban","bans","let","make","makes","made","get",
+  "gets","going","ever","still","really","actually","just","also","before","after","during","their",
+  "them","they","there","then","its","his","her","our","your","you","we","us","people","person",
+  "everyone","anyone","someone","thing","things","been","being","have","has","had","was","were",
+  "from","into","about","over","under","out","off","not","never","always","other","others","any",
+  "all","some","most","much","many","new","own","one","two","per","via","yes","no",
+]);
+
+/** Subject-matter words only — the part a duplicate must actually share. */
+function contentTokens(text: string): Set<string> {
+  const out = new Set<string>();
+  for (const t of tokens(text)) if (!TEMPLATE.has(t)) out.add(t);
+  return out;
+}
+
+/**
+ * How alike two questions read. Surface overlap (token-Dice, char-trigrams,
+ * Jaccard) catches rewordings, but on its own it rewards shared boilerplate.
+ * We gate it on subject-word overlap: both must be high for the score to be.
  */
 export function suggestionScore(a: string, b: string): number {
-  return Math.max(dice(tokens(a), tokens(b)), dice(trigrams(a), trigrams(b)), similarity(a, b));
+  const subject = dice(contentTokens(a), contentTokens(b));
+  if (subject <= 0) return 0;
+  const surface = Math.max(dice(tokens(a), tokens(b)), dice(trigrams(a), trigrams(b)), similarity(a, b));
+  if (surface <= 0) return 0;
+  return Math.sqrt(surface * subject);
 }
+
 
 export interface SuggestionInput {
   question: string;
