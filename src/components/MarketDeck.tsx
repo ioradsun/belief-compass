@@ -1044,3 +1044,20 @@ function QuoteRow({ k, v }: { k: string; v: string }) {
     </div>
   );
 }
+
+/** Spendable ETH in the connected wallet, shown in USD above "You pay". */
+function AvailRow({ ethUsd }: { ethUsd: number }) {
+  const { address, isConnected } = useAccount();
+  const { data, isLoading } = useBalance({
+    address,
+    chainId: CHAIN_ID,
+    query: { enabled: !!address, refetchInterval: 20_000 },
+  });
+  const eth = data ? Number(data.value) / 1e18 : 0;
+  const v = !isConnected
+    ? "Connect wallet"
+    : isLoading || !data
+      ? "…"
+      : `${fmtUsd(eth * ethUsd)}  ·  ${eth.toFixed(4)} ETH`;
+  return <QuoteRow k="Avail" v={v} />;
+}
