@@ -16,9 +16,13 @@ export type Lens = "all" | "hot" | "early" | "hidden" | "contested" | "convictio
 export type LensOption = { key: Lens; emoji: string; label: string; question: string };
 
 /**
- * The deck's filter. It now doubles as the market's momentum tag: the chip
- * shows the market's own classification when no lens is applied, and the active
- * lens once you pick one. One chip, one place, no duplicated vocabulary.
+ * The deck's filter, expressed as a tag rather than a select.
+ *
+ * "All" is not a label anyone should have to read — it's just the absence of a
+ * filter. So the chip always states the market's own momentum (a fact about
+ * what you're looking at). Tapping it opens the lenses; picking one turns the
+ * chip solid and adds an ✕ to clear. Unfiltered = outline tag, filtered = solid
+ * tag. Two states, no "All" to select.
  */
 export function LensPicker({
   lens,
@@ -34,7 +38,7 @@ export function LensPicker({
   onLens: (l: Lens) => void;
   /** Accent color of the chip (momentum hue). Defaults to the neutral border look. */
   tone?: string;
-  /** Override the chip's text (e.g. the market's momentum label when lens is "all"). */
+  /** The chip's text — the market's momentum label when no lens is applied. */
   label?: string;
   title?: string;
   align?: "left" | "right";
@@ -42,6 +46,7 @@ export function LensPicker({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const active = lenses.find((l) => l.key === lens)!;
+  const filtering = lens !== "all";
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -51,79 +56,126 @@ export function LensPicker({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  const toned = tone
-    ? {
-        color: tone,
-        background: `color-mix(in oklab, ${tone} 13%, transparent)`,
-        border: `1px solid color-mix(in oklab, ${tone} 32%, transparent)`,
-      }
-    : undefined;
+  const hue = tone ?? "var(--text-secondary)";
+  const chipStyle = filtering
+    ? { color: "var(--bg)", background: hue, border: `1px solid ${hue}` }
+    : tone
+      ? {
+          color: hue,
+          background: `color-mix(in oklab, ${hue} 13%, transparent)`,
+          border: `1px solid color-mix(in oklab, ${hue} 32%, transparent)`,
+        }
+      : undefined;
 
   return (
     <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label="Filter markets"
-        title={title}
-        style={toned}
-        className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors ${
-          toned
+      <div
+        style={chipStyle}
+        className={`flex shrink-0 items-center rounded-full text-[11px] font-semibold uppercase tracking-[0.08em] ${
+          chipStyle
             ? ""
-            : "border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--panel)] hover:text-[var(--text)]"
+            : "border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text)]"
         }`}
       >
-        {tone ? (
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone }} aria-hidden />
-        ) : (
-          <span aria-hidden>{active.emoji}</span>
-        )}
-        <span>{label ?? active.label}</span>
-        <svg
-          aria-hidden
-          viewBox="0 0 24 24"
-          className="h-3 w-3 opacity-70"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label={filtering ? `Filtering by ${active.label}` : "Filter markets"}
+          title={filtering ? `Showing ${active.label} markets` : title}
+          className="flex items-center gap-1.5 rounded-full px-2.5 py-1"
         >
-          <path d="m6 9 6 6 6-6" strokeLinecap="round" />
-        </svg>
-      </button>
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ background: filtering ? "currentColor" : hue }}
+            aria-hidden
+          />
+          <span>{filtering ? active.label : (label ?? "Filter")}</span>
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            className="h-3 w-3 opacity-70"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="m6 9 6 6 6-6" strokeLinecap="round" />
+          </svg>
+        </button>
+
+        {filtering && (
+          <button
+            type="button"
+            onClick={() => onLens("all")}
+            aria-label="Clear filter"
+            title="Clear filter"
+            className="-ml-0.5 rounded-full pr-2.5 pl-0.5 opacity-80 hover:opacity-100"
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              className="h-3 w-3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
+              <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+      </div>
+
 
       {open && (
         <div
           role="listbox"
           className={`absolute ${align === "right" ? "right-0" : "left-0"} top-9 z-40 w-72 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl`}
         >
-
-          {lenses.map((l) => (
+          {/* "All" isn't an option you pick — it's the state you return to. */}
+          {lenses
+            .filter((l) => l.key !== "all")
+            .map((l) => (
+              <button
+                key={l.key}
+                type="button"
+                role="option"
+                aria-selected={l.key === lens}
+                onClick={() => {
+                  onLens(l.key === lens ? "all" : l.key);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
+                  l.key === lens ? "bg-[var(--surface)]" : "hover:bg-[var(--surface)]"
+                }`}
+              >
+                <span aria-hidden className="mt-0.5 text-sm">
+                  {l.emoji}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-medium text-[var(--text)]">{l.label}</span>
+                  <span className="block truncate text-[11px] text-[var(--text-muted)]">
+                    {l.question}
+                  </span>
+                </span>
+                {l.key === lens && (
+                  <span className="mt-0.5 text-[11px] text-[var(--text-muted)]">✓</span>
+                )}
+              </button>
+            ))}
+          {lens !== "all" && (
             <button
-              key={l.key}
               type="button"
-              role="option"
-              aria-selected={l.key === lens}
               onClick={() => {
-                onLens(l.key);
+                onLens("all");
                 setOpen(false);
               }}
-              className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors ${
-                l.key === lens ? "bg-[var(--surface)]" : "hover:bg-[var(--surface)]"
-              }`}
+              className="mt-1 w-full rounded-lg border-t border-[var(--border)] px-3 py-2 text-left text-[12px] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text)]"
             >
-              <span aria-hidden className="mt-0.5 text-sm">
-                {l.emoji}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[13px] font-medium text-[var(--text)]">{l.label}</span>
-                <span className="block truncate text-[11px] text-[var(--text-muted)]">
-                  {l.question}
-                </span>
-              </span>
+              Clear filter — show everything
             </button>
-          ))}
+          )}
+
         </div>
       )}
     </div>
