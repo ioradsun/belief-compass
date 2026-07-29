@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
+import { TermsContent } from "@/components/TermsContent";
+
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
 import {
@@ -101,7 +103,7 @@ const pulsesQO = (ids: number[]) =>
 export const Route = createFileRoute("/")({
   validateSearch: (
     search: Record<string, unknown>,
-  ): { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean } => ({
+  ): { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean } => ({
     wallet:
       typeof search.wallet === "string" && search.wallet.length > 3 ? search.wallet : undefined,
     // Universal center selection, shared by every surface so deep links + browser
@@ -110,6 +112,8 @@ export const Route = createFileRoute("/")({
     p: typeof search.p === "string" && search.p.length > 3 ? search.p : undefined,
     dna: search.dna === true || search.dna === "1" ? true : undefined,
     create: search.create === true || search.create === "1" || search.create === 1 ? true : undefined,
+    terms: search.terms === true || search.terms === "1" ? true : undefined,
+
   }),
   head: () => ({
     meta: [
@@ -172,7 +176,9 @@ function Feed() {
     p: selectedPerson,
     dna: dnaOpen,
     create: createOpen,
+    terms: termsOpen,
   } = Route.useSearch();
+
   const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
   // Brand introduction layer. Intentional product interactions (opening a
@@ -184,12 +190,13 @@ function Feed() {
   // the center (mobile: the Belief column). Browser back/forward walks history.
   const selectMarket = (marketId: number) => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
         ...prev,
         m: marketId,
         p: undefined,
         dna: undefined,
         create: undefined,
+        terms: undefined,
       }),
     });
     setTab("belief");
@@ -197,12 +204,13 @@ function Feed() {
   };
   const selectPerson = (personWallet: string) => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
         ...prev,
         p: personWallet,
         m: undefined,
         dna: undefined,
         create: undefined,
+        terms: undefined,
       }),
     });
     setTab("belief");
@@ -210,12 +218,13 @@ function Feed() {
   };
   const openDna = () => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
         ...prev,
         dna: true,
         p: undefined,
         m: undefined,
         create: undefined,
+        terms: undefined,
       }),
     });
     setTab("belief");
@@ -225,9 +234,10 @@ function Feed() {
   // it deep-links, survives refresh, and back returns you to the deck.
   const openCreate = () => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
         ...prev,
         create: true,
+        terms: undefined,
         dna: undefined,
         p: undefined,
         m: undefined,
@@ -238,12 +248,34 @@ function Feed() {
   };
   const closeCreate = () => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
         ...prev,
         create: undefined,
+        terms: undefined,
       }),
     });
   };
+  // Terms read in the center column, so leaving the create form is never
+  // required to read what you're agreeing to. Back returns to the form.
+  const openTerms = () => {
+    navigate({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
+        ...prev,
+        terms: true,
+      }),
+    });
+    setTab("belief");
+    enterProduct();
+  };
+  const closeTerms = () => {
+    navigate({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
+        ...prev,
+        terms: undefined,
+      }),
+    });
+  };
+
   const [win, setWin] = useState<VolumeWindow>("24h");
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -424,14 +456,30 @@ function Feed() {
 
             {/* Center focus: person profile, DNA overview, or the single-market deck.
               The deck owns its own internal scroll so its dock stays pinned. */}
-            {createOpen ? (
+            {termsOpen ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <button
+                  type="button"
+                  onClick={closeTerms}
+                  className="mb-4 flex items-center gap-1.5 text-[13px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+                >
+                  <span aria-hidden>←</span> Back
+                </button>
+                <h1 className="mb-3 text-[24px] font-semibold tracking-[-0.02em] text-[var(--text)]">
+                  Terms &amp; risk
+                </h1>
+                <TermsContent />
+              </div>
+            ) : createOpen ? (
               <Suspense fallback={<DeckSkeleton />}>
                 <CreateMarket
                   ethUsd={data?.ethUsd ?? 0}
                   onCreated={(marketId) => selectMarket(marketId)}
                   onCancel={closeCreate}
+                  onOpenTerms={openTerms}
                 />
               </Suspense>
+
             ) : selectedPerson ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <Suspense fallback={<DeckSkeleton />}>
