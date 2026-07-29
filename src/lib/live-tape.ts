@@ -80,6 +80,10 @@ export function liveRowText(r: Omit<LiveRow, "text">): string {
       const verb = r.payload.action === "SELL" ? "exited" : "entered";
       return `${r.amountUsd ? fmtUsd(r.amountUsd) : ""} ${verb} ${r.side ?? ""}`.trim();
     }
+    case "believer_milestone": {
+      const n = Number(r.payload.threshold ?? 0);
+      return `${r.side ?? ""} just passed ${n.toLocaleString("en-US")} believers`.trim();
+    }
     case "market_created":
       return "New market just opened";
     case "side_shift":
@@ -133,7 +137,6 @@ function collapseRoundTrips(events: LiveEventInput[]): {
   return { kept: events.filter((e) => !drop.has(e.source_key)), roundTrip };
 }
 
-
 const LARGE_TRADE_USD = 1000;
 
 /**
@@ -146,7 +149,6 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
   let i = 0;
   while (i < events.length) {
     const e = events[i];
-
 
     // Non-trade structured events pass through as their own rows (never grouped).
     if (e.kind !== "trade") {
