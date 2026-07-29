@@ -62,7 +62,7 @@ const OPP_FILTERS: { key: OppFilter; emoji: string; label: string; question: str
 ];
 
 const MyWorld = lazy(() => import("@/components/MyWorld").then((m) => ({ default: m.MyWorld })));
-import { OmniHeader } from "@/components/OmniHeader";
+import { OmniHeader, LensPicker } from "@/components/OmniHeader";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { LandingPanel } from "@/components/LandingPanel";
@@ -332,7 +332,16 @@ function Feed() {
         onEnter={enterProduct}
         onCollapse={landing.collapse}
         onExpand={landing.expand}
+        search={
+          <OmniHeader
+            wallet={wallet}
+            onSelectMarket={selectMarket}
+            onSelectPerson={selectPerson}
+            onOpenMenu={() => setMenuOpen(true)}
+          />
+        }
       />
+
       <div className="grid min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:264px_minmax(0,1fr)_344px]">
         {/* LEFT — You (Positions | Network) — fixed 264px rail */}
         <aside
@@ -378,17 +387,11 @@ function Feed() {
           className={`${show("belief")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-8 lg:py-6`}
         >
           <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col">
-            <div className="shrink-0">
-              <OmniHeader
-                lens={lens}
-                lenses={OPP_FILTERS}
-                onLens={setLens}
-                wallet={wallet}
-                onSelectMarket={selectMarket}
-                onSelectPerson={selectPerson}
-                onOpenMenu={() => setMenuOpen(true)}
-              />
+            {/* The lens only re-ranks the deck below, so it stays with the deck. */}
+            <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
+              <LensPicker lens={lens} lenses={OPP_FILTERS} onLens={setLens} />
             </div>
+
 
             {/* Center focus: person profile, DNA overview, or the single-market deck.
               The deck owns its own internal scroll so its dock stays pinned. */}

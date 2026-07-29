@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { BrandMark } from "@/components/BrandMark";
 import type { LandingPanelState } from "@/hooks/useLandingPanelState";
 
@@ -8,19 +9,26 @@ import type { LandingPanelState } from "@/hooks/useLandingPanelState";
  * always mounted — expanding and collapsing only re-scales it and opens/closes
  * the region beneath, so the header is never swapped for a different component.
  * The live product stays mounted and interactive underneath at all times.
+ *
+ * When collapsed it also hosts the global search slot: search spans the whole
+ * catalog, so it belongs in the app frame rather than inside the center column.
  */
 export function LandingPanel({
   state,
   onEnter,
   onCollapse,
   onExpand,
+  search,
 }: {
   state: LandingPanelState;
   onEnter: () => void;
   onCollapse: () => void;
   onExpand: () => void;
+  /** Global search slot, shown only in the collapsed bar. */
+  search?: ReactNode;
 }) {
   const expanded = state === "expanded";
+
 
   return (
     <header
@@ -55,9 +63,19 @@ export function LandingPanel({
               className="shrink-0 text-[var(--text)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
             />
             {!expanded && (
-              <span className="truncate text-[12px] text-[var(--text-secondary)]">
+              <span className="hidden shrink-0 truncate text-[12px] text-[var(--text-secondary)] md:block">
                 Conviction needs company.
               </span>
+            )}
+            {!expanded && search && (
+              <div
+                className="ml-auto flex min-w-0 max-w-[560px] flex-1 items-center"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                role="presentation"
+              >
+                {search}
+              </div>
             )}
             {!expanded && (
               <span className="ml-auto hidden shrink-0 text-[11px] text-[var(--text-muted)] xl:block">
@@ -65,6 +83,7 @@ export function LandingPanel({
               </span>
             )}
           </div>
+
         </div>
 
 
