@@ -23,6 +23,7 @@ import {
 import { getNetwork } from "@/lib/dna.functions";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { BelieversSplit, Defense } from "@/components/MarketEvidence";
+import { LiveTape } from "@/components/LiveTape";
 import { useReadiness } from "@/components/Calibration";
 import { expressBelief, getCalibrationQueue } from "@/lib/beliefs.functions";
 import { type Readiness } from "@/domain/beliefs";
