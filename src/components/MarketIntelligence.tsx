@@ -27,6 +27,8 @@ import { LiveTape } from "@/components/LiveTape";
 import { useReadiness } from "@/components/Calibration";
 import { expressBelief, getCalibrationQueue } from "@/lib/beliefs.functions";
 import { useWalletSession } from "@/hooks/useWalletSession";
+import { useIsMobile } from "@/hooks/use-mobile";
+
 import { type Readiness } from "@/domain/beliefs";
 import { BAND_COPY } from "@/domain/house";
 
@@ -93,6 +95,8 @@ export function MarketIntelligence({
   viewerWallet?: string;
 }) {
   const [mode, setMode] = useState<Mode>("house");
+  const isMobile = useIsMobile();
+
   const connected = useEffectiveWallet();
   const viewer = viewerWallet ?? connected;
   const actions = useHouseFinalize(marketId, viewerWallet);
@@ -211,8 +215,8 @@ export function MarketIntelligence({
                   color: on ? "var(--text)" : "var(--text-muted)",
                 }}
               >
-                <span className="sm:hidden">{t.short}</span>
-                <span className="hidden sm:inline">{t.label}</span>
+                {isMobile ? t.short : t.label}
+
               </button>
 
             );
