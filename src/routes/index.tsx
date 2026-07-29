@@ -101,7 +101,7 @@ const pulsesQO = (ids: number[]) =>
 export const Route = createFileRoute("/")({
   validateSearch: (
     search: Record<string, unknown>,
-  ): { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean } => ({
+  ): { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean } => ({
     wallet:
       typeof search.wallet === "string" && search.wallet.length > 3 ? search.wallet : undefined,
     // Universal center selection, shared by every surface so deep links + browser
@@ -184,7 +184,7 @@ function Feed() {
   // the center (mobile: the Belief column). Browser back/forward walks history.
   const selectMarket = (marketId: number) => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
         ...prev,
         m: marketId,
         p: undefined,
@@ -197,7 +197,7 @@ function Feed() {
   };
   const selectPerson = (personWallet: string) => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
         ...prev,
         p: personWallet,
         m: undefined,
@@ -210,7 +210,7 @@ function Feed() {
   };
   const openDna = () => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
         ...prev,
         dna: true,
         p: undefined,
@@ -225,7 +225,7 @@ function Feed() {
   // it deep-links, survives refresh, and back returns you to the deck.
   const openCreate = () => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
         ...prev,
         create: true,
         dna: undefined,
@@ -238,7 +238,7 @@ function Feed() {
   };
   const closeCreate = () => {
     navigate({
-      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean }) => ({
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean; create?: boolean; terms?: boolean }) => ({
         ...prev,
         create: undefined,
       }),
