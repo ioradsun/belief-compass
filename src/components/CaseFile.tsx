@@ -159,6 +159,9 @@ export function CaseColumn({
   const chg =
     num(side === "YES" ? rr.chg_window_yes : rr.chg_window_no) ??
     num(side === "YES" ? rr.chg_24h_yes : rr.chg_24h_no);
+  // Per-share price belongs HERE (the detailed view), not on the calm center
+  // card — a small factual item, never the headline.
+  const price = num(side === "YES" ? rr.yes_price_usd : rr.no_price_usd);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -206,6 +209,14 @@ export function CaseColumn({
               chg == null ? undefined : chg > 0 ? "var(--yes)" : chg < 0 ? "var(--no)" : undefined
             }
           />
+        </div>
+        {/* Execution detail — the raw per-share price, quietly, for the record. */}
+        <div
+          className="mt-3 flex items-baseline justify-between border-t pt-2 text-[10px] text-[var(--text-muted)]"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <span className="uppercase tracking-[0.1em]">Share price</span>
+          <span className="num">{price != null ? `$${price.toFixed(2)}` : "—"}</span>
         </div>
       </div>
 

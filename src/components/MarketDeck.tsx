@@ -536,6 +536,7 @@ export function MarketDeck({
             proceeds={proceeds}
             quoting={sellQuoting}
             ethUsd={ethUsd}
+            worthUsd={heldSideData?.worth ?? null}
             ready={ready}
             trade={trade}
             onConfirm={onSellConfirm}
@@ -1093,6 +1094,7 @@ function SellPanel({
   proceeds,
   quoting,
   ethUsd,
+  worthUsd,
   ready,
   trade,
   onConfirm,
@@ -1105,12 +1107,16 @@ function SellPanel({
   proceeds: bigint | null;
   quoting: boolean;
   ethUsd: number;
+  /** Current value of the held side (POV) — for the "position remaining" estimate. */
+  worthUsd?: number | null;
   ready: { connected: boolean; onBase: boolean };
   trade: TradeApi;
   onConfirm: () => void;
   onCancel: () => void;
   onDone: () => void;
 }) {
+  // Token counts live under a disclosure — you sell in human percentages.
+  const [showDetails, setShowDetails] = useState(false);
   // Receipt.
   if (trade.isSuccess) {
     return (
@@ -1148,6 +1154,7 @@ function SellPanel({
 
   const busy = trade.isSubmitting || trade.isMining;
   const shares = sharesForPct(held.tokens, pct);
+  const remainingUsd = worthUsd != null ? worthUsd * (1 - pct / 100) : null;
   const confirmLabel = !ready.connected
     ? "Connect wallet"
     : !ready.onBase
@@ -1162,13 +1169,14 @@ function SellPanel({
     >
       <div className="mb-2 flex items-center gap-2 px-1">
         <span className="text-[12px] font-semibold text-[var(--text)]">
-          Sell{" "}
+          Sell your{" "}
           <span style={{ color: held.side === "YES" ? "var(--yes)" : "var(--no)" }}>
             {held.side}
-          </span>
+          </span>{" "}
+          conviction
         </span>
         <span className="ml-auto flex gap-1">
-          {[25, 50, 100].map((p) => (
+          {[25, 50, 75, 100].map((p) => (
             <button
               key={p}
               type="button"
@@ -1186,14 +1194,30 @@ function SellPanel({
         </span>
       </div>
       <div className="mb-2 space-y-1 px-1">
-        <QuoteRow k="Selling" v={`${fmtShares(shares)} shares`} />
+        {/* Human layer: dollars out, and what stays in. */}
         <QuoteRow
-          k="You receive"
+          k="Estimated proceeds"
           v={quoting ? "…" : proceeds != null ? `≈ ${fmtUsd(weiToUsd(proceeds, ethUsd))}` : "—"}
         />
+        {remainingUsd != null && pct < 100 && (
+          <QuoteRow k="Position remaining" v={`≈ ${fmtUsd(remainingUsd)}`} />
+        )}
         {trade.isError && (
           <div className="text-[11px] text-[var(--no)]">
             {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
+          </div>
+        )}
+        {/* Token count under a disclosure — you chose a percentage, not a share qty. */}
+        <button
+          type="button"
+          onClick={() => setShowDetails((v) => !v)}
+          className="pt-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
+        >
+          {showDetails ? "Hide order details" : "Order details"}
+        </button>
+        {showDetails && (
+          <div className="border-t pt-1" style={{ borderColor: "var(--border)" }}>
+            <QuoteRow k="Shares sold" v={`${fmtShares(shares)} of ${fmtShares(held.tokens)}`} />
           </div>
         )}
       </div>
