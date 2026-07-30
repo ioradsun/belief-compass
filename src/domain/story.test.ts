@@ -138,26 +138,26 @@ const liveBase = (o: Partial<LiveStoryInput> = {}): LiveStoryInput => ({
 });
 
 describe("composeLiveStory", () => {
-  it("a buy reads as joining the army, with the stake", () => {
-    expect(composeLiveStory(liveBase()).text).toBe("John joined the YES army for $25.00");
+  it("a buy reads as joining the tribe, with the stake", () => {
+    expect(composeLiveStory(liveBase()).text).toBe("John joined the YES tribe for $25.00");
   });
   it("adds the strongest momentum hook — urgency wins", () => {
     const t = composeLiveStory(
       liveBase({ market: { newBackers1h: 12, believersYes: 40, moneyYesPct: 70 } }),
     ).text;
-    expect(t).toBe("John joined the YES army for $25.00 — YES is heating up, 12 joined this hour");
+    expect(t).toBe("John joined the YES tribe for $25.00 — YES is heating up, 12 joined this hour");
   });
   it("falls back to bandwagon social proof when no urgency", () => {
     const t = composeLiveStory(liveBase({ market: { believersYes: 48 } })).text;
-    expect(t).toBe("John joined the YES army for $25.00 — 48 now hold YES");
+    expect(t).toBe("John joined the YES tribe for $25.00 — 48 now hold YES");
   });
   it("a network member keeps their relationship tag", () => {
     const t = composeLiveStory(liveBase({ actor: { name: "Maya", relationship: "twin" } })).text;
-    expect(t).toBe("Maya (Twin) joined the YES army for $25.00");
+    expect(t).toBe("Maya (Twin) joined the YES tribe for $25.00");
   });
   it("a sell cuts the side; a flip defects", () => {
     expect(composeLiveStory(liveBase({ action: "SELL", side: "NO", amountUsd: 82 })).text).toBe(
-      "John left the NO army for $82.00",
+      "John left the NO tribe for $82.00",
     );
     expect(composeLiveStory(liveBase({ flip: true, side: "YES", action: "BUY" })).text).toBe(
       "John defected to YES for $25.00",
