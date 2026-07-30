@@ -32,7 +32,7 @@ export function WalletProviders({ children }: { children: ReactNode }) {
           walletList: ["coinbase_wallet", "metamask", "rainbow", "wallet_connect", "detected_wallets"],
           walletChainType: "ethereum-only",
         },
-        embeddedWallets: { createOnLogin: "off" },
+        embeddedWallets: { ethereum: { createOnLogin: "off" } },
         defaultChain: base,
         supportedChains: [base],
       }}
@@ -66,7 +66,7 @@ function ConnectBridge() {
 /** Mirror Privy's connected wallet into wagmi so hooks see an account. */
 function ActiveWalletSync() {
   const { wallets } = useWallets();
-  const setActiveWallet = useSetActiveWallet();
+  const { setActiveWallet } = useSetActiveWallet();
   const first = wallets[0];
   useEffect(() => {
     if (first) void setActiveWallet(first).catch(() => null);
