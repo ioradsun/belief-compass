@@ -619,7 +619,7 @@ function Feed() {
 
         {/* RIGHT — The Room — fixed 320px rail */}
         <aside
-          className={`${show("room")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
+          className={`${show("room")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
           style={{ borderLeft: "1px solid var(--border)" }}
         >
           {caseActive && currentRow ? (
@@ -641,7 +641,7 @@ function Feed() {
               {/* Duplicate suggestions sit above the feed while creating; the feed
                 below keeps running and is never replaced. */}
               <DuplicateSuggestions onSelect={selectMarket} />
-              <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              <div className="mb-4 shrink-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 Live
               </div>
               <LiveTape wallet={wallet} onSelect={selectMarket} />
