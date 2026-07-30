@@ -35,6 +35,9 @@ export type MarketRow = {
   people_yes_pct: number | null;
   believers_yes: number | null;
   believers_no: number | null;
+  /** Per-side gross new believers in the last 24h (position_became_directional). */
+  new_believers_yes_24h?: number | null;
+  new_believers_no_24h?: number | null;
   believers_mixed: number | null;
   volume_total_usd: number | null;
   yes_capital_usd?: number | null;
