@@ -389,7 +389,7 @@ export function MarketDeck({
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
+      <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
         {/* Pulse — why this matters now, plus the day's traded activity. Hidden in
           Case File mode: it's market-wide context, so it would only add noise to a
           center that should be dedicated to the decision while investigating. */}

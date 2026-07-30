@@ -272,7 +272,10 @@ export function OmniHeader({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={onOpenMenu}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenMenu();
+          }}
           aria-label="Open menu"
           className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--border)] lg:hidden"
         >
