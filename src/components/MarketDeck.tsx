@@ -333,6 +333,7 @@ export function MarketDeck({
         believers={side === "YES" ? row.believers_yes : row.believers_no}
         faces={holders.filter((b) => b.side === side)}
         shareUrl={shareUrl}
+        investedUsd={amount}
         onNext={() => {
           void bal.refetch();
           onSkip();

@@ -14,7 +14,7 @@
  */
 import { useEffect, useState } from "react";
 import type { Believer } from "@/lib/evidence.functions";
-import type { OrderSide } from "@/domain/order";
+import { fmtUsd, type OrderSide } from "@/domain/order";
 import { tribeWelcome, tribeShareText } from "@/domain/tribe";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
@@ -26,6 +26,7 @@ export function PostPurchase({
   believers,
   faces,
   shareUrl,
+  investedUsd,
   onNext,
 }: {
   side: OrderSide;
@@ -36,6 +37,8 @@ export function PostPurchase({
   faces: Believer[];
   /** Deep link back to this market, so a share invites participation. */
   shareUrl: string;
+  /** Dollars the viewer just put in — exactly the amount they invested. */
+  investedUsd?: number | null;
   onNext: () => void;
 }) {
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
@@ -121,6 +124,17 @@ export function PostPurchase({
                   </span>
                 ))}
               </p>
+              {/* Quiet ownership confirmation — belonging first, then the fact of
+                what you put in. Never shares or a transaction hash. */}
+              {investedUsd != null && investedUsd > 0 && (
+                <p className="num text-[13px] text-[var(--text-muted)]">
+                  You invested {fmtUsd(investedUsd)} into{" "}
+                  <span style={{ color }} className="font-semibold">
+                    {side}
+                  </span>
+                  .
+                </p>
+              )}
             </div>
 
             {/* People — faces if we have them, calm circles otherwise. Communicates
