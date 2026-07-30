@@ -446,6 +446,7 @@ export function MarketDeck({
               chg={yesChg}
               windowLabel={PRICE_WINDOW_LABEL[win]}
               believers={row.believers_yes}
+              believerChange={(rr.new_believers_yes_24h as number | null) ?? null}
               capital={row.yes_capital_usd ?? null}
               signal={yesSignal}
               selected={side === "YES"}
@@ -457,6 +458,7 @@ export function MarketDeck({
               chg={noChg}
               windowLabel={PRICE_WINDOW_LABEL[win]}
               believers={row.believers_no}
+              believerChange={(rr.new_believers_no_24h as number | null) ?? null}
               capital={row.no_capital_usd ?? null}
               signal={noSignal}
               selected={side === "NO"}
@@ -630,6 +632,7 @@ function SideCard({
   chg,
   windowLabel,
   believers,
+  believerChange,
   capital,
   signal,
   selected,
@@ -641,6 +644,8 @@ function SideCard({
   chg: number | null;
   windowLabel: string;
   believers: number | null;
+  /** Gross new believers on this side in the last 24h (always a 24h figure). */
+  believerChange: number | null;
   capital: number | null;
   signal: ConvictionSignal | null;
   selected: boolean;
@@ -680,10 +685,24 @@ function SideCard({
         </div>
         <div className="mt-1 text-[10px] text-[var(--text-muted)]">Price · {windowLabel}</div>
       </div>
-      {/* Human momentum: who is standing on this side. */}
-      <div className="num text-[11px] text-[var(--text-secondary)]">
-        👥 {(believers ?? 0).toLocaleString("en-US")} believers
-        {capital ? <span className="text-[var(--text-muted)]"> · {fmtUsd(capital)}</span> : ""}
+      {/* Human momentum: how many joined this side today (parallel to price
+        momentum above). Always a 24h figure, independent of the price window. */}
+      <div className="num h-4 text-[13px] font-semibold text-[var(--text)]">
+        {believerChange != null && believerChange > 0
+          ? `👥 +${believerChange.toLocaleString("en-US")}`
+          : `👥 ${(believers ?? 0).toLocaleString("en-US")}`}
+      </div>
+      <div className="text-[10px] text-[var(--text-muted)]">
+        {believerChange != null && believerChange > 0 ? "joined · 24h" : "believers"}
+      </div>
+      {/* Total believers + capital as quiet context. */}
+      <div className="num text-[10px] text-[var(--text-muted)]">
+        {believerChange != null && believerChange > 0
+          ? `${(believers ?? 0).toLocaleString("en-US")} believers`
+          : capital
+            ? `${fmtUsd(capital)} backed`
+            : " "}
+        {believerChange != null && believerChange > 0 && capital ? ` · ${fmtUsd(capital)}` : ""}
       </div>
       <ConvictionSlot signal={signal} col={col} />
     </button>

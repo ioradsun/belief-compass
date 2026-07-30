@@ -326,6 +326,7 @@ const MARKET_ROW_SELECT = `
   believers_yes, believers_no, believers_mixed, directional_believers, divergence,
   volume_total_usd, trending_score, chg_1h, chg_24h, chg_24h_yes, chg_24h_no,
   yes_capital_usd, no_capital_usd, new_believers_1h, new_believers_24h,
+  new_believers_yes_24h, new_believers_no_24h,
   unique_wallets_24h, circulation_24h, last_trade_at, velocity_5m,
   live_line, live_line_kind, live_line_window, live_line_occurred_at,
   opportunity_type, opportunity_score, opportunity_reason, opportunity_reason_code,
