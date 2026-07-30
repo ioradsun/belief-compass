@@ -218,11 +218,11 @@ export function composeMarketStory(input: StoryInput): MarketStory {
 // Live-event story — one line per Live-tape row.
 //
 // Turns a single on-chain action into a FOMO-shaped sentence:
-//   {who} {joined / left / defected to} the {SIDE} army for ${amt}
+//   {who} {joined / left / defected to} the {SIDE} tribe for ${amt}
 //   — {the single strongest true momentum hook}
 //
 // Every clause is TRUE (numbers come from the row + market_state). Gamified
-// framing (army / joined / defected / heating up) is allowed; fabricated hype
+// framing (tribe / joined / defected / heating up) is allowed; fabricated hype
 // (whale / smart money / guaranteed / moon / pouring) is not.
 // ============================================================================
 
@@ -312,10 +312,11 @@ export function composeLiveStory(input: LiveStoryInput): { text: string; tone: B
     : input.actor.name;
 
   let verbPhrase: string;
-  // Consistent army metaphor: joined ↔ left, plus defected for a side switch.
+  // Consistent tribe metaphor (matches "Welcome to the YES Tribe", tribe health,
+  // tribe milestones): joined ↔ left, plus defected for a side switch.
   if (input.flip) verbPhrase = `defected to ${side ?? ""}`.trim();
-  else if (input.action === "SELL") verbPhrase = `left the ${side ?? ""} army`.trim();
-  else verbPhrase = `joined the ${side ?? ""} army`.trim();
+  else if (input.action === "SELL") verbPhrase = `left the ${side ?? ""} tribe`.trim();
+  else verbPhrase = `joined the ${side ?? ""} tribe`.trim();
 
   return { text: `${who} ${verbPhrase}${stake}${tail}`.trim(), tone };
 }

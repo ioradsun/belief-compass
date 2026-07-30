@@ -96,10 +96,9 @@ const plural = (n: number, u: string) => `${n} ${u}${n === 1 ? "" : "s"}`;
 /** Factual text for a row — real numbers only, no motive attribution. */
 export function liveRowText(r: Omit<LiveRow, "text">): string {
   switch (r.kind) {
-    case "round_trip": {
-      const amt = r.amountUsd && r.amountUsd > 0 ? ` ${fmtUsd(r.amountUsd)}` : "";
-      return `A believer round-tripped${amt} on ${r.side ?? ""}`.trim();
-    }
+    case "round_trip":
+      // A wash (in and out at the same size) — no amount, it nets to zero.
+      return `A believer backed then exited ${r.side ?? ""}`.trim();
     case "trade_burst": {
       const verb = r.side && r.payload.action === "SELL" ? "reduced" : "backed";
       const who = plural(r.walletCount ?? 1, "believer");

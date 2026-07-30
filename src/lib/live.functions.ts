@@ -3,7 +3,7 @@
  * order (occurred_at DESC, block DESC, log DESC — never ingested_at), excludes
  * reorg-orphaned events (is_canonical), groups bursts via the pure live-tape
  * module, then turns each row into a FOMO-shaped story via composeLiveStory:
- *   "John joined the YES army for $25 — YES is heating up, 12 joined this hour"
+ *   "John joined the YES tribe for $25 — YES is heating up, 12 joined this hour"
  * The actor is named from pov.co (alias fallback); the momentum clause comes from
  * market_state; the relationship tag ("(Twin)") is added when signed in. Multi-
  * wallet bursts read as the crowd. Live answers "what just happened?" — never ranked.
@@ -192,19 +192,9 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         r.face = face;
         if (r.kind === "round_trip") {
           // In and out at the same size — one honest line, not a mirrored pair.
-          const amt =
-            r.amountUsd && r.amountUsd > 0
-              ? ` $${
-                  r.amountUsd >= 1000
-                    ? r.amountUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })
-                    : r.amountUsd.toLocaleString("en-US", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })
-                }`
-              : "";
-
-          r.text = `${face.name} round-tripped${amt} on ${r.side ?? ""}`.trim();
+          // No amount: a wash nets to zero, so a dollar figure would misread as
+          // directional money. "backed then exited" says what happened, plainly.
+          r.text = `${face.name} backed then exited ${r.side ?? ""}`.trim();
           continue;
         }
         r.text = composeLiveStory({
