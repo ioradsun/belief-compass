@@ -647,6 +647,8 @@
 
     "@solana-program/compute-budget": ["@solana-program/compute-budget@0.11.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@solana-program/compute-budget/-/compute-budget-0.11.0.tgz", { "peerDependencies": { "@solana/kit": "^5.0" } }, "sha512-7f1ePqB/eURkTwTOO9TNIdUXZcyrZoX3Uy2hNo7cXMfNhPFWp9AVgIyRNBc2jf15sdUa9gNpW+PfP2iV8AYAaw=="],
 
+    "@solana-program/system": ["@solana-program/system@0.13.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@solana-program/system/-/system-0.13.0.tgz", { "peerDependencies": { "@solana/kit": "^7.0.0" } }, "sha512-Id6QQxCG7ByImXPD5X/c3Ag2kySD+49aJ9waIkfxyUFyokhMQgxYQAx2rKuaygaBlaBQY6VVfBS46pqxZV+99A=="],
+
     "@solana-program/token": ["@solana-program/token@0.9.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@solana-program/token/-/token-0.9.0.tgz", { "peerDependencies": { "@solana/kit": "^5.0" } }, "sha512-vnZxndd4ED4Fc56sw93cWZ2djEeeOFxtaPS8SPf5+a+JZjKA/EnKqzbE1y04FuMhIVrLERQ8uR8H2h72eZzlsA=="],
 
     "@solana-program/token-2022": ["@solana-program/token-2022@0.6.1", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@solana-program/token-2022/-/token-2022-0.6.1.tgz", { "peerDependencies": { "@solana/kit": "^5.0", "@solana/sysvars": "^5.0" } }, "sha512-Ex02cruDMGfBMvZZCrggVR45vdQQSI/unHVpt/7HPt/IwFYB4eTlXtO8otYZyqV/ce5GqZ8S6uwyRf0zy6fdbA=="],
