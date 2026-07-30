@@ -143,7 +143,9 @@ export function WalletConnectButton() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const { address, isConnected } = useAccount();
-  const { logout } = usePrivy();
+  // usePrivy() throws outside a PrivyProvider, so only read it when one exists.
+  const logout = PRIVY_APP_ID ? usePrivyLogout() : () => {};
+
 
   const cls =
     "rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent";
