@@ -135,6 +135,12 @@ function PovOnConnect() {
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
+/** Stable hook identity: the branch below is a module constant, never changes. */
+function usePrivyLogout() {
+  return usePrivy().logout;
+}
+
+
 /**
  * Client-only, dependency-light connect control. Opening the wallet modal goes
  * through the connect bridge so every account surface opens the same picker.
