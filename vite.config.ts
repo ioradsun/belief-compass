@@ -47,13 +47,16 @@ export default {};`;
  * Point `events` at our shim (backed by the real `events` package) instead.
  */
 const EVENTS_SHIM = fileURLToPath(new URL("./src/lib/shims/events.ts", import.meta.url));
+// Vite maps anything starting with `events` to the empty builtin stub in the
+// browser, including the deep path, so resolve the real file ourselves.
+const EVENTS_IMPL = fileURLToPath(new URL("./node_modules/events/events.js", import.meta.url));
 const eventsShimInBrowser = {
   name: "events-shim-in-browser",
   enforce: "pre" as const,
   resolveId(this: { environment?: { name?: string } }, id: string) {
-    if ((id === "events" || id === "node:events") && this.environment?.name === "client") {
-      return EVENTS_SHIM;
-    }
+    if (this.environment?.name !== "client") return null;
+    if (id === "events" || id === "node:events") return EVENTS_SHIM;
+    if (id === "events/events.js") return EVENTS_IMPL;
     return null;
   },
 };
