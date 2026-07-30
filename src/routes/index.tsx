@@ -644,7 +644,9 @@ function Feed() {
               <div className="mb-4 shrink-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 Live
               </div>
-              <LiveTape wallet={wallet} onSelect={selectMarket} />
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <LiveTape wallet={wallet} onSelect={selectMarket} />
+              </div>
             </>
           )}
         </aside>
