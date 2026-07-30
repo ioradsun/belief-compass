@@ -65,6 +65,15 @@ const WINDOWS: { key: WinKey; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
+/** Natural period label for the side cards' "Price · 24h" sublabel. */
+const PRICE_WINDOW_LABEL: Record<WinKey, string> = {
+  "1h": "1h",
+  "24h": "24h",
+  "7d": "7d",
+  "30d": "30d",
+  all: "all",
+};
+
 const MOMENTUM: Record<string, { label: string; hue: string; hint: string }> = {
   hot: { label: "Hot", hue: "#f97316", hint: "Activity is accelerating right now" },
   early: { label: "Early", hue: "#22d3ee", hint: "Real growth, still small and immature" },
@@ -422,9 +431,7 @@ export function MarketDeck({
         <div className="space-y-1.5">
           {/* Says what the numbers ARE, and lets the trader pick the horizon. */}
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-[var(--text-muted)]">
-              Price / share · change over
-            </span>
+            <span className="text-[11px] text-[var(--text-muted)]">Momentum over</span>
             <WindowSelector win={win} onWin={setWin} />
           </div>
           <ConvictionMedia
@@ -437,6 +444,7 @@ export function MarketDeck({
               label="YES"
               price={yesPrice}
               chg={yesChg}
+              windowLabel={PRICE_WINDOW_LABEL[win]}
               believers={row.believers_yes}
               capital={row.yes_capital_usd ?? null}
               signal={yesSignal}
@@ -447,6 +455,7 @@ export function MarketDeck({
               label="NO"
               price={noPrice}
               chg={noChg}
+              windowLabel={PRICE_WINDOW_LABEL[win]}
               believers={row.believers_no}
               capital={row.no_capital_usd ?? null}
               signal={noSignal}
@@ -619,6 +628,7 @@ function SideCard({
   label,
   price,
   chg,
+  windowLabel,
   believers,
   capital,
   signal,
@@ -626,8 +636,10 @@ function SideCard({
   onSelect,
 }: {
   label: OrderSide;
+  /** Per-share price — demoted to a hover title; never the card's lead. */
   price: number | null;
   chg: number | null;
+  windowLabel: string;
   believers: number | null;
   capital: number | null;
   signal: ConvictionSignal | null;
@@ -636,11 +648,22 @@ function SideCard({
 }) {
   const yes = label === "YES";
   const col = yes ? "var(--yes)" : "var(--no)";
+  const hasChg = chg != null && Number.isFinite(chg);
+  // Movement colour follows DIRECTION, not side — a NO price can rise, a YES fall.
+  const chgColor = !hasChg
+    ? "var(--text-muted)"
+    : chg! > 0
+      ? "var(--yes)"
+      : chg! < 0
+        ? "var(--no)"
+        : "var(--text-muted)";
   return (
     <button
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
+      // Per-share price is available on inspection, but never leads the card.
+      title={price == null ? undefined : `Current price $${Number(price).toFixed(2)} / share`}
       className="flex flex-col gap-2 rounded-[14px] p-3 text-left transition-colors"
       style={{
         border: `1.5px solid ${selected ? "var(--border-strong,var(--border))" : "var(--border)"}`,
@@ -650,25 +673,17 @@ function SideCard({
       <div className="text-[11px] font-semibold tracking-wide" style={{ color: col }}>
         {label}
       </div>
-      <div className="flex items-baseline gap-2">
-        <span className="num text-[22px] font-semibold leading-none text-[var(--text)]">
-          {price == null ? "—" : `$${Number(price).toFixed(2)}`}
-        </span>
-        {chg != null && Number.isFinite(chg) ? (
-          <span
-            className="num text-[11px] font-semibold"
-            style={{
-              color: chg > 0 ? "var(--yes)" : chg < 0 ? "var(--no)" : "var(--text-muted)",
-            }}
-          >
-            {chg > 0 ? "▲" : chg < 0 ? "▼" : "•"} {Math.abs(chg).toFixed(1)}%
-          </span>
-        ) : (
-          <span className="num text-[11px] text-[var(--text-muted)]">—</span>
-        )}
+      {/* Capital momentum leads — how the side moved, not the price itself. */}
+      <div>
+        <div className="num text-[20px] font-semibold leading-none" style={{ color: chgColor }}>
+          {hasChg ? `${chg! > 0 ? "▲" : chg! < 0 ? "▼" : "•"} ${Math.abs(chg!).toFixed(1)}%` : "—"}
+        </div>
+        <div className="mt-1 text-[10px] text-[var(--text-muted)]">Price · {windowLabel}</div>
       </div>
-      <div className="num text-[11px] text-[var(--text-muted)]">
-        {believers ?? 0} believers{capital ? ` · ${fmtUsd(capital)}` : ""}
+      {/* Human momentum: who is standing on this side. */}
+      <div className="num text-[11px] text-[var(--text-secondary)]">
+        👥 {(believers ?? 0).toLocaleString("en-US")} believers
+        {capital ? <span className="text-[var(--text-muted)]"> · {fmtUsd(capital)}</span> : ""}
       </div>
       <ConvictionSlot signal={signal} col={col} />
     </button>
@@ -1165,7 +1180,12 @@ function ConvictionMedia({ onchainId, title }: { onchainId: number; title: strin
         />
       )}
       {media.kind === "video" && (
-        <video src={src} controls className="max-h-[240px] w-full" style={{ aspectRatio: "16 / 9" }} />
+        <video
+          src={src}
+          controls
+          className="max-h-[240px] w-full"
+          style={{ aspectRatio: "16 / 9" }}
+        />
       )}
       {media.kind === "audio" && <audio src={src} controls className="w-full" />}
     </div>
