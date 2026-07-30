@@ -203,6 +203,25 @@ function WalletModalHost() {
     setPending(kind);
     setLazyError(null);
     try {
+      if (kind === "coinbase" && isMobileWeb()) {
+        // Mobile web: pair over WalletConnect and hand the URI to the Coinbase app,
+        // so it comes back with a live session instead of just opening.
+        const fn = await coinbaseMobileConnector();
+        const connector = wagmiConfig._internal.connectors.setup(fn);
+        const onMessage = ({ type, data }: { type: string; data?: unknown }) => {
+          if (type === "display_uri" && typeof data === "string") {
+            window.location.href = coinbaseDeepLink(data);
+          }
+        };
+        connector.emitter.on("message", onMessage);
+        try {
+          await connectAsync({ connector, chainId: base.id });
+        } finally {
+          connector.emitter.off("message", onMessage);
+        }
+        setOpen(false);
+        return;
+      }
       const connector = await lazyConnector(kind);
       await connectAsync({ connector, chainId: base.id });
       setOpen(false);
@@ -212,6 +231,7 @@ function WalletModalHost() {
       setPending(null);
     }
   };
+
 
   useEffect(() => {
     const onOpen = () => {
