@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PrivyProvider, usePrivy, useWallets } from "@privy-io/react-auth";
 import { WagmiProvider, useSetActiveWallet } from "@privy-io/wagmi";
-import { useAccount } from "wagmi";
+import { WagmiProvider as PlainWagmiProvider, useAccount } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { base } from "wagmi/chains";
@@ -26,7 +26,7 @@ export function WalletProviders({ children }: { children: ReactNode }) {
   if (!PRIVY_APP_ID) {
     return (
       <QueryClientProvider client={wagmiQueryClient}>
-        <WagmiProvider config={wagmiConfig}>{children}</WagmiProvider>
+        <PlainWagmiProvider config={wagmiConfig}>{children}</PlainWagmiProvider>
       </QueryClientProvider>
     );
   }
