@@ -460,7 +460,7 @@ function Feed() {
   );
 
   return (
-    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)]">
+    <div className="flex h-[100svh] w-full flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)] supports-[height:100dvh]:h-[100dvh]">
       <CalibrationReveal wallet={wallet} />
       <LandingPanel
         state={landing.hydrated ? landing.state : "collapsed"}
@@ -481,10 +481,10 @@ function Feed() {
       {/* One rail width for both sides in every mode — a single source of truth
         (no 264 vs 344 asymmetry). It also means the Case File's YES/NO columns get
         equal visual authority automatically, with no mode-specific grid. */}
-      <div className="grid min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:320px_minmax(0,1fr)_320px]">
+      <div className="grid h-full min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:320px_minmax(0,1fr)_320px]">
         {/* LEFT — You (Positions | Network) — fixed 320px rail */}
         <aside
-          className={`${show("mine")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
+          className={`${show("mine")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
           style={{ borderRight: "1px solid var(--border)" }}
         >
           {caseActive && currentRow ? (
@@ -539,7 +539,7 @@ function Feed() {
         {/* CENTER — Belief. Fluid column, but the reading measure is capped at
           920px and centered so the deck never stretches on wide monitors. */}
         <main
-          className={`${show("belief")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-8 lg:py-6`}
+          className={`${show("belief")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-8 lg:py-6`}
         >
           <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col">
             {/* Center focus: person profile, DNA overview, or the single-market deck.
@@ -619,7 +619,7 @@ function Feed() {
 
         {/* RIGHT — The Room — fixed 320px rail */}
         <aside
-          className={`${show("room")} row-start-1 min-h-0 flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
+          className={`${show("room")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
           style={{ borderLeft: "1px solid var(--border)" }}
         >
           {caseActive && currentRow ? (
@@ -641,10 +641,12 @@ function Feed() {
               {/* Duplicate suggestions sit above the feed while creating; the feed
                 below keeps running and is never replaced. */}
               <DuplicateSuggestions onSelect={selectMarket} />
-              <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              <div className="mb-4 shrink-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 Live
               </div>
-              <LiveTape wallet={wallet} onSelect={selectMarket} />
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <LiveTape wallet={wallet} onSelect={selectMarket} />
+              </div>
             </>
           )}
         </aside>

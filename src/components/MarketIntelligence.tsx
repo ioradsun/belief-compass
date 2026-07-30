@@ -240,7 +240,7 @@ export function MarketIntelligence({
         id={`${tablistId}-panel`}
         aria-labelledby={`${tablistId}-${mode}`}
         tabIndex={-1}
-        className="min-h-[188px] max-h-[260px] overflow-y-auto px-3 pb-3 pt-2"
+        className="min-h-[188px] max-h-[260px] touch-pan-y overflow-y-auto overscroll-contain px-3 pb-3 pt-2 [-webkit-overflow-scrolling:touch]"
       >
         {mode === "house" ? (
           viewer && readiness && !readiness.calibrated && !house?.revealed && !house?.closed ? (
