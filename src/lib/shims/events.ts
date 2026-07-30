@@ -9,26 +9,26 @@
  * file makes both the default and named shapes exist no matter how the module
  * is interop'd.
  */
+// @ts-expect-error — deep path into the `events` package has no type declarations.
 import EE from "events/events.js";
 
-type EventEmitterCtor = typeof EE;
-
-const Emitter: EventEmitterCtor =
-  ((EE as unknown as { EventEmitter?: EventEmitterCtor }).EventEmitter ?? EE) as EventEmitterCtor;
+const mod = EE as unknown as Record<string, unknown>;
+const Emitter = (mod.EventEmitter ?? EE) as unknown as {
+  new (): unknown;
+  EventEmitter?: unknown;
+};
 
 // Node's module is self-referential; keep that shape for consumers that read
 // `events.EventEmitter` off the default export.
-(Emitter as unknown as { EventEmitter: EventEmitterCtor }).EventEmitter = Emitter;
+Emitter.EventEmitter = Emitter;
 
 export const EventEmitter = Emitter;
-export const once = (EE as unknown as { once: unknown }).once;
-export const on = (EE as unknown as { on: unknown }).on;
-export const captureRejectionSymbol = (EE as unknown as { captureRejectionSymbol: unknown })
-  .captureRejectionSymbol;
-export const errorMonitor = (EE as unknown as { errorMonitor: unknown }).errorMonitor;
-export const defaultMaxListeners = (EE as unknown as { defaultMaxListeners: unknown })
-  .defaultMaxListeners;
-export const setMaxListeners = (EE as unknown as { setMaxListeners: unknown }).setMaxListeners;
-export const listenerCount = (EE as unknown as { listenerCount: unknown }).listenerCount;
+export const once = mod.once;
+export const on = mod.on;
+export const captureRejectionSymbol = mod.captureRejectionSymbol;
+export const errorMonitor = mod.errorMonitor;
+export const defaultMaxListeners = mod.defaultMaxListeners;
+export const setMaxListeners = mod.setMaxListeners;
+export const listenerCount = mod.listenerCount;
 
 export default Emitter;
