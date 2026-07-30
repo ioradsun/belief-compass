@@ -337,7 +337,7 @@ function WalletModalHost() {
           {!hasInjectedCoinbase && (
             <LazyWalletButton
               label="Coinbase Wallet"
-              note="Smart Wallet or Coinbase app"
+              note={isMobileWeb() ? "Opens the Coinbase app" : "Smart Wallet or Coinbase app"}
               loading={pending === "coinbase"}
               disabled={busy}
               onClick={() => lazyConnect("coinbase")}
