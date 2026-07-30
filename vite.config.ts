@@ -54,6 +54,7 @@ const eventsShimInBrowser = {
   name: "events-shim-in-browser",
   enforce: "pre" as const,
   resolveId(this: { environment?: { name?: string } }, id: string) {
+    if (/events/.test(id)) console.log("[eventsdbg]", this.environment?.name, JSON.stringify(id));
     if (this.environment?.name !== "client") return null;
     if (id === "events" || id === "node:events") return EVENTS_SHIM;
     if (id === "events/events.js") return EVENTS_IMPL;
