@@ -85,7 +85,6 @@ export function LiveTape({
   return (
     <div
       className="h-full min-h-0 flex-1 touch-pan-y overflow-y-scroll overscroll-contain [-webkit-overflow-scrolling:touch]"
-      style={{ WebkitOverflowScrolling: "touch" }}
     >
       {isLoading && rows.length === 0 ? (
         <ul className="space-y-2" aria-hidden>

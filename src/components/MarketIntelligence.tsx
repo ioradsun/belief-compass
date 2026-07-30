@@ -241,7 +241,6 @@ export function MarketIntelligence({
         aria-labelledby={`${tablistId}-${mode}`}
         tabIndex={-1}
         className="min-h-[188px] max-h-[260px] touch-pan-y overflow-y-auto overscroll-contain px-3 pb-3 pt-2 [-webkit-overflow-scrolling:touch]"
-        style={{ WebkitOverflowScrolling: "touch" }}
       >
         {mode === "house" ? (
           viewer && readiness && !readiness.calibrated && !house?.revealed && !house?.closed ? (
