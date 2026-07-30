@@ -64,7 +64,7 @@
       },
       "devDependencies": {
         "@eslint/js": "^9.32.0",
-        "@lovable.dev/vite-tanstack-config": "^2.7.7",
+        "@lovable.dev/vite-tanstack-config": "2.8.1",
         "@types/node": "^26.1.1",
         "@types/react": "^19.2.0",
         "@types/react-dom": "^19.2.0",
@@ -86,6 +86,7 @@
     },
   },
   "overrides": {
+    "@coinbase/wallet-sdk": "4.3.7",
     "viem": "2.55.8",
   },
   "packages": {
@@ -131,7 +132,7 @@
 
     "@babel/types": ["@babel/types@7.29.0", "", { "dependencies": { "@babel/helper-string-parser": "^7.27.1", "@babel/helper-validator-identifier": "^7.28.5" } }, "sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A=="],
 
-    "@coinbase/wallet-sdk": ["@coinbase/wallet-sdk@4.3.3", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@coinbase/wallet-sdk/-/wallet-sdk-4.3.3.tgz", { "dependencies": { "@noble/hashes": "^1.4.0", "clsx": "^1.2.1", "eventemitter3": "^5.0.1", "preact": "^10.24.2" } }, "sha512-h8gMLQNvP5TIJVXFOyQZaxbi1Mg5alFR4Z2/PEIngdyXZEoQGcVhzyQGuDa3t9zpllxvqfAaKfzDhsfCo+nhSQ=="],
+    "@coinbase/wallet-sdk": ["@coinbase/wallet-sdk@4.3.7", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@coinbase/wallet-sdk/-/wallet-sdk-4.3.7.tgz", { "dependencies": { "@noble/hashes": "^1.4.0", "clsx": "^1.2.1", "eventemitter3": "^5.0.1", "preact": "^10.24.2", "viem": "^2.27.2" } }, "sha512-z6e5XDw6EF06RqkeyEa+qD0dZ2ZbLci99vx3zwDY//XO8X7166tqKJrR2XlQnzVmtcUuJtCd5fCvr9Cu6zzX7w=="],
 
     "@date-fns/tz": ["@date-fns/tz@1.4.1", "", {}, "sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA=="],
 
@@ -259,9 +260,9 @@
 
     "@lovable.dev/vite-plugin-dev-server-bridge": ["@lovable.dev/vite-plugin-dev-server-bridge@1.2.1", "", { "peerDependencies": { "vite": ">=5.0.0 <9.0.0" } }, "sha512-JdADRwpEJA5t0ggXbd96dND23Wsp69Af9lVSV5m7MnMGxJZlPgqAqz7HUKcfJESfI5M5yFZOl9e0x76JMMDOAg=="],
 
-    "@lovable.dev/vite-plugin-hmr-gate": ["@lovable.dev/vite-plugin-hmr-gate@1.1.3", "", { "peerDependencies": { "vite": ">=5.0.0 <9.0.0" } }, "sha512-edEZzJloDj2IO7lf380So7k1SiNeYDbFLqeLzuqsP8J1qSetKWqTBTR2gAfGxBlLXHZrlayb/dU8Y9S9AlqW0Q=="],
+    "@lovable.dev/vite-plugin-hmr-gate": ["@lovable.dev/vite-plugin-hmr-gate@1.2.1", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@lovable.dev/vite-plugin-hmr-gate/-/vite-plugin-hmr-gate-1.2.1.tgz", { "peerDependencies": { "vite": ">=5.0.0 <9.0.0" } }, "sha512-K7Yw2fnKaA5g8JoOqvaSt6EsAGqTi23rzYFO8bGnBtZ/ulMRLMzopfVdR1mm2rly5w1SwdAWpc1rPKpoeufSoQ=="],
 
-    "@lovable.dev/vite-tanstack-config": ["@lovable.dev/vite-tanstack-config@2.7.7", "", { "dependencies": { "@lovable.dev/vite-plugin-dev-server-bridge": "^1.2.1", "@lovable.dev/vite-plugin-hmr-gate": "^1.1.3", "@tanstack/devtools-vite": "^0.8.1", "lightningcss": "^1.30.0" }, "peerDependencies": { "@tailwindcss/vite": ">=4.0.0", "@tanstack/react-start": ">=1.100.0", "@vitejs/plugin-react": ">=4.0.0", "nitro": ">=3.0.260603-beta", "vite": ">=5.0.0 <9.0.0", "vite-tsconfig-paths": ">=6.0.0" }, "optionalPeers": ["nitro"] }, "sha512-J7IXGzGaMfsFiEpNUaG3utmA1d/tXv4a7XPJb9ONlG7xyfq7LjPebJ10J087sou4lRl08ndJkJ/reE5paAJH2w=="],
+    "@lovable.dev/vite-tanstack-config": ["@lovable.dev/vite-tanstack-config@2.8.1", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@lovable.dev/vite-tanstack-config/-/vite-tanstack-config-2.8.1.tgz", { "dependencies": { "@lovable.dev/vite-plugin-dev-server-bridge": "^1.2.1", "@lovable.dev/vite-plugin-hmr-gate": "^1.2.1", "@tanstack/devtools-vite": "^0.8.1", "lightningcss": "^1.30.0" }, "peerDependencies": { "@tailwindcss/vite": ">=4.0.0", "@tanstack/react-start": ">=1.100.0", "@vitejs/plugin-react": ">=4.0.0", "nitro": ">=3.0.260603-beta", "vite": ">=5.0.0 <9.0.0", "vite-tsconfig-paths": ">=6.0.0" }, "optionalPeers": ["nitro"] }, "sha512-d74ZS11eQ+DH6AJtX8H0Nfb8VEvLugN7AJI6aWoB3NzbV3TX21nM5BjjYwa0puO45YwQf4Uhf4Q3AcMWf/59TQ=="],
 
     "@metamask/eth-json-rpc-provider": ["@metamask/eth-json-rpc-provider@1.0.1", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@metamask/eth-json-rpc-provider/-/eth-json-rpc-provider-1.0.1.tgz", { "dependencies": { "@metamask/json-rpc-engine": "^7.0.0", "@metamask/safe-event-emitter": "^3.0.0", "@metamask/utils": "^5.0.1" } }, "sha512-whiUMPlAOrVGmX8aKYVPvlKyG4CpQXiNNyt74vE1xb5sPvmx5oA7B/kOi/JdBvhGQq97U1/AVdXEdk2zkP8qyA=="],
 

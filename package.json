@@ -79,7 +79,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
-    "@lovable.dev/vite-tanstack-config": "^2.7.7",
+    "@lovable.dev/vite-tanstack-config": "2.8.1",
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
@@ -99,9 +99,11 @@
     "vitest": "^4.1.10"
   },
   "overrides": {
-    "viem": "2.55.8"
+    "viem": "2.55.8",
+    "@coinbase/wallet-sdk": "4.3.7"
   },
   "resolutions": {
-    "viem": "2.55.8"
+    "viem": "2.55.8",
+    "@coinbase/wallet-sdk": "4.3.7"
   }
 }
