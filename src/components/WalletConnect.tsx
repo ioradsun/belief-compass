@@ -12,6 +12,13 @@ import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getWalletLink } from "@/lib/wallet-link.functions";
 import { readLocalLink } from "@/lib/wallet-link";
 
+/**
+ * Privy's wagmi provider mounts PrivyWagmiConnector, which calls Privy hooks that
+ * are browser-only and throw during SSR. On the server we use plain wagmi (same
+ * context, renders no extra DOM), and the Privy-aware one in the browser.
+ */
+const Wagmi = typeof document === "undefined" ? PlainWagmiProvider : WagmiProvider;
+
 // Isolated query client for wagmi to avoid interfering with the app's router-level client.
 const wagmiQueryClient = new QueryClient();
 
@@ -53,12 +60,12 @@ export function WalletProviders({ children }: { children: ReactNode }) {
       }}
     >
       <QueryClientProvider client={wagmiQueryClient}>
-        <WagmiProvider config={wagmiConfig}>
+        <Wagmi config={wagmiConfig}>
           {children}
           <ActiveWalletSync />
           <PovOnConnect />
           <ConnectBridge />
-        </WagmiProvider>
+        </Wagmi>
       </QueryClientProvider>
     </PrivyProvider>
   );
