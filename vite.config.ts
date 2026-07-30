@@ -68,10 +68,14 @@ const SOLANA_SYSTEM_SHIM = fileURLToPath(
 const solanaSystemShim = {
   name: "solana-system-shim",
   enforce: "pre" as const,
+  // Match both the bare specifier and Vite's optional-peer-dep placeholder id
+  // (`__vite-optional-peer-dep:@solana-program/system:@privy-io/react-auth`),
+  // which is what Privy's Solana funding path actually resolves to.
   resolveId(id: string) {
-    return id === "@solana-program/system" ? SOLANA_SYSTEM_SHIM : null;
+    return id.includes("@solana-program/system") ? SOLANA_SYSTEM_SHIM : null;
   },
 };
+
 
 export default defineConfig({
   tanstackStart: {
