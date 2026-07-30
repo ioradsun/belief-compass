@@ -21,6 +21,15 @@ const wagmiQueryClient = new QueryClient();
  * `useSignMessage` / `useSendTransaction` call site keeps working unchanged.
  */
 export function WalletProviders({ children }: { children: ReactNode }) {
+  // Until a Privy app id is configured, keep the app fully renderable: wagmi
+  // still provides read-only context, connect surfaces just have nothing to open.
+  if (!PRIVY_APP_ID) {
+    return (
+      <QueryClientProvider client={wagmiQueryClient}>
+        <WagmiProvider config={wagmiConfig}>{children}</WagmiProvider>
+      </QueryClientProvider>
+    );
+  }
   return (
     <PrivyProvider
       appId={PRIVY_APP_ID}
@@ -29,7 +38,13 @@ export function WalletProviders({ children }: { children: ReactNode }) {
         appearance: {
           theme: "dark",
           accentColor: "#5b8cff",
-          walletList: ["coinbase_wallet", "metamask", "rainbow", "wallet_connect", "detected_wallets"],
+          walletList: [
+            "coinbase_wallet",
+            "metamask",
+            "rainbow",
+            "wallet_connect",
+            "detected_wallets",
+          ],
           walletChainType: "ethereum-only",
         },
         embeddedWallets: { ethereum: { createOnLogin: "off" } },
@@ -48,6 +63,7 @@ export function WalletProviders({ children }: { children: ReactNode }) {
     </PrivyProvider>
   );
 }
+
 
 /** Opening the wallet modal from anywhere goes through the connect bridge event. */
 function ConnectBridge() {
