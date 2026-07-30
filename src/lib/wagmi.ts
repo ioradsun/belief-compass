@@ -15,7 +15,8 @@ export const wagmiConfig = createConfig({
 });
 
 /** Privy app id — a public identifier, safe in the client bundle. */
-export const PRIVY_APP_ID = (import.meta.env.VITE_PRIVY_APP_ID as string | undefined) ?? "";
+export const PRIVY_APP_ID =
+  (import.meta.env.VITE_PRIVY_APP_ID as string | undefined) ?? "cms7jy9fm00b70ci4uj19bvb5";
 
 /** True on phone/tablet web browsers. */
 export function isMobileWeb(): boolean {

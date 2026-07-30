@@ -61,6 +61,18 @@ const eventsShimInBrowser = {
   },
 };
 
+/** See src/lib/shims/solana-system.ts — Ethereum-only app, stub Privy's Solana path. */
+const SOLANA_SYSTEM_SHIM = fileURLToPath(
+  new URL("./src/lib/shims/solana-system.ts", import.meta.url),
+);
+const solanaSystemShim = {
+  name: "solana-system-shim",
+  enforce: "pre" as const,
+  resolveId(id: string) {
+    return id === "@solana-program/system" ? SOLANA_SYSTEM_SHIM : null;
+  },
+};
+
 export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
@@ -71,9 +83,10 @@ export default defineConfig({
     define: {
       "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
     },
-    plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer],
+    plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer, solanaSystemShim],
   },
 });
+
 
 
 
