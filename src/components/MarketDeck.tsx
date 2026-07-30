@@ -9,7 +9,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getMarketChange } from "@/lib/markets.functions";
+import { getMarketChange, getPositionSummary } from "@/lib/markets.functions";
+import { positionPnl, type PositionPnl } from "@/domain/position";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { requestConnect } from "@/lib/connect-bridge";
@@ -64,6 +65,13 @@ const WINDOWS: { key: WinKey; label: string }[] = [
   { key: "30d", label: "1M" },
   { key: "all", label: "All" },
 ];
+
+/** Signed dollar/percent for personal gain (loss uses a true minus glyph). */
+const signedUsd = (n: number) => `${n < 0 ? "−" : "+"}${fmtUsd(Math.abs(n))}`;
+const signedPct = (n: number | null) =>
+  n == null || !Number.isFinite(n)
+    ? "—"
+    : `${n < 0 ? "−" : "+"}${Math.abs(n).toFixed(Math.abs(n) > 0 && Math.abs(n) < 10 ? 1 : 0)}%`;
 
 /** Natural period label for the side cards' "Price · 24h" sublabel. */
 const PRICE_WINDOW_LABEL: Record<WinKey, string> = {
@@ -265,6 +273,22 @@ export function MarketDeck({
       : bal.no > 0n
         ? { side: "NO" as const, tokens: bal.no }
         : null;
+
+  // The viewer's honest ownership numbers on THIS market (cost basis + worth).
+  // Off the reducer/POV read model — never inferred from a price percentage.
+  const { data: posSummary } = useQuery({
+    queryKey: ["position-summary", viewerWallet ?? null, marketId],
+    queryFn: () => getPositionSummary({ data: { wallet: viewerWallet as string, marketId } }),
+    enabled: !!viewerWallet,
+    staleTime: 15_000,
+    refetchInterval: 20_000,
+    placeholderData: (prev) => prev,
+  });
+  const heldSideData = held ? posSummary?.[held.side === "YES" ? "yes" : "no"] : null;
+  const heldPnl = positionPnl({
+    invested: heldSideData?.invested,
+    worth: heldSideData?.worth,
+  });
 
   // Sell quote (only while the sell panel is open on a held side).
   const sellShares = held && sellPct != null ? sharesForPct(held.tokens, sellPct) : 0n;
@@ -497,20 +521,7 @@ export function MarketDeck({
         <MarketIntelligence marketId={marketId} viewerWallet={viewerWallet} caseOpen={caseOpen} />
 
         {held && sellPct == null && (
-          <div className="flex items-center gap-2 text-[12px] text-[var(--text-muted)]">
-            <span>
-              You hold <b className="text-[var(--text)]">{held.side}</b> · {fmtShares(held.tokens)}{" "}
-              shares
-            </span>
-            <button
-              type="button"
-              onClick={openSell}
-              className="ml-auto rounded-[10px] px-3 py-1 text-[12px] font-semibold text-[var(--text-secondary)]"
-              style={{ border: "1px solid var(--border)" }}
-            >
-              Sell
-            </button>
-          </div>
+          <PositionSummary side={held.side} pnl={heldPnl} tokens={held.tokens} onSell={openSell} />
         )}
       </div>
 
@@ -710,6 +721,102 @@ function SideCard({
 }
 
 /**
+ * The viewer's ownership on this market, in human terms: what it's worth now and
+ * (when an authoritative cost basis exists) what they put in and their gain. Gain
+ * is only ever worth − invested — never a market percentage. Shares live under a
+ * quiet "Position details" disclosure, not in the everyday view.
+ */
+function PositionSummary({
+  side,
+  pnl,
+  tokens,
+  onSell,
+}: {
+  side: OrderSide;
+  pnl: PositionPnl;
+  tokens: bigint;
+  onSell: () => void;
+}) {
+  const col = side === "YES" ? "var(--yes)" : "var(--no)";
+  const hasBasis = pnl.investedUsd != null && pnl.gainUsd != null;
+  const gainColor =
+    pnl.gainUsd == null
+      ? "var(--text-secondary)"
+      : pnl.gainUsd > 0
+        ? "var(--yes)"
+        : pnl.gainUsd < 0
+          ? "var(--no)"
+          : "var(--text-muted)";
+  const [showDetails, setShowDetails] = useState(false);
+  const worthStr = pnl.worthUsd != null ? fmtUsd(pnl.worthUsd) : "—";
+  return (
+    <div className="rounded-[14px] p-3" style={{ border: "1px solid var(--border)" }}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12px] font-semibold text-[var(--text)]">
+          Your{" "}
+          <span style={{ color: col }} className="font-semibold">
+            {side}
+          </span>{" "}
+          conviction
+        </span>
+        <button
+          type="button"
+          onClick={onSell}
+          className="shrink-0 rounded-[10px] px-3 py-1 text-[12px] font-semibold text-[var(--text-secondary)]"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          Sell
+        </button>
+      </div>
+
+      {hasBasis ? (
+        <>
+          <div className="mt-2 flex items-end gap-6">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+                Invested
+              </div>
+              <div className="num text-[16px] font-semibold text-[var(--text)]">
+                {fmtUsd(pnl.investedUsd!)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+                Worth now
+              </div>
+              <div className="num text-[16px] font-semibold text-[var(--text)]">{worthStr}</div>
+            </div>
+          </div>
+          <div className="num mt-1 text-[12px] font-semibold" style={{ color: gainColor }}>
+            {signedUsd(pnl.gainUsd!)} · {signedPct(pnl.gainPct)}
+          </div>
+        </>
+      ) : (
+        <div className="mt-2">
+          <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+            Worth now
+          </div>
+          <div className="num text-[16px] font-semibold text-[var(--text)]">{worthStr}</div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setShowDetails((v) => !v)}
+        className="mt-2 text-[10px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
+      >
+        {showDetails ? "Hide details" : "Position details"}
+      </button>
+      {showDetails && (
+        <div className="num mt-1 text-[11px] text-[var(--text-muted)]">
+          {fmtShares(tokens)} shares held
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * The conviction line: the single truest thing about who is standing on this
  * side. A trusted face gets a colored ring; the diamond-hands champion shows a
  * 💎 and their hold time; a dead side reserves the row height (so the two cards
@@ -837,6 +944,8 @@ function Dock({
   onConfirm: () => void;
   onDone: () => void;
 }) {
+  // Execution mechanics (shares, avg price) live under a disclosure, off by default.
+  const [showOrderDetails, setShowOrderDetails] = useState(false);
   // Receipt.
   if (trade.isSuccess && side) {
     return (
@@ -915,18 +1024,34 @@ function Dock({
           Back {side} to reveal the House’s pick.
         </div>
         <AvailRow ethUsd={ethUsd} />
-        <QuoteRow
-          k="You pay"
-          v={`${fmtUsd(amount)}  ·  ${(Number(ethWei) / 1e18).toFixed(4)} ETH`}
-        />
-        <QuoteRow k="Shares" v={quoting ? "…" : quote ? fmtShares(quote.tokens) : "—"} />
-        <QuoteRow
-          k="Avg price"
-          v={quote ? `$${avgPriceUsd(ethWei, quote.tokens, ethUsd).toFixed(2)}` : "—"}
-        />
+        {/* Human layer: dollars in, protocol fee. Execution mechanics are demoted. */}
+        <QuoteRow k="You invest" v={fmtUsd(amount)} />
+        {quote && <QuoteRow k="Protocol fee" v={fmtUsd(weiToUsd(quote.fee, ethUsd))} />}
         {trade.isError && (
           <div className="text-[11px] text-[var(--no)]">
             {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
+          </div>
+        )}
+        {/* Advanced execution layer — shares, average fill, network — on demand. */}
+        <button
+          type="button"
+          onClick={() => setShowOrderDetails((v) => !v)}
+          className="pt-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
+        >
+          {showOrderDetails ? "Hide order details" : "Order details"}
+        </button>
+        {showOrderDetails && (
+          <div className="space-y-1 border-t pt-1" style={{ borderColor: "var(--border)" }}>
+            <QuoteRow
+              k="You pay"
+              v={`${fmtUsd(amount)}  ·  ${(Number(ethWei) / 1e18).toFixed(4)} ETH`}
+            />
+            <QuoteRow k="Est. shares" v={quoting ? "…" : quote ? fmtShares(quote.tokens) : "—"} />
+            <QuoteRow
+              k="Avg execution"
+              v={quote ? `$${avgPriceUsd(ethWei, quote.tokens, ethUsd).toFixed(2)}` : "—"}
+            />
+            <QuoteRow k="Network" v="Base" />
           </div>
         )}
       </div>

@@ -413,6 +413,41 @@ export const getMarketRow = createServerFn({ method: "GET" })
     return { row: row ?? null };
   });
 
+export interface PositionSide {
+  /** Remaining cost basis in USD (reducer weighted-average). Null when unknown. */
+  invested: number | null;
+  /** Current value in USD (POV valuation of held tokens). Null when unknown. */
+  worth: number | null;
+}
+
+/**
+ * The viewer's position on ONE market — the honest ownership numbers for the
+ * center deck: remaining cost basis (invested) and current value (worth), per
+ * side. Reads the single wallet_beliefs row; no POV round-trip (the stored value
+ * is POV-maintained). Both null when the viewer holds nothing here.
+ */
+export const getPositionSummary = createServerFn({ method: "GET" })
+  .inputValidator((d: { wallet: string; marketId: number }) =>
+    z.object({ wallet: z.string().min(3), marketId: z.number().int().nonnegative() }).parse(d),
+  )
+  .handler(async ({ data }): Promise<{ yes: PositionSide; no: PositionSide }> => {
+    const empty = { yes: { invested: null, worth: null }, no: { invested: null, worth: null } };
+    const sb = serviceClient();
+    const { data: row } = await sb
+      .from("wallet_beliefs")
+      .select("yes_cost, no_cost, yes_value_usd, no_value_usd")
+      .eq("wallet", data.wallet.toLowerCase())
+      .eq("onchain_id", data.marketId)
+      .maybeSingle();
+    if (!row) return empty;
+    const fin = (v: unknown): number | null =>
+      v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+    return {
+      yes: { invested: fin(row.yes_cost), worth: fin(row.yes_value_usd) },
+      no: { invested: fin(row.no_cost), worth: fin(row.no_value_usd) },
+    };
+  });
+
 export interface MarketChange {
   yesPrice: number | null;
   noPrice: number | null;
