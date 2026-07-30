@@ -99,9 +99,11 @@
     "vitest": "^4.1.10"
   },
   "overrides": {
-    "viem": "2.55.8"
+    "viem": "2.55.8",
+    "@coinbase/wallet-sdk": "4.3.7"
   },
   "resolutions": {
-    "viem": "2.55.8"
+    "viem": "2.55.8",
+    "@coinbase/wallet-sdk": "4.3.7"
   }
 }
