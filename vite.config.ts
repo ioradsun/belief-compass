@@ -39,6 +39,25 @@ export default {};`;
   },
 };
 
+/**
+ * Vite maps the bare `events` builtin to an EMPTY browser-external stub in the
+ * client build, so WalletConnect's `import EE, { EventEmitter } from "events"`
+ * yields `undefined` and mobile Safari dies with
+ * `undefined is not a constructor (evaluating 'new te.EventEmitter')`.
+ * Point `events` at our shim (backed by the real `events` package) instead.
+ */
+const EVENTS_SHIM = fileURLToPath(new URL("./src/lib/shims/events.ts", import.meta.url));
+const eventsShimInBrowser = {
+  name: "events-shim-in-browser",
+  enforce: "pre" as const,
+  resolveId(this: { environment?: { name?: string } }, id: string) {
+    if ((id === "events" || id === "node:events") && this.environment?.name === "client") {
+      return EVENTS_SHIM;
+    }
+    return null;
+  },
+};
+
 export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
@@ -46,17 +65,10 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    resolve: {
-      alias: [
-        // Bare `events` -> our shim, which guarantees a named `EventEmitter`
-        // export in the browser bundle (WalletConnect needs it).
-        { find: /^events$/, replacement: fileURLToPath(new URL("./src/lib/shims/events.ts", import.meta.url)) },
-      ],
-    },
     define: {
       "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
     },
-    plugins: [stubWalletConnectorsOnServer],
+    plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer],
   },
 });
 
