@@ -4,6 +4,7 @@
 //     nitro (build-only using cloudflare as a default target), VITE_* env injection, @ path alias,
 //     React/TanStack dedupe, error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 // Fresh id per build — inlined into the client bundle AND read by the server
@@ -38,6 +39,28 @@ export default {};`;
   },
 };
 
+/**
+ * Vite maps the bare `events` builtin to an EMPTY browser-external stub in the
+ * client build, so WalletConnect's `import EE, { EventEmitter } from "events"`
+ * yields `undefined` and mobile Safari dies with
+ * `undefined is not a constructor (evaluating 'new te.EventEmitter')`.
+ * Point `events` at our shim (backed by the real `events` package) instead.
+ */
+const EVENTS_SHIM = fileURLToPath(new URL("./src/lib/shims/events.ts", import.meta.url));
+// Vite maps anything starting with `events` to the empty builtin stub in the
+// browser, including the deep path, so resolve the real file ourselves.
+const EVENTS_IMPL = fileURLToPath(new URL("./node_modules/events/events.js", import.meta.url));
+const eventsShimInBrowser = {
+  name: "events-shim-in-browser",
+  enforce: "pre" as const,
+  resolveId(this: { environment?: { name?: string } }, id: string) {
+    if (this.environment?.name !== "client") return null;
+    if (id === "events" || id === "node:events") return EVENTS_SHIM;
+    if (id === "events/events.js" || id === "node:events/events.js") return EVENTS_IMPL;
+    return null;
+  },
+};
+
 export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
@@ -48,7 +71,7 @@ export default defineConfig({
     define: {
       "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
     },
-    plugins: [stubWalletConnectorsOnServer],
+    plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer],
   },
 });
 
