@@ -83,7 +83,7 @@ export function LiveTape({
   const rows = useStickyRows(data?.rows);
 
   return (
-    <div className="min-h-0 flex-1">
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
       {isLoading && rows.length === 0 ? (
         <ul className="space-y-2" aria-hidden>
           {Array.from({ length: skeletonRows }).map((_, i) => (
