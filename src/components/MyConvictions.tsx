@@ -9,12 +9,17 @@ import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
 import { type MarketRow } from "@/components/MarketCard";
+import { positionPnl } from "@/domain/position";
 
 type Position = {
   onchain_id: number;
   stance_side: string | null;
   yes_shares: number | null;
   no_shares: number | null;
+  /** Weighted-average REMAINING cost basis (USD) per side — authoritative,
+   *  reducer-maintained, correct after partial sells. The honest "Invested". */
+  yes_cost?: number | null;
+  no_cost?: number | null;
   markets?: { title?: string | null } | null;
   state?: {
     yes_price_usd: number | null;
@@ -72,6 +77,8 @@ function PositionCard({
     side: "YES" | "NO";
     value: number;
     chg: number | null;
+    gainUsd: number | null;
+    gainPct: number | null;
     title: string;
     liveLine: string | null;
     believers: number | null;
@@ -80,6 +87,18 @@ function PositionCard({
   winLabel: string;
   onSelect: (id: number) => void;
 }) {
+  // Movement colour tracks direction (gain vs loss), not the side — a NO position
+  // can rise, a YES position can fall.
+  const gainColor =
+    p.gainUsd == null
+      ? "var(--text-secondary)"
+      : p.gainUsd > 0
+        ? "var(--yes)"
+        : p.gainUsd < 0
+          ? "var(--no)"
+          : "var(--text-muted)";
+  const chgColor =
+    p.chg == null || p.chg === 0 ? "var(--text-muted)" : p.chg > 0 ? "var(--yes)" : "var(--no)";
   return (
     <button
       type="button"
@@ -88,7 +107,9 @@ function PositionCard({
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <div className="line-clamp-2 text-[13px] leading-snug text-[var(--text)]">{p.title}</div>
-      <div className="mt-2 flex items-center gap-2">
+
+      {/* Ownership line: side + what it's worth now, with personal gain to the right. */}
+      <div className="mt-2 flex items-baseline gap-2">
         <span
           className="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide"
           style={{
@@ -98,15 +119,23 @@ function PositionCard({
         >
           {p.side}
         </span>
-        <span className="num text-[12px] text-[var(--text)]">{usd(p.value)}</span>
-        <span className="num text-[11px] text-[var(--text-secondary)]">
-          {signedPct(p.chg)} <span className="text-[var(--text-muted)]">{winLabel}</span>
-        </span>
+        <span className="num text-[15px] font-semibold text-[var(--text)]">{usd(p.value)}</span>
+        {p.gainUsd != null && (
+          <span className="num ml-auto text-[11px] font-semibold" style={{ color: gainColor }}>
+            {signedUsd(p.gainUsd)} · {signedPct(p.gainPct)}
+          </span>
+        )}
       </div>
-      {/* Quiet tribe health for the side held — awareness, never an action. The
-        "+N today" only appears when someone actually joined this side today. */}
+
+      {/* Market side movement — distinct from personal gain (this is the SIDE's
+        price move, not your return). Muted, secondary. */}
+      <div className="num mt-1 text-[11px] text-[var(--text-muted)]">
+        <span style={{ color: chgColor }}>{signedPct(p.chg)}</span> price · {winLabel.toLowerCase()}
+      </div>
+
+      {/* Quiet tribe health for the side held — awareness, never an action. */}
       {p.believers != null && p.believers > 0 ? (
-        <div className="num mt-2 flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+        <div className="num mt-1 flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
           <span>👥 {p.believers.toLocaleString("en-US")} believers</span>
           {p.newToday != null && p.newToday > 0 && (
             <span className="text-[var(--text-secondary)]">
@@ -117,7 +146,7 @@ function PositionCard({
       ) : null}
       {/* One factual live line from market_state — omit the row when nothing meaningful. */}
       {p.liveLine ? (
-        <div className="mt-2 truncate text-[11px] text-[var(--text-muted)]">{p.liveLine}</div>
+        <div className="mt-1 truncate text-[11px] text-[var(--text-muted)]">{p.liveLine}</div>
       ) : null}
     </button>
   );
@@ -185,11 +214,18 @@ export function MyConvictions({
         null;
       const newToday =
         (side === "YES" ? st?.new_believers_yes_24h : st?.new_believers_no_24h) ?? null;
+      // The honest ownership statement: invested = remaining cost basis on the
+      // held side; gain = worth − invested. Never derived from `chg` (a market %).
+      const invested = side === "YES" ? p.yes_cost : p.no_cost;
+      const pnl = positionPnl({ invested, worth: value });
       return {
         id,
         side,
         value,
         chg,
+        invested: pnl.investedUsd,
+        gainUsd: pnl.gainUsd,
+        gainPct: pnl.gainPct,
         title: p.markets?.title ?? `Market #${id}`,
         // The GLOBAL market_state live line (joined by getWallet) — no per-position query.
         liveLine:
@@ -203,6 +239,9 @@ export function MyConvictions({
     side: "YES" | "NO";
     value: number;
     chg: number | null;
+    invested: number | null;
+    gainUsd: number | null;
+    gainPct: number | null;
     title: string;
     liveLine: string | null;
     believers: number | null;
@@ -229,12 +268,20 @@ export function MyConvictions({
   }
 
   const total = built.reduce((s, p) => s + p.value, 0);
+
+  // True unrealized gain when EVERY counted position has an authoritative cost
+  // basis: sum(invested) vs sum(worth). Otherwise fall back to period movement
+  // (market-window %), which we label as such — never as all-time profit.
+  const fullBasis = built.length > 0 && built.every((p) => p.invested != null);
+  const totalInvested = built.reduce((s, p) => s + (p.invested ?? 0), 0);
+  const truePnl = fullBasis ? positionPnl({ invested: totalInvested, worth: total }) : null;
+
   const prev = built.reduce((s, p) => {
     const f = 1 + (p.chg ?? 0) / 100;
     return s + (f > 0 ? p.value / f : p.value);
   }, 0);
-  const deltaUsd = total - prev;
-  const deltaPct = prev > 0 ? (deltaUsd / prev) * 100 : 0;
+  const periodUsd = total - prev;
+  const periodPct = prev > 0 ? (periodUsd / prev) * 100 : 0;
 
   return (
     <div>
@@ -244,9 +291,19 @@ export function MyConvictions({
           My Convictions
         </div>
         <div className="num mt-2 text-[22px] leading-none text-[var(--text)]">{usd(total)}</div>
-        <div className="num mt-2 text-[11px] text-[var(--text-secondary)]">
-          {signedUsd(deltaUsd)} · {signedPct(deltaPct)} {winLabel.toLowerCase()}
-        </div>
+        {truePnl && truePnl.gainUsd != null ? (
+          // Authoritative unrealized gain (worth − what you put in), all positions.
+          <div className="num mt-2 text-[11px] text-[var(--text-secondary)]">
+            {signedUsd(truePnl.gainUsd)} · {signedPct(truePnl.gainPct)}{" "}
+            <span className="text-[var(--text-muted)]">invested {usd(totalInvested)}</span>
+          </div>
+        ) : (
+          // No full cost basis — show market-period movement, labelled as such.
+          <div className="num mt-2 text-[11px] text-[var(--text-secondary)]">
+            {signedUsd(periodUsd)} · {signedPct(periodPct)}{" "}
+            <span className="text-[var(--text-muted)]">{winLabel.toLowerCase()}</span>
+          </div>
+        )}
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)" }} />
