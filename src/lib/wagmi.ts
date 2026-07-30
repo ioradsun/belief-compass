@@ -31,6 +31,32 @@ export const LAZY_WALLETCONNECT_ID = "walletConnect";
 
 export type LazyWalletKind = "coinbase" | "walletConnect";
 
+/** True on phone/tablet web browsers (not the in-app Coinbase browser). */
+export function isMobileWeb(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  const touchMac = /Macintosh/.test(ua) && (navigator.maxTouchPoints ?? 0) > 1; // iPadOS
+  return /Android|iPhone|iPod|iPad/i.test(ua) || touchMac;
+}
+
+/**
+ * Mobile-web Coinbase path. The Coinbase SDK's WalletLink relay opens the app
+ * but frequently never hands a session back to iOS Safari — the app just opens.
+ * WalletConnect v2 + Coinbase's universal link is the flow Coinbase itself
+ * supports on mobile web: the app opens *with the pairing URI*, approves, and
+ * returns an active session. `showQrModal: false` because we do the deep-link.
+ */
+export async function coinbaseMobileConnector(): Promise<CreateConnectorFn> {
+  const { walletConnect } = await import("wagmi/connectors");
+  return walletConnect({ projectId, showQrModal: false });
+}
+
+/** Universal link — opens the Coinbase app, or an install page if it's absent. */
+export function coinbaseDeepLink(wcUri: string): string {
+  return `https://go.cb-w.com/wc?uri=${encodeURIComponent(wcUri)}`;
+}
+
+
 /**
  * Client-only: register the generic injected connector once, after hydration.
  * Keeps `wagmi/connectors` out of the SSR module graph.
