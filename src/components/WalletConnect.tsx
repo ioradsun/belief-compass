@@ -84,9 +84,11 @@ function ConnectBridge() {
   const { disconnect } = useDisconnect();
   const hasWallet = wallets.length > 0;
   const wanted = useRef(false);
+  const exiting = useRef(false);
 
   useEffect(() => {
     const onOpen = () => {
+      if (exiting.current) return;
       if (!ready) {
         wanted.current = true; // retry as soon as Privy finishes booting
         return;
@@ -95,14 +97,23 @@ function ConnectBridge() {
       if (!hasWallet) return void connectWallet();
       // Authenticated with a wallet already: nothing to open.
     };
-    const onOut = () => {
+    const onOut = async () => {
       wanted.current = false;
+      if (exiting.current) return;
+      exiting.current = true;
       try {
-        disconnect();
-      } catch {
-        /* wagmi may already be disconnected */
+        // Privy owns the session. End it first, then clear wagmi's mirrored
+        // connector; doing this in the opposite order can make Privy restore the
+        // wallet while logout is still in flight.
+        await logout();
+      } finally {
+        try {
+          disconnect();
+        } catch {
+          /* wagmi may already be disconnected */
+        }
+        exiting.current = false;
       }
-      void logout().catch(() => null);
     };
     window.addEventListener(CONNECT_EVENT, onOpen);
     window.addEventListener(DISCONNECT_EVENT, onOut);
