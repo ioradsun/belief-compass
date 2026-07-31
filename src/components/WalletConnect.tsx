@@ -180,22 +180,15 @@ function PovOnConnect() {
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
-/** Stable hook identity: the branch below is a module constant, never changes. */
-function usePrivyLogout() {
-  return usePrivy().logout;
-}
-
-
 /**
- * Client-only, dependency-light connect control. Opening the wallet modal goes
- * through the connect bridge so every account surface opens the same picker.
+ * Client-only, dependency-light connect control. Connect and sign out both go
+ * through the bridge so Privy and wagmi stay in sync.
  */
 export function WalletConnectButton() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const { address, isConnected } = useAccount();
-  // usePrivy() throws outside a PrivyProvider, so only read it when one exists.
-  const logout = PRIVY_APP_ID ? usePrivyLogout() : () => {};
+
 
 
   const cls =
