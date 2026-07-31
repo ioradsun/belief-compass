@@ -21,6 +21,13 @@ import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { useWalletSession } from "@/hooks/useWalletSession";
 import { convictionSignal, type ConvictionSignal } from "@/domain/conviction";
+import {
+  scaleFlow,
+  composePulseStory,
+  FLOW_WINDOW_SHORT,
+  type FlowWindow,
+  type PulseStory,
+} from "@/domain/market-flow";
 
 import { CHAIN_ID } from "@/chain/decoder";
 import {
@@ -175,6 +182,16 @@ export function MarketDeck({
   const noPrice = change?.noPrice ?? row.no_price_usd;
   const yesChg = w?.yes ?? (rr.chg_24h_yes as number | null) ?? null;
   const noChg = w?.no ?? (rr.chg_24h_no as number | null) ?? null;
+
+  // Conviction CHANGE for the SAME window the price % uses — believers first,
+  // money second, price third. One window, one story: the Pulse headline and
+  // the two side cards can never quote different periods.
+  const rawFlow = change?.flows?.[win] ?? null;
+  const flow = rawFlow ? scaleFlow(rawFlow, ethUsd) : null;
+  const pulseStory = flow
+    ? composePulseStory(flow, { yes: yesChg, no: noChg }, win as FlowWindow)
+    : null;
+  const winShort = FLOW_WINDOW_SHORT[win as FlowWindow];
 
   // Conviction slot — the "diamond hands" read under each side. Reuses the same
   // evidence + network queries the intelligence panel already runs (React Query
@@ -424,39 +441,23 @@ export function MarketDeck({
       </div>
 
       <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
-        {/* Pulse — why this matters now, plus the day's traded activity. Hidden in
-          Case File mode: it's market-wide context, so it would only add noise to a
-          center that should be dedicated to the decision while investigating. */}
+        {/* Pulse — the headline for the ACTIVE window: what changed in belief,
+          then money, then price. It never introduces a number the cards below
+          can't corroborate, and never mixes two periods. Hidden in Case File
+          mode, where the center is dedicated to the decision. */}
         {!caseOpen && (
-          <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
-            {/* A label is a label and a sentence is a sentence: never let them
-              compete for the same line. The tag stays on one line (nowrap), the
-              prose gets the full measure below it and wraps like real text. */}
-            <div className="flex items-center gap-2">
-              <span
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{ background: PULSE_TONE[pulse.tone] }}
-                aria-hidden
-              />
-              <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                Pulse
-              </span>
-              <span className="truncate text-[13px] font-semibold text-[var(--text)]">
-                {pulse.label}
-              </span>
-            </div>
-            <p className="mt-1 pl-4 text-[12px] leading-snug text-[var(--text-secondary)] [overflow-wrap:anywhere]">
-              {pulse.why}
-              {eventBeat && <span className="text-[var(--text-muted)]"> {eventBeat}</span>}
-            </p>
-          </div>
+          <PulseHeadline
+            story={pulseStory}
+            fallback={{ label: pulse.label, why: pulse.why, tone: pulse.tone }}
+            winShort={winShort}
+          />
         )}
 
         {/* Battlefield */}
         <div className="space-y-1.5">
           {/* Says what the numbers ARE, and lets the trader pick the horizon. */}
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-[var(--text-muted)]">Momentum over</span>
+            <span className="text-[11px] text-[var(--text-muted)]">Conviction over</span>
             <WindowSelector win={win} onWin={setWin} />
           </div>
           <ConvictionMedia
@@ -469,9 +470,12 @@ export function MarketDeck({
               label="YES"
               price={yesPrice}
               chg={yesChg}
-              windowLabel={PRICE_WINDOW_LABEL[win]}
+              windowLabel={winShort}
               believers={row.believers_yes}
-              believerChange={(rr.new_believers_yes_24h as number | null) ?? null}
+              believerChange={
+                flow ? flow.yes.newBelievers : ((rr.new_believers_yes_24h as number | null) ?? null)
+              }
+              moneyChange={flow ? flow.yes.netUsd : null}
               capital={row.yes_capital_usd ?? null}
               signal={yesSignal}
               selected={side === "YES"}
@@ -481,9 +485,12 @@ export function MarketDeck({
               label="NO"
               price={noPrice}
               chg={noChg}
-              windowLabel={PRICE_WINDOW_LABEL[win]}
+              windowLabel={winShort}
               believers={row.believers_no}
-              believerChange={(rr.new_believers_no_24h as number | null) ?? null}
+              believerChange={
+                flow ? flow.no.newBelievers : ((rr.new_believers_no_24h as number | null) ?? null)
+              }
+              moneyChange={flow ? flow.no.netUsd : null}
               capital={row.no_capital_usd ?? null}
               signal={noSignal}
               selected={side === "NO"}
@@ -639,6 +646,75 @@ function WindowSelector({ win, onWin }: { win: WinKey; onWin: (w: WinKey) => voi
   );
 }
 
+/**
+ * The Pulse headline. One window, one story, in the product's order of truth:
+ * believer growth → money growth → price. It falls back to the opportunity
+ * engine's sentence only while the window's flow is still loading.
+ */
+function PulseHeadline({
+  story,
+  fallback,
+  winShort,
+}: {
+  story: PulseStory | null;
+  fallback: { label: string; why: string; tone: string };
+  winShort: string;
+}) {
+  const tone = story
+    ? story.kind === "quiet"
+      ? "var(--text-muted)"
+      : story.kind === "cooling"
+        ? "var(--no)"
+        : PULSE_TONE.warm
+    : PULSE_TONE[fallback.tone];
+  return (
+    <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
+      <div className="flex items-center gap-2">
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tone }} aria-hidden />
+        <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          Pulse
+        </span>
+        <span className="text-[13px] font-semibold text-[var(--text)] [overflow-wrap:anywhere]">
+          {story ? story.headline : fallback.label}
+        </span>
+        <span className="num ml-auto shrink-0 text-[10px] text-[var(--text-muted)]">
+          {winShort}
+        </span>
+      </div>
+
+      {story ? (
+        <>
+          {story.metrics.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 pl-4">
+              {story.metrics.map((m, i) => (
+                <span
+                  key={m.key}
+                  className={
+                    i === 0
+                      ? "num text-[14px] font-semibold text-[var(--text)]"
+                      : "num text-[12px] text-[var(--text-secondary)]"
+                  }
+                >
+                  {m.text}
+                </span>
+              ))}
+            </div>
+          )}
+          {story.note && (
+            <p className="mt-1 pl-4 text-[12px] leading-snug text-[var(--text-muted)] [overflow-wrap:anywhere]">
+              {story.note}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="mt-1 pl-4 text-[12px] leading-snug text-[var(--text-secondary)] [overflow-wrap:anywhere]">
+          {fallback.why}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function SideCard({
   label,
   price,
@@ -646,6 +722,7 @@ function SideCard({
   windowLabel,
   believers,
   believerChange,
+  moneyChange,
   capital,
   signal,
   selected,
@@ -657,8 +734,10 @@ function SideCard({
   chg: number | null;
   windowLabel: string;
   believers: number | null;
-  /** Gross new believers on this side in the last 24h (always a 24h figure). */
+  /** New believers on this side inside the ACTIVE window. */
   believerChange: number | null;
+  /** Net dollars added to this side inside the ACTIVE window. */
+  moneyChange: number | null;
   capital: number | null;
   signal: ConvictionSignal | null;
   selected: boolean;
@@ -692,11 +771,7 @@ function SideCard({
     >
       {/* Side identity — the ONLY place the side colour shouts. */}
       <div className="flex items-center gap-1.5">
-        <span
-          className="h-1.5 w-1.5 rounded-full"
-          style={{ background: col }}
-          aria-hidden
-        />
+        <span className="h-1.5 w-1.5 rounded-full" style={{ background: col }} aria-hidden />
         <span className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: col }}>
           {label}
         </span>
@@ -718,12 +793,18 @@ function SideCard({
         {capital ? `${fmtUsd(capital)} backed` : "—"}
       </div>
 
-      {/* 3 — MOVEMENT. Quiet, one line per dimension. */}
+      {/* 3 — MOVEMENT, in the same window the selector names: people, then
+        money, then price. Never a total — only what changed. */}
       <div className="mt-2 space-y-0.5 text-[11px]">
         <div className="num text-[var(--text-muted)]" suppressHydrationWarning>
           {believerChange != null && believerChange > 0
-            ? `+${believerChange.toLocaleString("en-US")} believers · 24h`
-            : "No new believers · 24h"}
+            ? `+${believerChange.toLocaleString("en-US")} believers · ${windowLabel}`
+            : `No new believers · ${windowLabel}`}
+        </div>
+        <div className="num text-[var(--text-muted)]" suppressHydrationWarning>
+          {moneyChange != null && Math.abs(moneyChange) >= 1
+            ? `${moneyChange < 0 ? "−" : "+"}${fmtUsd(Math.abs(moneyChange))} backed · ${windowLabel}`
+            : `No new capital · ${windowLabel}`}
         </div>
         <div className="num" style={{ color: hasChg ? chgColor : "var(--text-muted)" }}>
           {hasChg
@@ -736,7 +817,6 @@ function SideCard({
     </button>
   );
 }
-
 
 /**
  * The viewer's ownership on this market, in human terms: what it's worth now and
