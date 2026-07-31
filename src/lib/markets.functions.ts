@@ -475,7 +475,7 @@ export const getMarketChange = createServerFn({ method: "GET" })
   .inputValidator((d: { id: number }) => z.object({ id: z.number().int().nonnegative() }).parse(d))
   .handler(async ({ data }): Promise<MarketChange> => {
     const sb = serviceClient();
-    const [state, changes] = await Promise.all([
+    const [state, changes, trades] = await Promise.all([
       sb
         .from("market_state")
         .select("yes_price_usd, no_price_usd")
@@ -485,6 +485,7 @@ export const getMarketChange = createServerFn({ method: "GET" })
         .from("market_window_change")
         .select("window_key, chg_yes, chg_no")
         .eq("onchain_id", data.id),
+      readLatestTradeEvents(publicClient(), { marketIds: [data.id], limit: 1000 }),
     ]);
     const windows: MarketChange["windows"] = {};
     for (const c of (changes.data ?? []) as {
@@ -497,8 +498,35 @@ export const getMarketChange = createServerFn({ method: "GET" })
         no: numOrNull(c.chg_no),
       };
     }
+
+    // Conviction change per window, from the canonical trade log. Money stays in
+    // ETH; the deck scales it with the same ETH/USD rate it prices orders with.
+    const facts: FlowTrade[] = [];
+    for (const t of trades) {
+      const side = t.side === "YES" || t.side === "NO" ? t.side : null;
+      const action = t.action === "SELL" ? "SELL" : t.action === "BUY" ? "BUY" : null;
+      if (!side || !action || !t.wallet) continue;
+      facts.push({
+        wallet: t.wallet,
+        side,
+        action,
+        usd: Number(t.amount_eth ?? 0),
+        at: new Date(t.occurred_at).getTime(),
+      });
+    }
+    const now = Date.now();
+    const flows: MarketChange["flows"] = {};
+    for (const key of Object.keys(VOLUME_WINDOWS) as VolumeWindow[]) {
+      flows[key] = flowForWindow(facts, key, now);
+    }
+
     const s = state.data as { yes_price_usd: number | null; no_price_usd: number | null } | null;
-    return { yesPrice: numOrNull(s?.yes_price_usd), noPrice: numOrNull(s?.no_price_usd), windows };
+    return {
+      yesPrice: numOrNull(s?.yes_price_usd),
+      noPrice: numOrNull(s?.no_price_usd),
+      windows,
+      flows,
+    };
   });
 
 /**
