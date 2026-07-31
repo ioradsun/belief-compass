@@ -340,6 +340,11 @@ function Feed() {
   // like. Toggling the open one closes it; opening another closes the previous.
   const [caseSection, setCaseSection] = useState<CaseSection | null>(null);
   const toggleCaseSection = (s: CaseSection) => setCaseSection((prev) => (prev === s ? null : s));
+  // Investigation Mode: which side's story has taken the center (null = Discovery,
+  // where both sides are compared side by side). Clicking a side card opens it;
+  // clicking the same card, Escape, or "Compare" returns to Discovery.
+  const [storySide, setStorySide] = useState<"YES" | "NO" | null>(null);
+  const toggleStory = (s: "YES" | "NO") => setStorySide((prev) => (prev === s ? null : s));
 
   // The SSR loader prefetched the anonymous 24h feed; adopt it as initialData so
   // the very first render (server AND client) paints the real deck with no
