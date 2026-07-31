@@ -142,10 +142,13 @@ export function MarketVitalityPanel({
   tape,
   ethUsd,
   nowMs = Date.now(),
+  showStory = true,
 }: {
   tape: TapeTrade[] | undefined;
   ethUsd: number;
   nowMs?: number;
+  /** When false, the calm relationship sentence is owned by Pulse instead. */
+  showStory?: boolean;
 }) {
   const v: MarketVitality = useMemo(() => marketVitality(tape ?? [], nowMs), [tape, nowMs]);
   const usd = (eth: number) => eth * (ethUsd > 0 ? ethUsd : 0);
@@ -203,9 +206,11 @@ export function MarketVitalityPanel({
         />
       </div>
 
-      <p className="mt-3 text-[13px] leading-snug text-[var(--text-secondary)]">
-        {vitalityStory(v)}
-      </p>
+      {showStory && (
+        <p className="mt-3 text-[13px] leading-snug text-[var(--text-secondary)]">
+          {vitalityStory(v)}
+        </p>
+      )}
       {!empty && (
         <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
           {v.range.label}

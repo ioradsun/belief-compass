@@ -15,9 +15,10 @@ import { getMarketEvidence } from "@/lib/evidence.functions";
 import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain, useAccount, useBalance } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
-import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
+import { useHouseFinalize } from "@/components/MarketIntelligence";
 import { TheHouse } from "@/components/TheHouse";
 import { DnaFirstReveal } from "@/components/DnaFirstReveal";
+import { MarketPulse, LiveNow } from "@/components/CenterSignals";
 import { MobileCaseView } from "@/components/MobileCase";
 import { CaseStory } from "@/components/CaseStory";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
@@ -322,44 +323,41 @@ export function MarketDeck({
 
   // The neutral market content — the middle of the mobile case carousel, and the
   // whole scroll area otherwise. Kept in one place so both paths render the same.
+  // The Judge — the neutral balance sheet, identical whether the Case is open or
+  // closed. Totals → Pulse → Live Now → The House. Opening the Case only changes
+  // the side panels; the center never becomes analytics or takes a side.
   const marketInner = (
     <>
-      <ConvictionMedia
-        onchainId={Number(row.onchain_id)}
-        title={String((rr.title as string | null) ?? "Market media")}
-      />
+      {/* THE TOTALS — people and money for the WHOLE market (YES + NO), each with
+      its movement and a step sparkline. These reconcile with the two side totals. */}
+      <MarketVitalityPanel tape={change?.tape} ethUsd={ethUsd} showStory={false} />
 
-      {/* Neutral market vitality — people and money for the WHOLE market, plus
-      the ONE story sentence about their relationship. The YES/NO split, and any
-      second narration of these same two numbers, live in the Case File. */}
-      <MarketVitalityPanel tape={change?.tape} ethUsd={ethUsd} />
+      {/* PULSE — what changed recently, in one label + one calm sentence. */}
+      <Hairline />
+      <MarketPulse tape={change?.tape} />
 
-      {/* The House — one line, a companion that learns how you think. It
-      replaces the old House Read analytics in the neutral center; when the
-      Case File is open, the per-side intelligence lenses take over. */}
-      {caseOpen ? (
-        <MarketIntelligence
-          marketId={marketId}
-          viewerWallet={viewerWallet}
-          caseOpen
-          neutral={false}
-        />
-      ) : (
+      {/* LIVE NOW — the single most recent event (history, so it may name a side). */}
+      {change?.tape && change.tape.length > 0 && (
         <>
-          <TheHouse marketId={marketId} viewerWallet={viewerWallet} />
-          {/* One-time nudge: the first real match, surfaced to explore. */}
-          <DnaFirstReveal viewerWallet={viewerWallet} onSelectPerson={onSelectPerson} />
+          <Hairline />
+          <LiveNow tape={change.tape} ethUsd={ethUsd} />
         </>
+      )}
+
+      {/* THE HOUSE — a companion that only talks about YOU, never the market. */}
+      <Hairline />
+      <TheHouse marketId={marketId} viewerWallet={viewerWallet} />
+      {/* One-time nudge: the first real match, surfaced to explore. */}
+      <DnaFirstReveal viewerWallet={viewerWallet} onSelectPerson={onSelectPerson} />
+
+      {held && sellPct == null && (
+        <PositionSummary side={held.side} pnl={heldPnl} tokens={held.tokens} onSell={openSell} />
       )}
 
       {/* Moderation stays reachable, but quiet — not a metrics row. */}
       <div className="flex justify-end text-[11px] text-[var(--text-muted)]">
         <ReportMarket onchainId={Number(row.onchain_id)} wallet={viewerWallet} />
       </div>
-
-      {held && sellPct == null && (
-        <PositionSummary side={held.side} pnl={heldPnl} tokens={held.tokens} onSell={openSell} />
-      )}
     </>
   );
 
@@ -614,10 +612,10 @@ function ExamineCta({ open, onToggle }: { open: boolean; onToggle: () => void })
     >
       <span className="min-w-0">
         <span className="block text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--text)]">
-          {open ? "Close the case" : "Examine the case"}
+          {open ? "Case open" : "Examine the case"}
         </span>
         <span className="mt-0.5 block text-[11px] leading-snug text-[var(--text-muted)]">
-          {open ? "Return to the market story." : "See how conviction divides between YES and NO."}
+          {open ? "Close" : "See why believers chose each side."}
         </span>
       </span>
       <span
@@ -629,6 +627,11 @@ function ExamineCta({ open, onToggle }: { open: boolean; onToggle: () => void })
       </span>
     </button>
   );
+}
+
+/** A quiet hairline between the center's sections — the reading path, not a card. */
+function Hairline() {
+  return <div className="border-t border-[var(--border)]" aria-hidden />;
 }
 
 /**
@@ -1166,60 +1169,4 @@ function AvailRow({ ethUsd }: { ethUsd: number }) {
       ? "…"
       : `${fmtUsd(eth * ethUsd)}  ·  ${eth.toFixed(4)} ETH`;
   return <QuoteRow k="Avail" v={v} />;
-}
-
-/**
- * Media attached on Conviction (not POV). Rendered from a short-lived signed
- * URL and only for markets whose off-chain row is active and un-hidden.
- */
-function ConvictionMedia({ onchainId, title }: { onchainId: number; title: string }) {
-  const { data } = useQuery({
-    queryKey: ["conviction-market", onchainId],
-    queryFn: () => getConvictionMarket({ data: { onchainId } }),
-    staleTime: 5 * 60_000,
-  });
-  const market = data?.market as
-    | { media: { kind?: string; url?: string; title?: string } | null; mediaUrl: string | null }
-    | null
-    | undefined;
-  const media = market?.media;
-  if (!media?.kind) return null;
-
-  if (media.kind === "link") {
-    return (
-      <a
-        href={media.url}
-        target="_blank"
-        rel="noreferrer noopener"
-        className="block truncate rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[12px] text-[var(--text-secondary)]"
-      >
-        {media.title ?? media.url}
-      </a>
-    );
-  }
-  const src = market?.mediaUrl;
-  if (!src) return null;
-  return (
-    <div className="overflow-hidden rounded-lg border border-[var(--border)]">
-      {media.kind === "image" && (
-        <img
-          src={src}
-          alt={title}
-          width={640}
-          height={360}
-          decoding="async"
-          className="max-h-[240px] w-full object-cover"
-        />
-      )}
-      {media.kind === "video" && (
-        <video
-          src={src}
-          controls
-          className="max-h-[240px] w-full"
-          style={{ aspectRatio: "16 / 9" }}
-        />
-      )}
-      {media.kind === "audio" && <audio src={src} controls className="w-full" />}
-    </div>
-  );
 }
