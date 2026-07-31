@@ -452,7 +452,20 @@ export function MarketDeck({
         )}
       </div>
 
+      {/* Investigation Mode: one side's story replaces the comparison, while the
+        side columns stay put as anchors and the decision dock stays reachable. */}
+      {storySide ? (
+        <CaseStory
+          side={storySide}
+          marketId={marketId}
+          ethUsd={ethUsd}
+          backed={side === storySide}
+          onBack={() => chooseSide(storySide)}
+          onClose={() => onCloseStory?.()}
+        />
+      ) : (
       <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
+
         {/* Pulse — the headline for the ACTIVE window: what changed in belief,
           then money, then price. It never introduces a number the cards below
           can't corroborate, and never mixes two periods. Hidden in Case File
