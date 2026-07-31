@@ -18,6 +18,7 @@ import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain, useAccount, useBalance } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
+import { CaseStory } from "@/components/CaseStory";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { useWalletSession } from "@/hooks/useWalletSession";
