@@ -167,15 +167,17 @@ export function CaseColumn({
 
   // The window the trader picked in the center — never a second period on screen.
   const win = useDeckWindow();
+  const winShort = FLOW_WINDOW_SHORT[win];
   const tape = change?.tape;
-  const { series, events, caption } = useMemo(() => {
-    if (!tape?.length) return { series: [], events: [], caption: null };
+  const { series, events, caption, story } = useMemo(() => {
+    if (!tape?.length) return { series: [], events: [], caption: null, story: null };
     const now = Date.now();
     const s = convictionSeries(tape, side, win, now);
     return {
       series: s,
       events: timelineEvents(tape, side, win, now, 10),
       caption: leadStory(s),
+      story: convictionStory(side, s),
     };
   }, [tape, side, win]);
 
