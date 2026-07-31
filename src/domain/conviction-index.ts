@@ -11,7 +11,8 @@
  *           + 0.20 × Share price
  *
  * Each part is 0–100. Believer/capital share are this side's slice of the whole
- * market; price is the side's per-share price (0–1 ETH) read as a percentage.
+ * market; price is this side's share of the two share prices — the market's own
+ * implied probability, so the number never depends on units.
  *
  * The trend is the same number over time. Nothing happens between trades, so it
  * is a STEP series: the value holds until an event moves it, and every step
