@@ -7,7 +7,7 @@
  * clear way back. Everything account-related is behind this one affordance.
  */
 import { useEffect, useState } from "react";
-import { useAccount, useDisconnect } from "wagmi";
+import { useAccount } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { lookupPovUser } from "@/lib/pov-user.functions";
@@ -16,6 +16,7 @@ import { WalletIdentity } from "@/components/WalletIdentity";
 import { ProfileEditor } from "@/components/ProfileEditor";
 import { getProfileOverride } from "@/lib/profile-edit.functions";
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
+import { requestDisconnect } from "@/lib/connect-bridge";
 
 /** Never show a raw 0x address as a name — fall back to the neutral alias. */
 function nameOf(candidates: (string | null | undefined)[], wallet: string) {
@@ -39,7 +40,6 @@ export function AccountRail({
   onOpenChange: (open: boolean) => void;
 }) {
   const { address } = useAccount();
-  const { disconnect } = useDisconnect();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -138,7 +138,7 @@ export function AccountRail({
             <button
               type="button"
               onClick={() => {
-                disconnect();
+                requestDisconnect();
                 onOpenChange(false);
               }}
               className="-mx-2 w-[calc(100%+1rem)] rounded-xl px-2 py-2 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]"
