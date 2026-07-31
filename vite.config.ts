@@ -87,6 +87,14 @@ export default defineConfig({
     define: {
       "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
     },
+    // Privy ships a large optional-peer graph that Vite's dependency optimizer
+    // can invalidate independently. When that happens the client entry waits on
+    // missing pre-bundled files and React never hydrates (the connect control
+    // stays on its disabled SSR placeholder). Transform these packages normally
+    // so wallet initiation and logout always have a live client listener.
+    optimizeDeps: {
+      exclude: ["@privy-io/react-auth", "@privy-io/wagmi"],
+    },
     plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer, solanaSystemShim],
   },
 });
