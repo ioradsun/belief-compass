@@ -17,6 +17,8 @@ import { ProfileEditor } from "@/components/ProfileEditor";
 import { getProfileOverride } from "@/lib/profile-edit.functions";
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 import { requestDisconnect } from "@/lib/connect-bridge";
+import { setWalletProvider, walletProvider } from "@/lib/wagmi";
+
 
 /** Never show a raw 0x address as a name — fall back to the neutral alias. */
 function nameOf(candidates: (string | null | undefined)[], wallet: string) {
@@ -145,7 +147,15 @@ export function AccountRail({
             >
               Sign out
             </button>
+            <button
+              type="button"
+              onClick={() => setWalletProvider(walletProvider() === "privy" ? "rainbowkit" : "privy")}
+              className="-mx-2 w-[calc(100%+1rem)] rounded-xl px-2 py-2 text-left text-[11px] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]"
+            >
+              Trouble connecting? Try the backup connector
+            </button>
           </div>
+
         </>
       )}
     </div>

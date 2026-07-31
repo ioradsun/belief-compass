@@ -1,118 +1,76 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { PrivyProvider, usePrivy, useWallets } from "@privy-io/react-auth";
-import { WagmiProvider, useSetActiveWallet } from "@privy-io/wagmi";
-import { WagmiProvider as PlainWagmiProvider, useAccount, useDisconnect } from "wagmi";
+import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
+import { WagmiProvider, useAccount, useDisconnect } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import { base } from "wagmi/chains";
-import { wagmiConfig, PRIVY_APP_ID } from "@/lib/wagmi";
+import { RainbowKitProvider, darkTheme, useConnectModal } from "@rainbow-me/rainbowkit";
+import "@rainbow-me/rainbowkit/styles.css";
 
+import { wagmiConfig, walletProvider } from "@/lib/wagmi";
 import { CONNECT_EVENT, DISCONNECT_EVENT, requestConnect, requestDisconnect } from "@/lib/connect-bridge";
-import { lookupPovUser } from "@/lib/pov-user.functions";
-import { getWalletLink } from "@/lib/wallet-link.functions";
-import { readLocalLink } from "@/lib/wallet-link";
-
-/**
- * Privy's wagmi provider mounts PrivyWagmiConnector, which calls Privy hooks that
- * are browser-only and throw during SSR. On the server we use plain wagmi (same
- * context, renders no extra DOM), and the Privy-aware one in the browser.
- */
-const Wagmi = typeof document === "undefined" ? PlainWagmiProvider : WagmiProvider;
+import { PovOnConnect } from "@/components/wallet/PovOnConnect";
 
 // Isolated query client for wagmi to avoid interfering with the app's router-level client.
 const wagmiQueryClient = new QueryClient();
 
+/** Secondary provider — never in the eager bundle. */
+const PrivyStack = lazy(() => import("@/components/wallet/PrivyStack"));
+
 /**
- * Privy owns the connect experience (modal, mobile deep-links, session restore)
- * and feeds the connected wallet into wagmi, so every existing `useAccount` /
- * `useSignMessage` / `useSendTransaction` call site keeps working unchanged.
+ * PRIMARY: wagmi + RainbowKit. It owns the connect modal, wallet detection and
+ * mobile deep-links for Coinbase Wallet and MetaMask, and feeds the connected
+ * account into wagmi so every `useAccount` / `useSignMessage` call site keeps
+ * working unchanged. Privy remains available as a secondary provider.
  */
 export function WalletProviders({ children }: { children: ReactNode }) {
-  // Until a Privy app id is configured, keep the app fully renderable: wagmi
-  // still provides read-only context, connect surfaces just have nothing to open.
-  if (!PRIVY_APP_ID) {
+  // SSR and first paint always render the RainbowKit stack; if this browser
+  // opted into Privy we swap after mount (Privy is browser-only anyway).
+  const [provider, setProvider] = useState<"rainbowkit" | "privy">("rainbowkit");
+  useEffect(() => setProvider(walletProvider()), []);
+
+  if (provider === "privy") {
     return (
       <QueryClientProvider client={wagmiQueryClient}>
-        <PlainWagmiProvider config={wagmiConfig}>{children}</PlainWagmiProvider>
+        <Suspense fallback={null}>
+          <PrivyStack>{children}</PrivyStack>
+        </Suspense>
       </QueryClientProvider>
     );
   }
+
   return (
-    <PrivyProvider
-      appId={PRIVY_APP_ID}
-      config={{
-        loginMethods: ["wallet"],
-        appearance: {
-          theme: "dark",
-          accentColor: "#5b8cff",
-          walletList: [
-            "coinbase_wallet",
-            "metamask",
-            "rainbow",
-            "wallet_connect",
-            "detected_wallets",
-          ],
-          walletChainType: "ethereum-only",
-        },
-        embeddedWallets: { ethereum: { createOnLogin: "off" } },
-        defaultChain: base,
-        supportedChains: [base],
-      }}
-    >
-      <QueryClientProvider client={wagmiQueryClient}>
-        <Wagmi config={wagmiConfig}>
+    <QueryClientProvider client={wagmiQueryClient}>
+      <WagmiProvider config={wagmiConfig}>
+        <RainbowKitProvider
+          modalSize="compact"
+          theme={darkTheme({ accentColor: "#5b8cff", borderRadius: "medium" })}
+        >
           {children}
-          <ActiveWalletSync />
           <PovOnConnect />
-          <ConnectBridge />
-        </Wagmi>
-      </QueryClientProvider>
-    </PrivyProvider>
+          <RainbowKitBridge />
+        </RainbowKitProvider>
+      </WagmiProvider>
+    </QueryClientProvider>
   );
 }
 
-
 /**
- * Single owner of session changes. Connect and sign out both go through here so
- * Privy (which holds the real session) and wagmi never drift apart — signing out
- * of wagmi alone used to leave Privy authenticated, after which "Connect wallet"
- * silently did nothing.
+ * Single owner of session changes for the RainbowKit path: any surface can ask
+ * for connect / sign out through the bridge events without importing wallet UI.
  */
-function ConnectBridge() {
-  const { ready, authenticated, login, logout, connectWallet } = usePrivy();
-  const { wallets } = useWallets();
+function RainbowKitBridge() {
+  const { openConnectModal } = useConnectModal();
+  const { isConnected } = useAccount();
   const { disconnect } = useDisconnect();
-  const hasWallet = wallets.length > 0;
-  const wanted = useRef(false);
-  const exiting = useRef(false);
 
   useEffect(() => {
     const onOpen = () => {
-      if (exiting.current) return;
-      if (!ready) {
-        wanted.current = true; // retry as soon as Privy finishes booting
-        return;
-      }
-      if (!authenticated) return void login();
-      if (!hasWallet) return void connectWallet();
-      // Authenticated with a wallet already: nothing to open.
+      if (isConnected) return;
+      openConnectModal?.();
     };
-    const onOut = async () => {
-      wanted.current = false;
-      if (exiting.current) return;
-      exiting.current = true;
+    const onOut = () => {
       try {
-        // Privy owns the session. End it first, then clear wagmi's mirrored
-        // connector; doing this in the opposite order can make Privy restore the
-        // wallet while logout is still in flight.
-        await logout();
-      } finally {
-        try {
-          disconnect();
-        } catch {
-          /* wagmi may already be disconnected */
-        }
-        exiting.current = false;
+        disconnect();
+      } catch {
+        /* already disconnected */
       }
     };
     window.addEventListener(CONNECT_EVENT, onOpen);
@@ -121,70 +79,7 @@ function ConnectBridge() {
       window.removeEventListener(CONNECT_EVENT, onOpen);
       window.removeEventListener(DISCONNECT_EVENT, onOut);
     };
-  }, [ready, authenticated, hasWallet, login, logout, connectWallet, disconnect]);
-
-  // A click that landed before Privy was ready still opens the modal.
-  useEffect(() => {
-    if (!ready || !wanted.current) return;
-    wanted.current = false;
-    if (!authenticated) void login();
-    else if (!hasWallet) void connectWallet();
-  }, [ready, authenticated, hasWallet, login, connectWallet]);
-
-  return null;
-}
-
-
-/** Mirror Privy's connected wallet into wagmi so hooks see an account. */
-function ActiveWalletSync() {
-  const { wallets } = useWallets();
-  const { setActiveWallet } = useSetActiveWallet();
-  const first = wallets[0];
-  useEffect(() => {
-    if (first) void setActiveWallet(first).catch(() => null);
-  }, [first, setActiveWallet]);
-  return null;
-}
-
-/**
- * When a wallet connects, look up the POV profile and focus the home feed on
- * that wallet (the "You" panel). Runs once per new address per session.
- */
-function PovOnConnect() {
-  const { address, isConnected } = useAccount();
-  const navigate = useNavigate();
-  const handled = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!isConnected || !address) return;
-    if (handled.current === address) return;
-    handled.current = address;
-    // Redirect at most once per address per tab, so Back isn't trapped.
-    const key = `conviction:auto-nav:${address.toLowerCase()}`;
-    try {
-      if (window.sessionStorage.getItem(key)) return;
-      window.sessionStorage.setItem(key, "1");
-    } catch {
-      /* storage unavailable — fall through and navigate once */
-    }
-    void lookupPovUser({ data: { wallet: address } }).catch(() => null);
-    void (async () => {
-      const local = readLocalLink(address);
-      const linked =
-        local ??
-        (await getWalletLink({ data: { wallet: address.toLowerCase() } })
-          .then((r) => r.linked)
-          .catch(() => null));
-      void navigate({
-        to: "/",
-        search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({
-          ...prev,
-          wallet: linked ?? address,
-        }),
-        replace: true,
-      });
-    })();
-  }, [address, isConnected, navigate]);
+  }, [openConnectModal, isConnected, disconnect]);
 
   return null;
 }
@@ -193,14 +88,12 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 /**
  * Client-only, dependency-light connect control. Connect and sign out both go
- * through the bridge so Privy and wagmi stay in sync.
+ * through the bridge so whichever provider is mounted stays in sync.
  */
 export function WalletConnectButton() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const { address, isConnected } = useAccount();
-
-
 
   const cls =
     "rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent";
