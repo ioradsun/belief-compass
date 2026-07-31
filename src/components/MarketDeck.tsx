@@ -22,9 +22,9 @@ import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { useWalletSession } from "@/hooks/useWalletSession";
 import { MarketVitalityPanel } from "@/components/MarketVitality";
-import { marketVitality, vitalityPulse } from "@/domain/market-vitality";
+import { composePulse, pulseInputFromTape } from "@/domain/pulse";
 import type { TapeTrade } from "@/domain/conviction-series";
-import { type FlowWindow } from "@/domain/market-flow";
+import { FLOW_WINDOW_SHORT, type FlowWindow } from "@/domain/market-flow";
 
 import { CHAIN_ID } from "@/chain/decoder";
 import {
@@ -419,7 +419,13 @@ export function MarketDeck({
           />
 
           {/* Pulse — recent whole-market activity, never which side it happened on. */}
-          <NeutralPulse tape={change?.tape} ethUsd={ethUsd} fallback={pulse.why} />
+          <NeutralPulse
+            tape={change?.tape}
+            ethUsd={ethUsd}
+            win={win as FlowWindow}
+            priceChange={change?.windows?.[win]}
+            fallback={pulse.why}
+          />
 
           {/* Compact context — never the reason to act */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-muted)]">
