@@ -255,3 +255,13 @@ export function composePulseStory(
     metrics,
   };
 }
+
+/** Re-denominate a flow's money fields (ETH → USD) with a live rate. */
+export function scaleFlow(flow: WindowFlow, rate: number): WindowFlow {
+  const s = (f: SideFlow): SideFlow => ({
+    ...f,
+    netUsd: f.netUsd * rate,
+    largestBuyUsd: f.largestBuyUsd * rate,
+  });
+  return { yes: s(flow.yes), no: s(flow.no) };
+}
