@@ -74,17 +74,19 @@ export function CaseStory({
   });
 
   const tape = change?.tape;
-  const { series, events, caption, story } = useMemo(() => {
-    if (!tape?.length) return { series: [], events: [], caption: null, story: null };
+  const { idx, caption, story } = useMemo(() => {
+    if (!tape?.length)
+      return { idx: { opening: null, steps: [] }, caption: null, story: null };
     const now = Date.now();
     const s = convictionSeries(tape, side, win, now);
+    const i = convictionIndexSeries(tape, side, win, now);
     return {
-      series: s,
-      events: timelineEvents(tape, side, win, now, 14),
-      caption: leadStory(s),
+      idx: i,
+      caption: indexTrendCaption(i.opening, i.steps),
       story: convictionStory(side, s),
     };
   }, [tape, side, win]);
+
 
   const believers = (evidence?.believers ?? []).filter((b) => b.side === side);
   const defense = (evidence?.defense ?? []).filter((o) => o.vote === side);
