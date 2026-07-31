@@ -15,7 +15,8 @@ import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketChange } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
-import { ConvictionTimeline } from "@/components/ConvictionTimeline";
+import { ConvictionIndexChart } from "@/components/ConvictionIndexChart";
+import { convictionIndexSeries, indexTrendCaption } from "@/domain/conviction-index";
 import { SideColumn, DefenseColumn } from "@/components/MarketEvidence";
 import {
   convictionSeries,
