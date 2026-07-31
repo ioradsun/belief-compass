@@ -801,11 +801,10 @@ function SideCard({
         {capital ? `${fmtUsd(capital)} backed` : "—"}
       </div>
 
-      {/* 3 — MOVEMENT. Quiet, one line per dimension. */}
-      <div className="mt-2 space-y-0.5 text-[11px]">
       {/* 3 — MOVEMENT, in the same window the selector names: people, then
         money, then price. Never a total — only what changed. */}
       <div className="mt-2 space-y-0.5 text-[11px]">
+
         <div className="num text-[var(--text-muted)]" suppressHydrationWarning>
           {believerChange != null && believerChange > 0
             ? `+${believerChange.toLocaleString("en-US")} believers · ${windowLabel}`
