@@ -20,8 +20,6 @@ import { convictionIndexSeries, indexTrendCaption } from "@/domain/conviction-in
 import { SideColumn, DefenseColumn } from "@/components/MarketEvidence";
 import {
   convictionSeries,
-  timelineEvents,
-  leadStory,
   convictionStory,
   narrateStory,
 } from "@/domain/conviction-series";
