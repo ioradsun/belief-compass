@@ -675,52 +675,68 @@ function SideCard({
       : chg! < 0
         ? "var(--no)"
         : "var(--text-muted)";
+  const believerCount = believers ?? 0;
   return (
     <button
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
+      suppressHydrationWarning
       // Per-share price is available on inspection, but never leads the card.
       title={price == null ? undefined : `Current price $${Number(price).toFixed(2)} / share`}
-      className="flex flex-col gap-2 rounded-[14px] p-3 text-left transition-colors"
+      className="flex flex-col rounded-[14px] p-3.5 text-left transition-colors"
       style={{
-        border: `1.5px solid ${selected ? "var(--border-strong,var(--border))" : "var(--border)"}`,
+        border: `1.5px solid ${selected ? col : "var(--border)"}`,
         background: selected ? "var(--surface)" : "transparent",
       }}
     >
-      <div className="text-[11px] font-semibold tracking-wide" style={{ color: col }}>
-        {label}
+      {/* Side identity — the ONLY place the side colour shouts. */}
+      <div className="flex items-center gap-1.5">
+        <span
+          className="h-1.5 w-1.5 rounded-full"
+          style={{ background: col }}
+          aria-hidden
+        />
+        <span className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: col }}>
+          {label}
+        </span>
       </div>
-      {/* Capital momentum leads — how the side moved, not the price itself. */}
-      <div>
-        <div className="num text-[20px] font-semibold leading-none" style={{ color: chgColor }}>
-          {hasChg ? `${chg! > 0 ? "▲" : chg! < 0 ? "▼" : "•"} ${Math.abs(chg!).toFixed(1)}%` : "—"}
+
+      {/* 1 — PEOPLE. The primary number on the card. */}
+      <div
+        className="num mt-2.5 text-[34px] font-semibold leading-[0.95] tracking-[-0.02em] text-[var(--text)]"
+        suppressHydrationWarning
+      >
+        {believerCount.toLocaleString("en-US")}
+      </div>
+      <div className="mt-1 text-[11px] text-[var(--text-muted)]">
+        {believerCount === 1 ? "believer" : "believers"}
+      </div>
+
+      {/* 2 — MONEY. Second in the hierarchy, neutral colour. */}
+      <div className="num mt-3 text-[14px] font-medium text-[var(--text-secondary)]">
+        {capital ? `${fmtUsd(capital)} backed` : "—"}
+      </div>
+
+      {/* 3 — MOVEMENT. Quiet, one line per dimension. */}
+      <div className="mt-2 space-y-0.5 text-[11px]">
+        <div className="num text-[var(--text-muted)]" suppressHydrationWarning>
+          {believerChange != null && believerChange > 0
+            ? `+${believerChange.toLocaleString("en-US")} believers · 24h`
+            : "No new believers · 24h"}
         </div>
-        <div className="mt-1 text-[10px] text-[var(--text-muted)]">Price · {windowLabel}</div>
+        <div className="num" style={{ color: hasChg ? chgColor : "var(--text-muted)" }}>
+          {hasChg
+            ? `${chg! > 0 ? "▲" : chg! < 0 ? "▼" : "•"} ${Math.abs(chg!).toFixed(1)}% price · ${windowLabel}`
+            : `— price · ${windowLabel}`}
+        </div>
       </div>
-      {/* Human momentum: how many joined this side today (parallel to price
-        momentum above). Always a 24h figure, independent of the price window. */}
-      <div className="num h-4 text-[13px] font-semibold text-[var(--text)]">
-        {believerChange != null && believerChange > 0
-          ? `👥 +${believerChange.toLocaleString("en-US")}`
-          : `👥 ${(believers ?? 0).toLocaleString("en-US")}`}
-      </div>
-      <div className="text-[10px] text-[var(--text-muted)]">
-        {believerChange != null && believerChange > 0 ? "joined · 24h" : "believers"}
-      </div>
-      {/* Total believers + capital as quiet context. */}
-      <div className="num text-[10px] text-[var(--text-muted)]">
-        {believerChange != null && believerChange > 0
-          ? `${(believers ?? 0).toLocaleString("en-US")} believers`
-          : capital
-            ? `${fmtUsd(capital)} backed`
-            : " "}
-        {believerChange != null && believerChange > 0 && capital ? ` · ${fmtUsd(capital)}` : ""}
-      </div>
+
       <ConvictionSlot signal={signal} col={col} />
     </button>
   );
 }
+
 
 /**
  * The viewer's ownership on this market, in human terms: what it's worth now and
