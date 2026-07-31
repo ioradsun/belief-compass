@@ -227,8 +227,7 @@ export function marketState(input: PulseInput): StateCopy {
     const totalCapital = input.yesCapital + input.noCapital;
     const capitalShare =
       totalCapital >= USD_EPS ? Math.max(input.yesCapital, input.noCapital) / totalCapital : 0;
-    const tail =
-      capitalShare >= 0.75 ? ", but most capital is concentrated on one side" : "";
+    const tail = capitalShare >= 0.75 ? ", but most capital is concentrated on one side" : "";
     return { label, explanation: `${balanced}${tail}.` };
   }
 
@@ -304,9 +303,7 @@ export function activityMetrics(input: PulseInput): string {
   const net = Math.max(0, input.periodNewBelievers) - Math.max(0, input.periodExitedBelievers);
   if (net !== 0) parts.push(`${net > 0 ? "+" : "−"}${people(Math.abs(net))}`);
   if (Math.abs(input.periodNetCapital) >= USD_EPS)
-    parts.push(
-      `${input.periodNetCapital > 0 ? "+" : "−"}${usd(input.periodNetCapital)} committed`,
-    );
+    parts.push(`${input.periodNetCapital > 0 ? "+" : "−"}${usd(input.periodNetCapital)} committed`);
   const p = input.periodPriceChange;
   if (p != null && Number.isFinite(p) && Math.abs(p) >= 0.05)
     parts.push(`Price ${p < 0 ? "−" : "+"}${Math.abs(p).toFixed(Math.abs(p) < 10 ? 1 : 0)}%`);

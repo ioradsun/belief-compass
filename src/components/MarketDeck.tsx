@@ -623,8 +623,7 @@ function NeutralPulse({
 
   const input = pulseInputFromTape(tape, win, Date.now(), ethUsd);
   // Price is supporting context only: read the majority side's move, unnamed.
-  const majorityMove =
-    input.yesBelievers >= input.noBelievers ? priceChange?.yes : priceChange?.no;
+  const majorityMove = input.yesBelievers >= input.noBelievers ? priceChange?.yes : priceChange?.no;
   const p = composePulse({ ...input, periodPriceChange: majorityMove ?? null });
 
   return (
@@ -666,7 +665,6 @@ function PulseShell({
     </div>
   );
 }
-
 
 /**
  * The one door from the neutral overview into the evidence. It names the user's

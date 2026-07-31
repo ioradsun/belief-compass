@@ -58,25 +58,19 @@ describe("marketState", () => {
   });
 
   it("names the dimension when only capital is one-sided", () => {
-    const s = marketState(
-      inp({ yesBelievers: 5, noBelievers: 5, yesCapital: 900, noCapital: 50 }),
-    );
+    const s = marketState(inp({ yesBelievers: 5, noBelievers: 5, yesCapital: 900, noCapital: 50 }));
     expect(s.label).toBe("Evenly split");
     expect(s.explanation).toContain("most capital is concentrated on one side");
   });
 
   it("reports a believer majority whose capital is balanced", () => {
-    const s = marketState(
-      inp({ yesBelievers: 8, noBelievers: 2, yesCapital: 100, noCapital: 95 }),
-    );
+    const s = marketState(inp({ yesBelievers: 8, noBelievers: 2, yesCapital: 100, noCapital: 95 }));
     expect(s.label).toBe("Strong majority");
     expect(s.explanation).toContain("committed capital remains more balanced");
   });
 
   it("reports a smaller group holding the capital", () => {
-    const s = marketState(
-      inp({ yesBelievers: 7, noBelievers: 3, yesCapital: 20, noCapital: 200 }),
-    );
+    const s = marketState(inp({ yesBelievers: 7, noBelievers: 3, yesCapital: 20, noCapital: 200 }));
     expect(s.label).toBe("Clear lead");
     expect(s.explanation).toContain("smaller group holds most of the capital");
   });
@@ -100,12 +94,12 @@ describe("recentActivity", () => {
   });
 
   it("only says grew when both metrics grew", () => {
-    expect(
-      recentActivity(inp({ periodNewBelievers: 2, periodNetCapital: 84 })).label,
-    ).toBe("Conviction grew");
-    expect(
-      recentActivity(inp({ periodNewBelievers: 2, periodNetCapital: -40 })).label,
-    ).toBe("Interest grew, commitment fell");
+    expect(recentActivity(inp({ periodNewBelievers: 2, periodNetCapital: 84 })).label).toBe(
+      "Conviction grew",
+    );
+    expect(recentActivity(inp({ periodNewBelievers: 2, periodNetCapital: -40 })).label).toBe(
+      "Interest grew, commitment fell",
+    );
   });
 
   it("separates flat participation from capital", () => {
@@ -114,21 +108,17 @@ describe("recentActivity", () => {
   });
 
   it("reports exits", () => {
-    expect(recentActivity(inp({ periodExitedBelievers: 2 })).label).toBe(
-      "Participation narrowed",
+    expect(recentActivity(inp({ periodExitedBelievers: 2 })).label).toBe("Participation narrowed");
+    expect(recentActivity(inp({ periodExitedBelievers: 2, periodNetCapital: 50 })).label).toBe(
+      "Fewer believers, more capital",
     );
-    expect(
-      recentActivity(inp({ periodExitedBelievers: 2, periodNetCapital: 50 })).label,
-    ).toBe("Fewer believers, more capital");
   });
 });
 
 describe("activityMetrics", () => {
   it("shows believers, money, then price", () => {
     expect(
-      activityMetrics(
-        inp({ periodNewBelievers: 1, periodNetCapital: 3, periodPriceChange: -1.5 }),
-      ),
+      activityMetrics(inp({ periodNewBelievers: 1, periodNetCapital: 3, periodPriceChange: -1.5 })),
     ).toBe("+1 believer · +$3 committed · Price −1.5%");
   });
 
