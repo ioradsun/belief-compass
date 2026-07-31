@@ -803,10 +803,18 @@ function SideCard({
 
       {/* 3 — MOVEMENT. Quiet, one line per dimension. */}
       <div className="mt-2 space-y-0.5 text-[11px]">
+      {/* 3 — MOVEMENT, in the same window the selector names: people, then
+        money, then price. Never a total — only what changed. */}
+      <div className="mt-2 space-y-0.5 text-[11px]">
         <div className="num text-[var(--text-muted)]" suppressHydrationWarning>
           {believerChange != null && believerChange > 0
-            ? `+${believerChange.toLocaleString("en-US")} believers · 24h`
-            : "No new believers · 24h"}
+            ? `+${believerChange.toLocaleString("en-US")} believers · ${windowLabel}`
+            : `No new believers · ${windowLabel}`}
+        </div>
+        <div className="num text-[var(--text-muted)]" suppressHydrationWarning>
+          {moneyChange != null && Math.abs(moneyChange) >= 1
+            ? `${moneyChange < 0 ? "−" : "+"}${fmtUsd(Math.abs(moneyChange))} backed · ${windowLabel}`
+            : `No new capital · ${windowLabel}`}
         </div>
         <div className="num" style={{ color: hasChg ? chgColor : "var(--text-muted)" }}>
           {hasChg
@@ -814,6 +822,7 @@ function SideCard({
             : `— price · ${windowLabel}`}
         </div>
       </div>
+
 
       <ConvictionSlot signal={signal} col={col} />
     </button>
