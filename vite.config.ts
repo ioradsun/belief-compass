@@ -104,6 +104,7 @@ export default defineConfig({
         "fetch-retry",
         "@coinbase/wallet-sdk",
         "@walletconnect/time",
+        "@walletconnect/environment",
         "@walletconnect/window-metadata",
         "@walletconnect/window-getters",
         "blakejs",
