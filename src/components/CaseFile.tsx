@@ -121,6 +121,8 @@ export function CaseColumn({
   ethUsd = 0,
   openSection,
   onToggleSection,
+  investigating = false,
+  onInvestigate,
 }: {
   side: Side;
   marketId: number;
@@ -131,6 +133,10 @@ export function CaseColumn({
   /** The section open on BOTH columns (shared parent state); null = all collapsed. */
   openSection: CaseSection | null;
   onToggleSection: (s: CaseSection) => void;
+  /** True when THIS side's story is expanded in the center. */
+  investigating?: boolean;
+  /** Move the investigation into the center on this side. */
+  onInvestigate?: (s: Side) => void;
 }) {
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
 
