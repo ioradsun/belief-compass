@@ -2,10 +2,10 @@
  * CENTER — single-market decision deck.
  *
  * One market at a time: Pulse (why now) → Battlefield (both sides) → the House
- * Read → a persistent dock (shared amount, NO / SKIP / YES). A gesture/button/key
+ * Read → a persistent dock (shared amount, NO / PASS / YES). A gesture/button/key
  * only SELECTS a side; buying requires an explicit Confirm after an on-chain
  * quote. Prices/quotes come from the contract (src/lib/chain-trade) — never the
- * client. The House pick unlocks ONLY on a confirmed bet; a skip seals it.
+ * client. The House pick unlocks ONLY on a confirmed bet; a pass seals it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,6 +18,8 @@ import { useSwitchChain, useAccount, useBalance } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
 import { TheHouse } from "@/components/TheHouse";
+import { DnaFirstReveal } from "@/components/DnaFirstReveal";
+import { MobileCaseView } from "@/components/MobileCase";
 import { CaseStory } from "@/components/CaseStory";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
@@ -91,6 +93,7 @@ export function MarketDeck({
   lenses,
   onLens,
   caseOpen = false,
+  mobileCaseOpen = false,
   onToggleCase,
   storySide = null,
   onCloseStory,
@@ -104,8 +107,10 @@ export function MarketDeck({
   lens?: Lens;
   lenses?: LensOption[];
   onLens?: (l: Lens) => void;
-  /** Case File mode: the YES/NO evidence moves to the side columns. */
+  /** Case File mode (desktop): the YES/NO evidence moves to the side columns. */
   caseOpen?: boolean;
+  /** Case File mode (mobile): the center becomes a NO ← MARKET → YES carousel. */
+  mobileCaseOpen?: boolean;
   onToggleCase?: () => void;
   /** Investigation mode: one side's story takes the center. */
   storySide?: OrderSide | null;
@@ -132,8 +137,8 @@ export function MarketDeck({
   // means "not selling"; the buy dock owns the surface. Buying the opposite side
   // never sells (they're separate token balances), so a flip can't silently exit.
   const [sellPct, setSellPct] = useState<number | null>(null);
-  // The viewer walked away here (skip finalizes the round; the pick stays sealed).
-  const [skipped, setSkipped] = useState(false);
+  // The viewer walked away here (pass finalizes the round; the pick stays sealed).
+  const [passed, setPassed] = useState(false);
 
   const { switchChain } = useSwitchChain();
   const ready = useTradeReady();
@@ -202,12 +207,12 @@ export function MarketDeck({
     [viewerWallet],
   );
 
-  // Skip finalizes the round: the House pick stays sealed (you never paid to see
+  // Pass finalizes the round: the House pick stays sealed (you never paid to see
   // it). This is the FOMO lever, so it's a deliberate, explicit action.
-  const chooseSkip = useCallback(() => {
+  const choosePass = useCallback(() => {
     setSide(null);
-    setSkipped(true);
-    house.skip();
+    setPassed(true);
+    house.pass();
   }, [house]);
 
   // Reveal the House pick exactly once, when a bet confirms on-chain.
@@ -217,7 +222,7 @@ export function MarketDeck({
   useEffect(() => {
     setSide(null);
     setSellPct(null);
-    setSkipped(false);
+    setPassed(false);
     betRevealed.current = false;
     trade.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,7 +237,7 @@ export function MarketDeck({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trade.isSuccess, trade.hash, side]);
 
-  // Keyboard: ←/→ select a side, ↑ skip. None of them buy or reveal.
+  // Keyboard: ←/→ select a side, ↑ pass. None of them buy or reveal.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
@@ -242,12 +247,12 @@ export function MarketDeck({
       else if (e.key === "ArrowRight") chooseSide("YES");
       else if (e.key === "ArrowUp") {
         e.preventDefault();
-        chooseSkip();
+        choosePass();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [chooseSide, chooseSkip]);
+  }, [chooseSide, choosePass]);
 
   const relationshipBeat = row.story?.beats.find((b) => b.kind === "relationship")?.text ?? null;
   const eventBeat = row.story?.beats.find((b) => b.kind === "event")?.text ?? null;
@@ -334,10 +339,61 @@ export function MarketDeck({
   const chipLabel = lensMomentum?.label ?? momentum?.label;
   const chipHint = lensMomentum?.hint ?? momentum?.hint;
 
+  // The neutral market content — the middle of the mobile case carousel, and the
+  // whole scroll area otherwise. Kept in one place so both paths render the same.
+  const marketInner = (
+    <>
+      {caseOpen && (
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-[var(--text-muted)]">Evidence over</span>
+          <WindowSelector win={win} onWin={setWin} />
+        </div>
+      )}
+
+      <ConvictionMedia
+        onchainId={Number(row.onchain_id)}
+        title={String((rr.title as string | null) ?? "Market media")}
+      />
+
+      {/* Neutral market vitality — people and money for the WHOLE market, plus
+      the ONE story sentence about their relationship. The YES/NO split, and any
+      second narration of these same two numbers, live in the Case File. */}
+      <MarketVitalityPanel tape={change?.tape} ethUsd={ethUsd} />
+
+      {/* The House — one line, a companion that learns how you think. It
+      replaces the old House Read analytics in the neutral center; when the
+      Case File is open, the per-side intelligence lenses take over. */}
+      {caseOpen ? (
+        <MarketIntelligence
+          marketId={marketId}
+          viewerWallet={viewerWallet}
+          caseOpen
+          neutral={false}
+        />
+      ) : (
+        <>
+          <TheHouse marketId={marketId} viewerWallet={viewerWallet} />
+          {/* One-time nudge: the first real match, surfaced to explore. */}
+          <DnaFirstReveal viewerWallet={viewerWallet} onSelectPerson={onSelectPerson} />
+        </>
+      )}
+
+      {/* Moderation stays reachable, but quiet — not a metrics row. */}
+      <div className="flex justify-end text-[11px] text-[var(--text-muted)]">
+        <ReportMarket onchainId={Number(row.onchain_id)} wallet={viewerWallet} />
+      </div>
+
+      {held && sellPct == null && (
+        <PositionSummary side={held.side} pnl={heldPnl} tokens={held.tokens} onSell={openSell} />
+      )}
+    </>
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      {/* Identity — pinned to the top of the column */}
-      <div className="shrink-0">
+      {/* Identity — pinned to the top of the column. In mobile Case mode the
+        question moves into the carousel header, so this collapses. */}
+      <div className={`shrink-0 ${mobileCaseOpen ? "hidden" : ""}`}>
         <div className="mb-1 flex items-center gap-2">
           {category && (
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
@@ -395,59 +451,29 @@ export function MarketDeck({
           onBack={() => chooseSide(storySide)}
           onClose={() => onCloseStory?.()}
         />
+      ) : mobileCaseOpen ? (
+        <MobileCaseView
+          title={title}
+          marketId={marketId}
+          row={row}
+          viewerWallet={viewerWallet}
+          ethUsd={ethUsd}
+          onClose={() => onToggleCase?.()}
+          onBackSide={(s) => chooseSide(s)}
+        >
+          {marketInner}
+        </MobileCaseView>
       ) : (
         <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
-          {/* Range control belongs to the evidence, so it only appears with it. */}
-          {caseOpen && (
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[var(--text-muted)]">Evidence over</span>
-              <WindowSelector win={win} onWin={setWin} />
-            </div>
-          )}
-
-          <ConvictionMedia
-            onchainId={Number(row.onchain_id)}
-            title={String((rr.title as string | null) ?? "Market media")}
-          />
-
-          {/* Neutral market vitality — people and money for the WHOLE market, plus
-          the ONE story sentence about their relationship. The YES/NO split, and any
-          second narration of these same two numbers, live in the Case File. */}
-          <MarketVitalityPanel tape={change?.tape} ethUsd={ethUsd} />
-
-          {/* The House — one line, a companion that learns how you think. It
-          replaces the old House Read analytics in the neutral center; when the
-          Case File is open, the per-side intelligence lenses take over. */}
-          {caseOpen ? (
-            <MarketIntelligence
-              marketId={marketId}
-              viewerWallet={viewerWallet}
-              caseOpen
-              neutral={false}
-            />
-          ) : (
-            <TheHouse marketId={marketId} viewerWallet={viewerWallet} />
-          )}
-
-          {/* Moderation stays reachable, but quiet — not a metrics row. */}
-          <div className="flex justify-end text-[11px] text-[var(--text-muted)]">
-            <ReportMarket onchainId={Number(row.onchain_id)} wallet={viewerWallet} />
-          </div>
-
-          {held && sellPct == null && (
-            <PositionSummary
-              side={held.side}
-              pnl={heldPnl}
-              tokens={held.tokens}
-              onSell={openSell}
-            />
-          )}
+          {marketInner}
         </div>
       )}
 
       {/* Decision dock — buy by default; sell takes over when opened on a holding. */}
       <div className="shrink-0 space-y-2">
-        {onToggleCase && !storySide && <ExamineCta open={caseOpen} onToggle={onToggleCase} />}
+        {onToggleCase && !storySide && !mobileCaseOpen && (
+          <ExamineCta open={caseOpen} onToggle={onToggleCase} />
+        )}
 
         {held && sellPct != null ? (
           <SellPanel
@@ -467,7 +493,7 @@ export function MarketDeck({
               closeSell();
             }}
           />
-        ) : skipped ? (
+        ) : passed ? (
           /* Walked away: the round is closed and the House pick stays sealed. */
           <div
             className="flex items-center gap-3 rounded-[16px] p-4"
@@ -498,7 +524,7 @@ export function MarketDeck({
               chooseSide(s);
             }}
             onCancel={() => setSide(null)}
-            onSkip={() => chooseSkip()}
+            onPass={() => choosePass()}
             quote={quote}
             quoting={quoting}
             ethWei={ethWei}
@@ -816,7 +842,7 @@ function Dock({
   setAmount,
   onSelect,
   onCancel,
-  onSkip,
+  onPass,
   quote,
   quoting,
   ethWei,
@@ -831,7 +857,7 @@ function Dock({
   setAmount: (n: number) => void;
   onSelect: (s: OrderSide) => void;
   onCancel: () => void;
-  onSkip: () => void;
+  onPass: () => void;
   quote: { tokens: bigint; fee: bigint; refund: bigint } | null;
   quoting: boolean;
   ethWei: bigint;
@@ -886,7 +912,7 @@ function Dock({
   const busy = trade.isSubmitting || trade.isMining;
   const amtField = <AmountField amount={amount} setAmount={setAmount} />;
 
-  // Neutral: NO · SKIP · YES.
+  // Neutral: NO · PASS · YES.
   if (!side) {
     return (
       <div
@@ -896,7 +922,7 @@ function Dock({
         {amtField}
         <div className="flex flex-1 gap-2">
           <DockBtn label="← NO" tone="no" onClick={() => onSelect("NO")} />
-          <DockBtn label="↑ SKIP" tone="skip" onClick={onSkip} />
+          <DockBtn label="↑ PASS" tone="pass" onClick={onPass} />
           <DockBtn label="YES →" tone="yes" onClick={() => onSelect("YES")} />
         </div>
       </div>
@@ -1145,7 +1171,7 @@ function DockBtn({
   onClick,
 }: {
   label: string;
-  tone: "yes" | "no" | "skip";
+  tone: "yes" | "no" | "pass";
   onClick: () => void;
 }) {
   const style =

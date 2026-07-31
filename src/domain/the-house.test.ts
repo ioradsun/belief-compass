@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   houseAfter,
   houseBefore,
+  houseBeforeNamed,
   houseDelight,
   houseMilestone,
   houseMode,
@@ -43,11 +44,20 @@ describe("houseMode", () => {
 });
 
 describe("the voice", () => {
-  it("never names a side before the decision", () => {
+  it("never names a side in the generic pre-decision pool", () => {
     for (const mode of ["low", "medium", "high"] as const) {
       for (let seed = 0; seed < 20; seed++) {
-        expect(houseBefore(mode, seed)).not.toMatch(/\bYES\b|\bNO\b|\bSKIP\b/);
+        expect(houseBefore(mode, seed)).not.toMatch(/\bYES\b|\bNO\b|\bPASS\b/);
       }
+    }
+  });
+
+  it("names the side only in the high-confidence reveal", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      expect(houseBeforeNamed("YES", seed)).toContain("YES");
+      expect(houseBeforeNamed("NO", seed)).toContain("NO");
+      // A named PASS speaks to conviction, never a side label.
+      expect(houseBeforeNamed("PASS", seed)).not.toMatch(/\bYES\b|\bNO\b/);
     }
   });
 

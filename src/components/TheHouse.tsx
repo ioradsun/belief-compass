@@ -14,6 +14,7 @@ import { houseKey } from "@/components/MarketIntelligence";
 import {
   houseAfter,
   houseBefore,
+  houseBeforeNamed,
   houseDelight,
   houseMilestone,
   houseMode,
@@ -49,8 +50,10 @@ export function TheHouse({ marketId, viewerWallet }: { marketId: number; viewerW
       return { stage, text: beat ?? houseAfter(house.outcome === "correct", seed) };
     }
 
-    // Before a decision — an occasional pattern observation, else the confidence
-    // line. While still training (foundation), the House simply keeps watching.
+    // Before a decision. When the read is strong enough, the House CALLS the side
+    // out loud (the high-confidence reveal). Otherwise: an occasional pattern
+    // observation, else the intensity line. While training, it just keeps watching.
+    if (house.preview) return { stage, text: houseBeforeNamed(house.preview, seed) };
     const delight = house.foundation ? null : houseDelight(seed + decisions);
     if (delight) return { stage, text: delight };
     const mode = house.foundation ? "low" : houseMode(house.band);

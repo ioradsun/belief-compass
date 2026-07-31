@@ -17,8 +17,6 @@ import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
 import { CaseColumn, type CaseSection } from "@/components/CaseFile";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
-import { CalibrationReveal, useReadiness } from "@/components/Calibration";
-import { getCalibrationQueue } from "@/lib/beliefs.functions";
 import { WalletConnectButton } from "@/components/WalletConnect";
 
 // Deferred surfaces: none of these render for a first-time, signed-out visitor.
@@ -386,30 +384,9 @@ function Feed() {
 
   // Single-market deck: the center shows exactly one market. ?m (set by a
   // position, a Live row, search, or Next) picks it; otherwise the top of the
-  // queue. SKIP/Next advance through the current filtered order.
-  const feedRows = rows as unknown as MarketRow[];
-
-  // While calibrating, walk a curated, domain-diverse queue of un-answered
-  // markets first, so the viewer's early beliefs spread across the map.
-  const { data: readiness } = useReadiness(wallet);
-  const calibrating = !!wallet && !!readiness && !readiness.calibrated;
-  const { data: calQueue } = useQuery({
-    queryKey: ["cal-queue", wallet ?? null],
-    queryFn: () => getCalibrationQueue({ data: { wallet: wallet ?? null } }),
-    enabled: calibrating,
-    staleTime: 60_000,
-  });
-  const marketRows =
-    calibrating && calQueue?.length
-      ? (() => {
-          const rank = new Map(calQueue.map((q, i) => [q.marketId, i]));
-          const inQueue = feedRows
-            .filter((r) => rank.has(Number(r.onchain_id)))
-            .sort((a, b) => rank.get(Number(a.onchain_id))! - rank.get(Number(b.onchain_id))!);
-          const rest = feedRows.filter((r) => !rank.has(Number(r.onchain_id)));
-          return [...inQueue, ...rest];
-        })()
-      : feedRows;
+  // queue. PASS/Next advance through the current filtered order. There is no
+  // calibration queue — the live feed itself is how you build your DNA.
+  const marketRows = rows as unknown as MarketRow[];
 
   const foundIdx = marketRows.findIndex((r) => Number(r.onchain_id) === selectedMarket);
   const currentIdx = Math.max(0, foundIdx);
@@ -439,14 +416,12 @@ function Feed() {
   // Case File mode only applies to the single-market view. When on, the side
   // columns become the YES/NO case for the current market (existing intelligence,
   // reorganized). On mobile the Mine/Room tabs relabel to YES Case / NO Case.
-  const caseActive =
-    isDesktop &&
-    !!caseOpen &&
-    !selectedPerson &&
-    !dnaOpen &&
-    !createOpen &&
-    !termsOpen &&
-    !!currentRow;
+  const caseEligible =
+    !!caseOpen && !selectedPerson && !dnaOpen && !createOpen && !termsOpen && !!currentRow;
+  const caseActive = isDesktop && caseEligible;
+  // Mobile uses the same ?case flag, but as a NO ← MARKET → YES swipe carousel in
+  // the center rather than the desktop three-column split.
+  const mobileCaseActive = !isDesktop && caseEligible;
 
   const windowPicker = (
     <div className="flex items-center gap-1 overflow-x-auto rounded-md border border-border p-0.5">
@@ -469,7 +444,6 @@ function Feed() {
 
   return (
     <div className="flex h-[100svh] w-full flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)] supports-[height:100dvh]:h-[100dvh]">
-      <CalibrationReveal wallet={wallet} />
       <LandingPanel
         state={landing.hydrated ? landing.state : "collapsed"}
         onEnter={enterProduct}
@@ -620,7 +594,8 @@ function Feed() {
                     lenses={OPP_FILTERS}
                     onLens={setLens}
                     caseOpen={caseActive}
-                    onToggleCase={isDesktop ? toggleCase : undefined}
+                    mobileCaseOpen={mobileCaseActive}
+                    onToggleCase={toggleCase}
                     storySide={caseActive ? storySide : null}
                     onCloseStory={() => setStorySide(null)}
                     onSelectPerson={selectPerson}

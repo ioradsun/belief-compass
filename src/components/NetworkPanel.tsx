@@ -12,7 +12,16 @@ import { getNetwork, type NetworkPersonRow } from "@/lib/dna.functions";
 import { RELATIONSHIP_TEXT, relationshipTone, relationshipAria, ago } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { WalletConnectButton } from "@/components/WalletConnect";
-import { useReadiness, CalibrationCard } from "@/components/Calibration";
+import {
+  DNA_STAGE_HEADLINE,
+  DNA_STAGE_LABEL,
+  decisionsToNextStage,
+  dnaReveal,
+  dnaStage,
+  firstMeaningfulIndex,
+  matchCountLine,
+  stageAtLeast,
+} from "@/domain/conviction-dna";
 
 type RelFilter = "all" | "twin" | "tribe" | "opp" | "inverse";
 type Sort = "relevant" | "closest" | "active" | "newest";
@@ -57,8 +66,6 @@ export function NetworkPanel({
     };
   }, [rawQuery]);
 
-  const { data: readiness } = useReadiness(wallet);
-
   const { data, isLoading } = useQuery({
     queryKey: ["network", wallet ?? null, filter, sort, query],
     queryFn: () => getNetwork({ data: { wallet, relationship: filter, sort, query, limit: 40 } }),
@@ -72,14 +79,34 @@ export function NetworkPanel({
   const people = data?.people ?? [];
   const updating = data?.freshness.status === "updating";
 
-  const summaryLine = useMemo(() => {
-    if (!summary) return "";
-    const parts = [`${summary.expressedBeliefs} beliefs`];
-    if (summary.twinCount) parts.push(`${summary.twinCount} Twin`);
-    if (summary.tribeCount) parts.push(`${summary.tribeCount} Tribe`);
-    if (summary.oppCount) parts.push(`${summary.oppCount} Opp${summary.oppCount === 1 ? "" : "s"}`);
-    return parts.join(" · ");
-  }, [summary]);
+  // The one continuous game: real decisions earn a STAGE, and the stage decides
+  // what may honestly be named. No calibration gate, no percentage.
+  const counts = {
+    twin: summary?.twinCount ?? 0,
+    tribe: summary?.tribeCount ?? 0,
+    opp: summary?.oppCount ?? 0,
+  };
+  const stage = dnaStage({
+    decisions: summary?.expressedBeliefs ?? 0,
+    hasTwinCandidate: counts.twin > 0,
+  });
+  const reveal = dnaReveal(stage, counts);
+  const nameable = stageAtLeast(stage, "recognizable");
+  const next = decisionsToNextStage(summary?.expressedBeliefs ?? 0);
+
+  // Named counts only — never surface a relationship the evidence can't back.
+  const countLine = useMemo(() => {
+    if (!nameable) return "Keep deciding — your people will surface as your pattern sharpens.";
+    const parts: string[] = [];
+    if (reveal.canNameTwin) parts.push(matchCountLine(counts.twin, "Twin"));
+    if (reveal.canNameTribe) parts.push(matchCountLine(counts.tribe, "Tribe member"));
+    if (reveal.canNameOpp) parts.push(matchCountLine(counts.opp, "Opp"));
+    return parts.length ? parts.join(" · ") : "No strong matches named yet — keep deciding.";
+  }, [nameable, reveal, counts.twin, counts.tribe, counts.opp]);
+
+  // The single most meaningful person to meet first (only in the unfiltered view).
+  const revealIdx = filter === "all" && !query ? firstMeaningfulIndex(people, stage) : -1;
+  const firstPerson = revealIdx >= 0 ? people[revealIdx] : null;
 
   if (!wallet) {
     return (
@@ -92,123 +119,193 @@ export function NetworkPanel({
     );
   }
 
-  // Before calibration the Network can't be honest — show the shared calibration
-  // card instead of a blank list, so the surface never feels half-built.
-  if (readiness && !readiness.calibrated) {
-    return (
-      <div className="pt-2">
-        <CalibrationCard readiness={readiness} />
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Pinned DNA summary → opens the overview in the center. */}
+      {/* Persistent DNA progress → the stage you've earned, and what it lets us
+        honestly name. Opens the full overview in the center. */}
       <button
         type="button"
         onClick={onOpenDna}
         className="mb-3 w-full rounded-[12px] px-3 py-2.5 text-left transition-colors hover:bg-[var(--border)]/30"
         style={{ border: "1px solid var(--border)" }}
       >
-        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-          Your Conviction DNA
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+            Your Conviction DNA
+          </span>
+          <span
+            className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+            style={{
+              color: "var(--yes)",
+              background: "color-mix(in oklab, var(--yes) 14%, transparent)",
+            }}
+          >
+            {DNA_STAGE_LABEL[stage]}
+          </span>
         </div>
-        <div className="num mt-1 text-[12px] text-[var(--text-secondary)]">
-          {summary ? summaryLine : "Building your network…"}
-        </div>
-        {summary?.strongestAlignedDomain && (
-          <div className="mt-1 truncate text-[11px] text-[var(--text-muted)]">
-            Closest on {summary.strongestAlignedDomain}
-            {summary.strongestOpposedDomain
-              ? ` · Most divided on ${summary.strongestOpposedDomain}`
-              : ""}
+        <p className="mt-1.5 text-[12.5px] leading-snug text-[var(--text-secondary)]">
+          {summary ? DNA_STAGE_HEADLINE[stage] : "Reading your convictions…"}
+        </p>
+        <div className="num mt-1 text-[11px] text-[var(--text-muted)]">{countLine}</div>
+        {next && (
+          <div className="mt-1 text-[11px] text-[var(--text-muted)]">
+            {next.need} more {next.need === 1 ? "decision" : "decisions"} to{" "}
+            {DNA_STAGE_LABEL[next.next]}
           </div>
         )}
       </button>
 
-      {/* Search */}
-      <input
-        value={rawQuery}
-        onChange={(e) => setRawQuery(e.target.value)}
-        placeholder="Search your network"
-        aria-label="Search your network"
-        className="mb-2 w-full rounded-md bg-[var(--surface)] px-3 py-1.5 text-[13px] outline-none"
-        style={{ border: "1px solid var(--border)" }}
-      />
-
-      {/* Filter + sort */}
-      <div className="mb-2 flex flex-wrap items-center gap-1">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => setFilter(f.key)}
-            aria-pressed={filter === f.key}
-            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-              filter === f.key
-                ? "bg-[var(--text)] text-[var(--bg)]"
-                : "text-[var(--text-muted)] hover:text-[var(--text)]"
-            }`}
-            style={filter === f.key ? undefined : { border: "1px solid var(--border)" }}
-          >
-            {f.label}
-          </button>
-        ))}
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as Sort)}
-          aria-label="Sort network"
-          className="ml-auto rounded-md bg-[var(--surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
-          style={{ border: "1px solid var(--border)" }}
-        >
-          {SORTS.map((s) => (
-            <option key={s.key} value={s.key}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {updating && (
-        <div
-          className="pb-1 text-[10px] uppercase tracking-wide text-[var(--text-muted)]"
-          role="status"
-        >
-          Updating your network…
-        </div>
+      {/* Meet the first meaningful person the moment the evidence is there. */}
+      {firstPerson && (
+        <FirstMatchCard p={firstPerson} onSelect={() => onSelectPerson(firstPerson.wallet)} />
       )}
 
-      {/* Person list */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {isLoading && people.length === 0 ? (
-          <ul className="space-y-2" aria-hidden>
-            {Array.from({ length: 8 }).map((_, i) => (
-              <li key={i} className="h-14 animate-pulse rounded-[12px] bg-[var(--border)]/40" />
+      {!nameable ? (
+        // Honest forming state — no premature people, no fake matches.
+        <p className="pt-3 text-[12.5px] leading-relaxed text-[var(--text-muted)]">
+          Your first matches appear once your pattern is recognizable. Keep making calls in the feed
+          — every YES, NO, or PASS sharpens who you are.
+        </p>
+      ) : (
+        <>
+          {/* Search */}
+          <input
+            value={rawQuery}
+            onChange={(e) => setRawQuery(e.target.value)}
+            placeholder="Search your network"
+            aria-label="Search your network"
+            className="mb-2 w-full rounded-md bg-[var(--surface)] px-3 py-1.5 text-[13px] outline-none"
+            style={{ border: "1px solid var(--border)" }}
+          />
+
+          {/* Filter + sort */}
+          <div className="mb-2 flex flex-wrap items-center gap-1">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilter(f.key)}
+                aria-pressed={filter === f.key}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  filter === f.key
+                    ? "bg-[var(--text)] text-[var(--bg)]"
+                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                }`}
+                style={filter === f.key ? undefined : { border: "1px solid var(--border)" }}
+              >
+                {f.label}
+              </button>
             ))}
-          </ul>
-        ) : people.length === 0 ? (
-          <p className="pt-3 text-[12px] text-[var(--text-muted)]">
-            {query
-              ? "No one in your network matches this search."
-              : (summary?.expressedBeliefs ?? 0) < 5
-                ? "Your DNA is still forming. Express at least 5 beliefs to begin finding people."
-                : "Your DNA is active. No strong relationship yet — more beliefs will improve your matches."}
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1.5">
-            {people.map((p) => (
-              <PersonRow
-                key={p.wallet}
-                p={p}
-                selected={selectedPerson?.toLowerCase() === p.wallet.toLowerCase()}
-                onSelect={() => onSelectPerson(p.wallet)}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as Sort)}
+              aria-label="Sort network"
+              className="ml-auto rounded-md bg-[var(--surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
+              style={{ border: "1px solid var(--border)" }}
+            >
+              {SORTS.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {updating && (
+            <div
+              className="pb-1 text-[10px] uppercase tracking-wide text-[var(--text-muted)]"
+              role="status"
+            >
+              Updating your network…
+            </div>
+          )}
+
+          {/* Person list */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {isLoading && people.length === 0 ? (
+              <ul className="space-y-2" aria-hidden>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <li key={i} className="h-14 animate-pulse rounded-[12px] bg-[var(--border)]/40" />
+                ))}
+              </ul>
+            ) : people.length === 0 ? (
+              <p className="pt-3 text-[12px] text-[var(--text-muted)]">
+                {query
+                  ? "No one in your network matches this search."
+                  : "No strong relationship yet — more calls in the feed will surface your people."}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {people.map((p) => (
+                  <PersonRow
+                    key={p.wallet}
+                    p={p}
+                    selected={selectedPerson?.toLowerCase() === p.wallet.toLowerCase()}
+                    onSelect={() => onSelectPerson(p.wallet)}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+/**
+ * The first meaningful person, spotlighted — the moment there's enough evidence
+ * to mean it. A warm invitation to start exploring people, not a data row.
+ */
+function FirstMatchCard({ p, onSelect }: { p: NetworkPersonRow; onSelect: () => void }) {
+  const tone = relationshipTone(p.relationship);
+  const badge = RELATIONSHIP_TEXT[p.relationship];
+  const lead =
+    p.relationship === "twin"
+      ? "Your closest match is here"
+      : p.relationship === "opp" || p.relationship === "inverse"
+        ? "Someone who sees it the other way"
+        : "Someone who thinks like you";
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={`${lead}: ${p.displayName}`}
+      className="mb-3 w-full rounded-[14px] p-3 text-left transition-transform hover:-translate-y-px"
+      style={{
+        border: "1px solid color-mix(in oklab, var(--yes) 30%, var(--border))",
+        background: "color-mix(in oklab, var(--yes) 8%, transparent)",
+      }}
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+        {lead}
+      </div>
+      <div className="mt-1.5 flex items-center gap-2.5">
+        {p.avatarUrl ? (
+          <img src={p.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+        ) : (
+          <span
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[12px] font-semibold text-white"
+            style={{ background: `hsl(${hueFor(p.wallet)} 45% 45%)` }}
+            aria-hidden
+          >
+            {initialsFor(p.displayName)}
+          </span>
+        )}
+        <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[var(--text)]">
+          {p.displayName}
+        </span>
+        <span
+          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          style={{ color: tone.fg, background: tone.bg }}
+        >
+          {badge}
+        </span>
+      </div>
+      <div className="num mt-1.5 text-[11px] text-[var(--text-secondary)]">
+        {p.agreement}% aligned · {p.sharedBeliefs} shared · Tap to explore
+      </div>
+    </button>
   );
 }
 

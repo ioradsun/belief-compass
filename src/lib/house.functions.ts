@@ -2,15 +2,16 @@
  * The House — public server functions (thin wrappers around house.server.ts).
  *
  * Bet-to-reveal: the predicted side never crosses the wire until the viewer has
- * placed a REAL, on-chain-verified bet. A skip closes the round but keeps the
- * pick sealed.
+ * placed a REAL, on-chain-verified bet — unless the read is a STRONG_READ, which
+ * the House calls out loud before the decision. A pass closes the round but keeps
+ * a softer pick sealed.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import {
   loadHouseRead,
   finalizeHouseBet,
-  finalizeHouseSkip,
+  finalizeHousePass,
   recordFoundationAnswer,
   type HouseReadView,
 } from "@/lib/house.server";
@@ -47,8 +48,8 @@ export const finalizeBet = createServerFn({ method: "POST" })
     return finalizeHouseBet(wallet, data.marketId, data.side, data.txHash);
   });
 
-/** Close the round with a skip; the directional pick stays sealed. */
-export const finalizeSkip = createServerFn({ method: "POST" })
+/** Close the round with a pass; the directional pick stays sealed. */
+export const finalizePass = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
     z
       .object({
@@ -61,7 +62,7 @@ export const finalizeSkip = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
     const wallet = await assertWalletOwnership(data.wallet, data.session);
-    return finalizeHouseSkip(wallet, data.marketId);
+    return finalizeHousePass(wallet, data.marketId);
   });
 
 /** Answer one free foundation POV to train the House (cold start). */
@@ -72,7 +73,7 @@ export const recordFoundation = createServerFn({ method: "POST" })
         wallet: z.string().min(3),
         marketId: z.number().int().nonnegative(),
         key: z.string().min(1),
-        action: z.enum(["YES", "NO", "SKIP"]),
+        action: z.enum(["YES", "NO", "PASS"]),
         session: z.string().min(16).max(2000),
       })
       .parse(raw),
