@@ -105,6 +105,7 @@ export default defineConfig({
         "@coinbase/wallet-sdk",
         "@walletconnect/time",
         "@walletconnect/window-metadata",
+        "@walletconnect/window-getters",
         "pino",
       ],
     },
