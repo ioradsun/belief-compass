@@ -9,6 +9,7 @@ import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { readLatestTradesPerMarket, readLatestTradeEvents } from "@/lib/events.functions";
 import { flowForWindow, type FlowTrade, type WindowFlow } from "@/domain/market-flow";
+import type { TapeTrade } from "@/domain/conviction-series";
 import { toLegacyFeedEventRow } from "@/lib/events";
 import { composeMarketStory, type NetworkFace, type NetworkLabel } from "@/domain/story";
 import { swrCache } from "@/lib/server-cache";
@@ -460,7 +461,15 @@ export interface MarketChange {
    * already holds, so every number in the deck comes from one window.
    */
   flows: Partial<Record<VolumeWindow, WindowFlow>>;
+  /**
+   * The compacted canonical trade tape this response was derived from — the SAME
+   * rows, nothing extra fetched. The Case File rebuilds its Conviction Timeline
+   * (believers / capital / price) from it locally, so switching window is instant
+   * and costs no request. Money and price are ETH.
+   */
+  tape: TapeTrade[];
 }
+
 
 const numOrNull = (v: unknown): number | null =>
   v == null || !Number.isFinite(Number(v)) ? null : Number(v);
@@ -505,17 +514,25 @@ export const getMarketChange = createServerFn({ method: "GET" })
     // is scaled to whole ETH here; the deck converts to USD with the same
     // ETH/USD rate it prices orders with.
     const facts: FlowTrade[] = [];
+    const tape: TapeTrade[] = [];
     for (const t of trades) {
       const side = t.side === "YES" || t.side === "NO" ? t.side : null;
       const action = t.action === "SELL" ? "SELL" : t.action === "BUY" ? "BUY" : null;
       if (!side || !action || !t.wallet) continue;
       const wei = Number(t.amount_eth ?? 0);
-      facts.push({
-        wallet: t.wallet,
+      const eth = Number.isFinite(wei) ? wei / 1e18 : 0;
+      const at = new Date(t.occurred_at).getTime();
+      facts.push({ wallet: t.wallet, side, action, usd: eth, at });
+      const priceWei = t.price == null ? null : Number(t.price);
+      tape.push({
+        // Short, stable key — enough to count distinct believers, and nothing
+        // more than the feed already publishes.
+        w: t.wallet.slice(0, 10),
         side,
         action,
-        usd: Number.isFinite(wei) ? wei / 1e18 : 0,
-        at: new Date(t.occurred_at).getTime(),
+        eth,
+        price: priceWei != null && Number.isFinite(priceWei) ? priceWei / 1e18 : null,
+        t: at,
       });
     }
 
@@ -531,7 +548,9 @@ export const getMarketChange = createServerFn({ method: "GET" })
       noPrice: numOrNull(s?.no_price_usd),
       windows,
       flows,
+      tape,
     };
+
   });
 
 /**

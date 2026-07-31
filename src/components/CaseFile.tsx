@@ -13,13 +13,19 @@
  * Move) pinned at the top — same height both sides so the numbers line up across
  * the center — then the deeper People → Your Network → Evidence scrolls below.
  */
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
+import { getMarketChange } from "@/lib/markets.functions";
 import { SideColumn, DefenseColumn } from "@/components/MarketEvidence";
+import { ConvictionTimeline } from "@/components/ConvictionTimeline";
 import type { MarketRow } from "@/components/MarketCard";
 import { fmtUsd } from "@/domain/order";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
+import { convictionSeries, timelineEvents, leadStory } from "@/domain/conviction-series";
+import { FLOW_WINDOW_SHORT } from "@/domain/market-flow";
+import { useDeckWindow } from "@/lib/deck-window";
 
 type Side = "YES" | "NO";
 
@@ -106,6 +112,7 @@ export function CaseColumn({
   marketId,
   row,
   viewerWallet,
+  ethUsd = 0,
   openSection,
   onToggleSection,
 }: {
@@ -113,6 +120,8 @@ export function CaseColumn({
   marketId: number;
   row: MarketRow;
   viewerWallet?: string;
+  /** Live ETH/USD, so the event rail speaks dollars like the rest of the app. */
+  ethUsd?: number;
   /** The section open on BOTH columns (shared parent state); null = all collapsed. */
   openSection: CaseSection | null;
   onToggleSection: (s: CaseSection) => void;
@@ -135,8 +144,32 @@ export function CaseColumn({
     staleTime: 60_000,
   });
 
+  // The deck already runs this exact key for its own price/flow numbers, so the
+  // timeline is free: same response, rebuilt locally per window.
+  const { data: change } = useQuery({
+    queryKey: ["market-change", marketId],
+    queryFn: () => getMarketChange({ data: { id: marketId } }),
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+  });
+
+  // The window the trader picked in the center — never a second period on screen.
+  const win = useDeckWindow();
+  const tape = change?.tape;
+  const { series, events, caption } = useMemo(() => {
+    if (!tape?.length) return { series: [], events: [], caption: null };
+    const now = Date.now();
+    const s = convictionSeries(tape, side, win, now);
+    return {
+      series: s,
+      events: timelineEvents(tape, side, win, now, 10),
+      caption: leadStory(s),
+    };
+  }, [tape, side, win]);
+
   const relByWallet = new Map((net?.people ?? []).map((p) => [p.wallet.toLowerCase(), p]));
   const networkWallets = new Set(relByWallet.keys());
+
 
   const believers = (evidence?.believers ?? []).filter((b) => b.side === side);
   const defense = (evidence?.defense ?? []).filter((o) => o.vote === side);
@@ -220,9 +253,22 @@ export function CaseColumn({
         </div>
       </div>
 
-      {/* Investigation sections — collapsed by default; exactly one open, the SAME
-        one on both columns (parent-owned openSection). People vs People, etc. */}
+      {/* Conviction Timeline + event rail — how this side's belief FORMED, in the
+        same window the center is quoting. It scrolls with the investigation so a
+        short column never clips it. */}
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-0.5">
+        <ConvictionTimeline
+          side={side}
+          points={series}
+          events={events}
+          ethUsd={ethUsd}
+          windowLabel={FLOW_WINDOW_SHORT[win]}
+          caption={caption}
+        />
+
+        {/* Investigation sections — collapsed by default; exactly one open, the SAME
+          one on both columns (parent-owned openSection). People vs People, etc. */}
+
         {/* People — reuse the deck's own per-side believer list. */}
         <AccordionSection
           id="people"

@@ -496,6 +496,7 @@ function Feed() {
               marketId={Number(currentRow.onchain_id)}
               row={currentRow}
               viewerWallet={wallet}
+              ethUsd={data?.ethUsd ?? 0}
               openSection={caseSection}
               onToggleSection={toggleCaseSection}
             />
@@ -631,6 +632,7 @@ function Feed() {
               marketId={Number(currentRow.onchain_id)}
               row={currentRow}
               viewerWallet={wallet}
+              ethUsd={data?.ethUsd ?? 0}
               openSection={caseSection}
               onToggleSection={toggleCaseSection}
             />
