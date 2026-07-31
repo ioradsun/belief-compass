@@ -15,7 +15,7 @@
  * children. The shared order dock stays pinned below, unchanged.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CaseColumn, type CaseSection } from "@/components/CaseFile";
+import { CaseColumn } from "@/components/CaseFile";
 import type { MarketRow } from "@/components/MarketCard";
 import type { OrderSide } from "@/domain/order";
 
@@ -46,10 +46,6 @@ export function MobileCaseView({
   const scroller = useRef<HTMLDivElement | null>(null);
   const pages = useRef<(HTMLDivElement | null)[]>([]);
   const [active, setActive] = useState<Page>(1);
-  // One investigation section open at a time, shared across the two case pages
-  // so you always compare like with like (People vs People, etc).
-  const [section, setSection] = useState<CaseSection | null>(null);
-  const toggleSection = (s: CaseSection) => setSection((p) => (p === s ? null : s));
 
   // Start centered on MARKET without animation, before first paint.
   useEffect(() => {
@@ -135,8 +131,6 @@ export function MobileCaseView({
             row={row}
             viewerWallet={viewerWallet}
             ethUsd={ethUsd}
-            openSection={section}
-            onToggleSection={toggleSection}
           />
           <SideAction side="NO" onBack={() => onBackSide("NO")} />
         </CasePage>
@@ -164,8 +158,6 @@ export function MobileCaseView({
             row={row}
             viewerWallet={viewerWallet}
             ethUsd={ethUsd}
-            openSection={section}
-            onToggleSection={toggleSection}
           />
           <SideAction side="YES" onBack={() => onBackSide("YES")} />
         </CasePage>
