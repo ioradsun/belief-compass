@@ -72,19 +72,57 @@ export function WalletProviders({ children }: { children: ReactNode }) {
 }
 
 
-/** Opening the wallet modal from anywhere goes through the connect bridge event. */
+/**
+ * Single owner of session changes. Connect and sign out both go through here so
+ * Privy (which holds the real session) and wagmi never drift apart — signing out
+ * of wagmi alone used to leave Privy authenticated, after which "Connect wallet"
+ * silently did nothing.
+ */
 function ConnectBridge() {
-  const { ready, authenticated, login } = usePrivy();
+  const { ready, authenticated, login, logout, connectWallet } = usePrivy();
+  const { wallets } = useWallets();
+  const { disconnect } = useDisconnect();
+  const hasWallet = wallets.length > 0;
+  const wanted = useRef(false);
+
   useEffect(() => {
     const onOpen = () => {
-      if (!ready || authenticated) return;
-      login();
+      if (!ready) {
+        wanted.current = true; // retry as soon as Privy finishes booting
+        return;
+      }
+      if (!authenticated) return void login();
+      if (!hasWallet) return void connectWallet();
+      // Authenticated with a wallet already: nothing to open.
+    };
+    const onOut = () => {
+      wanted.current = false;
+      try {
+        disconnect();
+      } catch {
+        /* wagmi may already be disconnected */
+      }
+      void logout().catch(() => null);
     };
     window.addEventListener(CONNECT_EVENT, onOpen);
-    return () => window.removeEventListener(CONNECT_EVENT, onOpen);
-  }, [ready, authenticated, login]);
+    window.addEventListener(DISCONNECT_EVENT, onOut);
+    return () => {
+      window.removeEventListener(CONNECT_EVENT, onOpen);
+      window.removeEventListener(DISCONNECT_EVENT, onOut);
+    };
+  }, [ready, authenticated, hasWallet, login, logout, connectWallet, disconnect]);
+
+  // A click that landed before Privy was ready still opens the modal.
+  useEffect(() => {
+    if (!ready || !wanted.current) return;
+    wanted.current = false;
+    if (!authenticated) void login();
+    else if (!hasWallet) void connectWallet();
+  }, [ready, authenticated, hasWallet, login, connectWallet]);
+
   return null;
 }
+
 
 /** Mirror Privy's connected wallet into wagmi so hooks see an account. */
 function ActiveWalletSync() {
