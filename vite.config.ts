@@ -87,6 +87,14 @@ export default defineConfig({
     define: {
       "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
     },
+    // Privy ships a large optional-peer graph. Force one coherent optimization
+    // pass at startup so stale hashed chunks cannot leave React unhydrated, and
+    // include eventemitter3 so its CommonJS default export is normalized before
+    // Privy's ESM wallet bundle imports it.
+    optimizeDeps: {
+      force: true,
+      include: ["@privy-io/react-auth", "@privy-io/wagmi", "eventemitter3"],
+    },
     plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer, solanaSystemShim],
   },
 });
