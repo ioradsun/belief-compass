@@ -4,6 +4,7 @@
 //     nitro (build-only using cloudflare as a default target), VITE_* env injection, @ path alias,
 //     React/TanStack dedupe, error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
@@ -31,12 +32,29 @@ const stubWalletConnectorsOnServer = {
   },
   load(id: string) {
     if (id !== STUB_ID) return null;
+    // Rolldown resolves named imports statically, so the stub must declare every
+    // name any consumer imports — real package exports plus wallet names that
+    // RainbowKit reaches for even when the installed version lacks them.
+    const real = (() => {
+      try {
+        const src = readFileSync(
+          fileURLToPath(new URL("./node_modules/@wagmi/connectors/dist/esm/exports/index.js", import.meta.url)),
+          "utf8",
+        );
+        return [...src.matchAll(/export\s*{([^}]*)}/g)].flatMap((m) =>
+          m[1].split(",").map((s: string) => s.trim().split(/\s+as\s+/).pop()!.trim()).filter(Boolean),
+        );
+      } catch {
+        return [];
+      }
+    })();
+    const names = [...new Set([...real, "injected", "mock", "coinbaseWallet", "baseAccount", "walletConnect", "metaMask", "safe", "porto", "gemini", "tempoWallet", "version"])];
     return `const clientOnly = () => { throw new Error("wallet connectors are client-only"); };
-export const injected = clientOnly;
-export const coinbaseWallet = clientOnly;
-export const walletConnect = clientOnly;
+${names.map((n) => `export const ${n} = clientOnly;`).join("\n")}
 export default {};`;
   },
+
+
 };
 
 /**
