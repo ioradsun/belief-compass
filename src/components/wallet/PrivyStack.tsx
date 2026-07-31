@@ -11,7 +11,11 @@ import { WagmiProvider, useSetActiveWallet } from "@privy-io/wagmi";
 import { useDisconnect } from "wagmi";
 import { base } from "wagmi/chains";
 import { wagmiConfig, PRIVY_APP_ID } from "@/lib/wagmi";
-import { CONNECT_EVENT, DISCONNECT_EVENT } from "@/lib/connect-bridge";
+import {
+  CONNECT_EVENT,
+  DISCONNECT_EVENT,
+  clearDisconnectedWalletFromUrl,
+} from "@/lib/connect-bridge";
 import { PovOnConnect } from "@/components/wallet/PovOnConnect";
 
 export default function PrivyStack({ children }: { children: ReactNode }) {
@@ -54,7 +58,7 @@ export default function PrivyStack({ children }: { children: ReactNode }) {
 function PrivyBridge() {
   const { ready, authenticated, login, logout, connectWallet } = usePrivy();
   const { wallets } = useWallets();
-  const { disconnect } = useDisconnect();
+  const { disconnectAsync } = useDisconnect();
   const hasWallet = wallets.length > 0;
   const wanted = useRef(false);
   const exiting = useRef(false);
@@ -77,10 +81,11 @@ function PrivyBridge() {
         await logout();
       } finally {
         try {
-          disconnect();
+          await disconnectAsync();
         } catch {
           /* wagmi may already be disconnected */
         }
+        clearDisconnectedWalletFromUrl(wallets[0]?.address);
         exiting.current = false;
       }
     };
@@ -90,7 +95,7 @@ function PrivyBridge() {
       window.removeEventListener(CONNECT_EVENT, onOpen);
       window.removeEventListener(DISCONNECT_EVENT, onOut);
     };
-  }, [ready, authenticated, hasWallet, login, logout, connectWallet, disconnect]);
+  }, [ready, authenticated, hasWallet, login, logout, connectWallet, disconnectAsync, wallets]);
 
   // A click that landed before Privy was ready still opens the modal.
   useEffect(() => {
