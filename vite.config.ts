@@ -42,7 +42,7 @@ const stubWalletConnectorsOnServer = {
           "utf8",
         );
         return [...src.matchAll(/export\s*{([^}]*)}/g)].flatMap((m) =>
-          m[1].split(",").map((s) => s.trim().split(/\s+as\s+/).pop()!.trim()).filter(Boolean),
+          m[1].split(",").map((s: string) => s.trim().split(/\s+as\s+/).pop()!.trim()).filter(Boolean),
         );
       } catch {
         return [];
