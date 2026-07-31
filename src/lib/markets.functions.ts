@@ -453,6 +453,12 @@ export interface MarketChange {
   noPrice: number | null;
   /** Per-window price % change (first snapshot in window → latest). */
   windows: Partial<Record<VolumeWindow, { yes: number | null; no: number | null }>>;
+  /**
+   * Conviction CHANGE per window — new believers and net capital per side.
+   * Money is in ETH here; the client scales it with the live ETH/USD rate it
+   * already holds, so every number in the deck comes from one window.
+   */
+  flows: Partial<Record<VolumeWindow, WindowFlow>>;
 }
 
 const numOrNull = (v: unknown): number | null =>
