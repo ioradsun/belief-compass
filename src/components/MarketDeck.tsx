@@ -21,6 +21,13 @@ import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { useWalletSession } from "@/hooks/useWalletSession";
 import { convictionSignal, type ConvictionSignal } from "@/domain/conviction";
+import {
+  scaleFlow,
+  composePulseStory,
+  FLOW_WINDOW_SHORT,
+  type FlowWindow,
+  type PulseStory,
+} from "@/domain/market-flow";
 
 import { CHAIN_ID } from "@/chain/decoder";
 import {
