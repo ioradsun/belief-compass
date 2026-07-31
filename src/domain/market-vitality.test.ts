@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { marketVitality, vitalityRange, vitalityStory } from "./market-vitality";
+import { marketVitality, momentumView, vitalityRange, vitalityStory } from "./market-vitality";
 import type { TapeTrade } from "./conviction-series";
 
 const NOW = Date.UTC(2026, 0, 10, 12, 0, 0);
@@ -91,5 +91,37 @@ describe("vitalityStory", () => {
       NOW,
     );
     expect(vitalityStory(v)).toMatch(/narrowing|cooling/);
+  });
+});
+
+describe("momentumView", () => {
+  const idn = (n: number) => n.toLocaleString("en-US");
+
+  it("reads flat as a calm no-change, no arrow", () => {
+    const m = momentumView({ delta: 0, base: 20, rangeWords: "7 days", fmt: idn });
+    expect(m.direction).toBe("flat");
+    expect(m.text).toBe("No change over 7 days");
+  });
+
+  it("colors up with ▲ and a percent when the base is meaningful", () => {
+    const m = momentumView({ delta: 4, base: 31, rangeWords: "7 days", fmt: idn });
+    expect(m.direction).toBe("up");
+    expect(m.text).toBe("▲ +4 · +13% over 7 days");
+  });
+
+  it("colors down with ▼", () => {
+    const m = momentumView({ delta: -12, base: 40, rangeWords: "24 hours", fmt: idn });
+    expect(m.direction).toBe("down");
+    expect(m.text).toBe("▼ −12 · −30% over 24 hours");
+  });
+
+  it("suppresses the percent for small bases (a 1→2 jump is not +100%)", () => {
+    const m = momentumView({ delta: 1, base: 1, rangeWords: "since creation", fmt: idn });
+    expect(m.text).toBe("▲ +1 over since creation");
+  });
+
+  it("honors an epsilon so tiny capital dust reads flat", () => {
+    const m = momentumView({ delta: 0.4, base: 100, rangeWords: "7 days", fmt: idn, eps: 1 });
+    expect(m.direction).toBe("flat");
   });
 });
