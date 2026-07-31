@@ -13,13 +13,19 @@
  * Move) pinned at the top — same height both sides so the numbers line up across
  * the center — then the deeper People → Your Network → Evidence scrolls below.
  */
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
+import { getMarketChange } from "@/lib/markets.functions";
 import { SideColumn, DefenseColumn } from "@/components/MarketEvidence";
+import { ConvictionTimeline } from "@/components/ConvictionTimeline";
 import type { MarketRow } from "@/components/MarketCard";
 import { fmtUsd } from "@/domain/order";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
+import { convictionSeries, timelineEvents, leadStory } from "@/domain/conviction-series";
+import { FLOW_WINDOW_SHORT } from "@/domain/market-flow";
+import { useDeckWindow } from "@/lib/deck-window";
 
 type Side = "YES" | "NO";
 
