@@ -17,6 +17,8 @@ import { ProfileEditor } from "@/components/ProfileEditor";
 import { getProfileOverride } from "@/lib/profile-edit.functions";
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 import { requestDisconnect } from "@/lib/connect-bridge";
+import { setWalletProvider, walletProvider } from "@/lib/wagmi";
+
 
 /** Never show a raw 0x address as a name — fall back to the neutral alias. */
 function nameOf(candidates: (string | null | undefined)[], wallet: string) {
