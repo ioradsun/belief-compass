@@ -17,6 +17,7 @@ import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain, useAccount, useBalance } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
+import { TheHouse } from "@/components/TheHouse";
 import { CaseStory } from "@/components/CaseStory";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
@@ -414,14 +415,19 @@ export function MarketDeck({
           second narration of these same two numbers, live in the Case File. */}
           <MarketVitalityPanel tape={change?.tape} ethUsd={ethUsd} />
 
-          {/* House Read — what the question is really testing. In the neutral center
-          this is the only intelligence lens; the per-side lenses are Case material. */}
-          <MarketIntelligence
-            marketId={marketId}
-            viewerWallet={viewerWallet}
-            caseOpen
-            neutral={!caseOpen}
-          />
+          {/* The House — one line, a companion that learns how you think. It
+          replaces the old House Read analytics in the neutral center; when the
+          Case File is open, the per-side intelligence lenses take over. */}
+          {caseOpen ? (
+            <MarketIntelligence
+              marketId={marketId}
+              viewerWallet={viewerWallet}
+              caseOpen
+              neutral={false}
+            />
+          ) : (
+            <TheHouse marketId={marketId} viewerWallet={viewerWallet} />
+          )}
 
           {/* Moderation stays reachable, but quiet — not a metrics row. */}
           <div className="flex justify-end text-[11px] text-[var(--text-muted)]">
