@@ -15,12 +15,11 @@ import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketChange } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
-import { ConvictionTimeline } from "@/components/ConvictionTimeline";
+import { ConvictionIndexChart } from "@/components/ConvictionIndexChart";
+import { convictionIndexSeries, indexTrendCaption } from "@/domain/conviction-index";
 import { SideColumn, DefenseColumn } from "@/components/MarketEvidence";
 import {
   convictionSeries,
-  timelineEvents,
-  leadStory,
   convictionStory,
   narrateStory,
 } from "@/domain/conviction-series";
@@ -73,17 +72,19 @@ export function CaseStory({
   });
 
   const tape = change?.tape;
-  const { series, events, caption, story } = useMemo(() => {
-    if (!tape?.length) return { series: [], events: [], caption: null, story: null };
+  const { idx, caption, story } = useMemo(() => {
+    if (!tape?.length)
+      return { idx: { opening: null, steps: [] }, caption: null, story: null };
     const now = Date.now();
     const s = convictionSeries(tape, side, win, now);
+    const i = convictionIndexSeries(tape, side, win, now);
     return {
-      series: s,
-      events: timelineEvents(tape, side, win, now, 14),
-      caption: leadStory(s),
+      idx: i,
+      caption: indexTrendCaption(i.opening, i.steps),
       story: convictionStory(side, s),
     };
   }, [tape, side, win]);
+
 
   const believers = (evidence?.believers ?? []).filter((b) => b.side === side);
   const defense = (evidence?.defense ?? []).filter((o) => o.vote === side);
@@ -125,17 +126,18 @@ export function CaseStory({
           </button>
         </div>
 
-        {/* The full timeline + its synchronized event rail. */}
+        {/* The Conviction Index + its synchronized event rail. */}
         <div className="mt-4">
-          <ConvictionTimeline
+          <ConvictionIndexChart
             side={side}
-            points={series}
-            events={events}
+            opening={idx.opening}
+            steps={idx.steps}
             ethUsd={ethUsd}
             windowLabel={FLOW_WINDOW_SHORT[win]}
             caption={caption}
           />
         </div>
+
 
         {/* Who is behind it — the people the numbers stand for. */}
         <section className="mt-2">

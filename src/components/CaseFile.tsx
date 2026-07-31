@@ -19,7 +19,8 @@ import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getMarketChange } from "@/lib/markets.functions";
 import { SideColumn, DefenseColumn } from "@/components/MarketEvidence";
-import { ConvictionTimeline } from "@/components/ConvictionTimeline";
+import { ConvictionIndexChart } from "@/components/ConvictionIndexChart";
+import { convictionIndexSeries, indexTrendCaption } from "@/domain/conviction-index";
 import { ConvictionSpark } from "@/components/ConvictionSpark";
 import type { MarketRow } from "@/components/MarketCard";
 import { fmtUsd } from "@/domain/order";
@@ -27,7 +28,6 @@ import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import {
   convictionSeries,
   timelineEvents,
-  leadStory,
   convictionStory,
 } from "@/domain/conviction-series";
 import { FLOW_WINDOW_SHORT } from "@/domain/market-flow";
@@ -169,17 +169,27 @@ export function CaseColumn({
   const win = useDeckWindow();
   const winShort = FLOW_WINDOW_SHORT[win];
   const tape = change?.tape;
-  const { series, events, caption, story } = useMemo(() => {
-    if (!tape?.length) return { series: [], events: [], caption: null, story: null };
+  const { series, events, caption, story, idx } = useMemo(() => {
+    if (!tape?.length)
+      return {
+        series: [],
+        events: [],
+        caption: null,
+        story: null,
+        idx: { opening: null, steps: [] },
+      };
     const now = Date.now();
     const s = convictionSeries(tape, side, win, now);
+    const i = convictionIndexSeries(tape, side, win, now);
     return {
       series: s,
       events: timelineEvents(tape, side, win, now, 10),
-      caption: leadStory(s),
+      caption: indexTrendCaption(i.opening, i.steps),
       story: convictionStory(side, s),
+      idx: i,
     };
   }, [tape, side, win]);
+
 
   const relByWallet = new Map((net?.people ?? []).map((p) => [p.wallet.toLowerCase(), p]));
   const networkWallets = new Set(relByWallet.keys());
@@ -317,18 +327,19 @@ export function CaseColumn({
       </button>
 
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-0.5">
-        {/* The full three-line timeline lives in the center while investigating;
+        {/* The full Conviction Index lives in the center while investigating;
           here it only appears in Discovery, so the same chart is never duplicated. */}
         {!investigating && (
-          <ConvictionTimeline
+          <ConvictionIndexChart
             side={side}
-            points={series}
-            events={events}
+            opening={idx.opening}
+            steps={idx.steps}
             ethUsd={ethUsd}
             windowLabel={winShort}
             caption={caption}
           />
         )}
+
 
 
         {/* Investigation sections — collapsed by default; exactly one open, the SAME
