@@ -50,6 +50,9 @@ const EVENTS_SHIM = fileURLToPath(new URL("./src/lib/shims/events.ts", import.me
 // Vite maps anything starting with `events` to the empty builtin stub in the
 // browser, including the deep path, so resolve the real file ourselves.
 const EVENTS_IMPL = fileURLToPath(new URL("./node_modules/events/events.js", import.meta.url));
+const EVENTEMITTER3_ESM = fileURLToPath(
+  new URL("./node_modules/eventemitter3/index.mjs", import.meta.url),
+);
 const eventsShimInBrowser = {
   name: "events-shim-in-browser",
   enforce: "pre" as const,
@@ -57,6 +60,9 @@ const eventsShimInBrowser = {
     if (this.environment?.name !== "client") return null;
     if (id === "events" || id === "node:events") return EVENTS_SHIM;
     if (id === "events/events.js" || id === "node:events/events.js") return EVENTS_IMPL;
+    // Privy's direct-transform graph contains a deep CommonJS import that Vite
+    // serves as raw ESM. Use the package's equivalent native ESM entry so the
+    // expected default export is present in every browser.
     return null;
   },
 };
@@ -87,13 +93,24 @@ export default defineConfig({
     define: {
       "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
     },
-    // Privy ships a large optional-peer graph. Force one coherent optimization
-    // pass at startup so stale hashed chunks cannot leave React unhydrated, and
-    // include eventemitter3 so its CommonJS default export is normalized before
-    // Privy's ESM wallet bundle imports it.
+    // Transform Privy directly so its very large optional-peer graph cannot
+    // stall or invalidate hydration. Pre-bundle only the two CommonJS utilities
+    // that its ESM source imports with default-export syntax.
     optimizeDeps: {
-      force: true,
-      include: ["@privy-io/react-auth", "@privy-io/wagmi", "eventemitter3"],
+      exclude: ["@privy-io/react-auth", "@privy-io/wagmi"],
+      include: [
+        "eventemitter3",
+        "canonicalize",
+        "fetch-retry",
+        "@coinbase/wallet-sdk",
+        "@walletconnect/time",
+        "@walletconnect/environment",
+        "@walletconnect/window-metadata",
+        "@walletconnect/window-getters",
+        "@walletconnect/jsonrpc-utils",
+        "blakejs",
+        "pino",
+      ],
     },
     plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer, solanaSystemShim],
   },

@@ -2,20 +2,18 @@
  * Browser shim for Node's `events`.
  *
  * WalletConnect's core does `import EE, { EventEmitter } from "events"`. In the
- * production (rolldown) client bundle the CJS→ESM interop for the `events`
- * package loses the named `EventEmitter` binding, so the connector blows up on
+ * production client bundle the CJS→ESM interop for the `events` package loses
+ * the named `EventEmitter` binding, so the connector blows up on
  * mobile Safari with `undefined is not a constructor (evaluating 'new
  * te.EventEmitter')`. Re-exporting explicitly from the package's real entry
  * file makes both the default and named shapes exist no matter how the module
- * is interop'd.
+ * is interop'd. EventEmitter3 has a native ESM build and implements the subset
+ * of Node's emitter API used by Privy, Coinbase and WalletConnect.
  */
-// @ts-expect-error — deep path into the `events` package has no type declarations.
-import EE from "events/events.js";
+import EventEmitter3 from "eventemitter3";
 
-const mod = EE as unknown as Record<string, unknown>;
-const Emitter = (mod.EventEmitter ?? EE) as unknown as {
-  new (): unknown;
-  EventEmitter?: unknown;
+const Emitter = EventEmitter3 as typeof EventEmitter3 & {
+  EventEmitter?: typeof EventEmitter3;
 };
 
 // Node's module is self-referential; keep that shape for consumers that read
@@ -23,12 +21,15 @@ const Emitter = (mod.EventEmitter ?? EE) as unknown as {
 Emitter.EventEmitter = Emitter;
 
 export const EventEmitter = Emitter;
-export const once = mod.once;
-export const on = mod.on;
-export const captureRejectionSymbol = mod.captureRejectionSymbol;
-export const errorMonitor = mod.errorMonitor;
-export const defaultMaxListeners = mod.defaultMaxListeners;
-export const setMaxListeners = mod.setMaxListeners;
-export const listenerCount = mod.listenerCount;
+export const once = (emitter: EventEmitter3, event: string | symbol) =>
+  new Promise<unknown[]>((resolve) => emitter.once(event, (...args: unknown[]) => resolve(args)));
+export const on = (emitter: EventEmitter3, event: string | symbol, listener: (...args: unknown[]) => void) =>
+  emitter.on(event, listener);
+export const captureRejectionSymbol = Symbol.for("nodejs.rejection");
+export const errorMonitor = Symbol.for("events.errorMonitor");
+export const defaultMaxListeners = 10;
+export const setMaxListeners = () => undefined;
+export const listenerCount = (emitter: EventEmitter3, event: string | symbol) =>
+  emitter.listenerCount(event);
 
 export default Emitter;
