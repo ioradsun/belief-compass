@@ -22,7 +22,7 @@ const t = (o: Partial<TapeTrade>): TapeTrade => ({
 describe("convictionSeries", () => {
   it("accumulates distinct believers and capital, and normalizes to the window start", () => {
     const trades = [
-      t({ w: "a", t: now - 10 * H, eth: 2, price: 1 }),
+      t({ w: "a", t: now - 30 * H, eth: 2, price: 1 }),
       t({ w: "b", t: now - 2 * H, eth: 2, price: 1.5 }),
       t({ w: "c", t: now - H, eth: 4, price: 2 }),
     ];
@@ -110,7 +110,7 @@ describe("timelineEvents", () => {
 describe("leadStory", () => {
   it("reads a lone large position as money leading", () => {
     const s = convictionSeries(
-      [t({ w: "a", eth: 1, t: now - 10 * H }), t({ w: "a", eth: 40, t: now - H })],
+      [t({ w: "a", eth: 1, t: now - 30 * H }), t({ w: "a", eth: 40, t: now - H })],
       "YES",
       "24h",
       now,
