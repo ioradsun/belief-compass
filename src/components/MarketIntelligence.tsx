@@ -91,11 +91,14 @@ export function MarketIntelligence({
   marketId,
   viewerWallet,
   caseOpen = false,
+  neutral = false,
 }: {
   marketId: number;
   viewerWallet?: string;
   /** In Case File mode the per-side Believers/Defense move to the side columns. */
   caseOpen?: boolean;
+  /** Neutral center: House Read only — nothing that reveals a side. */
+  neutral?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>("house");
   const isMobile = useIsMobile();
@@ -119,8 +122,9 @@ export function MarketIntelligence({
   // In Case File mode the Believers/Defense evidence lives in the side columns,
   // so those tabs are hidden here — snap back to House if one was active.
   useEffect(() => {
-    if (caseOpen) setMode((m) => (m === "believers" || m === "defense" ? "house" : m));
-  }, [caseOpen]);
+    if (neutral) setMode("house");
+    else if (caseOpen) setMode((m) => (m === "believers" || m === "defense" ? "house" : m));
+  }, [caseOpen, neutral]);
 
   const { data: evidence, isLoading: loadingEvidence } = useQuery({
     queryKey: ["evidence", marketId],
@@ -175,7 +179,9 @@ export function MarketIntelligence({
     { id: "defense", label: "Defense", short: "Defense" },
   ];
   // Case File relocates the per-side evidence to the columns; hide it here.
-  const tabs = allTabs.filter((t) => !(caseOpen && (t.id === "believers" || t.id === "defense")));
+  const tabs = neutral
+    ? allTabs.filter((t) => t.id === "house")
+    : allTabs.filter((t) => !(caseOpen && (t.id === "believers" || t.id === "defense")));
 
   const onTabKey = (e: React.KeyboardEvent) => {
     const i = tabs.findIndex((t) => t.id === mode);
