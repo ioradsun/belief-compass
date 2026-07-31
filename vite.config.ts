@@ -31,12 +31,23 @@ const stubWalletConnectorsOnServer = {
   },
   load(id: string) {
     if (id !== STUB_ID) return null;
+    // Must name every export RainbowKit/wagmi reach for, or the server build
+    // fails with MISSING_EXPORT even though none of them ever run there.
+    const names = [
+      "injected",
+      "coinbaseWallet",
+      "baseAccount",
+      "walletConnect",
+      "metaMask",
+      "safe",
+      "mock",
+      "porto",
+    ];
     return `const clientOnly = () => { throw new Error("wallet connectors are client-only"); };
-export const injected = clientOnly;
-export const coinbaseWallet = clientOnly;
-export const walletConnect = clientOnly;
+${names.map((n) => `export const ${n} = clientOnly;`).join("\n")}
 export default {};`;
   },
+
 };
 
 /**
