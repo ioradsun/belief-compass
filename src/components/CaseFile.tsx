@@ -1,19 +1,19 @@
 /**
  * Case File — one side's case, told as a single story with no breaks.
  *
- * THE CLAIM (now) → THE MOVEMENT (over the window you pick) → THE PEOPLE (who is
- * actually here, which group they belong to, and how long they've held). One
- * time filter drives the whole panel, so every number on screen speaks the same
- * period. No conviction index, no duplicate People/Network lists — just the
- * argument, beginning to end.
+ * THE CLAIM (now) → THE MOVEMENT (over the shared window) → THE PEOPLE (who is
+ * sustaining the position, the group they belong to, and how long they've held).
+ * Both sides read the SAME timeframe (deck-window) so YES and NO are always
+ * comparable; a side only detaches its own period inside the full investigation.
+ * No conviction index, no duplicate People/Network lists — just the argument.
  *
  * Presentation only: it reuses the exact React Query keys the deck already runs
  * (so opening the Case File adds no requests) and derives the totals, deltas and
  * roster ordering from the pure src/domain/case-file engine.
  */
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getMarketEvidence } from "@/lib/evidence.functions";
+import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getMarketChange } from "@/lib/markets.functions";
 import { ConvictionSpark } from "@/components/ConvictionSpark";
@@ -22,30 +22,27 @@ import { fmtUsd } from "@/domain/order";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { timelineEvents } from "@/domain/conviction-series";
 import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT, type FlowWindow } from "@/domain/market-flow";
+import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import {
-  GROUP_LABEL,
+  RELATIONSHIP_LABEL,
+  STATUS_LABEL,
   heldFor,
   rankBelievers,
   sideCaseSummary,
-  type BelieverGroup,
+  type CaseRelationship,
 } from "@/domain/case-file";
 
 type Side = "YES" | "NO";
 
 const WINDOWS: FlowWindow[] = ["1h", "24h", "7d", "30d", "all"];
 
-/** Badge tone per group — network ties tinted, whale gold, plain holder quiet. */
-const GROUP_TONE: Record<BelieverGroup, { fg: string; bg: string }> = {
-  twin: { fg: "var(--yes)", bg: "color-mix(in oklab, var(--yes) 16%, transparent)" },
-  tribe: { fg: "var(--yes)", bg: "color-mix(in oklab, var(--yes) 12%, transparent)" },
-  rival: { fg: "var(--no)", bg: "color-mix(in oklab, var(--no) 14%, transparent)" },
-  inverse: { fg: "var(--no)", bg: "color-mix(in oklab, var(--no) 10%, transparent)" },
-  match: {
-    fg: "var(--text-secondary)",
-    bg: "color-mix(in oklab, var(--text-secondary) 12%, transparent)",
-  },
-  whale: { fg: "#b7791f", bg: "color-mix(in oklab, #d69e2e 16%, transparent)" },
-  believer: { fg: "var(--text-muted)", bg: "transparent" },
+/** The relationship word's colour — the one primary badge. Status stays quiet. */
+const REL_TONE: Record<CaseRelationship, string> = {
+  twin: "var(--yes)",
+  tribe: "var(--yes)",
+  rival: "var(--no)",
+  inverse: "var(--no)",
+  unmapped: "var(--text-muted)",
 };
 
 const num = (v: unknown): number | null =>
@@ -71,8 +68,8 @@ export function CaseColumn({
   investigating?: boolean;
 }) {
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
-  // The one control that drives the whole panel — this side's own timeframe.
-  const [win, setWin] = useState<FlowWindow>("24h");
+  // The shared timeframe: YES and NO always quote the same period so they compare.
+  const win = useDeckWindow();
 
   // Same query keys the deck already runs → React Query dedupes, no new requests.
   const { data: evidence } = useQuery({
@@ -105,13 +102,7 @@ export function CaseColumn({
     };
   }, [tape, side, win]);
 
-  // The people, as one ordered roster with their group (People + Network merged).
   const believers = (evidence?.believers ?? []).filter((b) => b.side === side);
-  const relOf = useMemo(() => {
-    const m = new Map((net?.people ?? []).map((p) => [p.wallet.toLowerCase(), p.relationship]));
-    return (w: string) => m.get(w) ?? null;
-  }, [net]);
-  const roster = useMemo(() => rankBelievers(believers, relOf), [believers, relOf]);
 
   // Totals fall back to the market row before the tape has loaded, so the panel
   // never opens blank. The row totals are period-less; the deltas need the tape.
@@ -129,7 +120,7 @@ export function CaseColumn({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Header: the side, and the one time filter that drives everything below. */}
+      {/* Header: the side, and the one shared time filter. */}
       <div className="mb-3 shrink-0">
         <div className="mb-2 flex items-baseline gap-2">
           <span className="text-[13px] font-semibold" style={{ color }}>
@@ -137,7 +128,7 @@ export function CaseColumn({
           </span>
           <span className="text-[13px] font-semibold text-[var(--text)]">Case</span>
         </div>
-        <WindowFilter win={win} onWin={setWin} />
+        <WindowFilter win={win} onWin={setDeckWindow} />
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5">
@@ -187,26 +178,8 @@ export function CaseColumn({
           )}
         </div>
 
-        {/* ACT 3 — THE PEOPLE: one roster, each in their group, with how long held. */}
-        <div className="space-y-1.5">
-          <div className="flex items-baseline justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-              Who backs {side}
-            </span>
-            {roster.length > 0 && (
-              <span className="num text-[10px] text-[var(--text-muted)]">{roster.length}</span>
-            )}
-          </div>
-          {roster.length === 0 ? (
-            <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No one on this side yet.</p>
-          ) : (
-            <ul className="space-y-0.5">
-              {roster.map(({ believer: b, group }) => (
-                <BelieverRow key={b.wallet} b={b} group={group} />
-              ))}
-            </ul>
-          )}
-        </div>
+        {/* ACT 3 — THE PEOPLE: one roster, one relationship badge, one status. */}
+        <CaseRoster side={side} believers={believers} people={net?.people} />
       </div>
 
       {/* Optional deep-dive into the full center timeline (desktop investigation). */}
@@ -225,8 +198,8 @@ export function CaseColumn({
   );
 }
 
-/** The one time filter: 1H · 1D · 1W · 1M · All. Drives the whole panel. */
-function WindowFilter({ win, onWin }: { win: FlowWindow; onWin: (w: FlowWindow) => void }) {
+/** The shared time filter: 1H · 1D · 1W · 1M · All. */
+export function WindowFilter({ win, onWin }: { win: FlowWindow; onWin: (w: FlowWindow) => void }) {
   return (
     <div
       className="flex rounded-[9px] p-0.5"
@@ -256,7 +229,7 @@ function WindowFilter({ win, onWin }: { win: FlowWindow; onWin: (w: FlowWindow) 
 }
 
 /** One headline total with its window-relative % change. */
-function StatRow({
+export function StatRow({
   icon,
   label,
   value,
@@ -285,8 +258,8 @@ function StatRow({
   );
 }
 
-/** A green/red/quiet % chip — the movement over the selected window. */
-function PctChip({ pct }: { pct: number | null }) {
+/** A green/red/quiet % chip — the move over the selected window. */
+export function PctChip({ pct }: { pct: number | null }) {
   if (pct == null) return <span className="num text-[11px] text-[var(--text-muted)]">—</span>;
   const flat = Math.abs(pct) < 0.05;
   const color = flat ? "var(--text-muted)" : pct > 0 ? "var(--yes)" : "var(--no)";
@@ -298,48 +271,72 @@ function PctChip({ pct }: { pct: number | null }) {
   );
 }
 
-function BelieverRow({
-  b,
-  group,
+/** The people, as one ranked roster — People and Network merged, no duplicates. */
+export function CaseRoster({
+  side,
+  believers,
+  people,
 }: {
-  b: {
-    wallet: string;
-    name: string;
-    avatarUrl: string | null;
-    daysHeld: number;
-    valueUsd: number;
-    whale: boolean;
-  };
-  group: BelieverGroup;
+  side: Side;
+  believers: Believer[];
+  people?: { wallet: string; relationship: string }[];
 }) {
-  const tone = GROUP_TONE[group];
+  const relOf = useMemo(() => {
+    const m = new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p.relationship]));
+    return (w: string) => m.get(w) ?? null;
+  }, [people]);
+  const roster = useMemo(() => rankBelievers(believers, relOf), [believers, relOf]);
+
   return (
-    <li className="flex items-center gap-2 rounded-[8px] px-1 py-1">
-      {b.avatarUrl ? (
-        <img src={b.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
-      ) : (
-        <span
-          className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold text-white"
-          style={{ background: `hsl(${hueFor(b.wallet)} 45% 45%)` }}
-          aria-hidden
-        >
-          {initialsFor(b.name)}
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          Who backs {side}
         </span>
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[12px] text-[var(--text)]">{b.name}</div>
-        <div className="num text-[10px] text-[var(--text-muted)]">
-          {heldFor(b.daysHeld)}
-          {b.valueUsd >= 1 ? ` · ${fmtUsd(b.valueUsd)}` : ""}
-        </div>
+        {roster.length > 0 && (
+          <span className="num text-[10px] text-[var(--text-muted)]">{roster.length}</span>
+        )}
       </div>
-      <span
-        className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]"
-        style={{ color: tone.fg, background: tone.bg }}
-      >
-        {b.whale && group !== "whale" ? "🐋 " : ""}
-        {GROUP_LABEL[group]}
-      </span>
-    </li>
+      {roster.length === 0 ? (
+        <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No one on this side yet.</p>
+      ) : (
+        <ul className="space-y-0.5">
+          {roster.map(({ believer: b, relationship, status }) => (
+            <li key={b.wallet} className="flex items-center gap-2 rounded-[8px] px-1 py-1">
+              {b.avatarUrl ? (
+                <img
+                  src={b.avatarUrl}
+                  alt=""
+                  className="h-7 w-7 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <span
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
+                  style={{ background: `hsl(${hueFor(b.wallet)} 45% 45%)` }}
+                  aria-hidden
+                >
+                  {initialsFor(b.name)}
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[12px] text-[var(--text)]">{b.name}</div>
+                <div className="text-[11px]">
+                  <span className="font-medium" style={{ color: REL_TONE[relationship] }}>
+                    {RELATIONSHIP_LABEL[relationship]}
+                  </span>
+                  {status && (
+                    <span className="text-[var(--text-muted)]"> · {STATUS_LABEL[status]}</span>
+                  )}
+                </div>
+                <div className="num text-[10px] text-[var(--text-muted)]">
+                  {heldFor(b.daysHeld)}
+                  {b.valueUsd >= 1 ? ` · ${fmtUsd(b.valueUsd)} backed` : ""}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

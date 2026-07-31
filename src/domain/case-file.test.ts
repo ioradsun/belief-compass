@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  GROUP_LABEL,
-  believerGroup,
+  RELATIONSHIP_LABEL,
+  STATUS_LABEL,
+  believerStatus,
+  caseRelationship,
   heldFor,
   rankBelievers,
   sideCaseSummary,
@@ -57,22 +59,36 @@ describe("sideCaseSummary", () => {
   });
 });
 
-describe("believerGroup", () => {
-  it("maps a viewer relationship to its case label", () => {
-    expect(believerGroup("twin", false)).toBe("twin");
-    expect(believerGroup("opp", false)).toBe("rival");
-    expect(believerGroup("inverse", false)).toBe("inverse");
-    expect(believerGroup("neutral", false)).toBe("match");
+describe("caseRelationship", () => {
+  it("maps the network label to the one relationship badge", () => {
+    expect(caseRelationship("twin")).toBe("twin");
+    expect(caseRelationship("tribe")).toBe("tribe");
+    expect(caseRelationship("opp")).toBe("rival");
+    expect(caseRelationship("inverse")).toBe("inverse");
   });
 
-  it("falls back to whale then plain believer with no relationship", () => {
-    expect(believerGroup(null, true)).toBe("whale");
-    expect(believerGroup(null, false)).toBe("believer");
-    expect(believerGroup(undefined, false)).toBe("believer");
+  it("is Unmapped when there is no known relationship", () => {
+    expect(caseRelationship("neutral")).toBe("unmapped");
+    expect(caseRelationship(null)).toBe("unmapped");
+    expect(caseRelationship(undefined)).toBe("unmapped");
   });
 
-  it("has a label for every group", () => {
-    for (const g of Object.keys(GROUP_LABEL)) expect(GROUP_LABEL[g as never]).toBeTruthy();
+  it("labels every relationship", () => {
+    for (const r of Object.keys(RELATIONSHIP_LABEL))
+      expect(RELATIONSHIP_LABEL[r as never]).toBeTruthy();
+  });
+});
+
+describe("believerStatus", () => {
+  it("is a single optional note, money before time before newness", () => {
+    expect(believerStatus(200, true)).toBe("whale");
+    expect(believerStatus(45, false)).toBe("long_term");
+    expect(believerStatus(0, false)).toBe("new");
+    expect(believerStatus(10, false)).toBeNull();
+  });
+
+  it("labels every status", () => {
+    for (const s of Object.keys(STATUS_LABEL)) expect(STATUS_LABEL[s as never]).toBeTruthy();
   });
 });
 
@@ -85,14 +101,16 @@ describe("rankBelievers", () => {
     whale,
   });
 
-  it("puts your people first, then big money, then the rest", () => {
-    const people = [mk("plain", 999), mk("whale", 500, true), mk("tribe", 10)];
+  it("puts your ties first, then big money, then the rest — with one status", () => {
+    const people = [mk("plain", 999), mk("whale", 500, true, 40), mk("tribe", 10)];
     const rel = (w: string) => (w === "tribe" ? "tribe" : null);
     const ranked = rankBelievers(people, rel);
-    expect(ranked.map((r) => r.group)).toEqual(["tribe", "whale", "believer"]);
+    expect(ranked.map((r) => r.relationship)).toEqual(["tribe", "unmapped", "unmapped"]);
+    expect(ranked[1].believer.wallet).toBe("whale"); // money outranks a plain holder
+    expect(ranked[1].status).toBe("whale");
   });
 
-  it("breaks ties on stake within the same group", () => {
+  it("breaks ties on stake within the same relationship", () => {
     const ranked = rankBelievers([mk("a", 5), mk("b", 50)], () => null);
     expect(ranked[0].believer.wallet).toBe("b");
   });
@@ -100,11 +118,11 @@ describe("rankBelievers", () => {
 
 describe("heldFor", () => {
   it("reads as a human holding duration", () => {
-    expect(heldFor(0)).toBe("new today");
-    expect(heldFor(1)).toBe("held 1 day");
-    expect(heldFor(9)).toBe("held 9 days");
-    expect(heldFor(45)).toBe("held 1 month");
-    expect(heldFor(120)).toBe("held 4 months");
-    expect(heldFor(400)).toBe("held 1 year");
+    expect(heldFor(0)).toBe("New today");
+    expect(heldFor(1)).toBe("Held 1 day");
+    expect(heldFor(9)).toBe("Held 9 days");
+    expect(heldFor(45)).toBe("Held 1 month");
+    expect(heldFor(120)).toBe("Held 4 months");
+    expect(heldFor(400)).toBe("Held 1 year");
   });
 });

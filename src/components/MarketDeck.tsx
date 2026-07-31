@@ -10,7 +10,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMarketChange, getPositionSummary } from "@/lib/markets.functions";
-import { setDeckWindow } from "@/lib/deck-window";
 import { positionPnl, type PositionPnl } from "@/domain/position";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { requestConnect } from "@/lib/connect-bridge";
@@ -28,7 +27,6 @@ import { MarketVitalityPanel } from "@/components/MarketVitality";
 import { marketFreshness } from "@/domain/market-freshness";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import type { TapeTrade } from "@/domain/conviction-series";
-import { FLOW_WINDOW_SHORT, type FlowWindow } from "@/domain/market-flow";
 
 import { CHAIN_ID } from "@/chain/decoder";
 import {
@@ -59,15 +57,6 @@ import { getConvictionMarket } from "@/lib/market-create.functions";
  * Momentum tags — the six canonical opportunity classifications from the
  * server-side engine. Color is a second signal only; the word carries meaning.
  */
-type WinKey = "1h" | "24h" | "7d" | "30d" | "all";
-const WINDOWS: { key: WinKey; label: string }[] = [
-  { key: "1h", label: "1H" },
-  { key: "24h", label: "1D" },
-  { key: "7d", label: "1W" },
-  { key: "30d", label: "1M" },
-  { key: "all", label: "All" },
-];
-
 /** Signed dollar/percent for personal gain (loss uses a true minus glyph). */
 const signedUsd = (n: number) => `${n < 0 ? "−" : "+"}${fmtUsd(Math.abs(n))}`;
 const signedPct = (n: number | null) =>
@@ -165,14 +154,6 @@ export function MarketDeck({
     },
   });
 
-  // The trader-chosen horizon. It no longer drives anything in the neutral
-  // center — it is the Case File's range control, published so both evidence
-  // columns read the same period.
-  const [win, setWinLocal] = useState<WinKey>("24h");
-  const setWin = (next: WinKey) => {
-    setWinLocal(next);
-    setDeckWindow(next as FlowWindow);
-  };
   const { data: change } = useQuery({
     queryKey: ["market-change", marketId],
     queryFn: () => getMarketChange({ data: { id: marketId } }),
@@ -343,13 +324,6 @@ export function MarketDeck({
   // whole scroll area otherwise. Kept in one place so both paths render the same.
   const marketInner = (
     <>
-      {caseOpen && (
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] text-[var(--text-muted)]">Evidence over</span>
-          <WindowSelector win={win} onWin={setWin} />
-        </div>
-      )}
-
       <ConvictionMedia
         onchainId={Number(row.onchain_id)}
         title={String((rr.title as string | null) ?? "Market media")}
@@ -447,6 +421,7 @@ export function MarketDeck({
           side={storySide}
           marketId={marketId}
           ethUsd={ethUsd}
+          viewerWallet={viewerWallet}
           backed={side === storySide}
           onBack={() => chooseSide(storySide)}
           onClose={() => onCloseStory?.()}
@@ -549,39 +524,6 @@ export function MarketDeck({
           />
         )}
       </div>
-    </div>
-  );
-}
-
-/** Compact horizon picker: 1H · 1D · 1W · 1M · All. */
-function WindowSelector({ win, onWin }: { win: WinKey; onWin: (w: WinKey) => void }) {
-  return (
-    <div
-      className="flex items-center gap-0.5 rounded-full p-0.5"
-      style={{ border: "1px solid var(--border)" }}
-      role="tablist"
-      aria-label="Change window"
-    >
-      {WINDOWS.map((o) => {
-        const on = win === o.key;
-        return (
-          <button
-            key={o.key}
-            type="button"
-            role="tab"
-            aria-selected={on}
-            onClick={() => onWin(o.key)}
-            className="num rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors"
-            style={
-              on
-                ? { background: "var(--surface-2,var(--border))", color: "var(--text)" }
-                : { color: "var(--text-muted)" }
-            }
-          >
-            {o.label}
-          </button>
-        );
-      })}
     </div>
   );
 }

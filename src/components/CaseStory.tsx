@@ -1,36 +1,34 @@
 /**
- * The Story of YES / NO — Investigation Mode.
+ * The Story of YES / NO — Investigation Mode (full timeline).
  *
- * Discovery is comparative: two side cards flank the House Read and the eye moves
- * across. Investigation is singular: one side's case takes the center, full
- * width, and reads top-to-bottom as a story —
+ * Discovery is comparative and shares one timeframe; investigation is singular:
+ * one side's case takes the center, full width, and DETACHES its own window so
+ * you can scrub this side's history without disturbing the comparison.
  *
- *   headline → what happened in words → the full Conviction Timeline
- *   → the events that caused it → who is behind it → the action it argues for.
+ *   headline → what happened in words → the three real signals over time
+ *   (believers, capital, price — never a synthetic index) → the events that
+ *   caused it → who is sustaining it → the action it argues for.
  *
  * It fetches nothing new: the same React Query keys the deck and the Case File
- * columns already run supply the tape, the believers and the defense.
+ * columns already run supply the tape, the believers and the network.
  */
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketChange } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
-import { ConvictionIndexChart } from "@/components/ConvictionIndexChart";
-import { convictionIndexSeries, indexTrendCaption } from "@/domain/conviction-index";
-import { SideColumn, DefenseColumn } from "@/components/MarketEvidence";
-import {
-  convictionSeries,
-  convictionStory,
-  narrateStory,
-} from "@/domain/conviction-series";
-import { FLOW_WINDOW_SHORT, FLOW_WINDOW_PHRASE } from "@/domain/market-flow";
-import { useDeckWindow } from "@/lib/deck-window";
+import { getNetwork } from "@/lib/dna.functions";
+import { ConvictionSpark } from "@/components/ConvictionSpark";
+import { CaseRoster, StatRow, WindowFilter } from "@/components/CaseFile";
+import { convictionStory, narrateStory, timelineEvents } from "@/domain/conviction-series";
+import { FLOW_WINDOW_PHRASE, type FlowWindow } from "@/domain/market-flow";
+import { sideCaseSummary } from "@/domain/case-file";
 import { fmtUsd } from "@/domain/order";
 
 export function CaseStory({
   side,
   marketId,
   ethUsd,
+  viewerWallet,
   onClose,
   onBack,
   backed,
@@ -38,6 +36,7 @@ export function CaseStory({
   side: "YES" | "NO";
   marketId: number;
   ethUsd: number;
+  viewerWallet?: string;
   /** Return to Discovery (both sides side-by-side). */
   onClose: () => void;
   /** The one action this story argues for — selects the side in the dock. */
@@ -46,7 +45,8 @@ export function CaseStory({
   backed: boolean;
 }) {
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
-  const win = useDeckWindow();
+  // Investigation detaches its own timeframe — the comparison keeps the shared one.
+  const [win, setWin] = useState<FlowWindow>("24h");
 
   // Escape always returns to comparison — investigation is a temporary lens.
   useEffect(() => {
@@ -70,28 +70,32 @@ export function CaseStory({
     staleTime: 30_000,
     placeholderData: (prev) => prev,
   });
+  const { data: net } = useQuery({
+    queryKey: ["network", viewerWallet ?? null, "all", "relevant", ""],
+    queryFn: () => getNetwork({ data: { wallet: viewerWallet, limit: 60 } }),
+    enabled: !!viewerWallet,
+    staleTime: 60_000,
+  });
 
   const tape = change?.tape;
-  const { idx, caption, story } = useMemo(() => {
-    if (!tape?.length)
-      return { idx: { opening: null, steps: [] }, caption: null, story: null };
+  const { summary, events, story } = useMemo(() => {
+    if (!tape?.length) return { summary: null, events: [], story: null };
     const now = Date.now();
-    const s = convictionSeries(tape, side, win, now);
-    const i = convictionIndexSeries(tape, side, win, now);
+    const s = sideCaseSummary(tape, side, win, now);
     return {
-      idx: i,
-      caption: indexTrendCaption(i.opening, i.steps),
-      story: convictionStory(side, s),
+      summary: s,
+      events: timelineEvents(tape, side, win, now, 8),
+      story: s ? convictionStory(side, s.series) : null,
     };
   }, [tape, side, win]);
 
-
   const believers = (evidence?.believers ?? []).filter((b) => b.side === side);
-  const defense = (evidence?.defense ?? []).filter((o) => o.vote === side);
-
   const narrative = story
     ? narrateStory(story, side, FLOW_WINDOW_PHRASE[win], (eth) => fmtUsd(eth * (ethUsd || 0)))
     : null;
+
+  const capitalUsd = summary ? summary.capitalEth * (ethUsd || 0) : null;
+  const priceUsd = summary?.priceEth != null ? summary.priceEth * (ethUsd || 0) : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -100,7 +104,11 @@ export function CaseStory({
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} aria-hidden />
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: color }}
+                aria-hidden
+              />
               <span
                 className="text-[10px] font-semibold uppercase tracking-[0.14em]"
                 style={{ color }}
@@ -126,41 +134,64 @@ export function CaseStory({
           </button>
         </div>
 
-        {/* The Conviction Index + its synchronized event rail. */}
-        <div className="mt-4">
-          <ConvictionIndexChart
+        {/* This side's own timeframe. */}
+        <div className="mt-3 max-w-[280px]">
+          <WindowFilter win={win} onWin={setWin} />
+        </div>
+
+        {/* The three real signals over time — believers, capital, price. */}
+        <div className="mt-4 space-y-3">
+          <SignalOverTime
             side={side}
-            opening={idx.opening}
-            steps={idx.steps}
-            ethUsd={ethUsd}
-            windowLabel={FLOW_WINDOW_SHORT[win]}
-            caption={caption}
+            icon="👥"
+            label="Believers"
+            value={summary ? summary.believers.toLocaleString("en-US") : "—"}
+            pct={summary?.believersPct ?? null}
+            points={summary?.series ?? []}
+            metric="believers"
+          />
+          <SignalOverTime
+            side={side}
+            icon="💰"
+            label="Capital"
+            value={capitalUsd != null ? fmtUsd(capitalUsd) : "—"}
+            pct={summary?.capitalPct ?? null}
+            points={summary?.series ?? []}
+            metric="capital"
+          />
+          <SignalOverTime
+            side={side}
+            icon="📈"
+            label="Price"
+            value={priceUsd != null ? `$${priceUsd.toFixed(2)}` : "—"}
+            pct={summary?.pricePct ?? null}
+            points={summary?.series ?? []}
+            metric="price"
           />
         </div>
 
+        {/* The events that caused it. */}
+        {events.length > 0 && (
+          <section className="mt-4">
+            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+              What happened {FLOW_WINDOW_PHRASE[win]}
+            </div>
+            <ul className="space-y-1">
+              {events.map((e) => (
+                <li key={e.id} className="flex items-baseline gap-1.5 text-[12px]">
+                  <span aria-hidden>{e.emoji}</span>
+                  <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
+                    {e.eth != null ? `${fmtUsd(e.eth * (ethUsd || 0))} ${e.text}` : e.text}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-        {/* Who is behind it — the people the numbers stand for. */}
-        <section className="mt-2">
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-            Who backs {side}
-          </div>
-          {believers.length === 0 ? (
-            <p className="text-[11px] text-[var(--text-muted)]">No one on this side yet.</p>
-          ) : (
-            <SideColumn side={side} people={believers} networkWallets={new Set()} />
-          )}
-        </section>
-
-        {/* Supporting evidence — the case people actually argued. */}
+        {/* Who is sustaining it — the same roster, one relationship badge each. */}
         <section className="mt-4">
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-            Evidence for {side}
-          </div>
-          {defense.length === 0 ? (
-            <p className="text-[11px] text-[var(--text-muted)]">No case made for {side} yet.</p>
-          ) : (
-            <DefenseColumn side={side} opinions={defense} />
-          )}
+          <CaseRoster side={side} believers={believers} people={net?.people} />
         </section>
       </div>
 
@@ -179,6 +210,36 @@ export function CaseStory({
           Back {side}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** One signal (believers / capital / price): its total, its move, its shape. */
+function SignalOverTime({
+  side,
+  icon,
+  label,
+  value,
+  pct,
+  points,
+  metric,
+}: {
+  side: "YES" | "NO";
+  icon: string;
+  label: string;
+  value: string;
+  pct: number | null;
+  points: import("@/domain/conviction-series").SeriesPoint[];
+  metric: "believers" | "capital" | "price";
+}) {
+  return (
+    <div className="rounded-[12px] p-2.5" style={{ border: "1px solid var(--border)" }}>
+      <StatRow icon={icon} label={label} value={value} pct={pct} />
+      {points.length > 1 && (
+        <div className="mt-1.5">
+          <ConvictionSpark side={side} points={points} metric={metric} />
+        </div>
+      )}
     </div>
   );
 }

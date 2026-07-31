@@ -63,41 +63,34 @@ export function sideCaseSummary(
   };
 }
 
-/* ── The people: one list, each believer placed in a group ─────────────────── */
+/* ── The people: ONE relationship badge, ONE optional status ────────────────── */
 
-export type BelieverGroup = "twin" | "tribe" | "rival" | "inverse" | "match" | "whale" | "believer";
+/**
+ * A believer's RELATIONSHIP to the viewer — the single primary badge. There is
+ * always exactly one; "unmapped" means the DNA hasn't placed them yet. This is
+ * the only classification of its kind, so nothing competes with it.
+ */
+export type CaseRelationship = "twin" | "tribe" | "rival" | "inverse" | "unmapped";
 
-/** How each group reads in the case — your relationship, or the plain roster. */
-export const GROUP_LABEL: Record<BelieverGroup, string> = {
+export const RELATIONSHIP_LABEL: Record<CaseRelationship, string> = {
   twin: "Twin",
   tribe: "Tribe",
   rival: "Rival",
   inverse: "Inverse",
-  match: "Match",
-  whale: "Whale",
-  believer: "Believer",
+  unmapped: "Unmapped",
 };
 
-/** Strongest first — network ties outrank a big wallet outranks a plain holder. */
-export const GROUP_RANK: Record<BelieverGroup, number> = {
-  twin: 6,
-  tribe: 5,
-  rival: 4,
-  inverse: 3,
-  match: 2,
-  whale: 1,
-  believer: 0,
+/** Strongest tie first; unmapped holders sit last. */
+export const RELATIONSHIP_RANK: Record<CaseRelationship, number> = {
+  twin: 4,
+  tribe: 3,
+  rival: 2,
+  inverse: 1,
+  unmapped: 0,
 };
 
-/**
- * The one place People and Network merge: a believer's group is their
- * relationship to the viewer when there is one, otherwise "Whale" (big money) or
- * a plain "Believer". No separate lists, no duplicate person.
- */
-export function believerGroup(
-  relationship: string | null | undefined,
-  whale: boolean,
-): BelieverGroup {
+/** Map the network's raw label to the case's single relationship badge. */
+export function caseRelationship(relationship: string | null | undefined): CaseRelationship {
   switch (relationship) {
     case "twin":
       return "twin";
@@ -107,16 +100,39 @@ export function believerGroup(
       return "rival";
     case "inverse":
       return "inverse";
-    case "neutral":
-      return "match";
     default:
-      return whale ? "whale" : "believer";
+      return "unmapped";
   }
+}
+
+/**
+ * A believer's STATUS — a secondary, optional note about their position, NOT a
+ * relationship. At most one shows, so "Whale" never reads like it's the same
+ * kind of thing as "Tribe".
+ */
+export type CaseStatus = "whale" | "long_term" | "new";
+
+export const STATUS_LABEL: Record<CaseStatus, string> = {
+  whale: "Whale",
+  long_term: "Long-term",
+  new: "New",
+};
+
+/** Held this many days or more counts as a long-term holder. */
+export const LONG_TERM_DAYS = 30;
+
+/** The single most notable status for a holder, or null. Money → time → newness. */
+export function believerStatus(daysHeld: number, whale: boolean): CaseStatus | null {
+  if (whale) return "whale";
+  if (daysHeld >= LONG_TERM_DAYS) return "long_term";
+  if (daysHeld <= 1) return "new";
+  return null;
 }
 
 export interface RankedBeliever<T> {
   believer: T;
-  group: BelieverGroup;
+  relationship: CaseRelationship;
+  status: CaseStatus | null;
 }
 
 /** The minimum a believer must carry to be ranked into the list. */
@@ -129,33 +145,38 @@ export interface RankableBeliever {
 }
 
 /**
- * Merge People + Network into a single ordered roster: your closest people
- * first, then the biggest money, then the deepest conviction, then the longest
- * holders. `relOf` returns the viewer's relationship to a wallet, or null.
+ * The single roster (People + Network merged): your closest ties first, then the
+ * biggest money, then the deepest conviction, then the longest holders. `relOf`
+ * returns the viewer's raw relationship to a wallet, or null.
  */
 export function rankBelievers<T extends RankableBeliever>(
   believers: T[],
   relOf: (wallet: string) => string | null | undefined,
 ): RankedBeliever<T>[] {
   return believers
-    .map((b) => ({ believer: b, group: believerGroup(relOf(b.wallet.toLowerCase()), b.whale) }))
+    .map((b) => ({
+      believer: b,
+      relationship: caseRelationship(relOf(b.wallet.toLowerCase())),
+      status: believerStatus(b.daysHeld, b.whale),
+    }))
     .sort(
       (a, b) =>
-        GROUP_RANK[b.group] - GROUP_RANK[a.group] ||
+        RELATIONSHIP_RANK[b.relationship] - RELATIONSHIP_RANK[a.relationship] ||
+        (b.believer.whale ? 1 : 0) - (a.believer.whale ? 1 : 0) ||
         b.believer.valueUsd - a.believer.valueUsd ||
         b.believer.conviction - a.believer.conviction ||
         b.believer.daysHeld - a.believer.daysHeld,
     );
 }
 
-/** Human "held" duration from whole days. Compact, honest, no decimals. */
+/** Human "held" duration from whole days — "Held 43 days", "New today". */
 export function heldFor(daysHeld: number): string {
   const d = Math.max(0, Math.floor(daysHeld));
-  if (d <= 0) return "new today";
-  if (d === 1) return "held 1 day";
-  if (d < 30) return `held ${d} days`;
-  if (d < 60) return "held 1 month";
-  if (d < 365) return `held ${Math.floor(d / 30)} months`;
+  if (d <= 0) return "New today";
+  if (d === 1) return "Held 1 day";
+  if (d < 30) return `Held ${d} days`;
+  if (d < 60) return "Held 1 month";
+  if (d < 365) return `Held ${Math.floor(d / 30)} months`;
   const years = Math.floor(d / 365);
-  return years === 1 ? "held 1 year" : `held ${years} years`;
+  return years === 1 ? "Held 1 year" : `Held ${years} years`;
 }
