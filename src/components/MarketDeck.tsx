@@ -441,39 +441,23 @@ export function MarketDeck({
       </div>
 
       <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
-        {/* Pulse — why this matters now, plus the day's traded activity. Hidden in
-          Case File mode: it's market-wide context, so it would only add noise to a
-          center that should be dedicated to the decision while investigating. */}
+        {/* Pulse — the headline for the ACTIVE window: what changed in belief,
+          then money, then price. It never introduces a number the cards below
+          can't corroborate, and never mixes two periods. Hidden in Case File
+          mode, where the center is dedicated to the decision. */}
         {!caseOpen && (
-          <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
-            {/* A label is a label and a sentence is a sentence: never let them
-              compete for the same line. The tag stays on one line (nowrap), the
-              prose gets the full measure below it and wraps like real text. */}
-            <div className="flex items-center gap-2">
-              <span
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{ background: PULSE_TONE[pulse.tone] }}
-                aria-hidden
-              />
-              <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-                Pulse
-              </span>
-              <span className="truncate text-[13px] font-semibold text-[var(--text)]">
-                {pulse.label}
-              </span>
-            </div>
-            <p className="mt-1 pl-4 text-[12px] leading-snug text-[var(--text-secondary)] [overflow-wrap:anywhere]">
-              {pulse.why}
-              {eventBeat && <span className="text-[var(--text-muted)]"> {eventBeat}</span>}
-            </p>
-          </div>
+          <PulseHeadline
+            story={pulseStory}
+            fallback={{ label: pulse.label, why: pulse.why, tone: pulse.tone }}
+            winShort={winShort}
+          />
         )}
 
         {/* Battlefield */}
         <div className="space-y-1.5">
           {/* Says what the numbers ARE, and lets the trader pick the horizon. */}
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-[var(--text-muted)]">Momentum over</span>
+            <span className="text-[11px] text-[var(--text-muted)]">Conviction over</span>
             <WindowSelector win={win} onWin={setWin} />
           </div>
           <ConvictionMedia
@@ -486,9 +470,12 @@ export function MarketDeck({
               label="YES"
               price={yesPrice}
               chg={yesChg}
-              windowLabel={PRICE_WINDOW_LABEL[win]}
+              windowLabel={winShort}
               believers={row.believers_yes}
-              believerChange={(rr.new_believers_yes_24h as number | null) ?? null}
+              believerChange={
+                flow ? flow.yes.newBelievers : ((rr.new_believers_yes_24h as number | null) ?? null)
+              }
+              moneyChange={flow ? flow.yes.netUsd : null}
               capital={row.yes_capital_usd ?? null}
               signal={yesSignal}
               selected={side === "YES"}
@@ -498,9 +485,12 @@ export function MarketDeck({
               label="NO"
               price={noPrice}
               chg={noChg}
-              windowLabel={PRICE_WINDOW_LABEL[win]}
+              windowLabel={winShort}
               believers={row.believers_no}
-              believerChange={(rr.new_believers_no_24h as number | null) ?? null}
+              believerChange={
+                flow ? flow.no.newBelievers : ((rr.new_believers_no_24h as number | null) ?? null)
+              }
+              moneyChange={flow ? flow.no.netUsd : null}
               capital={row.no_capital_usd ?? null}
               signal={noSignal}
               selected={side === "NO"}
