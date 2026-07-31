@@ -670,11 +670,7 @@ function PulseHeadline({
   return (
     <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
       <div className="flex items-center gap-2">
-        <span
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={{ background: tone }}
-          aria-hidden
-        />
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tone }} aria-hidden />
         <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
           Pulse
         </span>
@@ -775,11 +771,7 @@ function SideCard({
     >
       {/* Side identity — the ONLY place the side colour shouts. */}
       <div className="flex items-center gap-1.5">
-        <span
-          className="h-1.5 w-1.5 rounded-full"
-          style={{ background: col }}
-          aria-hidden
-        />
+        <span className="h-1.5 w-1.5 rounded-full" style={{ background: col }} aria-hidden />
         <span className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: col }}>
           {label}
         </span>
@@ -804,7 +796,6 @@ function SideCard({
       {/* 3 — MOVEMENT, in the same window the selector names: people, then
         money, then price. Never a total — only what changed. */}
       <div className="mt-2 space-y-0.5 text-[11px]">
-
         <div className="num text-[var(--text-muted)]" suppressHydrationWarning>
           {believerChange != null && believerChange > 0
             ? `+${believerChange.toLocaleString("en-US")} believers · ${windowLabel}`
@@ -822,12 +813,10 @@ function SideCard({
         </div>
       </div>
 
-
       <ConvictionSlot signal={signal} col={col} />
     </button>
   );
 }
-
 
 /**
  * The viewer's ownership on this market, in human terms: what it's worth now and

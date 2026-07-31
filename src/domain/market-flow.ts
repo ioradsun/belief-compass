@@ -110,13 +110,7 @@ export function flowForWindow(trades: FlowTrade[], win: FlowWindow, nowMs: numbe
 // The Pulse headline — one story, one window, never a total.
 // ---------------------------------------------------------------------------
 
-export type PulseKind =
-  | "growing"
-  | "whale"
-  | "grassroots"
-  | "divided"
-  | "cooling"
-  | "quiet";
+export type PulseKind = "growing" | "whale" | "grassroots" | "divided" | "cooling" | "quiet";
 
 export interface PulseStory {
   kind: PulseKind;
@@ -138,12 +132,16 @@ export const GRASSROOTS_AVG_USD = 50;
 
 const money = (n: number) => {
   const a = Math.abs(n);
-  const s = a >= 10_000 ? `$${Math.round(a / 1000)}k` : a >= 1000 ? `$${(a / 1000).toFixed(1)}k` : `$${Math.round(a)}`;
+  const s =
+    a >= 10_000
+      ? `$${Math.round(a / 1000)}k`
+      : a >= 1000
+        ? `$${(a / 1000).toFixed(1)}k`
+        : `$${Math.round(a)}`;
   return n < 0 ? `−${s}` : s;
 };
 
-const pct = (n: number) =>
-  `${n < 0 ? "−" : "+"}${Math.abs(n).toFixed(Math.abs(n) < 10 ? 1 : 0)}%`;
+const pct = (n: number) => `${n < 0 ? "−" : "+"}${Math.abs(n).toFixed(Math.abs(n) < 10 ? 1 : 0)}%`;
 
 /**
  * Turns one window's flow (plus that same window's price move) into the
@@ -249,9 +247,7 @@ export function composePulseStory(
     headline: `Growing conviction on ${side}`,
     side,
     note:
-      other.newBelievers > 0 && lead.newBelievers > 0 && Math.abs(lead.netUsd) >= 1
-        ? null
-        : null,
+      other.newBelievers > 0 && lead.newBelievers > 0 && Math.abs(lead.netUsd) >= 1 ? null : null,
     metrics,
   };
 }
