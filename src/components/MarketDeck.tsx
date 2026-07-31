@@ -664,7 +664,7 @@ function ExamineCta({ open, onToggle }: { open: boolean; onToggle: () => void })
       type="button"
       onClick={onToggle}
       aria-pressed={open}
-      className="hidden w-full items-center gap-3 rounded-[14px] px-4 py-3 text-left transition-colors lg:flex"
+      className="flex w-full items-center gap-3 rounded-[14px] px-4 py-3 text-left transition-colors"
       style={{
         border: `1px solid ${open ? "var(--text)" : "var(--border)"}`,
         background: open ? "var(--surface)" : "transparent",
