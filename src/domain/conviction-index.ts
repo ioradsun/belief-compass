@@ -78,7 +78,13 @@ function scoresFor(l: Ledger, side: "YES" | "NO") {
   );
   const capitalScore = share(l.capital[side], l.capital[side] + l.capital[other]);
   const p = l.price[side];
-  const priceScore = p != null && Number.isFinite(p) ? clamp100(p * 100) : 50;
+  // Price is read as the market's own confirmation: this side's share of the two
+  // prices, i.e. the implied probability. Scale-free, so it works in any units.
+  const q = l.price[other];
+  const priceScore =
+    p != null && Number.isFinite(p) && q != null && Number.isFinite(q) && p + q > 0
+      ? clamp100((p / (p + q)) * 100)
+      : 50;
   return {
     believerScore,
     capitalScore,
