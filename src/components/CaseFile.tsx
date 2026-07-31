@@ -328,18 +328,19 @@ export function CaseColumn({
       </button>
 
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-0.5">
-        {/* The full three-line timeline lives in the center while investigating;
+        {/* The full Conviction Index lives in the center while investigating;
           here it only appears in Discovery, so the same chart is never duplicated. */}
         {!investigating && (
-          <ConvictionTimeline
+          <ConvictionIndexChart
             side={side}
-            points={series}
-            events={events}
+            opening={idx.opening}
+            steps={idx.steps}
             ethUsd={ethUsd}
             windowLabel={winShort}
             caption={caption}
           />
         )}
+
 
 
         {/* Investigation sections — collapsed by default; exactly one open, the SAME
