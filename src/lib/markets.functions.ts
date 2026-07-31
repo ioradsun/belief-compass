@@ -460,7 +460,15 @@ export interface MarketChange {
    * already holds, so every number in the deck comes from one window.
    */
   flows: Partial<Record<VolumeWindow, WindowFlow>>;
+  /**
+   * The compacted canonical trade tape this response was derived from — the SAME
+   * rows, nothing extra fetched. The Case File rebuilds its Conviction Timeline
+   * (believers / capital / price) from it locally, so switching window is instant
+   * and costs no request. Money and price are ETH.
+   */
+  tape: TapeTrade[];
 }
+
 
 const numOrNull = (v: unknown): number | null =>
   v == null || !Number.isFinite(Number(v)) ? null : Number(v);
