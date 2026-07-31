@@ -18,6 +18,7 @@ import { useSwitchChain, useAccount, useBalance } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
 import { TheHouse } from "@/components/TheHouse";
+import { DnaFirstReveal } from "@/components/DnaFirstReveal";
 import { CaseStory } from "@/components/CaseStory";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
@@ -426,7 +427,11 @@ export function MarketDeck({
               neutral={false}
             />
           ) : (
-            <TheHouse marketId={marketId} viewerWallet={viewerWallet} />
+            <>
+              <TheHouse marketId={marketId} viewerWallet={viewerWallet} />
+              {/* One-time nudge: the first real match, surfaced to explore. */}
+              <DnaFirstReveal viewerWallet={viewerWallet} onSelectPerson={onSelectPerson} />
+            </>
           )}
 
           {/* Moderation stays reachable, but quiet — not a metrics row. */}
