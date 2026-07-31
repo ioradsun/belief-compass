@@ -407,18 +407,3 @@ export function CaseColumn({
   );
 }
 
-function SummaryStat({ label, value, color }: { label: string; value: string; color?: string }) {
-  // Flat: value sits on open space (no nested tile), label recedes (small, muted,
-  // not bold). Strong color only when `color` is passed (Move direction) — the
-  // rest reads through contrast, so nothing decorative competes for the eye.
-  return (
-    <div>
-      <div className="num text-[14px] font-semibold" style={{ color: color ?? "var(--text)" }}>
-        {value}
-      </div>
-      <div className="mt-1 text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-        {label}
-      </div>
-    </div>
-  );
-}
