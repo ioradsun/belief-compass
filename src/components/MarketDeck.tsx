@@ -693,9 +693,11 @@ function PulseHeadline({
               {story.metrics.map((m, i) => (
                 <span
                   key={m.key}
-                  className={`num text-[${i === 0 ? "14" : "12"}px] ${
-                    i === 0 ? "font-semibold text-[var(--text)]" : "text-[var(--text-secondary)]"
-                  }`}
+                  className={
+                    i === 0
+                      ? "num text-[14px] font-semibold text-[var(--text)]"
+                      : "num text-[12px] text-[var(--text-secondary)]"
+                  }
                 >
                   {m.text}
                 </span>
