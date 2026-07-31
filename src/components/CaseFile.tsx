@@ -112,6 +112,7 @@ export function CaseColumn({
   marketId,
   row,
   viewerWallet,
+  ethUsd = 0,
   openSection,
   onToggleSection,
 }: {
@@ -119,6 +120,8 @@ export function CaseColumn({
   marketId: number;
   row: MarketRow;
   viewerWallet?: string;
+  /** Live ETH/USD, so the event rail speaks dollars like the rest of the app. */
+  ethUsd?: number;
   /** The section open on BOTH columns (shared parent state); null = all collapsed. */
   openSection: CaseSection | null;
   onToggleSection: (s: CaseSection) => void;
@@ -141,8 +144,32 @@ export function CaseColumn({
     staleTime: 60_000,
   });
 
+  // The deck already runs this exact key for its own price/flow numbers, so the
+  // timeline is free: same response, rebuilt locally per window.
+  const { data: change } = useQuery({
+    queryKey: ["market-change", marketId],
+    queryFn: () => getMarketChange({ data: { id: marketId } }),
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+  });
+
+  // The window the trader picked in the center — never a second period on screen.
+  const win = useDeckWindow();
+  const tape = change?.tape;
+  const { series, events, caption } = useMemo(() => {
+    if (!tape?.length) return { series: [], events: [], caption: null };
+    const now = Date.now();
+    const s = convictionSeries(tape, side, win, now);
+    return {
+      series: s,
+      events: timelineEvents(tape, side, win, now, 10),
+      caption: leadStory(s),
+    };
+  }, [tape, side, win]);
+
   const relByWallet = new Map((net?.people ?? []).map((p) => [p.wallet.toLowerCase(), p]));
   const networkWallets = new Set(relByWallet.keys());
+
 
   const believers = (evidence?.believers ?? []).filter((b) => b.side === side);
   const defense = (evidence?.defense ?? []).filter((o) => o.vote === side);
