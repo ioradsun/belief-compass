@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMarketChange, getPositionSummary } from "@/lib/markets.functions";
+import { setDeckWindow } from "@/lib/deck-window";
 import { positionPnl, type PositionPnl } from "@/domain/position";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
