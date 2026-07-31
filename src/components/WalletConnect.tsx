@@ -7,7 +7,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { base } from "wagmi/chains";
 import { wagmiConfig, PRIVY_APP_ID } from "@/lib/wagmi";
 
-import { CONNECT_EVENT, DISCONNECT_EVENT, requestConnect } from "@/lib/connect-bridge";
+import { CONNECT_EVENT, DISCONNECT_EVENT, requestConnect, requestDisconnect } from "@/lib/connect-bridge";
 import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getWalletLink } from "@/lib/wallet-link.functions";
 import { readLocalLink } from "@/lib/wallet-link";
@@ -203,7 +203,7 @@ export function WalletConnectButton() {
   }
   if (isConnected && address) {
     return (
-      <button type="button" className={cls} onClick={() => void logout()} title="Disconnect">
+      <button type="button" className={cls} onClick={() => requestDisconnect()} title="Sign out">
         {short(address)}
       </button>
     );
