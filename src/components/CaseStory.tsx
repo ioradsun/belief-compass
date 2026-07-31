@@ -128,17 +128,18 @@ export function CaseStory({
           </button>
         </div>
 
-        {/* The full timeline + its synchronized event rail. */}
+        {/* The Conviction Index + its synchronized event rail. */}
         <div className="mt-4">
-          <ConvictionTimeline
+          <ConvictionIndexChart
             side={side}
-            points={series}
-            events={events}
+            opening={idx.opening}
+            steps={idx.steps}
             ethUsd={ethUsd}
             windowLabel={FLOW_WINDOW_SHORT[win]}
             caption={caption}
           />
         </div>
+
 
         {/* Who is behind it — the people the numbers stand for. */}
         <section className="mt-2">
