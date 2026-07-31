@@ -323,8 +323,34 @@ export const getConvictionMarket = createServerFn({ method: "GET" })
       const { signMediaUrl } = await import("@/lib/market-create.server");
       url = await signMediaUrl(media.path);
     }
-    return { market: { ...row, mediaUrl: url } };
+
+    // Resolve the creator's real identity in the SAME request (one bounded
+    // profile lookup), so the byline can render an avatar + name instead of a
+    // shortened wallet. Falls back to the deterministic alias, then the wallet.
+    let creator: MarketCreatorIdentity | null = null;
+    const cw = row.creator_wallet ? String(row.creator_wallet).toLowerCase() : null;
+    if (cw) {
+      const { resolveProfiles } = await import("@/lib/profiles.server");
+      const { aliasFor } = await import("@/lib/wallet-identity");
+      const prof = (await resolveProfiles([cw], 4)).get(cw);
+      creator = {
+        wallet: cw,
+        name: prof?.displayName ?? aliasFor(cw),
+        avatarUrl: prof?.pfpUrl ?? null,
+        createdAt: (row.created_at as string | null) ?? null,
+      };
+    }
+    return { market: { ...row, mediaUrl: url }, creator };
   });
+
+/** Resolved creator identity for the market byline (one request, profile-aware). */
+export interface MarketCreatorIdentity {
+  wallet: string;
+  /** display name, else deterministic alias — never a raw 0x address. */
+  name: string;
+  avatarUrl: string | null;
+  createdAt: string | null;
+}
 
 /** Anyone can report a market — no wallet required, so nothing is un-reportable. */
 export const reportMarket = createServerFn({ method: "POST" })
