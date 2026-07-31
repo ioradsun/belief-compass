@@ -5,7 +5,13 @@ import { RainbowKitProvider, darkTheme, useConnectModal } from "@rainbow-me/rain
 import "@rainbow-me/rainbowkit/styles.css";
 
 import { wagmiConfig, walletProvider } from "@/lib/wagmi";
-import { CONNECT_EVENT, DISCONNECT_EVENT, requestConnect, requestDisconnect } from "@/lib/connect-bridge";
+import {
+  CONNECT_EVENT,
+  DISCONNECT_EVENT,
+  clearDisconnectedWalletFromUrl,
+  requestConnect,
+  requestDisconnect,
+} from "@/lib/connect-bridge";
 import { PovOnConnect } from "@/components/wallet/PovOnConnect";
 
 // Isolated query client for wagmi to avoid interfering with the app's router-level client.
@@ -58,20 +64,21 @@ export function WalletProviders({ children }: { children: ReactNode }) {
  */
 function RainbowKitBridge() {
   const { openConnectModal } = useConnectModal();
-  const { isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
+  const { address, isConnected } = useAccount();
+  const { disconnectAsync } = useDisconnect();
 
   useEffect(() => {
     const onOpen = () => {
       if (isConnected) return;
       openConnectModal?.();
     };
-    const onOut = () => {
+    const onOut = async () => {
       try {
-        disconnect();
+        await disconnectAsync();
       } catch {
         /* already disconnected */
       }
+      clearDisconnectedWalletFromUrl(address);
     };
     window.addEventListener(CONNECT_EVENT, onOpen);
     window.addEventListener(DISCONNECT_EVENT, onOut);
@@ -79,7 +86,7 @@ function RainbowKitBridge() {
       window.removeEventListener(CONNECT_EVENT, onOpen);
       window.removeEventListener(DISCONNECT_EVENT, onOut);
     };
-  }, [openConnectModal, isConnected, disconnect]);
+  }, [openConnectModal, isConnected, address, disconnectAsync]);
 
   return null;
 }
