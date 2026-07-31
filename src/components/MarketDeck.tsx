@@ -109,6 +109,8 @@ export function MarketDeck({
   onLens,
   caseOpen = false,
   onToggleCase,
+  storySide = null,
+  onCloseStory,
 }: {
   row: MarketRow;
   ethUsd: number;
@@ -121,6 +123,9 @@ export function MarketDeck({
   /** Case File mode: the YES/NO evidence moves to the side columns. */
   caseOpen?: boolean;
   onToggleCase?: () => void;
+  /** Investigation mode: one side's story takes the center. */
+  storySide?: OrderSide | null;
+  onCloseStory?: () => void;
 }) {
   const rr = row as Record<string, unknown>;
   const marketId = Number(row.onchain_id);
