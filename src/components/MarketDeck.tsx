@@ -557,6 +557,8 @@ export function MarketDeck({
           <PositionSummary side={held.side} pnl={heldPnl} tokens={held.tokens} onSell={openSell} />
         )}
       </div>
+      )}
+
 
       {/* Decision dock — buy by default; sell takes over when opened on a holding. */}
       <div className="shrink-0">
