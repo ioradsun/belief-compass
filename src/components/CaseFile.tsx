@@ -170,17 +170,27 @@ export function CaseColumn({
   const win = useDeckWindow();
   const winShort = FLOW_WINDOW_SHORT[win];
   const tape = change?.tape;
-  const { series, events, caption, story } = useMemo(() => {
-    if (!tape?.length) return { series: [], events: [], caption: null, story: null };
+  const { series, events, caption, story, idx } = useMemo(() => {
+    if (!tape?.length)
+      return {
+        series: [],
+        events: [],
+        caption: null,
+        story: null,
+        idx: { opening: null, steps: [] },
+      };
     const now = Date.now();
     const s = convictionSeries(tape, side, win, now);
+    const i = convictionIndexSeries(tape, side, win, now);
     return {
       series: s,
       events: timelineEvents(tape, side, win, now, 10),
-      caption: leadStory(s),
+      caption: indexTrendCaption(i.opening, i.steps),
       story: convictionStory(side, s),
+      idx: i,
     };
   }, [tape, side, win]);
+
 
   const relByWallet = new Map((net?.people ?? []).map((p) => [p.wallet.toLowerCase(), p]));
   const networkWallets = new Set(relByWallet.keys());
