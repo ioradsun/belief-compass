@@ -146,6 +146,49 @@ export function marketVitality(tape: TapeTrade[], nowMs: number): MarketVitality
 const rising = (n: number, eps: number) => n > eps;
 const falling = (n: number, eps: number) => n < -eps;
 
+export type MomentumDirection = "up" | "down" | "flat";
+
+export interface MomentumView {
+  /** The colored delta line, e.g. "▲ +4 · +13% over 7 days" or "No change over 7 days". */
+  text: string;
+  direction: MomentumDirection;
+}
+
+/**
+ * The colored movement line for a vitality metric. Direction drives the arrow and
+ * (in the UI) the green/red tint; a flat metric reads a calm "No change". A
+ * percentage is added ONLY when the base is meaningful, so a 1 → 2 jump never
+ * masquerades as "+100%".
+ */
+export function momentumView(opts: {
+  /** Signed change over the window (people or USD). */
+  delta: number;
+  /** Value when the window opened (i.e. current − delta). */
+  base: number;
+  /** e.g. "7 days" (already stripped of "past "). */
+  rangeWords: string;
+  /** Format the absolute magnitude — String(n) for people, money fmt for capital. */
+  fmt: (n: number) => string;
+  /** Below this magnitude the metric counts as flat. */
+  eps?: number;
+  /** Below this base, the percentage is suppressed as noise. */
+  minBaseForPct?: number;
+}): MomentumView {
+  const { delta, base, rangeWords, fmt, eps = 0, minBaseForPct = 8 } = opts;
+  if (!Number.isFinite(delta) || Math.abs(delta) <= eps) {
+    return { direction: "flat", text: `No change over ${rangeWords}` };
+  }
+  const up = delta > 0;
+  const sign = up ? "+" : "−";
+  const abs = fmt(Math.abs(delta));
+  const pct = base >= minBaseForPct ? Math.round((Math.abs(delta) / base) * 100) : null;
+  const pctPart = pct != null && pct > 0 ? ` · ${sign}${pct}%` : "";
+  return {
+    direction: up ? "up" : "down",
+    text: `${up ? "▲" : "▼"} ${sign}${abs}${pctPart} over ${rangeWords}`,
+  };
+}
+
 /**
  * One calm sentence about the relationship between people and money. Never
  * mentions a side, never uses trading hype.
