@@ -170,7 +170,13 @@ export function MarketDeck({
 
   // Per-share price + % change over a trader-chosen window (1H/1D/1W/1M/All).
   // All windows come in one fetch, so switching is instant; live-refreshed.
-  const [win, setWin] = useState<WinKey>("24h");
+  const [win, setWinLocal] = useState<WinKey>("24h");
+  // One window, one story — the Case File columns render outside this tree, so
+  // the choice is published rather than passed down. Nothing else changes.
+  const setWin = (next: WinKey) => {
+    setWinLocal(next);
+    setDeckWindow(next as FlowWindow);
+  };
   const { data: change } = useQuery({
     queryKey: ["market-change", marketId],
     queryFn: () => getMarketChange({ data: { id: marketId } }),
