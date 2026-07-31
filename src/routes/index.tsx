@@ -205,8 +205,10 @@ function Feed() {
   // intelligence is shown, so it just flips the URL flag (preserved across switches).
   const toggleCase = () => {
     navigate({ search: (prev: Search) => ({ ...prev, case: prev.case ? undefined : true }) });
-    // Each Case File session opens with everything collapsed (summary-first).
+    // Each Case File session opens with everything collapsed (summary-first) and
+    // in Discovery Mode — comparison before investigation.
     setCaseSection(null);
+    setStorySide(null);
   };
   // Brand introduction layer. Intentional product interactions (opening a
   // market, a person, DNA) collapse it; nothing else does.
@@ -227,6 +229,7 @@ function Feed() {
       }),
     });
     setTab("belief");
+    setStorySide(null);
     enterProduct();
   };
   const selectPerson = (personWallet: string) => {
@@ -504,6 +507,8 @@ function Feed() {
               ethUsd={data?.ethUsd ?? 0}
               openSection={caseSection}
               onToggleSection={toggleCaseSection}
+              investigating={storySide === "YES"}
+              onInvestigate={toggleStory}
             />
           ) : !wallet ? (
             /* Signed out: nothing to show but the one thing to do. */
@@ -616,6 +621,8 @@ function Feed() {
                     onLens={setLens}
                     caseOpen={caseActive}
                     onToggleCase={isDesktop ? toggleCase : undefined}
+                    storySide={caseActive ? storySide : null}
+                    onCloseStory={() => setStorySide(null)}
                   />
                 </div>
               )
@@ -640,6 +647,8 @@ function Feed() {
               ethUsd={data?.ethUsd ?? 0}
               openSection={caseSection}
               onToggleSection={toggleCaseSection}
+              investigating={storySide === "NO"}
+              onInvestigate={toggleStory}
             />
           ) : (
             <>
