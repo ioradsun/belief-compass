@@ -28,7 +28,6 @@ import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import {
   convictionSeries,
   timelineEvents,
-  leadStory,
   convictionStory,
 } from "@/domain/conviction-series";
 import { FLOW_WINDOW_SHORT } from "@/domain/market-flow";
