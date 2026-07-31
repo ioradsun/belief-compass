@@ -9,6 +9,7 @@ import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { readLatestTradesPerMarket, readLatestTradeEvents } from "@/lib/events.functions";
 import { flowForWindow, type FlowTrade, type WindowFlow } from "@/domain/market-flow";
+import type { TapeTrade } from "@/domain/conviction-series";
 import { toLegacyFeedEventRow } from "@/lib/events";
 import { composeMarketStory, type NetworkFace, type NetworkLabel } from "@/domain/story";
 import { swrCache } from "@/lib/server-cache";
