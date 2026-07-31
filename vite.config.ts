@@ -106,6 +106,7 @@ export default defineConfig({
         "@walletconnect/time",
         "@walletconnect/window-metadata",
         "@walletconnect/window-getters",
+        "blakejs",
         "pino",
       ],
     },
