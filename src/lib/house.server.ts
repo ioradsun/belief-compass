@@ -3,7 +3,7 @@
  *
  * Responsibilities:
  *   • gather the viewer's real signals (their own answer history by category,
- *     their skip behaviour, and how their closest DNA matches sit on THIS market)
+ *     their pass behaviour, and how their closest DNA matches sit on THIS market)
  *   • lock exactly one prediction per (wallet, market) before the viewer answers
  *   • record the answer once, score the locked prediction once, and never
  *     recompute a prediction after the fact.
@@ -34,6 +34,12 @@ export interface HouseReadView {
   connected: boolean;
   /** Locked prediction — only ever populated AFTER a real bet reveals it. */
   predicted: BeliefAction | null;
+  /**
+   * The side the House will CALL, exposed before the decision ONLY when the read
+   * is strong enough (STRONG_READ) and the round is still open. This is the
+   * high-confidence reveal — every other read keeps the side sealed until a bet.
+   */
+  preview: BeliefAction | null;
   confidence: number | null;
   reasons: string[];
   /** Present when the House refused to name a side. Safe to show before reveal. */
@@ -56,9 +62,9 @@ export interface HouseReadView {
   band: HouseConfidenceBand | null;
   /** True only once a verified BET has unlocked the pick (full reveal). */
   revealed: boolean;
-  /** True once the round is finalized by a bet OR a skip. */
+  /** True once the round is finalized by a bet OR a pass. */
   closed: boolean;
-  finalizedVia: "bet" | "skip" | null;
+  finalizedVia: "bet" | "pass" | null;
   actual: BeliefAction | null;
   outcome: "correct" | "miss" | "unscored" | null;
   headline: { title: string; line: string } | null;
@@ -71,6 +77,18 @@ type AnswerRow = {
   actual_action: BeliefAction | null;
   predicted_action: BeliefAction | null;
 };
+
+// Read-tolerance for the SKIP→PASS rename: legacy rows may still hold the old
+// tokens until the backfill migration runs, so normalize everything on the way
+// in. The code always WRITES the new tokens.
+function normAction(a: string | null): BeliefAction | null {
+  if (a == null) return null;
+  return a === "SKIP" ? "PASS" : (a as BeliefAction);
+}
+function normVia(v: string | null): "bet" | "pass" | null {
+  if (v == null) return null;
+  return v === "skip" ? "pass" : (v as "bet" | "pass");
+}
 
 async function marketCategory(sb: SupabaseClient, marketId: number): Promise<string | null> {
   const { data } = await sb
@@ -89,7 +107,12 @@ async function answerHistory(sb: SupabaseClient, wallet: string): Promise<Answer
     .not("actual_action", "is", null)
     .order("revealed_at", { ascending: false })
     .limit(400);
-  return (data ?? []) as AnswerRow[];
+  // Normalize legacy SKIP → PASS so every downstream consumer sees new tokens.
+  return ((data ?? []) as AnswerRow[]).map((r) => ({
+    category: r.category,
+    actual_action: normAction(r.actual_action),
+    predicted_action: normAction(r.predicted_action),
+  }));
 }
 
 /** Foundation POV keys this wallet has already answered. */
@@ -187,8 +210,8 @@ async function buildSignals(
       connected: false,
       category,
       totalAnswers: 0,
-      overall: { yes: 0, no: 0, skip: 0 },
-      inCategory: { yes: 0, no: 0, skip: 0 },
+      overall: { yes: 0, no: 0, pass: 0 },
+      inCategory: { yes: 0, no: 0, pass: 0 },
     };
   }
   const [history, rel, beliefs] = await Promise.all([
@@ -196,12 +219,12 @@ async function buildSignals(
     relationshipLean(sb, wallet, marketId),
     beliefHistory(sb, wallet, marketId),
   ]);
-  const overall = { yes: 0, no: 0, skip: 0 };
-  const inCategory = { yes: 0, no: 0, skip: 0 };
+  const overall = { yes: 0, no: 0, pass: 0 };
+  const inCategory = { yes: 0, no: 0, pass: 0 };
   for (const row of history) {
     const a = row.actual_action;
     if (!a) continue;
-    const key = a === "YES" ? "yes" : a === "NO" ? "no" : "skip";
+    const key = a === "YES" ? "yes" : a === "NO" ? "no" : "pass";
     overall[key]++;
     if (category && row.category === category) inCategory[key]++;
   }
@@ -216,7 +239,7 @@ async function buildSignals(
     category,
     // Beliefs + completed foundation answers count toward the unlock gate, so once
     // the viewer has calibrated the engine reads markets instead of cold-starting.
-    totalAnswers: overall.yes + overall.no + overall.skip + foundationCount,
+    totalAnswers: overall.yes + overall.no + overall.pass + foundationCount,
     overall,
     inCategory,
     relationship: rel,
@@ -246,13 +269,14 @@ export async function loadHouseRead(
       connected: false,
       category,
       totalAnswers: 0,
-      overall: { yes: 0, no: 0, skip: 0 },
-      inCategory: { yes: 0, no: 0, skip: 0 },
+      overall: { yes: 0, no: 0, pass: 0 },
+      inCategory: { yes: 0, no: 0, pass: 0 },
     });
     return {
       marketId,
       connected: false,
       predicted: null,
+      preview: null,
       confidence: null,
       reasons: [],
       noRead: read.noRead,
@@ -292,7 +316,7 @@ export async function loadHouseRead(
     actual_action: BeliefAction | null;
     outcome: "correct" | "miss" | "unscored" | null;
     revealed_at: string | null;
-    finalized_via: "bet" | "skip" | null;
+    finalized_via: "bet" | "pass" | "skip" | null;
   };
   let row = (existing ?? null) as Row | null;
 
@@ -333,20 +357,30 @@ export async function loadHouseRead(
     }
   }
 
-  // The pick unlocks ONLY on a verified bet. A skip closes the round but keeps
+  // Normalize any legacy SKIP/skip tokens on the locked row (pre-backfill).
+  const predictedAction = normAction(row.predicted_action);
+  const actualAction = normAction(row.actual_action);
+  const finalizedVia = normVia(row.finalized_via);
+
+  // The pick unlocks ONLY on a verified bet. A pass closes the round but keeps
   // the House's directional pick sealed — the FOMO is the point.
-  const closed = !!row.actual_action;
-  const betRevealed = row.finalized_via === "bet" && !!row.actual_action;
+  const closed = !!actualAction;
+  const betRevealed = finalizedVia === "bet" && !!actualAction;
   // Recreate the honest no-read copy from the locked kind, without re-predicting.
-  const noRead = row.predicted_action
+  const noRead = predictedAction
     ? null
     : predictHouse(await buildSignals(sb, wallet, marketId, category, foundationCount)).noRead;
 
   // Coarse band is safe to leak pre-reveal (intensity only, never the side).
-  const band = row.predicted_action ? confidenceBand(Number(row.confidence ?? 0)) : null;
+  const band = predictedAction ? confidenceBand(Number(row.confidence ?? 0)) : null;
+
+  // The high-confidence reveal: when the read is a STRONG_READ and the round is
+  // still open, we CALL the side before the decision. Every softer read keeps it
+  // sealed until a bet — so the drama scales with how well the House knows you.
+  const preview = !closed && band === "STRONG_READ" ? predictedAction : null;
 
   const headline: { title: string; line: string } | null = betRevealed
-    ? revealHeadline(row.predicted_action, row.actual_action!)
+    ? revealHeadline(predictedAction, actualAction!)
     : closed
       ? {
           title: "You walked away",
@@ -357,7 +391,8 @@ export async function loadHouseRead(
   return {
     marketId,
     connected: true,
-    predicted: betRevealed ? row.predicted_action : null,
+    predicted: betRevealed ? predictedAction : null,
+    preview,
     confidence: betRevealed ? Number(row.confidence ?? 0) : null,
     reasons: betRevealed ? ((row.reasons ?? []) as string[]) : [],
     noRead,
@@ -365,15 +400,14 @@ export async function loadHouseRead(
     band,
     revealed: betRevealed,
     closed,
-    finalizedVia: row.finalized_via,
-    actual: row.actual_action,
+    finalizedVia,
+    actual: actualAction,
     outcome: row.outcome,
     headline,
     record: recordFor(history),
     category,
   };
 }
-
 
 /**
  * Prove the reveal was paid for: the tx must exist on Base, have succeeded, be
@@ -454,7 +488,7 @@ export async function finalizeHouseBet(
         actual_action: side,
         actual_side: side,
         actual_tx_hash: txHash,
-        outcome: scoreHouse(row.predicted_action, side),
+        outcome: scoreHouse(normAction(row.predicted_action), side),
         revealed_at: new Date().toISOString(),
         finalized_via: "bet",
       })
@@ -467,10 +501,10 @@ export async function finalizeHouseBet(
 }
 
 /**
- * Finalize the round with a SKIP. Scores the locked prediction but keeps the
+ * Finalize the round with a PASS. Scores the locked prediction but keeps the
  * directional pick SEALED — the viewer never paid to see it. Idempotent.
  */
-export async function finalizeHouseSkip(
+export async function finalizeHousePass(
   walletRaw: string,
   marketId: number,
 ): Promise<HouseReadView> {
@@ -493,10 +527,10 @@ export async function finalizeHouseSkip(
     await sb
       .from("house_predictions")
       .update({
-        actual_action: "SKIP",
-        outcome: scoreHouse(row.predicted_action, "SKIP"),
+        actual_action: "PASS",
+        outcome: scoreHouse(normAction(row.predicted_action), "PASS"),
         revealed_at: new Date().toISOString(),
-        finalized_via: "skip",
+        finalized_via: "pass",
       })
       .eq("wallet", wallet)
       .eq("onchain_id", marketId)

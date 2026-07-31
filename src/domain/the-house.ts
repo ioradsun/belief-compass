@@ -11,7 +11,7 @@
  * but it is exposed only as a STAGE the user levels up — never a number.
  */
 
-export type BeliefAction = "YES" | "NO" | "SKIP";
+export type BeliefAction = "YES" | "NO" | "PASS";
 
 export type HouseStage = "learning" | "familiar" | "understanding" | "in_sync" | "twin";
 
@@ -67,12 +67,25 @@ const BEFORE_MEDIUM = [
   "This sounds like you.",
   "I have a read.",
 ];
-// High = strong intensity, never the side — the side is yours to reveal.
+// High = strong intensity. The generic pool never names the side; when the read
+// is strong enough to call it, BEFORE_NAMED does (see houseBeforeNamed).
 const BEFORE_HIGH = [
   "I've got a strong read on this one.",
   "I'm almost certain I know you here.",
   "This one feels like you.",
   "I'd put money on knowing you here.",
+];
+// Strong read, side named — the dramatic call before you decide. "{s}" = YES/NO.
+const BEFORE_NAMED_DIRECTIONAL = [
+  "I think you're a {s} here.",
+  "Something tells me you'll go {s}.",
+  "I'd put money on you taking {s}.",
+  "This one feels like a {s} from you.",
+];
+const BEFORE_NAMED_PASS = [
+  "I don't think this one earns your conviction.",
+  "I think you'll let this one pass.",
+  "This doesn't feel like one you take.",
 ];
 const AFTER_CORRECT = [
   "I knew it.",
@@ -114,6 +127,16 @@ const pick = (pool: readonly string[], seed: number): string =>
 export function houseBefore(mode: HouseMode, seed: number): string {
   const pool = mode === "high" ? BEFORE_HIGH : mode === "medium" ? BEFORE_MEDIUM : BEFORE_LOW;
   return pick(pool, seed);
+}
+
+/**
+ * The pre-decision line when the read is strong enough to CALL the side — the
+ * high-confidence reveal ("I think you're a YES here"). Reserved for the top
+ * band; every other read still hides the side until you decide.
+ */
+export function houseBeforeNamed(side: BeliefAction, seed: number): string {
+  if (side === "PASS") return pick(BEFORE_NAMED_PASS, seed);
+  return pick(BEFORE_NAMED_DIRECTIONAL, seed).replaceAll("{s}", side);
 }
 
 /** The immediate reaction after a decision — emotion, never analytics. Being

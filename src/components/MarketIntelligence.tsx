@@ -16,7 +16,7 @@ import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
 import {
   getHouseRead,
   finalizeBet,
-  finalizeSkip,
+  finalizePass,
   recordFoundation,
   type HouseReadView,
 } from "@/lib/house.functions";
@@ -35,7 +35,7 @@ export const houseKey = (wallet: string | undefined, marketId: number) =>
   ["house", wallet ?? null, marketId] as const;
 
 /**
- * Finalize the round. A verified BET reveals the House pick; a SKIP closes the
+ * Finalize the round. A verified BET reveals the House pick; a PASS closes the
  * round but keeps the pick sealed. Both refresh the locked read in the cache.
  */
 export function useHouseFinalize(marketId: number, viewerWallet?: string) {
@@ -56,16 +56,16 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
     },
     onSuccess: store,
   });
-  const skip = useMutation({
+  const pass = useMutation({
     mutationFn: async () => {
       if (!wallet) return null;
       const session = await ensureSession();
-      return finalizeSkip({ data: { wallet, marketId, session } });
+      return finalizePass({ data: { wallet, marketId, session } });
     },
     onSuccess: store,
   });
   const foundation = useMutation({
-    mutationFn: async (vars: { key: string; action: "YES" | "NO" | "SKIP" }) => {
+    mutationFn: async (vars: { key: string; action: "YES" | "NO" | "PASS" }) => {
       if (!wallet) return null;
       const session = await ensureSession();
       return recordFoundation({
@@ -76,8 +76,8 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
   });
   return {
     betReveal: (side: "YES" | "NO", txHash: string) => bet.mutate({ side, txHash }),
-    skip: () => skip.mutate(),
-    trainFoundation: (key: string, action: "YES" | "NO" | "SKIP") =>
+    pass: () => pass.mutate(),
+    trainFoundation: (key: string, action: "YES" | "NO" | "PASS") =>
       foundation.mutate({ key, action }),
     training: foundation.isPending,
     revealing: bet.isPending,
@@ -292,7 +292,7 @@ function HouseMode({
 }: {
   house: HouseReadView | null;
   loading: boolean;
-  onFoundation: (key: string, action: "YES" | "NO" | "SKIP") => void;
+  onFoundation: (key: string, action: "YES" | "NO" | "PASS") => void;
   training: boolean;
 }) {
   if (loading || !house) return <Skeleton />;
@@ -319,7 +319,7 @@ function HouseMode({
     );
   }
 
-  // Sealed — the round closed on a SKIP, so the pick is gone. This is the hook:
+  // Sealed — the round closed on a PASS, so the pick is gone. This is the hook:
   // you had a read waiting and you never paid to see it.
   if (!house.revealed && house.closed) {
     return (
@@ -383,7 +383,7 @@ function HouseMode({
           Back a side to reveal our pick.
         </p>
         <p className="text-[11px] text-[var(--text-muted)]">
-          Skip and the read stays sealed — you’ll never know if we had you.
+          Pass and the read stays sealed — you’ll never know if we had you.
         </p>
         <p className="sr-only" role="note">
           The House prediction is hidden. Place a bet on YES or NO to reveal it.
@@ -474,17 +474,17 @@ function MiniScoreboard({ rec }: { rec: HouseReadView["record"] }) {
   );
 }
 
-/** Cold-start training: one free belief POV with YES / NO / SKIP. Moves no money. */
+/** Cold-start training: one free belief POV with YES / NO / PASS. Moves no money. */
 function FoundationCard({
   f,
   onAnswer,
   busy,
 }: {
   f: NonNullable<HouseReadView["foundation"]>;
-  onAnswer: (key: string, action: "YES" | "NO" | "SKIP") => void;
+  onAnswer: (key: string, action: "YES" | "NO" | "PASS") => void;
   busy: boolean;
 }) {
-  const btn = (action: "YES" | "NO" | "SKIP", label: string, color: string) => (
+  const btn = (action: "YES" | "NO" | "PASS", label: string, color: string) => (
     <button
       type="button"
       disabled={busy}
@@ -509,7 +509,7 @@ function FoundationCard({
       </p>
       <div className="flex gap-2 pt-0.5">
         {btn("YES", "Agree", "var(--yes)")}
-        {btn("SKIP", "Skip", "var(--text-muted)")}
+        {btn("PASS", "Pass", "var(--text-muted)")}
         {btn("NO", "Disagree", "var(--no)")}
       </div>
       {f.answered > 0 && (

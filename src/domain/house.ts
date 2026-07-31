@@ -2,13 +2,13 @@
  * The House — a per-viewer prediction of what THIS user will do with THIS market.
  *
  * ZERO IO, fully pure, fully tested. The House predicts a *belief action*
- * (YES / NO / SKIP) from the viewer's own answer history, their category
- * behaviour (including skips), and their Conviction DNA relationships on this
+ * (YES / NO / PASS) from the viewer's own answer history, their category
+ * behaviour (including passes), and their Conviction DNA relationships on this
  * market. It never predicts price and it never bluffs: when the evidence is
  * thin or contradictory it returns an honest no-read state instead of a side.
  */
 
-export type BeliefAction = "YES" | "NO" | "SKIP";
+export type BeliefAction = "YES" | "NO" | "PASS";
 
 export type NoReadKind =
   | "no_user"
@@ -43,10 +43,10 @@ export interface RelationshipLean {
 export interface HouseSignals {
   connected: boolean;
   category: string | null;
-  /** Prior *answered* markets (YES + NO + SKIP), excluding this one. */
+  /** Prior *answered* markets (YES + NO + PASS), excluding this one. */
   totalAnswers: number;
-  overall: { yes: number; no: number; skip: number };
-  inCategory: { yes: number; no: number; skip: number };
+  overall: { yes: number; no: number; pass: number };
+  inCategory: { yes: number; no: number; pass: number };
   relationship?: RelationshipLean | null;
 }
 
@@ -152,7 +152,7 @@ export function predictHouse(s: HouseSignals): HouseRead {
 
   const cat = s.category;
   const c = s.inCategory;
-  const catAnswers = c.yes + c.no + c.skip;
+  const catAnswers = c.yes + c.no + c.pass;
   const catDirectional = c.yes + c.no;
 
   if (cat && catAnswers === 0) {
@@ -166,16 +166,16 @@ export function predictHouse(s: HouseSignals): HouseRead {
     );
   }
 
-  // Skip behaviour first: a category the user reliably passes on is a real read.
-  const skipRate = catAnswers > 0 ? c.skip / catAnswers : 0;
-  if (c.skip >= 3 && skipRate >= 0.6) {
-    const conf = clamp01(skipRate * sampleConfidence(catAnswers));
+  // Pass behaviour first: a category the user reliably passes on is a real read.
+  const passRate = catAnswers > 0 ? c.pass / catAnswers : 0;
+  if (c.pass >= 3 && passRate >= 0.6) {
+    const conf = clamp01(passRate * sampleConfidence(catAnswers));
     if (conf >= MIN_CONFIDENCE) {
       return {
-        action: "SKIP",
+        action: "PASS",
         confidence: conf,
         reasons: [
-          `You have skipped ${c.skip} of your last ${catAnswers}${cat ? ` ${cat}` : ""} markets.`,
+          `You have passed on ${c.pass} of your last ${catAnswers}${cat ? ` ${cat}` : ""} markets.`,
           catDirectional === 0
             ? "You have never taken a side in this category."
             : `You have only taken a side ${catDirectional} time${catDirectional === 1 ? "" : "s"} here.`,
@@ -220,17 +220,17 @@ export function predictHouse(s: HouseSignals): HouseRead {
       [
         `Your own ${cat ?? "recent"} history leans ${personalLean > 0 ? "YES" : "NO"}.`,
         `Your closest matches lean ${relLean > 0 ? "YES" : "NO"}.`,
-        c.skip > 0
-          ? `You have skipped this category ${c.skip} time${c.skip === 1 ? "" : "s"}.`
+        c.pass > 0
+          ? `You have passed on this category ${c.pass} time${c.pass === 1 ? "" : "s"}.`
           : "",
       ].filter(Boolean),
     );
   }
 
   const blended = (personalLean * personalWeight + relLean * relWeight) / totalWeight;
-  // Skips make directional predictions less certain, never more.
-  const skipDrag = 1 - Math.min(0.4, skipRate * 0.5);
-  const confidence = clamp01(Math.abs(blended) * totalWeight * skipDrag + 0.35 * Math.abs(blended));
+  // Passes make directional predictions less certain, never more.
+  const passDrag = 1 - Math.min(0.4, passRate * 0.5);
+  const confidence = clamp01(Math.abs(blended) * totalWeight * passDrag + 0.35 * Math.abs(blended));
 
   if (confidence < MIN_CONFIDENCE || blended === 0) {
     return noRead(
@@ -257,12 +257,12 @@ export function predictHouse(s: HouseSignals): HouseRead {
         : `${share}% of your closest matches back ${action} here.`,
     );
   }
-  if (c.skip > 0) {
+  if (c.pass > 0) {
     reasons.push(
-      `You skip ${cat ?? "these"} markets ${Math.round(skipRate * 100)}% of the time — you engaged with this one.`,
+      `You pass on ${cat ?? "these"} markets ${Math.round(passRate * 100)}% of the time — you engaged with this one.`,
     );
   } else if (cat) {
-    reasons.push(`You rarely skip ${cat} markets.`);
+    reasons.push(`You rarely pass on ${cat} markets.`);
   }
 
   return {
@@ -297,18 +297,18 @@ export function revealHeadline(
     return {
       title: "The House read you",
       line:
-        actual === "SKIP"
+        actual === "PASS"
           ? "We thought this market wouldn't earn your conviction."
           : `The House called ${predicted}. You chose ${actual}.`,
     };
   }
-  if (actual === "SKIP") {
+  if (actual === "PASS") {
     return {
       title: "You held your read",
       line: `The House expected ${predicted}, but you weren't ready to take a side.`,
     };
   }
-  if (predicted === "SKIP") {
+  if (predicted === "PASS") {
     return {
       title: "You surprised the House",
       line: `We expected you to pass. You chose ${actual}.`,
@@ -338,7 +338,7 @@ export const EMPTY_RECORD: HouseRecord = {
   byAction: {
     YES: { correct: 0, total: 0 },
     NO: { correct: 0, total: 0 },
-    SKIP: { correct: 0, total: 0 },
+    PASS: { correct: 0, total: 0 },
   },
 };
 
@@ -354,7 +354,7 @@ export function foldRecord(
     byAction: {
       YES: { correct: 0, total: 0 },
       NO: { correct: 0, total: 0 },
-      SKIP: { correct: 0, total: 0 },
+      PASS: { correct: 0, total: 0 },
     },
   };
   let streakOpen = true;
@@ -383,7 +383,7 @@ export function foldRecord(
   return rec;
 }
 
-/** Directional accuracy, excluding SKIP so accurate passes can't dominate. */
+/** Directional accuracy, excluding PASS so accurate passes can't dominate. */
 export function directionalAccuracy(rec: HouseRecord): number | null {
   const total = rec.byAction.YES.total + rec.byAction.NO.total;
   if (total === 0) return null;
@@ -391,12 +391,12 @@ export function directionalAccuracy(rec: HouseRecord): number | null {
 }
 
 /**
- * What an answer teaches. YES/NO feed directional Conviction DNA; SKIP only ever
+ * What an answer teaches. YES/NO feed directional Conviction DNA; PASS only ever
  * updates readability/recommendation signals — it is never an agreement,
  * a disagreement, a neutral belief, or a shared directional market.
  */
 export function dnaContribution(action: BeliefAction): "directional" | "behavioral" {
-  return action === "SKIP" ? "behavioral" : "directional";
+  return action === "PASS" ? "behavioral" : "directional";
 }
 
 // ── Cold-start foundation ───────────────────────────────────────────────────
@@ -421,8 +421,8 @@ export interface FoundationMapping {
   dimensions: Record<BeliefAction, Record<string, number>>;
 }
 
-/** SKIP always signals "this territory doesn't pull you" — a small engagement debit. */
-const skipDisengage = (dim: string): Record<string, number> => ({ [dim]: -0.2 });
+/** PASS always signals "this territory doesn't pull you" — a small engagement debit. */
+const passDisengage = (dim: string): Record<string, number> => ({ [dim]: -0.2 });
 
 export const FOUNDATION_MAPPINGS: FoundationMapping[] = [
   {
@@ -433,7 +433,7 @@ export const FOUNDATION_MAPPINGS: FoundationMapping[] = [
     dimensions: {
       YES: { interpersonalTrust: -0.55, hiddenMotiveSensitivity: 0.3, cynicalExpectation: 0.2 },
       NO: { interpersonalTrust: 0.55, prosocialExpectation: 0.3, hiddenMotiveSensitivity: -0.1 },
-      SKIP: skipDisengage("trustEngagement"),
+      PASS: passDisengage("trustEngagement"),
     },
   },
   {
@@ -443,7 +443,7 @@ export const FOUNDATION_MAPPINGS: FoundationMapping[] = [
     dimensions: {
       YES: { intuitionTrust: 0.5, institutionalTrust: -0.3, expertiseDeference: -0.25 },
       NO: { intuitionTrust: -0.4, institutionalTrust: 0.35, expertiseDeference: 0.3 },
-      SKIP: skipDisengage("intuitionEngagement"),
+      PASS: passDisengage("intuitionEngagement"),
     },
   },
   {
@@ -453,7 +453,7 @@ export const FOUNDATION_MAPPINGS: FoundationMapping[] = [
     dimensions: {
       YES: { agencyBelief: -0.5, luckBelief: 0.4, systemicView: 0.25 },
       NO: { agencyBelief: 0.5, luckBelief: -0.35, meritocraticView: 0.3 },
-      SKIP: skipDisengage("agencyEngagement"),
+      PASS: passDisengage("agencyEngagement"),
     },
   },
   {
@@ -463,7 +463,7 @@ export const FOUNDATION_MAPPINGS: FoundationMapping[] = [
     dimensions: {
       YES: { disruptionAppetite: 0.5, traditionAttachment: -0.35, pragmatism: 0.3 },
       NO: { disruptionAppetite: -0.4, traditionAttachment: 0.45 },
-      SKIP: skipDisengage("disruptionEngagement"),
+      PASS: passDisengage("disruptionEngagement"),
     },
   },
   {
@@ -473,7 +473,7 @@ export const FOUNDATION_MAPPINGS: FoundationMapping[] = [
     dimensions: {
       YES: { statusOrientation: 0.5, belongingOrientation: -0.3, independenceOrientation: 0.25 },
       NO: { belongingOrientation: 0.5, statusOrientation: -0.3, warmthOrientation: 0.25 },
-      SKIP: skipDisengage("statusEngagement"),
+      PASS: passDisengage("statusEngagement"),
     },
   },
 ];

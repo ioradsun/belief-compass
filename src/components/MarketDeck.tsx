@@ -2,10 +2,10 @@
  * CENTER — single-market decision deck.
  *
  * One market at a time: Pulse (why now) → Battlefield (both sides) → the House
- * Read → a persistent dock (shared amount, NO / SKIP / YES). A gesture/button/key
+ * Read → a persistent dock (shared amount, NO / PASS / YES). A gesture/button/key
  * only SELECTS a side; buying requires an explicit Confirm after an on-chain
  * quote. Prices/quotes come from the contract (src/lib/chain-trade) — never the
- * client. The House pick unlocks ONLY on a confirmed bet; a skip seals it.
+ * client. The House pick unlocks ONLY on a confirmed bet; a pass seals it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -133,8 +133,8 @@ export function MarketDeck({
   // means "not selling"; the buy dock owns the surface. Buying the opposite side
   // never sells (they're separate token balances), so a flip can't silently exit.
   const [sellPct, setSellPct] = useState<number | null>(null);
-  // The viewer walked away here (skip finalizes the round; the pick stays sealed).
-  const [skipped, setSkipped] = useState(false);
+  // The viewer walked away here (pass finalizes the round; the pick stays sealed).
+  const [passed, setPassed] = useState(false);
 
   const { switchChain } = useSwitchChain();
   const ready = useTradeReady();
@@ -203,12 +203,12 @@ export function MarketDeck({
     [viewerWallet],
   );
 
-  // Skip finalizes the round: the House pick stays sealed (you never paid to see
+  // Pass finalizes the round: the House pick stays sealed (you never paid to see
   // it). This is the FOMO lever, so it's a deliberate, explicit action.
-  const chooseSkip = useCallback(() => {
+  const choosePass = useCallback(() => {
     setSide(null);
-    setSkipped(true);
-    house.skip();
+    setPassed(true);
+    house.pass();
   }, [house]);
 
   // Reveal the House pick exactly once, when a bet confirms on-chain.
@@ -218,7 +218,7 @@ export function MarketDeck({
   useEffect(() => {
     setSide(null);
     setSellPct(null);
-    setSkipped(false);
+    setPassed(false);
     betRevealed.current = false;
     trade.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -233,7 +233,7 @@ export function MarketDeck({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trade.isSuccess, trade.hash, side]);
 
-  // Keyboard: ←/→ select a side, ↑ skip. None of them buy or reveal.
+  // Keyboard: ←/→ select a side, ↑ pass. None of them buy or reveal.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
@@ -243,12 +243,12 @@ export function MarketDeck({
       else if (e.key === "ArrowRight") chooseSide("YES");
       else if (e.key === "ArrowUp") {
         e.preventDefault();
-        chooseSkip();
+        choosePass();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [chooseSide, chooseSkip]);
+  }, [chooseSide, choosePass]);
 
   const relationshipBeat = row.story?.beats.find((b) => b.kind === "relationship")?.text ?? null;
   const eventBeat = row.story?.beats.find((b) => b.kind === "event")?.text ?? null;
@@ -472,7 +472,7 @@ export function MarketDeck({
               closeSell();
             }}
           />
-        ) : skipped ? (
+        ) : passed ? (
           /* Walked away: the round is closed and the House pick stays sealed. */
           <div
             className="flex items-center gap-3 rounded-[16px] p-4"
@@ -503,7 +503,7 @@ export function MarketDeck({
               chooseSide(s);
             }}
             onCancel={() => setSide(null)}
-            onSkip={() => chooseSkip()}
+            onPass={() => choosePass()}
             quote={quote}
             quoting={quoting}
             ethWei={ethWei}
@@ -821,7 +821,7 @@ function Dock({
   setAmount,
   onSelect,
   onCancel,
-  onSkip,
+  onPass,
   quote,
   quoting,
   ethWei,
@@ -836,7 +836,7 @@ function Dock({
   setAmount: (n: number) => void;
   onSelect: (s: OrderSide) => void;
   onCancel: () => void;
-  onSkip: () => void;
+  onPass: () => void;
   quote: { tokens: bigint; fee: bigint; refund: bigint } | null;
   quoting: boolean;
   ethWei: bigint;
@@ -891,7 +891,7 @@ function Dock({
   const busy = trade.isSubmitting || trade.isMining;
   const amtField = <AmountField amount={amount} setAmount={setAmount} />;
 
-  // Neutral: NO · SKIP · YES.
+  // Neutral: NO · PASS · YES.
   if (!side) {
     return (
       <div
@@ -901,7 +901,7 @@ function Dock({
         {amtField}
         <div className="flex flex-1 gap-2">
           <DockBtn label="← NO" tone="no" onClick={() => onSelect("NO")} />
-          <DockBtn label="↑ SKIP" tone="skip" onClick={onSkip} />
+          <DockBtn label="↑ PASS" tone="pass" onClick={onPass} />
           <DockBtn label="YES →" tone="yes" onClick={() => onSelect("YES")} />
         </div>
       </div>
@@ -1150,7 +1150,7 @@ function DockBtn({
   onClick,
 }: {
   label: string;
-  tone: "yes" | "no" | "skip";
+  tone: "yes" | "no" | "pass";
   onClick: () => void;
 }) {
   const style =
