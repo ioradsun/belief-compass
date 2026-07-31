@@ -311,7 +311,7 @@ export const getConvictionMarket = createServerFn({ method: "GET" })
     const db = serviceClient();
     const { data: row } = await db
       .from("conviction_markets")
-      .select("question_id, question, description, category, media, creator_wallet, hidden, moderation_status, status")
+      .select("question_id, question, description, category, media, creator_wallet, created_at, hidden, moderation_status, status")
       .eq("onchain_id", data.onchainId)
       .maybeSingle();
     if (!row || row.status !== "active" || row.hidden || row.moderation_status === "blocked") {
