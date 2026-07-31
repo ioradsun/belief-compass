@@ -646,6 +646,77 @@ function WindowSelector({ win, onWin }: { win: WinKey; onWin: (w: WinKey) => voi
   );
 }
 
+/**
+ * The Pulse headline. One window, one story, in the product's order of truth:
+ * believer growth → money growth → price. It falls back to the opportunity
+ * engine's sentence only while the window's flow is still loading.
+ */
+function PulseHeadline({
+  story,
+  fallback,
+  winShort,
+}: {
+  story: PulseStory | null;
+  fallback: { label: string; why: string; tone: string };
+  winShort: string;
+}) {
+  const tone = story
+    ? story.kind === "quiet"
+      ? "var(--text-muted)"
+      : story.kind === "cooling"
+        ? "var(--no)"
+        : PULSE_TONE.warm
+    : PULSE_TONE[fallback.tone];
+  return (
+    <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
+      <div className="flex items-center gap-2">
+        <span
+          className="h-2 w-2 shrink-0 rounded-full"
+          style={{ background: tone }}
+          aria-hidden
+        />
+        <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          Pulse
+        </span>
+        <span className="text-[13px] font-semibold text-[var(--text)] [overflow-wrap:anywhere]">
+          {story ? story.headline : fallback.label}
+        </span>
+        <span className="num ml-auto shrink-0 text-[10px] text-[var(--text-muted)]">
+          {winShort}
+        </span>
+      </div>
+
+      {story ? (
+        <>
+          {story.metrics.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 pl-4">
+              {story.metrics.map((m, i) => (
+                <span
+                  key={m.key}
+                  className={`num text-[${i === 0 ? "14" : "12"}px] ${
+                    i === 0 ? "font-semibold text-[var(--text)]" : "text-[var(--text-secondary)]"
+                  }`}
+                >
+                  {m.text}
+                </span>
+              ))}
+            </div>
+          )}
+          {story.note && (
+            <p className="mt-1 pl-4 text-[12px] leading-snug text-[var(--text-muted)] [overflow-wrap:anywhere]">
+              {story.note}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="mt-1 pl-4 text-[12px] leading-snug text-[var(--text-secondary)] [overflow-wrap:anywhere]">
+          {fallback.why}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function SideCard({
   label,
   price,
@@ -653,6 +724,7 @@ function SideCard({
   windowLabel,
   believers,
   believerChange,
+  moneyChange,
   capital,
   signal,
   selected,
@@ -664,8 +736,10 @@ function SideCard({
   chg: number | null;
   windowLabel: string;
   believers: number | null;
-  /** Gross new believers on this side in the last 24h (always a 24h figure). */
+  /** New believers on this side inside the ACTIVE window. */
   believerChange: number | null;
+  /** Net dollars added to this side inside the ACTIVE window. */
+  moneyChange: number | null;
   capital: number | null;
   signal: ConvictionSignal | null;
   selected: boolean;
