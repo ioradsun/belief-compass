@@ -176,6 +176,16 @@ export function MarketDeck({
   const yesChg = w?.yes ?? (rr.chg_24h_yes as number | null) ?? null;
   const noChg = w?.no ?? (rr.chg_24h_no as number | null) ?? null;
 
+  // Conviction CHANGE for the SAME window the price % uses — believers first,
+  // money second, price third. One window, one story: the Pulse headline and
+  // the two side cards can never quote different periods.
+  const rawFlow = change?.flows?.[win] ?? null;
+  const flow = rawFlow ? scaleFlow(rawFlow, ethUsd) : null;
+  const pulseStory = flow
+    ? composePulseStory(flow, { yes: yesChg, no: noChg }, win as FlowWindow)
+    : null;
+  const winShort = FLOW_WINDOW_SHORT[win as FlowWindow];
+
   // Conviction slot — the "diamond hands" read under each side. Reuses the same
   // evidence + network queries the intelligence panel already runs (React Query
   // dedupes by key), so it costs no extra fetch. The pick is a pure ranking:
