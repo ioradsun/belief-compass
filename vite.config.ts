@@ -31,22 +31,28 @@ const stubWalletConnectorsOnServer = {
   },
   load(id: string) {
     if (id !== STUB_ID) return null;
-    // Must name every export RainbowKit/wagmi reach for, or the server build
-    // fails with MISSING_EXPORT even though none of them ever run there.
-    const names = [
-      "injected",
-      "coinbaseWallet",
-      "baseAccount",
-      "walletConnect",
-      "metaMask",
-      "safe",
-      "mock",
-      "porto",
-    ];
+    // Rolldown resolves named imports statically, so the stub must declare every
+    // name any consumer imports — real package exports plus wallet names that
+    // RainbowKit reaches for even when the installed version lacks them.
+    const real = (() => {
+      try {
+        const src = readFileSync(
+          fileURLToPath(new URL("./node_modules/@wagmi/connectors/dist/esm/exports/index.js", import.meta.url)),
+          "utf8",
+        );
+        return [...src.matchAll(/export\s*{([^}]*)}/g)].flatMap((m) =>
+          m[1].split(",").map((s) => s.trim().split(/\s+as\s+/).pop()!.trim()).filter(Boolean),
+        );
+      } catch {
+        return [];
+      }
+    })();
+    const names = [...new Set([...real, "injected", "mock", "coinbaseWallet", "baseAccount", "walletConnect", "metaMask", "safe", "porto", "gemini", "tempoWallet", "version"])];
     return `const clientOnly = () => { throw new Error("wallet connectors are client-only"); };
 ${names.map((n) => `export const ${n} = clientOnly;`).join("\n")}
 export default {};`;
   },
+
 
 };
 
