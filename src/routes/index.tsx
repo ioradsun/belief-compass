@@ -416,14 +416,12 @@ function Feed() {
   // Case File mode only applies to the single-market view. When on, the side
   // columns become the YES/NO case for the current market (existing intelligence,
   // reorganized). On mobile the Mine/Room tabs relabel to YES Case / NO Case.
-  const caseActive =
-    isDesktop &&
-    !!caseOpen &&
-    !selectedPerson &&
-    !dnaOpen &&
-    !createOpen &&
-    !termsOpen &&
-    !!currentRow;
+  const caseEligible =
+    !!caseOpen && !selectedPerson && !dnaOpen && !createOpen && !termsOpen && !!currentRow;
+  const caseActive = isDesktop && caseEligible;
+  // Mobile uses the same ?case flag, but as a NO ← MARKET → YES swipe carousel in
+  // the center rather than the desktop three-column split.
+  const mobileCaseActive = !isDesktop && caseEligible;
 
   const windowPicker = (
     <div className="flex items-center gap-1 overflow-x-auto rounded-md border border-border p-0.5">
@@ -596,7 +594,8 @@ function Feed() {
                     lenses={OPP_FILTERS}
                     onLens={setLens}
                     caseOpen={caseActive}
-                    onToggleCase={isDesktop ? toggleCase : undefined}
+                    mobileCaseOpen={mobileCaseActive}
+                    onToggleCase={toggleCase}
                     storySide={caseActive ? storySide : null}
                     onCloseStory={() => setStorySide(null)}
                     onSelectPerson={selectPerson}

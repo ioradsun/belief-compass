@@ -19,6 +19,7 @@ import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
 import { TheHouse } from "@/components/TheHouse";
 import { DnaFirstReveal } from "@/components/DnaFirstReveal";
+import { MobileCaseView } from "@/components/MobileCase";
 import { CaseStory } from "@/components/CaseStory";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
@@ -92,6 +93,7 @@ export function MarketDeck({
   lenses,
   onLens,
   caseOpen = false,
+  mobileCaseOpen = false,
   onToggleCase,
   storySide = null,
   onCloseStory,
@@ -105,8 +107,10 @@ export function MarketDeck({
   lens?: Lens;
   lenses?: LensOption[];
   onLens?: (l: Lens) => void;
-  /** Case File mode: the YES/NO evidence moves to the side columns. */
+  /** Case File mode (desktop): the YES/NO evidence moves to the side columns. */
   caseOpen?: boolean;
+  /** Case File mode (mobile): the center becomes a NO ← MARKET → YES carousel. */
+  mobileCaseOpen?: boolean;
   onToggleCase?: () => void;
   /** Investigation mode: one side's story takes the center. */
   storySide?: OrderSide | null;
@@ -335,10 +339,61 @@ export function MarketDeck({
   const chipLabel = lensMomentum?.label ?? momentum?.label;
   const chipHint = lensMomentum?.hint ?? momentum?.hint;
 
+  // The neutral market content — the middle of the mobile case carousel, and the
+  // whole scroll area otherwise. Kept in one place so both paths render the same.
+  const marketInner = (
+    <>
+      {caseOpen && (
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-[var(--text-muted)]">Evidence over</span>
+          <WindowSelector win={win} onWin={setWin} />
+        </div>
+      )}
+
+      <ConvictionMedia
+        onchainId={Number(row.onchain_id)}
+        title={String((rr.title as string | null) ?? "Market media")}
+      />
+
+      {/* Neutral market vitality — people and money for the WHOLE market, plus
+      the ONE story sentence about their relationship. The YES/NO split, and any
+      second narration of these same two numbers, live in the Case File. */}
+      <MarketVitalityPanel tape={change?.tape} ethUsd={ethUsd} />
+
+      {/* The House — one line, a companion that learns how you think. It
+      replaces the old House Read analytics in the neutral center; when the
+      Case File is open, the per-side intelligence lenses take over. */}
+      {caseOpen ? (
+        <MarketIntelligence
+          marketId={marketId}
+          viewerWallet={viewerWallet}
+          caseOpen
+          neutral={false}
+        />
+      ) : (
+        <>
+          <TheHouse marketId={marketId} viewerWallet={viewerWallet} />
+          {/* One-time nudge: the first real match, surfaced to explore. */}
+          <DnaFirstReveal viewerWallet={viewerWallet} onSelectPerson={onSelectPerson} />
+        </>
+      )}
+
+      {/* Moderation stays reachable, but quiet — not a metrics row. */}
+      <div className="flex justify-end text-[11px] text-[var(--text-muted)]">
+        <ReportMarket onchainId={Number(row.onchain_id)} wallet={viewerWallet} />
+      </div>
+
+      {held && sellPct == null && (
+        <PositionSummary side={held.side} pnl={heldPnl} tokens={held.tokens} onSell={openSell} />
+      )}
+    </>
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      {/* Identity — pinned to the top of the column */}
-      <div className="shrink-0">
+      {/* Identity — pinned to the top of the column. In mobile Case mode the
+        question moves into the carousel header, so this collapses. */}
+      <div className={`shrink-0 ${mobileCaseOpen ? "hidden" : ""}`}>
         <div className="mb-1 flex items-center gap-2">
           {category && (
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
@@ -396,63 +451,29 @@ export function MarketDeck({
           onBack={() => chooseSide(storySide)}
           onClose={() => onCloseStory?.()}
         />
+      ) : mobileCaseOpen ? (
+        <MobileCaseView
+          title={title}
+          marketId={marketId}
+          row={row}
+          viewerWallet={viewerWallet}
+          ethUsd={ethUsd}
+          onClose={() => onToggleCase?.()}
+          onBackSide={(s) => chooseSide(s)}
+        >
+          {marketInner}
+        </MobileCaseView>
       ) : (
         <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
-          {/* Range control belongs to the evidence, so it only appears with it. */}
-          {caseOpen && (
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-[var(--text-muted)]">Evidence over</span>
-              <WindowSelector win={win} onWin={setWin} />
-            </div>
-          )}
-
-          <ConvictionMedia
-            onchainId={Number(row.onchain_id)}
-            title={String((rr.title as string | null) ?? "Market media")}
-          />
-
-          {/* Neutral market vitality — people and money for the WHOLE market, plus
-          the ONE story sentence about their relationship. The YES/NO split, and any
-          second narration of these same two numbers, live in the Case File. */}
-          <MarketVitalityPanel tape={change?.tape} ethUsd={ethUsd} />
-
-          {/* The House — one line, a companion that learns how you think. It
-          replaces the old House Read analytics in the neutral center; when the
-          Case File is open, the per-side intelligence lenses take over. */}
-          {caseOpen ? (
-            <MarketIntelligence
-              marketId={marketId}
-              viewerWallet={viewerWallet}
-              caseOpen
-              neutral={false}
-            />
-          ) : (
-            <>
-              <TheHouse marketId={marketId} viewerWallet={viewerWallet} />
-              {/* One-time nudge: the first real match, surfaced to explore. */}
-              <DnaFirstReveal viewerWallet={viewerWallet} onSelectPerson={onSelectPerson} />
-            </>
-          )}
-
-          {/* Moderation stays reachable, but quiet — not a metrics row. */}
-          <div className="flex justify-end text-[11px] text-[var(--text-muted)]">
-            <ReportMarket onchainId={Number(row.onchain_id)} wallet={viewerWallet} />
-          </div>
-
-          {held && sellPct == null && (
-            <PositionSummary
-              side={held.side}
-              pnl={heldPnl}
-              tokens={held.tokens}
-              onSell={openSell}
-            />
-          )}
+          {marketInner}
         </div>
       )}
 
       {/* Decision dock — buy by default; sell takes over when opened on a holding. */}
       <div className="shrink-0 space-y-2">
-        {onToggleCase && !storySide && <ExamineCta open={caseOpen} onToggle={onToggleCase} />}
+        {onToggleCase && !storySide && !mobileCaseOpen && (
+          <ExamineCta open={caseOpen} onToggle={onToggleCase} />
+        )}
 
         {held && sellPct != null ? (
           <SellPanel
