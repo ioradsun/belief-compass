@@ -67,6 +67,28 @@ const eventsShimInBrowser = {
   },
 };
 
+/**
+ * RainbowKit's wallet factories (and the `wagmi/connectors` graph behind them)
+ * are browser-only. Outside the client build, resolve the connector module to a
+ * stub so the worker/SSR bundle never sees that vendor graph.
+ */
+const CONNECTORS_STUB = "\0wallet-connectors-server-stub";
+const stubWalletConnectorsModule = {
+  name: "stub-wallet-connectors-module",
+  enforce: "pre" as const,
+  resolveId(this: { environment?: { name?: string } }, id: string) {
+    if (this.environment?.name === "client") return null;
+    return id === "@/lib/wallet-connectors" || id.endsWith("src/lib/wallet-connectors.ts")
+      ? CONNECTORS_STUB
+      : null;
+  },
+  load(id: string) {
+    if (id !== CONNECTORS_STUB) return null;
+    return `export const WALLETCONNECT_PROJECT_ID = "";
+export function browserConnectors() { return []; }`;
+  },
+};
+
 /** See src/lib/shims/solana-system.ts — Ethereum-only app, stub Privy's Solana path. */
 const SOLANA_SYSTEM_SHIM = fileURLToPath(
   new URL("./src/lib/shims/solana-system.ts", import.meta.url),
@@ -112,7 +134,7 @@ export default defineConfig({
         "pino",
       ],
     },
-    plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer, solanaSystemShim],
+    plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer, stubWalletConnectorsModule, solanaSystemShim],
   },
 });
 
