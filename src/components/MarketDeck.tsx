@@ -22,7 +22,8 @@ import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { useWalletSession } from "@/hooks/useWalletSession";
 import { MarketVitalityPanel } from "@/components/MarketVitality";
-import { composePulse, pulseInputFromTape } from "@/domain/pulse";
+import { marketFreshness } from "@/domain/market-freshness";
+import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import type { TapeTrade } from "@/domain/conviction-series";
 import { FLOW_WINDOW_SHORT, type FlowWindow } from "@/domain/market-flow";
 
@@ -92,6 +93,7 @@ export function MarketDeck({
   onToggleCase,
   storySide = null,
   onCloseStory,
+  onSelectPerson,
 }: {
   row: MarketRow;
   ethUsd: number;
@@ -107,6 +109,8 @@ export function MarketDeck({
   /** Investigation mode: one side's story takes the center. */
   storySide?: OrderSide | null;
   onCloseStory?: () => void;
+  /** Open a person's profile (used by the clickable creator byline). */
+  onSelectPerson?: (wallet: string) => void;
 }) {
   const rr = row as Record<string, unknown>;
   const marketId = Number(row.onchain_id);
@@ -376,7 +380,7 @@ export function MarketDeck({
         <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
           {title}
         </h1>
-        <MarketByline onchainId={Number(row.onchain_id)} />
+        <MarketByline onchainId={Number(row.onchain_id)} onSelectPerson={onSelectPerson} />
       </div>
 
       {/* Investigation Mode: one side's story replaces the comparison, while the
@@ -391,7 +395,7 @@ export function MarketDeck({
           onClose={() => onCloseStory?.()}
         />
       ) : (
-        <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-4 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
+        <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
           {/* Range control belongs to the evidence, so it only appears with it. */}
           {caseOpen && (
             <div className="flex items-center justify-between">
@@ -405,12 +409,13 @@ export function MarketDeck({
             title={String((rr.title as string | null) ?? "Market media")}
           />
 
-          {/* Neutral market vitality — people and money for the WHOLE market. The
-          split between YES and NO is evidence, and lives in the Case File. */}
+          {/* Neutral market vitality — people and money for the WHOLE market, plus
+          the ONE story sentence about their relationship. The YES/NO split, and any
+          second narration of these same two numbers, live in the Case File. */}
           <MarketVitalityPanel tape={change?.tape} ethUsd={ethUsd} />
 
-          {/* One intelligence container. In the neutral center it is House Read
-          only — the per-side lenses are Case File material. */}
+          {/* House Read — what the question is really testing. In the neutral center
+          this is the only intelligence lens; the per-side lenses are Case material. */}
           <MarketIntelligence
             marketId={marketId}
             viewerWallet={viewerWallet}
@@ -418,26 +423,9 @@ export function MarketDeck({
             neutral={!caseOpen}
           />
 
-          {/* Pulse — recent whole-market activity, never which side it happened on. */}
-          <NeutralPulse
-            tape={change?.tape}
-            ethUsd={ethUsd}
-            win={win as FlowWindow}
-            priceChange={change?.windows?.[win]}
-            fallback={pulse.why}
-          />
-
-          {/* Compact context — never the reason to act */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-muted)]">
-            {(rr.volume_24h_usd as number | null) ? (
-              <span className="num">{fmtUsd(rr.volume_24h_usd as number)} 24h volume</span>
-            ) : null}
-            {(rr.trade_count_24h as number | null) ? (
-              <span className="num">{rr.trade_count_24h as number} trades today</span>
-            ) : null}
-            <span className="ml-auto">
-              <ReportMarket onchainId={Number(row.onchain_id)} wallet={viewerWallet} />
-            </span>
+          {/* Moderation stays reachable, but quiet — not a metrics row. */}
+          <div className="flex justify-end text-[11px] text-[var(--text-muted)]">
+            <ReportMarket onchainId={Number(row.onchain_id)} wallet={viewerWallet} />
           </div>
 
           {held && sellPct == null && (
@@ -566,24 +554,63 @@ function WindowSelector({ win, onWin }: { win: WinKey; onWin: (w: WinKey) => voi
   );
 }
 
-/** Who opened the question, and when. Secondary to the question itself. */
-function MarketByline({ onchainId }: { onchainId: number }) {
+/**
+ * Who opened the question — a real identity, not a raw address. Avatar + name
+ * (resolved server-side in one request), with fresh markets reading "Just opened
+ * this market". Clicking opens the creator's profile, never a block explorer.
+ */
+function MarketByline({
+  onchainId,
+  onSelectPerson,
+}: {
+  onchainId: number;
+  onSelectPerson?: (wallet: string) => void;
+}) {
   const { data } = useQuery({
     queryKey: ["conviction-market", onchainId],
     queryFn: () => getConvictionMarket({ data: { onchainId } }),
     staleTime: 5 * 60_000,
   });
-  const m = data?.market as { creator_wallet?: string | null; created_at?: string | null } | null;
-  if (!m?.creator_wallet && !m?.created_at) return null;
-  const who = m.creator_wallet
-    ? `${m.creator_wallet.slice(0, 6)}…${m.creator_wallet.slice(-4)}`
-    : null;
-  const when = m.created_at ? ageWords(Date.now() - new Date(m.created_at).getTime()) : null;
+  const c = data?.creator ?? null;
+  if (!c) return null;
+
+  const fresh = c.createdAt ? marketFreshness(Date.now() - new Date(c.createdAt).getTime()) : null;
+  const when = fresh?.fresh
+    ? "Just opened this market"
+    : c.createdAt
+      ? `Created this market · ${ageWords(Date.now() - new Date(c.createdAt).getTime())}`
+      : "Created this market";
+  const clickable = !!onSelectPerson;
+
   return (
-    <p className="mt-1.5 text-[11px] text-[var(--text-muted)]">
-      {who ? `Created by ${who}` : "Created"}
-      {when ? ` · ${when}` : ""}
-    </p>
+    <button
+      type="button"
+      disabled={!clickable}
+      onClick={() => onSelectPerson?.(c.wallet)}
+      className="mt-2 flex items-center gap-2 text-left disabled:cursor-default"
+    >
+      {c.avatarUrl ? (
+        <img src={c.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
+      ) : (
+        <span
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold text-white"
+          style={{ background: `hsl(${hueFor(c.wallet)} 45% 45%)` }}
+          aria-hidden
+        >
+          {initialsFor(c.name)}
+        </span>
+      )}
+      <span className="min-w-0">
+        <span
+          className={`block truncate text-[12px] font-semibold text-[var(--text)] ${
+            clickable ? "hover:underline" : ""
+          }`}
+        >
+          {c.name}
+        </span>
+        <span className="block truncate text-[10px] text-[var(--text-muted)]">{when}</span>
+      </span>
+    </button>
   );
 }
 
@@ -593,77 +620,6 @@ function ageWords(ms: number): string {
   if (h < 48) return `${Math.round(h)}h ago`;
   const d = Math.round(h / 24);
   return `${d} day${d === 1 ? "" : "s"} ago`;
-}
-
-/**
- * Pulse — two separate answers, never merged: what the market looks like NOW
- * (state) and what changed in the selected window (activity). It never names a
- * side; that belongs to the evidence columns.
- */
-function NeutralPulse({
-  tape,
-  ethUsd,
-  win,
-  priceChange,
-  fallback,
-}: {
-  tape: TapeTrade[] | undefined;
-  ethUsd: number;
-  win: FlowWindow;
-  priceChange: { yes: number | null; no: number | null } | undefined;
-  fallback: string;
-}) {
-  if (!tape?.length) {
-    return (
-      <PulseShell periodShort={FLOW_WINDOW_SHORT[win]} label="No conviction yet">
-        <p className="text-[13px] leading-snug text-[var(--text-secondary)]">{fallback}</p>
-      </PulseShell>
-    );
-  }
-
-  const input = pulseInputFromTape(tape, win, Date.now(), ethUsd);
-  // Price is supporting context only: read the majority side's move, unnamed.
-  const majorityMove = input.yesBelievers >= input.noBelievers ? priceChange?.yes : priceChange?.no;
-  const p = composePulse({ ...input, periodPriceChange: majorityMove ?? null });
-
-  return (
-    <PulseShell periodShort={p.periodShort} label={p.stateLabel}>
-      <p className="text-[13px] leading-snug text-[var(--text-secondary)]">{p.stateExplanation}</p>
-      <div className="mt-3 border-t pt-2" style={{ borderColor: "var(--border)" }}>
-        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          {p.activityLabel}
-        </div>
-        <p className="mt-0.5 text-[12px] leading-snug text-[var(--text-muted)]">
-          {p.activityExplanation}
-        </p>
-        {p.activityMetrics && (
-          <p className="num mt-1 text-[12px] text-[var(--text-secondary)]">{p.activityMetrics}</p>
-        )}
-      </div>
-    </PulseShell>
-  );
-}
-
-function PulseShell({
-  periodShort,
-  label,
-  children,
-}: {
-  periodShort: string;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
-      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-        Pulse · {periodShort}
-      </div>
-      <div className="mt-1.5 text-[15px] font-semibold uppercase tracking-[0.06em] text-[var(--text)]">
-        {label}
-      </div>
-      <div className="mt-1">{children}</div>
-    </div>
-  );
 }
 
 /**
@@ -687,9 +643,7 @@ function ExamineCta({ open, onToggle }: { open: boolean; onToggle: () => void })
           {open ? "Close the case" : "Examine the case"}
         </span>
         <span className="mt-0.5 block text-[11px] leading-snug text-[var(--text-muted)]">
-          {open
-            ? "Return to the market story."
-            : "Compare the believers, capital, history, and evidence behind YES and NO."}
+          {open ? "Return to the market story." : "See how conviction divides between YES and NO."}
         </span>
       </span>
       <span

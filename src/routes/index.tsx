@@ -623,6 +623,7 @@ function Feed() {
                     onToggleCase={isDesktop ? toggleCase : undefined}
                     storySide={caseActive ? storySide : null}
                     onCloseStory={() => setStorySide(null)}
+                    onSelectPerson={selectPerson}
                   />
                 </div>
               )
