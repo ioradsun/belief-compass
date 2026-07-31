@@ -281,3 +281,87 @@ export function leadStory(pts: SeriesPoint[]): string | null {
   if (b > 0 && c > 0 && p >= 0) return "People, money and price are moving together.";
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// The story of one side — the narrative the center tells while investigating.
+// ---------------------------------------------------------------------------
+
+export type StoryShape =
+  | "grassroots"
+  | "concentrated"
+  | "growing"
+  | "price-ahead"
+  | "cooling"
+  | "quiet";
+
+export interface ConvictionStory {
+  shape: StoryShape;
+  /** "YES is gaining believers" — never begins with price. */
+  headline: string;
+  /** People added inside the window. */
+  believerDelta: number;
+  /** Capital added inside the window, in ETH (can be negative). */
+  capitalDeltaEth: number;
+  /** Price move inside the window, in %. */
+  pricePct: number | null;
+  believersPct: number;
+  capitalPct: number;
+}
+
+/** Reads the window's own start→end move. Pure; says only what the tape proves. */
+export function convictionStory(side: "YES" | "NO", pts: SeriesPoint[]): ConvictionStory | null {
+  if (pts.length < 2) return null;
+  const a = pts[0];
+  const z = pts[pts.length - 1];
+  const believerDelta = z.believers - a.believers;
+  const capitalDeltaEth = z.capital - a.capital;
+  const pricePct = z.pricePct;
+  const base: Omit<ConvictionStory, "shape" | "headline"> = {
+    believerDelta,
+    capitalDeltaEth,
+    pricePct,
+    believersPct: z.believersPct,
+    capitalPct: z.capitalPct,
+  };
+  const avg = believerDelta > 0 ? capitalDeltaEth / believerDelta : Infinity;
+
+  if (believerDelta <= 0 && capitalDeltaEth <= 0)
+    return {
+      ...base,
+      shape: capitalDeltaEth < 0 ? "cooling" : "quiet",
+      headline:
+        capitalDeltaEth < 0 ? `${side} is losing capital` : `${side} has been quiet`,
+    };
+  if (believerDelta >= 5 && avg < 0.02)
+    return { ...base, shape: "grassroots", headline: `${side} is a crowd, not a whale` };
+  if (believerDelta <= 1 && capitalDeltaEth > 0)
+    return { ...base, shape: "concentrated", headline: `${side} is one conviction, heavily funded` };
+  if (pricePct != null && pricePct > z.believersPct && pricePct > z.capitalPct && pricePct > 10)
+    return { ...base, shape: "price-ahead", headline: `${side} price is ahead of its believers` };
+  return { ...base, shape: "growing", headline: `${side} is gaining believers` };
+}
+
+/**
+ * The narrative paragraph under the headline. People first, money second, price
+ * third — the caller supplies money formatting so the domain stays unit-pure.
+ */
+export function narrateStory(
+  story: ConvictionStory,
+  side: "YES" | "NO",
+  when: string,
+  money: (eth: number) => string,
+): string {
+  const p =
+    story.believerDelta > 0
+      ? `${story.believerDelta} new believer${story.believerDelta === 1 ? "" : "s"} joined ${side} ${when}`
+      : `No new believers joined ${side} ${when}`;
+  const m =
+    Math.abs(story.capitalDeltaEth) > 0
+      ? `${story.capitalDeltaEth < 0 ? "and " : "and they backed it with "}${money(Math.abs(story.capitalDeltaEth))}${story.capitalDeltaEth < 0 ? " left the side" : ""}`
+      : "and no new capital arrived";
+  const pr =
+    story.pricePct == null
+      ? "Price has not moved on the record."
+      : `Price ${story.pricePct > 0 ? "rose" : story.pricePct < 0 ? "fell" : "held"} ${Math.abs(story.pricePct).toFixed(1)}% behind them.`;
+  return `${p}, ${m}. ${pr}`;
+}

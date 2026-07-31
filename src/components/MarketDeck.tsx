@@ -18,6 +18,7 @@ import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain, useAccount, useBalance } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { MarketIntelligence, useHouseFinalize } from "@/components/MarketIntelligence";
+import { CaseStory } from "@/components/CaseStory";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { useWalletSession } from "@/hooks/useWalletSession";
@@ -109,6 +110,8 @@ export function MarketDeck({
   onLens,
   caseOpen = false,
   onToggleCase,
+  storySide = null,
+  onCloseStory,
 }: {
   row: MarketRow;
   ethUsd: number;
@@ -121,6 +124,9 @@ export function MarketDeck({
   /** Case File mode: the YES/NO evidence moves to the side columns. */
   caseOpen?: boolean;
   onToggleCase?: () => void;
+  /** Investigation mode: one side's story takes the center. */
+  storySide?: OrderSide | null;
+  onCloseStory?: () => void;
 }) {
   const rr = row as Record<string, unknown>;
   const marketId = Number(row.onchain_id);
@@ -447,7 +453,20 @@ export function MarketDeck({
         )}
       </div>
 
+      {/* Investigation Mode: one side's story replaces the comparison, while the
+        side columns stay put as anchors and the decision dock stays reachable. */}
+      {storySide ? (
+        <CaseStory
+          side={storySide}
+          marketId={marketId}
+          ethUsd={ethUsd}
+          backed={side === storySide}
+          onBack={() => chooseSide(storySide)}
+          onClose={() => onCloseStory?.()}
+        />
+      ) : (
       <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
+
         {/* Pulse — the headline for the ACTIVE window: what changed in belief,
           then money, then price. It never introduces a number the cards below
           can't corroborate, and never mixes two periods. Hidden in Case File
@@ -539,6 +558,8 @@ export function MarketDeck({
           <PositionSummary side={held.side} pnl={heldPnl} tokens={held.tokens} onSell={openSell} />
         )}
       </div>
+      )}
+
 
       {/* Decision dock — buy by default; sell takes over when opened on a holding. */}
       <div className="shrink-0">

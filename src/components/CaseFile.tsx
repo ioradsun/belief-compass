@@ -20,10 +20,16 @@ import { getNetwork } from "@/lib/dna.functions";
 import { getMarketChange } from "@/lib/markets.functions";
 import { SideColumn, DefenseColumn } from "@/components/MarketEvidence";
 import { ConvictionTimeline } from "@/components/ConvictionTimeline";
+import { ConvictionSpark } from "@/components/ConvictionSpark";
 import type { MarketRow } from "@/components/MarketCard";
 import { fmtUsd } from "@/domain/order";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
-import { convictionSeries, timelineEvents, leadStory } from "@/domain/conviction-series";
+import {
+  convictionSeries,
+  timelineEvents,
+  leadStory,
+  convictionStory,
+} from "@/domain/conviction-series";
 import { FLOW_WINDOW_SHORT } from "@/domain/market-flow";
 import { useDeckWindow } from "@/lib/deck-window";
 
@@ -115,6 +121,8 @@ export function CaseColumn({
   ethUsd = 0,
   openSection,
   onToggleSection,
+  investigating = false,
+  onInvestigate,
 }: {
   side: Side;
   marketId: number;
@@ -125,6 +133,10 @@ export function CaseColumn({
   /** The section open on BOTH columns (shared parent state); null = all collapsed. */
   openSection: CaseSection | null;
   onToggleSection: (s: CaseSection) => void;
+  /** True when THIS side's story is expanded in the center. */
+  investigating?: boolean;
+  /** Move the investigation into the center on this side. */
+  onInvestigate?: (s: Side) => void;
 }) {
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
 
@@ -155,15 +167,17 @@ export function CaseColumn({
 
   // The window the trader picked in the center — never a second period on screen.
   const win = useDeckWindow();
+  const winShort = FLOW_WINDOW_SHORT[win];
   const tape = change?.tape;
-  const { series, events, caption } = useMemo(() => {
-    if (!tape?.length) return { series: [], events: [], caption: null };
+  const { series, events, caption, story } = useMemo(() => {
+    if (!tape?.length) return { series: [], events: [], caption: null, story: null };
     const now = Date.now();
     const s = convictionSeries(tape, side, win, now);
     return {
       series: s,
       events: timelineEvents(tape, side, win, now, 10),
       caption: leadStory(s),
+      story: convictionStory(side, s),
     };
   }, [tape, side, win]);
 
@@ -196,6 +210,10 @@ export function CaseColumn({
   // card — a small factual item, never the headline.
   const price = num(side === "YES" ? rr.yes_price_usd : rr.no_price_usd);
 
+  const keyEvent = events[0] ?? null;
+  const keyEventMoney =
+    keyEvent?.eth != null ? fmtUsd(keyEvent.eth * (ethUsd || 0)) : null;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-3 flex items-baseline gap-2">
@@ -205,66 +223,113 @@ export function CaseColumn({
         <span className="text-[13px] font-semibold text-[var(--text)]">Case</span>
       </div>
 
-      {/* Fixed comparative summary — the highest-level side facts (Capital · People
-        · Money · Move). Every stat always renders (— when absent) so the YES and NO
-        summaries are the SAME height and line up across the center. Calm by design:
-        a neutral hairline + faint side tint carry column identity (not a heavy
-        colored box), and the stats sit on open space, not nested tiles. */}
-      <div
-        className="mb-4 shrink-0 rounded-[12px] p-3"
+      {/* The side case card — People first, money second, movement third, price
+        last. The whole card is the way into this side's story: clicking it moves
+        the investigation into the center, where the full timeline lives. Both
+        columns render every row (— when absent) so YES and NO line up exactly. */}
+      <button
+        type="button"
+        onClick={() => onInvestigate?.(side)}
+        aria-pressed={!!investigating}
+        className="mb-4 w-full shrink-0 rounded-[12px] p-3 text-left transition-colors"
         style={{
-          border: "1px solid var(--border)",
-          background: `color-mix(in oklab, ${color} 4%, transparent)`,
+          border: `1px solid ${investigating ? color : "var(--border)"}`,
+          background: `color-mix(in oklab, ${color} ${investigating ? 8 : 4}%, transparent)`,
         }}
       >
-        <div className="flex items-end justify-between">
-          <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-            Capital
-          </span>
-          <span className="num text-[22px] font-semibold leading-none text-[var(--text)]">
-            {capital != null ? fmtUsd(capital) : "—"}
-          </span>
+        {/* 1 — PEOPLE. */}
+        <div className="num text-[30px] font-semibold leading-[0.95] tracking-[-0.02em] text-[var(--text)]">
+          {believersCount != null ? believersCount.toLocaleString("en-US") : "—"}
         </div>
-        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-          <SummaryStat
-            label="People"
-            value={believersCount != null ? String(believersCount) : "—"}
-          />
-          <SummaryStat label="Money" value={moneySide != null ? `${moneySide.toFixed(0)}%` : "—"} />
-          <SummaryStat
-            label="Move"
-            value={
-              chg != null
-                ? `${chg > 0 ? "▲" : chg < 0 ? "▼" : "•"} ${Math.abs(chg).toFixed(1)}%`
-                : "—"
-            }
-            color={
-              chg == null ? undefined : chg > 0 ? "var(--yes)" : chg < 0 ? "var(--no)" : undefined
-            }
-          />
+        <div className="mt-1 text-[11px] text-[var(--text-muted)]">
+          {believersCount === 1 ? "believer" : "believers"}
         </div>
-        {/* Execution detail — the raw per-share price, quietly, for the record. */}
+
+        {/* 2 — MONEY. */}
+        <div className="num mt-2.5 text-[14px] font-medium text-[var(--text-secondary)]">
+          {capital != null ? `${fmtUsd(capital)} backed` : "—"}
+        </div>
+
+        {/* 3 — CHANGE, in the window the center is quoting. */}
+        <div className="mt-2 space-y-0.5 text-[11px]">
+          <div className="num text-[var(--text-muted)]">
+            {story && story.believerDelta > 0
+              ? `+${story.believerDelta} believers · ${winShort}`
+              : `No new believers · ${winShort}`}
+          </div>
+          <div className="num text-[var(--text-muted)]">
+            {story && Math.abs(story.capitalDeltaEth * (ethUsd || 0)) >= 1
+              ? `${story.capitalDeltaEth < 0 ? "−" : "+"}${fmtUsd(Math.abs(story.capitalDeltaEth * (ethUsd || 0)))} backed · ${winShort}`
+              : `No new capital · ${winShort}`}
+          </div>
+          <div
+            className="num"
+            style={{
+              color:
+                chg == null
+                  ? "var(--text-muted)"
+                  : chg > 0
+                    ? "var(--yes)"
+                    : chg < 0
+                      ? "var(--no)"
+                      : "var(--text-muted)",
+            }}
+          >
+            {chg != null
+              ? `${chg > 0 ? "▲" : chg < 0 ? "▼" : "•"} ${Math.abs(chg).toFixed(1)}% price · ${winShort}`
+              : `— price · ${winShort}`}
+          </div>
+        </div>
+
+        {/* 4 — The primary signal as a shape: believers over the window. */}
+        <div className="mt-2.5">
+          <ConvictionSpark side={side} points={series} events={events} />
+        </div>
+
+        {/* 5 — One key event, as the hook into the full story. */}
+        <div className="mt-1.5 flex items-baseline gap-1.5 text-[11px]">
+          {keyEvent ? (
+            <>
+              <span aria-hidden>{keyEvent.emoji}</span>
+              <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
+                {keyEventMoney ? `${keyEventMoney} ${keyEvent.text}` : keyEvent.text}
+              </span>
+            </>
+          ) : (
+            <span className="text-[var(--text-muted)]">Nothing moved · {winShort}</span>
+          )}
+        </div>
+
+        {/* 6 — Execution detail, quietly, for the record. */}
         <div
-          className="mt-3 flex items-baseline justify-between border-t pt-2 text-[10px] text-[var(--text-muted)]"
+          className="mt-2.5 flex items-baseline justify-between border-t pt-2 text-[10px] text-[var(--text-muted)]"
           style={{ borderColor: "var(--border)" }}
         >
-          <span className="uppercase tracking-[0.1em]">Share price</span>
+          <span className="uppercase tracking-[0.1em]">
+            Share price{moneySide != null ? ` · ${moneySide.toFixed(0)}% of money` : ""}
+          </span>
           <span className="num">{price != null ? `$${price.toFixed(2)}` : "—"}</span>
         </div>
-      </div>
 
-      {/* Conviction Timeline + event rail — how this side's belief FORMED, in the
-        same window the center is quoting. It scrolls with the investigation so a
-        short column never clips it. */}
+        <div className="mt-2 text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color }}>
+          {investigating ? "Reading this story →" : "Read this story →"}
+        </div>
+      </button>
+
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-0.5">
-        <ConvictionTimeline
-          side={side}
-          points={series}
-          events={events}
-          ethUsd={ethUsd}
-          windowLabel={FLOW_WINDOW_SHORT[win]}
-          caption={caption}
-        />
+        {/* The full three-line timeline lives in the center while investigating;
+          here it only appears in Discovery, so the same chart is never duplicated. */}
+        {!investigating && (
+          <ConvictionTimeline
+            side={side}
+            points={series}
+            events={events}
+            ethUsd={ethUsd}
+            windowLabel={winShort}
+            caption={caption}
+          />
+        )}
+
 
         {/* Investigation sections — collapsed by default; exactly one open, the SAME
           one on both columns (parent-owned openSection). People vs People, etc. */}
@@ -342,18 +407,3 @@ export function CaseColumn({
   );
 }
 
-function SummaryStat({ label, value, color }: { label: string; value: string; color?: string }) {
-  // Flat: value sits on open space (no nested tile), label recedes (small, muted,
-  // not bold). Strong color only when `color` is passed (Move direction) — the
-  // rest reads through contrast, so nothing decorative competes for the eye.
-  return (
-    <div>
-      <div className="num text-[14px] font-semibold" style={{ color: color ?? "var(--text)" }}>
-        {value}
-      </div>
-      <div className="mt-1 text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-        {label}
-      </div>
-    </div>
-  );
-}
