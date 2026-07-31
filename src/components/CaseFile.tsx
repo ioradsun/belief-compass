@@ -253,9 +253,22 @@ export function CaseColumn({
         </div>
       </div>
 
-      {/* Investigation sections — collapsed by default; exactly one open, the SAME
-        one on both columns (parent-owned openSection). People vs People, etc. */}
+      {/* Conviction Timeline + event rail — how this side's belief FORMED, in the
+        same window the center is quoting. It scrolls with the investigation so a
+        short column never clips it. */}
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-0.5">
+        <ConvictionTimeline
+          side={side}
+          points={series}
+          events={events}
+          ethUsd={ethUsd}
+          windowLabel={FLOW_WINDOW_SHORT[win]}
+          caption={caption}
+        />
+
+        {/* Investigation sections — collapsed by default; exactly one open, the SAME
+          one on both columns (parent-owned openSection). People vs People, etc. */}
+
         {/* People — reuse the deck's own per-side believer list. */}
         <AccordionSection
           id="people"
