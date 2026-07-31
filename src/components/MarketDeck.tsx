@@ -642,7 +642,9 @@ function ExamineCta({ open, onToggle }: { open: boolean; onToggle: () => void })
           {open ? "Close the case" : "Examine the case"}
         </span>
         <span className="mt-0.5 block text-[11px] leading-snug text-[var(--text-muted)]">
-          Compare the believers, capital, history, and evidence behind YES and NO.
+          {open
+            ? "Return to the market story."
+            : "Compare the believers, capital, history, and evidence behind YES and NO."}
         </span>
       </span>
       <span
