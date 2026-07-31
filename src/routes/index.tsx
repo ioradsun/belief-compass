@@ -15,7 +15,7 @@ import { LiveTape } from "@/components/LiveTape";
 import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
 import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
-import { CaseColumn, type CaseSection } from "@/components/CaseFile";
+import { CaseColumn } from "@/components/CaseFile";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { WalletConnectButton } from "@/components/WalletConnect";
 
@@ -203,9 +203,7 @@ function Feed() {
   // intelligence is shown, so it just flips the URL flag (preserved across switches).
   const toggleCase = () => {
     navigate({ search: (prev: Search) => ({ ...prev, case: prev.case ? undefined : true }) });
-    // Each Case File session opens with everything collapsed (summary-first) and
-    // in Discovery Mode — comparison before investigation.
-    setCaseSection(null);
+    // Each Case File session opens in Discovery Mode — comparison before investigation.
     setStorySide(null);
   };
   // Brand introduction layer. Intentional product interactions (opening a
@@ -336,11 +334,6 @@ function Feed() {
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  // The one Case File section open on BOTH columns (null = all collapsed). Lifting
-  // it here is what keeps YES and NO synchronized — you only ever compare like with
-  // like. Toggling the open one closes it; opening another closes the previous.
-  const [caseSection, setCaseSection] = useState<CaseSection | null>(null);
-  const toggleCaseSection = (s: CaseSection) => setCaseSection((prev) => (prev === s ? null : s));
   // Investigation Mode: which side's story has taken the center (null = Discovery,
   // where both sides are compared side by side). Clicking a side card opens it;
   // clicking the same card, Escape, or "Compare" returns to Discovery.
@@ -479,8 +472,6 @@ function Feed() {
               row={currentRow}
               viewerWallet={wallet}
               ethUsd={data?.ethUsd ?? 0}
-              openSection={caseSection}
-              onToggleSection={toggleCaseSection}
               investigating={storySide === "YES"}
               onInvestigate={toggleStory}
             />
@@ -621,8 +612,6 @@ function Feed() {
               row={currentRow}
               viewerWallet={wallet}
               ethUsd={data?.ethUsd ?? 0}
-              openSection={caseSection}
-              onToggleSection={toggleCaseSection}
               investigating={storySide === "NO"}
               onInvestigate={toggleStory}
             />
