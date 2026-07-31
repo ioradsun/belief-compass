@@ -500,21 +500,25 @@ export const getMarketChange = createServerFn({ method: "GET" })
       };
     }
 
-    // Conviction change per window, from the canonical trade log. Money stays in
-    // ETH; the deck scales it with the same ETH/USD rate it prices orders with.
+    // Conviction change per window, from the canonical trade log. `amount_eth`
+    // is stored in wei (kept as a string so precision survives the wire), so it
+    // is scaled to whole ETH here; the deck converts to USD with the same
+    // ETH/USD rate it prices orders with.
     const facts: FlowTrade[] = [];
     for (const t of trades) {
       const side = t.side === "YES" || t.side === "NO" ? t.side : null;
       const action = t.action === "SELL" ? "SELL" : t.action === "BUY" ? "BUY" : null;
       if (!side || !action || !t.wallet) continue;
+      const wei = Number(t.amount_eth ?? 0);
       facts.push({
         wallet: t.wallet,
         side,
         action,
-        usd: Number(t.amount_eth ?? 0),
+        usd: Number.isFinite(wei) ? wei / 1e18 : 0,
         at: new Date(t.occurred_at).getTime(),
       });
     }
+
     const now = Date.now();
     const flows: MarketChange["flows"] = {};
     for (const key of Object.keys(VOLUME_WINDOWS) as VolumeWindow[]) {
