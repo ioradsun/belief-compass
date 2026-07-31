@@ -20,10 +20,16 @@ import { getNetwork } from "@/lib/dna.functions";
 import { getMarketChange } from "@/lib/markets.functions";
 import { SideColumn, DefenseColumn } from "@/components/MarketEvidence";
 import { ConvictionTimeline } from "@/components/ConvictionTimeline";
+import { ConvictionSpark } from "@/components/ConvictionSpark";
 import type { MarketRow } from "@/components/MarketCard";
 import { fmtUsd } from "@/domain/order";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
-import { convictionSeries, timelineEvents, leadStory } from "@/domain/conviction-series";
+import {
+  convictionSeries,
+  timelineEvents,
+  leadStory,
+  convictionStory,
+} from "@/domain/conviction-series";
 import { FLOW_WINDOW_SHORT } from "@/domain/market-flow";
 import { useDeckWindow } from "@/lib/deck-window";
 
