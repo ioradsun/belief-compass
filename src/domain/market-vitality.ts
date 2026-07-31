@@ -181,32 +181,3 @@ export function vitalityStory(v: MarketVitality, capitalEpsEth = 1e-9): string {
   if (bUp) return "More people are joining.";
   return "The market is quiet right now.";
 }
-
-/** Recent whole-market activity, in plain sentences. Side-blind by construction. */
-export function vitalityPulse(v: MarketVitality, nowMs: number, ethUsd: number): string[] {
-  if (v.lastEventAt == null)
-    return ["No activity yet — this market is waiting for its first believer."];
-  const quietMs = nowMs - v.lastEventAt;
-  if (quietMs > 2 * 3_600_000) {
-    const hours = Math.floor(quietMs / 3_600_000);
-    return [
-      hours >= 24
-        ? `The market has been quiet for ${Math.floor(hours / 24)} day${Math.floor(hours / 24) === 1 ? "" : "s"}.`
-        : `The market has been quiet for ${hours} hours.`,
-    ];
-  }
-  const lines: string[] = [];
-  if (v.entrants24h > 0)
-    lines.push(
-      `${v.entrants24h} ${v.entrants24h === 1 ? "person" : "people"} entered the market today.`,
-    );
-  const usd = v.netEth24h * (ethUsd > 0 ? ethUsd : 0);
-  if (Math.abs(usd) >= 1)
-    lines.push(
-      usd > 0
-        ? `$${Math.round(usd).toLocaleString("en-US")} was newly committed.`
-        : `$${Math.round(Math.abs(usd)).toLocaleString("en-US")} was withdrawn.`,
-    );
-  if (lines.length === 0) lines.push("Activity is light, but the market is still moving.");
-  return lines;
-}

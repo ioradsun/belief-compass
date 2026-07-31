@@ -22,9 +22,9 @@ import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { useWalletSession } from "@/hooks/useWalletSession";
 import { MarketVitalityPanel } from "@/components/MarketVitality";
-import { marketVitality, vitalityPulse } from "@/domain/market-vitality";
+import { composePulse, pulseInputFromTape } from "@/domain/pulse";
 import type { TapeTrade } from "@/domain/conviction-series";
-import { type FlowWindow } from "@/domain/market-flow";
+import { FLOW_WINDOW_SHORT, type FlowWindow } from "@/domain/market-flow";
 
 import { CHAIN_ID } from "@/chain/decoder";
 import {
@@ -419,7 +419,13 @@ export function MarketDeck({
           />
 
           {/* Pulse — recent whole-market activity, never which side it happened on. */}
-          <NeutralPulse tape={change?.tape} ethUsd={ethUsd} fallback={pulse.why} />
+          <NeutralPulse
+            tape={change?.tape}
+            ethUsd={ethUsd}
+            win={win as FlowWindow}
+            priceChange={change?.windows?.[win]}
+            fallback={pulse.why}
+          />
 
           {/* Compact context — never the reason to act */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-muted)]">
@@ -590,33 +596,72 @@ function ageWords(ms: number): string {
 }
 
 /**
- * Pulse — recent activity for the WHOLE market. It never says which side moved;
- * that belongs to the evidence columns.
+ * Pulse — two separate answers, never merged: what the market looks like NOW
+ * (state) and what changed in the selected window (activity). It never names a
+ * side; that belongs to the evidence columns.
  */
 function NeutralPulse({
   tape,
   ethUsd,
+  win,
+  priceChange,
   fallback,
 }: {
   tape: TapeTrade[] | undefined;
   ethUsd: number;
+  win: FlowWindow;
+  priceChange: { yes: number | null; no: number | null } | undefined;
   fallback: string;
 }) {
-  const lines = tape?.length
-    ? vitalityPulse(marketVitality(tape, Date.now()), Date.now(), ethUsd)
-    : null;
+  if (!tape?.length) {
+    return (
+      <PulseShell periodShort={FLOW_WINDOW_SHORT[win]} label="No conviction yet">
+        <p className="text-[13px] leading-snug text-[var(--text-secondary)]">{fallback}</p>
+      </PulseShell>
+    );
+  }
+
+  const input = pulseInputFromTape(tape, win, Date.now(), ethUsd);
+  // Price is supporting context only: read the majority side's move, unnamed.
+  const majorityMove = input.yesBelievers >= input.noBelievers ? priceChange?.yes : priceChange?.no;
+  const p = composePulse({ ...input, periodPriceChange: majorityMove ?? null });
+
+  return (
+    <PulseShell periodShort={p.periodShort} label={p.stateLabel}>
+      <p className="text-[13px] leading-snug text-[var(--text-secondary)]">{p.stateExplanation}</p>
+      <div className="mt-3 border-t pt-2" style={{ borderColor: "var(--border)" }}>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          {p.activityLabel}
+        </div>
+        <p className="mt-0.5 text-[12px] leading-snug text-[var(--text-muted)]">
+          {p.activityExplanation}
+        </p>
+        {p.activityMetrics && (
+          <p className="num mt-1 text-[12px] text-[var(--text-secondary)]">{p.activityMetrics}</p>
+        )}
+      </div>
+    </PulseShell>
+  );
+}
+
+function PulseShell({
+  periodShort,
+  label,
+  children,
+}: {
+  periodShort: string;
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="rounded-[12px] px-3 py-2.5" style={{ border: "1px solid var(--border)" }}>
       <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-        Pulse
+        Pulse · {periodShort}
       </div>
-      <div className="mt-1 space-y-0.5">
-        {(lines ?? [fallback]).map((l) => (
-          <p key={l} className="text-[13px] leading-snug text-[var(--text-secondary)]">
-            {l}
-          </p>
-        ))}
+      <div className="mt-1.5 text-[15px] font-semibold uppercase tracking-[0.06em] text-[var(--text)]">
+        {label}
       </div>
+      <div className="mt-1">{children}</div>
     </div>
   );
 }
