@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PrivyProvider, usePrivy, useWallets } from "@privy-io/react-auth";
 import { WagmiProvider, useSetActiveWallet } from "@privy-io/wagmi";
-import { WagmiProvider as PlainWagmiProvider, useAccount } from "wagmi";
+import { WagmiProvider as PlainWagmiProvider, useAccount, useDisconnect } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { base } from "wagmi/chains";
 import { wagmiConfig, PRIVY_APP_ID } from "@/lib/wagmi";
 
-import { CONNECT_EVENT, requestConnect } from "@/lib/connect-bridge";
+import { CONNECT_EVENT, DISCONNECT_EVENT, requestConnect } from "@/lib/connect-bridge";
 import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getWalletLink } from "@/lib/wallet-link.functions";
 import { readLocalLink } from "@/lib/wallet-link";
