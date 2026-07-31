@@ -145,7 +145,15 @@ export function AccountRail({
             >
               Sign out
             </button>
+            <button
+              type="button"
+              onClick={() => setWalletProvider(walletProvider() === "privy" ? "rainbowkit" : "privy")}
+              className="-mx-2 w-[calc(100%+1rem)] rounded-xl px-2 py-2 text-left text-[11px] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]"
+            >
+              Trouble connecting? Try the backup connector
+            </button>
           </div>
+
         </>
       )}
     </div>
