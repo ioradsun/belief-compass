@@ -570,6 +570,20 @@ function Feed() {
                   first cycle completes.
                 </div>
               )
+            ) : houseIdea.suggestion ? (
+              /* A first-class feed card, in the exact slot a market would take. */
+              <div className="flex min-h-0 flex-1 flex-col">
+                <SuggestedMarketCard
+                  suggestion={houseIdea.suggestion}
+                  onShown={houseIdea.onShown}
+                  onCreate={() => acceptIdea(false)}
+                  onEdit={() => acceptIdea(true)}
+                  onDismiss={() => {
+                    houseIdea.onDismiss();
+                    nextMarket();
+                  }}
+                />
+              </div>
             ) : (
               currentRow && (
                 <div className="flex min-h-0 flex-1 flex-col">
@@ -591,6 +605,7 @@ function Feed() {
                 </div>
               )
             )}
+
           </div>
         </main>
 
