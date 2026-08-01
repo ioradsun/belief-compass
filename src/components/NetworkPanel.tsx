@@ -1,24 +1,28 @@
 /**
- * LEFT PANEL — "Network" tab. The viewer's relationships with people.
+ * LEFT PANEL — "Network", reimagined as People Discovery.
  *
- * Pinned DNA summary → opens the full overview in the center. Below: contextual
- * search, a relationship filter, a sort control, and a full-height person list.
- * Presentation only — getNetwork owns the labels, agreement, sort inputs, and
- * activity; clicking a person opens their profile in the center.
+ * People are the product; controls are not. The screen leads with people: a
+ * single compact DNA progress row, a collapsed search and ONE filter dropdown,
+ * then the person list immediately — the first person is visible within the first
+ * screenful. Every person reads as a story (a discovery stage + one human
+ * sentence), never a row of statistics, and the list is ordered by curiosity so
+ * the most interesting person is always first. Presentation only: getNetwork owns
+ * the relationships and evidence; the pure src/domain/person-story engine turns
+ * them into stages, sentences and rank; clicking opens the profile in the center.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getNetwork, type NetworkPersonRow } from "@/lib/dna.functions";
-import { RELATIONSHIP_TEXT, relationshipTone, relationshipAria, ago } from "@/lib/dna-labels";
+import { ago } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { WalletConnectButton } from "@/components/WalletConnect";
+import { personStory, type PersonStory } from "@/domain/person-story";
 import {
-  DNA_STAGE_HEADLINE,
   DNA_STAGE_LABEL,
+  DNA_STAGE_ORDER,
   decisionsToNextStage,
   dnaReveal,
   dnaStage,
-  firstMeaningfulIndex,
   matchCountLine,
   stageAtLeast,
 } from "@/domain/conviction-dna";
@@ -26,35 +30,65 @@ import {
 type RelFilter = "all" | "twin" | "tribe" | "opp" | "inverse";
 type Sort = "relevant" | "closest" | "active" | "newest";
 
-const FILTERS: { key: RelFilter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "twin", label: "Twin" },
-  { key: "tribe", label: "Tribe" },
-  { key: "opp", label: "Opp" },
-  { key: "inverse", label: "Inverse" },
+/** One dropdown replaces five chips + a sort control. Each lens maps to a server
+ *  filter/sort; curiosity views re-rank by story, activity views keep server order. */
+type Lens = {
+  key: string;
+  label: string;
+  filter: RelFilter;
+  sort: Sort;
+  /** Re-order client-side by curiosity (story rank); else trust the server sort. */
+  curiosity: boolean;
+};
+const LENSES: Lens[] = [
+  { key: "everyone", label: "Everyone", filter: "all", sort: "relevant", curiosity: true },
+  { key: "twin", label: "Potential Twin", filter: "twin", sort: "relevant", curiosity: true },
+  { key: "tribe", label: "Tribe", filter: "tribe", sort: "relevant", curiosity: true },
+  { key: "opp", label: "Opps", filter: "opp", sort: "relevant", curiosity: true },
+  { key: "active", label: "Recently Active", filter: "all", sort: "active", curiosity: false },
+  { key: "newest", label: "Newest", filter: "all", sort: "newest", curiosity: false },
+  { key: "closest", label: "Highest Match", filter: "all", sort: "closest", curiosity: false },
+  { key: "different", label: "Different", filter: "inverse", sort: "relevant", curiosity: true },
 ];
-const SORTS: { key: Sort; label: string }[] = [
-  { key: "relevant", label: "Relevant" },
-  { key: "closest", label: "Closest" },
-  { key: "active", label: "Most active" },
-  { key: "newest", label: "Newest" },
-];
+
+const toneFg = (t: PersonStory["tone"]): string =>
+  t === "aligned" ? "var(--yes)" : t === "opposed" ? "var(--no)" : "var(--text-muted)";
+const toneBg = (t: PersonStory["tone"]): string =>
+  t === "aligned"
+    ? "color-mix(in oklab, var(--yes) 14%, transparent)"
+    : t === "opposed"
+      ? "color-mix(in oklab, var(--no) 14%, transparent)"
+      : "color-mix(in oklab, var(--text-muted) 12%, transparent)";
+
+const storyOf = (p: NetworkPersonRow): PersonStory =>
+  personStory({
+    relationship: p.relationship,
+    evidence: p.evidenceLevel,
+    agreement: p.agreement,
+    sharedBeliefs: p.sharedBeliefs,
+    alignedDomain: p.strongestAlignedDomain?.name ?? null,
+    opposedDomain: p.strongestOpposedDomain?.name ?? null,
+  });
 
 export function NetworkPanel({
   wallet,
   selectedPerson,
   onSelectPerson,
   onOpenDna,
+  onExplore,
 }: {
   wallet?: string;
   selectedPerson?: string;
   onSelectPerson: (wallet: string) => void;
   onOpenDna: () => void;
+  /** Empty-state CTA — take me to the markets. */
+  onExplore?: () => void;
 }) {
+  const [lensKey, setLensKey] = useState<string>("everyone");
+  const lens = LENSES.find((l) => l.key === lensKey) ?? LENSES[0];
+  const [searchOpen, setSearchOpen] = useState(false);
   const [rawQuery, setRawQuery] = useState("");
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<RelFilter>("all");
-  const [sort, setSort] = useState<Sort>("relevant");
 
   // Debounce the search into the server query (server stays authoritative).
   const t = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -67,46 +101,56 @@ export function NetworkPanel({
   }, [rawQuery]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["network", wallet ?? null, filter, sort, query],
-    queryFn: () => getNetwork({ data: { wallet, relationship: filter, sort, query, limit: 40 } }),
+    queryKey: ["network", wallet ?? null, lens.filter, lens.sort, query],
+    queryFn: () =>
+      getNetwork({
+        data: { wallet, relationship: lens.filter, sort: lens.sort, query, limit: 40 },
+      }),
     enabled: !!wallet,
-    // Keep the previous page visible while refetching — never blank the list.
     placeholderData: (prev) => prev,
     refetchInterval: 60_000,
   });
 
   const summary = data?.summary;
-  const people = data?.people ?? [];
-  const updating = data?.freshness.status === "updating";
+  const rawPeople = useMemo(() => data?.people ?? [], [data]);
 
-  // The one continuous game: real decisions earn a STAGE, and the stage decides
-  // what may honestly be named. No calibration gate, no percentage.
+  // Curiosity order: the most interesting person first. Activity views keep the
+  // server's order so "Recently Active" / "Newest" mean what they say.
+  const people = useMemo(() => {
+    if (!lens.curiosity || query) return rawPeople;
+    return [...rawPeople].sort((a, b) => {
+      const ra = storyOf(a).rank;
+      const rb = storyOf(b).rank;
+      if (rb !== ra) return rb - ra;
+      const ta = a.latestActivity ? Date.parse(a.latestActivity.occurredAt) : 0;
+      const tb = b.latestActivity ? Date.parse(b.latestActivity.occurredAt) : 0;
+      return tb - ta || b.sharedBeliefs - a.sharedBeliefs;
+    });
+  }, [rawPeople, lens.curiosity, query]);
+
+  // The compact DNA progress — one row, tap for the full overview.
   const counts = {
     twin: summary?.twinCount ?? 0,
     tribe: summary?.tribeCount ?? 0,
     opp: summary?.oppCount ?? 0,
   };
-  const stage = dnaStage({
-    decisions: summary?.expressedBeliefs ?? 0,
-    hasTwinCandidate: counts.twin > 0,
-  });
+  const decisions = summary?.expressedBeliefs ?? 0;
+  const stage = dnaStage({ decisions, hasTwinCandidate: counts.twin > 0 });
   const reveal = dnaReveal(stage, counts);
-  const nameable = stageAtLeast(stage, "recognizable");
-  const next = decisionsToNextStage(summary?.expressedBeliefs ?? 0);
-
-  // Named counts only — never surface a relationship the evidence can't back.
-  const countLine = useMemo(() => {
-    if (!nameable) return "Keep deciding — your people will surface as your pattern sharpens.";
+  const next = decisionsToNextStage(decisions);
+  const progress = DNA_STAGE_ORDER.indexOf(stage) / (DNA_STAGE_ORDER.length - 1);
+  const dnaLine = useMemo(() => {
+    if (!stageAtLeast(stage, "recognizable")) {
+      return next
+        ? `${next.need} decision${next.need === 1 ? "" : "s"} until your first Tribe.`
+        : "Your people are beginning to surface.";
+    }
     const parts: string[] = [];
     if (reveal.canNameTwin) parts.push(matchCountLine(counts.twin, "Twin"));
     if (reveal.canNameTribe) parts.push(matchCountLine(counts.tribe, "Tribe member"));
     if (reveal.canNameOpp) parts.push(matchCountLine(counts.opp, "Opp"));
-    return parts.length ? parts.join(" · ") : "No strong matches named yet — keep deciding.";
-  }, [nameable, reveal, counts.twin, counts.tribe, counts.opp]);
-
-  // The single most meaningful person to meet first (only in the unfiltered view).
-  const revealIdx = filter === "all" && !query ? firstMeaningfulIndex(people, stage) : -1;
-  const firstPerson = revealIdx >= 0 ? people[revealIdx] : null;
+    return parts.length ? parts.join(" · ") : "Keep deciding — your people are surfacing.";
+  }, [stage, next, reveal, counts.twin, counts.tribe, counts.opp]);
 
   if (!wallet) {
     return (
@@ -121,260 +165,213 @@ export function NetworkPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Persistent DNA progress → the stage you've earned, and what it lets us
-        honestly name. Opens the full overview in the center. */}
+      {/* Compact DNA progress — never a quarter of the screen. */}
       <button
         type="button"
         onClick={onOpenDna}
-        className="mb-3 w-full rounded-[12px] px-3 py-2.5 text-left transition-colors hover:bg-[var(--border)]/30"
+        className="mb-2.5 w-full rounded-[10px] px-2.5 py-2 text-left transition-colors hover:bg-[var(--border)]/30"
         style={{ border: "1px solid var(--border)" }}
       >
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-            Your Conviction DNA
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
+            🧬 Conviction DNA
           </span>
-          <span
-            className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-            style={{
-              color: "var(--yes)",
-              background: "color-mix(in oklab, var(--yes) 14%, transparent)",
-            }}
-          >
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
             {DNA_STAGE_LABEL[stage]}
           </span>
         </div>
-        <p className="mt-1.5 text-[12.5px] leading-snug text-[var(--text-secondary)]">
-          {summary ? DNA_STAGE_HEADLINE[stage] : "Reading your convictions…"}
-        </p>
-        <div className="num mt-1 text-[11px] text-[var(--text-muted)]">{countLine}</div>
-        {next && (
-          <div className="mt-1 text-[11px] text-[var(--text-muted)]">
-            {next.need} more {next.need === 1 ? "decision" : "decisions"} to{" "}
-            {DNA_STAGE_LABEL[next.next]}
-          </div>
-        )}
+        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-[var(--border)]">
+          <div
+            className="h-full rounded-full"
+            style={{
+              width: `${Math.round(progress * 100)}%`,
+              background: "var(--yes)",
+              transition: "width .3s ease",
+            }}
+          />
+        </div>
+        <div className="num mt-1 text-[11px] text-[var(--text-muted)]">{dnaLine}</div>
       </button>
 
-      {/* Meet the first meaningful person the moment the evidence is there. */}
-      {firstPerson && (
-        <FirstMatchCard p={firstPerson} onSelect={() => onSelectPerson(firstPerson.wallet)} />
-      )}
-
-      {!nameable ? (
-        // Honest forming state — no premature people, no fake matches.
-        <p className="pt-3 text-[12.5px] leading-relaxed text-[var(--text-muted)]">
-          Your first matches appear once your pattern is recognizable. Keep making calls in the feed
-          — every YES, NO, or PASS sharpens who you are.
-        </p>
-      ) : (
-        <>
-          {/* Search */}
-          <input
-            value={rawQuery}
-            onChange={(e) => setRawQuery(e.target.value)}
-            placeholder="Search your network"
-            aria-label="Search your network"
-            className="mb-2 w-full rounded-md bg-[var(--surface)] px-3 py-1.5 text-[13px] outline-none"
-            style={{ border: "1px solid var(--border)" }}
-          />
-
-          {/* Filter + sort */}
-          <div className="mb-2 flex flex-wrap items-center gap-1">
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                onClick={() => setFilter(f.key)}
-                aria-pressed={filter === f.key}
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  filter === f.key
-                    ? "bg-[var(--text)] text-[var(--bg)]"
-                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
-                }`}
-                style={filter === f.key ? undefined : { border: "1px solid var(--border)" }}
-              >
-                {f.label}
-              </button>
-            ))}
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as Sort)}
-              aria-label="Sort network"
-              className="ml-auto rounded-md bg-[var(--surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)]"
+      {/* One toolbar row: collapsed search + one filter dropdown. */}
+      <div className="mb-2.5 flex items-center gap-2">
+        {searchOpen ? (
+          <div className="flex flex-1 items-center gap-1">
+            <input
+              autoFocus
+              value={rawQuery}
+              onChange={(e) => setRawQuery(e.target.value)}
+              placeholder="Search people…"
+              aria-label="Search people"
+              className="w-full rounded-md bg-[var(--surface)] px-2.5 py-1.5 text-[13px] outline-none"
               style={{ border: "1px solid var(--border)" }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setSearchOpen(false);
+                setRawQuery("");
+              }}
+              aria-label="Close search"
+              className="shrink-0 px-1 text-[13px] text-[var(--text-muted)] hover:text-[var(--text)]"
             >
-              {SORTS.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              ✕
+            </button>
           </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            aria-label="Search people"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-[14px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            ⌕
+          </button>
+        )}
+        {!searchOpen && (
+          <select
+            value={lensKey}
+            onChange={(e) => setLensKey(e.target.value)}
+            aria-label="Filter people"
+            className="ml-auto rounded-md bg-[var(--surface)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--text-secondary)]"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            {LENSES.map((l) => (
+              <option key={l.key} value={l.key}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
 
-          {updating && (
-            <div
-              className="pb-1 text-[10px] uppercase tracking-wide text-[var(--text-muted)]"
-              role="status"
-            >
-              Updating your network…
-            </div>
-          )}
-
-          {/* Person list */}
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {isLoading && people.length === 0 ? (
-              <ul className="space-y-2" aria-hidden>
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <li key={i} className="h-14 animate-pulse rounded-[12px] bg-[var(--border)]/40" />
-                ))}
-              </ul>
-            ) : people.length === 0 ? (
-              <p className="pt-3 text-[12px] text-[var(--text-muted)]">
-                {query
-                  ? "No one in your network matches this search."
-                  : "No strong relationship yet — more calls in the feed will surface your people."}
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-1.5">
-                {people.map((p) => (
-                  <PersonRow
-                    key={p.wallet}
-                    p={p}
-                    selected={selectedPerson?.toLowerCase() === p.wallet.toLowerCase()}
-                    onSelect={() => onSelectPerson(p.wallet)}
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
-        </>
-      )}
+      {/* People — the product. First person visible immediately. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {isLoading && people.length === 0 ? (
+          <ul className="space-y-2" aria-hidden>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <li key={i} className="h-16 animate-pulse rounded-[12px] bg-[var(--border)]/40" />
+            ))}
+          </ul>
+        ) : people.length === 0 ? (
+          query ? (
+            <p className="pt-3 text-[12.5px] text-[var(--text-muted)]">
+              No one in your network matches this search.
+            </p>
+          ) : (
+            <EmptyState onExplore={onExplore} />
+          )
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {people.map((p, i) => (
+              <PersonCard
+                key={p.wallet}
+                p={p}
+                spotlight={i === 0 && lens.curiosity && !query}
+                selected={selectedPerson?.toLowerCase() === p.wallet.toLowerCase()}
+                onSelect={() => onSelectPerson(p.wallet)}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
 
 /**
- * The first meaningful person, spotlighted — the moment there's enough evidence
- * to mean it. A warm invitation to start exploring people, not a data row.
+ * One person, as a story. The most curious person (spotlight) also shows their
+ * most recent move, so the top of the list always invites a tap.
  */
-function FirstMatchCard({ p, onSelect }: { p: NetworkPersonRow; onSelect: () => void }) {
-  const tone = relationshipTone(p.relationship);
-  const badge = RELATIONSHIP_TEXT[p.relationship];
-  const lead =
-    p.relationship === "twin"
-      ? "Your closest match is here"
-      : p.relationship === "opp" || p.relationship === "inverse"
-        ? "Someone who sees it the other way"
-        : "Someone who thinks like you";
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-label={`${lead}: ${p.displayName}`}
-      className="mb-3 w-full rounded-[14px] p-3 text-left transition-transform hover:-translate-y-px"
-      style={{
-        border: "1px solid color-mix(in oklab, var(--yes) 30%, var(--border))",
-        background: "color-mix(in oklab, var(--yes) 8%, transparent)",
-      }}
-    >
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-        {lead}
-      </div>
-      <div className="mt-1.5 flex items-center gap-2.5">
-        {p.avatarUrl ? (
-          <img src={p.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
-        ) : (
-          <span
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[12px] font-semibold text-white"
-            style={{ background: `hsl(${hueFor(p.wallet)} 45% 45%)` }}
-            aria-hidden
-          >
-            {initialsFor(p.displayName)}
-          </span>
-        )}
-        <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[var(--text)]">
-          {p.displayName}
-        </span>
-        <span
-          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-          style={{ color: tone.fg, background: tone.bg }}
-        >
-          {badge}
-        </span>
-      </div>
-      <div className="num mt-1.5 text-[11px] text-[var(--text-secondary)]">
-        {p.agreement}% aligned · {p.sharedBeliefs} shared · Tap to explore
-      </div>
-    </button>
-  );
-}
-
-function PersonRow({
+function PersonCard({
   p,
+  spotlight,
   selected,
   onSelect,
 }: {
   p: NetworkPersonRow;
+  spotlight: boolean;
   selected: boolean;
   onSelect: () => void;
 }) {
-  const tone = relationshipTone(p.relationship);
-  const badge = RELATIONSHIP_TEXT[p.relationship];
+  const s = storyOf(p);
+  const act = p.latestActivity;
   return (
     <li>
       <button
         type="button"
         onClick={onSelect}
         aria-current={selected ? "true" : undefined}
-        aria-label={relationshipAria(p.displayName, p.relationship, p.agreement, p.sharedBeliefs)}
+        aria-label={`${p.displayName}, ${s.stageLabel}. ${s.sentence}`}
         className="block w-full rounded-[12px] p-2.5 text-left transition-colors"
         style={{
-          background: selected ? "var(--surface)" : "transparent",
-          border: `1px solid ${selected ? "var(--border)" : "transparent"}`,
+          background: spotlight ? toneBg(s.tone) : selected ? "var(--surface)" : "transparent",
+          border: `1px solid ${spotlight ? toneFg(s.tone) + "55" : selected ? "var(--border)" : "transparent"}`,
         }}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           {p.avatarUrl ? (
-            <img src={p.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+            <img
+              src={p.avatarUrl}
+              alt=""
+              className={`${spotlight ? "h-9 w-9" : "h-8 w-8"} shrink-0 rounded-full object-cover`}
+            />
           ) : (
             <span
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
+              className={`${spotlight ? "h-9 w-9 text-[12px]" : "h-8 w-8 text-[11px]"} grid shrink-0 place-items-center rounded-full font-semibold text-white`}
               style={{ background: `hsl(${hueFor(p.wallet)} 45% 45%)` }}
               aria-hidden
             >
               {initialsFor(p.displayName)}
             </span>
           )}
-          <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text)]">
+          <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[var(--text)]">
             {p.displayName}
           </span>
           <span
-            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-            style={{ color: tone.fg, background: tone.bg }}
+            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide"
+            style={{ color: toneFg(s.tone), background: toneBg(s.tone) }}
           >
-            {badge}
+            {s.stageLabel}
           </span>
         </div>
-        <div className="num mt-1 pl-9 text-[11px] text-[var(--text-secondary)]">
-          {p.agreement}% · {p.sharedBeliefs} shared
+
+        {/* The one meaningful sentence. */}
+        <div className="mt-1.5 pl-[42px] text-[12px] leading-snug text-[var(--text-secondary)]">
+          {s.sentence}
         </div>
-        {(p.strongestAlignedDomain || p.strongestOpposedDomain) && (
-          <div className="mt-0.5 truncate pl-9 text-[10px] text-[var(--text-muted)]">
-            {p.relationship === "opp" || p.relationship === "inverse"
-              ? p.strongestOpposedDomain
-                ? `Most divided: ${p.strongestOpposedDomain.name}`
-                : ""
-              : p.strongestAlignedDomain
-                ? `${p.strongestAlignedDomain.name} · ${p.strongestAlignedDomain.agreement}%`
-                : ""}
-          </div>
-        )}
-        {p.latestActivity && (
-          <div className="mt-0.5 truncate pl-9 text-[10px] text-[var(--text-muted)]">
-            {p.latestActivity.action} {p.latestActivity.side} · {ago(p.latestActivity.occurredAt)}
+
+        {/* Spotlight only: their most recent move, so the top card invites a tap. */}
+        {spotlight && act && (
+          <div className="mt-1 truncate pl-[42px] text-[11px] text-[var(--text-muted)]">
+            Recently {act.action.toLowerCase()} {act.side} · “{act.marketTitle}” ·{" "}
+            {ago(act.occurredAt)}
           </div>
         )}
       </button>
     </li>
+  );
+}
+
+/** No people yet — an invitation, not a dead end. */
+function EmptyState({ onExplore }: { onExplore?: () => void }) {
+  return (
+    <div className="pt-2">
+      <div className="text-[15px] font-semibold text-[var(--text)]">Nobody knows you yet.</div>
+      <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--text-muted)]">
+        Every market you back helps The House find your people.
+      </p>
+      {onExplore && (
+        <button
+          type="button"
+          onClick={onExplore}
+          className="mt-4 rounded-[10px] px-3.5 py-2 text-[12px] font-semibold text-[var(--bg)] transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
+          style={{ background: "var(--text)" }}
+        >
+          Explore Markets
+        </button>
+      )}
+    </div>
   );
 }

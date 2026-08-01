@@ -99,6 +99,10 @@ export function MyWorld({
           selectedPerson={selectedPerson}
           onSelectPerson={onSelectPerson}
           onOpenDna={onOpenDna}
+          onExplore={() => {
+            const first = rows[0];
+            if (first) onSelectMarket(Number(first.onchain_id));
+          }}
         />
       )}
     </div>
