@@ -15,6 +15,8 @@ import { LiveTape } from "@/components/LiveTape";
 import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
 import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
+import { MobileGame } from "@/components/MobileGame";
+
 import { CaseColumn } from "@/components/CaseFile";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
