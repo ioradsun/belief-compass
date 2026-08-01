@@ -213,13 +213,16 @@ export function ProfileMenu({
           title={
             panel === "edit"
               ? "Edit Profile"
-              : panel === "import"
-                ? "Import POV Wallet"
-                : "Settings"
+              : panel === "earnings"
+                ? "Creator Earnings"
+                : panel === "import"
+                  ? "Import POV Wallet"
+                  : "Settings"
           }
           onClose={() => setPanel(null)}
         >
           {panel === "edit" && <ProfileEditor wallet={me} fallbackName={name} />}
+          {panel === "earnings" && <CreatorEarnings ethUsd={ethUsd} />}
           {panel === "import" && (
             <>
               <p className="mb-1 text-[12px] leading-relaxed text-[var(--text-muted)]">
