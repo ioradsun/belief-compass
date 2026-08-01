@@ -6,6 +6,8 @@ import {
   sequenceFeed,
   applyCategoryDiversity,
   primaryReasonFor,
+  excludeDecided,
+  nextMarketId,
   EMPTY_VIEWER_CONTEXT,
   type FeedMarketCandidate,
   type ViewerFeedContext,
@@ -207,5 +209,30 @@ describe("primaryReasonFor", () => {
   it("returns null when there is nothing honest to say", () => {
     const rel = relevanceFor(mkt(1), EMPTY_VIEWER_CONTEXT);
     expect(primaryReasonFor(mkt(1, { opportunityReason: null }), rel)).toBeNull();
+  });
+});
+
+describe("excludeDecided — completed markets leave discovery", () => {
+  const markets = [mkt(1), mkt(2), mkt(3)];
+  it("keeps every market when nothing is decided (anonymous / fresh)", () => {
+    expect(excludeDecided(markets, new Set()).map((m) => m.onchainId)).toEqual([1, 2, 3]);
+  });
+  it("removes a decided market (YES/NO/PASS all recorded the same way)", () => {
+    expect(excludeDecided(markets, new Set([2])).map((m) => m.onchainId)).toEqual([1, 3]);
+  });
+  it("stays excluded regardless of order / lens (pure id filter)", () => {
+    expect(excludeDecided(markets, new Set([1, 3])).map((m) => m.onchainId)).toEqual([2]);
+  });
+});
+
+describe("nextMarketId — forward only, never a carousel", () => {
+  const ids = [10, 20, 30];
+  it("advances to the next market without modulo wrapping", () => {
+    expect(nextMarketId(ids, 0)).toBe(20);
+    expect(nextMarketId(ids, 1)).toBe(30);
+  });
+  it("returns null at the end instead of looping back to the start", () => {
+    expect(nextMarketId(ids, 2)).toBeNull();
+    expect(nextMarketId([], 0)).toBeNull();
   });
 });

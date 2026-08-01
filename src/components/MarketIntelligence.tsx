@@ -46,6 +46,13 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
   const store = (data: HouseReadView | null) => {
     if (data) qc.setQueryData(houseKey(wallet, marketId), data);
   };
+  // A confirmed decision (buy or pass) removes this market from discovery, so the
+  // feed must refresh immediately — not on the next 8s poll — and never show the
+  // decided market again.
+  const onDecided = (data: HouseReadView | null) => {
+    store(data);
+    void qc.invalidateQueries({ queryKey: ["opp-feed"] });
+  };
   const bet = useMutation({
     mutationFn: async (vars: { side: "YES" | "NO"; txHash: string }) => {
       if (!wallet) return null;
@@ -54,7 +61,7 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
         data: { wallet, marketId, side: vars.side, txHash: vars.txHash, session },
       });
     },
-    onSuccess: store,
+    onSuccess: onDecided,
   });
   const pass = useMutation({
     mutationFn: async () => {
@@ -62,7 +69,7 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
       const session = await ensureSession();
       return finalizePass({ data: { wallet, marketId, session } });
     },
-    onSuccess: store,
+    onSuccess: onDecided,
   });
   const foundation = useMutation({
     mutationFn: async (vars: { key: string; action: "YES" | "NO" | "PASS" }) => {
@@ -77,6 +84,11 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
   return {
     betReveal: (side: "YES" | "NO", txHash: string) => bet.mutate({ side, txHash }),
     pass: () => pass.mutate(),
+    // A pass has no on-chain fallback: if persisting it fails, the caller shows a
+    // retry instead of silently advancing.
+    passFailed: pass.isError,
+    passing: pass.isPending,
+    retryPass: () => pass.mutate(),
     trainFoundation: (key: string, action: "YES" | "NO" | "PASS") =>
       foundation.mutate({ key, action }),
     training: foundation.isPending,

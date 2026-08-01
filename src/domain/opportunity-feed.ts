@@ -50,11 +50,7 @@ export const FEED = {
 } as const;
 
 export type RelevanceReasonCode =
-  | "category_affinity"
-  | "tribe_active"
-  | "opp_active"
-  | "held_position"
-  | "already_decided";
+  "category_affinity" | "tribe_active" | "opp_active" | "held_position" | "already_decided";
 
 export interface RelevanceReason {
   code: RelevanceReasonCode;
@@ -138,6 +134,30 @@ export type OpportunityFeedItem = FeedMarketItem | FeedIdeaItem;
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 const has = (list: number[], id: number) => list.includes(id);
+
+/**
+ * V1 discovery rule: once a viewer makes a REAL decision on a market (a confirmed
+ * YES/NO purchase, or a PASS), that market leaves the normal discovery queue — it
+ * is never asked again. Pure exclusion by id; the caller supplies the completed
+ * set (persisted, first-write-wins). Applied BEFORE sequencing so completed
+ * markets stay out under every lens. Anonymous viewers pass an empty set.
+ */
+export function excludeDecided<T extends { onchainId: number }>(
+  markets: T[],
+  completed: ReadonlySet<number>,
+): T[] {
+  return completed.size === 0 ? markets : markets.filter((m) => !completed.has(m.onchainId));
+}
+
+/**
+ * The next market in the sequence — NO modulo wrapping. Returns the id after
+ * `currentIdx`, or null when there is none (the caller shows the caught-up state
+ * instead of looping back to the start).
+ */
+export function nextMarketId(ids: number[], currentIdx: number): number | null {
+  const next = ids[currentIdx + 1];
+  return next == null ? null : next;
+}
 
 /**
  * How relevant is this market TO THIS PERSON, and why. The multiplier is always
@@ -286,7 +306,11 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
   }));
 
   if (input.idea) {
-    const slot = clamp(input.ideaSlot ?? FEED.IDEA_MIN_POSITION, FEED.IDEA_MIN_POSITION, items.length);
+    const slot = clamp(
+      input.ideaSlot ?? FEED.IDEA_MIN_POSITION,
+      FEED.IDEA_MIN_POSITION,
+      items.length,
+    );
     items.splice(slot, 0, {
       kind: "market_idea",
       position: slot,

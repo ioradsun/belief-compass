@@ -12,6 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { decodeFunctionData, parseAbi } from "viem";
 import { serviceClient } from "@/lib/supabase-clients";
 import { readViewerDnaCache } from "@/lib/dna/viewer-dna-cache.server";
+import { recordViewerDecision } from "@/lib/viewer-decisions.server";
 import {
   predictHouse,
   scoreHouse,
@@ -497,6 +498,15 @@ export async function finalizeHouseBet(
       .is("actual_action", null);
   }
 
+  // A confirmed purchase removes this market from discovery (V1). Best-effort:
+  // the on-chain buy is authoritative and must never fail because an off-chain
+  // write did — the record is idempotent and retried on the next finalize.
+  try {
+    await recordViewerDecision(wallet, marketId, side);
+  } catch {
+    /* purchase stands; the decision row will be re-written on retry */
+  }
+
   return loadHouseRead(wallet, marketId);
 }
 
@@ -536,6 +546,11 @@ export async function finalizeHousePass(
       .eq("onchain_id", marketId)
       .is("actual_action", null);
   }
+
+  // A PASS removes this market from discovery (V1). Unlike a purchase there is no
+  // on-chain fallback, so this write must succeed — let a failure propagate so the
+  // client can show a retry instead of silently advancing.
+  await recordViewerDecision(wallet, marketId, "PASS");
 
   return loadHouseRead(wallet, marketId);
 }
