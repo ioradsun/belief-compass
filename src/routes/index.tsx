@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { TermsContent } from "@/components/TermsContent";
 
 import { queryOptions, useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { nextMarketId } from "@/domain/opportunity-feed";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
 import { listMarketPulses, getMarketRow, type VolumeWindow } from "@/lib/markets.functions";
 import { getOpportunityFeed } from "@/lib/opportunity-feed.functions";
@@ -402,20 +401,33 @@ function Feed() {
   const stickyPulses = useSticky(pulseData?.pulses, (p) => !p || Object.keys(p).length === 0);
   const pulses = stickyPulses ?? {};
 
-  // Single-market deck: the center shows exactly one market. ?m (set by a
-  // position, a Live row, search, or Next) picks it; otherwise the top of the
-  // queue. PASS/Next advance through the server's order.
+  // Single-market deck: the center shows exactly ONE market, and it stays put.
   const marketRows = rows as unknown as MarketRow[];
+  const firstId = marketRows.length ? Number(marketRows[0].onchain_id) : null;
 
-  const foundIdx = marketRows.findIndex((r) => Number(r.onchain_id) === selectedMarket);
+  // Pin the deck to a stable market id. Without this the deck follows
+  // marketRows[0], which the 8s feed poll re-ranks (a just-viewed market drops on
+  // the seen-penalty), so the keyed card would remount on a *different* market —
+  // the "it jumps to another market on YES/NO" bug. ?m (search / a position / a
+  // Live row / Next) wins; otherwise we pin the top of the feed ONCE. Only Next
+  // or Refresh moves it.
+  const [pinnedId, setPinnedId] = useState<number | null>(null);
+  useEffect(() => {
+    if (pinnedId == null && selectedMarket == null && firstId != null) setPinnedId(firstId);
+  }, [pinnedId, selectedMarket, firstId]);
+  const activeMarket = selectedMarket ?? pinnedId ?? firstId;
+
+  const foundIdx =
+    activeMarket == null ? -1 : marketRows.findIndex((r) => Number(r.onchain_id) === activeMarket);
   const currentIdx = Math.max(0, foundIdx);
-  // Forward only — never a carousel. Advance to the next market in the sequence;
-  // when there is none, the viewer is caught up (no modulo wrap back to the start).
+
+  // Forward only — never a carousel. If the current market has left the feed
+  // (just decided), the next one is the new top; otherwise it's the following id.
   const nextMarket = () => {
-    const next = nextMarketId(
-      marketRows.map((r) => Number(r.onchain_id)),
-      currentIdx,
-    );
+    const ids = marketRows.map((r) => Number(r.onchain_id));
+    if (ids.length === 0) return setCaughtUp(true);
+    const idx = activeMarket == null ? -1 : ids.indexOf(activeMarket);
+    const next = idx < 0 ? ids[0] : idx + 1 < ids.length ? ids[idx + 1] : null;
     if (next != null) selectMarket(next);
     else setCaughtUp(true);
   };
@@ -428,19 +440,31 @@ function Feed() {
     void qc.invalidateQueries({ queryKey: ["opp-feed"] });
   };
 
-  // The selected market may be outside the loaded top-of-feed slice (e.g. opened
-  // from search) — fetch its row on demand so ANY market can open in the center.
-  const missing = selectedMarket != null && foundIdx === -1;
+  // The active market may be outside the loaded slice (opened from search) OR may
+  // have just left the feed after a decision — fetch its row on demand so ANY
+  // market can hold the center.
+  const missing = activeMarket != null && foundIdx === -1;
   const { data: soloRow } = useQuery({
-    queryKey: ["market-row", selectedMarket],
-    queryFn: () => getMarketRow({ data: { id: selectedMarket as number } }),
+    queryKey: ["market-row", activeMarket],
+    queryFn: () => getMarketRow({ data: { id: activeMarket as number } }),
     enabled: missing,
     staleTime: 15_000,
   });
-  const currentRow =
+  const liveRow: MarketRow | null =
     foundIdx >= 0
       ? marketRows[currentIdx]
-      : ((soloRow?.row as unknown as MarketRow | null) ?? marketRows[0]);
+      : ((soloRow?.row as unknown as MarketRow | null) ?? null);
+  // Keep the current market on screen through the moment it leaves the feed (a
+  // decision filters it out) so the deck never remounts and the celebration /
+  // passed screen survives. The cache only holds the row for the active id.
+  const rowCache = useRef<MarketRow | null>(null);
+  if (liveRow && Number(liveRow.onchain_id) === activeMarket) rowCache.current = liveRow;
+  const currentRow: MarketRow | null =
+    liveRow && Number(liveRow.onchain_id) === activeMarket
+      ? liveRow
+      : rowCache.current && Number(rowCache.current.onchain_id) === activeMarket
+        ? rowCache.current
+        : liveRow;
 
   // "The House has an idea" — the SERVER decided whether an idea belongs in
   // this sequence and at which slot. The hook only owns the funnel calls.
