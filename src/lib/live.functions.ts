@@ -34,6 +34,9 @@ const LIVE_KINDS = [
   "tribe_doubled",
 ];
 
+/** The live feed only reports the last 72 hours. Older events are history. */
+const LIVE_WINDOW_MS = 72 * 60 * 60_000;
+
 const input = z
   .object({
     limit: z.number().int().min(1).max(300).optional(),
