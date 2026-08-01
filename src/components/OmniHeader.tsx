@@ -126,7 +126,6 @@ export function LensPicker({
         )}
       </div>
 
-
       {open && (
         <div
           role="listbox"
@@ -153,7 +152,9 @@ export function LensPicker({
                   {l.emoji}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-medium text-[var(--text)]">{l.label}</span>
+                  <span className="block text-[13px] font-medium text-[var(--text)]">
+                    {l.label}
+                  </span>
                   <span className="block truncate text-[11px] text-[var(--text-muted)]">
                     {l.question}
                   </span>
@@ -175,7 +176,6 @@ export function LensPicker({
               Clear filter — show everything
             </button>
           )}
-
         </div>
       )}
     </div>
@@ -235,12 +235,18 @@ export function OmniHeader({
 
   const showResults = open && term.length >= 2;
 
+  // One universal field, quick filters beneath it: the scope narrows the current
+  // results in place rather than opening a different search.
+  const [scope, setScope] = useState<"all" | "markets" | "people">("all");
+  const visibleMarkets = scope === "people" ? [] : marketHits;
+  const visiblePeople = scope === "markets" ? [] : peopleHits;
+
   // One flat, keyboard-navigable list: markets first (primary intent), then people.
   const flat: Array<{ kind: "market"; id: number } | { kind: "person"; wallet: string }> = [
-    ...marketHits.map((m) => ({ kind: "market" as const, id: m.onchain_id })),
-    ...peopleHits.map((p) => ({ kind: "person" as const, wallet: p.wallet })),
+    ...visibleMarkets.map((m) => ({ kind: "market" as const, id: m.onchain_id })),
+    ...visiblePeople.map((p) => ({ kind: "person" as const, wallet: p.wallet })),
   ];
-  useEffect(() => setActiveI(0), [term]);
+  useEffect(() => setActiveI(0), [term, scope]);
 
   const choose = (item: (typeof flat)[number]) => {
     if (item.kind === "market") onSelectMarket(item.id);
@@ -318,16 +324,35 @@ export function OmniHeader({
       {/* Results */}
       {showResults && (
         <div className="absolute inset-x-0 top-11 z-50 max-h-[60vh] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl">
-          {marketHits.length === 0 && peopleHits.length === 0 ? (
+          {/* One search, quick filters — the scope narrows results in place. */}
+          <div className="flex items-center gap-1 px-2 pb-1 pt-1.5">
+            {(["all", "markets", "people"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setScope(s)}
+                className="rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize transition-colors"
+                style={
+                  scope === s
+                    ? { background: "var(--text)", color: "var(--bg)" }
+                    : { color: "var(--text-muted)" }
+                }
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
+          {visibleMarkets.length === 0 && visiblePeople.length === 0 ? (
             <p className="px-3 py-3 text-[13px] text-[var(--text-muted)]">No matches.</p>
           ) : null}
 
-          {marketHits.length > 0 && (
+          {visibleMarkets.length > 0 && (
             <>
               <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 Markets
               </p>
-              {marketHits.map((m, i) => (
+              {visibleMarkets.map((m, i) => (
                 <button
                   key={m.onchain_id}
                   type="button"
@@ -354,13 +379,13 @@ export function OmniHeader({
             </>
           )}
 
-          {peopleHits.length > 0 && (
+          {visiblePeople.length > 0 && (
             <>
               <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 People
               </p>
-              {peopleHits.map((p, i) => {
-                const idx = marketHits.length + i;
+              {visiblePeople.map((p, i) => {
+                const idx = visibleMarkets.length + i;
                 return (
                   <button
                     key={p.wallet}

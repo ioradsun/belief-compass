@@ -1,21 +1,33 @@
 /**
- * Order ticket — the shared decision controls.
+ * Order ticket — the one order component, with modes.
  *
  * The single source of truth for "YES or NO?" and "how much?": the side buttons,
  * the dollar amount field (with its ETH conversion), the wallet balance / Max /
  * minimum line, the quote k/v row, and the primary action button with its wallet
- * and transaction states. Both surfaces compose these atoms:
- *   • the market page's decision Dock (buy a side, reveal the House), and
- *   • the Create Market screen (seed a new market).
- * Neither screen re-implements an amount input, a side control, or a balance read.
+ * and transaction states.
  *
- * These are presentational atoms plus one balance reader — no trade or create
- * logic lives here; each screen owns its own submission.
+ * `<OrderTicket mode="buy">` and `<OrderTicket mode="sell">` are the market
+ * page's two order interactions — there is no BuyOrderBar / SellOrderBar, just one
+ * component whose middle changes with the mode while the amount input, wallet
+ * state, transaction states, errors and receipts stay shared. The Create Market
+ * screen composes the same atoms below (it adds a question + media, so it is not a
+ * `mode` — but it reuses AmountField / SideButton / BalanceLine / PrimaryAction).
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { useAccount, useBalance } from "wagmi";
 import { CHAIN_ID } from "@/chain/decoder";
-import { fmtUsd } from "@/domain/order";
+import {
+  avgPriceUsd,
+  fmtShares,
+  fmtUsd,
+  sharesForPct,
+  weiToUsd,
+  type OrderSide,
+} from "@/domain/order";
+import type { useTrade } from "@/lib/chain-trade";
+
+/** The trade controller the deck owns; the ticket only reads its state + calls it. */
+type TradeApi = ReturnType<typeof useTrade>;
 
 /** The connected wallet's spendable ETH on Base — one reader for every order surface. */
 export function useSpendableBalance() {
@@ -209,5 +221,350 @@ export function PrimaryAction({
     >
       {children ?? label}
     </button>
+  );
+}
+
+/** Spendable ETH in the connected wallet, shown in USD above "You pay". */
+function AvailRow({ ethUsd }: { ethUsd: number }) {
+  const { eth, isConnected, isLoading } = useSpendableBalance();
+  const v = !isConnected
+    ? "Connect wallet"
+    : isLoading || eth == null
+      ? "…"
+      : `${fmtUsd(eth * ethUsd)}  ·  ${eth.toFixed(4)} ETH`;
+  return <QuoteRow k="Avail" v={v} />;
+}
+
+interface BuyTicketProps {
+  side: OrderSide | null;
+  amount: number;
+  setAmount: (n: number) => void;
+  onSelect: (s: OrderSide) => void;
+  onCancel: () => void;
+  onPass: () => void;
+  quote: { tokens: bigint; fee: bigint; refund: bigint } | null;
+  quoting: boolean;
+  ethWei: bigint;
+  ethUsd: number;
+  ready: { connected: boolean; onBase: boolean };
+  trade: TradeApi;
+  onConfirm: () => void;
+  onDone: () => void;
+}
+
+interface SellTicketProps {
+  held: { side: OrderSide; tokens: bigint };
+  pct: number;
+  setPct: (n: number) => void;
+  proceeds: bigint | null;
+  quoting: boolean;
+  ethUsd: number;
+  /** Current value of the held side — for the "position remaining" estimate. */
+  worthUsd?: number | null;
+  ready: { connected: boolean; onBase: boolean };
+  trade: TradeApi;
+  onConfirm: () => void;
+  onCancel: () => void;
+  onDone: () => void;
+}
+
+/**
+ * The one order component. `mode` switches the middle — a side selector + quote to
+ * BUY, a percentage + proceeds to SELL — while the amount input, wallet/Base
+ * states, error line, receipt and confirm button behave identically. Create Market
+ * is not a mode (it is a whole screen) but composes the same atoms above.
+ */
+export type OrderTicketProps =
+  | ({ mode: "buy" } & BuyTicketProps)
+  | ({ mode: "sell" } & SellTicketProps);
+
+export function OrderTicket(p: OrderTicketProps) {
+  return p.mode === "buy" ? <BuyTicket {...p} /> : <SellTicket {...p} />;
+}
+
+function BuyTicket({
+  side,
+  amount,
+  setAmount,
+  onSelect,
+  onCancel,
+  onPass,
+  quote,
+  quoting,
+  ethWei,
+  ethUsd,
+  ready,
+  trade,
+  onConfirm,
+  onDone,
+}: BuyTicketProps) {
+  // Execution mechanics (shares, avg price) live under a disclosure, off by default.
+  const [showOrderDetails, setShowOrderDetails] = useState(false);
+  // Receipt.
+  if (trade.isSuccess && side) {
+    return (
+      <div
+        className="rounded-[16px] p-4"
+        style={{ border: "1px solid var(--border-strong,var(--border))" }}
+      >
+        <div className="flex items-center gap-3">
+          <span
+            className="grid h-7 w-7 place-items-center rounded-full"
+            style={{ background: "var(--surface)" }}
+          >
+            <span style={{ color: side === "YES" ? "var(--yes)" : "var(--no)" }}>✓</span>
+          </span>
+          <div>
+            <div className="text-[15px] font-semibold text-[var(--text)]">
+              Joined {side} · House read revealed ↑
+            </div>
+            {quote && (
+              <div className="num text-[11px] text-[var(--text-muted)]">
+                {fmtShares(quote.tokens)} shares at $
+                {avgPriceUsd(ethWei, quote.tokens, ethUsd).toFixed(2)} avg
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onDone}
+            className="ml-auto rounded-[12px] px-4 py-2 text-[13px] font-semibold text-[var(--bg)]"
+            style={{ background: "var(--text)" }}
+          >
+            Next market
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const busy = trade.isSubmitting || trade.isMining;
+  const amtField = <AmountField amount={amount} setAmount={setAmount} />;
+
+  // Neutral: NO · PASS · YES.
+  if (!side) {
+    return (
+      <div
+        className="flex items-center gap-2 rounded-[16px] p-3"
+        style={{ border: "1px solid var(--border)" }}
+      >
+        {amtField}
+        <div className="flex flex-1 gap-2">
+          <SideButton label="← NO" tone="no" onClick={() => onSelect("NO")} />
+          <SideButton label="↑ PASS" tone="pass" onClick={onPass} />
+          <SideButton label="YES →" tone="yes" onClick={() => onSelect("YES")} />
+        </div>
+      </div>
+    );
+  }
+
+  // Belief expressed → optional financial backing. Nothing happens without confirm.
+  const confirmLabel = !ready.connected
+    ? "Connect wallet"
+    : !ready.onBase
+      ? "Switch to Base"
+      : `Back ${side} · ${fmtUsd(amount)}`;
+  const disabled = ready.connected && ready.onBase && (busy || !quote || ethWei <= 0n);
+
+  return (
+    <div className="rounded-[16px] p-3" style={{ border: "1px solid var(--border)" }}>
+      <div className="mb-2 space-y-1 px-1">
+        <div className="pb-1 text-[11px] font-semibold text-[var(--text)]">
+          Back {side} to reveal the House’s pick.
+        </div>
+        <AvailRow ethUsd={ethUsd} />
+        <QuoteRow k="You invest" v={fmtUsd(amount)} />
+        {quote && <QuoteRow k="Protocol fee" v={fmtUsd(weiToUsd(quote.fee, ethUsd))} />}
+        {trade.isError && (
+          <div className="text-[11px] text-[var(--no)]">
+            {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowOrderDetails((v) => !v)}
+          className="pt-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
+        >
+          {showOrderDetails ? "Hide order details" : "Order details"}
+        </button>
+        {showOrderDetails && (
+          <div className="space-y-1 border-t pt-1" style={{ borderColor: "var(--border)" }}>
+            <QuoteRow
+              k="You pay"
+              v={`${fmtUsd(amount)}  ·  ${(Number(ethWei) / 1e18).toFixed(4)} ETH`}
+            />
+            <QuoteRow k="Est. shares" v={quoting ? "…" : quote ? fmtShares(quote.tokens) : "—"} />
+            <QuoteRow
+              k="Avg execution"
+              v={quote ? `$${avgPriceUsd(ethWei, quote.tokens, ethUsd).toFixed(2)}` : "—"}
+            />
+            <QuoteRow k="Network" v="Base" />
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        {amtField}
+        <div className="flex flex-1 gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-[52px] flex-1 rounded-[12px] text-[14px] font-medium text-[var(--text-secondary)]"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            Not now
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onConfirm}
+            className="h-[52px] flex-[2] rounded-[12px] text-[15px] font-semibold disabled:opacity-40"
+            style={{ background: "var(--text)", color: "var(--bg)" }}
+          >
+            {busy ? "Confirming…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SellTicket({
+  held,
+  pct,
+  setPct,
+  proceeds,
+  quoting,
+  ethUsd,
+  worthUsd,
+  ready,
+  trade,
+  onConfirm,
+  onCancel,
+  onDone,
+}: SellTicketProps) {
+  // Token counts live under a disclosure — you sell in human percentages.
+  const [showDetails, setShowDetails] = useState(false);
+  // Receipt.
+  if (trade.isSuccess) {
+    return (
+      <div
+        className="rounded-[16px] p-4"
+        style={{ border: "1px solid var(--border-strong,var(--border))" }}
+      >
+        <div className="flex items-center gap-3">
+          <span
+            className="grid h-7 w-7 place-items-center rounded-full"
+            style={{ background: "color-mix(in oklab,var(--text-muted) 18%,transparent)" }}
+          >
+            <span className="text-[var(--text-secondary)]">✓</span>
+          </span>
+          <div>
+            <div className="text-[15px] font-semibold text-[var(--text)]">Left {held.side}</div>
+            {proceeds != null && (
+              <div className="num text-[11px] text-[var(--text-muted)]">
+                Sold {pct}% · +{fmtUsd(weiToUsd(proceeds, ethUsd))}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onDone}
+            className="ml-auto rounded-[12px] px-4 py-2 text-[13px] font-semibold text-[var(--bg)]"
+            style={{ background: "var(--text)" }}
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const busy = trade.isSubmitting || trade.isMining;
+  const shares = sharesForPct(held.tokens, pct);
+  const remainingUsd = worthUsd != null ? worthUsd * (1 - pct / 100) : null;
+  const confirmLabel = !ready.connected
+    ? "Connect wallet"
+    : !ready.onBase
+      ? "Switch to Base"
+      : `Sell ${pct}% of ${held.side}`;
+  const disabled = ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n);
+
+  return (
+    <div
+      className="rounded-[16px] p-3"
+      style={{ border: "1px solid var(--border-strong,var(--border))" }}
+    >
+      <div className="mb-2 flex items-center gap-2 px-1">
+        <span className="text-[12px] font-semibold text-[var(--text)]">
+          Sell your{" "}
+          <span style={{ color: held.side === "YES" ? "var(--yes)" : "var(--no)" }}>
+            {held.side}
+          </span>{" "}
+          conviction
+        </span>
+        <span className="ml-auto flex gap-1">
+          {[25, 50, 75, 100].map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPct(p)}
+              className="rounded-[8px] px-2 py-1 text-[11px] font-semibold"
+              style={
+                pct === p
+                  ? { background: "var(--text)", color: "var(--bg)" }
+                  : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
+              }
+            >
+              {p === 100 ? "All" : `${p}%`}
+            </button>
+          ))}
+        </span>
+      </div>
+      <div className="mb-2 space-y-1 px-1">
+        <QuoteRow
+          k="Estimated proceeds"
+          v={quoting ? "…" : proceeds != null ? `≈ ${fmtUsd(weiToUsd(proceeds, ethUsd))}` : "—"}
+        />
+        {remainingUsd != null && pct < 100 && (
+          <QuoteRow k="Position remaining" v={`≈ ${fmtUsd(remainingUsd)}`} />
+        )}
+        {trade.isError && (
+          <div className="text-[11px] text-[var(--no)]">
+            {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowDetails((v) => !v)}
+          className="pt-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
+        >
+          {showDetails ? "Hide order details" : "Order details"}
+        </button>
+        {showDetails && (
+          <div className="border-t pt-1" style={{ borderColor: "var(--border)" }}>
+            <QuoteRow k="Shares sold" v={`${fmtShares(shares)} of ${fmtShares(held.tokens)}`} />
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="h-[52px] flex-1 rounded-[12px] text-[14px] font-medium text-[var(--text-secondary)]"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onConfirm}
+          className="h-[52px] flex-[2] rounded-[12px] text-[15px] font-semibold disabled:opacity-40"
+          style={{ background: "var(--text)", color: "var(--bg)" }}
+        >
+          {busy ? "Selling…" : confirmLabel}
+        </button>
+      </div>
+    </div>
   );
 }
