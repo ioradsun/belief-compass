@@ -115,8 +115,12 @@ const feedQO = (wallet: string | undefined, window: VolumeWindow = "24h", lens =
           ...feedSession(),
         },
       }),
-    // Prices, capital and volume re-poll so the cards move on their own.
-    refetchInterval: 8_000,
+    // The realtime coordinator (startRealtime) now moves each card's canonical
+    // market_state fields in place over one socket, so this poll no longer owns
+    // "the cards move." It is a slow STRUCTURAL reconcile: it catches what the
+    // stream can't patch — feed ordering, a newly created market entering, the
+    // house idea, and tribe faces — and re-syncs after a dropped socket.
+    refetchInterval: 20_000,
     // Never blank the feed while a poll (or a window switch) is in flight.
     placeholderData: (prev) => prev,
   });

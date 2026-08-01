@@ -14,6 +14,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { WalletProviders } from "../components/WalletConnect";
 import { VersionWatcher } from "../components/VersionWatcher";
 import { restoreQueryCache, startQueryPersist } from "../lib/query-persist";
+import { startRealtime } from "../lib/realtime/coordinator";
 
 // Web fonts, loaded OFF the critical path. The system fallback stack in styles.css
 // (system-ui / -apple-system / Segoe UI …) paints instantly; Inter + JetBrains
@@ -163,7 +164,13 @@ function RootComponent() {
   // and the panels revalidate on their own via staleTime / refetchInterval.
   useEffect(() => {
     restoreQueryCache(queryClient);
-    return startQueryPersist(queryClient);
+    const stopPersist = startQueryPersist(queryClient);
+    // Then the app comes alive: one socket maintains the snapshot in place.
+    const stopRealtime = startRealtime(queryClient);
+    return () => {
+      stopRealtime();
+      stopPersist();
+    };
   }, [queryClient]);
 
   return (
