@@ -78,9 +78,6 @@ const eventsShimInBrowser = {
     if (this.environment?.name !== "client") return null;
     if (id === "events" || id === "node:events") return EVENTS_SHIM;
     if (id === "events/events.js" || id === "node:events/events.js") return EVENTS_IMPL;
-    // Privy's direct-transform graph contains a deep CommonJS import that Vite
-    // serves as raw ESM. Use the package's equivalent native ESM entry so the
-    // expected default export is present in every browser.
     return null;
   },
 };
@@ -107,22 +104,6 @@ export function browserConnectors() { return []; }`;
   },
 };
 
-/** See src/lib/shims/solana-system.ts — Ethereum-only app, stub Privy's Solana path. */
-const SOLANA_SYSTEM_SHIM = fileURLToPath(
-  new URL("./src/lib/shims/solana-system.ts", import.meta.url),
-);
-const solanaSystemShim = {
-  name: "solana-system-shim",
-  enforce: "pre" as const,
-  // Match both the bare specifier and Vite's optional-peer-dep placeholder id
-  // (`__vite-optional-peer-dep:@solana-program/system:@privy-io/react-auth`),
-  // which is what Privy's Solana funding path actually resolves to.
-  resolveId(id: string) {
-    return id.includes("@solana-program/system") ? SOLANA_SYSTEM_SHIM : null;
-  },
-};
-
-
 export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
@@ -133,11 +114,7 @@ export default defineConfig({
     define: {
       "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
     },
-    // Transform Privy directly so its very large optional-peer graph cannot
-    // stall or invalidate hydration. Pre-bundle only the two CommonJS utilities
-    // that its ESM source imports with default-export syntax.
     optimizeDeps: {
-      exclude: ["@privy-io/react-auth", "@privy-io/wagmi"],
       include: [
         "eventemitter3",
         "canonicalize",
@@ -152,7 +129,7 @@ export default defineConfig({
         "pino",
       ],
     },
-    plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer, stubWalletConnectorsModule, solanaSystemShim],
+    plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer, stubWalletConnectorsModule],
   },
 });
 
