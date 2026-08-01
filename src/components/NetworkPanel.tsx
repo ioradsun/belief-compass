@@ -137,6 +137,10 @@ export function NetworkPanel({
     tribe: summary?.tribeCount ?? 0,
     opp: summary?.oppCount ?? 0,
   };
+  const matched = counts.twin + counts.tribe + counts.opp;
+  useEffect(() => {
+    onCount?.(matched);
+  }, [matched, onCount]);
   const decisions = summary?.expressedBeliefs ?? 0;
   const stage = dnaStage({ decisions, hasTwinCandidate: counts.twin > 0 });
   const reveal = dnaReveal(stage, counts);
