@@ -15,7 +15,7 @@
  * It never fetches, never subscribes, and never writes anything but the cache —
  * the coordinator owns the socket, this owns the merge. Pure enough to unit-test.
  */
-import type { QueryClient, Query } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 /** A raw `market_state` row as delivered by Postgres realtime (JSON payload.new). */
 export type MarketStateRow = Record<string, unknown> & {
@@ -185,13 +185,6 @@ export function applyMarketStateBatch(
   }
   return touched;
 }
-
-/** Test seam: does a cache query belong to a family the reducer patches? */
-export const isReducerPatched = (q: Query): boolean =>
-  Array.isArray(q.queryKey) &&
-  (q.queryKey[0] === "opp-feed" ||
-    q.queryKey[0] === "market-row" ||
-    q.queryKey[0] === "market-change");
 
 // --- Activity (events stream) --------------------------------------------
 //
