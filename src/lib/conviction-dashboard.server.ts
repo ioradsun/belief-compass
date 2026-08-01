@@ -13,6 +13,7 @@ import { decodeBuyCreatorFeeWei } from "@/chain/decoder";
 import {
   realizedTradingEth,
   bucketCreatorFees,
+  moneyFlows,
   type DashTrade,
   type FeeEntry,
 } from "@/domain/conviction-dashboard";
@@ -54,6 +55,24 @@ export interface ConvictionDashboardData {
     thisWeekUsd: number;
     lastWeekUsd: number;
   };
+  /** The lifetime money-flow story (USD). Worth Today = holdings.worthUsd. */
+  progress: {
+    putInUsd: number;
+    cashedOutUsd: number;
+  };
+  /** Today's counts for the Recent Activity story. */
+  activity: {
+    tradesTodayCount: number;
+    uniqueTradersTodayCount: number;
+  };
+  /** Facts the milestone ladder needs (the rest come from on-chain creator data). */
+  facts: {
+    tradeCount: number;
+    longestHeldDays: number;
+    hasProfit: boolean;
+  };
+  /** Top held positions by gain — merged with created markets in "Best Markets". */
+  heldBest: Array<{ onchainId: number; title: string; gainUsd: number }>;
   /** Markets this wallet created — attribution + volume/trades. Fees are on-chain. */
   createdMarkets: DashboardBestMarket[];
 }
@@ -84,7 +103,7 @@ export async function buildConvictionDashboard(
   // --- Holdings (unrealized) + today's portfolio move -----------------------
   const { data: beliefsData } = await sb
     .from("wallet_beliefs")
-    .select("onchain_id, yes_cost, no_cost, yes_value_usd, no_value_usd")
+    .select("onchain_id, yes_cost, no_cost, yes_value_usd, no_value_usd, first_backed_at")
     .eq("wallet", wallet)
     .limit(500);
   const beliefs = (beliefsData ?? []) as Array<{
@@ -93,37 +112,58 @@ export async function buildConvictionDashboard(
     no_cost: unknown;
     yes_value_usd: unknown;
     no_value_usd: unknown;
+    first_backed_at: string | null;
   }>;
 
   const heldIds = Array.from(new Set(beliefs.map((b) => Number(b.onchain_id))));
   const chgById = new Map<number, { yes: number; no: number }>();
+  const heldTitle = new Map<number, string>();
   if (heldIds.length) {
-    const { data: st } = await sb
-      .from("market_state")
-      .select("onchain_id, chg_24h_yes, chg_24h_no")
-      .in("onchain_id", heldIds);
+    const [{ data: st }, { data: mk }] = await Promise.all([
+      sb.from("market_state").select("onchain_id, chg_24h_yes, chg_24h_no").in("onchain_id", heldIds),
+      sb.from("markets").select("onchain_id, title").in("onchain_id", heldIds),
+    ]);
     for (const s of st ?? [])
       chgById.set(Number(s.onchain_id), { yes: num(s.chg_24h_yes), no: num(s.chg_24h_no) });
+    for (const m of (mk ?? []) as Array<{ onchain_id: number | string; title: string | null }>)
+      heldTitle.set(Number(m.onchain_id), m.title ?? "Untitled market");
   }
 
   let worthUsd = 0;
   let holdCostUsd = 0;
   let portfolioTodayUsd = 0;
   let heldCount = 0;
+  let longestHeldDays = 0;
+  let anyHeldProfit = false;
+  const heldGains: Array<{ onchainId: number; title: string; gainUsd: number }> = [];
+  const now = Date.now();
   for (const b of beliefs) {
+    const id = Number(b.onchain_id);
     const yesWorth = num(b.yes_value_usd);
     const noWorth = num(b.no_value_usd);
     const w = yesWorth + noWorth;
+    const c = costUsd(b.yes_cost, ethUsd) + costUsd(b.no_cost, ethUsd);
     if (w > 0) heldCount++;
     worthUsd += w;
-    holdCostUsd += costUsd(b.yes_cost, ethUsd) + costUsd(b.no_cost, ethUsd);
-    const chg = chgById.get(Number(b.onchain_id));
+    holdCostUsd += c;
+    // Per-position gain (only when a real cost basis exists — never invented).
+    if (w > 0 && c > 0) {
+      const gain = w - c;
+      if (gain > 0) anyHeldProfit = true;
+      heldGains.push({ onchainId: id, title: heldTitle.get(id) ?? "Untitled market", gainUsd: gain });
+    }
+    if (w > 0 && b.first_backed_at) {
+      const days = (now - Date.parse(b.first_backed_at)) / 86_400_000;
+      if (Number.isFinite(days) && days > longestHeldDays) longestHeldDays = days;
+    }
+    const chg = chgById.get(id);
     if (chg) {
       // A side worth W that moved p% over 24h contributed ~ W * p/(100+p) today.
       portfolioTodayUsd += yesWorth * (chg.yes / (100 + chg.yes));
       portfolioTodayUsd += noWorth * (chg.no / (100 + chg.no));
     }
   }
+  const heldBest = heldGains.sort((a, b) => b.gainUsd - a.gainUsd).slice(0, 6);
 
   // --- Realized trading (the one derived number; folded from trade history) --
   const trades = await readWalletTradesAscending(sb, wallet);
@@ -138,13 +178,20 @@ export async function buildConvictionDashboard(
         tokens: num(t.shares),
       }));
 
-  const realizedEth = realizedTradingEth(asDash(trades));
+  const dashTrades = asDash(trades);
+  const realizedEth = realizedTradingEth(dashTrades);
   const startOfDay = new Date();
   startOfDay.setUTCHours(0, 0, 0, 0);
-  const beforeToday = trades.filter((t) => t.occurred_at < startOfDay.toISOString());
+  const startOfDayIso = startOfDay.toISOString();
+  const beforeToday = trades.filter((t) => t.occurred_at < startOfDayIso);
   const realizedBeforeEth = realizedTradingEth(asDash(beforeToday));
   const realizedUsd = realizedEth * ethUsd;
   const realizedTodayUsd = (realizedEth - realizedBeforeEth) * ethUsd;
+
+  // Lifetime money-flow story + today's trade count (viewer).
+  const flows = moneyFlows(dashTrades);
+  const tradesTodayCount = trades.length - beforeToday.length;
+  const hasProfit = realizedUsd > 0 || anyHeldProfit;
 
   // --- Created markets (attribution + volume + trades) ----------------------
   const { data: createdData } = await sb
@@ -219,6 +266,23 @@ export async function buildConvictionDashboard(
     creatorLastWeekUsd = w.prevWeekEth * ethUsd;
   }
 
+  // How many distinct people traded this creator's markets today.
+  let uniqueTradersTodayCount = 0;
+  if (createdIds.length) {
+    const { data: todayTrades } = await sb
+      .from("events")
+      .select("wallet")
+      .eq("is_canonical", true)
+      .eq("kind", "trade")
+      .in("market_id", createdIds.map((id) => String(id)))
+      .gte("occurred_at", startOfDayIso)
+      .limit(5000);
+    const traders = new Set<string>();
+    for (const r of (todayTrades ?? []) as Array<{ wallet: string | null }>)
+      if (r.wallet) traders.add(r.wallet.toLowerCase());
+    uniqueTradersTodayCount = traders.size;
+  }
+
   return {
     wallet,
     ethUsd,
@@ -231,6 +295,10 @@ export async function buildConvictionDashboard(
     trading: { realizedUsd, realizedTodayUsd },
     today: { portfolioUsd: portfolioTodayUsd, creatorEarnedUsd: creatorEarnedTodayUsd },
     creatorWindows: { thisWeekUsd: creatorThisWeekUsd, lastWeekUsd: creatorLastWeekUsd },
+    progress: { putInUsd: flows.putInEth * ethUsd, cashedOutUsd: flows.cashedOutEth * ethUsd },
+    activity: { tradesTodayCount, uniqueTradersTodayCount },
+    facts: { tradeCount: trades.length, longestHeldDays, hasProfit },
+    heldBest,
     createdMarkets,
   };
 }

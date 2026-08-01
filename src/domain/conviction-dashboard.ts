@@ -64,6 +64,79 @@ export function realizedTradingEth(trades: DashTrade[]): number {
   return realized;
 }
 
+/**
+ * The lifetime money-flow story from a wallet's trades: everything ever committed
+ * to buys ("you put in") and everything ever received from sells ("you've cashed
+ * out"). Gross flows, in ETH — real numbers straight off the trade log.
+ */
+export function moneyFlows(trades: DashTrade[]): { putInEth: number; cashedOutEth: number } {
+  let putInEth = 0;
+  let cashedOutEth = 0;
+  for (const t of trades) {
+    if (t.action === "BUY") putInEth += Math.max(0, t.eth);
+    else if (t.action === "SELL") cashedOutEth += Math.max(0, t.eth);
+  }
+  return { putInEth, cashedOutEth };
+}
+
+/** Everything the milestone ladder needs to decide what's unlocked. */
+export interface MilestoneFacts {
+  createdCount: number;
+  tradeCount: number;
+  sinceStartUsd: number;
+  /** A realized win or a position currently in the green. */
+  hasProfit: boolean;
+  creatorLifetimeUsd: number;
+  /** Lifetime creator earnings exceed the unclaimed balance → they've claimed. */
+  hasClaimed: boolean;
+  maxMarketVolumeUsd: number;
+  longestHeldDays: number;
+  totalValueUsd: number;
+}
+
+export interface Milestone {
+  key: string;
+  label: string;
+  done: boolean;
+}
+
+/**
+ * The milestone ladder — progress, not trophies. Ordered so early wins are easy
+ * and value tiers escalate, guaranteeing there is almost always a "next" just
+ * ahead. Returns the list, the count/percent unlocked, and the next locked one.
+ */
+export function buildMilestones(f: MilestoneFacts): {
+  list: Milestone[];
+  unlocked: number;
+  total: number;
+  pct: number;
+  next: Milestone | null;
+} {
+  const list: Milestone[] = [
+    { key: "first-market", label: "First Market", done: f.createdCount >= 1 },
+    { key: "first-profit", label: "First Profitable Trade", done: f.hasProfit },
+    { key: "first-100", label: "Earned Your First $100", done: f.sinceStartUsd >= 100 },
+    { key: "trades-100", label: "100 Trades", done: f.tradeCount >= 100 },
+    { key: "first-creator", label: "First Creator Earnings", done: f.creatorLifetimeUsd > 0 },
+    { key: "first-claim", label: "First Claim", done: f.hasClaimed },
+    { key: "vol-10k", label: "Market Reached $10k Volume", done: f.maxMarketVolumeUsd >= 10_000 },
+    { key: "held-30", label: "Held a Conviction 30 Days", done: f.longestHeldDays >= 30 },
+    { key: "value-10k", label: "Reach $10k Conviction", done: f.totalValueUsd >= 10_000 },
+    { key: "trades-500", label: "500 Trades", done: f.tradeCount >= 500 },
+    { key: "value-50k", label: "Reach $50k Conviction", done: f.totalValueUsd >= 50_000 },
+    { key: "value-100k", label: "Reach $100k Conviction", done: f.totalValueUsd >= 100_000 },
+  ];
+  const unlocked = list.filter((m) => m.done).length;
+  const total = list.length;
+  return {
+    list,
+    unlocked,
+    total,
+    pct: Math.round((unlocked / total) * 100),
+    next: list.find((m) => !m.done) ?? null,
+  };
+}
+
 /** One decoded creator-fee accrual: when it happened and how much (ETH). */
 export interface FeeEntry {
   at: number;

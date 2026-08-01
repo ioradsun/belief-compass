@@ -3,7 +3,10 @@ import {
   realizedTradingEth,
   gainBreakdown,
   bucketCreatorFees,
+  moneyFlows,
+  buildMilestones,
   type DashTrade,
+  type MilestoneFacts,
 } from "./conviction-dashboard";
 
 const T = (o: Partial<DashTrade>): DashTrade => ({
@@ -106,6 +109,76 @@ describe("bucketCreatorFees", () => {
       prevWeekEth: 0,
     });
     expect(bucketCreatorFees([], now)).toEqual({ todayEth: 0, weekEth: 0, prevWeekEth: 0 });
+  });
+});
+
+describe("moneyFlows", () => {
+  const T = (o: Partial<DashTrade>): DashTrade => ({
+    market: "1",
+    side: "YES",
+    action: "BUY",
+    eth: 0,
+    tokens: 0,
+    ...o,
+  });
+  it("sums buys as put-in and sells as cashed-out", () => {
+    const f = moneyFlows([
+      T({ action: "BUY", eth: 3 }),
+      T({ action: "BUY", eth: 2 }),
+      T({ action: "SELL", eth: 4 }),
+    ]);
+    expect(f.putInEth).toBeCloseTo(5, 9);
+    expect(f.cashedOutEth).toBeCloseTo(4, 9);
+  });
+});
+
+describe("buildMilestones", () => {
+  const base: MilestoneFacts = {
+    createdCount: 0,
+    tradeCount: 0,
+    sinceStartUsd: 0,
+    hasProfit: false,
+    creatorLifetimeUsd: 0,
+    hasClaimed: false,
+    maxMarketVolumeUsd: 0,
+    longestHeldDays: 0,
+    totalValueUsd: 0,
+  };
+  it("starts fully locked with a reachable next", () => {
+    const m = buildMilestones(base);
+    expect(m.unlocked).toBe(0);
+    expect(m.pct).toBe(0);
+    expect(m.next?.key).toBe("first-market");
+  });
+  it("unlocks the right rungs and points at the next", () => {
+    const m = buildMilestones({
+      ...base,
+      createdCount: 2,
+      tradeCount: 120,
+      sinceStartUsd: 500,
+      hasProfit: true,
+      creatorLifetimeUsd: 50,
+      maxMarketVolumeUsd: 12_000,
+      longestHeldDays: 40,
+      totalValueUsd: 12_000,
+    });
+    expect(m.unlocked).toBe(8);
+    expect(m.next?.key).toBe("first-claim");
+  });
+  it("has no next once everything is unlocked", () => {
+    const m = buildMilestones({
+      createdCount: 5,
+      tradeCount: 600,
+      sinceStartUsd: 1e6,
+      hasProfit: true,
+      creatorLifetimeUsd: 1000,
+      hasClaimed: true,
+      maxMarketVolumeUsd: 1e6,
+      longestHeldDays: 100,
+      totalValueUsd: 200_000,
+    });
+    expect(m.unlocked).toBe(m.total);
+    expect(m.next).toBeNull();
   });
 });
 
