@@ -1,6 +1,6 @@
 /**
  * When a wallet connects, look up the POV profile and focus the home feed on
- * that wallet. Shared by both connect providers (RainbowKit and Privy).
+ * that wallet. Mounted inside the RainbowKit layer.
  */
 import { useEffect, useRef } from "react";
 import { useAccount } from "wagmi";
