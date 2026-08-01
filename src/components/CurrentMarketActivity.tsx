@@ -117,9 +117,12 @@ export function CurrentMarketActivity({
       </button>
 
       {open ? (
-        <div className="flex max-h-[320px] flex-col px-1 pb-1">
+        <div className="flex flex-col px-1 pb-1">
           {houseText && (
-            <div className="flex shrink-0 items-start gap-2 px-2 py-2">
+            <div
+              className="sticky top-0 z-10 flex shrink-0 items-start gap-2 px-2 py-2"
+              style={{ background: "color-mix(in oklab, var(--bg,#0b0b0f) 92%, transparent)" }}
+            >
               <span aria-hidden>🏠</span>
               <div className="min-w-0">
                 <div className="text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--text)]">
@@ -131,18 +134,21 @@ export function CurrentMarketActivity({
               </div>
             </div>
           )}
-          <div className="min-h-0 flex-1">
+          {/* An explicit height gives the tape a real scroll box — without it the
+            list grows and the section can't scroll on touch. */}
+          <div className="h-[300px] min-h-0">
             <LiveTape
               wallet={wallet}
               onSelect={onSelect}
               marketIds={[marketId]}
               showTitles={false}
-              limit={40}
+              limit={200}
               skeletonRows={4}
-              emptyText="No activity here yet."
+              emptyText="No activity in the last 72 hours."
             />
           </div>
         </div>
+
       ) : (
         <button
           type="button"
