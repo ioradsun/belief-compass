@@ -38,7 +38,9 @@ import {
   setDraft,
   setProbe,
 } from "@/lib/create-draft";
+import { completeSuggestion, trackSuggestion } from "@/lib/market-suggestion.functions";
 import {
+
   DEFAULT_CURVE,
   useCreateEconomics,
   useCreateMarket,
