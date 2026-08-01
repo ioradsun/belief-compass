@@ -1,66 +1,139 @@
 /**
- * PULSE — the market's one-word summary of what changed recently.
- *
- * The center is the Judge: it answers "is this question worth my conviction?"
- * without ever taking a side. Pulse is the headline of that answer — a single
- * neutral label plus the calm sentence that already explains the relationship
- * between people and money (vitalityStory). It is side-blind by construction and
- * can never contradict the totals, because it is derived from the same replayed
- * tape.
+ * PULSE — the market narrator. One label + one calm sentence about the SHAPE of
+ * momentum: how Market Believers and Market Capital are moving relative to each
+ * other. Side-blind, price-free, and deterministic — when the words and the
+ * numbers could disagree, the numbers win.
  *
  * ZERO IO, pure, fully testable.
  */
-import { vitalityStory, type MarketVitality } from "./market-vitality";
+import type { MarketBook } from "./market-book";
 
-/**
- * The honest states of a market's recent motion. Deliberately about CHANGE
- * (what just happened), never about which side is ahead.
- */
-export type PulseLabel = "Quiet" | "Early" | "Growing" | "Accelerating" | "Deepening" | "Cooling";
+export type PulseLabel =
+  | "New"
+  | "Quiet"
+  | "Growing"
+  | "Accelerating"
+  | "Deepening"
+  | "Broadening"
+  | "Mixed Momentum"
+  | "Narrowing"
+  | "Cooling"
+  | "Capital-led";
 
-const CAP_EPS = 1e-9;
-
-/** The label for a market's current motion. */
-export function pulseLabel(v: MarketVitality): PulseLabel {
-  const events = v.believerEvents + v.capitalEvents;
-  if (v.lastEventAt == null || events === 0) return "Quiet";
-  // A brand-new market that is still finding its first handful of believers.
-  if (v.range.kind === "since-creation" && v.believers <= 5) return "Early";
-
-  const b = v.believersDelta;
-  const c = v.capitalDeltaEth;
-  const bUp = b > 0;
-  const cUp = c > CAP_EPS;
-  const bDown = b < 0;
-  const cDown = c < -CAP_EPS;
-
-  // Growth measured against its own starting base — a 6→12 week is "accelerating",
-  // a 200→206 week is merely "growing".
-  const bBase = Math.max(1, v.believers - b);
-  const fast = bUp && cUp && b / bBase >= 0.5;
-
-  if (fast) return "Accelerating";
-  if (bUp && cUp) return "Growing";
-  if (bUp) return "Growing"; // people arriving, capital flat
-  if (!bUp && !bDown && cUp) return "Deepening"; // same people, more money
-  if (bDown || cDown) return "Cooling";
-  return "Quiet";
-}
-
-export interface MarketPulse {
+export interface Pulse {
   label: PulseLabel;
-  /** The one calm sentence — never mentions a side, never uses hype. */
+  /** One calm, observant sentence. Never a side, never price, never a number. */
   meaning: string;
 }
 
-/** The full pulse: the label + the sentence that already reads the movement. */
-export function marketPulse(v: MarketVitality): MarketPulse {
-  return { label: pulseLabel(v), meaning: vitalityStory(v) };
+/** A capital move counts as real only past both an absolute and a relative floor. */
+const CAP_ABS = 0.004; // ETH (~$12) — ignore dust
+const CAP_REL = 0.03; // 3% of the base
+/** Growth rates that separate "accelerating" and "capital-led" from "growing". */
+const FAST = 0.25;
+const BROADEN = 1.5;
+const CAPITAL_LED = 0.25;
+
+export interface PulseInput {
+  believerDelta: number;
+  believerBase: number;
+  believers: number;
+  capitalDeltaEth: number;
+  capitalBaseEth: number;
+  events: number;
+}
+
+/** The deterministic label. Reads the two deltas; the numbers are the authority. */
+export function pulseLabel(i: PulseInput): PulseLabel {
+  if (i.believers <= 1) return "New";
+
+  const b = i.believerDelta;
+  const c = i.capitalDeltaEth;
+  const capMove = Math.max(CAP_ABS, Math.abs(i.capitalBaseEth) * CAP_REL);
+  const cUp = c > capMove;
+  const cDown = c < -capMove;
+  const bUp = b > 0;
+  const bDown = b < 0;
+
+  if (i.events === 0) return "Quiet";
+  if (!bUp && !bDown && !cUp && !cDown) return "Quiet";
+
+  const bRate = b / Math.max(1, i.believerBase);
+  const cRate = c / Math.max(capMove, Math.abs(i.capitalBaseEth));
+
+  // Opposite directions, or one holding while the other fades → Mixed.
+  if (bUp && cDown) return "Mixed Momentum";
+  if (!bUp && !bDown && cDown) return "Mixed Momentum";
+
+  // Believers falling.
+  if (bDown && cDown) return "Cooling";
+  if (bDown) return "Narrowing"; // capital rising or holding
+
+  // Believers flat, capital rising.
+  if (!bUp && cUp) return cRate >= CAPITAL_LED ? "Capital-led" : "Deepening";
+
+  // Believers rising.
+  if (bUp && cUp) {
+    if (bRate >= FAST && cRate >= FAST) return "Accelerating";
+    if (bRate >= cRate * BROADEN) return "Broadening";
+    return "Growing";
+  }
+  return "Growing"; // people rising, capital flat
+}
+
+/** The sentence that matches the label AND the exact directions. */
+function pulseMeaning(label: PulseLabel, i: PulseInput): string {
+  const capMove = Math.max(CAP_ABS, Math.abs(i.capitalBaseEth) * CAP_REL);
+  const cUp = i.capitalDeltaEth > capMove;
+  switch (label) {
+    case "New":
+      return "Conviction is just beginning to form.";
+    case "Quiet":
+      return "The market has held steady, with little moving either way.";
+    case "Growing":
+      return "More people are arriving, and commitment is holding.";
+    case "Accelerating":
+      return "More people are joining, and capital is following.";
+    case "Deepening":
+      return "The same believers are leaning in harder.";
+    case "Broadening":
+      return "Interest is spreading faster than the money behind it.";
+    case "Mixed Momentum":
+      return i.believerDelta > 0
+        ? "More people are entering, but committed capital is getting lighter."
+        : "Interest is holding, but committed capital is beginning to fade.";
+    case "Narrowing":
+      return cUp
+        ? "Fewer people remain, but those still here are leaning in harder."
+        : "Fewer people remain, though the committed capital is holding.";
+    case "Cooling":
+      return "Interest and committed capital are cooling together.";
+    case "Capital-led":
+      return "A small group is quietly increasing its commitment.";
+  }
+}
+
+export function pulse(i: PulseInput): Pulse {
+  const label = pulseLabel(i);
+  return { label, meaning: pulseMeaning(label, i) };
+}
+
+/** Read the pulse straight off the canonical book (the center's source). */
+export function marketPulse(book: MarketBook): Pulse {
+  return pulse({
+    believerDelta: book.believers.market.delta,
+    believerBase: book.believers.market.base,
+    believers: book.believers.market.current,
+    capitalDeltaEth: book.capitalEth.market.delta,
+    capitalBaseEth: book.capitalEth.market.base,
+    events: book.believers.market.events + book.capitalEth.market.events,
+  });
 }
 
 /** Direction of a pulse, for the label's tint. */
 export function pulseTone(label: PulseLabel): "up" | "down" | "flat" {
-  if (label === "Growing" || label === "Accelerating" || label === "Deepening") return "up";
-  if (label === "Cooling") return "down";
-  return "flat";
+  if (label === "Growing" || label === "Accelerating" || label === "Broadening") return "up";
+  if (label === "Deepening" || label === "Capital-led") return "up";
+  if (label === "Cooling" || label === "Narrowing") return "down";
+  return "flat"; // New, Quiet, Mixed Momentum
 }

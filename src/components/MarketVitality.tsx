@@ -1,50 +1,35 @@
 /**
- * CENTER — neutral market vitality.
+ * CENTER — Market Momentum.
  *
- * Two market-level metrics (people, money) with event-driven step sparklines and
- * one calm sentence about their relationship. Everything here is side-blind by
- * construction: the YES/NO split lives in the Case File, not the center.
+ * Two STACKED rows — Market Believers, then Market Capital — read as one story:
+ * people, then money, then (in Pulse) meaning. Stacking (not side by side) avoids
+ * a false red-vs-green contest, since believers and capital are not opposing
+ * sides. Every number comes from the canonical marketBook, so the center totals
+ * reconcile exactly with the two side panels. Side-blind by construction.
  */
 import { useMemo } from "react";
-import {
-  marketVitality,
-  momentumView,
-  vitalityStory,
-  type MarketVitality,
-  type MomentumDirection,
-  type MomentumView,
-  type VitalityPoint,
-} from "@/domain/market-vitality";
+import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
 import type { TapeTrade } from "@/domain/conviction-series";
+import type { VitalityPoint } from "@/domain/market-vitality";
 
-/** Direction → the movement tint. Green = market growing, red = shrinking, muted
- *  = steady. Side-blind: this is the WHOLE market's movement, never YES/NO. */
-const directionTone = (d: MomentumDirection): string =>
+/** Below these bases a percentage is noise, so we show the absolute change only. */
+const BELIEVER_PCT_MIN = 5;
+const CAPITAL_PCT_MIN_USD = 10;
+
+const dirTone = (d: "up" | "down" | "flat"): string =>
   d === "up" ? "var(--yes)" : d === "down" ? "var(--no)" : "var(--text-muted)";
 
 const fmtMoney = (usd: number) =>
   usd >= 1000 ? `$${Math.round(usd).toLocaleString("en-US")}` : `$${usd.toFixed(usd < 10 ? 2 : 0)}`;
 
-const agoLabel = (ms: number) => {
-  const s = Math.max(0, ms / 1000);
-  if (s < 90) return `${Math.round(s)}s ago`;
-  if (s < 5400) return `${Math.round(s / 60)}m ago`;
-  if (s < 172_800) return `${Math.round(s / 3600)}h ago`;
-  return `${Math.round(s / 86_400)}d ago`;
-};
-
 const SPARK_W = 168;
-const SPARK_H = 24;
+const SPARK_H = 26;
 
-/**
- * A calm dashed baseline for "no movement" — steady should LOOK steady, and read
- * distinctly from "no data" (which shows nothing at all higher up).
- */
 function FlatSpark() {
   return (
     <svg
       viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
-      className="mt-1.5 h-[24px] w-full"
+      className="mt-1.5 h-[26px] w-full"
       preserveAspectRatio="none"
       aria-hidden
     >
@@ -62,12 +47,7 @@ function FlatSpark() {
   );
 }
 
-/**
- * A step line, TINTED by direction (green rising / red falling), so the shape and
- * the colored delta agree. No axes, grid, or markers — supporting evidence only.
- * A dead-flat series falls back to the dashed baseline so it never masquerades as
- * a trend.
- */
+/** An event-driven step line, tinted by the window's direction. No axes/fills. */
 function StepSpark({ points, tone }: { points: VitalityPoint[]; tone: string }) {
   const vs = points.map((p) => p.v);
   const flat = points.length < 2 || Math.max(...vs) === Math.min(...vs);
@@ -89,133 +69,142 @@ function StepSpark({ points, tone }: { points: VitalityPoint[]; tone: string }) 
     d += ` L ${x(points[i].t).toFixed(2)} ${y(points[i].v).toFixed(2)}`;
   }
   const last = points[points.length - 1];
-  const single = points.length <= 2;
-
   return (
     <svg
       viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
-      className="mt-1.5 h-[24px] w-full"
+      className="mt-1.5 h-[26px] w-full"
       preserveAspectRatio="none"
       aria-hidden
     >
-      <path d={d} fill="none" stroke={tone} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-      {single && <circle cx={x(last.t)} cy={y(last.v)} r="2" fill={tone} />}
+      <path d={d} fill="none" stroke={tone} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+      {points.length <= 2 && <circle cx={x(last.t)} cy={y(last.v)} r="2" fill={tone} />}
     </svg>
   );
 }
 
-function Metric({
-  value,
+interface RowCopy {
+  /** e.g. "+14%" or null when the base is too small to be meaningful. */
+  pct: string | null;
+  /** e.g. "+1 believer over 24H" / "First believer" / "No change over 24H". */
+  absolute: string;
+  direction: "up" | "down" | "flat";
+}
+
+/** Turn a metric + its cold-start context into the row's two copy lines. */
+function believerCopy(m: BookMetric, w: BookWindow): RowCopy {
+  const direction = m.delta > 0 ? "up" : m.delta < 0 ? "down" : "flat";
+  if (m.base === 0 && m.current > 0) {
+    return m.current === 1
+      ? { pct: null, absolute: "First believer", direction: "up" }
+      : { pct: null, absolute: `+${m.current} believers ${w.since}`, direction: "up" };
+  }
+  const pct =
+    m.base >= BELIEVER_PCT_MIN
+      ? `${m.delta >= 0 ? "+" : "−"}${Math.round((Math.abs(m.delta) / m.base) * 100)}%`
+      : null;
+  if (m.delta === 0)
+    return { pct: pct ? "0%" : null, absolute: `No change ${w.since}`, direction: "flat" };
+  const n = Math.abs(m.delta);
+  return {
+    pct,
+    absolute: `${m.delta > 0 ? "+" : "−"}${n} believer${n === 1 ? "" : "s"} ${w.since}`,
+    direction,
+  };
+}
+
+function capitalCopy(m: BookMetric, w: BookWindow, usd: (eth: number) => number): RowCopy {
+  const baseUsd = usd(m.base);
+  const deltaUsd = usd(m.delta);
+  const direction = deltaUsd > 0.5 ? "up" : deltaUsd < -0.5 ? "down" : "flat";
+  if (baseUsd < 0.5 && usd(m.current) > 0.5) {
+    return { pct: null, absolute: `First capital · ${fmtMoney(usd(m.current))}`, direction: "up" };
+  }
+  const pct =
+    baseUsd >= CAPITAL_PCT_MIN_USD
+      ? `${deltaUsd >= 0 ? "+" : "−"}${Math.round((Math.abs(deltaUsd) / baseUsd) * 100)}%`
+      : null;
+  if (direction === "flat")
+    return { pct: pct ? "0%" : null, absolute: `No change ${w.since}`, direction: "flat" };
+  return {
+    pct,
+    absolute: `${deltaUsd > 0 ? "+" : "−"}${fmtMoney(Math.abs(deltaUsd))} committed ${w.since}`,
+    direction,
+  };
+}
+
+function MomentumRow({
+  total,
   label,
-  momentum,
-  cold,
+  copy,
   points,
 }: {
-  value: string;
+  total: string;
   label: string;
-  momentum: MomentumView | null;
-  cold: string | null;
+  copy: RowCopy;
   points: VitalityPoint[];
 }) {
-  const tone = momentum ? directionTone(momentum.direction) : "var(--text-muted)";
+  const tone = dirTone(copy.direction);
   return (
-    <div className="min-w-0">
-      <div className="num text-[28px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
-        {value}
+    <div>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="min-w-0">
+          <span className="num text-[21px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
+            {total}
+          </span>
+          <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
+            {label}
+          </span>
+        </div>
+        {copy.pct && (
+          <span
+            className="num shrink-0 text-[13px] font-semibold tabular-nums"
+            style={{ color: tone }}
+          >
+            {copy.direction === "up" ? "▲ " : copy.direction === "down" ? "▼ " : ""}
+            {copy.pct}
+          </span>
+        )}
       </div>
-      <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-        {label}
+      <div className="num mt-0.5 text-[11px]" style={{ color: tone }}>
+        {copy.absolute}
       </div>
-      {/* The movement line — colored by direction (cold copy stays muted). */}
-      <div
-        className="num mt-1 text-[11px] font-medium"
-        style={{ color: cold ? "var(--text-muted)" : tone }}
-      >
-        {cold ?? momentum?.text ?? " "}
-      </div>
-      {cold ? <div className="h-[24px]" aria-hidden /> : <StepSpark points={points} tone={tone} />}
+      <StepSpark points={points} tone={tone} />
     </div>
   );
 }
 
-export function MarketVitalityPanel({
+export function MarketMomentum({
   tape,
   ethUsd,
   nowMs = Date.now(),
-  showStory = true,
 }: {
   tape: TapeTrade[] | undefined;
   ethUsd: number;
   nowMs?: number;
-  /** When false, the calm relationship sentence is owned by Pulse instead. */
-  showStory?: boolean;
 }) {
-  const v: MarketVitality = useMemo(() => marketVitality(tape ?? [], nowMs), [tape, nowMs]);
+  const book = useMemo(() => marketBook(tape ?? [], nowMs), [tape, nowMs]);
   const usd = (eth: number) => eth * (ethUsd > 0 ? ethUsd : 0);
-  const rangeWords = v.range.label.toLowerCase().replace("past ", "");
 
-  const empty = v.lastEventAt == null;
-  const oneBeliever = !empty && v.believers === 1 && v.believerEvents <= 1;
-  const oneCapital = !empty && v.capitalEvents === 1;
-
-  const believerMomentum = momentumView({
-    delta: v.believersDelta,
-    base: v.believers - v.believersDelta,
-    rangeWords,
-    fmt: (n) => n.toLocaleString("en-US"),
-    minBaseForPct: 8,
-  });
-  const capitalUsdDelta = usd(v.capitalDeltaEth);
-  const capitalMomentum = momentumView({
-    delta: capitalUsdDelta,
-    base: usd(v.capitalEth) - capitalUsdDelta,
-    rangeWords,
-    fmt: fmtMoney,
-    eps: 1,
-    minBaseForPct: 25,
-  });
+  const b = book.believers.market;
+  const c = book.capitalEth.market;
 
   return (
-    <section aria-label="Market vitality">
-      <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-        <Metric
-          value={v.believers.toLocaleString("en-US")}
-          label={v.believers === 1 ? "Believer" : "Believers"}
-          momentum={believerMomentum}
-          cold={
-            empty
-              ? "Waiting for the first believer"
-              : oneBeliever && v.firstBelieverAt
-                ? `First believer joined ${agoLabel(nowMs - v.firstBelieverAt)}`
-                : null
-          }
-          points={v.believersSeries}
-        />
-        <Metric
-          value={fmtMoney(usd(v.capitalEth))}
-          label="Capital committed"
-          momentum={capitalMomentum}
-          cold={
-            empty
-              ? "No capital committed yet"
-              : oneCapital
-                ? `First conviction backed with ${fmtMoney(usd(v.capitalEth))}`
-                : null
-          }
-          points={v.capitalSeries}
-        />
+    <section aria-label="Market momentum" className="space-y-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+        Market Momentum · {book.window.short}
       </div>
-
-      {showStory && (
-        <p className="mt-3 text-[13px] leading-snug text-[var(--text-secondary)]">
-          {vitalityStory(v)}
-        </p>
-      )}
-      {!empty && (
-        <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          {v.range.label}
-        </p>
-      )}
+      <MomentumRow
+        total={b.current.toLocaleString("en-US")}
+        label="Market Believers"
+        copy={believerCopy(b, book.window)}
+        points={b.series}
+      />
+      <MomentumRow
+        total={fmtMoney(usd(c.current))}
+        label="Market Capital"
+        copy={capitalCopy(c, book.window, usd)}
+        points={c.series}
+      />
     </section>
   );
 }

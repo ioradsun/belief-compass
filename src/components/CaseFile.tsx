@@ -23,6 +23,7 @@ import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { timelineEvents } from "@/domain/conviction-series";
 import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT, type FlowWindow } from "@/domain/market-flow";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
+import { marketBook, type BookMetric } from "@/domain/market-book";
 import {
   RELATIONSHIP_LABEL,
   STATUS_LABEL,
@@ -31,6 +32,9 @@ import {
   sideCaseSummary,
   type CaseRelationship,
 } from "@/domain/case-file";
+
+/** Window-relative % for a book metric, or null when the base is too small. */
+const metricPct = (m: BookMetric): number | null => (m.base > 0 ? (m.delta / m.base) * 100 : null);
 
 type Side = "YES" | "NO";
 
@@ -104,14 +108,22 @@ export function CaseColumn({
 
   const believers = (evidence?.believers ?? []).filter((b) => b.side === side);
 
-  // Totals fall back to the market row before the tape has loaded, so the panel
-  // never opens blank. The row totals are period-less; the deltas need the tape.
+  // Headline Believers + Capital come from the CANONICAL reducer (the same one the
+  // center uses), so YES + NO always equals the center's Market total. Price is a
+  // per-share fact, not a total, so it stays with the side summary.
+  const book = useMemo(() => (tape?.length ? marketBook(tape, Date.now()) : null), [tape]);
+  const sideKey = side === "YES" ? "yes" : "no";
+  const believerMetric = book?.believers[sideKey] ?? null;
+  const capitalMetric = book?.capitalEth[sideKey] ?? null;
+
+  // Fall back to the market row before the tape has loaded, so the panel never
+  // opens blank. The row totals are period-less; the deltas need the tape.
   const rr = row as Record<string, unknown>;
   const believersTotal =
-    summary?.believers ?? num(side === "YES" ? rr.believers_yes : rr.believers_no) ?? 0;
+    believerMetric?.current ?? num(side === "YES" ? rr.believers_yes : rr.believers_no) ?? 0;
   const capitalUsd =
-    summary != null
-      ? summary.capitalEth * (ethUsd || 0)
+    capitalMetric != null
+      ? capitalMetric.current * (ethUsd || 0)
       : num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
   const priceUsd =
     summary?.priceEth != null
@@ -136,15 +148,15 @@ export function CaseColumn({
         <div className="space-y-2">
           <StatRow
             icon="👥"
-            label="Believers"
+            label={`${side} Believers`}
             value={believersTotal.toLocaleString("en-US")}
-            pct={summary?.believersPct ?? null}
+            pct={believerMetric ? metricPct(believerMetric) : (summary?.believersPct ?? null)}
           />
           <StatRow
             icon="💰"
-            label="Backed"
+            label={`${side} Capital`}
             value={capitalUsd != null ? fmtUsd(capitalUsd) : "—"}
-            pct={summary?.capitalPct ?? null}
+            pct={capitalMetric ? metricPct(capitalMetric) : (summary?.capitalPct ?? null)}
           />
           <StatRow
             icon="📈"

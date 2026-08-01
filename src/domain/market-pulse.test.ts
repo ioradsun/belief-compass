@@ -1,97 +1,99 @@
 import { describe, expect, it } from "vitest";
-import { marketPulse, pulseLabel, pulseTone } from "@/domain/market-pulse";
-import { marketVitality } from "@/domain/market-vitality";
-import type { TapeTrade } from "@/domain/conviction-series";
+import { pulse, pulseLabel, pulseTone, type PulseInput } from "@/domain/market-pulse";
 
-const now = 1_000_000_000_000;
-const day = 86_400_000;
-const buy = (w: string, side: "YES" | "NO", eth: number, t: number): TapeTrade => ({
-  w,
-  side,
-  action: "BUY",
-  eth,
-  price: 1,
-  t,
+const base = (over: Partial<PulseInput> = {}): PulseInput => ({
+  believerDelta: 0,
+  believerBase: 10,
+  believers: 10,
+  capitalDeltaEth: 0,
+  capitalBaseEth: 1,
+  events: 4,
+  ...over,
 });
-const sell = (w: string, side: "YES" | "NO", eth: number, t: number): TapeTrade => ({
-  w,
-  side,
-  action: "SELL",
-  eth,
-  price: 1,
-  t,
-});
-
-const pulse = (tape: TapeTrade[]) => pulseLabel(marketVitality(tape, now));
 
 describe("pulseLabel", () => {
-  it("is Quiet on an empty market", () => {
-    expect(pulse([])).toBe("Quiet");
+  it("is New with almost no believers", () => {
+    expect(pulseLabel(base({ believers: 1 }))).toBe("New");
   });
 
-  it("is Early for a young market with only a few believers", () => {
-    // First event <24h ago → range is since-creation.
-    expect(pulse([buy("a", "YES", 1, now - 2 * 3_600_000)])).toBe("Early");
+  it("is Quiet when nothing moved materially", () => {
+    expect(pulseLabel(base({ events: 0 }))).toBe("Quiet");
+    expect(pulseLabel(base({ believerDelta: 0, capitalDeltaEth: 0.0001 }))).toBe("Quiet");
   });
 
-  it("is Accelerating when a small base doubles with capital", () => {
-    const tape = [
-      buy("a", "YES", 1, now - 30 * day),
-      buy("b", "NO", 1, now - 30 * day),
-      buy("c", "YES", 1, now - 20 * day),
-      buy("d", "NO", 1, now - 20 * day),
-      buy("e", "YES", 1, now - 12 * day),
-      buy("f", "NO", 1, now - 12 * day),
-      // this week: several new believers + capital
-      buy("g", "YES", 1, now - 2 * day),
-      buy("h", "NO", 1, now - 2 * day),
-      buy("i", "YES", 1, now - day),
-      buy("j", "NO", 1, now - day),
-    ];
-    expect(pulse(tape)).toBe("Accelerating");
+  it("NEVER reads Growing when believers rise but capital falls", () => {
+    // The screenshot case: +people, −money.
+    const label = pulseLabel(base({ believerDelta: 4, capitalDeltaEth: -0.5 }));
+    expect(label).toBe("Mixed Momentum");
+    expect(label).not.toBe("Growing");
   });
 
-  it("is Deepening when the same believers add capital", () => {
-    const tape = [
-      buy("a", "YES", 1, now - 30 * day),
-      buy("b", "NO", 1, now - 30 * day),
-      buy("c", "YES", 1, now - 20 * day),
-      buy("d", "NO", 1, now - 20 * day),
-      buy("e", "YES", 1, now - 12 * day),
-      buy("f", "NO", 1, now - 12 * day),
-      // this week: no new wallets, existing ones add money
-      buy("a", "YES", 5, now - 2 * day),
-    ];
-    expect(pulse(tape)).toBe("Deepening");
+  it("is Accelerating only when both rise meaningfully", () => {
+    expect(
+      pulseLabel(base({ believerBase: 6, believers: 12, believerDelta: 6, capitalDeltaEth: 1 })),
+    ).toBe("Accelerating");
   });
 
-  it("is Cooling when capital leaves", () => {
-    const tape = [
-      buy("a", "YES", 5, now - 30 * day),
-      buy("b", "NO", 5, now - 30 * day),
-      buy("c", "YES", 5, now - 20 * day),
-      buy("d", "NO", 5, now - 12 * day),
-      sell("a", "YES", 4, now - 2 * day),
-    ];
-    expect(pulse(tape)).toBe("Cooling");
+  it("is Deepening when believers are flat and capital rises modestly", () => {
+    expect(pulseLabel(base({ believerDelta: 0, capitalBaseEth: 10, capitalDeltaEth: 1 }))).toBe(
+      "Deepening",
+    );
+  });
+
+  it("is Capital-led when a flat crowd adds a lot of money", () => {
+    expect(pulseLabel(base({ believerDelta: 0, capitalBaseEth: 2, capitalDeltaEth: 2 }))).toBe(
+      "Capital-led",
+    );
+  });
+
+  it("is Narrowing when believers fall but capital holds or rises", () => {
+    expect(pulseLabel(base({ believerDelta: -3, capitalDeltaEth: 0 }))).toBe("Narrowing");
+    expect(pulseLabel(base({ believerDelta: -3, capitalDeltaEth: 0.5 }))).toBe("Narrowing");
+  });
+
+  it("is Cooling when both fall", () => {
+    expect(pulseLabel(base({ believerDelta: -3, capitalDeltaEth: -0.5 }))).toBe("Cooling");
+  });
+
+  it("is Broadening when believers outpace capital", () => {
+    expect(
+      pulseLabel(base({ believerBase: 10, believers: 20, believerDelta: 10, capitalDeltaEth: 0.05 })),
+    ).toBe("Broadening");
   });
 });
 
-describe("marketPulse", () => {
-  it("carries a neutral meaning sentence with no side", () => {
-    const p = marketPulse(marketVitality([buy("a", "YES", 1, now - 2 * 3_600_000)], now));
-    expect(p.meaning).toBeTruthy();
-    expect(p.meaning).not.toMatch(/\bYES\b|\bNO\b/);
+describe("pulse conflict-prevention", () => {
+  it("never claims people are joining when believers are flat or negative", () => {
+    for (const bd of [0, -2]) {
+      const p = pulse(base({ believerDelta: bd, capitalDeltaEth: 1, capitalBaseEth: 10 }));
+      expect(p.meaning.toLowerCase()).not.toContain("more people are joining");
+    }
+  });
+
+  it("never says capital is following unless both rose", () => {
+    const p = pulse(base({ believerDelta: 4, capitalDeltaEth: -0.5 }));
+    expect(p.meaning.toLowerCase()).not.toContain("capital is following");
+  });
+
+  it("never mentions a side or price", () => {
+    const labels: PulseInput[] = [
+      base({ believerDelta: 4, capitalDeltaEth: 1 }),
+      base({ believerDelta: 4, capitalDeltaEth: -0.5 }),
+      base({ believerDelta: -3, capitalDeltaEth: -0.5 }),
+    ];
+    for (const i of labels) {
+      expect(pulse(i).meaning).not.toMatch(/\bYES\b|\bNO\b|price|\$/);
+    }
   });
 });
 
 describe("pulseTone", () => {
-  it("tints growth up, cooling down, the rest flat", () => {
-    expect(pulseTone("Growing")).toBe("up");
+  it("tints growth up, decline down, ambiguity flat", () => {
     expect(pulseTone("Accelerating")).toBe("up");
     expect(pulseTone("Deepening")).toBe("up");
     expect(pulseTone("Cooling")).toBe("down");
-    expect(pulseTone("Quiet")).toBe("flat");
-    expect(pulseTone("Early")).toBe("flat");
+    expect(pulseTone("Narrowing")).toBe("down");
+    expect(pulseTone("Mixed Momentum")).toBe("flat");
+    expect(pulseTone("New")).toBe("flat");
   });
 });
