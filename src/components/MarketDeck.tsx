@@ -7,7 +7,7 @@
  * quote. Prices/quotes come from the contract (src/lib/chain-trade) — never the
  * client. The House pick unlocks ONLY on a confirmed bet; a pass seals it.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMarketChange, getPositionSummary } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
@@ -49,6 +49,8 @@ import {
   sharesForPct,
   type OrderSide,
 } from "@/domain/order";
+import { marketBook } from "@/domain/market-book";
+import { marketPulse } from "@/domain/market-pulse";
 import { OrderTicket } from "@/components/order/OrderTicket";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
@@ -169,6 +171,12 @@ export function MarketDeck({
     staleTime: 10_000,
     refetchInterval: 15_000,
   });
+
+  // The momentum shape, told as a tension — bait on the Case File door.
+  const caseTeaser = useMemo(() => {
+    const t = change?.tape ?? [];
+    return t.length ? marketPulse(marketBook(t, Date.now())).meaning : null;
+  }, [change]);
 
   // Creator/age for the identity row's freshness token (deduped with the byline).
   const { data: cm } = useQuery({
@@ -473,7 +481,7 @@ export function MarketDeck({
       {/* Decision dock — buy by default; sell takes over when opened on a holding. */}
       <div className="shrink-0 space-y-2">
         {onToggleCase && !storySide && !mobileCaseOpen && (
-          <ExamineCta open={caseOpen} onToggle={onToggleCase} />
+          <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
         )}
 
         {held && sellPct != null ? (
@@ -662,33 +670,57 @@ function ageWords(ms: number): string {
 }
 
 /**
- * The one door from the neutral overview into the evidence. It names the user's
- * purpose — examining the case — not the object being opened.
+ * The one door from the neutral overview into the evidence. The arrows point the
+ * way the panels travel — it opens BOTH sides — and the teaser is the market's
+ * momentum told as a tension, so the door promises a secret worth opening.
  */
-function ExamineCta({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+function ExamineCta({
+  open,
+  onToggle,
+  teaser,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  /** The momentum/pulse read, as bait — shown only while closed. */
+  teaser?: string | null;
+}) {
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-pressed={open}
-      className="flex w-full items-center gap-3 rounded-[14px] px-4 py-3 text-left transition-colors"
+      aria-label={open ? "Close Case File" : "Open Case File"}
+      className="block w-full rounded-[14px] px-4 py-3 text-center transition-colors"
       style={{
         border: `1px solid ${open ? "var(--text)" : "var(--border)"}`,
         background: open ? "var(--surface)" : "transparent",
       }}
     >
-      <span className="min-w-0">
-        <span className="block text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--text)]">
-          {open ? "Close Case File" : "Open Case File"}
+      <span className="flex items-center justify-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--text)]">
+        {open ? (
+          <>
+            Close Case File{" "}
+            <span aria-hidden className="text-[var(--text-secondary)]">
+              ×
+            </span>
+          </>
+        ) : (
+          <>
+            <span aria-hidden className="text-[var(--text-secondary)]">
+              ←
+            </span>{" "}
+            Open Case File{" "}
+            <span aria-hidden className="text-[var(--text-secondary)]">
+              →
+            </span>
+          </>
+        )}
+      </span>
+      {!open && teaser && (
+        <span className="mt-1 block text-[11.5px] leading-snug text-[var(--text-muted)]">
+          {teaser}
         </span>
-      </span>
-      <span
-        className="ml-auto text-[15px] text-[var(--text-secondary)]"
-        aria-label={open ? "Close Case File" : undefined}
-        aria-hidden={open ? undefined : true}
-      >
-        {open ? "×" : "→"}
-      </span>
+      )}
     </button>
   );
 }

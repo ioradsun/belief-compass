@@ -330,7 +330,6 @@ export function MobileGame({
         <CurrentMarketActivity
           marketId={marketId}
           wallet={viewerWallet}
-          ethUsd={ethUsd}
           onSelect={() => undefined}
         />
       </div>
