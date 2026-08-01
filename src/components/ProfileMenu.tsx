@@ -33,7 +33,7 @@ function nameOf(candidates: (string | null | undefined)[], wallet: string) {
   return wallet ? aliasFor(wallet) : "";
 }
 
-type Panel = null | "edit" | "import" | "settings";
+type Panel = null | "edit" | "import" | "settings" | "earnings";
 
 export function ProfileMenu({
   wallet,
