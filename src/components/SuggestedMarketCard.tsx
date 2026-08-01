@@ -8,22 +8,34 @@
  *
  * It states fit and novelty. It never states demand, earnings, or urgency.
  */
+import { useEffect } from "react";
 import { rewardLine } from "@/domain/market-suggestion";
+import { useCreateEconomics } from "@/chain/market-create";
 import type { ReadySuggestion } from "@/lib/market-suggestion.functions";
 
 export function SuggestedMarketCard({
   suggestion,
-  creatorFeeBps,
+  onShown,
   onCreate,
   onEdit,
   onDismiss,
 }: {
   suggestion: ReadySuggestion;
-  creatorFeeBps: number | null;
+  onShown: () => void;
   onCreate: () => void;
   onEdit: () => void;
   onDismiss: () => void;
 }) {
+  // The reward sentence is read from the contract, never from a stored label.
+  const { creatorFeeBps } = useCreateEconomics();
+
+  useEffect(() => {
+    onShown();
+    // Exactly one impression per suggestion, however the deck re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestion.id]);
+
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-3" aria-label="The House has an idea">
       {/* Identity — the deck's own header rhythm. */}
