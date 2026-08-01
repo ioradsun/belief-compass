@@ -14,6 +14,7 @@ import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getHouseRead } from "@/lib/house.functions";
 import { requestConnect } from "@/lib/connect-bridge";
+import { walletIntent } from "@/lib/wagmi";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { useHouseFinalize, houseKey } from "@/lib/house-round";
@@ -478,8 +479,10 @@ export function MarketDeck({
         </div>
       )}
 
-      {/* Decision dock — buy by default; sell takes over when opened on a holding. */}
-      <div className="shrink-0 space-y-2">
+      {/* Decision dock — buy by default; sell takes over when opened on a holding.
+        Reaching the dock is the strongest signal a wallet is about to be needed,
+        so hover/touch/focus here starts the wallet chunks before the click. */}
+      <div className="shrink-0 space-y-2" {...walletIntent}>
         {onToggleCase && !storySide && !mobileCaseOpen && (
           <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
         )}
