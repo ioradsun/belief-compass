@@ -14,6 +14,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
+import { Route as ApiPublicJobsSuggestionGeneratorRouteImport } from './routes/api/public/jobs/suggestion-generator'
 import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
 import { Route as ApiPublicJobsPositionReconcileRouteImport } from './routes/api/public/jobs/position-reconcile'
 import { Route as ApiPublicJobsPositionRebuilderRouteImport } from './routes/api/public/jobs/position-rebuilder'
@@ -47,6 +48,12 @@ const ApiPublicBuildIdRoute = ApiPublicBuildIdRouteImport.update({
   path: '/api/public/build-id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicJobsSuggestionGeneratorRoute =
+  ApiPublicJobsSuggestionGeneratorRouteImport.update({
+    id: '/api/public/jobs/suggestion-generator',
+    path: '/api/public/jobs/suggestion-generator',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicJobsPovPollerRoute = ApiPublicJobsPovPollerRouteImport.update({
   id: '/api/public/jobs/pov-poller',
   path: '/api/public/jobs/pov-poller',
@@ -102,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/api/public/jobs/position-rebuilder': typeof ApiPublicJobsPositionRebuilderRoute
   '/api/public/jobs/position-reconcile': typeof ApiPublicJobsPositionReconcileRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
+  '/api/public/jobs/suggestion-generator': typeof ApiPublicJobsSuggestionGeneratorRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -116,6 +124,7 @@ export interface FileRoutesByTo {
   '/api/public/jobs/position-rebuilder': typeof ApiPublicJobsPositionRebuilderRoute
   '/api/public/jobs/position-reconcile': typeof ApiPublicJobsPositionReconcileRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
+  '/api/public/jobs/suggestion-generator': typeof ApiPublicJobsSuggestionGeneratorRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -131,6 +140,7 @@ export interface FileRoutesById {
   '/api/public/jobs/position-rebuilder': typeof ApiPublicJobsPositionRebuilderRoute
   '/api/public/jobs/position-reconcile': typeof ApiPublicJobsPositionReconcileRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
+  '/api/public/jobs/suggestion-generator': typeof ApiPublicJobsSuggestionGeneratorRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/position-rebuilder'
     | '/api/public/jobs/position-reconcile'
     | '/api/public/jobs/pov-poller'
+    | '/api/public/jobs/suggestion-generator'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/position-rebuilder'
     | '/api/public/jobs/position-reconcile'
     | '/api/public/jobs/pov-poller'
+    | '/api/public/jobs/suggestion-generator'
   id:
     | '__root__'
     | '/'
@@ -175,6 +187,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/position-rebuilder'
     | '/api/public/jobs/position-reconcile'
     | '/api/public/jobs/pov-poller'
+    | '/api/public/jobs/suggestion-generator'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -190,6 +203,7 @@ export interface RootRouteChildren {
   ApiPublicJobsPositionRebuilderRoute: typeof ApiPublicJobsPositionRebuilderRoute
   ApiPublicJobsPositionReconcileRoute: typeof ApiPublicJobsPositionReconcileRoute
   ApiPublicJobsPovPollerRoute: typeof ApiPublicJobsPovPollerRoute
+  ApiPublicJobsSuggestionGeneratorRoute: typeof ApiPublicJobsSuggestionGeneratorRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -227,6 +241,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/build-id'
       fullPath: '/api/public/build-id'
       preLoaderRoute: typeof ApiPublicBuildIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/jobs/suggestion-generator': {
+      id: '/api/public/jobs/suggestion-generator'
+      path: '/api/public/jobs/suggestion-generator'
+      fullPath: '/api/public/jobs/suggestion-generator'
+      preLoaderRoute: typeof ApiPublicJobsSuggestionGeneratorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/jobs/pov-poller': {
@@ -294,6 +315,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicJobsPositionRebuilderRoute: ApiPublicJobsPositionRebuilderRoute,
   ApiPublicJobsPositionReconcileRoute: ApiPublicJobsPositionReconcileRoute,
   ApiPublicJobsPovPollerRoute: ApiPublicJobsPovPollerRoute,
+  ApiPublicJobsSuggestionGeneratorRoute: ApiPublicJobsSuggestionGeneratorRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
