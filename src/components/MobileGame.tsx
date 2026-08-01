@@ -19,6 +19,7 @@ import { useSwitchChain } from "wagmi";
 
 import type { MarketRow } from "@/components/MarketCard";
 import { pulseLine } from "@/components/MarketCard";
+import { MarketMomentum } from "@/components/MarketVitality";
 import { useHouseFinalize } from "@/lib/house-round";
 import { getMarketChange, listMarketPulses } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
@@ -32,18 +33,10 @@ import { requestConnect } from "@/lib/connect-bridge";
 import { CHAIN_ID } from "@/chain/decoder";
 import { useBuyQuote, useTrade, useTradeReady } from "@/lib/chain-trade";
 import { fmtUsd, usdToWei, type OrderSide } from "@/domain/order";
-import { marketBook } from "@/domain/market-book";
-import { marketPulse } from "@/domain/market-pulse";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
-import {
-  houseAfter,
-  houseBefore,
-  houseBeforeNamed,
-  houseFoundationLine,
-  houseMode,
-} from "@/domain/the-house";
+import { houseAfter } from "@/domain/the-house";
 
 const money = (usd: number) =>
   usd >= 1000 ? `$${Math.round(usd).toLocaleString("en-US")}` : `$${usd.toFixed(usd < 10 ? 2 : 0)}`;
@@ -137,34 +130,6 @@ export function MobileGame({
     staleTime: 60_000,
   });
 
-  // Community exists — totals only. Never a side, never a percentage.
-  const totals = useMemo(() => {
-    const tape = change?.tape ?? [];
-    if (tape.length) {
-      const book = marketBook(tape, Date.now());
-      return {
-        believers: book.believers.market.current,
-        capitalUsd: book.capitalEth.market.current * (ethUsd > 0 ? ethUsd : 0),
-        pulse: marketPulse(book).meaning,
-      };
-    }
-    return {
-      believers: (row.believers_yes ?? 0) + (row.believers_no ?? 0),
-      capitalUsd: (row.yes_capital_usd ?? 0) + (row.no_capital_usd ?? 0),
-      pulse: "No one has moved yet. This question is still waiting for its first believer.",
-    };
-  }, [change, ethUsd, row]);
-
-  // The House — exactly one sentence, never a card, never a confidence number.
-  const houseLine = useMemo(() => {
-    if (!viewerWallet) return "Play me. I'll learn how you think.";
-    if (!houseRead) return "Still learning you.";
-    if (houseRead.foundation)
-      return houseFoundationLine(houseRead.foundation.answered, houseRead.foundation.required);
-    if (houseRead.preview) return houseBeforeNamed(houseRead.preview, marketId);
-    return houseBefore(houseMode(houseRead.band), marketId);
-  }, [viewerWallet, houseRead, marketId]);
-
   const houseReaction = useMemo(() => {
     if (!side) return null;
     const p = houseRead?.preview ?? null;
@@ -256,7 +221,6 @@ export function MobileGame({
         title={title}
         ethUsd={ethUsd}
         row={row}
-
         onBack={() => setPhase(side ? "decided" : "question")}
       />
     );
@@ -350,31 +314,14 @@ export function MobileGame({
 
         <Rule />
 
-        <div className="space-y-1.5">
-          <div className="num text-[16px] text-[var(--text)]">
-            {totals.believers} believer{totals.believers === 1 ? "" : "s"}
-          </div>
-          <div className="num text-[16px] text-[var(--text-secondary)]">
-            {money(totals.capitalUsd)} committed
-          </div>
-        </div>
-
-        <Rule />
-
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-            Pulse
-          </div>
-          <p className="mt-2 text-[16px] leading-relaxed text-[var(--text-secondary)]">
-            {totals.pulse}
-          </p>
-        </div>
-
-        <Rule />
-
-        <p className="text-[16px] leading-relaxed text-[var(--text-secondary)]">
-          <span aria-hidden>🏠</span> {houseLine}
-        </p>
+        {/* One block — believers, capital, the trend and the House — the same
+          <MarketMomentum> the desktop deck renders, in its mobile layout. */}
+        <MarketMomentum
+          tape={change?.tape}
+          ethUsd={ethUsd}
+          marketId={marketId}
+          viewerWallet={viewerWallet}
+        />
       </div>
 
       <Dock>

@@ -21,9 +21,8 @@ import { useHouseFinalize, houseKey } from "@/lib/house-round";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
-import { TheHouse } from "@/components/TheHouse";
 import { DnaFirstReveal } from "@/components/DnaFirstReveal";
-import { MarketPulse, LiveNow } from "@/components/CenterSignals";
+import { LiveNow } from "@/components/CenterSignals";
 import { MobileCaseView } from "@/components/MobileCase";
 import { CaseStory } from "@/components/CaseStory";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
@@ -374,14 +373,17 @@ export function MarketDeck({
   // the side panels; the center never becomes analytics or takes a side.
   const marketInner = (
     <>
-      {/* MARKET MOMENTUM — Market Believers then Market Capital (YES + NO), each
-      with its movement and a step sparkline. From the canonical marketBook, so
-      the center totals reconcile exactly with the two side panels. */}
-      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} />
-
-      {/* PULSE — the shape of momentum, in one label + one calm sentence. */}
-      <Hairline />
-      <MarketPulse tape={change?.tape} />
+      {/* MARKET MOMENTUM — the one block that answers "why should I care about
+      this market now?": believers + capital (value · sparkline · %), a status
+      pill for the shape, and the House as a quiet note. Believers, capital, the
+      Pulse label and the House line were four sections; they are one story. From
+      the canonical marketBook, so the totals reconcile with the side panels. */}
+      <MarketMomentum
+        tape={change?.tape}
+        ethUsd={ethUsd}
+        marketId={marketId}
+        viewerWallet={viewerWallet}
+      />
 
       {/* LIVE NOW — the single most recent material event (history, may name a side). */}
       {change?.tape && change.tape.length > 0 && (
@@ -398,9 +400,6 @@ export function MarketDeck({
         onSelectPerson={onSelectPerson}
       />
 
-      {/* THE HOUSE — a companion that only talks about YOU, never the market. */}
-      <Hairline />
-      <TheHouse marketId={marketId} viewerWallet={viewerWallet} />
       {/* One-time nudge: the first real match, surfaced to explore. */}
       <DnaFirstReveal viewerWallet={viewerWallet} onSelectPerson={onSelectPerson} />
 
