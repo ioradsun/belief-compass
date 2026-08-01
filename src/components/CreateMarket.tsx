@@ -163,6 +163,15 @@ export function CreateMarket({
     mutationFn: async () => {
       if (!address) throw new Error("Connect a wallet first.");
       const token = await ensureSession();
+      // Attribution is best-effort: it must never be able to fail a publish.
+      const note = (type: "suggestion_publish_started" | "suggestion_publish_failed") => {
+        if (!source) return;
+        void trackSuggestion({
+          data: { wallet: address, session: token, id: source.suggestionId, type },
+        }).catch(() => undefined);
+      };
+      note("suggestion_publish_started");
+
       const { questionId } = await createMarketDraft({
         data: {
           wallet: address,
