@@ -10,7 +10,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMarketChange, getPositionSummary } from "@/lib/markets.functions";
-import { positionPnl, type PositionPnl } from "@/domain/position";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getHouseRead } from "@/lib/house.functions";
@@ -293,10 +292,6 @@ export function MarketDeck({
     placeholderData: (prev) => prev,
   });
   const heldSideData = held ? posSummary?.[held.side === "YES" ? "yes" : "no"] : null;
-  const heldPnl = positionPnl({
-    invested: heldSideData?.invested,
-    worth: heldSideData?.worth,
-  });
 
   // Sell quote (only while the sell panel is open on a held side).
   const sellShares = held && sellPct != null ? sharesForPct(held.tokens, sellPct) : 0n;
@@ -569,8 +564,6 @@ export function MarketDeck({
             is only Sell or Buy More; each hands off to the same OrderTicket. */
           <PositionActions
             side={held.side}
-            pnl={heldPnl}
-            tokens={held.tokens}
             onSell={openSell}
             onBuyMore={() => {
               trade.reset();
@@ -730,143 +723,39 @@ function Hairline() {
 }
 
 /**
- * The viewer's ownership on this market, in human terms: what it's worth now and
- * (when an authoritative cost basis exists) what they put in and their gain. Gain
- * is only ever worth − invested — never a market percentage. Shares live under a
- * quiet "Position details" disclosure, not in the everyday view.
- */
-function PositionSummary({
-  side,
-  pnl,
-  tokens,
-  onSell,
-}: {
-  side: OrderSide;
-  pnl: PositionPnl;
-  tokens: bigint;
-  /** When omitted the summary is informational only (the actions live below it). */
-  onSell?: () => void;
-}) {
-  const col = side === "YES" ? "var(--yes)" : "var(--no)";
-  const hasBasis = pnl.investedUsd != null && pnl.gainUsd != null;
-  const gainColor =
-    pnl.gainUsd == null
-      ? "var(--text-secondary)"
-      : pnl.gainUsd > 0
-        ? "var(--yes)"
-        : pnl.gainUsd < 0
-          ? "var(--no)"
-          : "var(--text-muted)";
-  const [showDetails, setShowDetails] = useState(false);
-  const worthStr = pnl.worthUsd != null ? fmtUsd(pnl.worthUsd) : "—";
-  return (
-    <div className="rounded-[14px] p-3" style={{ border: "1px solid var(--border)" }}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] font-semibold text-[var(--text)]">
-          Your{" "}
-          <span style={{ color: col }} className="font-semibold">
-            {side}
-          </span>{" "}
-          conviction
-        </span>
-        {onSell && (
-          <button
-            type="button"
-            onClick={onSell}
-            className="shrink-0 rounded-[10px] px-3 py-1 text-[12px] font-semibold text-[var(--text-secondary)]"
-            style={{ border: "1px solid var(--border)" }}
-          >
-            Sell
-          </button>
-        )}
-      </div>
-
-      {hasBasis ? (
-        <>
-          <div className="mt-2 flex items-end gap-6">
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-                Invested
-              </div>
-              <div className="num text-[16px] font-semibold text-[var(--text)]">
-                {fmtUsd(pnl.investedUsd!)}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-                Worth now
-              </div>
-              <div className="num text-[16px] font-semibold text-[var(--text)]">{worthStr}</div>
-            </div>
-          </div>
-          <div className="num mt-1 text-[12px] font-semibold" style={{ color: gainColor }}>
-            {signedUsd(pnl.gainUsd!)} · {signedPct(pnl.gainPct)}
-          </div>
-        </>
-      ) : (
-        <div className="mt-2">
-          <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            Worth now
-          </div>
-          <div className="num text-[16px] font-semibold text-[var(--text)]">{worthStr}</div>
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={() => setShowDetails((v) => !v)}
-        className="mt-2 text-[10px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
-      >
-        {showDetails ? "Hide details" : "Position details"}
-      </button>
-      {showDetails && (
-        <div className="num mt-1 text-[11px] text-[var(--text-muted)]">
-          {fmtShares(tokens)} shares held
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
  * Owned-market resting state (State 2): a compact position summary and the two
  * decisions — Sell or Buy More — that hand off to the SAME <OrderTicket>. No new
  * order surface; the first question is only "what do you want to do?".
  */
 function PositionActions({
   side,
-  pnl,
-  tokens,
   onSell,
   onBuyMore,
 }: {
   side: OrderSide;
-  pnl: PositionPnl;
-  tokens: bigint;
   onSell: () => void;
   onBuyMore: () => void;
 }) {
+  // No summary card — "Buy more YES" already says what you hold; the worth/P&L
+  // lives in Positions. The market page's job here is only the two choices.
   return (
-    <div className="space-y-2">
-      <PositionSummary side={side} pnl={pnl} tokens={tokens} />
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onSell}
-          className="h-[52px] flex-1 rounded-[12px] text-[14px] font-semibold text-[var(--text-secondary)]"
-          style={{ border: "1px solid var(--border)" }}
-        >
-          Sell
-        </button>
-        <button
-          type="button"
-          onClick={onBuyMore}
-          className="h-[52px] flex-[1.4] rounded-[12px] text-[15px] font-semibold"
-          style={{ background: "var(--text)", color: "var(--bg)" }}
-        >
-          Buy more {side}
-        </button>
-      </div>
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={onSell}
+        className="h-[52px] flex-1 rounded-[12px] text-[14px] font-semibold text-[var(--text-secondary)]"
+        style={{ border: "1px solid var(--border)" }}
+      >
+        Sell
+      </button>
+      <button
+        type="button"
+        onClick={onBuyMore}
+        className="h-[52px] flex-[1.4] rounded-[12px] text-[15px] font-semibold"
+        style={{ background: "var(--text)", color: "var(--bg)" }}
+      >
+        Buy more {side}
+      </button>
     </div>
   );
 }
