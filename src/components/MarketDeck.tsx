@@ -15,7 +15,7 @@ import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getHouseRead } from "@/lib/house.functions";
 import { requestConnect } from "@/lib/connect-bridge";
-import { useSwitchChain, useAccount, useBalance } from "wagmi";
+import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { useHouseFinalize, houseKey } from "@/components/MarketIntelligence";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
@@ -54,6 +54,12 @@ import {
   sharesForPct,
   type OrderSide,
 } from "@/domain/order";
+import {
+  AmountField,
+  SideButton,
+  QuoteRow,
+  useSpendableBalance,
+} from "@/components/order/OrderTicket";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
 import { ReportMarket } from "@/components/ReportMarket";
@@ -802,55 +808,6 @@ function PositionSummary({
 
 type TradeApi = ReturnType<typeof useTrade>;
 
-/** Dollar input that accepts decimals (e.g. 0.25, 12.50). */
-function AmountField({ amount, setAmount }: { amount: number; setAmount: (n: number) => void }) {
-  const [text, setText] = useState(amount ? String(amount) : "");
-
-  // Re-sync when the amount is changed from the outside.
-  useEffect(() => {
-    const parsed = parseFloat(text);
-    if ((Number.isNaN(parsed) ? 0 : parsed) !== amount) {
-      setText(amount ? String(amount) : "");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount]);
-
-  return (
-    <span
-      className="flex h-[52px] items-center gap-1 rounded-[12px] px-3"
-      style={{ border: "1px solid var(--border)" }}
-    >
-      <span className="num text-[15px] text-[var(--text-muted)]">$</span>
-      <input
-        inputMode="decimal"
-        value={text}
-        onChange={(e) => {
-          // Keep digits and a single decimal point, max 2 decimals.
-          let raw = e.target.value.replace(/[^0-9.]/g, "");
-          const first = raw.indexOf(".");
-          if (first !== -1) {
-            raw = raw.slice(0, first + 1) + raw.slice(first + 1).replace(/\./g, "");
-            const [int, dec] = raw.split(".");
-            raw = `${int}.${(dec ?? "").slice(0, 2)}`;
-          }
-          const n = parseFloat(raw);
-          if (!Number.isNaN(n) && n > 1_000_000) {
-            setText("1000000");
-            setAmount(1_000_000);
-            return;
-          }
-          setText(raw);
-          setAmount(Number.isNaN(n) ? 0 : n);
-        }}
-        onBlur={() => setText(amount ? String(amount) : "")}
-        aria-label="Amount in dollars"
-        className="num w-[86px] bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
-        placeholder="0"
-      />
-    </span>
-  );
-}
-
 function Dock({
   side,
   amount,
@@ -936,9 +893,9 @@ function Dock({
       >
         {amtField}
         <div className="flex flex-1 gap-2">
-          <DockBtn label="← NO" tone="no" onClick={() => onSelect("NO")} />
-          <DockBtn label="↑ PASS" tone="pass" onClick={onPass} />
-          <DockBtn label="YES →" tone="yes" onClick={() => onSelect("YES")} />
+          <SideButton label="← NO" tone="no" onClick={() => onSelect("NO")} />
+          <SideButton label="↑ PASS" tone="pass" onClick={onPass} />
+          <SideButton label="YES →" tone="yes" onClick={() => onSelect("YES")} />
         </div>
       </div>
     );
@@ -1180,62 +1137,12 @@ function SellPanel({
   );
 }
 
-function DockBtn({
-  label,
-  tone,
-  onClick,
-}: {
-  label: string;
-  tone: "yes" | "no" | "pass";
-  onClick: () => void;
-}) {
-  const style =
-    tone === "yes"
-      ? {
-          border: "1px solid var(--border-strong,var(--border))",
-          background: "var(--surface)",
-          color: "var(--yes)",
-        }
-      : tone === "no"
-        ? {
-            border: "1px solid var(--border-strong,var(--border))",
-            background: "var(--surface)",
-            color: "var(--no)",
-          }
-        : { border: "1px solid var(--border)", color: "var(--text-secondary)" };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="h-[52px] flex-1 rounded-[12px] text-[14px] font-semibold transition-colors"
-      style={style}
-    >
-      {label}
-    </button>
-  );
-}
-
-function QuoteRow({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2">
-      <span className="text-[11px] text-[var(--text-muted)]">{k}</span>
-      <span className="num text-[12px] font-semibold text-[var(--text-secondary)]">{v}</span>
-    </div>
-  );
-}
-
 /** Spendable ETH in the connected wallet, shown in USD above "You pay". */
 function AvailRow({ ethUsd }: { ethUsd: number }) {
-  const { address, isConnected } = useAccount();
-  const { data, isLoading } = useBalance({
-    address,
-    chainId: CHAIN_ID,
-    query: { enabled: !!address, refetchInterval: 20_000 },
-  });
-  const eth = data ? Number(data.value) / 1e18 : 0;
+  const { eth, isConnected, isLoading } = useSpendableBalance();
   const v = !isConnected
     ? "Connect wallet"
-    : isLoading || !data
+    : isLoading || eth == null
       ? "…"
       : `${fmtUsd(eth * ethUsd)}  ·  ${eth.toFixed(4)} ETH`;
   return <QuoteRow k="Avail" v={v} />;
