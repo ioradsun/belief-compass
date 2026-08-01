@@ -52,7 +52,6 @@ import {
 import { OrderTicket } from "@/components/order/OrderTicket";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
-import { ReportMarket } from "@/components/ReportMarket";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 
 /**
@@ -387,10 +386,6 @@ export function MarketDeck({
       {/* One-time nudge: the first real match, surfaced to explore. */}
       <DnaFirstReveal viewerWallet={viewerWallet} onSelectPerson={onSelectPerson} />
 
-      {/* Moderation stays reachable, but quiet — not a metrics row. */}
-      <div className="flex justify-end text-[11px] text-[var(--text-muted)]">
-        <ReportMarket onchainId={Number(row.onchain_id)} wallet={viewerWallet} />
-      </div>
     </>
   );
 

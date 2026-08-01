@@ -34,6 +34,9 @@ const LIVE_KINDS = [
   "tribe_doubled",
 ];
 
+/** The live feed only reports the last 72 hours. Older events are history. */
+const LIVE_WINDOW_MS = 72 * 60 * 60_000;
+
 const input = z
   .object({
     limit: z.number().int().min(1).max(300).optional(),
@@ -79,6 +82,8 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       .eq("is_canonical", true)
       .in("kind", LIVE_KINDS);
     if (scope) q = q.in("market_id", scope);
+    // The live feed is a 72-hour window: anything older is history, not "live".
+    q = q.gte("occurred_at", new Date(Date.now() - LIVE_WINDOW_MS).toISOString());
     // Delta: bound by the overlap window instead of over-reading the full list.
     // The window is small, so this fetches only what changed since last poll.
     if (data?.since) q = q.gte("occurred_at", data.since);
