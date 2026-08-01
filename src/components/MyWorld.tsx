@@ -87,6 +87,10 @@ export function MyWorld({
             window={win}
             winLabel={winLabel}
             onSelect={onSelectMarket}
+            onExplore={() => {
+              const first = rows[0];
+              if (first) onSelectMarket(Number(first.onchain_id));
+            }}
           />
         </div>
       ) : (
