@@ -34,6 +34,7 @@ export function LiveTape({
   wallet,
   onSelect,
   marketIds,
+  excludeMarketId,
   limit,
   showTitles = true,
   emptyText = "No recent activity yet.",
@@ -43,6 +44,8 @@ export function LiveTape({
   onSelect: (marketId: number) => void;
   /** Scope the tape to one market (center deck) or a set (positions). */
   marketIds?: number[];
+  /** Drop this market's rows — the global feed hides what the pinned block shows. */
+  excludeMarketId?: number;
   limit?: number;
   /** Hide the market title line when the tape already sits under that market. */
   showTitles?: boolean;
@@ -80,7 +83,9 @@ export function LiveTape({
     placeholderData: (prev) => prev,
   });
   // Sticky: the tape holds its rows until fresh ones arrive.
-  const rows = useStickyRows(data?.rows);
+  const sticky = useStickyRows(data?.rows);
+  const rows =
+    excludeMarketId == null ? sticky : sticky.filter((r) => Number(r.marketId) !== excludeMarketId);
 
   return (
     <div className="h-full min-h-0 flex-1 touch-pan-y overflow-y-scroll overscroll-contain [-webkit-overflow-scrolling:touch]">

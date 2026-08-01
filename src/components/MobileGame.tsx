@@ -20,6 +20,7 @@ import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { pulseLine } from "@/components/MarketCard";
 import { MarketMomentum } from "@/components/MarketVitality";
+import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { useHouseFinalize } from "@/lib/house-round";
 import { getMarketChange, listMarketPulses } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
@@ -318,13 +319,19 @@ export function MobileGame({
 
         <Rule />
 
-        {/* One block — believers, capital, the trend and the House — the same
-          <MarketMomentum> the desktop deck renders, in its mobile layout. */}
-        <MarketMomentum
-          tape={change?.tape}
-          ethUsd={ethUsd}
+        {/* Momentum — believers, capital, the trend. The same <MarketMomentum>
+          the desktop deck renders, in its mobile layout. */}
+        <MarketMomentum tape={change?.tape} ethUsd={ethUsd} />
+
+        <Rule />
+
+        {/* The story — House + this market's activity — as the pinned scope of the
+          Live feed, expandable in place. Same component desktop pins to its feed. */}
+        <CurrentMarketActivity
           marketId={marketId}
-          viewerWallet={viewerWallet}
+          wallet={viewerWallet}
+          ethUsd={ethUsd}
+          onSelect={() => undefined}
         />
       </div>
 

@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
-
 import { queryOptions, useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
 import { listMarketPulses, getMarketRow, type VolumeWindow } from "@/lib/markets.functions";
@@ -11,6 +10,7 @@ import { readSessionToken } from "@/lib/wallet-session";
 
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
+import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
 import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
@@ -236,9 +236,8 @@ function Feed() {
       void import("@/components/MobileGame");
       return;
     }
-    const idle = (
-      window as unknown as { requestIdleCallback?: (cb: () => void) => number }
-    ).requestIdleCallback;
+    const idle = (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
+      .requestIdleCallback;
     const warm = () => void import("@/components/CaseFile");
     if (idle) idle(warm);
     else setTimeout(warm, 1500);
@@ -789,11 +788,26 @@ function Feed() {
               {/* Duplicate suggestions sit above the feed while creating; the feed
                 below keeps running and is never replaced. */}
               <DuplicateSuggestions onSelect={selectMarket} />
+              {/* THIS MARKET — the pinned scope of the feed: the current market's
+                story (House + activity), collapsible. Excluded from the global feed
+                below so nothing is shown twice. Same LiveTape, two scopes. */}
+              {activeMarket != null && (
+                <CurrentMarketActivity
+                  marketId={activeMarket}
+                  wallet={wallet}
+                  ethUsd={data?.ethUsd ?? 0}
+                  onSelect={selectMarket}
+                />
+              )}
               <div className="mb-4 shrink-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 Live
               </div>
               <div className="min-h-0 flex-1 overflow-hidden">
-                <LiveTape wallet={wallet} onSelect={selectMarket} />
+                <LiveTape
+                  wallet={wallet}
+                  onSelect={selectMarket}
+                  excludeMarketId={activeMarket ?? undefined}
+                />
               </div>
             </>
           )}

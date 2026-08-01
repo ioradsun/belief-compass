@@ -21,7 +21,6 @@ import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
 import { DnaFirstReveal } from "@/components/DnaFirstReveal";
-import { LiveNow } from "@/components/CenterSignals";
 import { MobileCaseView } from "@/components/MobileCase";
 import { CaseStory } from "@/components/CaseStory";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
@@ -373,23 +372,10 @@ export function MarketDeck({
     <>
       {/* MARKET MOMENTUM — the one block that answers "why should I care about
       this market now?": believers + capital (value · sparkline · %), a status
-      pill for the shape, and the House as a quiet note. Believers, capital, the
-      Pulse label and the House line were four sections; they are one story. From
-      the canonical marketBook, so the totals reconcile with the side panels. */}
-      <MarketMomentum
-        tape={change?.tape}
-        ethUsd={ethUsd}
-        marketId={marketId}
-        viewerWallet={viewerWallet}
-      />
-
-      {/* LIVE NOW — the single most recent material event (history, may name a side). */}
-      {change?.tape && change.tape.length > 0 && (
-        <>
-          <Hairline />
-          <LiveNow tape={change.tape} ethUsd={ethUsd} />
-        </>
-      )}
+      pill for the shape. Believers + capital + the momentum label, from the
+      canonical marketBook so the totals reconcile with the side panels. The
+      narrative, the House voice and the activity all live in the right feed. */}
+      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} />
 
       {/* SHARED CONVICTION — side-blind belonging: your Tribe/Twin/Opp are here. */}
       <SharedConviction
