@@ -19,7 +19,7 @@ export function SuggestedMarketCard({
   onDismiss,
 }: {
   suggestion: ReadySuggestion;
-  creatorFeeBps: CreatorFeeBps;
+  creatorFeeBps: number | null;
   onCreate: () => void;
   onEdit: () => void;
   onDismiss: () => void;
