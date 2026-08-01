@@ -98,12 +98,18 @@ export interface Milestone {
   key: string;
   label: string;
   done: boolean;
+  /** Current value toward the goal (for the active-goal progress bar). */
+  current?: number;
+  /** Target value that unlocks it. Present on measurable rungs. */
+  target?: number;
 }
 
 /**
  * The milestone ladder — progress, not trophies. Ordered so early wins are easy
- * and value tiers escalate, guaranteeing there is almost always a "next" just
- * ahead. Returns the list, the count/percent unlocked, and the next locked one.
+ * and value/earnings tiers escalate, guaranteeing there is almost always a "next"
+ * just ahead. Measurable rungs carry current/target so the active goal can show a
+ * real progress bar ("$842 / $1,000 · 84%"). Returns the list, count/percent
+ * unlocked, and the next locked rung as the single active goal.
  */
 export function buildMilestones(f: MilestoneFacts): {
   list: Milestone[];
@@ -112,19 +118,28 @@ export function buildMilestones(f: MilestoneFacts): {
   pct: number;
   next: Milestone | null;
 } {
+  const M = (key: string, label: string, done: boolean, current?: number, target?: number): Milestone => ({
+    key,
+    label,
+    done,
+    current,
+    target,
+  });
   const list: Milestone[] = [
-    { key: "first-market", label: "First Market", done: f.createdCount >= 1 },
-    { key: "first-profit", label: "First Profitable Trade", done: f.hasProfit },
-    { key: "first-100", label: "Earned Your First $100", done: f.sinceStartUsd >= 100 },
-    { key: "trades-100", label: "100 Trades", done: f.tradeCount >= 100 },
-    { key: "first-creator", label: "First Creator Earnings", done: f.creatorLifetimeUsd > 0 },
-    { key: "first-claim", label: "First Claim", done: f.hasClaimed },
-    { key: "vol-10k", label: "Market Reached $10k Volume", done: f.maxMarketVolumeUsd >= 10_000 },
-    { key: "held-30", label: "Held a Conviction 30 Days", done: f.longestHeldDays >= 30 },
-    { key: "value-10k", label: "Reach $10k Conviction", done: f.totalValueUsd >= 10_000 },
-    { key: "trades-500", label: "500 Trades", done: f.tradeCount >= 500 },
-    { key: "value-50k", label: "Reach $50k Conviction", done: f.totalValueUsd >= 50_000 },
-    { key: "value-100k", label: "Reach $100k Conviction", done: f.totalValueUsd >= 100_000 },
+    M("first-market", "First Market", f.createdCount >= 1),
+    M("first-profit", "First Profitable Trade", f.hasProfit),
+    M("first-100", "Earn Your First $100", f.sinceStartUsd >= 100, f.sinceStartUsd, 100),
+    M("first-creator", "First Creator Earnings", f.creatorLifetimeUsd > 0),
+    M("trades-100", "100 Trades", f.tradeCount >= 100, f.tradeCount, 100),
+    M("held-30", "Hold a Conviction 30 Days", f.longestHeldDays >= 30, f.longestHeldDays, 30),
+    M("first-claim", "First Claim", f.hasClaimed),
+    M("earn-1k", "Earn $1,000 Creating Markets", f.creatorLifetimeUsd >= 1000, f.creatorLifetimeUsd, 1000),
+    M("vol-10k", "A Market Reaches $10k Volume", f.maxMarketVolumeUsd >= 10_000, f.maxMarketVolumeUsd, 10_000),
+    M("value-10k", "Reach $10k Conviction", f.totalValueUsd >= 10_000, f.totalValueUsd, 10_000),
+    M("trades-500", "500 Trades", f.tradeCount >= 500, f.tradeCount, 500),
+    M("value-50k", "Reach $50k Conviction", f.totalValueUsd >= 50_000, f.totalValueUsd, 50_000),
+    M("earn-10k", "Earn $10,000 Creating Markets", f.creatorLifetimeUsd >= 10_000, f.creatorLifetimeUsd, 10_000),
+    M("value-100k", "Reach $100k Conviction", f.totalValueUsd >= 100_000, f.totalValueUsd, 100_000),
   ];
   const unlocked = list.filter((m) => m.done).length;
   const total = list.length;
@@ -135,6 +150,12 @@ export function buildMilestones(f: MilestoneFacts): {
     pct: Math.round((unlocked / total) * 100),
     next: list.find((m) => !m.done) ?? null,
   };
+}
+
+/** Progress toward a measurable milestone, clamped to 0–100. */
+export function milestonePct(m: Milestone): number | null {
+  if (m.target == null || m.current == null || m.target <= 0) return null;
+  return Math.max(0, Math.min(100, Math.round((m.current / m.target) * 100)));
 }
 
 /** One decoded creator-fee accrual: when it happened and how much (ETH). */

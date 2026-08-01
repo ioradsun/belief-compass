@@ -15,7 +15,12 @@ import { formatEther } from "viem";
 import { getConvictionDashboard } from "@/lib/conviction-dashboard.functions";
 import { FEES_ABI, useFeeBalances, useClaimFees } from "@/lib/creator-fees";
 import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
-import { gainBreakdown, buildMilestones } from "@/domain/conviction-dashboard";
+import {
+  gainBreakdown,
+  buildMilestones,
+  milestonePct,
+  type Milestone,
+} from "@/domain/conviction-dashboard";
 
 const fmtUsd = (n: number, sign = false): string => {
   const v = Math.abs(n);
@@ -28,15 +33,30 @@ const fmtUsd = (n: number, sign = false): string => {
 const weiToUsd = (wei: bigint | null | undefined, ethUsd: number): number =>
   wei == null || !(ethUsd > 0) ? 0 : Number(formatEther(wei)) * ethUsd;
 
-type SectionId = "overview" | "progress" | "markets" | "milestones" | "activity" | "settings";
+type SectionId = "overview" | "journey" | "edge" | "wins" | "milestones" | "today";
 const SECTIONS: { id: SectionId; label: string }[] = [
   { id: "overview", label: "Overview" },
-  { id: "progress", label: "Progress" },
-  { id: "markets", label: "Markets" },
+  { id: "journey", label: "Your Journey" },
+  { id: "edge", label: "Your Edge" },
+  { id: "wins", label: "Biggest Wins" },
   { id: "milestones", label: "Milestones" },
-  { id: "activity", label: "Activity" },
-  { id: "settings", label: "Settings" },
+  { id: "today", label: "Today" },
 ];
+
+/** One-line coaching copy that turns an Edge number into identity. */
+function edgeCopy(key: string, usd: number): string {
+  if (key === "holding")
+    return usd >= 0
+      ? "You're strongest when you stay patient."
+      : "Your held convictions are still maturing — patience tends to pay.";
+  if (key === "trading")
+    return usd >= 0
+      ? "Quick decisions have added steady gains."
+      : "Trading has cost a little — your other edges are carrying you.";
+  return usd > 0
+    ? "Your questions keep generating activity."
+    : "Create a market and start earning while others trade.";
+}
 
 function findScrollParent(el: HTMLElement | null): HTMLElement | null {
   let p = el?.parentElement ?? null;
@@ -193,7 +213,26 @@ export function ConvictionDashboard({
     (data?.today.creatorEarnedUsd ?? 0);
 
   const hasCreated = createdIds.length > 0;
-  const activeMarkets = (data?.holdings.count ?? 0) + createdIds.length;
+
+  // Today's Story — stories are remembered, lists aren't.
+  const todaySentences: string[] = (() => {
+    const s: string[] = [];
+    const traders = data?.activity.uniqueTradersTodayCount ?? 0;
+    const trades = data?.activity.tradesTodayCount ?? 0;
+    const earned = data?.today.creatorEarnedUsd ?? 0;
+    if (hasCreated && traders > 0)
+      s.push(`${traders} ${traders === 1 ? "person" : "people"} traded your markets.`);
+    if (trades > 0) s.push(`You made ${trades} ${trades === 1 ? "trade" : "trades"} today.`);
+    if (netToday !== 0)
+      s.push(
+        netToday > 0
+          ? `Your conviction grew by ${fmtUsd(netToday)}.`
+          : `Your conviction dipped by ${fmtUsd(Math.abs(netToday))}.`,
+      );
+    if (hasCreated && earned > 0)
+      s.push(`You earned another ${fmtUsd(earned)} while you were away.`);
+    return s;
+  })();
 
   // --- scroll-spy ------------------------------------------------------------
   const rootRef = useRef<HTMLDivElement>(null);
@@ -219,13 +258,14 @@ export function ConvictionDashboard({
   const go = (id: SectionId) =>
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
+  const strongestEdge = [...sources].filter((s) => s.usd > 0).sort((a, b) => b.usd - a.usd)[0];
   const navSummary: Record<SectionId, string> = {
-    overview: fmtUsd(worthToday),
-    progress: fmtUsd(sinceStart, true),
-    markets: `${activeMarkets} Active`,
+    overview: fmtUsd(sinceStart, true),
+    journey: fmtUsd(worthToday),
+    edge: strongestEdge ? fmtUsd(strongestEdge.usd, true) : "",
+    wins: bestMarkets.length ? `${bestMarkets.length}` : "",
     milestones: `${milestones.unlocked} Unlocked`,
-    activity: `${data?.activity.tradesTodayCount ?? 0} Today`,
-    settings: "",
+    today: `${data?.activity.tradesTodayCount ?? 0} Today`,
   };
 
   if (!wallet) return <Centered>Connect a wallet to see your Conviction.</Centered>;
@@ -263,24 +303,33 @@ export function ConvictionDashboard({
 
         {/* Right — one long scrolling story */}
         <div className="min-w-0 flex-1 pb-24">
-          {/* SECTION 1 — Overview (the one hero) */}
+          {/* SECTION 1 — Your Conviction. Lead with the GAIN — people anchor on
+              growth, not balance. Worth Today is the supporting line. */}
           <section id="overview" className="scroll-mt-4 pt-2">
             <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
               Your Conviction
             </div>
-            <div className="mt-4 text-[13px] text-[var(--text-muted)]">Worth Today</div>
-            <div className="mt-1 text-[56px] font-semibold leading-none tracking-[-0.035em] text-[var(--text)] tabular-nums">
-              {fmtUsd(worthToday)}
+            <div
+              className="mt-4 text-[56px] font-semibold leading-none tracking-[-0.035em] tabular-nums"
+              style={{ color: sinceStart >= 0 ? "var(--yes)" : "var(--no)" }}
+            >
+              {fmtUsd(sinceStart, sinceStart !== 0)}
             </div>
-            {sinceStart !== 0 && (
-              <div className="mt-3 text-[15px] tabular-nums">
-                <span
-                  className="font-semibold"
-                  style={{ color: sinceStart >= 0 ? "var(--yes)" : "var(--no)" }}
-                >
-                  {fmtUsd(sinceStart, true)}
-                </span>
-                <span className="text-[var(--text-muted)]"> since you started</span>
+            <div className="mt-2 text-[14px] text-[var(--text-muted)]">since you started</div>
+            <div className="mt-4 flex items-baseline gap-2">
+              <span className="text-[13px] text-[var(--text-muted)]">Worth Today</span>
+              <span className="text-[18px] font-semibold tabular-nums text-[var(--text)]">
+                {fmtUsd(worthToday)}
+              </span>
+            </div>
+            {hasCreated && (data?.peopleReached ?? 0) > 0 && (
+              <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+                <div className="text-[24px] font-semibold tabular-nums text-[var(--text)]">
+                  {(data?.peopleReached ?? 0).toLocaleString("en-US")}
+                </div>
+                <div className="text-[12px] text-[var(--text-muted)]">
+                  people have interacted with your markets
+                </div>
               </div>
             )}
             <p className="mt-4 max-w-[46ch] text-[13px] leading-relaxed text-[var(--text-muted)]">
@@ -288,55 +337,63 @@ export function ConvictionDashboard({
             </p>
           </section>
 
-          {/* SECTION 2 — Progress (the money-flow story) */}
-          <Section id="progress" title="Progress">
+          {/* SECTION 2 — Your Journey (the money-flow timeline) */}
+          <Section id="journey" title="Your Journey">
             <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
               <FlowRow label="You Put In" value={fmtUsd(putIn)} />
               <FlowRow label="Worth Today" value={fmtUsd(worthToday)} strong />
               <FlowRow label="You've Cashed Out" value={fmtUsd(cashedOut)} />
               <FlowRow label="Your Markets Earned" value={fmtUsd(creatingGain)} />
             </div>
-            {hasCreated && (
-              <div className="mt-3 flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5">
-                <div>
-                  <div className="text-[12px] text-[var(--text-muted)]">Available</div>
-                  <div className="text-[18px] font-semibold tabular-nums text-[var(--text)]">
-                    {fmtUsd(availableUsd)}
-                  </div>
-                </div>
-                <ClaimButton available={availableWei} claim={claim} onClaimed={refetchFees} />
-              </div>
-            )}
           </Section>
 
-          {/* SECTION 3 — What's Working */}
+          {/* Ready to Claim — real money, its own ceremony */}
+          {availableUsd > 0.01 && (
+            <Section id="claim" title="Ready to Claim" anchorless>
+              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+                <div className="text-[34px] font-semibold leading-none tabular-nums text-[var(--text)]">
+                  {fmtUsd(availableUsd)}
+                </div>
+                <p className="mt-2 text-[13px] text-[var(--text-muted)]">
+                  Generated while people traded your markets.
+                </p>
+                <div className="mt-4">
+                  <ClaimButton available={availableWei} claim={claim} onClaimed={refetchFees} full />
+                </div>
+              </div>
+            </Section>
+          )}
+
+          {/* SECTION 3 — Your Edge (numbers become identity) */}
           {sinceStart !== 0 && (
-            <Section id="whats-working" title="What's Working" anchorless>
+            <Section id="edge" title="Your Edge">
               <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
                 {sources.map((s, i) => (
-                  <div
-                    key={s.key}
-                    className={`flex items-center px-4 py-3.5 ${i > 0 ? "border-t border-[var(--border)]" : ""}`}
-                  >
-                    <span className="text-[14px] text-[var(--text)]">{s.label}</span>
-                    <span
-                      className="ml-auto text-[15px] font-semibold tabular-nums"
-                      style={{ color: s.usd >= 0 ? "var(--yes)" : "var(--no)" }}
-                    >
-                      {fmtUsd(s.usd, true)}
-                    </span>
+                  <div key={s.key} className={`px-4 py-3.5 ${i > 0 ? "border-t border-[var(--border)]" : ""}`}>
+                    <div className="flex items-center">
+                      <span className="text-[14px] font-medium text-[var(--text)]">{s.label}</span>
+                      <span
+                        className="ml-auto text-[15px] font-semibold tabular-nums"
+                        style={{ color: s.usd >= 0 ? "var(--yes)" : "var(--no)" }}
+                      >
+                        {fmtUsd(s.usd, true)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
+                      {edgeCopy(s.key, s.usd)}
+                    </p>
                   </div>
                 ))}
               </div>
             </Section>
           )}
 
-          {/* SECTION 4 — Your Best Markets (held + created) */}
-          <Section id="markets" title="Your Best Markets">
+          {/* SECTION 4 — Biggest Wins (held + created victories) */}
+          <Section id="wins" title="Biggest Wins">
             {bestMarkets.length === 0 ? (
               <Empty
-                title="Back markets you believe in."
-                body="Your best-performing convictions and created markets will appear here."
+                title="Your wins will show here."
+                body="Back markets you believe in and create markets others trade — your best results appear here."
                 cta={onExplore ? { label: "Explore markets", onClick: onExplore } : undefined}
               />
             ) : (
@@ -351,10 +408,7 @@ export function ConvictionDashboard({
                     <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[var(--text)]">
                       {m.title}
                     </span>
-                    <span
-                      className="shrink-0 text-[14px] font-semibold tabular-nums"
-                      style={{ color: "var(--yes)" }}
-                    >
+                    <span className="shrink-0 text-[14px] font-semibold tabular-nums" style={{ color: "var(--yes)" }}>
                       {fmtUsd(m.amountUsd, true)}
                     </span>
                     <Badge kind={m.kind} />
@@ -364,14 +418,12 @@ export function ConvictionDashboard({
             )}
           </Section>
 
-          {/* SECTION 5 — Milestones */}
+          {/* SECTION 5 — Milestones, with one active goal up top */}
           <Section id="milestones" title="Milestones">
+            {milestones.next && <ActiveGoal goal={milestones.next} />}
             <div className="mb-3 flex items-center gap-3">
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--border)]">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${milestones.pct}%`, background: "var(--yes)" }}
-                />
+                <div className="h-full rounded-full" style={{ width: `${milestones.pct}%`, background: "var(--yes)" }} />
               </div>
               <span className="text-[12px] font-semibold tabular-nums text-[var(--text-secondary)]">
                 {milestones.pct}%
@@ -379,11 +431,7 @@ export function ConvictionDashboard({
             </div>
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               {milestones.list.map((m) => (
-                <div
-                  key={m.key}
-                  className="flex items-center gap-2.5 rounded-lg px-1 py-1.5"
-                  style={{ opacity: m.done ? 1 : 0.5 }}
-                >
+                <div key={m.key} className="flex items-center gap-2.5 px-1 py-1.5" style={{ opacity: m.done ? 1 : 0.45 }}>
                   <span
                     className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px]"
                     style={{
@@ -395,82 +443,83 @@ export function ConvictionDashboard({
                   >
                     ✓
                   </span>
-                  <span
-                    className="text-[13px]"
-                    style={{ color: m.done ? "var(--text)" : "var(--text-muted)" }}
-                  >
+                  <span className="text-[13px]" style={{ color: m.done ? "var(--text)" : "var(--text-muted)" }}>
                     {m.label}
                   </span>
                 </div>
               ))}
             </div>
-            {milestones.next && (
-              <p className="mt-3 text-[12px] text-[var(--text-muted)]">
-                Next: <span className="text-[var(--text-secondary)]">{milestones.next.label}</span>
-              </p>
-            )}
           </Section>
 
-          {/* SECTION 6 — Recent Activity */}
-          <Section id="activity" title="Recent Activity">
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
-              <div className="text-[12px] text-[var(--text-muted)]">Today</div>
-              <div
-                className="mt-0.5 text-[28px] font-semibold tabular-nums"
-                style={{ color: netToday >= 0 ? "var(--yes)" : "var(--no)" }}
-              >
-                {fmtUsd(netToday, true)}
-              </div>
-              <div className="mt-3 space-y-1 text-[13px] text-[var(--text-secondary)]">
-                <ActivityLine
-                  show={(data?.activity.tradesTodayCount ?? 0) > 0}
-                  text={`${data?.activity.tradesTodayCount} trade${data?.activity.tradesTodayCount === 1 ? "" : "s"} completed`}
-                />
-                <ActivityLine
-                  show={hasCreated && (data?.activity.uniqueTradersTodayCount ?? 0) > 0}
-                  text={`${data?.activity.uniqueTradersTodayCount} ${data?.activity.uniqueTradersTodayCount === 1 ? "person" : "people"} traded your markets`}
-                />
-                <ActivityLine
-                  show={hasCreated && (data?.today.creatorEarnedUsd ?? 0) > 0}
-                  text={`${fmtUsd(data?.today.creatorEarnedUsd ?? 0, true)} creator earnings`}
-                />
-                {(data?.activity.tradesTodayCount ?? 0) === 0 &&
-                  (data?.activity.uniqueTradersTodayCount ?? 0) === 0 && (
-                    <p className="text-[var(--text-muted)]">A quiet day. Your Conviction is still working.</p>
-                  )}
-              </div>
+          {/* SECTION 6 — Today's Story (sentences, not a list) */}
+          <Section id="today" title="Today's Story">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-[15px] leading-relaxed text-[var(--text)]">
+              {todaySentences.length > 0 ? (
+                <div className="space-y-1.5">
+                  {todaySentences.map((line, i) => (
+                    <p key={i}>{line}</p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[var(--text-muted)]">
+                  A quiet day. Your conviction is still working while you&rsquo;re away.
+                </p>
+              )}
             </div>
           </Section>
 
-          {/* SECTION 7 — Insight (exactly one) */}
+          {/* SECTION 7 — One Insight */}
           {insight && (
             <Section id="insight" title="Insight" anchorless>
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-5 py-4 text-[15px] leading-snug text-[var(--text)]">
+              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-5 py-4 text-[15px] leading-relaxed text-[var(--text)]">
                 {insight}
               </div>
             </Section>
           )}
 
-          {/* Settings — minimal, read-only */}
-          <Section id="settings" title="Settings">
-            <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-              <FlowRow label="Wallet" value={wallet ? `${wallet.slice(0, 6)}…${wallet.slice(-4)}` : "—"} />
-              <FlowRow label="Network" value="Base" />
-            </div>
-            {!hasCreated && (
-              <Empty
-                className="mt-3"
-                title="Create a market that people love."
-                body="When others trade your markets, you'll earn a share of every trade."
-                cta={onCreate ? { label: "Create a market", onClick: onCreate } : undefined}
-              />
-            )}
-          </Section>
+          {!hasCreated && (
+            <Empty
+              className="mt-12"
+              title="Create a market that people love."
+              body="When others trade your markets, you'll earn a share of every trade — and start reaching people."
+              cta={onCreate ? { label: "Create a market", onClick: onCreate } : undefined}
+            />
+          )}
         </div>
       </div>
     </div>
   );
 }
+
+/** The one active goal — always answers "what am I working toward?" */
+function ActiveGoal({ goal }: { goal: Milestone }) {
+  const pct = milestonePct(goal);
+  const usd = !goal.key.includes("trades") && goal.key !== "held-30";
+  const fmt = (n: number) =>
+    usd ? fmtUsd(n) : goal.key === "held-30" ? `${Math.floor(n)}d` : `${Math.floor(n)}`;
+  return (
+    <div className="mb-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+        Next
+      </div>
+      <div className="mt-1 text-[15px] font-semibold text-[var(--text)]">{goal.label}</div>
+      {pct != null && goal.current != null && goal.target != null && (
+        <>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--border)]">
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--yes)" }} />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[12px] tabular-nums text-[var(--text-muted)]">
+            <span>
+              {fmt(goal.current)} / {fmt(goal.target)}
+            </span>
+            <span className="font-semibold text-[var(--text-secondary)]">{pct}%</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 
 // --- one rotating insight (real, computed — never filler) -------------------
 function pickInsight({
@@ -486,11 +535,11 @@ function pickInsight({
 }): string | null {
   const out: string[] = [];
 
+  // Conversational, two-part: an observation, then the number that proves it.
   if (lastWeekUsd > 0 && thisWeekUsd > lastWeekUsd * 1.5) {
     const x = thisWeekUsd / lastWeekUsd;
-    out.push(
-      `Your markets earned ${x >= 2 ? `${Math.round(x)}×` : `${Math.round((x - 1) * 100)}%`} more this week.`,
-    );
+    const amt = x >= 2 ? `${Math.round(x)}×` : `${Math.round((x - 1) * 100)}%`;
+    out.push(`Your markets are heating up. They earned ${amt} more this week than last.`);
   }
 
   // Top category vs the next by creator earnings.
@@ -502,18 +551,21 @@ function pickInsight({
   const cats = [...byCat.entries()].sort((a, b) => b[1] - a[1]);
   if (cats.length >= 2 && cats[1][1] > 0 && cats[0][1] >= cats[1][1] * 2) {
     const x = cats[0][1] / cats[1][1];
-    out.push(`${cap(cats[0][0])} earns you ${Math.round(x)}× more than ${cap(cats[1][0])}.`);
+    out.push(
+      `Some topics resonate more than others. ${cap(cats[0][0])} has earned you ${Math.round(x)}× more than ${cap(cats[1][0])}.`,
+    );
   } else if (cats.length === 1) {
-    out.push(`${cap(cats[0][0])} generates all of your creator earnings.`);
+    out.push(`${cap(cats[0][0])} is your home turf — it generates all of your creator earnings so far.`);
   }
 
   const trading = sources.find((s) => s.key === "trading")?.usd ?? 0;
   const creating = sources.find((s) => s.key === "creating")?.usd ?? 0;
   if (creating > 0 && trading < 0 && creating >= Math.abs(trading)) {
-    out.push("Your creator earnings now cover all of your trading costs.");
+    out.push("Here's the beautiful part: your creator earnings now cover all of your trading costs.");
   }
   const strongest = [...sources].filter((s) => s.usd > 0).sort((a, b) => b.usd - a.usd)[0];
-  if (strongest) out.push(`${strongest.label} is your strongest source of value.`);
+  if (strongest)
+    out.push(`${strongest.label} is where you shine — it's your strongest source of value.`);
 
   if (out.length === 0) return null;
   // Rotate daily so the page feels alive without ever overwhelming.
@@ -573,11 +625,6 @@ function Badge({ kind }: { kind: "Held" | "Created" }) {
   );
 }
 
-function ActivityLine({ show, text }: { show: boolean; text: string }) {
-  if (!show) return null;
-  return <div>{text}</div>;
-}
-
 function Centered({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-[40vh] items-center justify-center px-6 text-center text-[13px] text-[var(--text-muted)]">
@@ -621,10 +668,12 @@ function ClaimButton({
   available,
   claim,
   onClaimed,
+  full,
 }: {
   available: bigint | null;
   claim: ReturnType<typeof useClaimFees>;
   onClaimed: () => void;
+  full?: boolean;
 }) {
   const hasBalance = (available ?? 0n) > 0n;
   const busy = claim.pending === "creator" || (claim.isMining && claim.pending === null);
@@ -639,7 +688,9 @@ function ClaimButton({
       type="button"
       disabled={!hasBalance || busy}
       onClick={() => void claim.claim("creator")}
-      className="shrink-0 rounded-full px-5 py-2.5 text-[13px] font-semibold text-[var(--bg)] transition-opacity enabled:hover:opacity-90 disabled:opacity-40"
+      className={`rounded-full font-semibold text-[var(--bg)] transition-opacity enabled:hover:opacity-90 disabled:opacity-40 ${
+        full ? "w-full py-3 text-[14px]" : "shrink-0 px-5 py-2.5 text-[13px]"
+      }`}
       style={{ background: "var(--text)" }}
     >
       {busy ? "Collecting…" : claim.isSuccess ? "Collected ✓" : "Claim Earnings"}
