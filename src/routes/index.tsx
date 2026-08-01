@@ -450,7 +450,12 @@ function Feed() {
         }
         profile={
           wallet ? (
-            <ProfileMenu wallet={wallet} onViewProfile={selectPerson} onOpenTerms={openTerms} />
+            <ProfileMenu
+              wallet={wallet}
+              onViewProfile={selectPerson}
+              onOpenTerms={openTerms}
+              ethUsd={data?.ethUsd ?? 0}
+            />
           ) : undefined
         }
       />
