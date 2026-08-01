@@ -10,13 +10,7 @@
  */
 import { useCallback, useState } from "react";
 import { decodeEventLog, type Abi, type TransactionReceipt } from "viem";
-import {
-  useAccount,
-  useBalance,
-  usePublicClient,
-  useReadContract,
-  useWriteContract,
-} from "wagmi";
+import { useAccount, usePublicClient, useReadContract, useWriteContract } from "wagmi";
 import abi from "./abi.json" with { type: "json" };
 import { PROXY_ADDRESS, CHAIN_ID } from "./decoder";
 
@@ -62,8 +56,6 @@ export function grossSeedWei(netMinWei: bigint, feeBps: number | null): bigint {
   return (netMinWei * 10_000n + denom - 1n) / denom + 1n;
 }
 
-
-
 /** Live economics: minimum seed + the creator's real cut. Never hardcoded. */
 export function useCreateEconomics(): CreateEconomics {
   const min = useReadContract({ ...CONTRACT, functionName: "minSeedEth", chainId: CHAIN_ID });
@@ -84,24 +76,12 @@ export function useCreateEconomics(): CreateEconomics {
       ? (feeBps * Number(share.data as bigint)) / Number(denom.data as bigint)
       : null;
   return {
-    minSeedWei:
-      min.data != null ? grossSeedWei(min.data as bigint, feeBps) : null,
+    minSeedWei: min.data != null ? grossSeedWei(min.data as bigint, feeBps) : null,
 
     feeBps,
     creatorFeeBps,
     isLoading: min.isLoading || fee.isLoading || share.isLoading || denom.isLoading,
   };
-}
-
-/** The connected wallet's spendable ETH on Base. */
-export function useEthBalance() {
-  const { address } = useAccount();
-  const q = useBalance({
-    address,
-    chainId: CHAIN_ID,
-    query: { enabled: !!address, refetchInterval: 20_000 },
-  });
-  return { wei: q.data?.value ?? null, isLoading: q.isLoading };
 }
 
 /**
@@ -245,8 +225,7 @@ export function useCreateMarket() {
         return { ...decoded, txHash: hash } satisfies CreateResult;
       } catch (e) {
         setPhase("error");
-        const msg =
-          e instanceof Error ? e.message.split("\n")[0] : "Could not create the market.";
+        const msg = e instanceof Error ? e.message.split("\n")[0] : "Could not create the market.";
         setError(msg);
         throw e;
       }
