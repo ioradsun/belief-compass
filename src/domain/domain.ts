@@ -26,7 +26,9 @@ export type Direction = "BUY" | "SELL";
 export interface BeliefRow {
   yes_shares: number;
   no_shares: number;
-  yes_cost: number; // weighted-average remaining acquisition cost (USD)
+  // Remaining acquisition cost in ETH (folded from each trade's eth_amount).
+  // Readers value it in USD at the current rate before comparing with worth.
+  yes_cost: number;
   no_cost: number;
   expressed_side: Side; // from applyTrade only
   directional_since: Date | null;
