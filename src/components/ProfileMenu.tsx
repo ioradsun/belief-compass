@@ -48,6 +48,7 @@ export function ProfileMenu({
   wallet,
   onViewProfile,
   onOpenTerms,
+  onOpenDashboard,
   ethUsd = 0,
 }: {
   /** The effective (POV / trading) wallet being represented. */
@@ -56,6 +57,8 @@ export function ProfileMenu({
   onViewProfile: (wallet: string) => void;
   /** Open Terms & risk in the center (the one privacy surface we have). */
   onOpenTerms?: () => void;
+  /** Open the Conviction Dashboard in the center panel. */
+  onOpenDashboard?: () => void;
   /** Live ETH price, so claimable fees can be shown in dollars too. */
   ethUsd?: number;
 }) {
@@ -204,6 +207,15 @@ export function ProfileMenu({
           </div>
 
           <Divider />
+          {onOpenDashboard && (
+            <Item
+              label="Conviction Dashboard"
+              onClick={() => {
+                onOpenDashboard();
+                setOpen(false);
+              }}
+            />
+          )}
           <Item label="Edit Profile" onClick={() => setPanel("edit")} />
           <Item label="Creator Earnings" onClick={() => setPanel("earnings")} />
           <Item label="Import POV Wallet" onClick={() => setPanel("import")} />
