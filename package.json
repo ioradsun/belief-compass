@@ -20,8 +20,6 @@
     "check:ownership": "tsx scripts/check-ownership.ts"
   },
   "dependencies": {
-    "@privy-io/react-auth": "^3.35.2",
-    "@privy-io/wagmi": "^4.0.15",
     "@rainbow-me/rainbowkit": "^2.2.11",
     "@supabase/supabase-js": "^2.110.8",
     "@tailwindcss/vite": "^4.2.1",

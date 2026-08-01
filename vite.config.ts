@@ -68,9 +68,6 @@ const EVENTS_SHIM = fileURLToPath(new URL("./src/lib/shims/events.ts", import.me
 // Vite maps anything starting with `events` to the empty builtin stub in the
 // browser, including the deep path, so resolve the real file ourselves.
 const EVENTS_IMPL = fileURLToPath(new URL("./node_modules/events/events.js", import.meta.url));
-const EVENTEMITTER3_ESM = fileURLToPath(
-  new URL("./node_modules/eventemitter3/index.mjs", import.meta.url),
-);
 const eventsShimInBrowser = {
   name: "events-shim-in-browser",
   enforce: "pre" as const,
