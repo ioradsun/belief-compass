@@ -17,7 +17,7 @@ import { getHouseRead } from "@/lib/house.functions";
 import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain, useAccount, useBalance } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
-import { useHouseFinalize, houseKey } from "@/components/MarketIntelligence";
+import { useHouseFinalize, houseKey } from "@/lib/house-round";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
