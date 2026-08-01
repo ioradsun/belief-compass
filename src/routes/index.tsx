@@ -406,7 +406,7 @@ function Feed() {
   // "The House has an idea" — a rare, pre-generated market idea that takes one
   // normal card's slot in this same deck. It never fetches on demand and never
   // blocks a market: when there's nothing ready, the feed behaves exactly as before.
-  const houseIdea = useHouseIdea(wallet);
+  const houseIdea = useHouseIdea();
   const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
   useEffect(() => {
     if (viewedId != null) houseIdea.noteCardViewed(viewedId);
