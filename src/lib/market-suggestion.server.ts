@@ -446,19 +446,22 @@ export async function participationGate(wallet: string): Promise<boolean> {
 type Transition = "shown" | "dismissed" | "editing";
 
 /**
- * Move a suggestion along its funnel. Keyed by the unguessable suggestion id —
- * a capability the feed only ever hands to the wallet the idea belongs to.
+ * Move a suggestion along its funnel. The wallet is the one the caller proved
+ * ownership of, so an id belonging to someone else is silently ignored.
  */
 export async function transitionSuggestion(
   id: string,
+  wallet: string,
   next: Transition,
   event: SuggestionEvent,
 ): Promise<void> {
   const sb = serviceClient();
+  const w = norm(wallet);
   const { data } = await sb
     .from("market_suggestions")
     .select("wallet, status")
     .eq("id", id)
+    .eq("wallet", w)
     .maybeSingle();
   if (!data) return;
   const row = data as { wallet: string; status: string };
@@ -466,20 +469,23 @@ export async function transitionSuggestion(
   const patch: Record<string, unknown> = { status: next };
   if (next === "shown") patch.shown_at = new Date().toISOString();
   await sb.from("market_suggestions").update(patch).eq("id", id);
-  await logSuggestionEvent(sb, event, id, row.wallet);
+  await logSuggestionEvent(sb, event, id, w);
 }
 
 /** Attribute a published market back to the idea that started it. */
 export async function attachCreatedMarket(
   id: string,
-  marketId: number,
+  wallet: string,
+  marketId: number | null,
   finalQuestion: string,
 ): Promise<void> {
   const sb = serviceClient();
+  const w = norm(wallet);
   const { data } = await sb
     .from("market_suggestions")
     .select("wallet, question")
     .eq("id", id)
+    .eq("wallet", w)
     .maybeSingle();
   if (!data) return;
   const row = data as { wallet: string; question: string };
@@ -492,10 +498,11 @@ export async function attachCreatedMarket(
     sb,
     unchanged ? "suggestion_created_unchanged" : "suggestion_created_edited",
     id,
-    row.wallet,
+    w,
     { source: "house_suggestion", suggestionId: id, originalQuestion: row.question, finalQuestion, marketId },
   );
 }
+
 
 /**
  * Wallets worth generating for: they answered something recently and have no
