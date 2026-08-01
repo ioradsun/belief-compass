@@ -1,7 +1,13 @@
 import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
-import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
+
+// NOTE: no Supabase bearer middleware here on purpose. This app authenticates
+// writes with wallet signatures (see src/lib/wallet-session.ts) and no server
+// function uses `requireSupabaseAuth`, so attaching a Supabase session would
+// only drag the whole supabase-js client (auth + realtime + storage + postgrest)
+// into the first-paint bundle for nothing.
+
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
