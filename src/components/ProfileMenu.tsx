@@ -193,6 +193,7 @@ export function ProfileMenu({
 
           <Divider />
           <Item label="Edit Profile" onClick={() => setPanel("edit")} />
+          <Item label="Creator Earnings" onClick={() => setPanel("earnings")} />
           <Item label="Import POV Wallet" onClick={() => setPanel("import")} />
           <Divider />
           <Item label="Settings" onClick={() => setPanel("settings")} />
