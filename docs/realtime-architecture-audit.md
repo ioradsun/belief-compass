@@ -234,6 +234,18 @@ backend work — the stream, reducer semantics, and read model already exist.**
 > event-driven, LiveTape's 6s poll and the feed's 8s pulse poll became 30s safety
 > reconciles; a recovered socket reconciles feed + activity once. Quiet markets
 > cost zero fetches.
+>
+> **Positions stream (landed, follow-up).** `wallet_beliefs` is now published to
+> `supabase_realtime` (migration `20260814000000`). Unlike the global streams,
+> positions are per-viewer, so `usePositionStream(wallet)` (mounted once in
+> `Feed`) opens ONE subscription **filtered to the connected wallet**
+> (`wallet=eq.<addr>`) with its own lifecycle — it re-subscribes on wallet change.
+> Positions are server-valued (POV worth, ETH→USD cost basis, joined meta), so a
+> belief change is a signal to refetch the mounted position slices
+> (`viewerPositionKeys`), coalesced + throttled — never a client re-valuation.
+> Others' trades on a viewer's position markets refresh the left-column network
+> tape precisely via `affectedPositionsTapeKeys` off the events stream. The
+> portfolio poll (12s) and positions-tape poll (8s) became 30s reconciles.
 
 1. **Open the stream that already exists.** One app-level realtime coordinator
    subscribes _once_ to `market_state` (and `events` for activity). Components

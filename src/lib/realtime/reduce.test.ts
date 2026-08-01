@@ -4,6 +4,8 @@ import {
   applyMarketStateRow,
   applyMarketStateBatch,
   affectedPulseKeys,
+  affectedPositionsTapeKeys,
+  viewerPositionKeys,
   liveFieldsOf,
   versionOf,
   type MarketStateRow,
@@ -156,6 +158,31 @@ describe("affectedPulseKeys", () => {
     qc.setQueryData(["market-pulses", "7,9"], { pulses: {} });
     expect(affectedPulseKeys(qc, new Set([1, 2]))).toEqual([]);
     expect(affectedPulseKeys(qc, new Set())).toEqual([]);
+  });
+});
+
+describe("affectedPositionsTapeKeys", () => {
+  it("selects only tapes whose id-array scope holds a traded market", () => {
+    qc.setQueryData(["positions-tape", "0xabc", [12, 45]], { rows: [] });
+    qc.setQueryData(["positions-tape", "0xabc", [7, 9]], { rows: [] });
+    const keys = affectedPositionsTapeKeys(qc, new Set([45]));
+    expect(keys.length).toBe(1);
+    expect(keys[0][2]).toEqual([12, 45]);
+  });
+  it("returns nothing on no intersection / empty set", () => {
+    qc.setQueryData(["positions-tape", "0xabc", [7, 9]], { rows: [] });
+    expect(affectedPositionsTapeKeys(qc, new Set([1]))).toEqual([]);
+    expect(affectedPositionsTapeKeys(qc, new Set())).toEqual([]);
+  });
+});
+
+describe("viewerPositionKeys", () => {
+  it("returns the three viewer position families, lowercased", () => {
+    expect(viewerPositionKeys("0xABC")).toEqual([
+      ["my-convictions", "0xabc"],
+      ["positions-tape", "0xabc"],
+      ["position-summary", "0xabc"],
+    ]);
   });
 });
 

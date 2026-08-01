@@ -198,7 +198,10 @@ export function MyConvictions({
     queryKey: ["my-convictions", wallet ?? null, win],
     queryFn: async () => await getWallet({ data: { wallet: wallet as string, window: win } }),
     enabled: !!wallet,
-    refetchInterval: 12_000,
+    // usePositionStream refetches this the moment the viewer's beliefs change;
+    // the interval is now a slow safety reconcile (POV worth also drifts with
+    // price between belief changes, so a periodic re-value is still healthy).
+    refetchInterval: 30_000,
     placeholderData: (prev) => prev,
   });
 
@@ -270,7 +273,9 @@ export function MyConvictions({
     queryKey: ["positions-tape", wallet ?? null, [...tapeIds].sort((a, b) => a - b)],
     queryFn: () => listLiveEvents({ data: { wallet, marketIds: tapeIds, limit: 120 } }),
     enabled: tapeIds.length > 0,
-    refetchInterval: 8_000,
+    // The events stream refetches this the moment one of these markets trades;
+    // the interval is now a slow safety reconcile.
+    refetchInterval: 30_000,
     placeholderData: (prev) => prev,
   });
   const netByMarket = new Map<
