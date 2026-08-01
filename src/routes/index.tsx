@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { TermsContent } from "@/components/TermsContent";
 
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
@@ -17,7 +17,11 @@ import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
 import { CaseColumn } from "@/components/CaseFile";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
+import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
+import { useHouseIdea } from "@/hooks/useHouseIdea";
+import { startDraftFromSuggestion } from "@/lib/create-draft";
 import { WalletConnectButton } from "@/components/WalletConnect";
+
 
 // Deferred surfaces: none of these render for a first-time, signed-out visitor.
 // PersonProfile/DnaOverview need a ?p/?dna selection; MyWorld/AccountRail need a
@@ -399,6 +403,26 @@ function Feed() {
       ? marketRows[currentIdx]
       : ((soloRow?.row as unknown as MarketRow | null) ?? marketRows[0]);
 
+  // "The House has an idea" — a rare, pre-generated market idea that takes one
+  // normal card's slot in this same deck. It never fetches on demand and never
+  // blocks a market: when there's nothing ready, the feed behaves exactly as before.
+  const houseIdea = useHouseIdea();
+  const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
+  useEffect(() => {
+    if (viewedId != null) houseIdea.noteCardViewed(viewedId);
+  }, [viewedId, houseIdea]);
+
+  /** Accept the idea: seed the create form with it, then open the review screen. */
+  const acceptIdea = (edit: boolean) => {
+    const s = houseIdea.suggestion;
+    if (!s) return;
+    startDraftFromSuggestion(s.question, { suggestionId: s.id, originalQuestion: s.question });
+    if (edit) houseIdea.onEdit();
+    else houseIdea.onCreate();
+    openCreate();
+  };
+
+
   // On mobile only the active tab's column is mounted-visible; from lg up all
   // three columns are always shown side by side.
   const show = (t: MobileTab) => (tab === t ? "flex" : "hidden");
@@ -570,6 +594,20 @@ function Feed() {
                   first cycle completes.
                 </div>
               )
+            ) : houseIdea.suggestion ? (
+              /* A first-class feed card, in the exact slot a market would take. */
+              <div className="flex min-h-0 flex-1 flex-col">
+                <SuggestedMarketCard
+                  suggestion={houseIdea.suggestion}
+                  onShown={houseIdea.onShown}
+                  onCreate={() => acceptIdea(false)}
+                  onEdit={() => acceptIdea(true)}
+                  onDismiss={() => {
+                    houseIdea.onDismiss();
+                    nextMarket();
+                  }}
+                />
+              </div>
             ) : (
               currentRow && (
                 <div className="flex min-h-0 flex-1 flex-col">
@@ -591,6 +629,7 @@ function Feed() {
                 </div>
               )
             )}
+
           </div>
         </main>
 

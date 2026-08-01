@@ -733,6 +733,101 @@ export type Database = {
           },
         ]
       }
+      market_suggestion_events: {
+        Row: {
+          id: number
+          meta: Json
+          suggestion_id: string | null
+          ts: string
+          type: string
+          wallet: string | null
+        }
+        Insert: {
+          id?: number
+          meta?: Json
+          suggestion_id?: string | null
+          ts?: string
+          type: string
+          wallet?: string | null
+        }
+        Update: {
+          id?: number
+          meta?: Json
+          suggestion_id?: string | null
+          ts?: string
+          type?: string
+          wallet?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "market_suggestion_events_suggestion_id_fkey"
+            columns: ["suggestion_id"]
+            isOneToOne: false
+            referencedRelation: "market_suggestions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      market_suggestions: {
+        Row: {
+          category: string
+          created_market_id: number | null
+          engine_version: number
+          expires_at: string
+          final_question: string | null
+          generated_at: string
+          id: string
+          question: string
+          score: number | null
+          secondary_category: string | null
+          short_reason: string
+          shown_at: string | null
+          source_category: string
+          status: string
+          topics: string[]
+          updated_at: string
+          wallet: string
+        }
+        Insert: {
+          category: string
+          created_market_id?: number | null
+          engine_version?: number
+          expires_at?: string
+          final_question?: string | null
+          generated_at?: string
+          id?: string
+          question: string
+          score?: number | null
+          secondary_category?: string | null
+          short_reason: string
+          shown_at?: string | null
+          source_category: string
+          status?: string
+          topics?: string[]
+          updated_at?: string
+          wallet: string
+        }
+        Update: {
+          category?: string
+          created_market_id?: number | null
+          engine_version?: number
+          expires_at?: string
+          final_question?: string | null
+          generated_at?: string
+          id?: string
+          question?: string
+          score?: number | null
+          secondary_category?: string | null
+          short_reason?: string
+          shown_at?: string | null
+          source_category?: string
+          status?: string
+          topics?: string[]
+          updated_at?: string
+          wallet?: string
+        }
+        Relationships: []
+      }
       market_window_change: {
         Row: {
           chg_no: number | null

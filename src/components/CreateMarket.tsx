@@ -38,7 +38,11 @@ import {
   setDraft,
   setProbe,
 } from "@/lib/create-draft";
+import { rewardLine } from "@/domain/market-suggestion";
+import { completeSuggestion, trackSuggestion } from "@/lib/market-suggestion.functions";
+
 import {
+
   DEFAULT_CURVE,
   useCreateEconomics,
   useCreateMarket,
@@ -76,7 +80,11 @@ export function CreateMarket({
   // Hydrated from the session draft so leaving to read an existing market (or
   // the terms) never costs the user what they had typed.
   const saved = getDraft();
+  // Set when this draft came from a House idea, so the published market stays
+  // attributed to the suggestion that started it.
+  const source = saved.source;
   const [question, setQuestion] = useState(saved.question);
+
   const [description] = useState("");
   const [side, setSide] = useState<"YES" | "NO">(saved.side);
   const [amount, setAmount] = useState<number>(saved.amount);
@@ -159,6 +167,15 @@ export function CreateMarket({
     mutationFn: async () => {
       if (!address) throw new Error("Connect a wallet first.");
       const token = await ensureSession();
+      // Attribution is best-effort: it must never be able to fail a publish.
+      const note = (type: "suggestion_publish_started" | "suggestion_publish_failed") => {
+        if (!source) return;
+        void trackSuggestion({
+          data: { wallet: address, session: token, id: source.suggestionId, type },
+        }).catch(() => undefined);
+      };
+      note("suggestion_publish_started");
+
       const { questionId } = await createMarketDraft({
         data: {
           wallet: address,
@@ -211,8 +228,20 @@ export function CreateMarket({
             creatorFeeBps: econ.creatorFeeBps,
           },
         });
+        if (source) {
+          await completeSuggestion({
+            data: {
+              wallet: address,
+              session: token,
+              id: source.suggestionId,
+              marketId: result.marketId,
+              finalQuestion: question.trim(),
+            },
+          }).catch(() => undefined);
+        }
         return result.marketId;
       } catch (e) {
+        note("suggestion_publish_failed");
         await recordCreateFailure({
           data: {
             wallet: address,
@@ -225,9 +254,12 @@ export function CreateMarket({
       }
     },
     onSuccess: (marketId) => {
+      // The draft (and its attribution) is only cleared once the market exists —
+      // a failed publish keeps everything the user edited.
       clearDraft();
       onCreated(marketId);
     },
+
   });
 
   const busy = submit.isPending || phase === "checking" || phase === "signing" || phase === "confirming";
@@ -282,6 +314,24 @@ export function CreateMarket({
         <h2 className="text-[15px] font-semibold text-[var(--text)]">Create market</h2>
         <span className="w-[52px]" />
       </div>
+
+      {/* Provenance: this draft started as a House idea. Editable like any other. */}
+      {source && (
+        <div
+          className="mt-4 rounded-[14px] px-3.5 py-3"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text)]">
+            <span aria-hidden>🏠</span> The House found the question
+          </div>
+          <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
+            Publish it as-is or change anything before it goes live.{" "}
+            {rewardLine(econ.creatorFeeBps)}
+          </p>
+        </div>
+      )}
+
+
 
       {/* Type */}
       <label className="mt-5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
