@@ -83,7 +83,22 @@ export function setDraft(patch: Partial<Draft>) {
   emit();
 }
 
+/**
+ * Start a fresh draft from a House idea. Replaces (never merges into) whatever
+ * was there, so accepting an idea can't inherit a stale attachment or wording.
+ */
+export function startDraftFromSuggestion(
+  question: string,
+  source: DraftSource,
+  side: "YES" | "NO" = "YES",
+) {
+  draft = { ...EMPTY_DRAFT, question, side, source };
+  dismissed = false;
+  emit();
+}
+
 export function clearDraft() {
+
   draft = EMPTY_DRAFT;
   probe = null;
   dismissed = false;
