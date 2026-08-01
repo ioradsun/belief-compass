@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { realizedTradingEth, gainBreakdown, type DashTrade } from "./conviction-dashboard";
+import {
+  realizedTradingEth,
+  gainBreakdown,
+  bucketCreatorFees,
+  type DashTrade,
+} from "./conviction-dashboard";
 
 const T = (o: Partial<DashTrade>): DashTrade => ({
   market: "1",
@@ -70,6 +75,37 @@ describe("realizedTradingEth", () => {
         T({ side: "NO", action: "SELL", eth: 0.5, tokens: 10 }),
       ]),
     ).toBeCloseTo(0, 9);
+  });
+});
+
+describe("bucketCreatorFees", () => {
+  const now = Date.UTC(2026, 7, 1, 12, 0, 0);
+  const H = 3_600_000;
+  const D = 86_400_000;
+
+  it("splits accruals into today / this week / last week without double counting", () => {
+    const r = bucketCreatorFees(
+      [
+        { at: now - 1 * H, eth: 0.01 }, // today
+        { at: now - 13 * H, eth: 0.02 }, // crosses midnight → this week, not today
+        { at: now - 2 * D, eth: 0.03 }, // this week
+        { at: now - 8 * D, eth: 0.04 }, // last week
+        { at: now - 20 * D, eth: 0.05 }, // older → excluded
+      ],
+      now,
+    );
+    expect(r.todayEth).toBeCloseTo(0.01, 9);
+    expect(r.weekEth).toBeCloseTo(0.06, 9);
+    expect(r.prevWeekEth).toBeCloseTo(0.04, 9);
+  });
+
+  it("ignores non-positive entries and handles empty", () => {
+    expect(bucketCreatorFees([{ at: now, eth: -1 }], now)).toEqual({
+      todayEth: 0,
+      weekEth: 0,
+      prevWeekEth: 0,
+    });
+    expect(bucketCreatorFees([], now)).toEqual({ todayEth: 0, weekEth: 0, prevWeekEth: 0 });
   });
 });
 

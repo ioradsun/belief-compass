@@ -125,9 +125,33 @@ export function ConvictionDashboard({
   }, [data?.createdMarkets, feeByMarket, ethUsd]);
 
   const insights = useMemo(
-    () => buildInsights({ sources, bestMarkets, creatingGain, tradingGain }),
-    [sources, bestMarkets, creatingGain, tradingGain],
+    () =>
+      buildInsights({
+        sources,
+        bestMarkets,
+        creatingGain,
+        tradingGain,
+        thisWeekUsd: data?.creatorWindows.thisWeekUsd ?? 0,
+        lastWeekUsd: data?.creatorWindows.lastWeekUsd ?? 0,
+      }),
+    [sources, bestMarkets, creatingGain, tradingGain, data?.creatorWindows],
   );
+
+  // Today — the tiles that actually have something to say (Markets → Trading →
+  // Portfolio), so an idle day never shows a row of $0.00.
+  const todayTiles = (
+    [
+      data && data.today.creatorEarnedUsd !== 0
+        ? { label: "Markets", usd: data.today.creatorEarnedUsd }
+        : null,
+      data && data.trading.realizedTodayUsd !== 0
+        ? { label: "Trading", usd: data.trading.realizedTodayUsd }
+        : null,
+      data && data.today.portfolioUsd !== 0
+        ? { label: "Portfolio", usd: data.today.portfolioUsd }
+        : null,
+    ] as Array<{ label: string; usd: number } | null>
+  ).filter((t): t is { label: string; usd: number } => t !== null);
 
   if (!wallet) {
     return <Centered>Connect a wallet to see your Conviction.</Centered>;
@@ -286,12 +310,13 @@ export function ConvictionDashboard({
           )}
 
           {/* SECTION 5 — Today */}
-          {data && (data.today.portfolioUsd !== 0 || data.trading.realizedTodayUsd !== 0) && (
+          {data && todayTiles.length > 0 && (
             <section className="mt-10">
               <SectionTitle>Today</SectionTitle>
-              <div className="mt-3 flex gap-3">
-                <TodayTile label="Portfolio" usd={data.today.portfolioUsd} />
-                <TodayTile label="Trading" usd={data.trading.realizedTodayUsd} />
+              <div className="mt-3 flex gap-2.5">
+                {todayTiles.map((t) => (
+                  <TodayTile key={t.label} label={t.label} usd={t.usd} />
+                ))}
               </div>
             </section>
           )}
@@ -333,13 +358,25 @@ function buildInsights({
   bestMarkets,
   creatingGain,
   tradingGain,
+  thisWeekUsd,
+  lastWeekUsd,
 }: {
   sources: ReturnType<typeof gainBreakdown>;
   bestMarkets: Array<{ category: string | null; earnedUsd: number }>;
   creatingGain: number;
   tradingGain: number;
+  thisWeekUsd: number;
+  lastWeekUsd: number;
 }): string[] {
   const out: string[] = [];
+
+  // Week-over-week creator momentum — exact (same on-chain facts as lifetime).
+  if (lastWeekUsd > 0 && thisWeekUsd > lastWeekUsd * 1.5) {
+    const x = thisWeekUsd / lastWeekUsd;
+    out.push(`Your markets earned ${x >= 2 ? `${Math.round(x)}×` : `${Math.round((x - 1) * 100)}%`} more this week.`);
+  } else if (lastWeekUsd === 0 && thisWeekUsd > 0) {
+    out.push("Your markets started earning this week.");
+  }
 
   const strongest = [...sources].filter((s) => s.usd > 0).sort((a, b) => b.usd - a.usd)[0];
   if (strongest) out.push(`${strongest.label} is your strongest source of value.`);

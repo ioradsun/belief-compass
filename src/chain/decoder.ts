@@ -95,3 +95,29 @@ export function decodeTradeLog(log: Log): CanonicalTrade | null {
     return null;
   }
 }
+
+/**
+ * The exact creator fee (wei) a single stored buy carried on-chain, decoded from
+ * its raw log. The `TokensBought` event pays the market's creator a `creatorFee`
+ * slice; `TokensSold` pays none. Server-side only — used to sum a creator's
+ * earnings over a time window from the SAME facts on-chain, so it reconciles with
+ * the contract's lifetime total. Returns null for a sell, a non-trade log, a
+ * missing/garbage payload, or an ABI without the field.
+ */
+export function decodeBuyCreatorFeeWei(rawLog: unknown): bigint | null {
+  const r = rawLog as { topics?: unknown; data?: unknown } | null;
+  if (!r || !Array.isArray(r.topics) || typeof r.data !== "string") return null;
+  try {
+    const decoded = decodeEventLog({
+      abi: ABI as never,
+      data: r.data as Hex,
+      topics: r.topics as [Hex, ...Hex[]],
+      strict: false,
+    }) as unknown as { eventName: string; args: Record<string, unknown> };
+    if (decoded.eventName !== "TokensBought") return null;
+    const fee = decoded.args.creatorFee;
+    return typeof fee === "bigint" ? fee : null;
+  } catch {
+    return null;
+  }
+}

@@ -9,7 +9,13 @@
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { readWalletTradesAscending } from "@/lib/conviction-dashboard.trades.server";
-import { realizedTradingEth, type DashTrade } from "@/domain/conviction-dashboard";
+import { decodeBuyCreatorFeeWei } from "@/chain/decoder";
+import {
+  realizedTradingEth,
+  bucketCreatorFees,
+  type DashTrade,
+  type FeeEntry,
+} from "@/domain/conviction-dashboard";
 
 export interface DashboardBestMarket {
   onchainId: number;
@@ -40,6 +46,13 @@ export interface ConvictionDashboardData {
   today: {
     /** Approx. 24h move of the held portfolio (USD). */
     portfolioUsd: number;
+    /** Exact creator earnings accrued today (USD), decoded from buy events. */
+    creatorEarnedUsd: number;
+  };
+  /** Creator earnings over rolling windows (USD) — for the week-over-week story. */
+  creatorWindows: {
+    thisWeekUsd: number;
+    lastWeekUsd: number;
   };
   /** Markets this wallet created — attribution + volume/trades. Fees are on-chain. */
   createdMarkets: DashboardBestMarket[];
@@ -172,6 +185,40 @@ export async function buildConvictionDashboard(
     trades: tradesById.get(Number(m.onchain_id)) ?? 0,
   }));
 
+  // --- Creator earnings over time (exact, decoded from buy events) ----------
+  // Each TokensBought log carries the exact creatorFee slice. We decode it
+  // SERVER-SIDE from the stored raw log for this creator's markets over the last
+  // two weeks and bucket it — the same on-chain facts the lifetime total sums, so
+  // "today" and "this week" reconcile with it. The raw payload never leaves here.
+  let creatorEarnedTodayUsd = 0;
+  let creatorThisWeekUsd = 0;
+  let creatorLastWeekUsd = 0;
+  if (createdIds.length) {
+    const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
+    const { data: buys } = await sb
+      .from("events")
+      .select("occurred_at, payload")
+      .eq("is_canonical", true)
+      .eq("kind", "trade")
+      .eq("action", "BUY")
+      .in("market_id", createdIds.map((id) => String(id)))
+      .gte("occurred_at", since)
+      .limit(8000);
+
+    const entries: FeeEntry[] = [];
+    for (const row of (buys ?? []) as Array<{ occurred_at: string; payload: unknown }>) {
+      const rawLog = (row.payload as { raw_log?: unknown } | null)?.raw_log;
+      const feeWei = decodeBuyCreatorFeeWei(rawLog);
+      if (feeWei == null || feeWei <= 0n) continue;
+      const at = Date.parse(row.occurred_at);
+      if (Number.isFinite(at)) entries.push({ at, eth: Number(feeWei) / 1e18 });
+    }
+    const w = bucketCreatorFees(entries, Date.now());
+    creatorEarnedTodayUsd = w.todayEth * ethUsd;
+    creatorThisWeekUsd = w.weekEth * ethUsd;
+    creatorLastWeekUsd = w.prevWeekEth * ethUsd;
+  }
+
   return {
     wallet,
     ethUsd,
@@ -182,7 +229,8 @@ export async function buildConvictionDashboard(
       count: heldCount,
     },
     trading: { realizedUsd, realizedTodayUsd },
-    today: { portfolioUsd: portfolioTodayUsd },
+    today: { portfolioUsd: portfolioTodayUsd, creatorEarnedUsd: creatorEarnedTodayUsd },
+    creatorWindows: { thisWeekUsd: creatorThisWeekUsd, lastWeekUsd: creatorLastWeekUsd },
     createdMarkets,
   };
 }

@@ -64,6 +64,40 @@ export function realizedTradingEth(trades: DashTrade[]): number {
   return realized;
 }
 
+/** One decoded creator-fee accrual: when it happened and how much (ETH). */
+export interface FeeEntry {
+  at: number;
+  eth: number;
+}
+
+/**
+ * Bucket a creator's fee accruals into the windows the dashboard tells the story
+ * with: today (since UTC midnight), the last 7 days, and the 7 days before that
+ * (for the week-over-week line). Same facts, three lenses — no double counting
+ * between "this week" and "last week".
+ */
+export function bucketCreatorFees(
+  entries: FeeEntry[],
+  now: number,
+): { todayEth: number; weekEth: number; prevWeekEth: number } {
+  const startOfToday = new Date(now);
+  startOfToday.setUTCHours(0, 0, 0, 0);
+  const todayFrom = startOfToday.getTime();
+  const weekFrom = now - 7 * 86_400_000;
+  const prevWeekFrom = now - 14 * 86_400_000;
+
+  let todayEth = 0;
+  let weekEth = 0;
+  let prevWeekEth = 0;
+  for (const e of entries) {
+    if (!Number.isFinite(e.eth) || e.eth <= 0) continue;
+    if (e.at >= todayFrom) todayEth += e.eth;
+    if (e.at >= weekFrom) weekEth += e.eth;
+    else if (e.at >= prevWeekFrom) prevWeekEth += e.eth;
+  }
+  return { todayEth, weekEth, prevWeekEth };
+}
+
 /** A value source in the "where your gains came from" breakdown. */
 export interface GainSource {
   key: "holding" | "trading" | "creating";
