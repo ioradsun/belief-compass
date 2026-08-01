@@ -424,10 +424,15 @@ function Feed() {
       ? marketRows[currentIdx]
       : ((soloRow?.row as unknown as MarketRow | null) ?? marketRows[0]);
 
-  // "The House has an idea" — a rare, pre-generated market idea that takes one
-  // normal card's slot in this same deck. It never fetches on demand and never
-  // blocks a market: when there's nothing ready, the feed behaves exactly as before.
-  const houseIdea = useHouseIdea();
+  // "The House has an idea" — the SERVER decided whether an idea belongs in
+  // this sequence and at which slot. The hook only owns the funnel calls.
+  const ideaItem = items.find((it) => it.kind === "market_idea") ?? null;
+  const houseIdea = useHouseIdea(
+    ideaItem ? ((data?.idea as ReadySuggestion | null) ?? null) : null,
+  );
+  // The idea takes its own slot: it shows once the viewer has advanced to it.
+  const ideaDue = !!ideaItem && currentIdx >= ideaItem.position;
+
   const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
   useEffect(() => {
     if (viewedId != null) houseIdea.noteCardViewed(viewedId);
