@@ -13,7 +13,6 @@
  */
 import { useMemo } from "react";
 import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
-import { marketPulse, pulseTone } from "@/domain/market-pulse";
 import type { TapeTrade } from "@/domain/conviction-series";
 import type { VitalityPoint } from "@/domain/market-vitality";
 
@@ -215,12 +214,13 @@ export function MarketMomentum({
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs), [tape, nowMs]);
   const usd = (eth: number) => eth * (ethUsd > 0 ? ethUsd : 0);
-  const pulse = useMemo(() => marketPulse(book), [book]);
-  const pTone = dirTone(pulseTone(pulse.label));
 
   const b = book.believers.market;
   const c = book.capitalEth.market;
 
+  // Just the shape — two metric rows. No momentum word, no narrative: the
+  // sparklines and percentages already say which way and how hard. The momentum
+  // story is the tension teaser on the Case File door; the voice is in the feed.
   return (
     <section aria-label="Market momentum" className="space-y-2.5">
       <MomentumMetric
@@ -235,21 +235,6 @@ export function MarketMomentum({
         copy={capitalCopy(c, book.window, usd)}
         points={c.series}
       />
-
-      {/* One-word momentum status. The narrative sentence and the House voice now
-        live in the right feed — the center only shows the shape, never a story. */}
-      <div className="pt-0.5">
-        <span
-          className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
-          style={{
-            color: pTone,
-            background: `color-mix(in oklab, ${pTone} 12%, transparent)`,
-            border: `1px solid color-mix(in oklab, ${pTone} 30%, transparent)`,
-          }}
-        >
-          {pulse.label}
-        </span>
-      </div>
     </section>
   );
 }

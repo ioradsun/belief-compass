@@ -795,7 +795,6 @@ function Feed() {
                 <CurrentMarketActivity
                   marketId={activeMarket}
                   wallet={wallet}
-                  ethUsd={data?.ethUsd ?? 0}
                   onSelect={selectMarket}
                 />
               )}
