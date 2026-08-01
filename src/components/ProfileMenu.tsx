@@ -15,6 +15,7 @@ import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getPersonProfile } from "@/lib/dna.functions";
 import { getProfileOverride } from "@/lib/profile-edit.functions";
 import { ProfileEditor } from "@/components/ProfileEditor";
+import { CreatorEarnings } from "@/components/CreatorEarnings";
 import { WalletIdentity } from "@/components/WalletIdentity";
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 import { requestDisconnect } from "@/lib/connect-bridge";
