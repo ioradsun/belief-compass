@@ -76,6 +76,7 @@ export function NetworkPanel({
   onSelectPerson,
   onOpenDna,
   onExplore,
+  onCount,
 }: {
   wallet?: string;
   selectedPerson?: string;
@@ -83,6 +84,8 @@ export function NetworkPanel({
   onOpenDna: () => void;
   /** Empty-state CTA — take me to the markets. */
   onExplore?: () => void;
+  /** Reports the number of matched people to the tab strip. */
+  onCount?: (n: number) => void;
 }) {
   const [lensKey, setLensKey] = useState<string>("everyone");
   const lens = LENSES.find((l) => l.key === lensKey) ?? LENSES[0];
