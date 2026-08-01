@@ -85,15 +85,28 @@ const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-const feedQO = (wallet?: string, window: VolumeWindow = "24h") =>
+// ONE authoritative feed call. The server sequences markets and market ideas
+// into a single ordered list; the client renders that order and never
+// re-scores, re-sorts or re-filters it. The lens is a server-side filter too.
+const feedQO = (wallet: string | undefined, window: VolumeWindow = "24h", lens = "all") =>
   queryOptions({
-    queryKey: ["feed", wallet ?? null, window],
-    queryFn: async () => await listFeed({ data: { wallet, window } }),
+    queryKey: ["opp-feed", wallet ?? null, window, lens],
+    queryFn: async () =>
+      await getOpportunityFeed({
+        data: {
+          wallet: wallet ?? null,
+          sessionToken: wallet ? readSessionToken(wallet) : null,
+          window,
+          lens,
+          ...feedSession(),
+        },
+      }),
     // Prices, capital and volume re-poll so the cards move on their own.
     refetchInterval: 8_000,
     // Never blank the feed while a poll (or a window switch) is in flight.
     placeholderData: (prev) => prev,
   });
+
 
 const pulsesQO = (ids: number[]) =>
   queryOptions({
