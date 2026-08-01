@@ -234,6 +234,18 @@ export function ConvictionDashboard({
     return s;
   })();
 
+  // One lifetime sentence under the hero — identity, not accounting.
+  const lifetimeLine: string | null = (() => {
+    const reached = data?.peopleReached ?? 0;
+    const trades = data?.facts.tradeCount ?? 0;
+    const ideas = data?.facts.ideasBacked ?? 0;
+    if (reached > 0)
+      return `Since joining Conviction, ${reached.toLocaleString("en-US")} ${reached === 1 ? "person has" : "people have"} traded alongside your ideas.`;
+    if (trades > 0)
+      return `Since joining Conviction, you've backed ${ideas} idea${ideas === 1 ? "" : "s"} across ${trades.toLocaleString("en-US")} trade${trades === 1 ? "" : "s"}.`;
+    return null;
+  })();
+
   // --- scroll-spy ------------------------------------------------------------
   const rootRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<SectionId>("overview");
@@ -322,32 +334,23 @@ export function ConvictionDashboard({
                 {fmtUsd(worthToday)}
               </span>
             </div>
-            {hasCreated && (data?.peopleReached ?? 0) > 0 && (
-              <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                <div className="text-[24px] font-semibold tabular-nums text-[var(--text)]">
-                  {(data?.peopleReached ?? 0).toLocaleString("en-US")}
-                </div>
-                <div className="text-[12px] text-[var(--text-muted)]">
-                  people have interacted with your markets
-                </div>
+            {/* The living pulse — did my conviction grow today? */}
+            {netToday !== 0 && (
+              <div
+                className="mt-2 text-[13px] font-medium tabular-nums"
+                style={{ color: netToday >= 0 ? "var(--yes)" : "var(--no)" }}
+              >
+                {netToday >= 0 ? "↑" : "↓"} Today {fmtUsd(netToday, true)}
               </div>
             )}
-            <p className="mt-4 max-w-[46ch] text-[13px] leading-relaxed text-[var(--text-muted)]">
-              Everything you&rsquo;ve built through investing, trading and creating.
+            {/* One lifetime sentence — identity, not accounting. */}
+            <p className="mt-5 max-w-[46ch] text-[13px] leading-relaxed text-[var(--text-secondary)]">
+              {lifetimeLine ?? "Everything you’ve built through investing, trading and creating."}
             </p>
           </section>
 
-          {/* SECTION 2 — Your Journey (the money-flow timeline) */}
-          <Section id="journey" title="Your Journey">
-            <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-              <FlowRow label="You Put In" value={fmtUsd(putIn)} />
-              <FlowRow label="Worth Today" value={fmtUsd(worthToday)} strong />
-              <FlowRow label="You've Cashed Out" value={fmtUsd(cashedOut)} />
-              <FlowRow label="Your Markets Earned" value={fmtUsd(creatingGain)} />
-            </div>
-          </Section>
-
-          {/* Ready to Claim — real money, its own ceremony */}
+          {/* Ready to Claim — the one thing you can DO. Premium placement, right
+              under the hero, only when there's something to collect. */}
           {availableUsd > 0.01 && (
             <Section id="claim" title="Ready to Claim" anchorless>
               <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
@@ -363,6 +366,16 @@ export function ConvictionDashboard({
               </div>
             </Section>
           )}
+
+          {/* SECTION 2 — Your Journey (the money-flow timeline) */}
+          <Section id="journey" title="Your Journey">
+            <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+              <FlowRow label="You Put In" value={fmtUsd(putIn)} />
+              <FlowRow label="Worth Today" value={fmtUsd(worthToday)} strong />
+              <FlowRow label="You've Cashed Out" value={fmtUsd(cashedOut)} />
+              <FlowRow label="Your Markets Earned" value={fmtUsd(creatingGain)} />
+            </div>
+          </Section>
 
           {/* SECTION 3 — Your Edge (numbers become identity) */}
           {sinceStart !== 0 && (

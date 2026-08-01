@@ -67,11 +67,13 @@ export interface ConvictionDashboardData {
   };
   /** Lifetime distinct wallets that have ever traded this creator's markets. */
   peopleReached: number;
-  /** Facts the milestone ladder needs (the rest come from on-chain creator data). */
+  /** Facts the milestone ladder + lifetime line need (rest from on-chain creator). */
   facts: {
     tradeCount: number;
     longestHeldDays: number;
     hasProfit: boolean;
+    /** Distinct markets this wallet has ever traded ("ideas backed"). */
+    ideasBacked: number;
   };
   /** Top held positions by gain — merged with created markets in "Best Markets". */
   heldBest: Array<{ onchainId: number; title: string; gainUsd: number }>;
@@ -194,6 +196,7 @@ export async function buildConvictionDashboard(
   const flows = moneyFlows(dashTrades);
   const tradesTodayCount = trades.length - beforeToday.length;
   const hasProfit = realizedUsd > 0 || anyHeldProfit;
+  const ideasBacked = new Set(dashTrades.map((t) => t.market)).size;
 
   // --- Created markets (attribution + volume + trades) ----------------------
   const { data: createdData } = await sb
@@ -309,7 +312,7 @@ export async function buildConvictionDashboard(
     progress: { putInUsd: flows.putInEth * ethUsd, cashedOutUsd: flows.cashedOutEth * ethUsd },
     activity: { tradesTodayCount, uniqueTradersTodayCount },
     peopleReached,
-    facts: { tradeCount: trades.length, longestHeldDays, hasProfit },
+    facts: { tradeCount: trades.length, longestHeldDays, hasProfit, ideasBacked },
     heldBest,
     createdMarkets,
   };
