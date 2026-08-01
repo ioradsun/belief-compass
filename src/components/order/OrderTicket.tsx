@@ -100,6 +100,50 @@ export function AmountField({
 }
 
 /**
+ * Quick-amount chips — the PRIMARY, mouse-first way to choose how much to back.
+ * One click sets the dollar amount; Max fills to the spendable balance. Typing
+ * (AmountField) stays available as the secondary path. The active preset lights
+ * up so the current amount is always obvious at a glance.
+ */
+const AMOUNT_PRESETS = [5, 10, 25, 50, 100];
+export function AmountChips({
+  amount,
+  setAmount,
+  ethUsd,
+}: {
+  amount: number;
+  setAmount: (n: number) => void;
+  ethUsd: number;
+}) {
+  const { wei, isConnected } = useSpendableBalance();
+  const availUsd = wei != null && ethUsd > 0 ? (Number(wei) / 1e18) * ethUsd : null;
+  const chip = (label: string, value: number, active: boolean) => (
+    <button
+      key={label}
+      type="button"
+      onClick={() => setAmount(value)}
+      className="rounded-[10px] px-3.5 py-2 text-[14px] font-semibold tabular-nums transition-colors"
+      style={
+        active
+          ? { background: "var(--text)", color: "var(--bg)" }
+          : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
+      }
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {AMOUNT_PRESETS.map((p) => chip(`$${p}`, p, amount === p))}
+      {isConnected &&
+        availUsd != null &&
+        availUsd >= 1 &&
+        chip("Max", Math.floor(availUsd * 100) / 100, false)}
+    </div>
+  );
+}
+
+/**
  * A side button. Two looks from one control so both screens share the exact YES/NO
  * vocabulary:
  *   • momentary (selected omitted) — the market dock's tap-to-open NO / YES.
@@ -341,18 +385,38 @@ function BuyTicket({
   const busy = trade.isSubmitting || trade.isMining;
   const amtField = <AmountField amount={amount} setAmount={setAmount} />;
 
-  // Neutral: NO · PASS · YES.
+  // Neutral: choose how much (one click), then which side (big targets).
   if (!side) {
     return (
       <div
-        className="flex items-center gap-2 rounded-[16px] p-3"
+        className="space-y-3.5 rounded-[18px] p-4"
         style={{ border: "1px solid var(--border)" }}
       >
-        {amtField}
-        <div className="flex flex-1 gap-2">
-          <SideButton label="← NO" tone="no" onClick={() => onSelect("NO")} />
-          <SideButton label="↑ PASS" tone="pass" onClick={onPass} />
-          <SideButton label="YES →" tone="yes" onClick={() => onSelect("YES")} />
+        {/* Amount — one-click chips (primary), typing (secondary, to the right). */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <AmountChips amount={amount} setAmount={setAmount} ethUsd={ethUsd} />
+          <span className="ml-auto flex items-center gap-2">
+            <span className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
+              or type
+            </span>
+            {amtField}
+          </span>
+        </div>
+        {/* The decision — big, obvious, mouse-first. */}
+        <div className="flex gap-2.5">
+          <SideButton
+            label="← NO"
+            tone="no"
+            onClick={() => onSelect("NO")}
+            className="h-[60px] flex-1"
+          />
+          <SideButton label="PASS" tone="pass" onClick={onPass} className="h-[60px] w-[104px]" />
+          <SideButton
+            label="YES →"
+            tone="yes"
+            onClick={() => onSelect("YES")}
+            className="h-[60px] flex-1"
+          />
         </div>
       </div>
     );
@@ -367,9 +431,9 @@ function BuyTicket({
   const disabled = ready.connected && ready.onBase && (busy || !quote || ethWei <= 0n);
 
   return (
-    <div className="rounded-[16px] p-3" style={{ border: "1px solid var(--border)" }}>
-      <div className="mb-2 space-y-1 px-1">
-        <div className="pb-1 text-[11px] font-semibold text-[var(--text)]">
+    <div className="rounded-[18px] p-4" style={{ border: "1px solid var(--border)" }}>
+      <div className="mb-3 space-y-1 px-1">
+        <div className="pb-1 text-[12px] font-semibold text-[var(--text)]">
           Back {side} to reveal the House’s pick.
         </div>
         <AvailRow ethUsd={ethUsd} />
@@ -402,13 +466,22 @@ function BuyTicket({
           </div>
         )}
       </div>
-      <div className="flex items-center gap-2">
-        {amtField}
-        <div className="flex flex-1 gap-2">
+      <div className="space-y-3">
+        {/* Amount — one-click chips (primary), typing (secondary). */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <AmountChips amount={amount} setAmount={setAmount} ethUsd={ethUsd} />
+          <span className="ml-auto flex items-center gap-2">
+            <span className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
+              or type
+            </span>
+            {amtField}
+          </span>
+        </div>
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={onCancel}
-            className="h-[52px] flex-1 rounded-[12px] text-[14px] font-medium text-[var(--text-secondary)]"
+            className="h-[56px] flex-1 rounded-[12px] text-[14px] font-medium text-[var(--text-secondary)]"
             style={{ border: "1px solid var(--border)" }}
           >
             Not now
@@ -417,7 +490,7 @@ function BuyTicket({
             type="button"
             disabled={disabled}
             onClick={onConfirm}
-            className="h-[52px] flex-[2] rounded-[12px] text-[15px] font-semibold disabled:opacity-40"
+            className="h-[56px] flex-[2] rounded-[12px] text-[15px] font-semibold disabled:opacity-40"
             style={{ background: "var(--text)", color: "var(--bg)" }}
           >
             {busy ? "Confirming…" : confirmLabel}
