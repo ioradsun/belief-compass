@@ -108,22 +108,33 @@ export function startRealtime(qc: QueryClient): () => void {
     activityTimer = setTimeout(drainActivity, wait);
   };
 
-  // A dropped-then-recovered socket can have missed rows; a single, debounced,
-  // low-cost reconcile re-syncs the visible feed. We reconcile, we don't reload
-  // everything — the reducer keeps the rest converged.
+  // Reconnect = reconcile, not full reload. A gap (socket error, network drop, a
+  // backgrounded tab whose socket was suspended) may have dropped stream rows, so
+  // we re-sync the visible surfaces once, debounced. Because the client refetches
+  // rather than folds deltas, a refetch IS the resume: market_state/pulses reload
+  // current truth, and the live tape resumes from its OWN cursor — its queryFn
+  // fetches only events since the newest row it already holds (delta), so a
+  // reconnect replays just the missed tail, not the whole list.
   let reconcileTimer: ReturnType<typeof setTimeout> | null = null;
   const reconcileSoon = () => {
     if (reconcileTimer != null) return;
     reconcileTimer = setTimeout(() => {
       reconcileTimer = null;
       if (disposed) return;
-      // A gap may have dropped both market facts and trade activity — re-sync the
-      // visible feed and the mounted activity slices once.
       void qc.invalidateQueries({ queryKey: ["opp-feed"] });
       void qc.invalidateQueries({ queryKey: ["live-tape"], refetchType: "active" });
       void qc.invalidateQueries({ queryKey: ["market-pulses"], refetchType: "active" });
     }, RECONCILE_DEBOUNCE_MS);
   };
+
+  // The browser's own reconnect signals: coming back online, or a hidden tab
+  // becoming visible again (mobile suspends the socket in the background).
+  const onOnline = () => reconcileSoon();
+  const onVisible = () => {
+    if (document.visibilityState === "visible") reconcileSoon();
+  };
+  window.addEventListener("online", onOnline);
+  document.addEventListener("visibilitychange", onVisible);
 
   // Dynamic import keeps supabase-js off the first-paint critical path.
   void import("@/integrations/supabase/client")
@@ -177,6 +188,8 @@ export function startRealtime(qc: QueryClient): () => void {
 
   return () => {
     disposed = true;
+    window.removeEventListener("online", onOnline);
+    document.removeEventListener("visibilitychange", onVisible);
     cancelFrame();
     if (reconcileTimer != null) clearTimeout(reconcileTimer);
     if (activityTimer != null) clearTimeout(activityTimer);
