@@ -208,6 +208,20 @@ there is no event stream to drive it. Today the only tools are "poll again" and
 Ordered by leverage. Each step deletes more than it adds. **None require
 backend work — the stream, reducer semantics, and read model already exist.**
 
+> **Status (steps 1–3 landed).** `src/lib/realtime/coordinator.ts` opens one
+> socket to the already-published `market_state` stream (dynamically imported so
+> supabase-js stays off the first-paint bundle); `src/lib/realtime/reduce.ts` is
+> the one client reducer that batches rows per animation frame and patches the
+> shared React Query cache, preserving server enrichments and ordering by
+> `read_model_version`. Wired in `__root.tsx` beside the persist/restore. The
+> feed's 8s poll became a 20s structural reconcile (`index.tsx`). Reducer locked
+> by `src/lib/realtime/reduce.test.ts`. Dead code removed: `ReportMarket.tsx`
+> (unreferenced) and `integrations/supabase/auth-middleware.ts` (its own comments
+> confirmed `requireSupabaseAuth` is unused); `lib/shims/events.ts` was checked
+> and **kept** — it is live via the Vite `events` alias for the wallet SDK.
+> Follow-ups: the `events` stream for pulses/live-tape, `wallet_beliefs` for
+> positions, then predictive prefetch + cursor reconnect (steps 4–6).
+
 1. **Open the stream that already exists.** One app-level realtime coordinator
    subscribes _once_ to `market_state` (and `events` for activity). Components
    never subscribe. This is net-new but small — the DB side is done.
