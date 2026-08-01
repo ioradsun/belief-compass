@@ -28,7 +28,7 @@ import { getConvictionMarket } from "@/lib/market-create.functions";
 import { getHouseRead } from "@/lib/house.functions";
 import { houseKey } from "@/lib/house-round";
 import { expressBelief } from "@/lib/beliefs.functions";
-import { useWalletSession } from "@/hooks/useWalletSession";
+import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { requestConnect } from "@/lib/connect-bridge";
 import { CHAIN_ID } from "@/chain/decoder";
 import { useBuyQuote, useTrade, useTradeReady } from "@/lib/chain-trade";
@@ -86,17 +86,21 @@ export function MobileGame({
   const { ensureSession } = useWalletSession();
   const house = useHouseFinalize(marketId, viewerWallet);
   const express = useMutation({
+    // Free belief: recorded only if the wallet already signed in for a paid
+    // action — expressing an opinion never opens the wallet.
     mutationFn: async (s: OrderSide) =>
-      expressBelief({
-        data: {
-          wallet: viewerWallet as string,
-          marketId,
-          side: s,
-          session: await ensureSession(),
-        },
-      }),
+      bestEffort(async () =>
+        expressBelief({
+          data: {
+            wallet: viewerWallet as string,
+            marketId,
+            side: s,
+            session: await ensureSession({ interactive: false }),
+          },
+        }),
+      ),
     onSuccess: (r) => {
-      if (viewerWallet) qc.setQueryData(["readiness", viewerWallet.toLowerCase()], r);
+      if (r && viewerWallet) qc.setQueryData(["readiness", viewerWallet.toLowerCase()], r);
     },
   });
 

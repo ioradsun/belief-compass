@@ -19,7 +19,7 @@ import {
   type WelcomablePerson,
 } from "@/lib/welcomes.functions";
 import { welcomeKey } from "@/domain/welcome";
-import { useWalletSession } from "@/hooks/useWalletSession";
+import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
 function Avatar({
@@ -82,17 +82,20 @@ export function WelcomePrompt({ wallet }: { wallet?: string }) {
     mutationFn: async () => {
       const chosen = people.filter((p) => selected.has(keyOf(p)));
       if (chosen.length === 0) return { welcomed: 0 };
-      const session = await ensureSession();
-      return sendWelcomes({
-        data: {
-          wallet: wallet as string,
-          session,
-          recipients: chosen.map((p) => ({
-            recipientWallet: p.wallet,
-            marketId: p.marketId,
-            side: p.side,
-          })),
-        },
+      // Welcoming is free — never prompt the wallet to sign for it.
+      return bestEffort(async () => {
+        const session = await ensureSession({ interactive: false });
+        return sendWelcomes({
+          data: {
+            wallet: wallet as string,
+            session,
+            recipients: chosen.map((p) => ({
+              recipientWallet: p.wallet,
+              marketId: p.marketId,
+              side: p.side,
+            })),
+          },
+        });
       });
     },
     onSuccess: () => {

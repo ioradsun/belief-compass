@@ -27,7 +27,7 @@ import { MobileCaseView } from "@/components/MobileCase";
 import { CaseStory } from "@/components/CaseStory";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
-import { useWalletSession } from "@/hooks/useWalletSession";
+import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
 import { SharedConviction } from "@/components/SharedConviction";
 import { marketFreshness } from "@/domain/market-freshness";
@@ -148,17 +148,21 @@ export function MarketDeck({
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
   const express = useMutation({
+    // Free belief: recorded only if the wallet already signed in for a paid
+    // action — expressing an opinion never opens the wallet.
     mutationFn: async (s: OrderSide) =>
-      expressBelief({
-        data: {
-          wallet: viewerWallet as string,
-          marketId,
-          side: s,
-          session: await ensureSession(),
-        },
-      }),
+      bestEffort(async () =>
+        expressBelief({
+          data: {
+            wallet: viewerWallet as string,
+            marketId,
+            side: s,
+            session: await ensureSession({ interactive: false }),
+          },
+        }),
+      ),
     onSuccess: (r) => {
-      if (viewerWallet) qc.setQueryData(["readiness", viewerWallet.toLowerCase()], r);
+      if (r && viewerWallet) qc.setQueryData(["readiness", viewerWallet.toLowerCase()], r);
     },
   });
 

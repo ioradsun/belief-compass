@@ -61,9 +61,12 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
   const foundation = useMutation({
     mutationFn: async (vars: { key: string; action: "YES" | "NO" | "PASS" }) => {
       if (!wallet) return null;
-      const session = await ensureSession({ interactive: false });
-      return recordFoundation({
-        data: { wallet, marketId, key: vars.key, action: vars.action, session },
+      // Free action: only recorded when the wallet already has a session.
+      return bestEffort(async () => {
+        const session = await ensureSession({ interactive: false });
+        return recordFoundation({
+          data: { wallet, marketId, key: vars.key, action: vars.action, session },
+        });
       });
     },
     onSuccess: store,
