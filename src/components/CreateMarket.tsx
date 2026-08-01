@@ -226,8 +226,20 @@ export function CreateMarket({
             creatorFeeBps: econ.creatorFeeBps,
           },
         });
+        if (source) {
+          await completeSuggestion({
+            data: {
+              wallet: address,
+              session: token,
+              id: source.suggestionId,
+              marketId: result.marketId,
+              finalQuestion: question.trim(),
+            },
+          }).catch(() => undefined);
+        }
         return result.marketId;
       } catch (e) {
+        note("suggestion_publish_failed");
         await recordCreateFailure({
           data: {
             wallet: address,
@@ -240,9 +252,12 @@ export function CreateMarket({
       }
     },
     onSuccess: (marketId) => {
+      // The draft (and its attribution) is only cleared once the market exists —
+      // a failed publish keeps everything the user edited.
       clearDraft();
       onCreated(marketId);
     },
+
   });
 
   const busy = submit.isPending || phase === "checking" || phase === "signing" || phase === "confirming";
