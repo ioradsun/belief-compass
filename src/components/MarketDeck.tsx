@@ -12,10 +12,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMarketChange, getPositionSummary } from "@/lib/markets.functions";
 import { positionPnl, type PositionPnl } from "@/domain/position";
 import { getMarketEvidence } from "@/lib/evidence.functions";
+import { getNetwork } from "@/lib/dna.functions";
+import { getHouseRead } from "@/lib/house.functions";
 import { requestConnect } from "@/lib/connect-bridge";
 import { useSwitchChain, useAccount, useBalance } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
-import { useHouseFinalize } from "@/components/MarketIntelligence";
+import { useHouseFinalize, houseKey } from "@/components/MarketIntelligence";
+import { ConvictionReveal } from "@/components/ConvictionReveal";
+import { getConvictionReveal } from "@/domain/conviction-reveal";
+import { assembleRevealInput } from "@/lib/reveal-input";
 import { TheHouse } from "@/components/TheHouse";
 import { DnaFirstReveal } from "@/components/DnaFirstReveal";
 import { MarketPulse, LiveNow } from "@/components/CenterSignals";
@@ -52,7 +57,6 @@ import {
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
 import { ReportMarket } from "@/components/ReportMarket";
-import { PostPurchase } from "@/components/PostPurchase";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 
 /**
@@ -185,6 +189,20 @@ export function MarketDeck({
   });
   const holders = evidence?.believers ?? [];
 
+  // The reveal needs the viewer's network (for Tribe / Opps / Twin faces) and the
+  // House read (its pick + surprise streak). Both cached, both used elsewhere.
+  const { data: net } = useQuery({
+    queryKey: ["network", viewer ?? null, "all", "relevant", ""],
+    queryFn: () => getNetwork({ data: { wallet: viewer, limit: 60 } }),
+    enabled: !!viewer,
+    staleTime: 60_000,
+  });
+  const { data: houseRead } = useQuery({
+    queryKey: houseKey(viewer, marketId),
+    queryFn: () => getHouseRead({ data: { wallet: viewer ?? null, marketId } }),
+    staleTime: 30_000,
+  });
+
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(marketId, side === "YES", side ? ethWei : 0n);
 
@@ -302,25 +320,35 @@ export function MarketDeck({
     }
   };
 
-  // A completed BUY takes over the whole center: the purchase becomes belonging,
-  // not a receipt. (A sell keeps its own compact receipt in the dock below.)
+  // A completed BUY takes over the whole center: the Conviction Reveal — the same
+  // story engine + component the mobile game uses. The trade was only the unlock.
   if (trade.isSuccess && side != null && sellPct == null) {
-    const shareUrl =
-      typeof window !== "undefined"
-        ? `${window.location.origin}${window.location.pathname}?m=${marketId}`
-        : `?m=${marketId}`;
+    const reveal = getConvictionReveal(
+      assembleRevealInput({
+        side,
+        marketId,
+        believersYes: evidence?.believersYes ?? row.believers_yes ?? 0,
+        believersNo: evidence?.believersNo ?? row.believers_no ?? 0,
+        believers: holders,
+        people: net?.people ?? [],
+        housePredicted: houseRead?.predicted ?? houseRead?.preview ?? null,
+        surpriseStreak: houseRead?.record?.surpriseStreak ?? 0,
+        momentum: (rr.opportunity_type as string | null) === "hot" ? "accelerating" : null,
+        creatorName: cm?.creator?.name ?? null,
+      }),
+    );
     return (
-      <PostPurchase
+      <ConvictionReveal
+        story={reveal}
         side={side}
-        title={title}
-        believers={side === "YES" ? row.believers_yes : row.believers_no}
-        faces={holders.filter((b) => b.side === side)}
-        shareUrl={shareUrl}
-        investedUsd={amount}
         onNext={() => {
           void bal.refetch();
           onSkip();
         }}
+        onMeetTribe={(() => {
+          const t = net?.people?.find((p) => ["twin", "tribe"].includes(p.relationship));
+          return t ? () => onSelectPerson?.(t.wallet) : undefined;
+        })()}
       />
     );
   }
