@@ -130,7 +130,9 @@ const pulsesQO = (ids: number[]) =>
     queryKey: ["market-pulses", ids.join(",")],
     queryFn: async () => await listMarketPulses({ data: { ids: ids.slice(0, 120) } }),
     enabled: ids.length > 0,
-    refetchInterval: 8_000,
+    // The events stream refetches this the moment one of these markets trades;
+    // the interval is now just a slow safety reconcile.
+    refetchInterval: 30_000,
     placeholderData: (prev) => prev,
   });
 

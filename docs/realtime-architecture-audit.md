@@ -221,6 +221,19 @@ backend work — the stream, reducer semantics, and read model already exist.**
 > and **kept** — it is live via the Vite `events` alias for the wallet SDK.
 > Follow-ups: the `events` stream for pulses/live-tape, `wallet_beliefs` for
 > positions, then predictive prefetch + cursor reconnect (steps 4–6).
+>
+> **Events stream (landed, follow-up).** The same coordinator now also subscribes
+> to the published `events` stream (`INSERT`, `kind=eq.trade`). The live tape and
+> per-card pulses are **server-narrated** DTOs (composed story beats, resolved
+> profiles, personal/network detection), so a trade is treated as a *signal*, not
+> a delta to fold on the client — re-narrating them here would duplicate real
+> server logic. On a trade the coordinator refetches only the affected narrated
+> slices (`affectedPulseKeys` picks the intersecting pulse caches; the mounted
+> live tapes refetch their cheap cursor-delta), coalesced + throttled
+> (`ACTIVITY_THROTTLE_MS`) so a burst is one refresh. With freshness now
+> event-driven, LiveTape's 6s poll and the feed's 8s pulse poll became 30s safety
+> reconciles; a recovered socket reconciles feed + activity once. Quiet markets
+> cost zero fetches.
 
 1. **Open the stream that already exists.** One app-level realtime coordinator
    subscribes _once_ to `market_state` (and `events` for activity). Components

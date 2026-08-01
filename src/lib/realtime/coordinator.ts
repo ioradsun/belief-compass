@@ -17,10 +17,17 @@
  * bundle — the socket opens after the snapshot is already on screen.
  */
 import type { QueryClient } from "@tanstack/react-query";
-import { applyMarketStateBatch, type MarketStateRow } from "./reduce";
+import { applyMarketStateBatch, affectedPulseKeys, type MarketStateRow } from "./reduce";
 
 /** How long after a socket recovery we let a single feed reconcile fire. */
 const RECONCILE_DEBOUNCE_MS = 400;
+
+/**
+ * Min gap between activity refetches. A burst of trades coalesces into at most
+ * one refetch of the narrated slices per window — instant enough to feel live,
+ * bounded enough that 40 trades in 100ms is one refresh, not forty.
+ */
+const ACTIVITY_THROTTLE_MS = 1_500;
 
 /**
  * Start the app-level realtime replica. Client-only; a no-op on the server and
@@ -65,6 +72,33 @@ export function startRealtime(qc: QueryClient): () => void {
     frame = null;
   };
 
+  // Activity signal: trade events say WHICH market changed; we refetch only that
+  // market's narrated slices (server owns the copy), coalesced + throttled so a
+  // burst is one refresh. Quiet markets cost nothing — no timer, no fetch.
+  const affected = new Set<number>();
+  let activityTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastActivityAt = 0;
+  const drainActivity = () => {
+    activityTimer = null;
+    lastActivityAt = Date.now();
+    if (disposed || affected.size === 0) return;
+    const ids = new Set(affected);
+    affected.clear();
+    // Per-card pulses: only the caches that actually hold a traded market.
+    for (const key of affectedPulseKeys(qc, ids)) {
+      void qc.invalidateQueries({ queryKey: key, exact: true });
+    }
+    // The live tape is chronological across all markets, so any trade can change
+    // it; refetch only the mounted (active) tapes, never the whole family.
+    void qc.invalidateQueries({ queryKey: ["live-tape"], refetchType: "active" });
+  };
+  const noteActivity = (marketId: number) => {
+    if (Number.isFinite(marketId)) affected.add(marketId);
+    if (activityTimer != null) return;
+    const wait = Math.max(0, ACTIVITY_THROTTLE_MS - (Date.now() - lastActivityAt));
+    activityTimer = setTimeout(drainActivity, wait);
+  };
+
   // A dropped-then-recovered socket can have missed rows; a single, debounced,
   // low-cost reconcile re-syncs the visible feed. We reconcile, we don't reload
   // everything — the reducer keeps the rest converged.
@@ -73,7 +107,12 @@ export function startRealtime(qc: QueryClient): () => void {
     if (reconcileTimer != null) return;
     reconcileTimer = setTimeout(() => {
       reconcileTimer = null;
-      if (!disposed) void qc.invalidateQueries({ queryKey: ["opp-feed"] });
+      if (disposed) return;
+      // A gap may have dropped both market facts and trade activity — re-sync the
+      // visible feed and the mounted activity slices once.
+      void qc.invalidateQueries({ queryKey: ["opp-feed"] });
+      void qc.invalidateQueries({ queryKey: ["live-tape"], refetchType: "active" });
+      void qc.invalidateQueries({ queryKey: ["market-pulses"], refetchType: "active" });
     }, RECONCILE_DEBOUNCE_MS);
   };
 
@@ -84,7 +123,8 @@ export function startRealtime(qc: QueryClient): () => void {
       let sawError = false;
 
       const channel = supabase
-        .channel("market-state-stream")
+        .channel("belief-realtime")
+        // Truth of each market's current facts — patched in place by the reducer.
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "market_state" },
@@ -94,6 +134,15 @@ export function startRealtime(qc: QueryClient): () => void {
               queue.push(row as MarketStateRow);
               schedule();
             }
+          },
+        )
+        // Trade activity — a signal to refetch the narrated slice (server-authored).
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "events", filter: "kind=eq.trade" },
+          (payload: { new?: Record<string, unknown> | null }) => {
+            const mid = Number(payload.new?.market_id);
+            if (Number.isFinite(mid)) noteActivity(mid);
           },
         )
         .subscribe((status: string) => {
@@ -108,6 +157,7 @@ export function startRealtime(qc: QueryClient): () => void {
       cleanup = () => {
         cancelFrame();
         if (reconcileTimer != null) clearTimeout(reconcileTimer);
+        if (activityTimer != null) clearTimeout(activityTimer);
         void supabase.removeChannel(channel);
       };
     })
@@ -120,6 +170,7 @@ export function startRealtime(qc: QueryClient): () => void {
     disposed = true;
     cancelFrame();
     if (reconcileTimer != null) clearTimeout(reconcileTimer);
+    if (activityTimer != null) clearTimeout(activityTimer);
     cleanup?.();
   };
 }

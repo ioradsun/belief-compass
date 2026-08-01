@@ -192,3 +192,29 @@ export const isReducerPatched = (q: Query): boolean =>
   (q.queryKey[0] === "opp-feed" ||
     q.queryKey[0] === "market-row" ||
     q.queryKey[0] === "market-change");
+
+// --- Activity (events stream) --------------------------------------------
+//
+// The live tape and per-card pulses are SERVER-NARRATED DTOs (composed story
+// beats, resolved profiles, personal/network detection) — not raw projections
+// of `events`. Re-narrating them on the client would duplicate real server
+// logic, exactly what this architecture avoids. So a trade event is a *signal*,
+// not a delta to fold: it says "market X just traded" and we refetch only that
+// narrated slice, letting the server stay the single author of the copy.
+
+/**
+ * Which `["market-pulses", ids]` cache keys hold at least one of the markets that
+ * just traded. Both key shapes are covered: the feed's `"12,45,88"` id-list and a
+ * single market's `"42"`. Pure — the coordinator invalidates the returned keys.
+ */
+export function affectedPulseKeys(qc: QueryClient, affected: Set<number>): unknown[][] {
+  if (affected.size === 0) return [];
+  const out: unknown[][] = [];
+  for (const q of qc.getQueryCache().findAll({ queryKey: ["market-pulses"] })) {
+    const spec = q.queryKey[1];
+    if (typeof spec !== "string") continue;
+    const ids = spec.split(",").map((s) => Number(s));
+    if (ids.some((id) => affected.has(id))) out.push(q.queryKey as unknown[]);
+  }
+  return out;
+}
