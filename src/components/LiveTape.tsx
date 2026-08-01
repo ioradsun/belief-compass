@@ -97,7 +97,11 @@ export function LiveTape({
           {rows.map((r) => {
             const s = r.story;
             const personal = s.personal;
-            const showTitle = showTitles && s.category !== "fresh_market";
+            // The title tells you WHICH market. Never show it when the body already
+            // is the question (a fresh market), so the row never repeats itself.
+            const norm = (x: string) => x.trim().replace(/\s+/g, " ").toLowerCase();
+            const showTitle =
+              showTitles && s.category !== "fresh_market" && norm(r.marketTitle) !== norm(s.body);
             return (
               <li key={r.id}>
                 <button
@@ -124,7 +128,7 @@ export function LiveTape({
                     <SideText text={s.body} />
                   </div>
                   {showTitle && (
-                    <div className="mt-1 truncate text-[11px] text-[var(--text-muted)]">
+                    <div className="mt-1 text-[11px] leading-snug text-[var(--text-muted)]">
                       {r.marketTitle}
                     </div>
                   )}
