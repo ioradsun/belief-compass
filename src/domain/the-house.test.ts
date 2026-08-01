@@ -4,9 +4,12 @@ import {
   houseBefore,
   houseBeforeNamed,
   houseDelight,
+  houseFoundationLine,
   houseMilestone,
   houseMode,
   houseStage,
+  houseSurpriseBeat,
+  SURPRISE_BEAT_MIN,
   STAGE_LABEL,
 } from "@/domain/the-house";
 
@@ -92,5 +95,27 @@ describe("the voice", () => {
     expect(houseMilestone("in_sync", 1)).toBeNull();
     expect(houseDelight(0)).not.toBeNull();
     expect(houseDelight(1)).toBeNull();
+  });
+});
+
+describe("houseSurpriseBeat — defiance is celebrated, not punished", () => {
+  it("stays silent below the streak, then celebrates being unreadable", () => {
+    expect(houseSurpriseBeat(SURPRISE_BEAT_MIN - 1, 0)).toBeNull();
+    const beat = houseSurpriseBeat(SURPRISE_BEAT_MIN, 0);
+    expect(beat).not.toBeNull();
+    // Never disappointment, never a failure framing — surprising the House is good.
+    expect(beat!.toLowerCase()).not.toMatch(/wrong|bad|fail|sorry|disappoint|predictable/);
+  });
+  it("is deterministic per seed", () => {
+    expect(houseSurpriseBeat(4, 3)).toBe(houseSurpriseBeat(4, 3));
+  });
+});
+
+describe("houseFoundationLine — cold-start payoff is concrete, from decision one", () => {
+  it("counts down toward being read, and lands when foundation completes", () => {
+    expect(houseFoundationLine(0, 5)).toBe("5 more, and I start to read you.");
+    expect(houseFoundationLine(4, 5)).toBe("One more, and I start to read you.");
+    expect(houseFoundationLine(5, 5)).toBe("I'm starting to read you now.");
+    expect(houseFoundationLine(9, 5)).toBe("I'm starting to read you now.");
   });
 });

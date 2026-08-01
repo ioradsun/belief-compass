@@ -16,9 +16,11 @@ import {
   houseBefore,
   houseBeforeNamed,
   houseDelight,
+  houseFoundationLine,
   houseMilestone,
   houseMode,
   houseStage,
+  houseSurpriseBeat,
   STAGE_LABEL,
   type HouseStage,
 } from "@/domain/the-house";
@@ -44,20 +46,36 @@ export function TheHouse({ marketId, viewerWallet }: { marketId: number; viewerW
     const stage = houseStage(decisions, accuracy);
     const seed = marketId;
 
+    // Cold start: while the House is still training on you, show concrete forward
+    // progress — the payoff is visible from the first decision, never deferred.
+    if (house.foundation) {
+      return {
+        stage,
+        text: houseFoundationLine(house.foundation.answered, house.foundation.required),
+      };
+    }
+
     // After a decision — react with emotion (a rare relationship beat first).
     if (house.closed && (house.outcome === "correct" || house.outcome === "miss")) {
+      if (house.outcome === "miss") {
+        // You defied the read. A surprise streak is celebrated exactly like being
+        // read right — authenticity is the winning move, never predictability.
+        const beat = houseSurpriseBeat(rec.surpriseStreak, seed);
+        return { stage, text: beat ?? houseAfter(false, seed) };
+      }
       const beat = houseMilestone(stage, seed + decisions);
-      return { stage, text: beat ?? houseAfter(house.outcome === "correct", seed) };
+      return { stage, text: beat ?? houseAfter(true, seed) };
     }
 
     // Before a decision. When the read is strong enough, the House CALLS the side
     // out loud (the high-confidence reveal). Otherwise: an occasional pattern
     // observation, else the intensity line. While training, it just keeps watching.
     if (house.preview) return { stage, text: houseBeforeNamed(house.preview, seed) };
-    const delight = house.foundation ? null : houseDelight(seed + decisions);
+    // Past foundation (handled above): an occasional pattern observation, else the
+    // intensity line.
+    const delight = houseDelight(seed + decisions);
     if (delight) return { stage, text: delight };
-    const mode = house.foundation ? "low" : houseMode(house.band);
-    return { stage, text: houseBefore(mode, seed) };
+    return { stage, text: houseBefore(houseMode(house.band), seed) };
   }, [viewer, house, marketId]);
 
   return (

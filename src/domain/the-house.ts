@@ -153,6 +153,44 @@ export function houseMilestone(stage: HouseStage, seed: number): string | null {
   return Math.abs(Math.trunc(seed)) % 6 === 0 ? pick(MILESTONE, seed) : null;
 }
 
+/** Defy the House this many times running and it celebrates you. */
+export const SURPRISE_BEAT_MIN = 3;
+
+// Being unreadable is an ACHIEVEMENT, not a failure — it means your convictions
+// are genuinely your own. This is the deliberate mirror of MILESTONE: the House
+// values "you keep surprising me" exactly as much as "I read you right", so the
+// game never rewards making yourself predictable.
+const SURPRISE_BEAT = [
+  "You keep surprising me — and I respect it.",
+  "I can't predict you. That's rare.",
+  "You refuse to be typed. I like that.",
+  "You keep breaking my read. Stay unreadable.",
+  "Most people are easy. You aren't.",
+];
+
+/**
+ * A relationship beat that celebrates DEFIANCE — the counterpart to houseMilestone.
+ * Fires on a real surprise streak (you've defied the read several times running),
+ * so authenticity is rewarded as loudly as being read right. Null below the streak.
+ */
+export function houseSurpriseBeat(surpriseStreak: number, seed: number): string | null {
+  if (Math.floor(surpriseStreak) < SURPRISE_BEAT_MIN) return null;
+  return pick(SURPRISE_BEAT, seed);
+}
+
+/**
+ * The cold-start hook. During the first handful of decisions the House can't read
+ * you yet, so instead of a vague "still learning you", it shows concrete, forward
+ * progress — the payoff ("I start to read you") is visible from decision one, not
+ * deferred. `answered`/`required` come straight from the House foundation state.
+ */
+export function houseFoundationLine(answered: number, required: number): string {
+  const left = Math.max(0, Math.floor(required) - Math.max(0, Math.floor(answered)));
+  if (left <= 0) return "I'm starting to read you now.";
+  if (left === 1) return "One more, and I start to read you.";
+  return `${left} more, and I start to read you.`;
+}
+
 /** An occasional pattern observation — the feeling that the House notices you.
  *  Rare (~1 in 5, seeded) so it delights rather than nags. */
 export function houseDelight(seed: number): string | null {
