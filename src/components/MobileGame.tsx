@@ -34,6 +34,9 @@ import { useBuyQuote, useTrade, useTradeReady } from "@/lib/chain-trade";
 import { fmtUsd, usdToWei, type OrderSide } from "@/domain/order";
 import { marketBook } from "@/domain/market-book";
 import { marketPulse } from "@/domain/market-pulse";
+import { ConvictionReveal } from "@/components/ConvictionReveal";
+import { getConvictionReveal } from "@/domain/conviction-reveal";
+import { assembleRevealInput } from "@/lib/reveal-input";
 import {
   houseAfter,
   houseBefore,
@@ -120,6 +123,19 @@ export function MobileGame({
     queryFn: () => getHouseRead({ data: { wallet: viewerWallet ?? null, marketId } }),
     staleTime: 30_000,
   });
+  // For the Conviction Reveal after a completed buy (same keys the Reveal screen
+  // uses, so React Query dedupes — no extra fetch).
+  const { data: revealEvidence } = useQuery({
+    queryKey: ["evidence", marketId],
+    queryFn: () => getMarketEvidence({ data: { marketId } }),
+    staleTime: 30_000,
+  });
+  const { data: revealNet } = useQuery({
+    queryKey: ["network", viewerWallet ?? null, "all", "relevant", ""],
+    queryFn: () => getNetwork({ data: { wallet: viewerWallet, limit: 60 } }),
+    enabled: !!viewerWallet,
+    staleTime: 60_000,
+  });
 
   // Community exists — totals only. Never a side, never a percentage.
   const totals = useMemo(() => {
@@ -197,6 +213,41 @@ export function MobileGame({
   ]
     .filter(Boolean)
     .join(" • ");
+
+  // A completed buy takes over the screen with the Conviction Reveal — the same
+  // engine + component desktop uses. The trade was only the unlock.
+  if (trade.isSuccess && side) {
+    const reveal = getConvictionReveal(
+      assembleRevealInput({
+        side,
+        marketId,
+        believersYes: revealEvidence?.believersYes ?? row.believers_yes ?? 0,
+        believersNo: revealEvidence?.believersNo ?? row.believers_no ?? 0,
+        believers: revealEvidence?.believers ?? [],
+        people: revealNet?.people ?? [],
+        housePredicted: houseRead?.predicted ?? houseRead?.preview ?? null,
+        surpriseStreak: houseRead?.record?.surpriseStreak ?? 0,
+        momentum:
+          ((row as Record<string, unknown>).opportunity_type as string | null) === "hot"
+            ? "accelerating"
+            : null,
+        creatorName: cm?.creator?.name ?? null,
+      }),
+    );
+    const tribeTarget = revealNet?.people?.find((p) => ["twin", "tribe"].includes(p.relationship));
+    return (
+      <Screen>
+        <ConvictionReveal
+          story={reveal}
+          side={side}
+          onNext={onNext}
+          onMeetTribe={
+            tribeTarget && onSelectPerson ? () => onSelectPerson(tribeTarget.wallet) : undefined
+          }
+        />
+      </Screen>
+    );
+  }
 
   if (phase === "sides")
     return (
