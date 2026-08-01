@@ -116,17 +116,23 @@ function ConvictionCard({ p, onSelect }: { p: Built; onSelect: (id: number) => v
         <span className="num text-[20px] font-semibold leading-none text-[var(--text)]">
           {usd(p.value)}
         </span>
-        {p.gainUsd != null && p.gainUsd !== 0 && (
-          <span
-            className="num ml-auto text-[12px] font-semibold"
-            style={{ color: p.gainUsd > 0 ? "var(--yes)" : "var(--no)" }}
-          >
-            {signedUsd(p.gainUsd)}
-            <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">
-              since entered
+        {p.gainUsd != null &&
+          (Math.abs(p.gainUsd) >= 0.005 ? (
+            <span
+              className="num ml-auto text-[12px] font-semibold"
+              style={{ color: p.gainUsd > 0 ? "var(--yes)" : "var(--no)" }}
+            >
+              {signedUsd(p.gainUsd)}
+              <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">
+                since entered
+              </span>
             </span>
-          </span>
-        )}
+          ) : (
+            <span className="ml-auto text-[11px] font-normal text-[var(--text-muted)]">
+              No change
+            </span>
+          ))}
+
       </div>
 
       {/* 4 — How is the market reacting? Believers (scale + movement), then Pulse. */}
@@ -353,7 +359,7 @@ export function MyConvictions({
           Worth
         </div>
         <div className="num text-[24px] leading-none text-[var(--text)]">{usd(total)}</div>
-        {trueGain != null && trueGain !== 0 ? (
+        {trueGain != null && Math.abs(trueGain) >= 0.005 ? (
           <div
             className="num mt-1.5 text-[12px] font-semibold"
             style={{ color: trueGain > 0 ? "var(--yes)" : "var(--no)" }}
@@ -369,7 +375,10 @@ export function MyConvictions({
             {signedUsd(periodUsd)}{" "}
             <span className="font-normal text-[var(--text-muted)]">{winLabel.toLowerCase()}</span>
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-1.5 text-[11px] font-normal text-[var(--text-muted)]">No change</div>
+        )}
+
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)" }} />
