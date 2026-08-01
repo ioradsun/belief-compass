@@ -13,7 +13,7 @@ import {
   type HouseReadView,
 } from "@/lib/house.functions";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
-import { useWalletSession } from "@/hooks/useWalletSession";
+import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 
 export const houseKey = (wallet: string | undefined, marketId: number) =>
   ["house", wallet ?? null, marketId] as const;
@@ -50,15 +50,18 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
   const pass = useMutation({
     mutationFn: async () => {
       if (!wallet) return null;
-      const session = await ensureSession();
-      return finalizePass({ data: { wallet, marketId, session } });
+      // Free action: never prompt for a signature just to walk away.
+      return bestEffort(async () => {
+        const session = await ensureSession({ interactive: false });
+        return finalizePass({ data: { wallet, marketId, session } });
+      });
     },
     onSuccess: onDecided,
   });
   const foundation = useMutation({
     mutationFn: async (vars: { key: string; action: "YES" | "NO" | "PASS" }) => {
       if (!wallet) return null;
-      const session = await ensureSession();
+      const session = await ensureSession({ interactive: false });
       return recordFoundation({
         data: { wallet, marketId, key: vars.key, action: vars.action, session },
       });
