@@ -203,9 +203,11 @@ export const Route = createFileRoute("/")({
         getOpportunityFeed({ data: { window: "24h" } }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 200)),
       ]);
-      return { feed };
+      // fetchedAt travels with the payload so the client can age the snapshot
+      // correctly instead of treating it as "fetched at hydration time".
+      return { feed, fetchedAt: Date.now() };
     } catch {
-      return { feed: null };
+      return { feed: null, fetchedAt: Date.now() };
     }
   },
   staleTime: 10_000,
