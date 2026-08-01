@@ -176,7 +176,7 @@ export const Route = createFileRoute("/")({
       // fast (client fills it in), and the in-flight compute primes the cache for
       // the next visitor. Either way the loader never owns the TTFB budget.
       const feed = await Promise.race([
-        listFeed({ data: { window: "24h" } }),
+        getOpportunityFeed({ data: { window: "24h" } }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 200)),
       ]);
       return { feed };
