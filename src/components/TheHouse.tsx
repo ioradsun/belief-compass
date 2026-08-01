@@ -34,7 +34,7 @@ export function TheHouse({ marketId, viewerWallet }: { marketId: number; viewerW
 
   const { stage, text } = useMemo((): { stage: HouseStage; text: string } => {
     if (!viewer) {
-      return { stage: "learning", text: "Connect a wallet and I'll start learning how you think." };
+      return { stage: "learning", text: "Connect to begin building your Conviction Twin." };
     }
     if (!house) return { stage: "learning", text: "Still learning you." };
 

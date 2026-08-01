@@ -21,6 +21,31 @@ export function latestMarketEvent(tape: TapeTrade[], nowMs: number): TimelineEve
   return all.sort((a, b) => b.t - a.t)[0];
 }
 
+/**
+ * The newest MATERIAL event: people joining, a whale, or a milestone always
+ * count; capital in/out must clear a threshold (a fraction of Market Capital) so
+ * dust never fills the line. Null when nothing meaningful happened.
+ */
+export function latestMaterialEvent(
+  tape: TapeTrade[],
+  nowMs: number,
+  minCapitalEth: number,
+): TimelineEvent | null {
+  if (!tape.length) return null;
+  const all = [
+    ...timelineEvents(tape, "YES", "all", nowMs, 12),
+    ...timelineEvents(tape, "NO", "all", nowMs, 12),
+  ].sort((a, b) => b.t - a.t);
+  for (const e of all) {
+    if (e.kind === "capital" || e.kind === "exit") {
+      if ((e.eth ?? 0) >= minCapitalEth) return e;
+      continue;
+    }
+    return e; // believers, whale, milestone — always material
+  }
+  return null;
+}
+
 /** The side a rail event refers to — encoded in its id (`bel-YES-…`). */
 export function eventSide(e: TimelineEvent): "YES" | "NO" | null {
   const part = e.id.split("-")[1];

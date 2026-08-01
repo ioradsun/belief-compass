@@ -24,7 +24,8 @@ import { CaseStory } from "@/components/CaseStory";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { useWalletSession } from "@/hooks/useWalletSession";
-import { MarketVitalityPanel } from "@/components/MarketVitality";
+import { MarketMomentum } from "@/components/MarketVitality";
+import { SharedConviction } from "@/components/SharedConviction";
 import { marketFreshness } from "@/domain/market-freshness";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import type { TapeTrade } from "@/domain/conviction-series";
@@ -161,6 +162,17 @@ export function MarketDeck({
     staleTime: 10_000,
     refetchInterval: 15_000,
   });
+
+  // Creator/age for the identity row's freshness token (deduped with the byline).
+  const { data: cm } = useQuery({
+    queryKey: ["conviction-market", marketId],
+    queryFn: () => getConvictionMarket({ data: { onchainId: marketId } }),
+    staleTime: 5 * 60_000,
+  });
+  const createdAt = cm?.creator?.createdAt ?? null;
+  const freshToken = createdAt
+    ? marketFreshness(Date.now() - new Date(createdAt).getTime()).token
+    : null;
 
   const connected = useEffectiveWallet();
   const viewer = viewerWallet ?? connected;
@@ -328,21 +340,29 @@ export function MarketDeck({
   // the side panels; the center never becomes analytics or takes a side.
   const marketInner = (
     <>
-      {/* THE TOTALS — people and money for the WHOLE market (YES + NO), each with
-      its movement and a step sparkline. These reconcile with the two side totals. */}
-      <MarketVitalityPanel tape={change?.tape} ethUsd={ethUsd} showStory={false} />
+      {/* MARKET MOMENTUM — Market Believers then Market Capital (YES + NO), each
+      with its movement and a step sparkline. From the canonical marketBook, so
+      the center totals reconcile exactly with the two side panels. */}
+      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} />
 
-      {/* PULSE — what changed recently, in one label + one calm sentence. */}
+      {/* PULSE — the shape of momentum, in one label + one calm sentence. */}
       <Hairline />
       <MarketPulse tape={change?.tape} />
 
-      {/* LIVE NOW — the single most recent event (history, so it may name a side). */}
+      {/* LIVE NOW — the single most recent material event (history, may name a side). */}
       {change?.tape && change.tape.length > 0 && (
         <>
           <Hairline />
           <LiveNow tape={change.tape} ethUsd={ethUsd} />
         </>
       )}
+
+      {/* SHARED CONVICTION — side-blind belonging: your Tribe/Twin/Opp are here. */}
+      <SharedConviction
+        marketId={marketId}
+        viewerWallet={viewerWallet}
+        onSelectPerson={onSelectPerson}
+      />
 
       {/* THE HOUSE — a companion that only talks about YOU, never the market. */}
       <Hairline />
@@ -367,9 +387,9 @@ export function MarketDeck({
         question moves into the carousel header, so this collapses. */}
       <div className={`shrink-0 ${mobileCaseOpen ? "hidden" : ""}`}>
         <div className="mb-1 flex items-center gap-2">
-          {category && (
+          {(category || freshToken) && (
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-              {category}
+              {[category, freshToken].filter(Boolean).join(" · ")}
             </span>
           )}
           {lens && lenses && onLens ? (
@@ -548,10 +568,10 @@ function MarketByline({
 
   const fresh = c.createdAt ? marketFreshness(Date.now() - new Date(c.createdAt).getTime()) : null;
   const when = fresh?.fresh
-    ? "Just opened this market"
+    ? "just opened this market"
     : c.createdAt
-      ? `Created this market · ${ageWords(Date.now() - new Date(c.createdAt).getTime())}`
-      : "Created this market";
+      ? `opened ${ageWords(Date.now() - new Date(c.createdAt).getTime())}`
+      : "opened this market";
   const clickable = !!onSelectPerson;
 
   return (
@@ -572,15 +592,11 @@ function MarketByline({
           {initialsFor(c.name)}
         </span>
       )}
-      <span className="min-w-0">
-        <span
-          className={`block truncate text-[12px] font-semibold text-[var(--text)] ${
-            clickable ? "hover:underline" : ""
-          }`}
-        >
+      <span className="min-w-0 truncate text-[12px] text-[var(--text-secondary)]">
+        <span className={`font-semibold text-[var(--text)] ${clickable ? "hover:underline" : ""}`}>
           {c.name}
         </span>
-        <span className="block truncate text-[10px] text-[var(--text-muted)]">{when}</span>
+        <span className="text-[var(--text-muted)]"> · {when}</span>
       </span>
     </button>
   );
@@ -615,15 +631,17 @@ function ExamineCta({ open, onToggle }: { open: boolean; onToggle: () => void })
           {open ? "Case open" : "Examine the case"}
         </span>
         <span className="mt-0.5 block text-[11px] leading-snug text-[var(--text-muted)]">
-          {open ? "Close" : "See why believers chose each side."}
+          {open
+            ? "YES and NO evidence is open beside the market."
+            : "See how conviction divides between YES and NO."}
         </span>
       </span>
       <span
-        aria-hidden
-        className="ml-auto text-[15px] text-[var(--text-secondary)] transition-transform"
-        style={{ transform: open ? "rotate(90deg)" : "none" }}
+        className="ml-auto text-[15px] text-[var(--text-secondary)]"
+        aria-label={open ? "Close Case File" : undefined}
+        aria-hidden={open ? undefined : true}
       >
-        →
+        {open ? "×" : "→"}
       </span>
     </button>
   );
