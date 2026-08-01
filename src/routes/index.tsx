@@ -403,6 +403,26 @@ function Feed() {
       ? marketRows[currentIdx]
       : ((soloRow?.row as unknown as MarketRow | null) ?? marketRows[0]);
 
+  // "The House has an idea" — a rare, pre-generated market idea that takes one
+  // normal card's slot in this same deck. It never fetches on demand and never
+  // blocks a market: when there's nothing ready, the feed behaves exactly as before.
+  const houseIdea = useHouseIdea(wallet);
+  const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
+  useEffect(() => {
+    if (viewedId != null) houseIdea.noteCardViewed(viewedId);
+  }, [viewedId, houseIdea]);
+
+  /** Accept the idea: seed the create form with it, then open the review screen. */
+  const acceptIdea = (edit: boolean) => {
+    const s = houseIdea.suggestion;
+    if (!s) return;
+    startDraftFromSuggestion(s.question, { suggestionId: s.id, originalQuestion: s.question });
+    if (edit) houseIdea.onEdit();
+    else houseIdea.onCreate();
+    openCreate();
+  };
+
+
   // On mobile only the active tab's column is mounted-visible; from lg up all
   // three columns are always shown side by side.
   const show = (t: MobileTab) => (tab === t ? "flex" : "hidden");
