@@ -76,7 +76,11 @@ export function CreateMarket({
   // Hydrated from the session draft so leaving to read an existing market (or
   // the terms) never costs the user what they had typed.
   const saved = getDraft();
+  // Set when this draft came from a House idea, so the published market stays
+  // attributed to the suggestion that started it.
+  const source = saved.source;
   const [question, setQuestion] = useState(saved.question);
+
   const [description] = useState("");
   const [side, setSide] = useState<"YES" | "NO">(saved.side);
   const [amount, setAmount] = useState<number>(saved.amount);
