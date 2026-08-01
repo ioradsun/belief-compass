@@ -17,7 +17,11 @@ import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
 import { CaseColumn } from "@/components/CaseFile";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
+import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
+import { useHouseIdea } from "@/hooks/useHouseIdea";
+import { startDraftFromSuggestion } from "@/lib/create-draft";
 import { WalletConnectButton } from "@/components/WalletConnect";
+
 
 // Deferred surfaces: none of these render for a first-time, signed-out visitor.
 // PersonProfile/DnaOverview need a ?p/?dna selection; MyWorld/AccountRail need a
