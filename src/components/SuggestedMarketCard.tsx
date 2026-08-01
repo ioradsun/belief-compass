@@ -8,7 +8,7 @@
  *
  * It states fit and novelty. It never states demand, earnings, or urgency.
  */
-import { rewardLine, type CreatorFeeBps } from "@/domain/market-suggestion";
+import { rewardLine } from "@/domain/market-suggestion";
 import type { ReadySuggestion } from "@/lib/market-suggestion.functions";
 
 export function SuggestedMarketCard({
