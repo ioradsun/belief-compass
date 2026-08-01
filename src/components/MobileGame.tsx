@@ -202,6 +202,8 @@ export function MobileGame({
         marketId={marketId}
         title={title}
         ethUsd={ethUsd}
+        row={row}
+
         onBack={() => setPhase(side ? "decided" : "question")}
       />
     );
