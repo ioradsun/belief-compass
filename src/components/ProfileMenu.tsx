@@ -19,7 +19,6 @@ import { CreatorEarnings } from "@/components/CreatorEarnings";
 import { WalletIdentity } from "@/components/WalletIdentity";
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 import { requestDisconnect } from "@/lib/connect-bridge";
-import { setWalletProvider, walletProvider } from "@/lib/wagmi";
 
 /** Base is the one chain this app trades on. */
 const NETWORK = "Base";
@@ -319,28 +318,8 @@ function SettingsPanel({
   onOpenTerms?: () => void;
   onClose: () => void;
 }) {
-  const [provider, setProvider] = useState(walletProvider());
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between gap-3 rounded-xl px-1 py-2">
-        <div className="min-w-0">
-          <div className="text-[13px] text-[var(--text)]">Backup connector</div>
-          <div className="text-[11px] text-[var(--text-muted)]">
-            Switch wallet connector if you have trouble connecting.
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            const nextP = provider === "privy" ? "rainbowkit" : "privy";
-            setWalletProvider(nextP);
-            setProvider(nextP);
-          }}
-          className="shrink-0 rounded-full border border-[var(--border)] px-3 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
-        >
-          {provider === "privy" ? "Default" : "Backup"}
-        </button>
-      </div>
       {onOpenTerms && (
         <button
           type="button"

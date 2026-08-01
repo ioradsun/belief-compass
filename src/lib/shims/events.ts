@@ -8,7 +8,7 @@
  * te.EventEmitter')`. Re-exporting explicitly from the package's real entry
  * file makes both the default and named shapes exist no matter how the module
  * is interop'd. EventEmitter3 has a native ESM build and implements the subset
- * of Node's emitter API used by Privy, Coinbase and WalletConnect.
+ * of Node's emitter API used by Coinbase and WalletConnect.
  */
 import EventEmitter3 from "eventemitter3";
 

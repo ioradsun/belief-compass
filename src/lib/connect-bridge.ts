@@ -1,6 +1,6 @@
 /**
  * Wallet session bridge — any surface can ask for connect / sign out without
- * importing the wallet SDK. The single Privy-aware island in WalletConnect.tsx
+ * importing the wallet SDK. The wallet layer mounted by WalletConnect.tsx
  * listens for these events and owns the actual session change.
  */
 export const CONNECT_EVENT = "conviction:open-connect";
@@ -37,7 +37,7 @@ export function requestDisconnect() {
 
 /**
  * Remove the URL identity that can otherwise keep the account rail rendered
- * after wagmi/Privy has disconnected. Returns true when navigation started.
+ * after wagmi has disconnected. Returns true when navigation started.
  */
 export function clearDisconnectedWalletFromUrl(wallet?: string): boolean {
   if (typeof window === "undefined") return false;
