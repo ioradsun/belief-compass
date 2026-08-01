@@ -1,33 +1,27 @@
 /**
- * useHouseIdea — decides whether "The House has an idea" belongs in the feed
- * right now, and owns the funnel calls.
+ * useHouseIdea — the funnel side of "The House has an idea".
  *
- * The gate is deliberately conservative and lives in the domain module; this
- * hook only supplies the live session counters (how many normal markets this
- * person has actually seen, and how long since the last idea) and the ready
- * suggestion a background job stored earlier. It NEVER generates on demand, so
- * a slow or failed model can never stall a market card.
+ * It no longer decides ANYTHING about placement: the unified opportunity feed
+ * on the server decides whether an idea belongs in the sequence and where. This
+ * hook takes the suggestion the server already placed and owns the funnel calls
+ * (shown / create / edit / dismiss / published) plus the local dismissal so the
+ * card disappears immediately.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { readSessionToken } from "@/lib/wallet-session";
+import { noteCardViewed as noteFeedCard, noteIdeaShown } from "@/lib/feed-session";
 import {
   completeSuggestion,
-  getSuggestion,
   markSuggestion,
   trackSuggestion,
   type ReadySuggestion,
 } from "@/lib/market-suggestion.functions";
-import { SUGGESTION, shouldInsertSuggestion } from "@/domain/market-suggestion";
-
-/** Per-tab session counters — a suggestion is a session-scoped surprise. */
-const session = { cardsViewed: 0, cardsSinceSuggestion: Number.POSITIVE_INFINITY, shown: 0 };
 
 export interface HouseIdea {
-  /** The card to render in place of a market, or null (the normal case). */
+  /** The card to render, or null (the normal case). */
   suggestion: ReadySuggestion | null;
-  /** Count one normal market card as viewed. */
+  /** Count one normal market card as viewed (reported to the server feed). */
   noteCardViewed: (marketId: number) => void;
   onShown: () => void;
   onCreate: () => void;
@@ -37,64 +31,28 @@ export interface HouseIdea {
   onPublishFailed: () => void;
 }
 
-export function useHouseIdea(): HouseIdea {
+export function useHouseIdea(serverSuggestion: ReadySuggestion | null): HouseIdea {
   const { address } = useAccount();
   // The connected address, not the effective/linked viewer wallet: the session
   // token proves ownership of *this* address, and the server checks that.
   const wallet = address ?? null;
-  // Only a session the viewer already signed for — asking for a signature to
-  // *offer* an idea would be a worse trade than never offering it.
   const token = wallet ? readSessionToken(wallet) : null;
 
+  const [dismissedId, setDismissedId] = useState<string | null>(null);
+  const ready =
+    serverSuggestion && serverSuggestion.id !== dismissedId ? serverSuggestion : null;
 
-  const [, bump] = useState(0);
-  const seen = useRef(new Set<number>());
-  const [dismissedLocally, setDismissedLocally] = useState(false);
-
-  const { data } = useQuery({
-    queryKey: ["house-idea", wallet],
-    queryFn: async () =>
-      (await getSuggestion({ data: { wallet: wallet as string, session: token as string } })) ??
-      null,
-    enabled: !!wallet && !!token && session.shown < SUGGESTION.MAX_PER_SESSION,
-    staleTime: 5 * 60_000,
-    retry: false,
-  });
-
-  const ready = dismissedLocally ? null : (data ?? null);
-
-  const noteCardViewed = useCallback((marketId: number) => {
-    if (seen.current.has(marketId)) return;
-    seen.current.add(marketId);
-    session.cardsViewed += 1;
-    if (Number.isFinite(session.cardsSinceSuggestion)) session.cardsSinceSuggestion += 1;
-    bump((n) => n + 1);
+  const fire = useCallback((fn: () => Promise<unknown>) => {
+    void fn().catch(() => undefined); // analytics must never surface to the viewer
   }, []);
 
-  const eligible =
-    !!ready &&
-    shouldInsertSuggestion({
-      cardsViewed: session.cardsViewed,
-      cardsSinceSuggestion: session.cardsSinceSuggestion,
-      suggestionsThisSession: session.shown,
-      dismissedAt: null, // server-side cooldowns already gate the read
-      createdAt: null,
-      hasReadySuggestion: true,
-    });
-
-  const suggestion = eligible ? ready : null;
-
-  const fire = useCallback(
-    (fn: () => Promise<unknown>) => {
-      void fn().catch(() => undefined); // analytics must never surface to the viewer
-    },
-    [],
-  );
+  const noteCardViewed = useCallback((marketId: number) => {
+    noteFeedCard(marketId);
+  }, []);
 
   const onShown = useCallback(() => {
     if (!ready || !wallet || !token) return;
-    session.shown += 1;
-    session.cardsSinceSuggestion = 0;
+    noteIdeaShown();
     fire(() => markSuggestion({ data: { wallet, session: token, id: ready.id, step: "shown" } }));
   }, [ready, wallet, token, fire]);
 
@@ -114,7 +72,7 @@ export function useHouseIdea(): HouseIdea {
 
   const onDismiss = useCallback(() => {
     if (!ready || !wallet || !token) return;
-    setDismissedLocally(true);
+    setDismissedId(ready.id);
     fire(() =>
       markSuggestion({ data: { wallet, session: token, id: ready.id, step: "dismissed" } }),
     );
@@ -123,9 +81,11 @@ export function useHouseIdea(): HouseIdea {
   const onPublished = useCallback(
     (marketId: number | null, finalQuestion: string) => {
       if (!ready || !wallet || !token) return;
-      setDismissedLocally(true);
+      setDismissedId(ready.id);
       fire(() =>
-        completeSuggestion({ data: { wallet, session: token, id: ready.id, marketId, finalQuestion } }),
+        completeSuggestion({
+          data: { wallet, session: token, id: ready.id, marketId, finalQuestion },
+        }),
       );
     },
     [ready, wallet, token, fire],
@@ -142,11 +102,11 @@ export function useHouseIdea(): HouseIdea {
 
   // Signing out mid-session should not leave a stale card on screen.
   useEffect(() => {
-    if (!wallet) setDismissedLocally(false);
+    if (!wallet) setDismissedId(null);
   }, [wallet]);
 
   return {
-    suggestion,
+    suggestion: ready,
     noteCardViewed,
     onShown,
     onCreate,

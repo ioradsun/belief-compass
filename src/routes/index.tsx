@@ -5,11 +5,14 @@ import { TermsContent } from "@/components/TermsContent";
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
 import {
-  listFeed,
   listMarketPulses,
   getMarketRow,
   type VolumeWindow,
 } from "@/lib/markets.functions";
+import { getOpportunityFeed } from "@/lib/opportunity-feed.functions";
+import { feedSession } from "@/lib/feed-session";
+import { readSessionToken } from "@/lib/wallet-session";
+
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
@@ -19,6 +22,7 @@ import { CaseColumn } from "@/components/CaseFile";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
 import { useHouseIdea } from "@/hooks/useHouseIdea";
+import type { ReadySuggestion } from "@/lib/market-suggestion.functions";
 import { startDraftFromSuggestion } from "@/lib/create-draft";
 import { WalletConnectButton } from "@/components/WalletConnect";
 
@@ -85,15 +89,28 @@ const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-const feedQO = (wallet?: string, window: VolumeWindow = "24h") =>
+// ONE authoritative feed call. The server sequences markets and market ideas
+// into a single ordered list; the client renders that order and never
+// re-scores, re-sorts or re-filters it. The lens is a server-side filter too.
+const feedQO = (wallet: string | undefined, window: VolumeWindow = "24h", lens = "all") =>
   queryOptions({
-    queryKey: ["feed", wallet ?? null, window],
-    queryFn: async () => await listFeed({ data: { wallet, window } }),
+    queryKey: ["opp-feed", wallet ?? null, window, lens],
+    queryFn: async () =>
+      await getOpportunityFeed({
+        data: {
+          wallet: wallet ?? null,
+          sessionToken: wallet ? readSessionToken(wallet) : null,
+          window,
+          lens,
+          ...feedSession(),
+        },
+      }),
     // Prices, capital and volume re-poll so the cards move on their own.
     refetchInterval: 8_000,
     // Never blank the feed while a poll (or a window switch) is in flight.
     placeholderData: (prev) => prev,
   });
+
 
 const pulsesQO = (ids: number[]) =>
   queryOptions({
@@ -160,7 +177,7 @@ export const Route = createFileRoute("/")({
       // fast (client fills it in), and the in-flight compute primes the cache for
       // the next visitor. Either way the loader never owns the TTFB budget.
       const feed = await Promise.race([
-        listFeed({ data: { window: "24h" } }),
+        getOpportunityFeed({ data: { window: "24h" } }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 200)),
       ]);
       return { feed };
@@ -341,34 +358,39 @@ function Feed() {
   const [storySide, setStorySide] = useState<"YES" | "NO" | null>(null);
   const toggleStory = (s: "YES" | "NO") => setStorySide((prev) => (prev === s ? null : s));
 
+  // The active lens is a SERVER filter on the one global classification: it is
+  // sent with the feed request, so the server still owns the whole sequence.
+  const [lens, setLens] = useState<OppFilter>("all");
+
   // The SSR loader prefetched the anonymous 24h feed; adopt it as initialData so
   // the very first render (server AND client) paints the real deck with no
-  // round-trip. Only the anon 24h query matches what the loader fetched — a
-  // wallet or a different window falls through to a normal client fetch.
+  // round-trip. Only the anon 24h "all" query matches what the loader fetched —
+  // a wallet, window or lens falls through to a normal client fetch.
   const loaderData = Route.useLoaderData();
-  const initialFeed = !wallet && win === "24h" ? (loaderData?.feed ?? undefined) : undefined;
+  const initialFeed =
+    !wallet && win === "24h" && lens === "all" ? (loaderData?.feed ?? undefined) : undefined;
   const { data } = useQuery({
-    ...feedQO(wallet, win),
+    ...feedQO(wallet, win, lens),
     ...(initialFeed ? { initialData: initialFeed } : {}),
   });
+
+  // The server returned a finished sequence: market / market_idea items in
+  // order, plus the read-model row behind each market item. The client's only
+  // job is to project that order into rows — no scoring, sorting or filtering.
+  const items = data?.items ?? [];
+  const rowsById = data?.rows ?? {};
+  const orderedRows = items.flatMap((it) =>
+    it.kind === "market" && rowsById[it.onchainId] ? [rowsById[it.onchainId]!] : [],
+  );
   // Sticky: hold the last good feed until the next refresh lands.
-  const rawRows = useStickyRows(data?.data ?? []);
+  const rows = useStickyRows(orderedRows);
   const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "24H";
 
-  // Intent engine: the active lens re-ranks the whole feed by its OWN question,
-  // not just the sort order. Each lens answers a different human question, and
-  // every card carries the human reason it surfaced for this lens.
-  const [lens, setLens] = useState<OppFilter>("all");
-  // The dropdown FILTERS the one global classification; it never re-scores. Rows
-  // arrive already ordered by the server's opportunity_score (getMarkets).
-  const rows =
-    lens === "all"
-      ? rawRows
-      : rawRows.filter((r) => (r as Record<string, unknown>).opportunity_type === lens);
+  // Every card carries the reason the SERVER surfaced it (personal fact first,
+  // global classification otherwise).
   const reasonByMarket: Record<number, string> = {};
-  for (const r of rawRows) {
-    const reason = (r as Record<string, unknown>).opportunity_reason;
-    if (reason) reasonByMarket[Number(r.onchain_id)] = String(reason);
+  for (const it of items) {
+    if (it.kind === "market" && it.primaryReason) reasonByMarket[it.onchainId] = it.primaryReason;
   }
 
   const ids = rows.map((r) => Number(r.onchain_id));
@@ -378,16 +400,16 @@ function Feed() {
 
   // Single-market deck: the center shows exactly one market. ?m (set by a
   // position, a Live row, search, or Next) picks it; otherwise the top of the
-  // queue. PASS/Next advance through the current filtered order. There is no
-  // calibration queue — the live feed itself is how you build your DNA.
+  // queue. PASS/Next advance through the server's order.
   const marketRows = rows as unknown as MarketRow[];
 
   const foundIdx = marketRows.findIndex((r) => Number(r.onchain_id) === selectedMarket);
   const currentIdx = Math.max(0, foundIdx);
   const nextMarket = () => {
     if (marketRows.length)
-      selectMarket(Number(marketRows[(currentIdx + 1) % marketRows.length].onchain_id));
+      selectMarket(Number(marketRows[(currentIdx + 1) % marketRows.length]!.onchain_id));
   };
+
 
   // The selected market may be outside the loaded top-of-feed slice (e.g. opened
   // from search) — fetch its row on demand so ANY market can open in the center.
@@ -403,10 +425,15 @@ function Feed() {
       ? marketRows[currentIdx]
       : ((soloRow?.row as unknown as MarketRow | null) ?? marketRows[0]);
 
-  // "The House has an idea" — a rare, pre-generated market idea that takes one
-  // normal card's slot in this same deck. It never fetches on demand and never
-  // blocks a market: when there's nothing ready, the feed behaves exactly as before.
-  const houseIdea = useHouseIdea();
+  // "The House has an idea" — the SERVER decided whether an idea belongs in
+  // this sequence and at which slot. The hook only owns the funnel calls.
+  const ideaItem = items.find((it) => it.kind === "market_idea") ?? null;
+  const houseIdea = useHouseIdea(
+    ideaItem ? ((data?.idea as ReadySuggestion | null) ?? null) : null,
+  );
+  // The idea takes its own slot: it shows once the viewer has advanced to it.
+  const ideaDue = !!ideaItem && currentIdx >= ideaItem.position;
+
   const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
   useEffect(() => {
     if (viewedId != null) houseIdea.noteCardViewed(viewedId);
@@ -594,7 +621,7 @@ function Feed() {
                   first cycle completes.
                 </div>
               )
-            ) : houseIdea.suggestion ? (
+            ) : ideaDue && houseIdea.suggestion ? (
               /* A first-class feed card, in the exact slot a market would take. */
               <div className="flex min-h-0 flex-1 flex-col">
                 <SuggestedMarketCard
