@@ -65,6 +65,8 @@ export interface ConvictionDashboardData {
     tradesTodayCount: number;
     uniqueTradersTodayCount: number;
   };
+  /** Lifetime distinct wallets that have ever traded this creator's markets. */
+  peopleReached: number;
   /** Facts the milestone ladder needs (the rest come from on-chain creator data). */
   facts: {
     tradeCount: number;
@@ -266,21 +268,30 @@ export async function buildConvictionDashboard(
     creatorLastWeekUsd = w.prevWeekEth * ethUsd;
   }
 
-  // How many distinct people traded this creator's markets today.
+  // How many distinct people traded this creator's markets — today, and ever.
+  // "Reached" is the influence number: for a creator it can matter as much as
+  // earnings. Bounded scan (a floor for the largest creators, exact otherwise).
   let uniqueTradersTodayCount = 0;
+  let peopleReached = 0;
   if (createdIds.length) {
-    const { data: todayTrades } = await sb
+    const { data: allTrades } = await sb
       .from("events")
-      .select("wallet")
+      .select("wallet, occurred_at")
       .eq("is_canonical", true)
       .eq("kind", "trade")
       .in("market_id", createdIds.map((id) => String(id)))
-      .gte("occurred_at", startOfDayIso)
-      .limit(5000);
-    const traders = new Set<string>();
-    for (const r of (todayTrades ?? []) as Array<{ wallet: string | null }>)
-      if (r.wallet) traders.add(r.wallet.toLowerCase());
-    uniqueTradersTodayCount = traders.size;
+      .order("occurred_at", { ascending: false })
+      .limit(20_000);
+    const everyone = new Set<string>();
+    const today = new Set<string>();
+    for (const r of (allTrades ?? []) as Array<{ wallet: string | null; occurred_at: string }>) {
+      if (!r.wallet) continue;
+      const w = r.wallet.toLowerCase();
+      everyone.add(w);
+      if (r.occurred_at >= startOfDayIso) today.add(w);
+    }
+    peopleReached = everyone.size;
+    uniqueTradersTodayCount = today.size;
   }
 
   return {
@@ -297,6 +308,7 @@ export async function buildConvictionDashboard(
     creatorWindows: { thisWeekUsd: creatorThisWeekUsd, lastWeekUsd: creatorLastWeekUsd },
     progress: { putInUsd: flows.putInEth * ethUsd, cashedOutUsd: flows.cashedOutEth * ethUsd },
     activity: { tradesTodayCount, uniqueTradersTodayCount },
+    peopleReached,
     facts: { tradeCount: trades.length, longestHeldDays, hasProfit },
     heldBest,
     createdMarkets,

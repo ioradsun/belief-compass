@@ -5,6 +5,7 @@ import {
   bucketCreatorFees,
   moneyFlows,
   buildMilestones,
+  milestonePct,
   type DashTrade,
   type MilestoneFacts,
 } from "./conviction-dashboard";
@@ -148,9 +149,10 @@ describe("buildMilestones", () => {
     const m = buildMilestones(base);
     expect(m.unlocked).toBe(0);
     expect(m.pct).toBe(0);
+    expect(m.total).toBe(14);
     expect(m.next?.key).toBe("first-market");
   });
-  it("unlocks the right rungs and points at the next", () => {
+  it("unlocks the right rungs and points at the next active goal", () => {
     const m = buildMilestones({
       ...base,
       createdCount: 2,
@@ -164,6 +166,13 @@ describe("buildMilestones", () => {
     });
     expect(m.unlocked).toBe(8);
     expect(m.next?.key).toBe("first-claim");
+  });
+  it("carries current/target on measurable rungs for the progress bar", () => {
+    const m = buildMilestones({ ...base, creatorLifetimeUsd: 842 });
+    const earn1k = m.list.find((x) => x.key === "earn-1k")!;
+    expect(earn1k.current).toBe(842);
+    expect(earn1k.target).toBe(1000);
+    expect(milestonePct(earn1k)).toBe(84);
   });
   it("has no next once everything is unlocked", () => {
     const m = buildMilestones({
