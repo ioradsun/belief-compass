@@ -13,7 +13,7 @@
  * and the expanded list is the existing <LiveTape> filtered by market. One feed, two
  * scopes.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketChange } from "@/lib/markets.functions";
 import { getHouseRead } from "@/lib/house.functions";
@@ -69,6 +69,31 @@ export function CurrentMarketActivity({
 
   const count = change?.tape?.length ?? 0;
 
+  // Collapsed, the preview does NOT keep swapping on every poll. It holds the last
+  // line the viewer saw and instead counts how many events arrived since — the
+  // number is calmer than a line that flickers. Opening the section marks all seen
+  // and refreshes the held line.
+  const [held, setHeld] = useState<{ emoji: string; text: string } | null>(null);
+  const [seenCount, setSeenCount] = useState(0);
+  useEffect(() => {
+    if (held == null && preview != null) {
+      setHeld(preview);
+      setSeenCount(count);
+    }
+  }, [preview, held, count]);
+  const unread = Math.max(0, count - seenCount);
+
+  const markSeen = () => {
+    setSeenCount(count);
+    if (preview) setHeld(preview);
+  };
+  const toggle = () =>
+    setOpen((v) => {
+      if (!v) markSeen();
+      return !v;
+    });
+  const line = held ?? preview;
+
   return (
     <div
       className="mb-3 shrink-0 overflow-hidden rounded-[12px]"
@@ -79,7 +104,7 @@ export function CurrentMarketActivity({
     >
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         className="flex w-full items-center gap-2 px-3 pb-1 pt-2 text-left"
         aria-expanded={open}
       >
@@ -121,13 +146,13 @@ export function CurrentMarketActivity({
       ) : (
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={toggle}
           className="flex w-full items-center gap-2 px-3 pb-2 pt-0.5 text-left"
         >
           <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text-secondary)]">
-            {preview ? (
+            {line ? (
               <>
-                <span aria-hidden>{preview.emoji}</span> {preview.text}
+                <span aria-hidden>{line.emoji}</span> {line.text}
               </>
             ) : (
               <>
@@ -138,7 +163,7 @@ export function CurrentMarketActivity({
           </span>
           {count > 0 && (
             <span className="num shrink-0 text-[12px] font-semibold text-[var(--text-muted)]">
-              {count} update{count === 1 ? "" : "s"} ›
+              {unread > 0 ? `+${unread} new` : `${count} update${count === 1 ? "" : "s"}`} ›
             </span>
           )}
         </button>
