@@ -9,6 +9,7 @@
  * the headline. Story selection, pulse and ranking come from the pure
  * src/domain/position-story engine. Clicking opens the market in the center.
  */
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
