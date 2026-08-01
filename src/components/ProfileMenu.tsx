@@ -8,15 +8,24 @@
  * occasionally need: Edit Profile, Import POV Wallet, Settings, Sign Out. No
  * account switcher, no multiple profiles, no advanced wallet management.
  */
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
 import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getPersonProfile } from "@/lib/dna.functions";
 import { getProfileOverride } from "@/lib/profile-edit.functions";
-import { ProfileEditor } from "@/components/ProfileEditor";
-import { CreatorEarnings } from "@/components/CreatorEarnings";
-import { WalletIdentity } from "@/components/WalletIdentity";
+// The three account panels only exist behind a menu click, and each drags in
+// its own contract/signing code. Keeping them out of the header's chunk keeps
+// them off every first paint.
+const ProfileEditor = lazy(() =>
+  import("@/components/ProfileEditor").then((m) => ({ default: m.ProfileEditor })),
+);
+const CreatorEarnings = lazy(() =>
+  import("@/components/CreatorEarnings").then((m) => ({ default: m.CreatorEarnings })),
+);
+const WalletIdentity = lazy(() =>
+  import("@/components/WalletIdentity").then((m) => ({ default: m.WalletIdentity })),
+);
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 import { requestDisconnect } from "@/lib/connect-bridge";
 
