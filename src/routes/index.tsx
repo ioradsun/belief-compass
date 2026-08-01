@@ -22,6 +22,7 @@ import { CaseColumn } from "@/components/CaseFile";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
 import { useHouseIdea } from "@/hooks/useHouseIdea";
+import type { ReadySuggestion } from "@/lib/market-suggestion.functions";
 import { startDraftFromSuggestion } from "@/lib/create-draft";
 import { WalletConnectButton } from "@/components/WalletConnect";
 
@@ -620,7 +621,7 @@ function Feed() {
                   first cycle completes.
                 </div>
               )
-            ) : houseIdea.suggestion ? (
+            ) : ideaDue && houseIdea.suggestion ? (
               /* A first-class feed card, in the exact slot a market would take. */
               <div className="flex min-h-0 flex-1 flex-col">
                 <SuggestedMarketCard
