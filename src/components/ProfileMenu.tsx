@@ -15,6 +15,7 @@ import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getPersonProfile } from "@/lib/dna.functions";
 import { getProfileOverride } from "@/lib/profile-edit.functions";
 import { ProfileEditor } from "@/components/ProfileEditor";
+import { CreatorEarnings } from "@/components/CreatorEarnings";
 import { WalletIdentity } from "@/components/WalletIdentity";
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 import { requestDisconnect } from "@/lib/connect-bridge";
@@ -33,12 +34,13 @@ function nameOf(candidates: (string | null | undefined)[], wallet: string) {
   return wallet ? aliasFor(wallet) : "";
 }
 
-type Panel = null | "edit" | "import" | "settings";
+type Panel = null | "edit" | "import" | "settings" | "earnings";
 
 export function ProfileMenu({
   wallet,
   onViewProfile,
   onOpenTerms,
+  ethUsd = 0,
 }: {
   /** The effective (POV / trading) wallet being represented. */
   wallet: string;
@@ -46,6 +48,8 @@ export function ProfileMenu({
   onViewProfile: (wallet: string) => void;
   /** Open Terms & risk in the center (the one privacy surface we have). */
   onOpenTerms?: () => void;
+  /** Live ETH price, so claimable fees can be shown in dollars too. */
+  ethUsd?: number;
 }) {
   const me = wallet.toLowerCase();
   const [open, setOpen] = useState(false);
@@ -193,6 +197,7 @@ export function ProfileMenu({
 
           <Divider />
           <Item label="Edit Profile" onClick={() => setPanel("edit")} />
+          <Item label="Creator Earnings" onClick={() => setPanel("earnings")} />
           <Item label="Import POV Wallet" onClick={() => setPanel("import")} />
           <Divider />
           <Item label="Settings" onClick={() => setPanel("settings")} />
@@ -212,13 +217,16 @@ export function ProfileMenu({
           title={
             panel === "edit"
               ? "Edit Profile"
-              : panel === "import"
-                ? "Import POV Wallet"
-                : "Settings"
+              : panel === "earnings"
+                ? "Creator Earnings"
+                : panel === "import"
+                  ? "Import POV Wallet"
+                  : "Settings"
           }
           onClose={() => setPanel(null)}
         >
           {panel === "edit" && <ProfileEditor wallet={me} fallbackName={name} />}
+          {panel === "earnings" && <CreatorEarnings ethUsd={ethUsd} />}
           {panel === "import" && (
             <>
               <p className="mb-1 text-[12px] leading-relaxed text-[var(--text-muted)]">
