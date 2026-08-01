@@ -1,46 +1,49 @@
 import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
 import { WagmiProvider, useAccount } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { Config } from "wagmi";
 
-import { wagmiConfig, walletProvider } from "@/lib/wagmi";
+import { wagmiConfig, loadWalletConfig } from "@/lib/wagmi";
 import { requestConnect, requestDisconnect } from "@/lib/connect-bridge";
 
 // Isolated query client for wagmi to avoid interfering with the app's router-level client.
 const wagmiQueryClient = new QueryClient();
 
-/** Secondary provider — never in the eager bundle. */
-const PrivyStack = lazy(() => import("@/components/wallet/PrivyStack"));
 /** Connect modal + wallet artwork — its own chunk, mounted after first paint. */
 const RainbowKitLayer = lazy(() => import("@/components/wallet/RainbowKitLayer"));
 
 /**
- * PRIMARY: wagmi + RainbowKit. wagmi itself wraps the app (every `useAccount` /
- * `useSignMessage` call site depends on it), but the RainbowKit UI layer mounts
- * alongside the app rather than above it, so the connect modal, wallet artwork
- * and its stylesheet never sit on the first-paint path. Privy remains available
- * as a secondary provider.
+ * wagmi wraps the app (every `useAccount` / `useSignMessage` call site depends
+ * on it), but boots with a connector-free config so no wallet SDK is on the
+ * first-paint path. Once the browser is idle we swap in the real connectors and
+ * mount the RainbowKit UI layer, both from lazily imported chunks.
  */
 export function WalletProviders({ children }: { children: ReactNode }) {
-  // SSR and first paint always render the RainbowKit stack; if this browser
-  // opted into Privy we swap after mount (Privy is browser-only anyway).
-  const [provider, setProvider] = useState<"rainbowkit" | "privy">("rainbowkit");
+  const [config, setConfig] = useState<Config>(wagmiConfig);
   const [walletUi, setWalletUi] = useState(false);
-  useEffect(() => setProvider(walletProvider()), []);
-  useEffect(() => setWalletUi(true), []);
 
-  if (provider === "privy") {
-    return (
-      <QueryClientProvider client={wagmiQueryClient}>
-        <Suspense fallback={null}>
-          <PrivyStack>{children}</PrivyStack>
-        </Suspense>
-      </QueryClientProvider>
-    );
-  }
+  useEffect(() => {
+    let cancelled = false;
+    const boot = () => {
+      void loadWalletConfig().then((full) => {
+        if (cancelled) return;
+        setConfig(full);
+        setWalletUi(true);
+      });
+    };
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
+      .requestIdleCallback;
+    const id = ric ? ric(boot) : window.setTimeout(boot, 200);
+    return () => {
+      cancelled = true;
+      if (!ric) window.clearTimeout(id as number);
+    };
+  }, []);
 
   return (
     <QueryClientProvider client={wagmiQueryClient}>
-      <WagmiProvider config={wagmiConfig}>
+      {/* keyed so wagmi re-runs its reconnect pass once real connectors exist */}
+      <WagmiProvider key={config === wagmiConfig ? "boot" : "full"} config={config}>
         {children}
         {walletUi && (
           <Suspense fallback={null}>
@@ -57,7 +60,7 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 /**
  * Client-only, dependency-light connect control. Connect and sign out both go
- * through the bridge so whichever provider is mounted stays in sync.
+ * through the bridge so the mounted wallet layer stays in sync.
  */
 export function WalletConnectButton() {
   const [mounted, setMounted] = useState(false);
