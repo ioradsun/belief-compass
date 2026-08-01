@@ -46,6 +46,9 @@ const PersonProfile = lazy(() =>
 const DnaOverview = lazy(() =>
   import("@/components/DnaOverview").then((m) => ({ default: m.DnaOverview })),
 );
+const ConvictionDashboard = lazy(() =>
+  import("@/components/ConvictionDashboard").then((m) => ({ default: m.ConvictionDashboard })),
+);
 // Phase 5: the SERVER owns opportunity classification + score. The client only
 // filters by the canonical type and reads the precomputed order — no scoreFeed().
 type OppFilter = "all" | "hot" | "early" | "hidden" | "contested" | "conviction" | "new";
@@ -154,6 +157,7 @@ type Search = {
   create?: boolean;
   terms?: boolean;
   case?: boolean;
+  dash?: boolean;
 };
 
 export const Route = createFileRoute("/")({
@@ -170,6 +174,8 @@ export const Route = createFileRoute("/")({
     terms: search.terms === true || search.terms === "1" ? true : undefined,
     // Case File mode — preserved in the URL so it survives market switches + back/forward.
     case: search.case === true || search.case === "1" ? true : undefined,
+    // Conviction Dashboard — the financial story, a center-panel destination.
+    dash: search.dash === true || search.dash === "1" ? true : undefined,
   }),
   head: () => ({
     meta: [
@@ -236,6 +242,7 @@ function Feed() {
     create: createOpen,
     terms: termsOpen,
     case: caseOpen,
+    dash: dashOpen,
   } = Route.useSearch();
 
   const navigate = Route.useNavigate();
@@ -326,6 +333,23 @@ function Feed() {
       search: (prev: Search) => ({
         ...prev,
         dna: true,
+        p: undefined,
+        m: undefined,
+        create: undefined,
+        terms: undefined,
+      }),
+    });
+    setTab("belief");
+    enterProduct();
+  };
+  // The Conviction Dashboard is a center-panel destination (never a modal): it
+  // deep-links, survives refresh, and back returns you to the deck.
+  const openDashboard = () => {
+    navigate({
+      search: (prev: Search) => ({
+        ...prev,
+        dash: true,
+        dna: undefined,
         p: undefined,
         m: undefined,
         create: undefined,
@@ -608,6 +632,7 @@ function Feed() {
               wallet={wallet}
               onViewProfile={selectPerson}
               onOpenTerms={openTerms}
+              onOpenDashboard={openDashboard}
               ethUsd={data?.ethUsd ?? 0}
             />
           ) : undefined
@@ -691,6 +716,19 @@ function Feed() {
                 </h1>
                 <Suspense fallback={<DeckSkeleton />}>
                   <TermsContent />
+                </Suspense>
+              </div>
+            ) : dashOpen ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <Suspense fallback={<DeckSkeleton />}>
+                  <ConvictionDashboard
+                    wallet={wallet}
+                    onSelectMarket={selectMarket}
+                    onCreate={openCreate}
+                    onExplore={() =>
+                      navigate({ search: (prev: Search) => ({ ...prev, dash: undefined }) })
+                    }
+                  />
                 </Suspense>
               </div>
             ) : createOpen ? (
