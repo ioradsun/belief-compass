@@ -444,9 +444,11 @@ export const getPositionSummary = createServerFn({ method: "GET" })
     if (!row) return empty;
     const fin = (v: unknown): number | null =>
       v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+    // Cost basis is stored in ETH; value it in USD so it compares with USD worth.
+    const ethUsd = await ethUsdRate(sb);
     return {
-      yes: { invested: fin(row.yes_cost), worth: fin(row.yes_value_usd) },
-      no: { invested: fin(row.no_cost), worth: fin(row.no_value_usd) },
+      yes: { invested: costBasisUsd(row.yes_cost, ethUsd), worth: fin(row.yes_value_usd) },
+      no: { invested: costBasisUsd(row.no_cost, ethUsd), worth: fin(row.no_value_usd) },
     };
   });
 
@@ -469,7 +471,6 @@ export interface MarketChange {
    */
   tape: TapeTrade[];
 }
-
 
 const numOrNull = (v: unknown): number | null =>
   v == null || !Number.isFinite(Number(v)) ? null : Number(v);
@@ -550,7 +551,6 @@ export const getMarketChange = createServerFn({ method: "GET" })
       flows,
       tape,
     };
-
   });
 
 /**
@@ -618,6 +618,25 @@ export type Pulse = {
   eth: number;
   at: string;
 };
+
+/** Current ETH→USD rate from the cron-refreshed snapshot (0 when unknown). */
+async function ethUsdRate(sb: ReturnType<typeof serviceClient>): Promise<number> {
+  const { data } = await sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle();
+  return Number((data as { value?: number } | null)?.value ?? 0) || 0;
+}
+
+/**
+ * The reducer stores acquisition cost in ETH (it folds each trade's eth_amount).
+ * Worth, however, is POV's USD valuation — so gain must compare like with like.
+ * Value the ETH cost basis at the current rate, matching how the rest of the app
+ * prices ETH quantities. Null when the cost is unknown or we have no rate, so the
+ * caller honestly shows "worth only" instead of an inflated gain.
+ */
+function costBasisUsd(ethCost: unknown, ethUsd: number): number | null {
+  const eth = Number(ethCost);
+  if (!Number.isFinite(eth) || eth <= 0 || !(ethUsd > 0)) return null;
+  return eth * ethUsd;
+}
 
 export const getWallet = createServerFn({ method: "GET" })
   .inputValidator((d: { wallet: string; window?: VolumeWindow }) =>
@@ -772,8 +791,14 @@ export const getWallet = createServerFn({ method: "GET" })
       /* best-effort: stored values still render */
     }
 
+    // Cost basis is stored in ETH; value it in USD so gain compares like with like.
+    const ethUsd = await ethUsdRate(sb);
+
     const positions = (rows ?? []).map((r) => ({
       ...r,
+      // The honest "invested": the ETH acquisition cost, valued at the current rate.
+      yes_cost: costBasisUsd(r.yes_cost, ethUsd),
+      no_cost: costBasisUsd(r.no_cost, ethUsd),
       yes_shares: povValue.get(Number(r.onchain_id))?.yesShares ?? r.yes_shares,
       no_shares: povValue.get(Number(r.onchain_id))?.noShares ?? r.no_shares,
       yes_value_usd:
