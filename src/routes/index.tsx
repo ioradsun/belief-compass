@@ -5,11 +5,14 @@ import { TermsContent } from "@/components/TermsContent";
 import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
 import {
-  listFeed,
   listMarketPulses,
   getMarketRow,
   type VolumeWindow,
 } from "@/lib/markets.functions";
+import { getOpportunityFeed } from "@/lib/opportunity-feed.functions";
+import { feedSession } from "@/lib/feed-session";
+import { readSessionToken } from "@/lib/wallet-session";
+
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { LiveTape } from "@/components/LiveTape";
 import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
