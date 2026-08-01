@@ -422,7 +422,11 @@ function Feed() {
     !wallet && win === "24h" && lens === "all" ? (loaderData?.feed ?? undefined) : undefined;
   const { data } = useQuery({
     ...feedQO(wallet, win, lens),
-    ...(initialFeed ? { initialData: initialFeed } : {}),
+    // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
+    // React Query ages it against staleTime instead of refetching on hydration.
+    ...(initialFeed
+      ? { initialData: initialFeed, initialDataUpdatedAt: loaderData?.fetchedAt ?? Date.now() }
+      : {}),
   });
 
   // The server returned a finished sequence: market / market_idea items in
