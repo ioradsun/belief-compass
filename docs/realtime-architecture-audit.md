@@ -246,6 +246,19 @@ backend work — the stream, reducer semantics, and read model already exist.**
 > Others' trades on a viewer's position markets refresh the left-column network
 > tape precisely via `affectedPositionsTapeKeys` off the events stream. The
 > portfolio poll (12s) and positions-tape poll (8s) became 30s reconciles.
+>
+> **Predictive prefetch + reconnect (landed, steps 5–6).**
+> `usePredictivePrefetch` (in `Feed`) warms the immediate neighbors' deck-core —
+> next, next+1, previous, *nothing else* — into the same cache the deck reads, on
+> `requestIdleCallback` so it never competes with the active render; the
+> likely-next market gets the full trio (market-change + evidence + creator),
+> the others just the deck-core. `neighborIds` is pure/tested. Reconnect is
+> reconcile-not-reload: the coordinator re-syncs the visible surfaces once
+> (debounced) on socket-error recovery **and** on the browser's own `online` /
+> tab-visible signals. Because the client refetches rather than folds deltas, a
+> refetch *is* the resume — and the live tape resumes from its **own cursor** (its
+> queryFn fetches only events newer than the row it already holds), so a
+> reconnect replays just the missed tail. **All six audit steps are now landed.**
 
 1. **Open the stream that already exists.** One app-level realtime coordinator
    subscribes _once_ to `market_state` (and `events` for activity). Components

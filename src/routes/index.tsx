@@ -88,6 +88,7 @@ import { ProfileMenu } from "@/components/ProfileMenu";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { usePositionStream } from "@/lib/realtime/use-position-stream";
+import { usePredictivePrefetch } from "@/lib/realtime/use-predictive-prefetch";
 import { useIsDesktop } from "@/hooks/use-mobile";
 import { LandingPanel } from "@/components/LandingPanel";
 import { useLandingPanelState } from "@/hooks/useLandingPanelState";
@@ -459,6 +460,8 @@ function Feed() {
   const foundIdx =
     activeMarket == null ? -1 : marketRows.findIndex((r) => Number(r.onchain_id) === activeMarket);
   const currentIdx = Math.max(0, foundIdx);
+  // Warm the immediate neighbors' deck-core so "Next" (and back) feels local.
+  usePredictivePrefetch(ids, currentIdx);
 
   // Forward only — never a carousel. If the current market has left the feed
   // (just decided), the next one is the new top; otherwise it's the following id.
