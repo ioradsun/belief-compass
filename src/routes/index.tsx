@@ -28,9 +28,6 @@ const PersonProfile = lazy(() =>
 const DnaOverview = lazy(() =>
   import("@/components/DnaOverview").then((m) => ({ default: m.DnaOverview })),
 );
-const AccountRail = lazy(() =>
-  import("@/components/AccountMenu").then((m) => ({ default: m.AccountRail })),
-);
 // Phase 5: the SERVER owns opportunity classification + score. The client only
 // filters by the canonical type and reads the precomputed order — no scoreFeed().
 type OppFilter = "all" | "hot" | "early" | "hidden" | "contested" | "conviction" | "new";
@@ -69,6 +66,7 @@ const CreateMarket = lazy(() =>
 );
 const MyWorld = lazy(() => import("@/components/MyWorld").then((m) => ({ default: m.MyWorld })));
 import { OmniHeader } from "@/components/OmniHeader";
+import { ProfileMenu } from "@/components/ProfileMenu";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { useIsDesktop } from "@/hooks/use-mobile";
@@ -333,7 +331,6 @@ function Feed() {
   const [win, setWin] = useState<VolumeWindow>("24h");
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
   // Investigation Mode: which side's story has taken the center (null = Discovery,
   // where both sides are compared side by side). Clicking a side card opens it;
   // clicking the same card, Escape, or "Compare" returns to Discovery.
@@ -451,6 +448,11 @@ function Feed() {
             onOpenMenu={() => setMenuOpen(true)}
           />
         }
+        profile={
+          wallet ? (
+            <ProfileMenu wallet={wallet} onViewProfile={selectPerson} onOpenTerms={openTerms} />
+          ) : undefined
+        }
       />
 
       {/* One rail width for both sides in every mode — a single source of truth
@@ -484,31 +486,21 @@ function Feed() {
               <WalletConnectButton />
             </div>
           ) : (
-            <Suspense fallback={null}>
-              <AccountRail
+            <>
+              {/* Recipient side of belonging — one aggregated line, dismissible. */}
+              <WelcomeReceived wallet={wallet} />
+              <MyWorld
                 wallet={wallet}
-                onOpenProfile={selectPerson}
-                open={accountOpen}
-                onOpenChange={setAccountOpen}
+                rows={rows as unknown as MarketRow[]}
+                window={win}
+                winLabel={winLabel}
+                onSelectMarket={selectMarket}
+                selectedPerson={selectedPerson}
+                onSelectPerson={selectPerson}
+                onOpenDna={openDna}
+                initialNetwork={Boolean(selectedPerson || dnaOpen)}
               />
-              {!accountOpen && (
-                <>
-                  {/* Recipient side of belonging — one aggregated line, dismissible. */}
-                  <WelcomeReceived wallet={wallet} />
-                  <MyWorld
-                    wallet={wallet}
-                    rows={rows as unknown as MarketRow[]}
-                    window={win}
-                    winLabel={winLabel}
-                    onSelectMarket={selectMarket}
-                    selectedPerson={selectedPerson}
-                    onSelectPerson={selectPerson}
-                    onOpenDna={openDna}
-                    initialNetwork={Boolean(selectedPerson || dnaOpen)}
-                  />
-                </>
-              )}
-            </Suspense>
+            </>
           )}
         </aside>
 

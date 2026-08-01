@@ -20,6 +20,7 @@ export function LandingPanel({
   onExpand,
   onCreate,
   search,
+  profile,
 }: {
   state: LandingPanelState;
   onEnter: () => void;
@@ -29,10 +30,10 @@ export function LandingPanel({
   onCreate?: () => void;
   /** Global search slot, shown only in the collapsed bar. */
   search?: ReactNode;
+  /** The single account affordance — a profile icon, far right of the bar. */
+  profile?: ReactNode;
 }) {
-
   const expanded = state === "expanded";
-
 
   return (
     <header
@@ -48,7 +49,8 @@ export function LandingPanel({
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            expanded ? onCollapse() : onExpand();
+            if (expanded) onCollapse();
+            else onExpand();
           }
         }}
         className={`mx-auto w-full max-w-[1180px] cursor-pointer px-4 transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none motion-reduce:transition-none lg:px-8 ${
@@ -95,11 +97,18 @@ export function LandingPanel({
               </button>
             )}
 
+            {!expanded && profile && (
+              <div
+                className={`shrink-0 ${onCreate ? "lg:ml-2" : "ml-auto"}`}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                role="presentation"
+              >
+                {profile}
+              </div>
+            )}
           </div>
-
         </div>
-
-
 
         {/* expanding region — same component, changing shape */}
         <div
