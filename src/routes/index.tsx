@@ -2,15 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { TermsContent } from "@/components/TermsContent";
 
-import { queryOptions, useSuspenseQuery, useQuery } from "@tanstack/react-query";
+import { queryOptions, useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { nextMarketId } from "@/domain/opportunity-feed";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
-import {
-  listMarketPulses,
-  getMarketRow,
-  type VolumeWindow,
-} from "@/lib/markets.functions";
+import { listMarketPulses, getMarketRow, type VolumeWindow } from "@/lib/markets.functions";
 import { getOpportunityFeed } from "@/lib/opportunity-feed.functions";
-import { feedSession } from "@/lib/feed-session";
+import { feedSession, resetFeedSession } from "@/lib/feed-session";
 import { readSessionToken } from "@/lib/wallet-session";
 
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
@@ -25,7 +22,6 @@ import { useHouseIdea } from "@/hooks/useHouseIdea";
 import type { ReadySuggestion } from "@/lib/market-suggestion.functions";
 import { startDraftFromSuggestion } from "@/lib/create-draft";
 import { WalletConnectButton } from "@/components/WalletConnect";
-
 
 // Deferred surfaces: none of these render for a first-time, signed-out visitor.
 // PersonProfile/DnaOverview need a ?p/?dna selection; MyWorld/AccountRail need a
@@ -110,7 +106,6 @@ const feedQO = (wallet: string | undefined, window: VolumeWindow = "24h", lens =
     // Never blank the feed while a poll (or a window switch) is in flight.
     placeholderData: (prev) => prev,
   });
-
 
 const pulsesQO = (ids: number[]) =>
   queryOptions({
@@ -229,10 +224,17 @@ function Feed() {
   // market, a person, DNA) collapse it; nothing else does.
   const landing = useLandingPanelState();
   const enterProduct = landing.collapse;
+  const qc = useQueryClient();
+  // Discovery end-state: the viewer has decided on every eligible market. Set when
+  // "Next" runs off the end of the sequence; cleared by selecting a market or
+  // refreshing. Only meaningful for a connected viewer (anonymous never decides).
+  const [caughtUp, setCaughtUp] = useState(false);
+
   // One selection flow for the whole app. Clicking a position/Live row sets ?m; a
   // person sets ?p; the DNA summary sets ?dna. Each clears the others and focuses
   // the center (mobile: the Belief column). Browser back/forward walks history.
   const selectMarket = (marketId: number) => {
+    setCaughtUp(false);
     navigate({
       search: (prev: Search) => ({
         ...prev,
@@ -405,11 +407,24 @@ function Feed() {
 
   const foundIdx = marketRows.findIndex((r) => Number(r.onchain_id) === selectedMarket);
   const currentIdx = Math.max(0, foundIdx);
+  // Forward only — never a carousel. Advance to the next market in the sequence;
+  // when there is none, the viewer is caught up (no modulo wrap back to the start).
   const nextMarket = () => {
-    if (marketRows.length)
-      selectMarket(Number(marketRows[(currentIdx + 1) % marketRows.length]!.onchain_id));
+    const next = nextMarketId(
+      marketRows.map((r) => Number(r.onchain_id)),
+      currentIdx,
+    );
+    if (next != null) selectMarket(next);
+    else setCaughtUp(true);
   };
 
+  // Refresh the discovery feed: re-fetch (newly created markets may appear) and
+  // leave the caught-up state.
+  const refreshFeed = () => {
+    setCaughtUp(false);
+    resetFeedSession();
+    void qc.invalidateQueries({ queryKey: ["opp-feed"] });
+  };
 
   // The selected market may be outside the loaded top-of-feed slice (e.g. opened
   // from search) — fetch its row on demand so ANY market can open in the center.
@@ -448,7 +463,6 @@ function Feed() {
     else houseIdea.onCreate();
     openCreate();
   };
-
 
   // On mobile only the active tab's column is mounted-visible; from lg up all
   // three columns are always shown side by side.
@@ -607,6 +621,9 @@ function Feed() {
                   <DnaOverview wallet={wallet} onSelectPerson={selectPerson} />
                 </Suspense>
               </div>
+            ) : caughtUp && wallet ? (
+              // Ran off the end of the sequence — every eligible market decided.
+              <CaughtUp onRefresh={refreshFeed} onConvictions={() => setTab("mine")} />
             ) : rows.length === 0 ? (
               // While the feed is still loading (first paint), show a live-market
               // skeleton, not a "nothing here" card. Only show the real empty
@@ -615,6 +632,9 @@ function Feed() {
                 <div className="flex min-h-0 flex-1 flex-col">
                   <DeckSkeleton />
                 </div>
+              ) : wallet ? (
+                // Connected + the filtered feed is empty = decided on everything.
+                <CaughtUp onRefresh={refreshFeed} onConvictions={() => setTab("mine")} />
               ) : (
                 <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
                   No markets yet. The POV poller runs on a schedule — data will appear once the
@@ -656,7 +676,6 @@ function Feed() {
                 </div>
               )
             )}
-
           </div>
         </main>
 
@@ -734,6 +753,51 @@ function Feed() {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Discovery end-state. The center feed is a journey through unanswered
+ * convictions, not a carousel — when a viewer has decided on every eligible
+ * market, we say so plainly rather than looping back to the first one.
+ */
+function CaughtUp({
+  onRefresh,
+  onConvictions,
+}: {
+  onRefresh: () => void;
+  onConvictions: () => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+        You&rsquo;re caught up
+      </div>
+      <p className="mt-3 max-w-[34ch] text-[15px] leading-relaxed text-[var(--text)]">
+        You&rsquo;ve made a call on every market currently in your feed.
+      </p>
+      <p className="mt-1.5 max-w-[34ch] text-[13px] leading-relaxed text-[var(--text-muted)]">
+        New questions will appear as Conviction grows.
+      </p>
+      <div className="mt-6 flex flex-col items-center gap-2.5 sm:flex-row">
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="rounded-full px-5 py-2.5 text-[13px] font-semibold text-[var(--bg)] transition-opacity hover:opacity-90"
+          style={{ background: "var(--text)" }}
+        >
+          Refresh Feed
+        </button>
+        <button
+          type="button"
+          onClick={onConvictions}
+          className="rounded-full px-5 py-2.5 text-[13px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          View Your Convictions
+        </button>
       </div>
     </div>
   );

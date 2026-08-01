@@ -9,6 +9,7 @@
 import { serviceClient } from "@/lib/supabase-clients";
 import {
   sequenceFeed,
+  excludeDecided,
   EMPTY_VIEWER_CONTEXT,
   type FeedMarketCandidate,
   type FeedIdeaCandidate,
@@ -16,6 +17,7 @@ import {
   type OpportunityFeedItem,
 } from "@/domain/opportunity-feed";
 import { shouldInsertSuggestion } from "@/domain/market-suggestion";
+import { listCompletedMarketIds } from "@/lib/viewer-decisions.server";
 import { listFeed, type VolumeWindow } from "@/lib/markets.functions";
 
 export interface FeedSessionState {
@@ -43,10 +45,7 @@ type Row = Record<string, unknown> & { onchain_id: number };
  * capped slice of their own history. Everything here is already-computed state
  * — the feed never runs DNA or scoring inline.
  */
-async function viewerContext(
-  wallet: string,
-  rows: Row[],
-): Promise<ViewerFeedContext> {
+async function viewerContext(wallet: string, rows: Row[]): Promise<ViewerFeedContext> {
   const sb = serviceClient();
   const ids = rows.map((r) => Number(r.onchain_id));
   const w = wallet.toLowerCase();
@@ -102,6 +101,8 @@ async function viewerContext(
   return { categoryAffinity: affinity, tribeMarkets, oppMarkets, heldMarkets, decidedMarkets };
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- read-model rows are opaque JSON payloads */
+
 /** The ready idea for this viewer, if the session gate also allows one now. */
 async function ideaFor(
   wallet: string | null,
@@ -140,7 +141,6 @@ async function ideaFor(
   }
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /** Read-model row as it travels to the client (already JSON-serializable). */
 export type FeedRowPayload = Record<string, any>;
 
@@ -167,7 +167,16 @@ export async function buildOpportunityFeed(
   const feed = await listFeed({ data: { window: win, ...(wallet ? { wallet } : {}) } });
   const all = (feed.data ?? []) as unknown as Row[];
   const lens = input.lens && input.lens !== "all" ? input.lens : null;
-  const rows = lens ? all.filter((r) => r["opportunity_type"] === lens) : all;
+  const lensed = lens ? all.filter((r) => r["opportunity_type"] === lens) : all;
+
+  // V1 discovery rule: once a viewer has made a real decision on a market (a
+  // confirmed YES/NO purchase or a PASS), it leaves the normal discovery queue —
+  // under EVERY lens. Server-side only; anonymous viewers see the full feed.
+  const completed = wallet ? await listCompletedMarketIds(wallet) : new Set<number>();
+  const rows = excludeDecided(
+    lensed.map((r) => ({ r, onchainId: Number(r.onchain_id) })),
+    completed,
+  ).map((x) => x.r);
 
   const viewer = wallet && rows.length ? await viewerContext(wallet, rows) : EMPTY_VIEWER_CONTEXT;
   const { idea, raw } = await ideaFor(wallet, input.sessionToken ?? null, input);
@@ -175,8 +184,7 @@ export async function buildOpportunityFeed(
   const candidates: FeedMarketCandidate[] = rows.map((r) => ({
     onchainId: Number(r.onchain_id),
     category: ((r["markets"] as { category?: string | null } | null)?.category ?? null) as
-      | string
-      | null,
+      string | null,
     opportunityEligible: Boolean(r["opportunity_eligible"]),
     opportunityScore:
       r["opportunity_score"] == null ? null : Number(r["opportunity_score"] as number),
