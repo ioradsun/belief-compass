@@ -575,11 +575,13 @@ function BothSides({
   marketId,
   title,
   ethUsd,
+  row,
   onBack,
 }: {
   marketId: number;
   title: string;
   ethUsd: number;
+  row: MarketRow;
   onBack: () => void;
 }) {
   const [open, setOpen] = useState<OrderSide | null>(null);
@@ -595,10 +597,20 @@ function BothSides({
   });
 
   const believers = evidence?.believers ?? [];
-  const capital = (s: OrderSide) =>
-    believers.filter((b) => b.side === s).reduce((t, b) => t + (b.valueUsd ?? 0), 0);
-  const count = (s: OrderSide) => believers.filter((b) => b.side === s).length;
+  // Prefer the read-model's authoritative per-side capital; fall back to the
+  // sum of priced holdings only when the row hasn't been valued yet.
+  const capital = (s: OrderSide) => {
+    const rowUsd = s === "YES" ? row.yes_capital_usd : row.no_capital_usd;
+    if (rowUsd != null && rowUsd > 0) return Number(rowUsd);
+    return believers.filter((b) => b.side === s).reduce((t, b) => t + (b.valueUsd ?? 0), 0);
+  };
+  const count = (s: OrderSide) => {
+    const seen = believers.filter((b) => b.side === s).length;
+    const rowCount = s === "YES" ? evidence?.believersYes : evidence?.believersNo;
+    return Math.max(seen, rowCount ?? 0);
+  };
   const events = pulses?.pulses?.[String(marketId)] ?? [];
+
 
   return (
     <Screen>
