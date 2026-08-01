@@ -40,6 +40,7 @@ export function ProfileMenu({
   wallet,
   onViewProfile,
   onOpenTerms,
+  ethUsd = 0,
 }: {
   /** The effective (POV / trading) wallet being represented. */
   wallet: string;
@@ -47,6 +48,8 @@ export function ProfileMenu({
   onViewProfile: (wallet: string) => void;
   /** Open Terms & risk in the center (the one privacy surface we have). */
   onOpenTerms?: () => void;
+  /** Live ETH price, so claimable fees can be shown in dollars too. */
+  ethUsd?: number;
 }) {
   const me = wallet.toLowerCase();
   const [open, setOpen] = useState(false);
