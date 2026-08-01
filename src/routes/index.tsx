@@ -87,6 +87,7 @@ import { OmniHeader } from "@/components/OmniHeader";
 import { ProfileMenu } from "@/components/ProfileMenu";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
+import { useAccount } from "wagmi";
 import { usePositionStream } from "@/lib/realtime/use-position-stream";
 import { usePredictivePrefetch } from "@/lib/realtime/use-predictive-prefetch";
 import { useIsDesktop } from "@/hooks/use-mobile";
@@ -239,6 +240,14 @@ function Feed() {
 
   const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
+  // On a return visit wagmi silently reconnects the wallet AFTER hydration. Until
+  // that settles, treat the viewer as "resolving" — not "signed out" — so the left
+  // rail holds neutral space instead of flashing the Connect CTA, then swapping to
+  // positions the moment the wallet appears. A first-time visitor with no stored
+  // connection is 'disconnected' immediately, so their CTA is not delayed.
+  const { status: walletStatus } = useAccount();
+  const walletResolving =
+    !wallet && (walletStatus === "reconnecting" || walletStatus === "connecting");
   // One viewer-scoped socket keeps the connected wallet's positions live; a
   // belief change refetches only the mounted position slices (server-valued).
   usePositionStream(wallet);
@@ -580,7 +589,7 @@ function Feed() {
   return (
     <div className="flex h-[100svh] w-full flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)] supports-[height:100dvh]:h-[100dvh]">
       <LandingPanel
-        state={landing.hydrated ? landing.state : "collapsed"}
+        state={landing.state}
         onEnter={enterProduct}
         onCollapse={landing.collapse}
         onExpand={landing.expand}
@@ -629,6 +638,10 @@ function Feed() {
                 onInvestigate={toggleStory}
               />
             </Suspense>
+          ) : walletResolving ? (
+            /* Wallet still reconnecting on load — hold neutral space so the rail
+               never flashes the Connect CTA before positions appear. */
+            <div className="min-h-0 flex-1" aria-hidden />
           ) : !wallet ? (
             /* Signed out: nothing to show but the one thing to do. */
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
