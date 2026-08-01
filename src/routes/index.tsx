@@ -15,6 +15,8 @@ import { LiveTape } from "@/components/LiveTape";
 import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
 import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
+import { MobileGame } from "@/components/MobileGame";
+
 import { CaseColumn } from "@/components/CaseFile";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
@@ -623,7 +625,11 @@ function Feed() {
               </div>
             ) : caughtUp && wallet ? (
               // Ran off the end of the sequence — every eligible market decided.
-              <CaughtUp onRefresh={refreshFeed} onConvictions={() => setTab("mine")} />
+              <CaughtUp
+                onRefresh={refreshFeed}
+                onConvictions={() => setTab("mine")}
+                onCreate={openCreate}
+              />
             ) : rows.length === 0 ? (
               // While the feed is still loading (first paint), show a live-market
               // skeleton, not a "nothing here" card. Only show the real empty
@@ -634,7 +640,11 @@ function Feed() {
                 </div>
               ) : wallet ? (
                 // Connected + the filtered feed is empty = decided on everything.
-                <CaughtUp onRefresh={refreshFeed} onConvictions={() => setTab("mine")} />
+                <CaughtUp
+                  onRefresh={refreshFeed}
+                  onConvictions={() => setTab("mine")}
+                  onCreate={openCreate}
+                />
               ) : (
                 <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
                   No markets yet. The POV poller runs on a schedule — data will appear once the
@@ -658,21 +668,34 @@ function Feed() {
             ) : (
               currentRow && (
                 <div className="flex min-h-0 flex-1 flex-col">
-                  <MarketDeck
-                    row={currentRow}
-                    ethUsd={data?.ethUsd ?? 0}
-                    onSkip={nextMarket}
-                    viewerWallet={wallet}
-                    lens={lens}
-                    lenses={OPP_FILTERS}
-                    onLens={setLens}
-                    caseOpen={caseActive}
-                    mobileCaseOpen={mobileCaseActive}
-                    onToggleCase={toggleCase}
-                    storySide={caseActive ? storySide : null}
-                    onCloseStory={() => setStorySide(null)}
-                    onSelectPerson={selectPerson}
-                  />
+                  {!isDesktop ? (
+                    /* MOBILE — The Conviction Game. Its own experience: the
+                      question first, the crowd only after the decision. */
+                    <MobileGame
+                      key={Number(currentRow.onchain_id)}
+                      row={currentRow}
+                      ethUsd={data?.ethUsd ?? 0}
+                      viewerWallet={wallet}
+                      onNext={nextMarket}
+                      onSelectPerson={selectPerson}
+                    />
+                  ) : (
+                    <MarketDeck
+                      row={currentRow}
+                      ethUsd={data?.ethUsd ?? 0}
+                      onSkip={nextMarket}
+                      viewerWallet={wallet}
+                      lens={lens}
+                      lenses={OPP_FILTERS}
+                      onLens={setLens}
+                      caseOpen={caseActive}
+                      mobileCaseOpen={mobileCaseActive}
+                      onToggleCase={toggleCase}
+                      storySide={caseActive ? storySide : null}
+                      onCloseStory={() => setStorySide(null)}
+                      onSelectPerson={selectPerson}
+                    />
+                  )}
                 </div>
               )
             )}
@@ -766,9 +789,12 @@ function Feed() {
 function CaughtUp({
   onRefresh,
   onConvictions,
+  onCreate,
 }: {
   onRefresh: () => void;
   onConvictions: () => void;
+  /** Mobile's forward path when the game runs out of questions. */
+  onCreate?: () => void;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
@@ -798,6 +824,16 @@ function CaughtUp({
         >
           View Your Convictions
         </button>
+        {onCreate && (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="rounded-full px-5 py-2.5 text-[13px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            Create a Market
+          </button>
+        )}
       </div>
     </div>
   );
