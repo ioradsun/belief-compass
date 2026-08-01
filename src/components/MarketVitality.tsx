@@ -271,14 +271,13 @@ export function MarketMomentum({
           {pulse.meaning}
         </span>
         <span className="text-[12px] leading-snug text-[var(--text-muted)] sm:hidden">
-          · <span aria-hidden>🏠</span> {note.text}
+          · <span className="font-medium text-[var(--text-secondary)]">House:</span> {note.text}
         </span>
       </div>
 
       {/* Desktop: the House as a quiet analyst note under the narrative. */}
       <p className="hidden text-[12.5px] leading-snug text-[var(--text-secondary)] sm:block">
-        <span aria-hidden>🏠</span> <span className="font-medium text-[var(--text)]">House:</span>{" "}
-        {note.text}
+        <span className="font-medium text-[var(--text)]">House:</span> {note.text}
       </p>
     </section>
   );
