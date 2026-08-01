@@ -9,6 +9,7 @@
  * (market_created, side shifts, milestones) are NEVER grouped away.
  */
 import type { JsonValue } from "@/lib/events";
+import { composeLiveStory, type LiveStory } from "@/domain/story";
 
 export interface LiveEventInput {
   source_key: string;
@@ -49,6 +50,9 @@ export interface LiveRow {
   wallet: string | null;
   /** Set by the server when the actor is in the viewer's network. */
   face?: LiveFace | null;
+  /** The structured story: headline (market) → body (change) → attribution (who). */
+  story: LiveStory;
+  /** Flat fallback ("HEADLINE — body") for any non-structured consumer. */
   text: string;
   payload: Record<string, JsonValue>;
 }
@@ -85,43 +89,25 @@ export function mergeLiveRows(
     .slice(0, limit);
 }
 
-const fmtUsd = (n: number): string =>
-  "$" +
-  (n >= 1000
-    ? n.toLocaleString("en-US", { maximumFractionDigits: 0 })
-    : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+/** Flatten a structured story for the `text` fallback field. */
+export const flattenStory = (s: LiveStory): string =>
+  s.attribution ? `${s.headline} — ${s.body} ${s.attribution}` : `${s.headline} — ${s.body}`;
 
-const plural = (n: number, u: string) => `${n} ${u}${n === 1 ? "" : "s"}`;
-
-/** Factual text for a row — real numbers only, no motive attribution. */
-export function liveRowText(r: Omit<LiveRow, "text">): string {
-  switch (r.kind) {
-    case "round_trip":
-      // A wash (in and out at the same size) — no amount, it nets to zero.
-      return `A believer backed then exited ${r.side ?? ""}`.trim();
-    case "trade_burst": {
-      const verb = r.side && r.payload.action === "SELL" ? "reduced" : "backed";
-      const who = plural(r.walletCount ?? 1, "believer");
-      const amt = r.amountUsd && r.amountUsd > 0 ? ` · ${fmtUsd(r.amountUsd)}` : "";
-      return `${who} ${verb} ${r.side ?? ""}${amt}`.trim();
-    }
-    case "large_trade": {
-      const verb = r.payload.action === "SELL" ? "exited" : "entered";
-      return `${r.amountUsd ? fmtUsd(r.amountUsd) : ""} ${verb} ${r.side ?? ""}`.trim();
-    }
-    case "believer_milestone": {
-      const n = Number(r.payload.threshold ?? 0);
-      return `${r.side ?? ""} just passed ${n.toLocaleString("en-US")} believers`.trim();
-    }
-    case "tribe_doubled":
-      return `The ${r.side ?? ""} tribe doubled today`.trim();
-    case "market_created":
-      return "New market just opened";
-    case "side_shift":
-      return `A believer flipped to ${r.side ?? ""}`.trim();
-    default:
-      return "";
-  }
+/**
+ * The baseline story for a row from just the row's own fields (no actor identity,
+ * no live believer counts). The server re-composes actor rows and the fresh
+ * market with the richer inputs it resolves; system rows are final here.
+ */
+export function liveRowStory(r: Omit<LiveRow, "text" | "story">): LiveStory {
+  return composeLiveStory({
+    kind: r.kind,
+    side: r.side,
+    action: (r.payload.action as "BUY" | "SELL" | undefined) ?? null,
+    amountUsd: r.amountUsd,
+    walletCount: r.walletCount,
+    question: r.kind === "market_created" ? r.marketTitle : null,
+    threshold: r.kind === "believer_milestone" ? Number(r.payload.threshold ?? 0) : null,
+  });
 }
 
 const ROUND_TRIP_WINDOW_MS = 15 * 60_000;
@@ -189,7 +175,7 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
           : e.kind === "position_changed_side"
             ? "side_shift"
             : e.kind;
-      const base: Omit<LiveRow, "text"> = {
+      const base: Omit<LiveRow, "text" | "story"> = {
         id: e.source_key,
         kind,
         marketId: e.market_id,
@@ -204,7 +190,8 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
         wallet: e.wallet,
         payload: { ...(e.payload ?? {}) } as Record<string, JsonValue>,
       };
-      rows.push({ ...base, text: liveRowText(base) });
+      const story = liveRowStory(base);
+      rows.push({ ...base, story, text: flattenStory(story) });
       i += 1;
       continue;
     }
@@ -236,7 +223,7 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
     }
     const amountUsd = amountEth * ethUsd;
     const isLargeSingle = !isRoundTrip && trades === 1 && amountUsd >= LARGE_TRADE_USD;
-    const base: Omit<LiveRow, "text"> = {
+    const base: Omit<LiveRow, "text" | "story"> = {
       id: e.source_key,
       kind: isRoundTrip ? "round_trip" : isLargeSingle ? "large_trade" : "trade_burst",
       marketId: e.market_id,
@@ -253,7 +240,8 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
       wallet: wallets.size === 1 ? [...wallets][0] : trades === 1 ? (e.wallet ?? null) : null,
       payload: { action: e.action, window_ms: GROUP_WINDOW_MS },
     };
-    rows.push({ ...base, text: liveRowText(base) });
+    const story = liveRowStory(base);
+    rows.push({ ...base, story, text: flattenStory(story) });
     i = j;
   }
   return rows;

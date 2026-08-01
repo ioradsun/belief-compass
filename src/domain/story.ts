@@ -215,108 +215,242 @@ export function composeMarketStory(input: StoryInput): MarketStory {
 }
 
 // ============================================================================
-// Live-event story — one line per Live-tape row.
+// Live-event story — one Live-feed row, told as conviction, not a transaction.
 //
-// Turns a single on-chain action into a FOMO-shaped sentence:
-//   {who} {joined / left / defected to} the {SIDE} tribe for ${amt}
-//   — {the single strongest true momentum hook}
+// Every row answers three questions, in this order:
+//   1. WHAT changed?  → the HEADLINE ("YES IS GROWING")
+//   2. WHY it matters? → the BODY    ("9 believers now back YES.")
+//   3. WHO caused it?  → the ATTRIBUTION ("Bob joined." — small, last)
 //
-// Every clause is TRUE (numbers come from the row + market_state). Gamified
-// framing (tribe / joined / defected / heating up) is allowed; fabricated hype
-// (whale / smart money / guaranteed / moon / pouring) is not.
+// The market is the protagonist; people create the story. Two hard rules:
+//   • Terminology: never wallet / address / transaction / position / holder / the
+//     "YES tribe" (a Tribe belongs to the USER and is cross-market; YES/NO are
+//     market SIDES — you back / join / enter a side, you don't join its tribe).
+//   • Privacy: a network member's SIDE is never revealed here — their row is a
+//     side-blind belonging signal (YOUR TWIN / YOUR TRIBE / YOUR OPP) until the
+//     viewer has chosen. Non-network single actors may be named (pov.co identity).
 // ============================================================================
 
+export type LiveCategory =
+  | "fresh_market"
+  | "growing"
+  | "shrinking"
+  | "capital_in"
+  | "capital_out"
+  | "milestone"
+  | "momentum"
+  | "twin"
+  | "tribe"
+  | "opp"
+  | "inverse";
+
+export interface LiveStory {
+  category: LiveCategory;
+  /** "YES IS GROWING" — describes the MARKET, never a person. */
+  headline: string;
+  /** One sentence explaining the change. */
+  body: string;
+  /** Small, muted, last — "Bob joined." Null when there's no single actor. */
+  attribution: string | null;
+  tone: BeatTone;
+  /** True for network-relative rows (get the "about you" wash). */
+  personal: boolean;
+}
+
 export interface LiveStoryInput {
-  /** Named actor for a single-wallet row; null for a multi-wallet burst. */
-  actor?: { name: string; relationship: NetworkLabel | null } | null;
-  /** Wallets in a burst (for the crowd line); 1/undefined for a single actor. */
-  walletCount?: number | null;
+  kind: string; // trade_burst | large_trade | round_trip | market_created | believer_milestone | tribe_doubled | side_shift
   side: Side | null;
   action?: "BUY" | "SELL" | null;
-  /** A position_changed_side event — the actor switched sides. */
-  flip?: boolean;
   amountUsd?: number | null;
+  /** Wallets in a burst; 1/undefined for a single actor. */
+  walletCount?: number | null;
+  /** Named actor for a single-wallet row; null for a multi-wallet burst. */
+  actor?: { name: string; relationship: NetworkLabel | null } | null;
+  /** The market question — the hero of a fresh_market row. */
+  question?: string | null;
+  /** Believer milestone threshold. */
+  threshold?: number | null;
   market?: {
     believersYes?: number | null;
     believersNo?: number | null;
-    newBackers1h?: number | null;
-    moneyYesPct?: number | null;
-    peopleYesPct?: number | null;
-    opportunityType?: string | null;
   } | null;
 }
 
-const capWord = (s: string) => s[0].toUpperCase() + s.slice(1);
+const usd = (n: number): string =>
+  "$" +
+  (n >= 1000
+    ? n.toLocaleString("en-US", { maximumFractionDigits: 0 })
+    : n.toLocaleString("en-US", { maximumFractionDigits: n < 10 ? 2 : 0 }));
 
-/** The single strongest true momentum hook for a Live line (or ""). */
-function liveMomentumClause(input: LiveStoryInput, side: Side): string {
-  const m = input.market;
-  if (!m) return "";
-  const sideBackers = side === "YES" ? num(m.believersYes) : num(m.believersNo);
-  const n1h = num(m.newBackers1h);
-  const moneyOnSide =
-    m.moneyYesPct == null ? 0 : side === "YES" ? num(m.moneyYesPct) : 100 - num(m.moneyYesPct);
-  const divergent =
-    m.peopleYesPct != null &&
-    m.moneyYesPct != null &&
-    (num(m.peopleYesPct) - 50) * (num(m.moneyYesPct) - 50) < 0;
-  const buy = !input.flip && input.action !== "SELL";
+const sideTone = (side: Side | null, negative = false): BeatTone =>
+  side == null ? "neutral" : side === "YES" ? (negative ? "no" : "yes") : negative ? "yes" : "no";
 
-  if (buy) {
-    // Urgency first, then bandwagon, then dominance.
-    if (n1h >= 3 || m.opportunityType === "hot")
-      return n1h >= 2 ? `${side} is heating up, ${n1h} joined this hour` : `${side} is heating up`;
-    if (sideBackers >= 5) return `${sideBackers} now hold ${side}`;
-    if (moneyOnSide >= 60) return `the money's ${Math.round(moneyOnSide)}% ${side}`;
-    return "";
+const REL_HEADLINE: Record<NetworkLabel, string> = {
+  twin: "YOUR TWIN",
+  tribe: "YOUR TRIBE",
+  opp: "YOUR OPP",
+  inverse: "YOUR INVERSE",
+};
+
+/** The side-blind body for a network member's move — never names their side. */
+function personalBody(rel: NetworkLabel, action: "BUY" | "SELL" | null | undefined): string {
+  const left = action === "SELL";
+  switch (rel) {
+    case "twin":
+      return left
+        ? "Your closest match stepped back."
+        : "Your closest match just entered this market.";
+    case "tribe":
+      return left
+        ? "Someone from your Tribe stepped back."
+        : "Someone from your Tribe just entered.";
+    case "opp":
+      return left ? "Your rival stepped back." : "Your strongest rival just entered this market.";
+    case "inverse":
+      return left
+        ? "Someone who mirrors you stepped back."
+        : "Someone who mirrors you just entered.";
   }
-  // Selling / defecting — the contrarian or cooling angle.
-  if (divergent) {
-    const moneySide: Side = num(m.moneyYesPct) >= 50 ? "YES" : "NO";
-    return `the money leans ${moneySide}`;
-  }
-  if (sideBackers >= 5) return `${sideBackers} still hold ${side}`;
-  return "";
 }
 
-export function composeLiveStory(input: LiveStoryInput): { text: string; tone: BeatTone } {
+/**
+ * Compose one Live-feed row. Network members get a side-blind belonging row; the
+ * crowd and non-network actors get a market-story row. Always: headline (market)
+ * → body (change) → attribution (who, small, last).
+ */
+export function composeLiveStory(input: LiveStoryInput): LiveStory {
   const side = input.side;
-  const tone: BeatTone = side === "YES" ? "yes" : side === "NO" ? "no" : "neutral";
-  const stake =
-    input.amountUsd && input.amountUsd > 0
-      ? ` for $${
-          input.amountUsd >= 1000
-            ? input.amountUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })
-            : input.amountUsd.toLocaleString("en-US", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })
-        }`
-      : "";
+  const sideStr = side ?? "";
+  const actorName = input.actor?.name ?? null;
 
-  const clause = side ? liveMomentumClause(input, side) : "";
-  const tail = clause ? ` — ${clause}` : "";
-
-  // Crowd burst (no named actor).
-  if (!input.actor) {
-    const n = num(input.walletCount) || 1;
-    const verb = input.action === "SELL" ? "pulled out of" : "piled into";
+  // ── Fresh market — the question is the hero. ──
+  if (input.kind === "market_created") {
     return {
-      text: `${n} ${n === 1 ? "believer" : "believers"} ${verb} ${side ?? ""}${stake}${tail}`.trim(),
-      tone,
+      category: "fresh_market",
+      headline: "FRESH MARKET",
+      body: input.question?.trim() || "A new question just opened.",
+      attribution: actorName ? `${actorName} opened this market.` : "Just opened.",
+      tone: "neutral",
+      personal: false,
     };
   }
 
-  const who = input.actor.relationship
-    ? `${input.actor.name} (${capWord(input.actor.relationship)})`
-    : input.actor.name;
+  // ── Milestone — celebrate the market growing. ──
+  if (input.kind === "believer_milestone") {
+    const n = num(input.threshold);
+    return {
+      category: "milestone",
+      headline: "MILESTONE",
+      body: side
+        ? `${sideStr} just reached ${n.toLocaleString("en-US")} believers.`
+        : `${n.toLocaleString("en-US")} believers now back this question.`,
+      attribution: null,
+      tone: sideTone(side),
+      personal: false,
+    };
+  }
 
-  let verbPhrase: string;
-  // Consistent tribe metaphor (matches "Welcome to the YES Tribe", tribe health,
-  // tribe milestones): joined ↔ left, plus defected for a side switch.
-  if (input.flip) verbPhrase = `defected to ${side ?? ""}`.trim();
-  else if (input.action === "SELL") verbPhrase = `left the ${side ?? ""} tribe`.trim();
-  else verbPhrase = `joined the ${side ?? ""} tribe`.trim();
+  // ── Surge — a side's believers doubled in a day. ──
+  if (input.kind === "tribe_doubled") {
+    return {
+      category: "momentum",
+      headline: side ? `${sideStr} IS SURGING` : "MOMENTUM SHIFTED",
+      body: side ? `The number backing ${sideStr} doubled today.` : "Believers doubled in a day.",
+      attribution: null,
+      tone: sideTone(side),
+      personal: false,
+    };
+  }
 
-  return { text: `${who} ${verbPhrase}${stake}${tail}`.trim(), tone };
+  // ── Network member — a side-blind belonging signal. ──
+  const rel = input.actor?.relationship ?? null;
+  if (rel) {
+    return {
+      category: rel,
+      headline: REL_HEADLINE[rel],
+      body: personalBody(rel, input.action),
+      attribution: actorName ? `${actorName} · in your network` : null,
+      tone: "neutral", // never leak the side
+      personal: true,
+    };
+  }
+
+  // ── Side switch — conviction moved. ──
+  if (input.kind === "side_shift") {
+    return {
+      category: "momentum",
+      headline: "CONVICTION SHIFTED",
+      body: `A believer switched to ${sideStr}.`.replace(" to .", "."),
+      attribution: actorName ? `${actorName} switched sides.` : null,
+      tone: sideTone(side),
+      personal: false,
+    };
+  }
+
+  // ── A wash — nets to zero, quiet. ──
+  if (input.kind === "round_trip") {
+    return {
+      category: "momentum",
+      headline: "A QUICK ROUND TRIP",
+      body: `A believer backed ${sideStr} and exited the same day.`,
+      attribution: actorName ? `${actorName} came and went.` : null,
+      tone: "neutral",
+      personal: false,
+    };
+  }
+
+  const amt = num(input.amountUsd);
+  const sell = input.action === "SELL";
+  const n = num(input.walletCount) || 1;
+  const sideBelievers = side === "YES" ? input.market?.believersYes : input.market?.believersNo;
+  const remaining = sideBelievers == null ? null : num(sideBelievers);
+
+  // ── Large capital — money is the story. ──
+  if (input.kind === "large_trade") {
+    return sell
+      ? {
+          category: "capital_out",
+          headline: "CAPITAL PULLED BACK",
+          body: `${usd(amt)} left ${sideStr}.`,
+          attribution: actorName ? `${actorName} exited.` : null,
+          tone: sideTone(side, true),
+          personal: false,
+        }
+      : {
+          category: "capital_in",
+          headline: "CAPITAL IS SHIFTING",
+          body: `${usd(amt)} moved into ${sideStr}.`,
+          attribution: actorName ? `${actorName} entered.` : null,
+          tone: sideTone(side),
+          personal: false,
+        };
+  }
+
+  // ── The everyday heartbeat: believers arriving or stepping back. ──
+  if (sell) {
+    return {
+      category: "shrinking",
+      headline: n > 1 ? `${sideStr} LOST ${n} BELIEVERS` : `${sideStr} LOST A BELIEVER`,
+      body:
+        remaining != null
+          ? `${remaining} still back ${sideStr}.`
+          : `Conviction in ${sideStr} weakened.`,
+      attribution: actorName ? `${actorName} exited.` : `${n} stepped back.`,
+      tone: sideTone(side, true),
+      personal: false,
+    };
+  }
+  return {
+    category: "growing",
+    headline: `${sideStr} IS GROWING`,
+    body:
+      remaining != null
+        ? `${remaining} believer${remaining === 1 ? "" : "s"} now back ${sideStr}.`
+        : n > 1
+          ? `${n} more people joined ${sideStr}.`
+          : `Another believer joined ${sideStr}.`,
+    attribution: actorName ? `${actorName} joined.` : `${n} joined.`,
+    tone: sideTone(side),
+    personal: false,
+  };
 }
