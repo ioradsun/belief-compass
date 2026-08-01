@@ -186,8 +186,10 @@ function MomentumMetric({
             {unit}
           </span>
         </div>
-        <div className="ml-auto flex items-center gap-2">
-          <div className="hidden h-[22px] w-[92px] min-[380px]:block sm:h-[46px] sm:w-[300px]">
+        {/* pl-6 guarantees clear air between the label and the chart so the
+          sparkline can never butt against "believers" / "committed". */}
+        <div className="ml-auto flex shrink-0 items-center gap-2 pl-6">
+          <div className="hidden h-[22px] w-[72px] shrink-0 min-[380px]:block sm:h-[44px] sm:w-[168px]">
             <StepSpark points={points} tone={tone} className="h-full w-full" />
           </div>
           <span
