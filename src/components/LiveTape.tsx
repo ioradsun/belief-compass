@@ -78,8 +78,10 @@ export function LiveTape({
         data: { wallet, marketIds: scopeKey ?? undefined, limit },
       })) as LiveResult;
     },
-    // New rows prepend; refetch keeps the tape fresh without new infra.
-    refetchInterval: 6_000,
+    // The realtime coordinator refetches this tape the instant a trade lands
+    // (events stream), so this interval is now only a slow safety reconcile for a
+    // dropped socket — not the primary freshness path.
+    refetchInterval: 30_000,
     placeholderData: (prev) => prev,
   });
   // Sticky: the tape holds its rows until fresh ones arrive.

@@ -3,6 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import {
   applyMarketStateRow,
   applyMarketStateBatch,
+  affectedPulseKeys,
   liveFieldsOf,
   versionOf,
   type MarketStateRow,
@@ -138,6 +139,23 @@ describe("applyMarketStateBatch — deterministic ordering", () => {
     const row = (qc.getQueryData(["opp-feed", null, "24h", "all"]) as { rows: Record<number, Record<string, unknown>> })
       .rows[42];
     expect(row.yes_price_usd).toBe(0.5); // unchanged
+  });
+});
+
+describe("affectedPulseKeys", () => {
+  it("selects only pulse caches that hold a traded market (both key shapes)", () => {
+    qc.setQueryData(["market-pulses", "12,45,88"], { pulses: {} }); // feed id-list
+    qc.setQueryData(["market-pulses", "42"], { pulses: {} }); // single market
+    qc.setQueryData(["market-pulses", "7,9"], { pulses: {} }); // unrelated
+    const keys = affectedPulseKeys(qc, new Set([42, 88]));
+    const specs = keys.map((k) => k[1]).sort();
+    expect(specs).toEqual(["12,45,88", "42"]);
+  });
+
+  it("returns nothing when no cache intersects (or the set is empty)", () => {
+    qc.setQueryData(["market-pulses", "7,9"], { pulses: {} });
+    expect(affectedPulseKeys(qc, new Set([1, 2]))).toEqual([]);
+    expect(affectedPulseKeys(qc, new Set())).toEqual([]);
   });
 });
 
