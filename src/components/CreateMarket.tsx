@@ -313,6 +313,24 @@ export function CreateMarket({
         <span className="w-[52px]" />
       </div>
 
+      {/* Provenance: this draft started as a House idea. Editable like any other. */}
+      {source && (
+        <div
+          className="mt-4 rounded-[14px] px-3.5 py-3"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text)]">
+            <span aria-hidden>🏠</span> The House found the question
+          </div>
+          <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
+            Publish it as-is or change anything before it goes live.{" "}
+            {rewardLine(econ.creatorFeeBps)}
+          </p>
+        </div>
+      )}
+
+
+
       {/* Type */}
       <label className="mt-5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
         Type
