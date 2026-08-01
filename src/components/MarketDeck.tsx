@@ -52,7 +52,6 @@ import {
 import { OrderTicket } from "@/components/order/OrderTicket";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
-import { ReportMarket } from "@/components/ReportMarket";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 
 /**
