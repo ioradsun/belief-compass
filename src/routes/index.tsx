@@ -357,34 +357,39 @@ function Feed() {
   const [storySide, setStorySide] = useState<"YES" | "NO" | null>(null);
   const toggleStory = (s: "YES" | "NO") => setStorySide((prev) => (prev === s ? null : s));
 
+  // The active lens is a SERVER filter on the one global classification: it is
+  // sent with the feed request, so the server still owns the whole sequence.
+  const [lens, setLens] = useState<OppFilter>("all");
+
   // The SSR loader prefetched the anonymous 24h feed; adopt it as initialData so
   // the very first render (server AND client) paints the real deck with no
-  // round-trip. Only the anon 24h query matches what the loader fetched — a
-  // wallet or a different window falls through to a normal client fetch.
+  // round-trip. Only the anon 24h "all" query matches what the loader fetched —
+  // a wallet, window or lens falls through to a normal client fetch.
   const loaderData = Route.useLoaderData();
-  const initialFeed = !wallet && win === "24h" ? (loaderData?.feed ?? undefined) : undefined;
+  const initialFeed =
+    !wallet && win === "24h" && lens === "all" ? (loaderData?.feed ?? undefined) : undefined;
   const { data } = useQuery({
-    ...feedQO(wallet, win),
+    ...feedQO(wallet, win, lens),
     ...(initialFeed ? { initialData: initialFeed } : {}),
   });
+
+  // The server returned a finished sequence: market / market_idea items in
+  // order, plus the read-model row behind each market item. The client's only
+  // job is to project that order into rows — no scoring, sorting or filtering.
+  const items = data?.items ?? [];
+  const rowsById = data?.rows ?? {};
+  const orderedRows = items.flatMap((it) =>
+    it.kind === "market" && rowsById[it.onchainId] ? [rowsById[it.onchainId]!] : [],
+  );
   // Sticky: hold the last good feed until the next refresh lands.
-  const rawRows = useStickyRows(data?.data ?? []);
+  const rows = useStickyRows(orderedRows);
   const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "24H";
 
-  // Intent engine: the active lens re-ranks the whole feed by its OWN question,
-  // not just the sort order. Each lens answers a different human question, and
-  // every card carries the human reason it surfaced for this lens.
-  const [lens, setLens] = useState<OppFilter>("all");
-  // The dropdown FILTERS the one global classification; it never re-scores. Rows
-  // arrive already ordered by the server's opportunity_score (getMarkets).
-  const rows =
-    lens === "all"
-      ? rawRows
-      : rawRows.filter((r) => (r as Record<string, unknown>).opportunity_type === lens);
+  // Every card carries the reason the SERVER surfaced it (personal fact first,
+  // global classification otherwise).
   const reasonByMarket: Record<number, string> = {};
-  for (const r of rawRows) {
-    const reason = (r as Record<string, unknown>).opportunity_reason;
-    if (reason) reasonByMarket[Number(r.onchain_id)] = String(reason);
+  for (const it of items) {
+    if (it.kind === "market" && it.primaryReason) reasonByMarket[it.onchainId] = it.primaryReason;
   }
 
   const ids = rows.map((r) => Number(r.onchain_id));
@@ -394,16 +399,16 @@ function Feed() {
 
   // Single-market deck: the center shows exactly one market. ?m (set by a
   // position, a Live row, search, or Next) picks it; otherwise the top of the
-  // queue. PASS/Next advance through the current filtered order. There is no
-  // calibration queue — the live feed itself is how you build your DNA.
+  // queue. PASS/Next advance through the server's order.
   const marketRows = rows as unknown as MarketRow[];
 
   const foundIdx = marketRows.findIndex((r) => Number(r.onchain_id) === selectedMarket);
   const currentIdx = Math.max(0, foundIdx);
   const nextMarket = () => {
     if (marketRows.length)
-      selectMarket(Number(marketRows[(currentIdx + 1) % marketRows.length].onchain_id));
+      selectMarket(Number(marketRows[(currentIdx + 1) % marketRows.length]!.onchain_id));
   };
+
 
   // The selected market may be outside the loaded top-of-feed slice (e.g. opened
   // from search) — fetch its row on demand so ANY market can open in the center.
