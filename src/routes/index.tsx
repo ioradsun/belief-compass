@@ -782,10 +782,14 @@ function Feed() {
 function CaughtUp({
   onRefresh,
   onConvictions,
+  onCreate,
 }: {
   onRefresh: () => void;
   onConvictions: () => void;
+  /** Mobile's forward path when the game runs out of questions. */
+  onCreate?: () => void;
 }) {
+
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
