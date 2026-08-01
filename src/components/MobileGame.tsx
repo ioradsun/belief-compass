@@ -161,8 +161,10 @@ export function MobileGame({
       if (viewerWallet) express.mutate(s);
       setSide(s);
       setPhase("decided");
-      setBacking(false);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      // Drop straight into backing — the amount + Confirm is right there, so buying
+      // is YES → Confirm (two taps). The reveal + community still show above; the
+      // amount panel's Cancel steps back out for anyone who isn't ready.
+      setBacking(true);
     },
     [viewerWallet], // eslint-disable-line react-hooks/exhaustive-deps
   );
