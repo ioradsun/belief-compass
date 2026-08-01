@@ -613,7 +613,6 @@ function BothSides({
   };
   const events = pulses?.pulses?.[String(marketId)] ?? [];
 
-
   return (
     <Screen>
       <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">

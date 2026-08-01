@@ -625,7 +625,11 @@ function Feed() {
               </div>
             ) : caughtUp && wallet ? (
               // Ran off the end of the sequence — every eligible market decided.
-              <CaughtUp onRefresh={refreshFeed} onConvictions={() => setTab("mine")} onCreate={openCreate} />
+              <CaughtUp
+                onRefresh={refreshFeed}
+                onConvictions={() => setTab("mine")}
+                onCreate={openCreate}
+              />
             ) : rows.length === 0 ? (
               // While the feed is still loading (first paint), show a live-market
               // skeleton, not a "nothing here" card. Only show the real empty
@@ -636,7 +640,11 @@ function Feed() {
                 </div>
               ) : wallet ? (
                 // Connected + the filtered feed is empty = decided on everything.
-                <CaughtUp onRefresh={refreshFeed} onConvictions={() => setTab("mine")} onCreate={openCreate} />
+                <CaughtUp
+                  onRefresh={refreshFeed}
+                  onConvictions={() => setTab("mine")}
+                  onCreate={openCreate}
+                />
               ) : (
                 <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
                   No markets yet. The POV poller runs on a schedule — data will appear once the
@@ -691,7 +699,6 @@ function Feed() {
                 </div>
               )
             )}
-
           </div>
         </main>
 
@@ -789,7 +796,6 @@ function CaughtUp({
   /** Mobile's forward path when the game runs out of questions. */
   onCreate?: () => void;
 }) {
-
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
@@ -829,7 +835,6 @@ function CaughtUp({
           </button>
         )}
       </div>
-
     </div>
   );
 }
