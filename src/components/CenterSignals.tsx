@@ -1,23 +1,17 @@
 /**
- * CENTER signals — Pulse and Live Now.
+ * CENTER signal — Live Now.
  *
- *   • Pulse    — "what is the shape of momentum?" One label + one calm sentence,
- *                read off the canonical marketBook so it can never contradict the
- *                totals above.
  *   • Live Now — "what happened most recently?" Exactly one MATERIAL event. It
  *                reports history, so it may name a side; it wraps to two lines
  *                rather than truncate the meaning.
  *
+ * (Pulse used to live here too; it now folds into <MarketMomentum>.)
  * Presentation only — everything comes from the pure domain modules.
  */
 import { useMemo } from "react";
 import type { TapeTrade } from "@/domain/conviction-series";
 import { marketBook } from "@/domain/market-book";
-import { marketPulse, pulseTone } from "@/domain/market-pulse";
 import { latestMaterialEvent, liveNowLine } from "@/domain/live-now";
-
-const toneColor = (t: "up" | "down" | "flat"): string =>
-  t === "up" ? "var(--yes)" : t === "down" ? "var(--no)" : "var(--text-muted)";
 
 const fmtMoney = (usd: number) =>
   usd >= 1000 ? `$${Math.round(usd).toLocaleString("en-US")}` : `$${usd.toFixed(usd < 10 ? 2 : 0)}`;
@@ -29,40 +23,6 @@ const agoLabel = (ms: number) => {
   if (s < 172_800) return `${Math.round(s / 3600)}h ago`;
   return `${Math.round(s / 86_400)}d ago`;
 };
-
-/** PULSE — the market's one-word state and one calm sentence. */
-export function MarketPulse({
-  tape,
-  nowMs = Date.now(),
-}: {
-  tape: TapeTrade[] | undefined;
-  nowMs?: number;
-}) {
-  const pulse = useMemo(() => marketPulse(marketBook(tape ?? [], nowMs)), [tape, nowMs]);
-  const tone = toneColor(pulseTone(pulse.label));
-
-  return (
-    <section aria-label="Pulse">
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-          Pulse
-        </span>
-        <span className="text-[10px] text-[var(--text-muted)]" aria-hidden>
-          ·
-        </span>
-        <span
-          className="text-[11px] font-semibold uppercase tracking-[0.06em]"
-          style={{ color: tone }}
-        >
-          {pulse.label}
-        </span>
-      </div>
-      <p className="mt-1 text-[12.5px] leading-snug text-[var(--text-secondary)]">
-        {pulse.meaning}
-      </p>
-    </section>
-  );
-}
 
 /** LIVE NOW — the single most recent material event. Wraps, never truncates. */
 export function LiveNow({

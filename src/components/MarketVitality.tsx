@@ -1,14 +1,26 @@
 /**
- * CENTER — Market Momentum.
+ * CENTER — Market Momentum: the one block that answers "why should I care about
+ * this market right now?"
  *
- * Two STACKED rows — Market Believers, then Market Capital — read as one story:
- * people, then money, then (in Pulse) meaning. Stacking (not side by side) avoids
- * a false red-vs-green contest, since believers and capital are not opposing
- * sides. Every number comes from the canonical marketBook, so the center totals
- * reconcile exactly with the two side panels. Side-blind by construction.
+ * It merges what used to be four stacked sections — believers, capital, Pulse and
+ * The House — into a single story: how many people believe, how money is moving,
+ * what the trend is, and what the House makes of it. Two compact metric rows
+ * (value · capped sparkline · percentage), a status pill that summarises the
+ * shape, and the House as a quiet analyst note. No section headers — "Pulse" and
+ * "House" are metadata, not headings. The SAME component renders on desktop and
+ * mobile; only the layout (and the sparkline size) changes.
+ *
+ * Every number is read off the canonical marketBook, so the totals reconcile with
+ * the side panels; the label comes from marketPulse and the note from houseNote —
+ * all existing calculations, unchanged. Side-blind by construction.
  */
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
+import { marketPulse, pulseTone } from "@/domain/market-pulse";
+import { houseNote } from "@/domain/house-note";
+import { getHouseRead } from "@/lib/house.functions";
+import { houseKey } from "@/lib/house-round";
 import type { TapeTrade } from "@/domain/conviction-series";
 import type { VitalityPoint } from "@/domain/market-vitality";
 
@@ -22,14 +34,16 @@ const dirTone = (d: "up" | "down" | "flat"): string =>
 const fmtMoney = (usd: number) =>
   usd >= 1000 ? `$${Math.round(usd).toLocaleString("en-US")}` : `$${usd.toFixed(usd < 10 ? 2 : 0)}`;
 
-const SPARK_W = 168;
-const SPARK_H = 26;
+// The sparkline answers only up / down / flat. Its box is set by the caller's
+// wrapper (small inline on mobile, wider on desktop); the path fills it.
+const SPARK_W = 300;
+const SPARK_H = 46;
 
-function FlatSpark() {
+function FlatSpark({ className }: { className?: string }) {
   return (
     <svg
       viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
-      className="mt-1.5 h-[26px] w-full"
+      className={className}
       preserveAspectRatio="none"
       aria-hidden
     >
@@ -48,10 +62,18 @@ function FlatSpark() {
 }
 
 /** An event-driven step line, tinted by the window's direction. No axes/fills. */
-function StepSpark({ points, tone }: { points: VitalityPoint[]; tone: string }) {
+function StepSpark({
+  points,
+  tone,
+  className,
+}: {
+  points: VitalityPoint[];
+  tone: string;
+  className?: string;
+}) {
   const vs = points.map((p) => p.v);
   const flat = points.length < 2 || Math.max(...vs) === Math.min(...vs);
-  if (flat) return <FlatSpark />;
+  if (flat) return <FlatSpark className={className} />;
 
   const t0 = points[0].t;
   const t1 = Math.max(points[points.length - 1].t, t0 + 1);
@@ -72,12 +94,12 @@ function StepSpark({ points, tone }: { points: VitalityPoint[]; tone: string }) 
   return (
     <svg
       viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
-      className="mt-1.5 h-[26px] w-full"
+      className={className}
       preserveAspectRatio="none"
       aria-hidden
     >
       <path d={d} fill="none" stroke={tone} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
-      {points.length <= 2 && <circle cx={x(last.t)} cy={y(last.v)} r="2" fill={tone} />}
+      {points.length <= 2 && <circle cx={x(last.t)} cy={y(last.v)} r="2.4" fill={tone} />}
     </svg>
   );
 }
@@ -132,43 +154,57 @@ function capitalCopy(m: BookMetric, w: BookWindow, usd: (eth: number) => number)
   };
 }
 
-function MomentumRow({
+/**
+ * One metric row: value + unit on the left, a capped sparkline + the percentage
+ * pinned to the endpoint on the right, an absolute change beneath. On mobile the
+ * sparkline shrinks and the absolute line hides unless it carries the only signal
+ * (cold-start, when there's no percentage). Below ~380px the chart drops before
+ * the percentage — the percentage carries more per pixel.
+ */
+function MomentumMetric({
   total,
-  label,
+  unit,
   copy,
   points,
 }: {
   total: string;
-  label: string;
+  unit: string;
   copy: RowCopy;
   points: VitalityPoint[];
 }) {
   const tone = dirTone(copy.direction);
+  const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
+  const trend = copy.pct ?? (copy.direction === "flat" ? "0%" : "");
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="min-w-0">
-          <span className="num text-[21px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
+      <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-baseline gap-1.5">
+          <span className="num text-[19px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)] sm:text-[21px]">
             {total}
           </span>
-          <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            {label}
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
+            {unit}
           </span>
         </div>
-        {copy.pct && (
+        <div className="ml-auto flex items-center gap-2">
+          <div className="hidden h-[22px] w-[92px] min-[380px]:block sm:h-[46px] sm:w-[300px]">
+            <StepSpark points={points} tone={tone} className="h-full w-full" />
+          </div>
           <span
             className="num shrink-0 text-[13px] font-semibold tabular-nums"
             style={{ color: tone }}
           >
-            {copy.direction === "up" ? "▲ " : copy.direction === "down" ? "▼ " : ""}
-            {copy.pct}
+            {arrow ? `${arrow} ` : ""}
+            {trend}
           </span>
-        )}
+        </div>
       </div>
-      <div className="num mt-0.5 text-[11px]" style={{ color: tone }}>
+      <div
+        className={`num mt-0.5 text-[11px] ${copy.pct ? "hidden sm:block" : ""}`}
+        style={{ color: tone }}
+      >
         {copy.absolute}
       </div>
-      <StepSpark points={points} tone={tone} />
     </div>
   );
 }
@@ -176,35 +212,72 @@ function MomentumRow({
 export function MarketMomentum({
   tape,
   ethUsd,
+  marketId,
+  viewerWallet,
   nowMs = Date.now(),
 }: {
   tape: TapeTrade[] | undefined;
   ethUsd: number;
+  marketId: number;
+  viewerWallet?: string;
   nowMs?: number;
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs), [tape, nowMs]);
   const usd = (eth: number) => eth * (ethUsd > 0 ? ethUsd : 0);
+  const pulse = useMemo(() => marketPulse(book), [book]);
+  const pTone = dirTone(pulseTone(pulse.label));
+
+  const { data: house } = useQuery({
+    queryKey: houseKey(viewerWallet, marketId),
+    queryFn: () => getHouseRead({ data: { wallet: viewerWallet ?? null, marketId } }),
+    staleTime: 30_000,
+  });
+  const note = houseNote(viewerWallet, house, marketId);
 
   const b = book.believers.market;
   const c = book.capitalEth.market;
 
   return (
-    <section aria-label="Market momentum" className="space-y-3">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-        Market Momentum · {book.window.short}
-      </div>
-      <MomentumRow
+    <section aria-label="Market momentum" className="space-y-2.5">
+      <MomentumMetric
         total={b.current.toLocaleString("en-US")}
-        label="Market Believers"
+        unit="believers"
         copy={believerCopy(b, book.window)}
         points={b.series}
       />
-      <MomentumRow
+      <MomentumMetric
         total={fmtMoney(usd(c.current))}
-        label="Market Capital"
+        unit="committed"
         copy={capitalCopy(c, book.window, usd)}
         points={c.series}
       />
+
+      {/* Narrative: the status pill summarises the charts. Desktop shows the calm
+        sentence beside it; mobile folds the House note in on the same line. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-0.5">
+        <span
+          className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
+          style={{
+            color: pTone,
+            background: `color-mix(in oklab, ${pTone} 12%, transparent)`,
+            border: `1px solid color-mix(in oklab, ${pTone} 30%, transparent)`,
+          }}
+        >
+          {pulse.label}
+        </span>
+        <span className="hidden text-[12.5px] leading-snug text-[var(--text-secondary)] sm:inline">
+          {pulse.meaning}
+        </span>
+        <span className="text-[12px] leading-snug text-[var(--text-muted)] sm:hidden">
+          · <span aria-hidden>🏠</span> {note.text}
+        </span>
+      </div>
+
+      {/* Desktop: the House as a quiet analyst note under the narrative. */}
+      <p className="hidden text-[12.5px] leading-snug text-[var(--text-secondary)] sm:block">
+        <span aria-hidden>🏠</span> <span className="font-medium text-[var(--text)]">House:</span>{" "}
+        {note.text}
+      </p>
     </section>
   );
 }
