@@ -1,26 +1,19 @@
 /**
- * CENTER — Market Momentum: the one block that answers "why should I care about
- * this market right now?"
+ * CENTER — Market Momentum: the timeless read of "how big and which way?"
  *
- * It merges what used to be four stacked sections — believers, capital, Pulse and
- * The House — into a single story: how many people believe, how money is moving,
- * what the trend is, and what the House makes of it. Two compact metric rows
- * (value · capped sparkline · percentage), a status pill that summarises the
- * shape, and the House as a quiet analyst note. No section headers — "Pulse" and
- * "House" are metadata, not headings. The SAME component renders on desktop and
- * mobile; only the layout (and the sparkline size) changes.
+ * Two compact metric rows — believers and capital (value · capped sparkline ·
+ * percentage) — plus a one-word status pill for the shape. This is the only
+ * momentum surface; the story (the narrative sentence, the House voice, the
+ * activity) lives in the right feed. The center never becomes a feed.
  *
  * Every number is read off the canonical marketBook, so the totals reconcile with
- * the side panels; the label comes from marketPulse and the note from houseNote —
- * all existing calculations, unchanged. Side-blind by construction.
+ * the side panels; the label comes from marketPulse — existing calculations,
+ * unchanged. Side-blind by construction. The SAME component renders on desktop and
+ * mobile; only the layout (and the sparkline size) changes.
  */
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
 import { marketPulse, pulseTone } from "@/domain/market-pulse";
-import { houseNote } from "@/domain/house-note";
-import { getHouseRead } from "@/lib/house.functions";
-import { houseKey } from "@/lib/house-round";
 import type { TapeTrade } from "@/domain/conviction-series";
 import type { VitalityPoint } from "@/domain/market-vitality";
 
@@ -214,27 +207,16 @@ function MomentumMetric({
 export function MarketMomentum({
   tape,
   ethUsd,
-  marketId,
-  viewerWallet,
   nowMs = Date.now(),
 }: {
   tape: TapeTrade[] | undefined;
   ethUsd: number;
-  marketId: number;
-  viewerWallet?: string;
   nowMs?: number;
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs), [tape, nowMs]);
   const usd = (eth: number) => eth * (ethUsd > 0 ? ethUsd : 0);
   const pulse = useMemo(() => marketPulse(book), [book]);
   const pTone = dirTone(pulseTone(pulse.label));
-
-  const { data: house } = useQuery({
-    queryKey: houseKey(viewerWallet, marketId),
-    queryFn: () => getHouseRead({ data: { wallet: viewerWallet ?? null, marketId } }),
-    staleTime: 30_000,
-  });
-  const note = houseNote(viewerWallet, house, marketId);
 
   const b = book.believers.market;
   const c = book.capitalEth.market;
@@ -254,11 +236,11 @@ export function MarketMomentum({
         points={c.series}
       />
 
-      {/* Narrative: the status pill summarises the charts. Desktop shows the calm
-        sentence beside it; mobile folds the House note in on the same line. */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-0.5">
+      {/* One-word momentum status. The narrative sentence and the House voice now
+        live in the right feed — the center only shows the shape, never a story. */}
+      <div className="pt-0.5">
         <span
-          className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
+          className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
           style={{
             color: pTone,
             background: `color-mix(in oklab, ${pTone} 12%, transparent)`,
@@ -267,18 +249,7 @@ export function MarketMomentum({
         >
           {pulse.label}
         </span>
-        <span className="hidden text-[12.5px] leading-snug text-[var(--text-secondary)] sm:inline">
-          {pulse.meaning}
-        </span>
-        <span className="text-[12px] leading-snug text-[var(--text-muted)] sm:hidden">
-          · <span className="font-medium text-[var(--text-secondary)]">House:</span> {note.text}
-        </span>
       </div>
-
-      {/* Desktop: the House as a quiet analyst note under the narrative. */}
-      <p className="hidden text-[12.5px] leading-snug text-[var(--text-secondary)] sm:block">
-        <span className="font-medium text-[var(--text)]">House:</span> {note.text}
-      </p>
     </section>
   );
 }
