@@ -175,6 +175,7 @@ export function MyConvictions({
   winLabel = "24H",
   onSelect,
   onExplore,
+  onCount,
 }: {
   wallet?: string;
   rows: MarketRow[];
@@ -183,6 +184,8 @@ export function MyConvictions({
   onSelect: (id: number) => void;
   /** Empty-state CTA — take me to the markets. */
   onExplore?: () => void;
+  /** Reports the number of live convictions to the tab strip. */
+  onCount?: (n: number) => void;
 }) {
   const { data } = useQuery({
     queryKey: ["my-convictions", wallet ?? null, win],
