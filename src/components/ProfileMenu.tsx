@@ -233,16 +233,20 @@ export function ProfileMenu({
           }
           onClose={() => setPanel(null)}
         >
-          {panel === "edit" && <ProfileEditor wallet={me} fallbackName={name} />}
-          {panel === "earnings" && <CreatorEarnings ethUsd={ethUsd} />}
-          {panel === "import" && (
-            <>
-              <p className="mb-1 text-[12px] leading-relaxed text-[var(--text-muted)]">
-                Link the wallet you trade from so your conviction history comes with you.
-              </p>
-              <WalletIdentity viewing={me} compact />
-            </>
-          )}
+          <Suspense
+            fallback={<div className="py-6 text-center text-[12px] text-[var(--text-muted)]">…</div>}
+          >
+            {panel === "edit" && <ProfileEditor wallet={me} fallbackName={name} />}
+            {panel === "earnings" && <CreatorEarnings ethUsd={ethUsd} />}
+            {panel === "import" && (
+              <>
+                <p className="mb-1 text-[12px] leading-relaxed text-[var(--text-muted)]">
+                  Link the wallet you trade from so your conviction history comes with you.
+                </p>
+                <WalletIdentity viewing={me} compact />
+              </>
+            )}
+          </Suspense>
           {panel === "settings" && (
             <SettingsPanel onOpenTerms={onOpenTerms} onClose={() => setPanel(null)} />
           )}
