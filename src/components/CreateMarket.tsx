@@ -38,7 +38,9 @@ import {
   setDraft,
   setProbe,
 } from "@/lib/create-draft";
+import { rewardLine } from "@/domain/market-suggestion";
 import { completeSuggestion, trackSuggestion } from "@/lib/market-suggestion.functions";
+
 import {
 
   DEFAULT_CURVE,
