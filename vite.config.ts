@@ -130,7 +130,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    build: { sourcemap: true },
     define: {
       "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
     },
