@@ -658,24 +658,38 @@ function Feed() {
             ) : (
               currentRow && (
                 <div className="flex min-h-0 flex-1 flex-col">
-                  <MarketDeck
-                    row={currentRow}
-                    ethUsd={data?.ethUsd ?? 0}
-                    onSkip={nextMarket}
-                    viewerWallet={wallet}
-                    lens={lens}
-                    lenses={OPP_FILTERS}
-                    onLens={setLens}
-                    caseOpen={caseActive}
-                    mobileCaseOpen={mobileCaseActive}
-                    onToggleCase={toggleCase}
-                    storySide={caseActive ? storySide : null}
-                    onCloseStory={() => setStorySide(null)}
-                    onSelectPerson={selectPerson}
-                  />
+                  {!isDesktop ? (
+                    /* MOBILE — The Conviction Game. Its own experience: the
+                      question first, the crowd only after the decision. */
+                    <MobileGame
+                      key={Number(currentRow.onchain_id)}
+                      row={currentRow}
+                      ethUsd={data?.ethUsd ?? 0}
+                      viewerWallet={wallet}
+                      onNext={nextMarket}
+                      onSelectPerson={selectPerson}
+                    />
+                  ) : (
+                    <MarketDeck
+                      row={currentRow}
+                      ethUsd={data?.ethUsd ?? 0}
+                      onSkip={nextMarket}
+                      viewerWallet={wallet}
+                      lens={lens}
+                      lenses={OPP_FILTERS}
+                      onLens={setLens}
+                      caseOpen={caseActive}
+                      mobileCaseOpen={mobileCaseActive}
+                      onToggleCase={toggleCase}
+                      storySide={caseActive ? storySide : null}
+                      onCloseStory={() => setStorySide(null)}
+                      onSelectPerson={selectPerson}
+                    />
+                  )}
                 </div>
               )
             )}
+
           </div>
         </main>
 
