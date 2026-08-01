@@ -359,7 +359,7 @@ export function MyConvictions({
           Worth
         </div>
         <div className="num text-[24px] leading-none text-[var(--text)]">{usd(total)}</div>
-        {trueGain != null && trueGain !== 0 ? (
+        {trueGain != null && Math.abs(trueGain) >= 0.005 ? (
           <div
             className="num mt-1.5 text-[12px] font-semibold"
             style={{ color: trueGain > 0 ? "var(--yes)" : "var(--no)" }}
@@ -375,7 +375,10 @@ export function MyConvictions({
             {signedUsd(periodUsd)}{" "}
             <span className="font-normal text-[var(--text-muted)]">{winLabel.toLowerCase()}</span>
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-1.5 text-[11px] font-normal text-[var(--text-muted)]">No change</div>
+        )}
+
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)" }} />
