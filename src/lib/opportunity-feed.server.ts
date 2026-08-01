@@ -107,7 +107,7 @@ async function ideaFor(
   wallet: string | null,
   sessionToken: string | null,
   s: FeedSessionState,
-): Promise<{ idea: FeedIdeaCandidate | null; raw: unknown }> {
+): Promise<{ idea: FeedIdeaCandidate | null; raw: Record<string, any> | null }> {
   if (!wallet || !sessionToken) return { idea: null, raw: null };
   const allowed = shouldInsertSuggestion({
     cardsViewed: s.cardsViewed ?? 0,
@@ -140,17 +140,21 @@ async function ideaFor(
   }
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/** Read-model row as it travels to the client (already JSON-serializable). */
+export type FeedRowPayload = Record<string, any>;
+
 export interface OpportunityFeedResult {
   items: OpportunityFeedItem[];
   /** The full read-model row for each `market` item, keyed by onchain_id. */
-  rows: Record<number, unknown>;
+  rows: Record<number, FeedRowPayload>;
   /** The suggestion payload behind a `market_idea` item, when present. */
-  idea: unknown;
+  idea: FeedRowPayload | null;
   window: VolumeWindow;
   ethUsd: number;
   historyFrom: string | null;
-  tribe: unknown;
-  opp: unknown;
+  tribe: FeedRowPayload | null;
+  opp: FeedRowPayload | null;
   error: string | null;
 }
 
@@ -190,7 +194,7 @@ export async function buildOpportunityFeed(
     ...(input.limit ? { limit: input.limit } : {}),
   });
 
-  const byId: Record<number, unknown> = {};
+  const byId: Record<number, FeedRowPayload> = {};
   for (const r of rows) byId[Number(r.onchain_id)] = r;
 
   return {
@@ -200,8 +204,8 @@ export async function buildOpportunityFeed(
     window: win,
     ethUsd: feed.ethUsd ?? 0,
     historyFrom: feed.historyFrom ?? null,
-    tribe: feed.tribe ?? null,
-    opp: feed.opp ?? null,
+    tribe: (feed.tribe as FeedRowPayload | null) ?? null,
+    opp: (feed.opp as FeedRowPayload | null) ?? null,
     error: feed.error ?? null,
   };
 }
