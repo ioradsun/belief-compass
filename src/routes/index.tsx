@@ -818,7 +818,18 @@ function CaughtUp({
         >
           View Your Convictions
         </button>
+        {onCreate && (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="rounded-full px-5 py-2.5 text-[13px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            Create a Market
+          </button>
+        )}
       </div>
+
     </div>
   );
 }
