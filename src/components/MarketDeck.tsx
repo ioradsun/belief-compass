@@ -698,12 +698,7 @@ function ExamineCta({ open, onToggle }: { open: boolean; onToggle: () => void })
     >
       <span className="min-w-0">
         <span className="block text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--text)]">
-          {open ? "Case open" : "Examine the case"}
-        </span>
-        <span className="mt-0.5 block text-[11px] leading-snug text-[var(--text-muted)]">
-          {open
-            ? "YES and NO evidence is open beside the market."
-            : "See how conviction divides between YES and NO."}
+          {open ? "Close Case File" : "Open Case File"}
         </span>
       </span>
       <span
