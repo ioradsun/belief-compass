@@ -335,6 +335,11 @@ export function MyConvictions({
   }, 0);
   const periodUsd = total - prev;
 
+  const count = built.length;
+  useEffect(() => {
+    onCount?.(count);
+  }, [count, onCount]);
+
   if (!wallet || built.length === 0) {
     return <EmptyState onExplore={onExplore} />;
   }
@@ -343,12 +348,6 @@ export function MyConvictions({
     <div>
       {/* Summary — one financial story, money only. */}
       <div className="pb-4">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-          Your Convictions
-        </div>
-        <div className="mt-1 text-[12px] text-[var(--text-muted)]">
-          {built.length} active {built.length === 1 ? "position" : "positions"}
-        </div>
         <div className="mt-2.5 text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
           Worth
         </div>
