@@ -9,6 +9,7 @@
  * the headline. Story selection, pulse and ranking come from the pure
  * src/domain/position-story engine. Clicking opens the market in the center.
  */
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
@@ -175,6 +176,7 @@ export function MyConvictions({
   winLabel = "24H",
   onSelect,
   onExplore,
+  onCount,
 }: {
   wallet?: string;
   rows: MarketRow[];
@@ -183,6 +185,8 @@ export function MyConvictions({
   onSelect: (id: number) => void;
   /** Empty-state CTA — take me to the markets. */
   onExplore?: () => void;
+  /** Reports the number of live convictions to the tab strip. */
+  onCount?: (n: number) => void;
 }) {
   const { data } = useQuery({
     queryKey: ["my-convictions", wallet ?? null, win],
@@ -332,6 +336,11 @@ export function MyConvictions({
   }, 0);
   const periodUsd = total - prev;
 
+  const count = built.length;
+  useEffect(() => {
+    onCount?.(count);
+  }, [count, onCount]);
+
   if (!wallet || built.length === 0) {
     return <EmptyState onExplore={onExplore} />;
   }
@@ -340,12 +349,6 @@ export function MyConvictions({
     <div>
       {/* Summary — one financial story, money only. */}
       <div className="pb-4">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-          Your Convictions
-        </div>
-        <div className="mt-1 text-[12px] text-[var(--text-muted)]">
-          {built.length} active {built.length === 1 ? "position" : "positions"}
-        </div>
         <div className="mt-2.5 text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
           Worth
         </div>

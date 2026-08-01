@@ -45,6 +45,8 @@ export function MyWorld({
   initialNetwork?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>(() => (initialNetwork ? "network" : initialTab()));
+  const [convictionCount, setConvictionCount] = useState<number | null>(null);
+  const [peopleCount, setPeopleCount] = useState<number | null>(null);
   const select = (t: Tab) => {
     setTab(t);
     try {
@@ -54,6 +56,12 @@ export function MyWorld({
     }
   };
 
+  const label = (t: Tab) => {
+    const n = t === "positions" ? convictionCount : peopleCount;
+    const name = t === "positions" ? "Convictions" : "People";
+    return n && n > 0 ? `${name} (${n})` : name;
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Quiet segmented control */}
@@ -61,7 +69,7 @@ export function MyWorld({
         className="mb-4 flex rounded-[10px] p-0.5"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
         role="tablist"
-        aria-label="Positions or Network"
+        aria-label="Convictions or People"
       >
         {(["positions", "network"] as Tab[]).map((t) => (
           <button
@@ -70,11 +78,11 @@ export function MyWorld({
             aria-selected={tab === t}
             type="button"
             onClick={() => select(t)}
-            className={`flex-1 rounded-[8px] px-3 py-1.5 text-[12px] font-medium capitalize transition-colors ${
+            className={`flex-1 rounded-[8px] px-3 py-1.5 text-[12px] font-medium transition-colors ${
               tab === t ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
             }`}
           >
-            {t}
+            {label(t)}
           </button>
         ))}
       </div>
@@ -87,6 +95,7 @@ export function MyWorld({
             window={win}
             winLabel={winLabel}
             onSelect={onSelectMarket}
+            onCount={setConvictionCount}
             onExplore={() => {
               const first = rows[0];
               if (first) onSelectMarket(Number(first.onchain_id));
@@ -99,6 +108,7 @@ export function MyWorld({
           selectedPerson={selectedPerson}
           onSelectPerson={onSelectPerson}
           onOpenDna={onOpenDna}
+          onCount={setPeopleCount}
           onExplore={() => {
             const first = rows[0];
             if (first) onSelectMarket(Number(first.onchain_id));

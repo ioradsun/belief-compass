@@ -76,6 +76,7 @@ export function NetworkPanel({
   onSelectPerson,
   onOpenDna,
   onExplore,
+  onCount,
 }: {
   wallet?: string;
   selectedPerson?: string;
@@ -83,6 +84,8 @@ export function NetworkPanel({
   onOpenDna: () => void;
   /** Empty-state CTA — take me to the markets. */
   onExplore?: () => void;
+  /** Reports the number of matched people to the tab strip. */
+  onCount?: (n: number) => void;
 }) {
   const [lensKey, setLensKey] = useState<string>("everyone");
   const lens = LENSES.find((l) => l.key === lensKey) ?? LENSES[0];
@@ -134,6 +137,10 @@ export function NetworkPanel({
     tribe: summary?.tribeCount ?? 0,
     opp: summary?.oppCount ?? 0,
   };
+  const matched = counts.twin + counts.tribe + counts.opp;
+  useEffect(() => {
+    onCount?.(matched);
+  }, [matched, onCount]);
   const decisions = summary?.expressedBeliefs ?? 0;
   const stage = dnaStage({ decisions, hasTwinCandidate: counts.twin > 0 });
   const reveal = dnaReveal(stage, counts);
