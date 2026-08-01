@@ -10,7 +10,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getHouseRead } from "@/lib/house.functions";
-import { houseKey } from "@/components/MarketIntelligence";
+import { houseKey } from "@/lib/house-round";
 import {
   houseAfter,
   houseBefore,

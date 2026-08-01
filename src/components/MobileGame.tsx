@@ -19,13 +19,13 @@ import { useSwitchChain } from "wagmi";
 
 import type { MarketRow } from "@/components/MarketCard";
 import { pulseLine } from "@/components/MarketCard";
-import { useHouseFinalize } from "@/components/MarketIntelligence";
+import { useHouseFinalize } from "@/lib/house-round";
 import { getMarketChange, listMarketPulses } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 import { getHouseRead } from "@/lib/house.functions";
-import { houseKey } from "@/components/MarketIntelligence";
+import { houseKey } from "@/lib/house-round";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { useWalletSession } from "@/hooks/useWalletSession";
 import { requestConnect } from "@/lib/connect-bridge";

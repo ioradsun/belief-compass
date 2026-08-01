@@ -1,36 +1,32 @@
 import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
-import { WagmiProvider, useAccount, useDisconnect } from "wagmi";
+import { WagmiProvider, useAccount } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { RainbowKitProvider, darkTheme, useConnectModal } from "@rainbow-me/rainbowkit";
-import "@rainbow-me/rainbowkit/styles.css";
 
 import { wagmiConfig, walletProvider } from "@/lib/wagmi";
-import {
-  CONNECT_EVENT,
-  DISCONNECT_EVENT,
-  clearDisconnectedWalletFromUrl,
-  requestConnect,
-  requestDisconnect,
-} from "@/lib/connect-bridge";
-import { PovOnConnect } from "@/components/wallet/PovOnConnect";
+import { requestConnect, requestDisconnect } from "@/lib/connect-bridge";
 
 // Isolated query client for wagmi to avoid interfering with the app's router-level client.
 const wagmiQueryClient = new QueryClient();
 
 /** Secondary provider — never in the eager bundle. */
 const PrivyStack = lazy(() => import("@/components/wallet/PrivyStack"));
+/** Connect modal + wallet artwork — its own chunk, mounted after first paint. */
+const RainbowKitLayer = lazy(() => import("@/components/wallet/RainbowKitLayer"));
 
 /**
- * PRIMARY: wagmi + RainbowKit. It owns the connect modal, wallet detection and
- * mobile deep-links for Coinbase Wallet and MetaMask, and feeds the connected
- * account into wagmi so every `useAccount` / `useSignMessage` call site keeps
- * working unchanged. Privy remains available as a secondary provider.
+ * PRIMARY: wagmi + RainbowKit. wagmi itself wraps the app (every `useAccount` /
+ * `useSignMessage` call site depends on it), but the RainbowKit UI layer mounts
+ * alongside the app rather than above it, so the connect modal, wallet artwork
+ * and its stylesheet never sit on the first-paint path. Privy remains available
+ * as a secondary provider.
  */
 export function WalletProviders({ children }: { children: ReactNode }) {
   // SSR and first paint always render the RainbowKit stack; if this browser
   // opted into Privy we swap after mount (Privy is browser-only anyway).
   const [provider, setProvider] = useState<"rainbowkit" | "privy">("rainbowkit");
+  const [walletUi, setWalletUi] = useState(false);
   useEffect(() => setProvider(walletProvider()), []);
+  useEffect(() => setWalletUi(true), []);
 
   if (provider === "privy") {
     return (
@@ -45,51 +41,17 @@ export function WalletProviders({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={wagmiQueryClient}>
       <WagmiProvider config={wagmiConfig}>
-        <RainbowKitProvider
-          modalSize="compact"
-          theme={darkTheme({ accentColor: "#5b8cff", borderRadius: "medium" })}
-        >
-          {children}
-          <PovOnConnect />
-          <RainbowKitBridge />
-        </RainbowKitProvider>
+        {children}
+        {walletUi && (
+          <Suspense fallback={null}>
+            <RainbowKitLayer />
+          </Suspense>
+        )}
       </WagmiProvider>
     </QueryClientProvider>
   );
 }
 
-/**
- * Single owner of session changes for the RainbowKit path: any surface can ask
- * for connect / sign out through the bridge events without importing wallet UI.
- */
-function RainbowKitBridge() {
-  const { openConnectModal } = useConnectModal();
-  const { address, isConnected } = useAccount();
-  const { disconnectAsync } = useDisconnect();
-
-  useEffect(() => {
-    const onOpen = () => {
-      if (isConnected) return;
-      openConnectModal?.();
-    };
-    const onOut = async () => {
-      try {
-        await disconnectAsync();
-      } catch {
-        /* already disconnected */
-      }
-      clearDisconnectedWalletFromUrl(address);
-    };
-    window.addEventListener(CONNECT_EVENT, onOpen);
-    window.addEventListener(DISCONNECT_EVENT, onOut);
-    return () => {
-      window.removeEventListener(CONNECT_EVENT, onOpen);
-      window.removeEventListener(DISCONNECT_EVENT, onOut);
-    };
-  }, [openConnectModal, isConnected, address, disconnectAsync]);
-
-  return null;
-}
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 

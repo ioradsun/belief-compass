@@ -6,10 +6,29 @@
 export const CONNECT_EVENT = "conviction:open-connect";
 export const DISCONNECT_EVENT = "conviction:sign-out";
 
+// The wallet UI layer mounts just after first paint, so a very early click can
+// fire before anyone is listening. Remember that intent and let the listener
+// claim it the moment it mounts.
+let pendingConnect = false;
+
 export function requestConnect() {
   if (typeof window === "undefined") return;
+  pendingConnect = true;
   window.dispatchEvent(new Event(CONNECT_EVENT));
 }
+
+/** Consume a connect intent that was requested before the listener existed. */
+export function takePendingConnect(): boolean {
+  const p = pendingConnect;
+  pendingConnect = false;
+  return p;
+}
+
+/** Clear the intent once it has been handled by a mounted listener. */
+export function clearPendingConnect() {
+  pendingConnect = false;
+}
+
 
 export function requestDisconnect() {
   if (typeof window === "undefined") return;

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { TermsContent } from "@/components/TermsContent";
+
 
 import { queryOptions, useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
@@ -14,11 +14,24 @@ import { LiveTape } from "@/components/LiveTape";
 import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
 import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
-import { MobileGame } from "@/components/MobileGame";
 
-import { CaseColumn } from "@/components/CaseFile";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
+
+// Split off the surfaces that never render for the SSR/desktop first paint.
+// MobileGame is a phone-only experience, the Case File only exists once the user
+// opens the case, and Terms is a rarely visited legal page. Keeping them out of
+// the initial chunk is the single biggest first-load win.
+const MobileGame = lazy(() =>
+  import("@/components/MobileGame").then((m) => ({ default: m.MobileGame })),
+);
+const CaseColumn = lazy(() =>
+  import("@/components/CaseFile").then((m) => ({ default: m.CaseColumn })),
+);
+const TermsContent = lazy(() =>
+  import("@/components/TermsContent").then((m) => ({ default: m.TermsContent })),
+);
+
 import { useHouseIdea } from "@/hooks/useHouseIdea";
 import type { ReadySuggestion } from "@/lib/market-suggestion.functions";
 import { startDraftFromSuggestion } from "@/lib/create-draft";
@@ -214,6 +227,23 @@ function Feed() {
   // phone is for action, so it never exposes Case File (button, columns, or the
   // ?case flag). Desktop is >= lg, where the three columns actually sit together.
   const isDesktop = useIsDesktop();
+  // Intent-based prefetch: pull the split chunk this viewport is about to need
+  // while the shell is already interactive, so the swap never shows a skeleton.
+  // Phones need the game immediately; desktop only needs the Case File once the
+  // user opens a case, so warm it when the browser is idle.
+  useEffect(() => {
+    if (!isDesktop) {
+      void import("@/components/MobileGame");
+      return;
+    }
+    const idle = (
+      window as unknown as { requestIdleCallback?: (cb: () => void) => number }
+    ).requestIdleCallback;
+    const warm = () => void import("@/components/CaseFile");
+    if (idle) idle(warm);
+    else setTimeout(warm, 1500);
+  }, [isDesktop]);
+
   // Case File is a pure presentation toggle — it only changes where existing
   // intelligence is shown, so it just flips the URL flag (preserved across switches).
   const toggleCase = () => {
@@ -563,16 +593,18 @@ function Feed() {
           {caseActive && currentRow ? (
             // YES Case — the existing YES-supporting intelligence, reorganized.
             // Keyed on the market so switching resets the column scroll to top.
-            <CaseColumn
-              key={Number(currentRow.onchain_id)}
-              side="YES"
-              marketId={Number(currentRow.onchain_id)}
-              row={currentRow}
-              viewerWallet={wallet}
-              ethUsd={data?.ethUsd ?? 0}
-              investigating={storySide === "YES"}
-              onInvestigate={toggleStory}
-            />
+            <Suspense fallback={<DeckSkeleton />}>
+              <CaseColumn
+                key={Number(currentRow.onchain_id)}
+                side="YES"
+                marketId={Number(currentRow.onchain_id)}
+                row={currentRow}
+                viewerWallet={wallet}
+                ethUsd={data?.ethUsd ?? 0}
+                investigating={storySide === "YES"}
+                onInvestigate={toggleStory}
+              />
+            </Suspense>
           ) : !wallet ? (
             /* Signed out: nothing to show but the one thing to do. */
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
@@ -620,7 +652,9 @@ function Feed() {
                 <h1 className="mb-3 text-[24px] font-semibold tracking-[-0.02em] text-[var(--text)]">
                   Terms &amp; risk
                 </h1>
-                <TermsContent />
+                <Suspense fallback={<DeckSkeleton />}>
+                  <TermsContent />
+                </Suspense>
               </div>
             ) : createOpen ? (
               <Suspense fallback={<DeckSkeleton />}>
@@ -695,14 +729,16 @@ function Feed() {
                   {!isDesktop ? (
                     /* MOBILE — The Conviction Game. Its own experience: the
                       question first, the crowd only after the decision. */
-                    <MobileGame
-                      key={Number(currentRow.onchain_id)}
-                      row={currentRow}
-                      ethUsd={data?.ethUsd ?? 0}
-                      viewerWallet={wallet}
-                      onNext={nextMarket}
-                      onSelectPerson={selectPerson}
-                    />
+                    <Suspense fallback={<DeckSkeleton />}>
+                      <MobileGame
+                        key={Number(currentRow.onchain_id)}
+                        row={currentRow}
+                        ethUsd={data?.ethUsd ?? 0}
+                        viewerWallet={wallet}
+                        onNext={nextMarket}
+                        onSelectPerson={selectPerson}
+                      />
+                    </Suspense>
                   ) : (
                     <MarketDeck
                       row={currentRow}
@@ -734,16 +770,18 @@ function Feed() {
           {caseActive && currentRow ? (
             // NO Case replaces the Live feed while investigating. Closing Case File
             // restores the Live feed (LiveTape remounts, polling resumes).
-            <CaseColumn
-              key={Number(currentRow.onchain_id)}
-              side="NO"
-              marketId={Number(currentRow.onchain_id)}
-              row={currentRow}
-              viewerWallet={wallet}
-              ethUsd={data?.ethUsd ?? 0}
-              investigating={storySide === "NO"}
-              onInvestigate={toggleStory}
-            />
+            <Suspense fallback={<DeckSkeleton />}>
+              <CaseColumn
+                key={Number(currentRow.onchain_id)}
+                side="NO"
+                marketId={Number(currentRow.onchain_id)}
+                row={currentRow}
+                viewerWallet={wallet}
+                ethUsd={data?.ethUsd ?? 0}
+                investigating={storySide === "NO"}
+                onInvestigate={toggleStory}
+              />
+            </Suspense>
           ) : (
             <>
               {/* Welcome the newest believers on a side you back — one tap. */}
