@@ -129,6 +129,7 @@ describe("privacy rule", () => {
 
 // ── Live-event story ──────────────────────────────────────────────────────────
 const liveBase = (o: Partial<LiveStoryInput> = {}): LiveStoryInput => ({
+  kind: "trade_burst",
   actor: { name: "John", relationship: null },
   side: "YES",
   action: "BUY",
@@ -137,44 +138,82 @@ const liveBase = (o: Partial<LiveStoryInput> = {}): LiveStoryInput => ({
   ...o,
 });
 
-describe("composeLiveStory", () => {
-  it("a buy reads as joining the tribe, with the stake", () => {
-    expect(composeLiveStory(liveBase()).text).toBe("John joined the YES tribe for $25.00");
+describe("composeLiveStory — market as protagonist", () => {
+  it("a buy leads with the market growing, names the actor last", () => {
+    const s = composeLiveStory(liveBase({ market: { believersYes: 9 } }));
+    expect(s.category).toBe("growing");
+    expect(s.headline).toBe("YES IS GROWING");
+    expect(s.body).toBe("9 believers now back YES.");
+    expect(s.attribution).toBe("John joined.");
   });
-  it("adds the strongest momentum hook — urgency wins", () => {
-    const t = composeLiveStory(
-      liveBase({ market: { newBackers1h: 12, believersYes: 40, moneyYesPct: 70 } }),
-    ).text;
-    expect(t).toBe("John joined the YES tribe for $25.00 — YES is heating up, 12 joined this hour");
+
+  it("a sell reads as the side losing a believer", () => {
+    const s = composeLiveStory(liveBase({ action: "SELL", side: "NO", market: { believersNo: 8 } }));
+    expect(s.headline).toBe("NO LOST A BELIEVER");
+    expect(s.body).toBe("8 still back NO.");
+    expect(s.attribution).toBe("John exited.");
   });
-  it("falls back to bandwagon social proof when no urgency", () => {
-    const t = composeLiveStory(liveBase({ market: { believersYes: 48 } })).text;
-    expect(t).toBe("John joined the YES tribe for $25.00 — 48 now hold YES");
+
+  it("large capital is a money story", () => {
+    const s = composeLiveStory(liveBase({ kind: "large_trade", amountUsd: 420, side: "NO" }));
+    expect(s.category).toBe("capital_in");
+    expect(s.body).toBe("$420 moved into NO.");
   });
-  it("a network member keeps their relationship tag", () => {
-    const t = composeLiveStory(liveBase({ actor: { name: "Maya", relationship: "twin" } })).text;
-    expect(t).toBe("Maya (Twin) joined the YES tribe for $25.00");
+
+  it("a fresh market makes the question the hero", () => {
+    const s = composeLiveStory({
+      kind: "market_created",
+      side: null,
+      question: "Is working actually slavery?",
+      actor: { name: "@dana", relationship: null },
+    });
+    expect(s.category).toBe("fresh_market");
+    expect(s.body).toBe("Is working actually slavery?");
+    expect(s.attribution).toBe("@dana opened this market.");
   });
-  it("a sell cuts the side; a flip defects", () => {
-    expect(composeLiveStory(liveBase({ action: "SELL", side: "NO", amountUsd: 82 })).text).toBe(
-      "John left the NO tribe for $82.00",
+
+  it("a milestone celebrates the market", () => {
+    const s = composeLiveStory({ kind: "believer_milestone", side: "YES", threshold: 50 });
+    expect(s.headline).toBe("MILESTONE");
+    expect(s.body).toBe("YES just reached 50 believers.");
+  });
+});
+
+describe("composeLiveStory — network is side-blind", () => {
+  it("a Twin move never reveals their side", () => {
+    const s = composeLiveStory(liveBase({ actor: { name: "Maya", relationship: "twin" } }));
+    expect(s.category).toBe("twin");
+    expect(s.headline).toBe("YOUR TWIN");
+    expect(s.personal).toBe(true);
+    expect(s.tone).toBe("neutral");
+    expect(`${s.headline} ${s.body}`).not.toMatch(/\bYES\b|\bNO\b/);
+  });
+
+  it("a Tribe / Opp move surfaces belonging, not a side", () => {
+    expect(composeLiveStory(liveBase({ actor: { name: "A", relationship: "tribe" } })).headline).toBe(
+      "YOUR TRIBE",
     );
-    expect(composeLiveStory(liveBase({ flip: true, side: "YES", action: "BUY" })).text).toBe(
-      "John defected to YES for $25.00",
+    expect(composeLiveStory(liveBase({ actor: { name: "B", relationship: "opp" } })).headline).toBe(
+      "YOUR OPP",
     );
   });
-  it("a burst has no name — the crowd piles in", () => {
-    const t = composeLiveStory(
-      liveBase({ actor: null, walletCount: 5, market: { believersYes: 30 } }),
-    ).text;
-    expect(t).toBe("5 believers piled into YES for $25.00 — 30 now hold YES");
-  });
-  it("never fabricates hype", () => {
-    const banned = ["whale", "smart money", "moon", "degen", "pouring", "exploding", "guaranteed"];
-    const t = composeLiveStory(
-      liveBase({ market: { newBackers1h: 99, believersYes: 999, moneyYesPct: 99 } }),
-    ).text.toLowerCase();
-    for (const w of banned) expect(t).not.toContain(w);
+});
+
+describe("composeLiveStory — copy discipline", () => {
+  it("never says a side has a 'tribe' and never uses banned terms", () => {
+    const banned = /tribe|wallet|address|transaction|position|holder|whale|smart money|moon|pouring/i;
+    const inputs: LiveStoryInput[] = [
+      liveBase({ market: { believersYes: 9 } }),
+      liveBase({ action: "SELL", side: "NO", market: { believersNo: 8 } }),
+      liveBase({ kind: "large_trade", amountUsd: 420, side: "NO" }),
+      liveBase({ kind: "side_shift", side: "YES" }),
+      { kind: "believer_milestone", side: "YES", threshold: 50 },
+      { kind: "tribe_doubled", side: "YES" },
+    ];
+    for (const i of inputs) {
+      const s = composeLiveStory(i);
+      expect(`${s.headline} ${s.body} ${s.attribution ?? ""}`).not.toMatch(banned);
+    }
   });
 });
 

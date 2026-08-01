@@ -11,16 +11,24 @@
  * (so opening the Case File adds no requests) and derives the totals, deltas and
  * roster ordering from the pure src/domain/case-file engine.
  */
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getMarketChange } from "@/lib/markets.functions";
-import { ConvictionSpark } from "@/components/ConvictionSpark";
+import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { fmtUsd } from "@/domain/order";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { timelineEvents } from "@/domain/conviction-series";
+import {
+  LENS_META,
+  lensColdStart,
+  lensFacts,
+  lensMarkers,
+  lensStory,
+  type LensMetric,
+} from "@/domain/side-lens";
 import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT, type FlowWindow } from "@/domain/market-flow";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { marketBook, type BookMetric } from "@/domain/market-book";
@@ -130,6 +138,40 @@ export function CaseColumn({
       ? summary.priceEth * (ethUsd || 0)
       : num(side === "YES" ? rr.yes_price_usd : rr.no_price_usd);
 
+  // ── The one chart, one lens ─────────────────────────────────────────────────
+  // Believers is always the default lens — conviction.company is about people
+  // first. The selection is component state, so changing the timeframe never
+  // resets which lens you're investigating.
+  const [metric, setMetric] = useState<LensMetric>("believers");
+  const series = useMemo(() => summary?.series ?? [], [summary]);
+  const money = useMemo(() => (eth: number) => fmtUsd(eth * (ethUsd || 0)), [ethUsd]);
+  const facts = useMemo(() => lensFacts(series), [series]);
+  const markers = useMemo(() => lensMarkers(metric, series, money), [metric, series, money]);
+  const coldStart = lensColdStart(metric, series);
+  const meta = LENS_META[metric];
+  const lensSentence = lensStory(metric, side, facts, FLOW_WINDOW_PHRASE[win], money);
+
+  const metricRows: { metric: LensMetric; label: string; value: string; pct: number | null }[] = [
+    {
+      metric: "believers",
+      label: `${side} Believers`,
+      value: believersTotal.toLocaleString("en-US"),
+      pct: believerMetric ? metricPct(believerMetric) : (summary?.believersPct ?? null),
+    },
+    {
+      metric: "capital",
+      label: `${side} Capital`,
+      value: capitalUsd != null ? fmtUsd(capitalUsd) : "—",
+      pct: capitalMetric ? metricPct(capitalMetric) : (summary?.capitalPct ?? null),
+    },
+    {
+      metric: "price",
+      label: "Price",
+      value: priceUsd != null ? `$${priceUsd.toFixed(2)}` : "—",
+      pct: summary?.pricePct ?? null,
+    },
+  ];
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Header: the side, and the one shared time filter. */}
@@ -144,49 +186,62 @@ export function CaseColumn({
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5">
-        {/* ACT 1 — THE CLAIM: three totals, each with its move over the window. */}
-        <div className="space-y-2">
-          <StatRow
-            icon="👥"
-            label={`${side} Believers`}
-            value={believersTotal.toLocaleString("en-US")}
-            pct={believerMetric ? metricPct(believerMetric) : (summary?.believersPct ?? null)}
-          />
-          <StatRow
-            icon="💰"
-            label={`${side} Capital`}
-            value={capitalUsd != null ? fmtUsd(capitalUsd) : "—"}
-            pct={capitalMetric ? metricPct(capitalMetric) : (summary?.capitalPct ?? null)}
-          />
-          <StatRow
-            icon="📈"
-            label="Price"
-            value={priceUsd != null ? `$${priceUsd.toFixed(2)}` : "—"}
-            pct={summary?.pricePct ?? null}
-          />
+        {/* ACT 1 — THE LENSES: pick what to investigate. The three metrics ARE the
+          navigation — no tabs, no segmented control. Believers → Capital → Price
+          mirrors how conviction forms: people, then money, then price. */}
+        <div
+          className="space-y-0.5"
+          role="radiogroup"
+          aria-label={`${side} — choose a metric to chart`}
+        >
+          {metricRows.map((r) => (
+            <MetricRow
+              key={r.metric}
+              icon={LENS_META[r.metric].icon}
+              label={r.label}
+              value={r.value}
+              pct={r.pct}
+              active={metric === r.metric}
+              color={color}
+              onSelect={() => setMetric(r.metric)}
+            />
+          ))}
         </div>
 
-        {/* ACT 2 — THE MOVEMENT: the shape, one honest sentence, the latest beats. */}
+        {/* ACT 2 — THE ONE CHART: titled, single-metric, with a sentence that always
+          matches what's drawn. Switching lens crossfades inside LensChart. */}
         <div className="space-y-2">
-          {summary && summary.series.length > 1 && (
-            <ConvictionSpark side={side} points={summary.series} events={events} />
-          )}
-          <p className="text-[12px] leading-snug text-[var(--text-secondary)]">
-            {summary?.headline
-              ? `${summary.headline} ${FLOW_WINDOW_PHRASE[win]}.`
-              : `${side} has been quiet ${FLOW_WINDOW_PHRASE[win]}.`}
+          <LensChart
+            side={side}
+            metric={metric}
+            title={meta.title}
+            kind={meta.kind}
+            series={series}
+            markers={markers}
+            coldStart={coldStart}
+          />
+          <p
+            key={metric}
+            className="animate-in fade-in duration-200 text-[12px] leading-snug text-[var(--text-secondary)] motion-reduce:animate-none"
+          >
+            {lensSentence}
           </p>
           {events.length > 0 && (
-            <ul className="space-y-1">
-              {events.map((e) => (
-                <li key={e.id} className="flex items-baseline gap-1.5 text-[11px]">
-                  <span aria-hidden>{e.emoji}</span>
-                  <span className="min-w-0 flex-1 truncate text-[var(--text-muted)]">
-                    {e.eth != null ? `${fmtUsd(e.eth * (ethUsd || 0))} ${e.text}` : e.text}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <div className="space-y-1">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                Recent activity
+              </span>
+              <ul className="space-y-1">
+                {events.map((e) => (
+                  <li key={e.id} className="flex items-baseline gap-1.5 text-[11px]">
+                    <span aria-hidden>{e.emoji}</span>
+                    <span className="min-w-0 flex-1 truncate text-[var(--text-muted)]">
+                      {e.eth != null ? `${fmtUsd(e.eth * (ethUsd || 0))} ${e.text}` : e.text}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
 
@@ -270,16 +325,77 @@ export function StatRow({
   );
 }
 
-/** A green/red/quiet % chip — the move over the selected window. */
-export function PctChip({ pct }: { pct: number | null }) {
+/** A green/red/quiet % chip — the move over the selected window. Muted chips
+ *  (an unselected lens) dim toward neutral while staying readable. */
+export function PctChip({ pct, muted = false }: { pct: number | null; muted?: boolean }) {
   if (pct == null) return <span className="num text-[11px] text-[var(--text-muted)]">—</span>;
   const flat = Math.abs(pct) < 0.05;
   const color = flat ? "var(--text-muted)" : pct > 0 ? "var(--yes)" : "var(--no)";
   const arrow = flat ? "•" : pct > 0 ? "▲" : "▼";
   return (
-    <span className="num shrink-0 text-[12px] font-semibold" style={{ color }}>
+    <span
+      className="num shrink-0 text-[12px] font-semibold"
+      style={{ color, opacity: muted ? 0.55 : 1 }}
+    >
       {arrow} {Math.abs(pct).toFixed(pct !== 0 && Math.abs(pct) < 10 ? 1 : 0)}%
     </span>
+  );
+}
+
+/**
+ * One selectable lens. The whole row is the target (not a tiny icon); the active
+ * lens brightens, grows its value, and gains an accent edge, while the others
+ * stay muted but clearly tappable. Selection drives the single chart above.
+ */
+function MetricRow({
+  icon,
+  label,
+  value,
+  pct,
+  active,
+  color,
+  onSelect,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  pct: number | null;
+  active: boolean;
+  color: string;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onSelect}
+      className="flex w-full items-center gap-2.5 rounded-[10px] py-1.5 pr-2 text-left transition-colors hover:bg-[var(--border)]/20"
+      style={{
+        paddingLeft: "8px",
+        borderLeft: `2px solid ${active ? color : "transparent"}`,
+        background: active ? `color-mix(in oklab, ${color} 7%, transparent)` : "transparent",
+      }}
+    >
+      <span className="text-[15px]" aria-hidden style={{ opacity: active ? 1 : 0.55 }}>
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div
+          className="text-[10px] uppercase tracking-[0.1em]"
+          style={{ color: active ? "var(--text-secondary)" : "var(--text-muted)" }}
+        >
+          {label}
+        </div>
+        <div
+          className={`num font-semibold leading-tight tracking-[-0.01em] ${active ? "text-[19px]" : "text-[16px]"}`}
+          style={{ color: active ? "var(--text)" : "var(--text-muted)" }}
+        >
+          {value}
+        </div>
+      </div>
+      <PctChip pct={pct} muted={!active} />
+    </button>
   );
 }
 

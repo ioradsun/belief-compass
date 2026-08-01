@@ -12,8 +12,17 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { publicClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
-import { groupLiveRows, type LiveEventInput, type LiveFace, type LiveRow } from "@/lib/live-tape";
-import { composeLiveStory, type LiveStoryInput } from "@/domain/story";
+import {
+  flattenStory,
+  groupLiveRows,
+  type LiveEventInput,
+  type LiveFace,
+  type LiveRow,
+} from "@/lib/live-tape";
+import { composeLiveStory } from "@/domain/story";
+
+/** A single small trade below this (and not from your network) is dust — hidden. */
+const MIN_MATERIAL_USD = 5;
 
 type NetLabel = "twin" | "tribe" | "opp" | "inverse";
 
@@ -42,7 +51,14 @@ const input = z
   })
   .optional();
 
-type Momentum = NonNullable<LiveStoryInput["market"]>;
+type Momentum = {
+  believersYes: number | null;
+  believersNo: number | null;
+  newBackers1h: number | null;
+  moneyYesPct: number | null;
+  peopleYesPct: number | null;
+  opportunityType: string | null;
+};
 
 export const listLiveEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof input>) => input.parse(d ?? {}))
@@ -135,13 +151,10 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     // Turn each row into a story. Single-actor rows get named (pov.co, alias
     // fallback) + a relationship tag when the actor is in the viewer's network;
     // bursts read as the crowd. The momentum clause comes from market_state.
+    // Resolve identity for every single-actor row AND the creator of a fresh
+    // market, so attribution can name them ("Bob joined." / "@dana opened this").
     const actorWallets = [
-      ...new Set(
-        live
-          .filter((r) => r.kind !== "market_created")
-          .map((r) => r.wallet?.toLowerCase())
-          .filter((w): w is string => !!w),
-      ),
+      ...new Set(live.map((r) => r.wallet?.toLowerCase()).filter((w): w is string => !!w)),
     ];
 
     const labelByWallet = new Map<string, NetLabel>();
@@ -170,53 +183,57 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         : new Map();
 
     for (const r of live) {
-      // System rows already carry their final factual copy (no actor to name).
-      if (
-        r.kind === "market_created" ||
-        r.kind === "believer_milestone" ||
-        r.kind === "tribe_doubled"
-      )
-        continue;
-      const market = momentumById.get(Number(r.marketId)) ?? null;
-      const action = (r.payload as { action?: "BUY" | "SELL" }).action ?? null;
       const w = r.wallet?.toLowerCase();
-
+      // Name the actor / creator when we have one; tag the network relationship.
       if (w) {
         const prof = profiles.get(w);
         const relationship = labelByWallet.get(w) ?? null;
-        const face: LiveFace = {
+        r.face = {
           name: prof?.displayName ?? aliasFor(w),
           avatarUrl: prof?.pfpUrl ?? null,
           relationship,
-        };
-        r.face = face;
-        if (r.kind === "round_trip") {
-          // In and out at the same size — one honest line, not a mirrored pair.
-          // No amount: a wash nets to zero, so a dollar figure would misread as
-          // directional money. "backed then exited" says what happened, plainly.
-          r.text = `${face.name} backed then exited ${r.side ?? ""}`.trim();
-          continue;
-        }
-        r.text = composeLiveStory({
-          actor: { name: face.name, relationship },
-          side: r.side,
-          action,
-          flip: r.kind === "side_shift",
-          amountUsd: r.amountUsd,
-          market,
-        }).text;
-      } else {
-        // Multi-wallet burst — the crowd.
-        r.text = composeLiveStory({
-          actor: null,
-          walletCount: r.walletCount,
-          side: r.side,
-          action,
-          amountUsd: r.amountUsd,
-          market,
-        }).text;
+        } satisfies LiveFace;
       }
+
+      // Milestone / surge rows are already final from grouping (no actor to name).
+      if (r.kind === "believer_milestone" || r.kind === "tribe_doubled") continue;
+
+      const market = momentumById.get(Number(r.marketId)) ?? null;
+      const action = (r.payload as { action?: "BUY" | "SELL" }).action ?? null;
+      const actor = r.face ? { name: r.face.name, relationship: r.face.relationship } : null;
+
+      r.story = composeLiveStory({
+        kind: r.kind,
+        side: r.side,
+        action,
+        amountUsd: r.amountUsd,
+        walletCount: r.walletCount,
+        actor,
+        question: r.kind === "market_created" ? r.marketTitle : null,
+        market: market
+          ? { believersYes: market.believersYes, believersNo: market.believersNo }
+          : null,
+      });
+      r.text = flattenStory(r.story);
     }
 
-    return { rows: live, error: null };
+    // Materiality: the feed reports changes in conviction, not dust. Keep every
+    // personal (network) row, every milestone / fresh market / surge / side
+    // switch, and any trade that moved real money or brought several people;
+    // drop lone micro-trades and washes that say nothing.
+    const material = live.filter((r) => {
+      if (r.face?.relationship) return true;
+      if (
+        r.kind === "market_created" ||
+        r.kind === "believer_milestone" ||
+        r.kind === "tribe_doubled" ||
+        r.kind === "side_shift"
+      )
+        return true;
+      if (r.kind === "round_trip") return false;
+      if ((r.amountUsd ?? 0) >= MIN_MATERIAL_USD) return true;
+      return (r.walletCount ?? 1) > 1;
+    });
+
+    return { rows: material, error: null };
   });

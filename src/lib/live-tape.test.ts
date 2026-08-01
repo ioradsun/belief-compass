@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   groupLiveRows,
-  liveRowText,
+  liveRowStory,
   mergeLiveRows,
   type LiveEventInput,
   type LiveRow,
 } from "./live-tape";
+import type { LiveStory } from "@/domain/story";
 
 const ev = (o: Partial<LiveEventInput> = {}): LiveEventInput => ({
   source_key: Math.random().toString(36),
@@ -42,7 +43,8 @@ describe("trade burst grouping", () => {
     expect(rows[0].walletCount).toBe(3);
     expect(rows[0].tradeCount).toBe(3);
     expect(rows[0].occurredAt).toBe(t); // latest
-    expect(rows[0].text).toContain("3 believers backed YES");
+    expect(rows[0].story.headline).toBe("YES IS GROWING");
+    expect(rows[0].story.category).toBe("growing");
   });
 
   it("does NOT group across different sides", () => {
@@ -66,7 +68,7 @@ describe("trade burst grouping", () => {
   it("a single large trade becomes large_trade, not a burst", () => {
     const rows = groupLiveRows([ev({ amount_eth: 2, wallet: "0xwhale" })], 2000);
     expect(rows[0].kind).toBe("large_trade");
-    expect(rows[0].text).toContain("entered");
+    expect(rows[0].story.category).toBe("capital_in");
     expect(rows[0].amountUsd).toBe(4000);
   });
 });
@@ -90,7 +92,7 @@ describe("structured transitions are never grouped away", () => {
     );
     // trade | market_created | trade — the transition splits the bursts.
     expect(rows.map((r) => r.kind)).toEqual(["trade_burst", "market_created", "trade_burst"]);
-    expect(rows[1].text).toBe("New market just opened");
+    expect(rows[1].story.category).toBe("fresh_market");
   });
 });
 
@@ -120,63 +122,51 @@ describe("factual copy only", () => {
       }
     }
   });
-  it("liveRowText for a NO reduce burst reads factually", () => {
-    const text = liveRowText({
-      id: "x",
-      kind: "trade_burst",
-      marketId: "1",
-      marketTitle: "m",
-      occurredAt: "t",
-      startedAt: "t",
-      side: "NO",
-      walletCount: 4,
-      tradeCount: 4,
-      amountEth: 1,
-      amountUsd: 500,
-      wallet: null,
-      payload: { action: "SELL" },
-    });
-    expect(text).toContain("4 believers reduced NO");
+  const rowBase = (o: Partial<Omit<LiveRow, "text" | "story">> = {}): Omit<LiveRow, "text" | "story"> => ({
+    id: "x",
+    kind: "trade_burst",
+    marketId: "1",
+    marketTitle: "m",
+    occurredAt: "t",
+    startedAt: "t",
+    side: "NO",
+    walletCount: 4,
+    tradeCount: 4,
+    amountEth: 1,
+    amountUsd: 500,
+    wallet: null,
+    payload: { action: "SELL" },
+    ...o,
   });
-  it("liveRowText renders a believer milestone with its threshold", () => {
-    const text = liveRowText({
-      id: "milestone:1:YES:500",
-      kind: "believer_milestone",
-      marketId: "1",
-      marketTitle: "m",
-      occurredAt: "t",
-      startedAt: "t",
-      side: "YES",
-      walletCount: null,
-      tradeCount: null,
-      amountEth: null,
-      amountUsd: null,
-      wallet: null,
-      payload: { threshold: 500 },
-    });
-    expect(text).toBe("YES just passed 500 believers");
+
+  it("liveRowStory: a reduce burst reads as the side losing believers", () => {
+    const s = liveRowStory(rowBase());
+    expect(s.category).toBe("shrinking");
+    expect(s.headline).toBe("NO LOST 4 BELIEVERS");
   });
-  it("liveRowText renders a tribe doubling", () => {
-    const text = liveRowText({
-      id: "tribe_doubled:1:NO:2026-01-01",
-      kind: "tribe_doubled",
-      marketId: "1",
-      marketTitle: "m",
-      occurredAt: "t",
-      startedAt: "t",
-      side: "NO",
-      walletCount: null,
-      tradeCount: null,
-      amountEth: null,
-      amountUsd: null,
-      wallet: null,
-      payload: { count: 40, gained: 22 },
-    });
-    expect(text).toBe("The NO tribe doubled today");
+  it("liveRowStory: a milestone shows its threshold", () => {
+    const s = liveRowStory(
+      rowBase({ kind: "believer_milestone", side: "YES", amountUsd: null, payload: { threshold: 500 } }),
+    );
+    expect(s.category).toBe("milestone");
+    expect(s.body).toBe("YES just reached 500 believers.");
+  });
+  it("liveRowStory: a doubling surges, and never calls the side a 'tribe'", () => {
+    const s = liveRowStory(rowBase({ kind: "tribe_doubled", side: "NO", payload: {} }));
+    expect(s.category).toBe("momentum");
+    expect(`${s.headline} ${s.body}`).not.toMatch(/tribe/i);
   });
 });
 
 describe("mergeLiveRows (delta sync)", () => {
+  const story: LiveStory = {
+    category: "growing",
+    headline: "YES IS GROWING",
+    body: "Another believer joined YES.",
+    attribution: null,
+    tone: "yes",
+    personal: false,
+  };
   const lr = (id: string, occurredAt: string, text = id): LiveRow => ({
     id,
     kind: "trade_burst",
@@ -190,6 +180,7 @@ describe("mergeLiveRows (delta sync)", () => {
     amountEth: 0.1,
     amountUsd: 100,
     wallet: "0xa",
+    story,
     text,
     payload: {},
   });

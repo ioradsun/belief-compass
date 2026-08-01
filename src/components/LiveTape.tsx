@@ -11,8 +11,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { useStickyRows } from "@/hooks/useSticky";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
-import { classifyLiveRow } from "@/domain/live-taxonomy";
 import { mergeLiveRows, LIVE_DELTA_OVERLAP_MS, type LiveRow } from "@/lib/live-tape";
+import type { BeatTone } from "@/domain/story";
 
 type LiveResult = { rows: LiveRow[]; error: string | null };
 
@@ -83,9 +83,7 @@ export function LiveTape({
   const rows = useStickyRows(data?.rows);
 
   return (
-    <div
-      className="h-full min-h-0 flex-1 touch-pan-y overflow-y-scroll overscroll-contain [-webkit-overflow-scrolling:touch]"
-    >
+    <div className="h-full min-h-0 flex-1 touch-pan-y overflow-y-scroll overscroll-contain [-webkit-overflow-scrolling:touch]">
       {isLoading && rows.length === 0 ? (
         <ul className="space-y-2" aria-hidden>
           {Array.from({ length: skeletonRows }).map((_, i) => (
@@ -95,47 +93,47 @@ export function LiveTape({
       ) : rows.length === 0 ? (
         <p className="text-xs text-[var(--text-muted)]">{emptyText}</p>
       ) : (
-        <ul className="space-y-1">
+        <ul className="space-y-3">
           {rows.map((r) => {
-            const view = classifyLiveRow(r);
-            const personal = view.klass === "personal";
+            const s = r.story;
+            const personal = s.personal;
+            const showTitle = showTitles && s.category !== "fresh_market";
             return (
               <li key={r.id}>
                 <button
                   type="button"
                   onClick={() => onSelect(Number(r.marketId))}
-                  className="flex w-full items-start gap-2 rounded-[8px] px-1.5 py-1.5 text-left transition-colors hover:bg-[var(--border)]/30"
-                  // Personal rows carry a faint "this is about you" wash — the only
-                  // class with a background. Community and market rows stay flat so
-                  // nothing competes; priority is emphasis, never re-ordering.
+                  className="block w-full rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--border)]/25"
+                  // Personal (network) rows carry a faint "this is about you" wash —
+                  // the only rows with a background, so belonging quietly stands out.
                   style={
                     personal
                       ? { background: "color-mix(in oklab, var(--rel,#9b87f5) 8%, transparent)" }
                       : undefined
                   }
                 >
-                  <span className="mt-px w-7 shrink-0 text-[11px] tabular-nums text-[var(--text-muted)]">
+                  {/* WHEN → WHAT → WHY → WHO. Time first, headline loud, then the
+                    one-sentence change, then a small muted attribution last. */}
+                  <div className="text-[10px] font-medium tabular-nums text-[var(--text-muted)]">
                     {ago(r.occurredAt)}
-                  </span>
-
-                  {/* Leading glyph = the category at a glance. A real face when the
-                    actor is in your network (the strongest "someone" signal),
-                    otherwise the taxonomy icon. */}
-                  <LeadGlyph r={r} icon={view.icon} />
-
-                  <span className="min-w-0 flex-1">
-                    <span
-                      className="block text-[13px] leading-[1.45]"
-                      style={{ color: personal ? "var(--text)" : "var(--text-secondary)" }}
-                    >
-                      <SideText text={r.text} />
-                    </span>
-                    {showTitles && (
-                      <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]">
-                        {r.marketTitle}
-                      </span>
-                    )}
-                  </span>
+                  </div>
+                  <div className="mt-0.5 text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--text)]">
+                    <SideText text={s.headline} tone={s.tone} />
+                  </div>
+                  <div className="mt-0.5 text-[13px] leading-snug text-[var(--text-secondary)]">
+                    <SideText text={s.body} />
+                  </div>
+                  {showTitle && (
+                    <div className="mt-1 truncate text-[11px] text-[var(--text-muted)]">
+                      {r.marketTitle}
+                    </div>
+                  )}
+                  {s.attribution && (
+                    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+                      {r.face && <AttributionFace r={r} />}
+                      <span className="truncate">{s.attribution}</span>
+                    </div>
+                  )}
                 </button>
               </li>
             );
@@ -146,35 +144,18 @@ export function LiveTape({
   );
 }
 
-/**
- * The leading glyph, one consistent 20px slot so wrapped text left-aligns for
- * easy scanning. A real face when the actor is in your network (a person is the
- * truest "about you" signal), otherwise the taxonomy's category emoji.
- */
-function LeadGlyph({ r, icon }: { r: LiveRow; icon: string }) {
-  if (r.face) {
-    return r.face.avatarUrl ? (
-      <img
-        src={r.face.avatarUrl}
-        alt=""
-        className="mt-px h-5 w-5 shrink-0 rounded-full object-cover"
-      />
-    ) : (
-      <span
-        className="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-[8px] font-semibold text-white"
-        style={{ background: `hsl(${hueFor(r.wallet ?? r.id)} 45% 45%)` }}
-        aria-hidden
-      >
-        {initialsFor(r.face.name)}
-      </span>
-    );
-  }
-  return (
+/** A tiny face beside the attribution — the truest "someone" signal, kept last. */
+function AttributionFace({ r }: { r: LiveRow }) {
+  if (!r.face) return null;
+  return r.face.avatarUrl ? (
+    <img src={r.face.avatarUrl} alt="" className="h-4 w-4 shrink-0 rounded-full object-cover" />
+  ) : (
     <span
-      className="mt-px grid h-5 w-5 shrink-0 place-items-center text-[13px] leading-none"
+      className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-[7px] font-semibold text-white"
+      style={{ background: `hsl(${hueFor(r.wallet ?? r.id)} 45% 45%)` }}
       aria-hidden
     >
-      {icon}
+      {initialsFor(r.face.name)}
     </span>
   );
 }
@@ -184,7 +165,11 @@ function LeadGlyph({ r, icon }: { r: LiveRow; icon: string }) {
  * and signed percentages. Everything else stays neutral so the eye isn't asked
  * to decode a wall of red and green.
  */
-function SideText({ text }: { text: string }) {
+function SideText({ text, tone }: { text: string; tone?: BeatTone }) {
+  // A toned headline (e.g. "CAPITAL PULLED BACK") carries its direction; body text
+  // stays neutral except the YES / NO words and any percentage.
+  const toneColor =
+    tone === "yes" || tone === "hot" ? "var(--yes)" : tone === "no" ? "var(--no)" : undefined;
   const parts = text.split(/(\bYES\b|\bNO\b|[+−-]?\d+(?:\.\d+)?%)/g);
   return (
     <>
@@ -211,7 +196,11 @@ function SideText({ text }: { text: string }) {
             </span>
           );
         }
-        return <span key={i}>{p}</span>;
+        return (
+          <span key={i} style={toneColor ? { color: toneColor } : undefined}>
+            {p}
+          </span>
+        );
       })}
     </>
   );
