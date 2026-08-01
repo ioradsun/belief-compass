@@ -1,0 +1,734 @@
+/**
+ * MOBILE — The Conviction Game.
+ *
+ * A phone is not a courtroom. Desktop asks "help me understand the market";
+ * mobile asks "what do YOU believe?". So this surface deliberately hides every
+ * crowd signal that could bias the answer — no YES/NO split, no charts, no
+ * sparklines, no side comparison — until the viewer has committed.
+ *
+ * The sequence is always the same:
+ *   Question → community exists → Pulse → The House → Decision → Reveal → Next.
+ *
+ * Presentation only: every number comes from the same server/domain modules the
+ * desktop deck uses (marketBook / marketPulse / evidence / house read), so the
+ * two experiences can never disagree.
+ */
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSwitchChain } from "wagmi";
+
+import type { MarketRow } from "@/components/MarketCard";
+import { pulseLine } from "@/components/MarketCard";
+import { useHouseFinalize } from "@/components/MarketIntelligence";
+import { getMarketChange, listMarketPulses } from "@/lib/markets.functions";
+import { getMarketEvidence } from "@/lib/evidence.functions";
+import { getNetwork } from "@/lib/dna.functions";
+import { getConvictionMarket } from "@/lib/market-create.functions";
+import { getHouseRead } from "@/lib/house.functions";
+import { houseKey } from "@/components/MarketIntelligence";
+import { expressBelief } from "@/lib/beliefs.functions";
+import { useWalletSession } from "@/hooks/useWalletSession";
+import { requestConnect } from "@/lib/connect-bridge";
+import { CHAIN_ID } from "@/chain/decoder";
+import { useBuyQuote, useTrade, useTradeReady } from "@/lib/chain-trade";
+import { fmtUsd, usdToWei, type OrderSide } from "@/domain/order";
+import { marketBook } from "@/domain/market-book";
+import { marketPulse } from "@/domain/market-pulse";
+import {
+  houseAfter,
+  houseBefore,
+  houseBeforeNamed,
+  houseFoundationLine,
+  houseMode,
+} from "@/domain/the-house";
+
+const money = (usd: number) =>
+  usd >= 1000 ? `$${Math.round(usd).toLocaleString("en-US")}` : `$${usd.toFixed(usd < 10 ? 2 : 0)}`;
+
+function ago(ms: number): string {
+  const h = Math.max(0, ms) / 3_600_000;
+  if (h < 1) return `${Math.max(1, Math.round(h * 60))}m ago`;
+  if (h < 48) return `${Math.round(h)}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
+type Phase = "question" | "decided" | "passed" | "sides";
+
+export function MobileGame({
+  row,
+  ethUsd,
+  viewerWallet,
+  onNext,
+  onSelectPerson,
+}: {
+  row: MarketRow;
+  ethUsd: number;
+  viewerWallet?: string;
+  onNext: () => void;
+  onSelectPerson?: (wallet: string) => void;
+}) {
+  const marketId = Number(row.onchain_id);
+  const title = row.markets?.title ?? `Market #${marketId}`;
+  const category = row.markets?.category ?? null;
+
+  const [phase, setPhase] = useState<Phase>("question");
+  const [side, setSide] = useState<OrderSide | null>(null);
+  const [backing, setBacking] = useState(false);
+  const [amount, setAmount] = useState(1);
+
+  // A brand new question always starts from a blank slate.
+  useEffect(() => {
+    setPhase("question");
+    setSide(null);
+    setBacking(false);
+    setAmount(1);
+    trade.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketId]);
+
+  const qc = useQueryClient();
+  const { ensureSession } = useWalletSession();
+  const house = useHouseFinalize(marketId, viewerWallet);
+  const express = useMutation({
+    mutationFn: async (s: OrderSide) =>
+      expressBelief({
+        data: {
+          wallet: viewerWallet as string,
+          marketId,
+          side: s,
+          session: await ensureSession(),
+        },
+      }),
+    onSuccess: (r) => {
+      if (viewerWallet) qc.setQueryData(["readiness", viewerWallet.toLowerCase()], r);
+    },
+  });
+
+  const { data: change } = useQuery({
+    queryKey: ["market-change", marketId],
+    queryFn: () => getMarketChange({ data: { id: marketId } }),
+    staleTime: 10_000,
+    refetchInterval: 20_000,
+  });
+  const { data: cm } = useQuery({
+    queryKey: ["conviction-market", marketId],
+    queryFn: () => getConvictionMarket({ data: { onchainId: marketId } }),
+    staleTime: 5 * 60_000,
+  });
+  const { data: houseRead } = useQuery({
+    queryKey: houseKey(viewerWallet, marketId),
+    queryFn: () => getHouseRead({ data: { wallet: viewerWallet ?? null, marketId } }),
+    staleTime: 30_000,
+  });
+
+  // Community exists — totals only. Never a side, never a percentage.
+  const totals = useMemo(() => {
+    const tape = change?.tape ?? [];
+    if (tape.length) {
+      const book = marketBook(tape, Date.now());
+      return {
+        believers: book.believers.market.current,
+        capitalUsd: book.capitalEth.market.current * (ethUsd > 0 ? ethUsd : 0),
+        pulse: marketPulse(book).meaning,
+      };
+    }
+    return {
+      believers: (row.believers_yes ?? 0) + (row.believers_no ?? 0),
+      capitalUsd: (row.yes_capital_usd ?? 0) + (row.no_capital_usd ?? 0),
+      pulse: "No one has moved yet. This question is still waiting for its first believer.",
+    };
+  }, [change, ethUsd, row]);
+
+  // The House — exactly one sentence, never a card, never a confidence number.
+  const houseLine = useMemo(() => {
+    if (!viewerWallet) return "Play me. I'll learn how you think.";
+    if (!houseRead) return "Still learning you.";
+    if (houseRead.foundation)
+      return houseFoundationLine(houseRead.foundation.answered, houseRead.foundation.required);
+    if (houseRead.preview) return houseBeforeNamed(houseRead.preview, marketId);
+    return houseBefore(houseMode(houseRead.band), marketId);
+  }, [viewerWallet, houseRead, marketId]);
+
+  const houseReaction = useMemo(() => {
+    if (!side) return null;
+    const p = houseRead?.preview ?? null;
+    if (p === "YES" || p === "NO") return houseAfter(p === side, marketId);
+    return "I'm still learning how you think.";
+  }, [side, houseRead, marketId]);
+
+  const choose = useCallback(
+    (s: OrderSide) => {
+      if (viewerWallet) express.mutate(s);
+      setSide(s);
+      setPhase("decided");
+      setBacking(false);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [viewerWallet], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const pass = () => {
+    setSide(null);
+    setPhase("passed");
+    house.pass();
+  };
+
+  // ---- money: only ever asked for AFTER a side is chosen ----
+  const { switchChain } = useSwitchChain();
+  const ready = useTradeReady();
+  const trade = useTrade();
+  const ethWei = usdToWei(amount, ethUsd);
+  const { quote } = useBuyQuote(marketId, side === "YES", side && backing ? ethWei : 0n);
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (trade.isSuccess && trade.hash && side && !revealed) {
+      setRevealed(true);
+      house.betReveal(side, trade.hash);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trade.isSuccess, trade.hash, side]);
+
+  const createdAt = cm?.creator?.createdAt ?? null;
+  const byline = [
+    cm?.creator?.name ? `by ${cm.creator.name}` : null,
+    createdAt ? ago(Date.now() - new Date(createdAt).getTime()) : null,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+
+  if (phase === "sides")
+    return (
+      <BothSides
+        marketId={marketId}
+        title={title}
+        ethUsd={ethUsd}
+        onBack={() => setPhase(side ? "decided" : "question")}
+      />
+    );
+
+  if (phase === "passed")
+    return (
+      <Screen>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
+          <p className="text-[16px] text-[var(--text-secondary)]">You walked away.</p>
+          <p className="text-[16px] text-[var(--text-secondary)]">
+            <span aria-hidden>🏠</span> I kept my read. You never paid to see it.
+          </p>
+        </div>
+        <Dock>
+          <BigButton label="Next question" tone="neutral" onClick={onNext} />
+        </Dock>
+      </Screen>
+    );
+
+  if (phase === "decided" && side)
+    return (
+      <Reveal
+        marketId={marketId}
+        side={side}
+        row={row}
+        houseReaction={houseReaction}
+        viewerWallet={viewerWallet}
+        onSelectPerson={onSelectPerson}
+        onSeeBothSides={() => setPhase("sides")}
+        onNext={onNext}
+        backing={backing}
+        onBack={() => setBacking(true)}
+        amountPanel={
+          <AmountPanel
+            amount={amount}
+            setAmount={setAmount}
+            side={side}
+            busy={trade.isSubmitting || trade.isMining}
+            success={trade.isSuccess}
+            error={trade.isError ? (trade.error?.message?.slice(0, 90) ?? "Failed") : null}
+            label={
+              !ready.connected
+                ? "Connect wallet"
+                : !ready.onBase
+                  ? "Switch to Base"
+                  : `Confirm ${fmtUsd(amount)}`
+            }
+            onCancel={() => setBacking(false)}
+            onConfirm={async () => {
+              if (!ready.connected) return requestConnect();
+              if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
+              if (quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
+                try {
+                  await trade.buy(marketId, side === "YES", ethWei, quote.tokens);
+                } catch {
+                  /* surfaced via trade.error */
+                }
+              }
+            }}
+            onNext={onNext}
+          />
+        }
+      />
+    );
+
+  // ---- Screen 1 — The Question ----
+  return (
+    <Screen>
+      <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
+        <div>
+          {(category || createdAt) && (
+            <div className="text-[12px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+              {[category, createdAt ? ago(Date.now() - new Date(createdAt).getTime()) : null]
+                .filter(Boolean)
+                .join(" • ")}
+            </div>
+          )}
+          <h1 className="mt-3 text-[26px] font-semibold leading-[1.2] tracking-[-0.02em] text-[var(--text)]">
+            {title}
+          </h1>
+          {byline && (
+            <button
+              type="button"
+              onClick={() => cm?.creator && onSelectPerson?.(cm.creator.wallet)}
+              className="mt-3 text-left text-[13px] text-[var(--text-muted)]"
+            >
+              {byline}
+            </button>
+          )}
+        </div>
+
+        <Rule />
+
+        <div className="space-y-1.5">
+          <div className="num text-[16px] text-[var(--text)]">
+            {totals.believers} believer{totals.believers === 1 ? "" : "s"}
+          </div>
+          <div className="num text-[16px] text-[var(--text-secondary)]">
+            {money(totals.capitalUsd)} committed
+          </div>
+        </div>
+
+        <Rule />
+
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+            Pulse
+          </div>
+          <p className="mt-2 text-[16px] leading-relaxed text-[var(--text-secondary)]">
+            {totals.pulse}
+          </p>
+        </div>
+
+        <Rule />
+
+        <p className="text-[16px] leading-relaxed text-[var(--text-secondary)]">
+          <span aria-hidden>🏠</span> {houseLine}
+        </p>
+      </div>
+
+      <Dock>
+        <div className="flex gap-2.5">
+          <BigButton label="NO" tone="no" onClick={() => choose("NO")} />
+          <BigButton label="PASS" tone="neutral" onClick={pass} />
+          <BigButton label="YES" tone="yes" onClick={() => choose("YES")} />
+        </div>
+      </Dock>
+    </Screen>
+  );
+}
+
+/** Screen 2 — the reveal. The crowd is the reward for deciding first. */
+function Reveal({
+  marketId,
+  side,
+  row,
+  houseReaction,
+  viewerWallet,
+  onSeeBothSides,
+  onNext,
+  backing,
+  onBack,
+  amountPanel,
+}: {
+  marketId: number;
+  side: OrderSide;
+  row: MarketRow;
+  houseReaction: string | null;
+  viewerWallet?: string;
+  onSelectPerson?: (wallet: string) => void;
+  onSeeBothSides: () => void;
+  onNext: () => void;
+  backing: boolean;
+  onBack: () => void;
+  amountPanel: React.ReactNode;
+}) {
+  const { data: evidence } = useQuery({
+    queryKey: ["evidence", marketId],
+    queryFn: () => getMarketEvidence({ data: { marketId } }),
+    staleTime: 30_000,
+  });
+  const { data: net } = useQuery({
+    queryKey: ["network", viewerWallet ?? null, "all", "relevant", ""],
+    queryFn: () => getNetwork({ data: { wallet: viewerWallet, limit: 60 } }),
+    enabled: !!viewerWallet,
+    staleTime: 60_000,
+  });
+
+  const yes = evidence?.believersYes ?? row.believers_yes ?? 0;
+  const no = evidence?.believersNo ?? row.believers_no ?? 0;
+  const mine = side === "YES" ? yes : no;
+  const theirs = side === "YES" ? no : yes;
+  const other: OrderSide = side === "YES" ? "NO" : "YES";
+
+  const tribeAgreed = useMemo(() => {
+    const believers = evidence?.believers ?? [];
+    const bySide = new Map(believers.map((b) => [b.wallet.toLowerCase(), b.side]));
+    return (net?.people ?? []).filter(
+      (p) =>
+        ["tribe", "twin"].includes(p.relationship) && bySide.get(p.wallet.toLowerCase()) === side,
+    ).length;
+  }, [evidence, net, side]);
+
+  const tone = side === "YES" ? "var(--yes)" : "var(--no)";
+
+  return (
+    <Screen>
+      <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
+        {houseReaction && (
+          <p className="text-[16px] leading-relaxed text-[var(--text-secondary)]">
+            <span aria-hidden>🏠</span> {houseReaction}
+          </p>
+        )}
+
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+            You chose
+          </div>
+          <div
+            className="mt-1 text-[30px] font-semibold tracking-[-0.02em]"
+            style={{ color: tone }}
+          >
+            {side}
+          </div>
+        </div>
+
+        <Rule />
+
+        <div className="space-y-1.5">
+          <div className="num text-[16px] text-[var(--text)]">
+            {mine} believer{mine === 1 ? "" : "s"}
+          </div>
+          <div className="num text-[16px] text-[var(--text-secondary)]">
+            {theirs} chose {other}
+          </div>
+        </div>
+
+        {tribeAgreed > 0 && (
+          <>
+            <Rule />
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                Your Tribe
+              </div>
+              <div className="num mt-2 text-[16px] text-[var(--text)]">{tribeAgreed} agreed</div>
+            </div>
+          </>
+        )}
+
+        <Rule />
+
+        <button
+          type="button"
+          onClick={onSeeBothSides}
+          className="text-left text-[16px] font-semibold text-[var(--text)]"
+        >
+          See Both Sides →
+        </button>
+
+        <p className="text-[13px] text-[var(--text-muted)]">
+          Another conviction mapped. The House understands you a little better.
+        </p>
+      </div>
+
+      <Dock>
+        {backing ? (
+          amountPanel
+        ) : (
+          <div className="flex gap-2.5">
+            <BigButton label="Next question" tone="neutral" onClick={onNext} />
+            <BigButton
+              label={`Back ${side}`}
+              tone={side === "YES" ? "yes" : "no"}
+              onClick={onBack}
+            />
+          </div>
+        )}
+      </Dock>
+    </Screen>
+  );
+}
+
+/** How much conviction? Asked only after a side is chosen — never before. */
+function AmountPanel({
+  amount,
+  setAmount,
+  side,
+  busy,
+  success,
+  error,
+  label,
+  onCancel,
+  onConfirm,
+  onNext,
+}: {
+  amount: number;
+  setAmount: (n: number) => void;
+  side: OrderSide;
+  busy: boolean;
+  success: boolean;
+  error: string | null;
+  label: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  onNext: () => void;
+}) {
+  const [custom, setCustom] = useState(false);
+
+  if (success)
+    return (
+      <div className="space-y-3">
+        <p className="text-center text-[16px] text-[var(--text-secondary)]">
+          You backed {side} with {fmtUsd(amount)}.
+        </p>
+        <BigButton label="Next question" tone="neutral" onClick={onNext} />
+      </div>
+    );
+
+  return (
+    <div className="space-y-3">
+      <div className="text-[13px] text-[var(--text-muted)]">How much conviction?</div>
+      <div className="flex gap-2.5">
+        {[1, 5, 10].map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => {
+              setCustom(false);
+              setAmount(v);
+            }}
+            className="h-[52px] flex-1 rounded-[14px] text-[18px] font-semibold"
+            style={
+              !custom && amount === v
+                ? { background: "var(--text)", color: "var(--bg)" }
+                : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
+            }
+          >
+            ${v}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setCustom(true)}
+          className="h-[52px] flex-1 rounded-[14px] text-[18px] font-semibold"
+          style={
+            custom
+              ? { background: "var(--text)", color: "var(--bg)" }
+              : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
+          }
+        >
+          Custom
+        </button>
+      </div>
+      {custom && (
+        <span
+          className="flex h-[52px] items-center gap-1 rounded-[14px] px-3"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          <span className="num text-[18px] text-[var(--text-muted)]">$</span>
+          <input
+            autoFocus
+            inputMode="decimal"
+            value={amount ? String(amount) : ""}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[^0-9.]/g, "");
+              const n = parseFloat(raw);
+              setAmount(Number.isNaN(n) ? 0 : Math.min(n, 1_000_000));
+            }}
+            aria-label="Amount in dollars"
+            className="num w-full bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
+            placeholder="0"
+          />
+        </span>
+      )}
+      {error && <div className="text-[13px] text-[var(--no)]">{error}</div>}
+      <div className="flex gap-2.5">
+        <BigButton label="Not now" tone="neutral" onClick={onCancel} />
+        <BigButton
+          label={busy ? "Confirming…" : label}
+          tone={side === "YES" ? "yes" : "no"}
+          onClick={onConfirm}
+          disabled={busy || amount <= 0}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Screen 3 — See Both Sides. Totals first; one tap opens a side's case. */
+function BothSides({
+  marketId,
+  title,
+  ethUsd,
+  onBack,
+}: {
+  marketId: number;
+  title: string;
+  ethUsd: number;
+  onBack: () => void;
+}) {
+  const [open, setOpen] = useState<OrderSide | null>(null);
+  const { data: evidence } = useQuery({
+    queryKey: ["evidence", marketId],
+    queryFn: () => getMarketEvidence({ data: { marketId } }),
+    staleTime: 30_000,
+  });
+  const { data: pulses } = useQuery({
+    queryKey: ["market-pulses", String(marketId)],
+    queryFn: () => listMarketPulses({ data: { ids: [marketId] } }),
+    staleTime: 15_000,
+  });
+
+  const believers = evidence?.believers ?? [];
+  const capital = (s: OrderSide) =>
+    believers.filter((b) => b.side === s).reduce((t, b) => t + (b.valueUsd ?? 0), 0);
+  const count = (s: OrderSide) => believers.filter((b) => b.side === s).length;
+  const events = pulses?.pulses?.[String(marketId)] ?? [];
+
+  return (
+    <Screen>
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-left text-[13px] text-[var(--text-muted)]"
+        >
+          ← Back
+        </button>
+        <h2 className="text-[18px] font-semibold leading-snug text-[var(--text)]">{title}</h2>
+
+        {(["YES", "NO"] as OrderSide[]).map((s) => (
+          <div key={s}>
+            <Rule />
+            <button
+              type="button"
+              onClick={() => setOpen((cur) => (cur === s ? null : s))}
+              className="w-full pt-5 text-left"
+            >
+              <div
+                className="text-[20px] font-semibold"
+                style={{ color: s === "YES" ? "var(--yes)" : "var(--no)" }}
+              >
+                {s}
+              </div>
+              <div className="num mt-2 text-[16px] text-[var(--text)]">
+                {count(s)} believer{count(s) === 1 ? "" : "s"}
+              </div>
+              <div className="num mt-1 text-[16px] text-[var(--text-secondary)]">
+                {money(capital(s))} committed
+              </div>
+            </button>
+
+            {open === s && (
+              <div className="mt-5 space-y-5">
+                {(evidence?.defense ?? []).filter((d) => d.vote === s).length > 0 && (
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                      Why people believe
+                    </div>
+                    <ul className="mt-2 space-y-2">
+                      {(evidence?.defense ?? [])
+                        .filter((d) => d.vote === s)
+                        .slice(0, 3)
+                        .map((d, i) => (
+                          <li
+                            key={i}
+                            className="text-[14px] leading-relaxed text-[var(--text-secondary)]"
+                          >
+                            • {d.opinion}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
+                {events.filter((e) => e.side === s).length > 0 && (
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                      Recent activity
+                    </div>
+                    <ul className="mt-2 space-y-2">
+                      {events
+                        .filter((e) => e.side === s)
+                        .slice(0, 5)
+                        .map((e, i) => (
+                          <li key={i} className="text-[14px] text-[var(--text-secondary)]">
+                            {pulseLine(e, ethUsd)}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Screen>
+  );
+}
+
+/* ---------- primitives ---------- */
+
+function Screen({ children }: { children: React.ReactNode }) {
+  return <div className="flex h-full min-h-0 flex-col">{children}</div>;
+}
+
+function Dock({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="shrink-0 pt-3"
+      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 8px)" }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Rule() {
+  return <div className="border-t border-[var(--border)]" aria-hidden />;
+}
+
+function BigButton({
+  label,
+  tone,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  tone: "yes" | "no" | "neutral";
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const style =
+    tone === "yes"
+      ? { border: "1px solid var(--yes)", color: "var(--yes)" }
+      : tone === "no"
+        ? { border: "1px solid var(--no)", color: "var(--no)" }
+        : { border: "1px solid var(--border)", color: "var(--text-secondary)" };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="h-[60px] flex-1 rounded-[16px] text-[18px] font-semibold transition-opacity disabled:opacity-40"
+      style={style}
+    >
+      {label}
+    </button>
+  );
+}
