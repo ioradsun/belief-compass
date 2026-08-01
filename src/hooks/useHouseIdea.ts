@@ -37,12 +37,15 @@ export interface HouseIdea {
   onPublishFailed: () => void;
 }
 
-export function useHouseIdea(viewerWallet?: string): HouseIdea {
+export function useHouseIdea(): HouseIdea {
   const { address } = useAccount();
-  const wallet = viewerWallet ?? address ?? null;
+  // The connected address, not the effective/linked viewer wallet: the session
+  // token proves ownership of *this* address, and the server checks that.
+  const wallet = address ?? null;
   // Only a session the viewer already signed for — asking for a signature to
   // *offer* an idea would be a worse trade than never offering it.
   const token = wallet ? readSessionToken(wallet) : null;
+
 
   const [, bump] = useState(0);
   const seen = useRef(new Set<number>());
