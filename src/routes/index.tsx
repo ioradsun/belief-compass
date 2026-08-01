@@ -123,6 +123,12 @@ const feedQO = (wallet: string | undefined, window: VolumeWindow = "24h", lens =
     // stream can't patch — feed ordering, a newly created market entering, the
     // house idea, and tribe faces — and re-syncs after a dropped socket.
     refetchInterval: 20_000,
+    // The SSR loader hands this query a real, server-fetched payload. Without a
+    // staleTime that data is stale the instant it lands, so hydration fires an
+    // immediate duplicate request for bytes we already shipped in the HTML.
+    // 15s (< the 20s reconcile) means: adopt the server snapshot, then keep the
+    // normal poll cadence.
+    staleTime: 15_000,
     // Never blank the feed while a poll (or a window switch) is in flight.
     placeholderData: (prev) => prev,
   });
