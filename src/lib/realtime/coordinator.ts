@@ -17,7 +17,12 @@
  * bundle — the socket opens after the snapshot is already on screen.
  */
 import type { QueryClient } from "@tanstack/react-query";
-import { applyMarketStateBatch, affectedPulseKeys, type MarketStateRow } from "./reduce";
+import {
+  applyMarketStateBatch,
+  affectedPulseKeys,
+  affectedPositionsTapeKeys,
+  type MarketStateRow,
+} from "./reduce";
 
 /** How long after a socket recovery we let a single feed reconcile fire. */
 const RECONCILE_DEBOUNCE_MS = 400;
@@ -84,8 +89,12 @@ export function startRealtime(qc: QueryClient): () => void {
     if (disposed || affected.size === 0) return;
     const ids = new Set(affected);
     affected.clear();
-    // Per-card pulses: only the caches that actually hold a traded market.
+    // Per-card pulses + the position network tape: only caches that actually
+    // hold a traded market.
     for (const key of affectedPulseKeys(qc, ids)) {
+      void qc.invalidateQueries({ queryKey: key, exact: true });
+    }
+    for (const key of affectedPositionsTapeKeys(qc, ids)) {
       void qc.invalidateQueries({ queryKey: key, exact: true });
     }
     // The live tape is chronological across all markets, so any trade can change

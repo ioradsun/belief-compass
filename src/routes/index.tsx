@@ -87,6 +87,7 @@ import { OmniHeader } from "@/components/OmniHeader";
 import { ProfileMenu } from "@/components/ProfileMenu";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
+import { usePositionStream } from "@/lib/realtime/use-position-stream";
 import { useIsDesktop } from "@/hooks/use-mobile";
 import { LandingPanel } from "@/components/LandingPanel";
 import { useLandingPanelState } from "@/hooks/useLandingPanelState";
@@ -229,6 +230,9 @@ function Feed() {
 
   const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
+  // One viewer-scoped socket keeps the connected wallet's positions live; a
+  // belief change refetches only the mounted position slices (server-valued).
+  usePositionStream(wallet);
   // Case File is DESKTOP-ONLY: a research surface for side-by-side comparison. A
   // phone is for action, so it never exposes Case File (button, columns, or the
   // ?case flag). Desktop is >= lg, where the three columns actually sit together.

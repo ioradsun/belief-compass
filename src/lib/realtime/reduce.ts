@@ -218,3 +218,38 @@ export function affectedPulseKeys(qc: QueryClient, affected: Set<number>): unkno
   }
   return out;
 }
+
+/**
+ * Which `["positions-tape", wallet, ids[]]` caches hold a market that just
+ * traded. The scope is an id ARRAY at key[2] (vs pulses' comma-string at [1]),
+ * so any wallet's trade on one of the viewer's position markets refreshes this
+ * left-column network tape — precisely, never on unrelated trades.
+ */
+export function affectedPositionsTapeKeys(qc: QueryClient, affected: Set<number>): unknown[][] {
+  if (affected.size === 0) return [];
+  const out: unknown[][] = [];
+  for (const q of qc.getQueryCache().findAll({ queryKey: ["positions-tape"] })) {
+    const ids = q.queryKey[2];
+    if (Array.isArray(ids) && ids.some((id) => affected.has(Number(id)))) {
+      out.push(q.queryKey as unknown[]);
+    }
+  }
+  return out;
+}
+
+/**
+ * The viewer's position cache families, as partial key prefixes to invalidate
+ * when their `wallet_beliefs` changes. Partial match covers every window/market
+ * variant (`["my-convictions", w, win]`, `["position-summary", w, id]`, …);
+ * `refetchType: "active"` then refreshes only what is mounted. Positions are
+ * server-valued (POV worth, ETH→USD cost, market meta), so the change is a
+ * signal to refetch — never a client-side re-valuation.
+ */
+export function viewerPositionKeys(wallet: string): unknown[][] {
+  const w = wallet.toLowerCase();
+  return [
+    ["my-convictions", w],
+    ["positions-tape", w],
+    ["position-summary", w],
+  ];
+}
