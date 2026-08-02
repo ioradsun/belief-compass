@@ -206,7 +206,7 @@ export function CaseColumn({
               pct={r.pct}
               active={metric === r.metric}
               color={color}
-              onSelect={() => setMetric(r.metric)}
+              onSelect={() => setDeckLens(r.metric)}
             />
           ))}
         </div>
