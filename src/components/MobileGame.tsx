@@ -362,8 +362,6 @@ function AmountPanel({
   onConfirm: () => void;
   onNext: () => void;
 }) {
-  const [custom, setCustom] = useState(false);
-
   if (success)
     return (
       <div className="space-y-3">
@@ -377,59 +375,25 @@ function AmountPanel({
   return (
     <div className="space-y-3">
       <div className="text-[13px] text-[var(--text-muted)]">How much conviction?</div>
-      <div className="flex gap-2.5">
-        {[1, 5, 10].map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => {
-              setCustom(false);
-              setAmount(v);
-            }}
-            className="h-[52px] flex-1 rounded-[14px] text-[18px] font-semibold"
-            style={
-              !custom && amount === v
-                ? { background: "var(--text)", color: "var(--bg)" }
-                : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
-            }
-          >
-            ${v}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => setCustom(true)}
-          className="h-[52px] flex-1 rounded-[14px] text-[18px] font-semibold"
-          style={
-            custom
-              ? { background: "var(--text)", color: "var(--bg)" }
-              : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
-          }
-        >
-          Custom
-        </button>
-      </div>
-      {custom && (
-        <span
-          className="flex h-[52px] items-center gap-1 rounded-[14px] px-3"
-          style={{ border: "1px solid var(--border)" }}
-        >
-          <span className="num text-[18px] text-[var(--text-muted)]">$</span>
-          <input
-            autoFocus
-            inputMode="decimal"
-            value={amount ? String(amount) : ""}
-            onChange={(e) => {
-              const raw = e.target.value.replace(/[^0-9.]/g, "");
-              const n = parseFloat(raw);
-              setAmount(Number.isNaN(n) ? 0 : Math.min(n, 1_000_000));
-            }}
-            aria-label="Amount in dollars"
-            className="num w-full bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
-            placeholder="0"
-          />
-        </span>
-      )}
+      <span
+        className="flex h-[52px] items-center gap-1 rounded-[14px] px-3"
+        style={{ border: "1px solid var(--border)" }}
+      >
+        <span className="num text-[18px] text-[var(--text-muted)]">$</span>
+        <input
+          autoFocus
+          inputMode="decimal"
+          value={amount ? String(amount) : ""}
+          onChange={(e) => {
+            const raw = e.target.value.replace(/[^0-9.]/g, "");
+            const n = parseFloat(raw);
+            setAmount(Number.isNaN(n) ? 0 : Math.min(n, 1_000_000));
+          }}
+          aria-label="Amount in dollars"
+          className="num w-full bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
+          placeholder="0"
+        />
+      </span>
       {error && <div className="text-[13px] text-[var(--no)]">{error}</div>}
       <div className="flex gap-2.5">
         <BigButton label="Not now" tone="neutral" onClick={onCancel} />
