@@ -174,16 +174,19 @@ export function CaseColumn({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Header: the side, and the one shared time filter. */}
+      {/* Header: the side. The timeframe is chosen once, in the center panel. */}
       <div className="mb-3 shrink-0">
-        <div className="mb-2 flex items-baseline gap-2">
+        <div className="flex items-baseline gap-2">
           <span className="text-[13px] font-semibold" style={{ color }}>
             {side}
           </span>
           <span className="text-[13px] font-semibold text-[var(--text)]">Case</span>
+          <span className="ml-auto text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            {FLOW_WINDOW_SHORT[win]}
+          </span>
         </div>
-        <WindowFilter win={win} onWin={setDeckWindow} />
       </div>
+
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5">
         {/* ACT 1 — THE LENSES: pick what to investigate. The three metrics ARE the
