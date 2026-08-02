@@ -26,6 +26,7 @@ import { getMarketChange, listMarketPulses } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getConvictionMarket } from "@/lib/market-create.functions";
+import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
 import { getHouseRead } from "@/lib/house.functions";
 import { houseKey } from "@/lib/house-round";
 import { expressBelief } from "@/lib/beliefs.functions";
@@ -168,6 +169,7 @@ export function MobileGame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trade.isSuccess, trade.hash, side]);
 
+  const stageMedia = stageMediaFrom(cm);
   const createdAt = cm?.creator?.createdAt ?? null;
   const byline = [
     cm?.creator?.name ? `by ${cm.creator.name}` : null,
