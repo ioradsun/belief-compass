@@ -24,13 +24,13 @@ import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
 // MobileGame is a phone-only experience, the Case File only exists once the user
 // opens the case, and Terms is a rarely visited legal page. Keeping them out of
 // the initial chunk is the single biggest first-load win.
-const MobileGame = lazy(() =>
+const MobileGame = lazyRetry(() =>
   import("@/components/MobileGame").then((m) => ({ default: m.MobileGame })),
 );
-const CaseColumn = lazy(() =>
+const CaseColumn = lazyRetry(() =>
   import("@/components/CaseFile").then((m) => ({ default: m.CaseColumn })),
 );
-const TermsContent = lazy(() =>
+const TermsContent = lazyRetry(() =>
   import("@/components/TermsContent").then((m) => ({ default: m.TermsContent })),
 );
 
@@ -42,13 +42,13 @@ import { WalletConnectButton } from "@/components/WalletConnect";
 // Deferred surfaces: none of these render for a first-time, signed-out visitor.
 // PersonProfile/DnaOverview need a ?p/?dna selection; MyWorld/AccountRail need a
 // connected wallet. Code-splitting them keeps the first-load JS to just the deck.
-const PersonProfile = lazy(() =>
+const PersonProfile = lazyRetry(() =>
   import("@/components/PersonProfile").then((m) => ({ default: m.PersonProfile })),
 );
-const DnaOverview = lazy(() =>
+const DnaOverview = lazyRetry(() =>
   import("@/components/DnaOverview").then((m) => ({ default: m.DnaOverview })),
 );
-const ConvictionDashboard = lazy(() =>
+const ConvictionDashboard = lazyRetry(() =>
   import("@/components/ConvictionDashboard").then((m) => ({ default: m.ConvictionDashboard })),
 );
 // Phase 5: the SERVER owns opportunity classification + score. The client only
@@ -84,10 +84,10 @@ const OPP_FILTERS: { key: OppFilter; emoji: string; label: string; question: str
   { key: "new", emoji: "🆕", label: "New", question: "What is genuinely recent?" },
 ];
 
-const CreateMarket = lazy(() =>
+const CreateMarket = lazyRetry(() =>
   import("@/components/CreateMarket").then((m) => ({ default: m.CreateMarket })),
 );
-const MyWorld = lazy(() => import("@/components/MyWorld").then((m) => ({ default: m.MyWorld })));
+const MyWorld = lazyRetry(() => import("@/components/MyWorld").then((m) => ({ default: m.MyWorld })));
 import { OmniHeader } from "@/components/OmniHeader";
 import { ProfileMenu } from "@/components/ProfileMenu";
 

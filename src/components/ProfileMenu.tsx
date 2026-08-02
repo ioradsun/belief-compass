@@ -17,13 +17,13 @@ import { getProfileOverride } from "@/lib/profile-edit.functions";
 // The three account panels only exist behind a menu click, and each drags in
 // its own contract/signing code. Keeping them out of the header's chunk keeps
 // them off every first paint.
-const ProfileEditor = lazy(() =>
+const ProfileEditor = lazyRetry(() =>
   import("@/components/ProfileEditor").then((m) => ({ default: m.ProfileEditor })),
 );
-const CreatorEarnings = lazy(() =>
+const CreatorEarnings = lazyRetry(() =>
   import("@/components/CreatorEarnings").then((m) => ({ default: m.CreatorEarnings })),
 );
-const WalletIdentity = lazy(() =>
+const WalletIdentity = lazyRetry(() =>
   import("@/components/WalletIdentity").then((m) => ({ default: m.WalletIdentity })),
 );
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";

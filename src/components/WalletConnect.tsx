@@ -10,7 +10,7 @@ import { requestConnect, requestDisconnect } from "@/lib/connect-bridge";
 const wagmiQueryClient = new QueryClient();
 
 /** Connect modal + wallet artwork — its own chunk, mounted after first paint. */
-const RainbowKitLayer = lazy(() => import("@/components/wallet/RainbowKitLayer"));
+const RainbowKitLayer = lazyRetry(() => import("@/components/wallet/RainbowKitLayer"));
 
 /**
  * wagmi wraps the app (every `useAccount` / `useSignMessage` call site depends
