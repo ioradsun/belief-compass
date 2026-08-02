@@ -19,8 +19,9 @@ import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { ConvictionSpark } from "@/components/ConvictionSpark";
 import { CaseRoster, StatRow } from "@/components/CaseFile";
-import { WindowFilter } from "@/components/WindowFilter";
-import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
+import { FLOW_WINDOW_SHORT } from "@/domain/market-flow";
+import { useDeckWindow } from "@/lib/deck-window";
+
 import { convictionStory, narrateStory, timelineEvents } from "@/domain/conviction-series";
 import { FLOW_WINDOW_PHRASE } from "@/domain/market-flow";
 import { sideCaseSummary } from "@/domain/case-file";
@@ -50,7 +51,7 @@ export function CaseStory({
   // One timeframe everywhere: investigation reads (and can change) the same
   // selection the center panel owns, so no two surfaces quote different periods.
   const win = useDeckWindow();
-  const setWin = setDeckWindow;
+  
 
   // Escape always returns to comparison — investigation is a temporary lens.
   useEffect(() => {
@@ -138,10 +139,11 @@ export function CaseStory({
           </button>
         </div>
 
-        {/* The one shared timeframe. */}
-        <div className="mt-3 max-w-[280px]">
-          <WindowFilter win={win} onWin={setWin} />
+        {/* The one shared timeframe lives in the center panel — echoed here. */}
+        <div className="mt-3 text-[11px] font-semibold tracking-wide text-[var(--text-muted)]">
+          Over {FLOW_WINDOW_SHORT[win]}
         </div>
+
 
         {/* The three real signals over time — believers, capital, price. */}
         <div className="mt-4 space-y-3">
