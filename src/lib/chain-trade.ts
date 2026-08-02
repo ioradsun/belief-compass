@@ -18,6 +18,7 @@ import {
   useWaitForTransactionReceipt,
 } from "wagmi";
 import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
+import { CONVICTION_TAG } from "@/chain/attribution";
 import { minOut } from "@/domain/order";
 import { recordConvictionTrade } from "@/lib/conviction-trades.functions";
 
@@ -167,6 +168,9 @@ export function useTrade() {
           args: [BigInt(marketId), yes, minOut(quotedTokens)],
           value: ethWei,
           chainId: CHAIN_ID,
+          // Appended to the calldata; the contract ignores trailing bytes. Makes
+          // this trade attributable to Conviction from public chain data alone.
+          dataSuffix: CONVICTION_TAG,
         }),
       { marketId, side: yes ? "YES" : "NO", action: "BUY" },
     );
@@ -180,6 +184,7 @@ export function useTrade() {
           functionName: "sell",
           args: [BigInt(marketId), yes, tokenAmount, minOut(quotedProceeds)],
           chainId: CHAIN_ID,
+          dataSuffix: CONVICTION_TAG,
         }),
       { marketId, side: yes ? "YES" : "NO", action: "SELL" },
     );
