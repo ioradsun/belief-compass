@@ -313,18 +313,11 @@ export function CreateMarket({
       {/* 1 · Compact header — pinned. Title carries the earn promise; the
           provenance tag sits inline, top-right. */}
       <div className="flex shrink-0 items-start gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          aria-label="Back"
-          className="mt-0.5 text-[16px] leading-none text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-        >
-          ←
-        </button>
         <h2 className="flex-1 text-[15px] font-semibold leading-snug text-[var(--text)]">
-          Share Your Conviction. Earn 4.5% on Every Trade.
+          State Your Conviction. Earn 4.5% on Every Trade.
         </h2>
       </div>
+
 
 
 
