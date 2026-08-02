@@ -44,6 +44,8 @@ type Position = {
   } | null;
   chg_window_yes?: number | null;
   chg_window_no?: number | null;
+  new_believers_yes_win?: number | null;
+  new_believers_no_win?: number | null;
   yes_value_usd?: number | null;
   no_value_usd?: number | null;
   /** The stored marked value is too old to trust as a live mark (see getWallet). */
