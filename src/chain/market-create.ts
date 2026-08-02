@@ -13,6 +13,7 @@ import { decodeEventLog, type Abi, type TransactionReceipt } from "viem";
 import { useAccount, usePublicClient, useReadContract, useWriteContract } from "wagmi";
 import abi from "./abi.json" with { type: "json" };
 import { PROXY_ADDRESS, CHAIN_ID } from "./decoder";
+import { CONVICTION_TAG } from "./attribution";
 
 const ABI = abi as unknown as Abi;
 const CONTRACT = { address: PROXY_ADDRESS, abi: ABI } as const;
@@ -198,13 +199,16 @@ export function useCreateMarket() {
 
         if (balance < seedWei) throw new Error("Insufficient balance for this seed.");
 
-        // Unaudited contract: never send without a successful simulation.
+        // Unaudited contract: never send without a successful simulation. The
+        // attribution suffix is included here too, so we simulate the exact
+        // calldata we are about to broadcast.
         await client.simulateContract({
           ...CONTRACT,
           functionName: "createMarket",
           args: [questionId, YES_AGENT, NO_AGENT, curve, yes],
           value: seedWei,
           account: address,
+          dataSuffix: CONVICTION_TAG,
         });
 
         setPhase("signing");
@@ -214,6 +218,7 @@ export function useCreateMarket() {
           args: [questionId, YES_AGENT, NO_AGENT, curve, yes],
           value: seedWei,
           chainId: CHAIN_ID,
+          dataSuffix: CONVICTION_TAG,
         });
 
         setPhase("confirming");
