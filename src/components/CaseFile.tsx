@@ -16,7 +16,8 @@ import { setDeckLens, useDeckLens } from "@/lib/deck-lens";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
-import { getMarketChange } from "@/lib/markets.functions";
+import { getMarketChange, getMarketBaselines, type VolumeWindow } from "@/lib/markets.functions";
+import { windowChange } from "@/domain/window-change";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { fmtUsd } from "@/domain/order";
@@ -103,6 +104,15 @@ export function CaseColumn({
     staleTime: 10_000,
     refetchInterval: 15_000,
   });
+  // Authoritative window-open baselines (D3): exact even when the tape is capped
+  // at 1000 trades. Absent (pre-migration / no old-enough snapshot) → tape fallback.
+  const { data: baselines } = useQuery({
+    queryKey: ["market-baselines", marketId],
+    queryFn: () => getMarketBaselines({ data: { id: marketId } }),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    placeholderData: (prev) => prev,
+  });
 
   const tape = change?.tape;
   const { summary, events } = useMemo(() => {
@@ -119,7 +129,10 @@ export function CaseColumn({
   // Headline Believers + Capital come from the CANONICAL reducer (the same one the
   // center uses), so YES + NO always equals the center's Market total. Price is a
   // per-share fact, not a total, so it stays with the side summary.
-  const book = useMemo(() => (tape?.length ? marketBook(tape, Date.now(), win) : null), [tape, win]);
+  const book = useMemo(
+    () => (tape?.length ? marketBook(tape, Date.now(), win) : null),
+    [tape, win],
+  );
   const sideKey = side === "YES" ? "yes" : "no";
   const believerMetric = book?.believers[sideKey] ?? null;
   const capitalMetric = book?.capitalEth[sideKey] ?? null;
@@ -151,18 +164,43 @@ export function CaseColumn({
   const meta = LENS_META[metric];
   const lensSentence = lensStory(metric, side, facts, FLOW_WINDOW_PHRASE[win], money);
 
+  // Prefer the AUTHORITATIVE current (market_state row) + the snapshot baseline for
+  // the selected window: correct even on a >1000-trade market where the tape can't
+  // reach the window's opening state. When either is unavailable, fall back to the
+  // tape-derived marketBook figures (identical on the ~all non-truncated markets).
+  const bl = baselines?.[win as VolumeWindow];
+  const authBelievers = num(side === "YES" ? rr.believers_yes : rr.believers_no);
+  const authCapitalUsd = num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
+  const belBase = side === "YES" ? bl?.believersYes : bl?.believersNo;
+  const capBase = side === "YES" ? bl?.yesCapitalUsd : bl?.noCapitalUsd;
+  const belChange =
+    authBelievers != null && belBase != null ? windowChange(authBelievers, belBase) : null;
+  const capChange =
+    authCapitalUsd != null && capBase != null ? windowChange(authCapitalUsd, capBase) : null;
+
   const metricRows: { metric: LensMetric; label: string; value: string; pct: number | null }[] = [
     {
       metric: "believers",
       label: `${side} Believers`,
-      value: believersTotal.toLocaleString("en-US"),
-      pct: believerMetric ? metricPct(believerMetric) : (summary?.believersPct ?? null),
+      value: (belChange != null ? authBelievers! : believersTotal).toLocaleString("en-US"),
+      pct:
+        belChange != null
+          ? belChange.pct
+          : believerMetric
+            ? metricPct(believerMetric)
+            : (summary?.believersPct ?? null),
     },
     {
       metric: "capital",
       label: `${side} Capital`,
-      value: capitalUsd != null ? fmtUsd(capitalUsd) : "—",
-      pct: capitalMetric ? metricPct(capitalMetric) : (summary?.capitalPct ?? null),
+      value:
+        capChange != null ? fmtUsd(authCapitalUsd!) : capitalUsd != null ? fmtUsd(capitalUsd) : "—",
+      pct:
+        capChange != null
+          ? capChange.pct
+          : capitalMetric
+            ? metricPct(capitalMetric)
+            : (summary?.capitalPct ?? null),
     },
     {
       metric: "price",
@@ -180,13 +218,12 @@ export function CaseColumn({
           <span className="text-[13px] font-semibold" style={{ color }}>
             {side}
           </span>
-          
+
           <span className="ml-auto text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
             {FLOW_WINDOW_SHORT[win]}
           </span>
         </div>
       </div>
-
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5">
         {/* ACT 1 — THE LENSES: pick what to investigate. The three metrics ARE the

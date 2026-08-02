@@ -8,7 +8,6 @@ import { fetchPovPositions } from "@/lib/pov.server";
 import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { readLatestTradesPerMarket, readLatestTradeEvents } from "@/lib/events.functions";
-import { flowForWindow, type FlowTrade, type WindowFlow } from "@/domain/market-flow";
 import type { TapeTrade } from "@/domain/conviction-series";
 import { toLegacyFeedEventRow } from "@/lib/events";
 import { composeMarketStory, type NetworkFace, type NetworkLabel } from "@/domain/story";
@@ -453,27 +452,16 @@ export const getPositionSummary = createServerFn({ method: "GET" })
   });
 
 export interface MarketChange {
-  yesPrice: number | null;
-  noPrice: number | null;
-  /** Per-window price % change (first snapshot in window → latest). */
-  windows: Partial<Record<VolumeWindow, { yes: number | null; no: number | null }>>;
   /**
-   * Conviction CHANGE per window — new believers and net capital per side.
-   * Money is in ETH here; the client scales it with the live ETH/USD rate it
-   * already holds, so every number in the deck comes from one window.
-   */
-  flows: Partial<Record<VolumeWindow, WindowFlow>>;
-  /**
-   * The compacted canonical trade tape this response was derived from — the SAME
-   * rows, nothing extra fetched. The Case File rebuilds its Conviction Timeline
-   * (believers / capital / price) from it locally, so switching window is instant
-   * and costs no request. Money and price are ETH.
+   * The compacted canonical trade tape this response was derived from. The deck
+   * and Case File rebuild EVERY windowed number locally from it — believers,
+   * capital and price over the selected timeframe — via the canonical marketBook
+   * and conviction-series engines, so switching window is instant and costs no
+   * request. Money and price are in ETH. This is the single source; per-window
+   * change and flows are derived client-side, never precomputed here.
    */
   tape: TapeTrade[];
 }
-
-const numOrNull = (v: unknown): number | null =>
-  v == null || !Number.isFinite(Number(v)) ? null : Number(v);
 
 /**
  * One market's current per-share prices + its % price change over EVERY window
@@ -485,36 +473,15 @@ const numOrNull = (v: unknown): number | null =>
 export const getMarketChange = createServerFn({ method: "GET" })
   .inputValidator((d: { id: number }) => z.object({ id: z.number().int().nonnegative() }).parse(d))
   .handler(async ({ data }): Promise<MarketChange> => {
-    const sb = serviceClient();
-    const [state, changes, trades] = await Promise.all([
-      sb
-        .from("market_state")
-        .select("yes_price_usd, no_price_usd")
-        .eq("onchain_id", data.id)
-        .maybeSingle(),
-      sb
-        .from("market_window_change")
-        .select("window_key, chg_yes, chg_no")
-        .eq("onchain_id", data.id),
-      readLatestTradeEvents(publicClient(), { marketIds: [data.id], limit: 1000 }),
-    ]);
-    const windows: MarketChange["windows"] = {};
-    for (const c of (changes.data ?? []) as {
-      window_key: string;
-      chg_yes: number | null;
-      chg_no: number | null;
-    }[]) {
-      windows[c.window_key as VolumeWindow] = {
-        yes: numOrNull(c.chg_yes),
-        no: numOrNull(c.chg_no),
-      };
-    }
-
-    // Conviction change per window, from the canonical trade log. `amount_eth`
-    // is stored in wei (kept as a string so precision survives the wire), so it
-    // is scaled to whole ETH here; the deck converts to USD with the same
-    // ETH/USD rate it prices orders with.
-    const facts: FlowTrade[] = [];
+    // ONE read: the canonical trade tape. Every windowed number the deck shows is
+    // rebuilt from it client-side (marketBook + conviction-series), so there is no
+    // second, precomputed source of truth to drift from — and no wasted per-request
+    // snapshot/flow queries. `amount_eth`/`price` are wei (strings on the wire, so
+    // precision survives); scaled to whole ETH here.
+    const trades = await readLatestTradeEvents(publicClient(), {
+      marketIds: [data.id],
+      limit: 1000,
+    });
     const tape: TapeTrade[] = [];
     for (const t of trades) {
       const side = t.side === "YES" || t.side === "NO" ? t.side : null;
@@ -523,7 +490,6 @@ export const getMarketChange = createServerFn({ method: "GET" })
       const wei = Number(t.amount_eth ?? 0);
       const eth = Number.isFinite(wei) ? wei / 1e18 : 0;
       const at = new Date(t.occurred_at).getTime();
-      facts.push({ wallet: t.wallet, side, action, usd: eth, at });
       const priceWei = t.price == null ? null : Number(t.price);
       tape.push({
         // Short, stable key — enough to count distinct believers, and nothing
@@ -536,21 +502,59 @@ export const getMarketChange = createServerFn({ method: "GET" })
         t: at,
       });
     }
+    return { tape };
+  });
 
-    const now = Date.now();
-    const flows: MarketChange["flows"] = {};
-    for (const key of Object.keys(VOLUME_WINDOWS) as VolumeWindow[]) {
-      flows[key] = flowForWindow(facts, key, now);
-    }
+/** One window's authoritative believers/capital/price as of its opening boundary. */
+export interface WindowBaseline {
+  believersYes: number | null;
+  believersNo: number | null;
+  yesCapitalUsd: number | null;
+  noCapitalUsd: number | null;
+  yesPriceUsd: number | null;
+  noPriceUsd: number | null;
+}
+export type MarketBaselines = Partial<Record<VolumeWindow, WindowBaseline>>;
 
-    const s = state.data as { yes_price_usd: number | null; no_price_usd: number | null } | null;
-    return {
-      yesPrice: numOrNull(s?.yes_price_usd),
-      noPrice: numOrNull(s?.no_price_usd),
-      windows,
-      flows,
-      tape,
+const finLoose = (v: unknown): number | null =>
+  v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+
+/**
+ * Per-window baselines for one market — the AUTHORITATIVE believers/capital/price
+ * as they stood when each window opened, read from market_state_snapshots via the
+ * market_window_baselines RPC. Unlike the client's tape (capped at 1000 trades),
+ * this is exact on a busy market. Resilient by design: if the migration/RPC is
+ * not deployed yet, or a window has no old-enough snapshot, the entry is simply
+ * absent and the caller falls back to the tape-derived number.
+ */
+export const getMarketBaselines = createServerFn({ method: "GET" })
+  .inputValidator((d: { id: number }) => z.object({ id: z.number().int().nonnegative() }).parse(d))
+  .handler(async ({ data }): Promise<MarketBaselines> => {
+    const sb = serviceClient() as unknown as {
+      rpc: (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ data: unknown; error: unknown }>;
     };
+    try {
+      const { data: rows, error } = await sb.rpc("market_window_baselines", { p_id: data.id });
+      if (error || !Array.isArray(rows)) return {};
+      const out: MarketBaselines = {};
+      for (const raw of rows as Array<Record<string, unknown>>) {
+        const key = String(raw.window_key) as VolumeWindow;
+        out[key] = {
+          believersYes: finLoose(raw.believers_yes),
+          believersNo: finLoose(raw.believers_no),
+          yesCapitalUsd: finLoose(raw.yes_capital_usd),
+          noCapitalUsd: finLoose(raw.no_capital_usd),
+          yesPriceUsd: finLoose(raw.yes_price_usd),
+          noPriceUsd: finLoose(raw.no_price_usd),
+        };
+      }
+      return out;
+    } catch {
+      return {}; // pre-migration or transient error → tape fallback
+    }
   });
 
 /**

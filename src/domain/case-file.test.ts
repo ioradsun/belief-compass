@@ -9,6 +9,7 @@ import {
   sideCaseSummary,
   type RankableBeliever,
 } from "@/domain/case-file";
+import { marketBook } from "@/domain/market-book";
 import type { TapeTrade } from "@/domain/conviction-series";
 
 const now = 1_000_000_000_000;
@@ -56,6 +57,73 @@ describe("sideCaseSummary", () => {
     expect(oneDay.believersPct).toBe(100); // 1 → 2 today
     expect(oneHour.believersPct).toBe(0); // nothing new in the last hour
     expect(oneHour.believers).toBe(2); // but the total is unchanged
+  });
+
+  const sell = (w: string, side: "YES" | "NO", eth: number, price: number, t: number): TapeTrade => ({
+    w,
+    side,
+    action: "SELL",
+    eth,
+    price,
+    t,
+  });
+
+  it("shows believers LEAVING — the number, the %, and the series all decline together", () => {
+    // Two believers enter before the window; one fully exits inside it. The old
+    // cumulative-buyers series could never draw this; net-directional must.
+    const tape = [
+      buy("a", "YES", 1, 1, now - 3 * day),
+      buy("b", "YES", 1, 1, now - 2 * day),
+      sell("b", "YES", 1, 1, now - 2 * hour), // b exits inside the 24h window
+    ];
+    const s = sideCaseSummary(tape, "YES", "24h", now)!;
+    expect(s.believers).toBe(1); // b is gone
+    expect(s.believersPct).toBe(-50); // 2 → 1 over the window
+    // The drawn series ends at the lower value — a real decline, not a flat line.
+    expect(s.series[s.series.length - 1].believers).toBe(1);
+    expect(s.series[0].believers).toBe(2); // window opened with 2
+  });
+
+  it("excludes a wallet holding BOTH sides from the side's believer count (mixed)", () => {
+    const tape = [
+      buy("a", "YES", 2, 1, now - 2 * hour), // pure YES believer
+      buy("c", "YES", 1, 1, now - 90 * 60_000), // c starts YES…
+      buy("c", "NO", 1, 1, now - 60 * 60_000), // …then also NO → mixed, counts for neither
+    ];
+    const s = sideCaseSummary(tape, "YES", "24h", now)!;
+    expect(s.believers).toBe(1); // only a; c is mixed
+  });
+
+  it("reconciles exactly with the canonical marketBook (chart == headline source)", () => {
+    const tape = [
+      buy("a", "YES", 3, 1, now - 3 * day),
+      buy("b", "YES", 2, 1.2, now - 2 * hour),
+      buy("d", "NO", 1, 1, now - hour),
+    ];
+    const s = sideCaseSummary(tape, "YES", "24h", now)!;
+    const bk = marketBook(tape, now, "24h");
+    expect(s.believers).toBe(bk.believers.yes.current);
+    expect(s.capitalEth).toBeCloseTo(bk.capitalEth.yes.current);
+    // The last series point equals the headline current — first/last/current agree.
+    expect(s.series[s.series.length - 1].believers).toBe(bk.believers.yes.current);
+    expect(s.series[s.series.length - 1].capital).toBeCloseTo(bk.capitalEth.yes.current);
+  });
+
+  it("switching timeframe changes only the window, never the metric definition", () => {
+    const tape = [
+      buy("a", "YES", 1, 1, now - 10 * day),
+      buy("b", "YES", 1, 1, now - 5 * day),
+      buy("c", "YES", 1, 1, now - 30 * 60_000), // inside 1h
+    ];
+    const all = sideCaseSummary(tape, "YES", "all", now)!;
+    const oneHour = sideCaseSummary(tape, "YES", "1h", now)!;
+    // Same current total regardless of window (definition is timeframe-invariant).
+    expect(all.believers).toBe(3);
+    expect(oneHour.believers).toBe(3);
+    // Only the measured change differs. Since-open has a zero base (the market
+    // opened with nobody), so its % is honestly null; the hour measures 2 → 3.
+    expect(all.believersPct).toBeNull();
+    expect(oneHour.believersPct).toBe(50);
   });
 });
 

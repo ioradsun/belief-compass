@@ -146,6 +146,11 @@ function clip(hist: VitalityPoint[], sinceMs: number, nowMs: number): BookMetric
   const current = hist[hist.length - 1].v;
   const start = { t: sinceMs, v: open };
   const series = inWin.length ? [start, ...inWin] : [start, { t: nowMs, v: open }];
+  // Carry the current value forward to the window's right edge (now). A quiet
+  // stretch after the last event is flat state, not missing data, so the series
+  // must span [sinceMs, now] rather than stop at the final event.
+  const tail = series[series.length - 1];
+  if (tail.t < nowMs) series.push({ t: nowMs, v: current });
   return { current, series, delta: current - open, base: open, events: inWin.length };
 }
 
