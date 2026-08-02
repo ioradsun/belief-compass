@@ -34,8 +34,6 @@ export function CaseStory({
   ethUsd,
   viewerWallet,
   onClose,
-  onBack,
-  backed,
 }: {
   side: "YES" | "NO";
   marketId: number;
@@ -43,11 +41,8 @@ export function CaseStory({
   viewerWallet?: string;
   /** Return to Discovery (both sides side-by-side). */
   onClose: () => void;
-  /** The one action this story argues for — selects the side in the dock. */
-  onBack: () => void;
-  /** True when the dock is already open on this side. */
-  backed: boolean;
 }) {
+
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
   // One timeframe everywhere: investigation reads (and can change) the same
   // selection the center panel owns, so no two surfaces quote different periods.
