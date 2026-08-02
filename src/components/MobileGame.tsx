@@ -20,6 +20,8 @@ import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { pulseLine } from "@/components/MarketCard";
 import { MarketMomentum } from "@/components/MarketVitality";
+import { WindowFilter } from "@/components/WindowFilter";
+import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { useHouseFinalize } from "@/lib/house-round";
 import { getMarketChange, listMarketPulses } from "@/lib/markets.functions";
@@ -105,7 +107,11 @@ export function MobileGame({
     },
   });
 
+  // The one on-screen timeframe, shared with the desktop deck and both cases.
+  const deckWin = useDeckWindow();
+
   const { data: change } = useQuery({
+
     queryKey: ["market-change", marketId],
     queryFn: () => getMarketChange({ data: { id: marketId } }),
     staleTime: 10_000,
@@ -277,7 +283,9 @@ export function MobileGame({
 
       {/* Momentum — believers, capital, the trend. The same <MarketMomentum>
         the desktop deck renders, in its mobile layout. */}
-      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} />
+      <WindowFilter win={deckWin} onWin={setDeckWindow} />
+
+      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} win={deckWin} />
 
       <Rule />
 

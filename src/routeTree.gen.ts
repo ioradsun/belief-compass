@@ -9,34 +9,24 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminRouteImport } from './routes/admin'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ValueRouteImport } from './routes/value'
+import { Route as TermsRouteImport } from './routes/terms'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
-import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/public/jobs/belief-rollup'
-import { Route as ApiPublicJobsChainPollerRouteImport } from './routes/api/public/jobs/chain-poller'
-import { Route as ApiPublicJobsMarketRefresherRouteImport } from './routes/api/public/jobs/market-refresher'
-import { Route as ApiPublicJobsMatchWorkerRouteImport } from './routes/api/public/jobs/match-worker'
-import { Route as ApiPublicJobsPositionRebuilderRouteImport } from './routes/api/public/jobs/position-rebuilder'
-import { Route as ApiPublicJobsPositionReconcileRouteImport } from './routes/api/public/jobs/position-reconcile'
-import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
 import { Route as ApiPublicJobsSuggestionGeneratorRouteImport } from './routes/api/public/jobs/suggestion-generator'
+import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
+import { Route as ApiPublicJobsPositionReconcileRouteImport } from './routes/api/public/jobs/position-reconcile'
+import { Route as ApiPublicJobsPositionRebuilderRouteImport } from './routes/api/public/jobs/position-rebuilder'
+import { Route as ApiPublicJobsMatchWorkerRouteImport } from './routes/api/public/jobs/match-worker'
+import { Route as ApiPublicJobsMarketRefresherRouteImport } from './routes/api/public/jobs/market-refresher'
+import { Route as ApiPublicJobsChainPollerRouteImport } from './routes/api/public/jobs/chain-poller'
+import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/public/jobs/belief-rollup'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
+const ValueRoute = ValueRouteImport.update({
+  id: '/value',
+  path: '/value',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -44,9 +34,19 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ValueRoute = ValueRouteImport.update({
-  id: '/value',
-  path: '/value',
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicBuildIdRoute = ApiPublicBuildIdRouteImport.update({
@@ -54,28 +54,21 @@ const ApiPublicBuildIdRoute = ApiPublicBuildIdRouteImport.update({
   path: '/api/public/build-id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicJobsBeliefRollupRoute =
-  ApiPublicJobsBeliefRollupRouteImport.update({
-    id: '/api/public/jobs/belief-rollup',
-    path: '/api/public/jobs/belief-rollup',
+const ApiPublicJobsSuggestionGeneratorRoute =
+  ApiPublicJobsSuggestionGeneratorRouteImport.update({
+    id: '/api/public/jobs/suggestion-generator',
+    path: '/api/public/jobs/suggestion-generator',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicJobsChainPollerRoute =
-  ApiPublicJobsChainPollerRouteImport.update({
-    id: '/api/public/jobs/chain-poller',
-    path: '/api/public/jobs/chain-poller',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicJobsMarketRefresherRoute =
-  ApiPublicJobsMarketRefresherRouteImport.update({
-    id: '/api/public/jobs/market-refresher',
-    path: '/api/public/jobs/market-refresher',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicJobsMatchWorkerRoute =
-  ApiPublicJobsMatchWorkerRouteImport.update({
-    id: '/api/public/jobs/match-worker',
-    path: '/api/public/jobs/match-worker',
+const ApiPublicJobsPovPollerRoute = ApiPublicJobsPovPollerRouteImport.update({
+  id: '/api/public/jobs/pov-poller',
+  path: '/api/public/jobs/pov-poller',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicJobsPositionReconcileRoute =
+  ApiPublicJobsPositionReconcileRouteImport.update({
+    id: '/api/public/jobs/position-reconcile',
+    path: '/api/public/jobs/position-reconcile',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicJobsPositionRebuilderRoute =
@@ -84,21 +77,28 @@ const ApiPublicJobsPositionRebuilderRoute =
     path: '/api/public/jobs/position-rebuilder',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicJobsPositionReconcileRoute =
-  ApiPublicJobsPositionReconcileRouteImport.update({
-    id: '/api/public/jobs/position-reconcile',
-    path: '/api/public/jobs/position-reconcile',
+const ApiPublicJobsMatchWorkerRoute =
+  ApiPublicJobsMatchWorkerRouteImport.update({
+    id: '/api/public/jobs/match-worker',
+    path: '/api/public/jobs/match-worker',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicJobsPovPollerRoute = ApiPublicJobsPovPollerRouteImport.update({
-  id: '/api/public/jobs/pov-poller',
-  path: '/api/public/jobs/pov-poller',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicJobsSuggestionGeneratorRoute =
-  ApiPublicJobsSuggestionGeneratorRouteImport.update({
-    id: '/api/public/jobs/suggestion-generator',
-    path: '/api/public/jobs/suggestion-generator',
+const ApiPublicJobsMarketRefresherRoute =
+  ApiPublicJobsMarketRefresherRouteImport.update({
+    id: '/api/public/jobs/market-refresher',
+    path: '/api/public/jobs/market-refresher',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicJobsChainPollerRoute =
+  ApiPublicJobsChainPollerRouteImport.update({
+    id: '/api/public/jobs/chain-poller',
+    path: '/api/public/jobs/chain-poller',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicJobsBeliefRollupRoute =
+  ApiPublicJobsBeliefRollupRouteImport.update({
+    id: '/api/public/jobs/belief-rollup',
+    path: '/api/public/jobs/belief-rollup',
     getParentRoute: () => rootRouteImport,
   } as any)
 
@@ -221,25 +221,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
+    '/value': {
+      id: '/value'
+      path: '/value'
+      fullPath: '/value'
+      preLoaderRoute: typeof ValueRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -249,11 +235,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/value': {
-      id: '/value'
-      path: '/value'
-      fullPath: '/value'
-      preLoaderRoute: typeof ValueRouteImport
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/build-id': {
@@ -263,46 +263,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicBuildIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/jobs/belief-rollup': {
-      id: '/api/public/jobs/belief-rollup'
-      path: '/api/public/jobs/belief-rollup'
-      fullPath: '/api/public/jobs/belief-rollup'
-      preLoaderRoute: typeof ApiPublicJobsBeliefRollupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/jobs/chain-poller': {
-      id: '/api/public/jobs/chain-poller'
-      path: '/api/public/jobs/chain-poller'
-      fullPath: '/api/public/jobs/chain-poller'
-      preLoaderRoute: typeof ApiPublicJobsChainPollerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/jobs/market-refresher': {
-      id: '/api/public/jobs/market-refresher'
-      path: '/api/public/jobs/market-refresher'
-      fullPath: '/api/public/jobs/market-refresher'
-      preLoaderRoute: typeof ApiPublicJobsMarketRefresherRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/jobs/match-worker': {
-      id: '/api/public/jobs/match-worker'
-      path: '/api/public/jobs/match-worker'
-      fullPath: '/api/public/jobs/match-worker'
-      preLoaderRoute: typeof ApiPublicJobsMatchWorkerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/jobs/position-rebuilder': {
-      id: '/api/public/jobs/position-rebuilder'
-      path: '/api/public/jobs/position-rebuilder'
-      fullPath: '/api/public/jobs/position-rebuilder'
-      preLoaderRoute: typeof ApiPublicJobsPositionRebuilderRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/jobs/position-reconcile': {
-      id: '/api/public/jobs/position-reconcile'
-      path: '/api/public/jobs/position-reconcile'
-      fullPath: '/api/public/jobs/position-reconcile'
-      preLoaderRoute: typeof ApiPublicJobsPositionReconcileRouteImport
+    '/api/public/jobs/suggestion-generator': {
+      id: '/api/public/jobs/suggestion-generator'
+      path: '/api/public/jobs/suggestion-generator'
+      fullPath: '/api/public/jobs/suggestion-generator'
+      preLoaderRoute: typeof ApiPublicJobsSuggestionGeneratorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/jobs/pov-poller': {
@@ -312,11 +277,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicJobsPovPollerRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/jobs/suggestion-generator': {
-      id: '/api/public/jobs/suggestion-generator'
-      path: '/api/public/jobs/suggestion-generator'
-      fullPath: '/api/public/jobs/suggestion-generator'
-      preLoaderRoute: typeof ApiPublicJobsSuggestionGeneratorRouteImport
+    '/api/public/jobs/position-reconcile': {
+      id: '/api/public/jobs/position-reconcile'
+      path: '/api/public/jobs/position-reconcile'
+      fullPath: '/api/public/jobs/position-reconcile'
+      preLoaderRoute: typeof ApiPublicJobsPositionReconcileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/jobs/position-rebuilder': {
+      id: '/api/public/jobs/position-rebuilder'
+      path: '/api/public/jobs/position-rebuilder'
+      fullPath: '/api/public/jobs/position-rebuilder'
+      preLoaderRoute: typeof ApiPublicJobsPositionRebuilderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/jobs/match-worker': {
+      id: '/api/public/jobs/match-worker'
+      path: '/api/public/jobs/match-worker'
+      fullPath: '/api/public/jobs/match-worker'
+      preLoaderRoute: typeof ApiPublicJobsMatchWorkerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/jobs/market-refresher': {
+      id: '/api/public/jobs/market-refresher'
+      path: '/api/public/jobs/market-refresher'
+      fullPath: '/api/public/jobs/market-refresher'
+      preLoaderRoute: typeof ApiPublicJobsMarketRefresherRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/jobs/chain-poller': {
+      id: '/api/public/jobs/chain-poller'
+      path: '/api/public/jobs/chain-poller'
+      fullPath: '/api/public/jobs/chain-poller'
+      preLoaderRoute: typeof ApiPublicJobsChainPollerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/jobs/belief-rollup': {
+      id: '/api/public/jobs/belief-rollup'
+      path: '/api/public/jobs/belief-rollup'
+      fullPath: '/api/public/jobs/belief-rollup'
+      preLoaderRoute: typeof ApiPublicJobsBeliefRollupRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

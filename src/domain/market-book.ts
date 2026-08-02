@@ -27,6 +27,8 @@
  */
 import type { TapeTrade } from "./conviction-series";
 import type { VitalityPoint } from "./market-vitality";
+import { FLOW_WINDOW_MS, type FlowWindow } from "./market-flow";
+
 
 /** Net stance magnitude at/above which a wallet is a directional believer. */
 export const DIRECTIONAL_THRESHOLD = 0.1;
@@ -47,7 +49,7 @@ export function classifyWallet(yes: number, no: number): WalletState {
   return "mixed";
 }
 
-export type BookWindowKind = "since-open" | "24h" | "7d";
+export type BookWindowKind = "since-open" | "1h" | "24h" | "7d" | "30d";
 
 export interface BookWindow {
   kind: BookWindowKind;
@@ -58,18 +60,46 @@ export interface BookWindow {
   since: string;
 }
 
-/** Adaptive: a young market shows its whole life, older ones a fixed window. */
-export function bookWindow(firstEventAt: number | null, nowMs: number): BookWindow {
-  const ageMs = firstEventAt == null ? 0 : nowMs - firstEventAt;
-  if (firstEventAt == null || ageMs < DAY)
+/** The window words for an explicitly selected timeframe. */
+const SELECTED: Record<Exclude<FlowWindow, "all">, { kind: BookWindowKind; short: string }> = {
+  "1h": { kind: "1h", short: "1H" },
+  "24h": { kind: "24h", short: "1D" },
+  "7d": { kind: "7d", short: "1W" },
+  "30d": { kind: "30d", short: "1M" },
+};
+
+/**
+ * The window every number is measured over. When the caller passes an explicit
+ * `win` (the single on-screen timeframe control), that selection wins outright —
+ * totals, deltas, percentages and sparklines all quote it. Without one it stays
+ * adaptive: a young market shows its whole life, older ones a fixed window.
+ */
+export function bookWindow(
+  firstEventAt: number | null,
+  nowMs: number,
+  win?: FlowWindow,
+): BookWindow {
+  const sinceOpen: BookWindow = {
+    kind: "since-open",
+    sinceMs: firstEventAt ?? nowMs,
+    short: "SINCE OPEN",
+    since: "since open",
+  };
+  if (win) {
+    if (win === "all") return sinceOpen;
+    const s = SELECTED[win];
     return {
-      kind: "since-open",
-      sinceMs: firstEventAt ?? nowMs,
-      short: "SINCE OPEN",
-      since: "since open",
+      kind: s.kind,
+      sinceMs: nowMs - FLOW_WINDOW_MS[win],
+      short: s.short,
+      since: `over ${s.short}`,
     };
+  }
+  const ageMs = firstEventAt == null ? 0 : nowMs - firstEventAt;
+  if (firstEventAt == null || ageMs < DAY) return sinceOpen;
   if (ageMs <= 7 * DAY)
     return { kind: "24h", sinceMs: nowMs - DAY, short: "24H", since: "over 24H" };
+
   return { kind: "7d", sinceMs: nowMs - 7 * DAY, short: "7D", since: "over 7D" };
 }
 
@@ -118,13 +148,15 @@ function clip(hist: VitalityPoint[], sinceMs: number, nowMs: number): BookMetric
 type Book = { yes: number; no: number };
 
 /**
- * Replay the tape into the canonical book. `nowMs` fixes the window; the current
- * totals are the end state regardless of window.
+ * Replay the tape into the canonical book. `nowMs` fixes "now"; `win` is the
+ * single on-screen timeframe — when supplied, every delta, percentage and
+ * sparkline in the book is measured over exactly that period.
  */
-export function marketBook(tape: TapeTrade[], nowMs: number): MarketBook {
+export function marketBook(tape: TapeTrade[], nowMs: number, win?: FlowWindow): MarketBook {
   const sorted = tape.filter((t) => Number.isFinite(t.t)).sort((a, b) => a.t - b.t);
   const firstEventAt = sorted.length ? sorted[0].t : null;
-  const window = bookWindow(firstEventAt, nowMs);
+  const window = bookWindow(firstEventAt, nowMs, win);
+
 
   const books = new Map<string, Book>();
   let yesB = 0;

@@ -12,15 +12,17 @@
  * It fetches nothing new: the same React Query keys the deck and the Case File
  * columns already run supply the tape, the believers and the network.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketChange } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { ConvictionSpark } from "@/components/ConvictionSpark";
-import { CaseRoster, StatRow, WindowFilter } from "@/components/CaseFile";
+import { CaseRoster, StatRow } from "@/components/CaseFile";
+import { WindowFilter } from "@/components/WindowFilter";
+import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { convictionStory, narrateStory, timelineEvents } from "@/domain/conviction-series";
-import { FLOW_WINDOW_PHRASE, type FlowWindow } from "@/domain/market-flow";
+import { FLOW_WINDOW_PHRASE } from "@/domain/market-flow";
 import { sideCaseSummary } from "@/domain/case-file";
 import { fmtUsd } from "@/domain/order";
 
@@ -45,8 +47,10 @@ export function CaseStory({
   backed: boolean;
 }) {
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
-  // Investigation detaches its own timeframe — the comparison keeps the shared one.
-  const [win, setWin] = useState<FlowWindow>("24h");
+  // One timeframe everywhere: investigation reads (and can change) the same
+  // selection the center panel owns, so no two surfaces quote different periods.
+  const win = useDeckWindow();
+  const setWin = setDeckWindow;
 
   // Escape always returns to comparison — investigation is a temporary lens.
   useEffect(() => {
@@ -134,7 +138,7 @@ export function CaseStory({
           </button>
         </div>
 
-        {/* This side's own timeframe. */}
+        {/* The one shared timeframe. */}
         <div className="mt-3 max-w-[280px]">
           <WindowFilter win={win} onWin={setWin} />
         </div>

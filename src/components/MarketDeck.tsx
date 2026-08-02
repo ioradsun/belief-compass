@@ -52,6 +52,8 @@ import {
 } from "@/domain/order";
 import { marketBook } from "@/domain/market-book";
 import { marketPulse } from "@/domain/market-pulse";
+import { WindowFilter } from "@/components/WindowFilter";
+import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { OrderTicket } from "@/components/order/OrderTicket";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
@@ -175,11 +177,14 @@ export function MarketDeck({
     refetchInterval: 15_000,
   });
 
+  // The one on-screen timeframe — the center owns it, both cases follow it.
+  const deckWin = useDeckWindow();
+
   // The momentum shape, told as a tension — bait on the Case File door.
   const caseTeaser = useMemo(() => {
     const t = change?.tape ?? [];
-    return t.length ? marketPulse(marketBook(t, Date.now())).meaning : null;
-  }, [change]);
+    return t.length ? marketPulse(marketBook(t, Date.now(), deckWin)).meaning : null;
+  }, [change, deckWin]);
 
   // Creator/age for the identity row's freshness token (deduped with the byline).
   const { data: cm } = useQuery({
@@ -383,12 +388,20 @@ export function MarketDeck({
   // the side panels; the center never becomes analytics or takes a side.
   const marketInner = (
     <>
+      {/* THE ONE TIMEFRAME — a single control in the center. Every number below
+      and in both Case columns (totals' deltas, percentages, sparklines, copy)
+      is measured over exactly this period. */}
+      <div className="max-w-[300px]">
+        <WindowFilter win={deckWin} onWin={setDeckWindow} />
+      </div>
+
       {/* MARKET MOMENTUM — the one block that answers "why should I care about
       this market now?": believers + capital (value · sparkline · %), a status
       pill for the shape. Believers + capital + the momentum label, from the
       canonical marketBook so the totals reconcile with the side panels. The
       narrative, the House voice and the activity all live in the right feed. */}
-      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} />
+      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} win={deckWin} />
+
 
       {/* SHARED CONVICTION — side-blind belonging: your Tribe/Twin/Opp are here. */}
       <SharedConviction
