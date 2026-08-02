@@ -757,6 +757,52 @@ export const getWallet = createServerFn({ method: "GET" })
       }
     }
 
+    // Window-scoped BELIEVER intake per held side. The read model only stores a
+    // fixed 24h intake, so the selected timeframe is replayed off the canonical
+    // trade log: a wallet is "new in the window" when its FIRST trade on that
+    // market+side falls inside it. If the fetched tape doesn't reach back past
+    // the window opening we can't tell new from pre-existing, so we return null
+    // (the card then shows the count without a move) rather than guess.
+    const newYesWin = new Map<number, number>();
+    const newNoWin = new Map<number, number>();
+    const winMs = VOLUME_WINDOWS[win];
+    if (ids.length && winMs != null) {
+      const since = Date.now() - winMs;
+      try {
+        const tape = await readLatestTradesPerMarket(publicClient(), ids.slice(0, 60), 400);
+        const firstSeen = new Map<string, number>(); // `${id}|${side}|${wallet}` -> ms
+        const oldest = new Map<number, number>();
+        for (const t of tape) {
+          const side = t.side === "YES" || t.side === "NO" ? t.side : null;
+          if (!side || !t.wallet) continue;
+          const id = Number(t.market_id);
+          const at = new Date(t.occurred_at).getTime();
+          if (!Number.isFinite(at)) continue;
+          const o = oldest.get(id);
+          if (o == null || at < o) oldest.set(id, at);
+          const k = `${id}|${side}|${t.wallet.toLowerCase()}`;
+          const prev = firstSeen.get(k);
+          if (prev == null || at < prev) firstSeen.set(k, at);
+        }
+        const counts = new Map<string, number>();
+        for (const [k, at] of firstSeen) {
+          if (at < since) continue;
+          const [idStr, side] = k.split("|");
+          counts.set(`${idStr}|${side}`, (counts.get(`${idStr}|${side}`) ?? 0) + 1);
+        }
+        for (const id of ids) {
+          // Only trust the replay when the tape actually covers the window.
+          const o = oldest.get(id);
+          if (o == null || o > since) continue;
+          newYesWin.set(id, counts.get(`${id}|YES`) ?? 0);
+          newNoWin.set(id, counts.get(`${id}|NO`) ?? 0);
+        }
+      } catch {
+        /* best-effort: the card falls back to the plain believer count */
+      }
+    }
+
+
     // POV is the authority on what a position is worth right now (it prices the
     // wallet's own tokens). Refresh live, best-effort: if POV is slow or down we
     // fall back to the stored value, and only then to shares x market price.
@@ -831,6 +877,10 @@ export const getWallet = createServerFn({ method: "GET" })
         state: stateById.get(Number(r.onchain_id)) ?? null,
         chg_window_yes: chgYes.get(Number(r.onchain_id)) ?? null,
         chg_window_no: chgNo.get(Number(r.onchain_id)) ?? null,
+        // Believer intake over the SELECTED window (null when the tape can't
+        // cover it, or on "All" where "new" has no meaning).
+        new_believers_yes_win: newYesWin.get(Number(r.onchain_id)) ?? null,
+        new_believers_no_win: newNoWin.get(Number(r.onchain_id)) ?? null,
       };
     });
     return { wallet, positions, window: win };

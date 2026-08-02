@@ -99,6 +99,7 @@ import { usePredictivePrefetch } from "@/lib/realtime/use-predictive-prefetch";
 import { useIsDesktop } from "@/hooks/use-mobile";
 import { LandingPanel } from "@/components/LandingPanel";
 import { useLandingPanelState } from "@/hooks/useLandingPanelState";
+import { useDeckWindow } from "@/lib/deck-window";
 
 const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
   { key: "1h", label: "1H" },
@@ -436,7 +437,10 @@ function Feed() {
     });
   };
 
-  const [win, setWin] = useState<VolumeWindow>("24h");
+  // ONE timeframe for the whole app. The center's WindowFilter publishes to the
+  // deck-window store; the feed, the left rail and every metric read it here, so
+  // selecting 1W can never leave a "24H" label or a 24h delta on screen.
+  const win = useDeckWindow() as VolumeWindow;
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
   // Investigation Mode: which side's story has taken the center (null = Discovery,
@@ -594,24 +598,8 @@ function Feed() {
   // the center rather than the desktop three-column split.
   const mobileCaseActive = !isDesktop && caseEligible;
 
-  const windowPicker = (
-    <div className="flex items-center gap-1 overflow-x-auto rounded-md border border-border p-0.5">
-      {WINDOW_OPTIONS.map((w) => (
-        <button
-          key={w.key}
-          type="button"
-          onClick={() => setWin(w.key)}
-          className={`shrink-0 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
-            win === w.key
-              ? "bg-foreground text-background"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {w.label}
-        </button>
-      ))}
-    </div>
-  );
+
+
 
   return (
     <div className="flex h-[100svh] w-full flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)] supports-[height:100dvh]:h-[100dvh]">

@@ -24,8 +24,8 @@ import { formatMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
 
 /** Below these bases a percentage is noise, so we show the absolute change only. */
-const BELIEVER_PCT_MIN = 5;
-const CAPITAL_PCT_MIN_USD = 10;
+const BELIEVER_PCT_MIN = 1;
+const CAPITAL_PCT_MIN_USD = 1;
 
 const dirTone = (d: "up" | "down" | "flat"): string =>
   d === "up" ? "var(--yes)" : d === "down" ? "var(--no)" : "var(--text-muted)";
