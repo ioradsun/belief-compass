@@ -404,20 +404,33 @@ export function CreateMarket({
               />
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
-            <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} />
+            {/* One line, one job. The bounds aren't rules to memorise — the field
+                stays quiet at "what you can spend" and only speaks up (in the
+                error tone) at the moment an entry actually breaks a bound. */}
+            <p
+              className={`num text-right text-[11px] ${
+                belowMin && amount > 0
+                  ? "text-[var(--no)]"
+                  : overBalance
+                    ? "text-[var(--no)]"
+                    : "text-[var(--text-muted)]"
+              }`}
+              aria-live="polite"
+            >
+              {belowMin && amount > 0
+                ? `Minimum ${minUsd != null ? fmtUsd(minUsd) : "—"}`
+                : overBalance
+                  ? `Over your balance${availUsd != null ? ` · ${fmtUsd(availUsd)} available` : ""}`
+                  : availUsd != null
+                    ? `${fmtUsd(availUsd)} available`
+                    : " "}
+            </p>
           </div>
         </div>
 
 
-
-        {belowMin && amount > 0 && (
-          <p className="text-[12px] text-[var(--no)]">Seed is below the contract minimum.</p>
-        )}
-        {overBalance && (
-          <p className="text-[12px] text-[var(--no)]">That&apos;s more than your balance.</p>
-        )}
         {errorText && !belowMin && !overBalance && (
           <p className="text-[12px] text-[var(--no)]">{errorText}</p>
         )}
