@@ -34,8 +34,6 @@ export function CaseStory({
   ethUsd,
   viewerWallet,
   onClose,
-  onBack,
-  backed,
 }: {
   side: "YES" | "NO";
   marketId: number;
@@ -43,11 +41,8 @@ export function CaseStory({
   viewerWallet?: string;
   /** Return to Discovery (both sides side-by-side). */
   onClose: () => void;
-  /** The one action this story argues for — selects the side in the dock. */
-  onBack: () => void;
-  /** True when the dock is already open on this side. */
-  backed: boolean;
 }) {
+
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
   // One timeframe everywhere: investigation reads (and can change) the same
   // selection the center panel owns, so no two surfaces quote different periods.
@@ -204,21 +199,8 @@ export function CaseStory({
         </section>
       </div>
 
-      {/* The one action this story argues for. */}
-      <div className="shrink-0 pt-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="w-full rounded-[12px] py-3 text-[14px] font-semibold transition-colors"
-          style={{
-            border: `1.5px solid ${color}`,
-            background: backed ? `color-mix(in oklab, ${color} 16%, transparent)` : "transparent",
-            color: "var(--text)",
-          }}
-        >
-          Back {side}
-        </button>
-      </div>
+      {/* No side action here — the decision dock below already owns Back YES/NO. */}
+
     </div>
   );
 }
