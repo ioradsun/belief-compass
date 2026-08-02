@@ -56,6 +56,8 @@ import { OrderTicket } from "@/components/order/OrderTicket";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
 import { getConvictionMarket } from "@/lib/market-create.functions";
+import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
+
 
 /**
  * Momentum tags — the six canonical opportunity classifications from the
