@@ -105,6 +105,19 @@ export function decodeTradeLog(log: Log): CanonicalTrade | null {
  * missing/garbage payload, or an ABI without the field.
  */
 export function decodeBuyCreatorFeeWei(rawLog: unknown): bigint | null {
+  return decodeBuyFeeField(rawLog, "creatorFee");
+}
+
+/**
+ * The TOTAL protocol fee (wei) a buyer paid on a single buy — the `fee` field of
+ * `TokensBought`. `ethSpent` is NET of this fee, so a wallet's lifetime buy fees
+ * are a real cost on top of what it invested, never double counted.
+ */
+export function decodeBuyTotalFeeWei(rawLog: unknown): bigint | null {
+  return decodeBuyFeeField(rawLog, "fee");
+}
+
+function decodeBuyFeeField(rawLog: unknown, field: "fee" | "creatorFee"): bigint | null {
   const r = rawLog as { topics?: unknown; data?: unknown } | null;
   if (!r || !Array.isArray(r.topics) || typeof r.data !== "string") return null;
   try {
