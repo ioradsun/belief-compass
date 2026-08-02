@@ -505,6 +505,58 @@ export const getMarketChange = createServerFn({ method: "GET" })
     return { tape };
   });
 
+/** One window's authoritative believers/capital/price as of its opening boundary. */
+export interface WindowBaseline {
+  believersYes: number | null;
+  believersNo: number | null;
+  yesCapitalUsd: number | null;
+  noCapitalUsd: number | null;
+  yesPriceUsd: number | null;
+  noPriceUsd: number | null;
+}
+export type MarketBaselines = Partial<Record<VolumeWindow, WindowBaseline>>;
+
+const finLoose = (v: unknown): number | null =>
+  v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+
+/**
+ * Per-window baselines for one market — the AUTHORITATIVE believers/capital/price
+ * as they stood when each window opened, read from market_state_snapshots via the
+ * market_window_baselines RPC. Unlike the client's tape (capped at 1000 trades),
+ * this is exact on a busy market. Resilient by design: if the migration/RPC is
+ * not deployed yet, or a window has no old-enough snapshot, the entry is simply
+ * absent and the caller falls back to the tape-derived number.
+ */
+export const getMarketBaselines = createServerFn({ method: "GET" })
+  .inputValidator((d: { id: number }) => z.object({ id: z.number().int().nonnegative() }).parse(d))
+  .handler(async ({ data }): Promise<MarketBaselines> => {
+    const sb = serviceClient() as unknown as {
+      rpc: (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ data: unknown; error: unknown }>;
+    };
+    try {
+      const { data: rows, error } = await sb.rpc("market_window_baselines", { p_id: data.id });
+      if (error || !Array.isArray(rows)) return {};
+      const out: MarketBaselines = {};
+      for (const raw of rows as Array<Record<string, unknown>>) {
+        const key = String(raw.window_key) as VolumeWindow;
+        out[key] = {
+          believersYes: finLoose(raw.believers_yes),
+          believersNo: finLoose(raw.believers_no),
+          yesCapitalUsd: finLoose(raw.yes_capital_usd),
+          noCapitalUsd: finLoose(raw.no_capital_usd),
+          yesPriceUsd: finLoose(raw.yes_price_usd),
+          noPriceUsd: finLoose(raw.no_price_usd),
+        };
+      }
+      return out;
+    } catch {
+      return {}; // pre-migration or transient error → tape fallback
+    }
+  });
+
 /**
  * Per-market pulse strips: the most recent real trade events for each of the
  * given markets, so every card in the grid can run its own little live feed.

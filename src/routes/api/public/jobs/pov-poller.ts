@@ -170,6 +170,17 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
             .delete()
             .lt("captured_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
 
+          // Snapshot the authoritative believers/capital totals so the deck can
+          // read a true window-open baseline even when a busy market's trade tape
+          // is truncated (see market_window_baselines). Best-effort: a missing RPC
+          // (deploy landing before the migration) must never fail the poll.
+          const { error: snapErr } = await sb.rpc("snapshot_market_state");
+          if (snapErr) console.error("snapshot_market_state failed:", snapErr.message);
+          await sb
+            .from("market_state_snapshots")
+            .delete()
+            .lt("captured_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
+
           return Response.json({
             ok: true,
             seen,
