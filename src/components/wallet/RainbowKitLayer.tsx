@@ -14,6 +14,7 @@ import "@rainbow-me/rainbowkit/styles.css";
 import {
   CONNECT_EVENT,
   DISCONNECT_EVENT,
+  SWITCH_ACCOUNT_EVENT,
   clearDisconnectedWalletFromUrl,
   takePendingConnect,
 } from "@/lib/connect-bridge";
