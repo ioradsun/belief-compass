@@ -30,6 +30,7 @@ import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
 import { SharedConviction } from "@/components/SharedConviction";
 import { marketAgeCopy, marketFreshness } from "@/domain/market-freshness";
+import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import type { TapeTrade } from "@/domain/conviction-series";
 
@@ -472,7 +473,11 @@ export function MarketDeck({
         <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
           {title}
         </h1>
-        <MarketByline onchainId={Number(row.onchain_id)} onSelectPerson={onSelectPerson} />
+        <MarketByline
+          onchainId={Number(row.onchain_id)}
+          viewerWallet={viewer}
+          onSelectPerson={onSelectPerson}
+        />
       </div>
 
       {/* Investigation Mode: one side's story replaces the comparison, while the
