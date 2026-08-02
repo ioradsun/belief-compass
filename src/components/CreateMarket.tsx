@@ -385,26 +385,32 @@ export function CreateMarket({
           )}
         </div>
 
-        {/* 3 · YES or NO? + How much? — the shared order ticket. */}
-        <div className="space-y-2 rounded-[16px] p-3" style={{ border: "1px solid var(--border)" }}>
-          <StepLabel>Take your position</StepLabel>
-          <div className="flex gap-2">
-            <SideButton
-              label="Yes"
-              tone="yes"
-              selected={side === "YES"}
-              onClick={() => setSide("YES")}
-            />
-            <SideButton
-              label="No"
-              tone="no"
-              selected={side === "NO"}
-              onClick={() => setSide("NO")}
-            />
+        {/* 3 · Position + amount — grouped by spacing, not by extra chrome. */}
+        <div className="space-y-4 rounded-[16px] p-4" style={{ border: "1px solid var(--border)" }}>
+          <div>
+            <StepLabel>Your position</StepLabel>
+            <div className="flex gap-2">
+              <SideButton
+                label="Yes"
+                tone="yes"
+                selected={side === "YES"}
+                onClick={() => setSide("YES")}
+              />
+              <SideButton
+                label="No"
+                tone="no"
+                selected={side === "NO"}
+                onClick={() => setSide("NO")}
+              />
+            </div>
           </div>
-          <StepLabel>Back your conviction</StepLabel>
-          <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
-          <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} />
+          <div>
+            <StepLabel>Amount</StepLabel>
+            <div className="space-y-2">
+              <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
+              <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} />
+            </div>
+          </div>
         </div>
 
 
