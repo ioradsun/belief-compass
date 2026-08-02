@@ -137,11 +137,13 @@ export function ConvictionDashboard({
   const sinceStart = holdingGain + tradingGain + creatingGain;
 
   // The reconciling journey identity (see domain/conviction-dashboard).
+  const tradingFees = data?.progress.tradingFeesUsd ?? 0;
   const journey = journeyMath({
     investedUsd: putIn,
     currentValueUsd: worthToday,
     withdrawnUsd: cashedOut,
     creatorUsd: creatingGain,
+    feesUsd: tradingFees,
   });
   const winningMarkets = (data?.heldBest ?? []).filter((h) => h.gainUsd > 0).length;
 
