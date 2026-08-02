@@ -142,7 +142,7 @@ export function CaseColumn({
   // Believers is always the default lens — conviction.company is about people
   // first. The selection is component state, so changing the timeframe never
   // resets which lens you're investigating.
-  const [metric, setMetric] = useState<LensMetric>("believers");
+  const metric = useDeckLens();
   const series = useMemo(() => summary?.series ?? [], [summary]);
   const money = useMemo(() => (eth: number) => fmtUsd(eth * (ethUsd || 0)), [ethUsd]);
   const facts = useMemo(() => lensFacts(series), [series]);
