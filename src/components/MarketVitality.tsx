@@ -15,6 +15,8 @@ import { useMemo } from "react";
 import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
 import type { TapeTrade } from "@/domain/conviction-series";
 import type { VitalityPoint } from "@/domain/market-vitality";
+import type { FlowWindow } from "@/domain/market-flow";
+
 
 /** Below these bases a percentage is noise, so we show the absolute change only. */
 const BELIEVER_PCT_MIN = 5;
