@@ -371,7 +371,8 @@ export function MyConvictions({
       deltaLabel,
       title: f.title,
       believers: f.believers,
-      newToday: f.newToday,
+      newInWindow: f.newInWindow,
+      windowLabel: lifetime ? "all time" : winLabel.toUpperCase(),
       chg: f.chg,
       signal,
     };
