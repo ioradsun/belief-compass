@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { lazyRetry } from "@/lib/lazy-retry";
 import { WagmiProvider, useAccount } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Config } from "wagmi";
@@ -10,7 +11,7 @@ import { requestConnect, requestDisconnect } from "@/lib/connect-bridge";
 const wagmiQueryClient = new QueryClient();
 
 /** Connect modal + wallet artwork — its own chunk, mounted after first paint. */
-const RainbowKitLayer = lazy(() => import("@/components/wallet/RainbowKitLayer"));
+const RainbowKitLayer = lazyRetry(() => import("@/components/wallet/RainbowKitLayer"));
 
 /**
  * wagmi wraps the app (every `useAccount` / `useSignMessage` call site depends
