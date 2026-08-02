@@ -473,11 +473,17 @@ export function MarketDeck({
         >
           {marketInner}
         </MobileCaseView>
+      ) : stageMedia ? (
+        /* Markets WITH evidence: same panel, now one of two stage states. */
+        <MediaStage media={stageMedia} className="flex min-h-0 flex-1 touch-pan-y flex-col">
+          {marketInner}
+        </MediaStage>
       ) : (
         <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
           {marketInner}
         </div>
       )}
+
 
       {/* Decision dock — buy by default; sell takes over when opened on a holding.
         Reaching the dock is the strongest signal a wallet is about to be needed,
