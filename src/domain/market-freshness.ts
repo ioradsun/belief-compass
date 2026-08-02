@@ -33,7 +33,7 @@ export function marketAgeCopy(ageMs: number): string {
   const d = Math.floor(ms / DAY);
   if (d === 1) return "1 day old";
   if (d < 7) return `${d} days old`;
-  if (d < 14) return "Less than a week old";
+  if (d < 14) return "About a week old";
   if (d < 30) return `${Math.floor(d / 7)} weeks old`;
   if (d < 60) return "About a month old";
   if (d < 365) return `${Math.round(d / 30)} months old`;
