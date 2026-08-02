@@ -324,18 +324,8 @@ export function CreateMarket({
         <h2 className="flex-1 text-[15px] font-semibold leading-snug text-[var(--text)]">
           Share Your Conviction. Earn 4.5% on Every Trade.
         </h2>
-        <span
-          title="Not on pov.co yet"
-          className="mt-0.5 shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em]"
-          style={{
-            borderColor: "#C9A227",
-            color: "#D9B640",
-            background: "color-mix(in srgb, #C9A227 8%, transparent)",
-          }}
-        >
-          Company exclusive
-        </span>
       </div>
+
 
 
 
@@ -449,7 +439,7 @@ export function CreateMarket({
 
         {/* 6 · Disclosure — one compact line. */}
         <p className="text-center text-[11px] text-[var(--text-muted)]">
-          Media appears in this app only ·{" "}
+          Conviction Company Exclusive. Not available on pov.co yet.{" "}
           <button
             type="button"
             onClick={() => (onOpenTerms ? onOpenTerms() : window.open("/terms", "_blank"))}
@@ -458,6 +448,7 @@ export function CreateMarket({
             Terms
           </button>
         </p>
+
       </div>
 
       <input
