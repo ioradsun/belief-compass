@@ -8,7 +8,8 @@
  * occasionally need: Edit Profile, Import POV Wallet, Settings, Sign Out. No
  * account switcher, no multiple profiles, no advanced wallet management.
  */
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { lazyRetry } from "@/lib/lazy-retry";
 import { useAccount } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
 import { lookupPovUser } from "@/lib/pov-user.functions";

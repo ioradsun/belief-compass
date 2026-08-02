@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { lazyRetry } from "@/lib/lazy-retry";
 import { WagmiProvider, useAccount } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Config } from "wagmi";
