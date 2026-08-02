@@ -271,6 +271,11 @@ export function MyConvictions({
         null;
       const newTodayRaw =
         (side === "YES" ? st?.new_believers_yes_24h : st?.new_believers_no_24h) ?? null;
+      // Intake over the SELECTED window (server-replayed); on 24h the read-model
+      // number is the same measure, so it's the natural fallback.
+      const newWinRaw =
+        (side === "YES" ? p.new_believers_yes_win : p.new_believers_no_win) ??
+        (win === "24h" ? newTodayRaw : null);
       const invested = side === "YES" ? p.yes_cost : p.no_cost;
       const pnl = positionPnl({ invested, worth: value });
       return {
@@ -283,6 +288,7 @@ export function MyConvictions({
         title: p.markets?.title ?? `Market #${id}`,
         believers: believersRaw == null ? null : Number(believersRaw),
         newToday: newTodayRaw == null ? null : Number(newTodayRaw),
+        newInWindow: newWinRaw == null ? null : Number(newWinRaw),
       };
     })
     .filter(Boolean) as {
@@ -295,6 +301,7 @@ export function MyConvictions({
     title: string;
     believers: number | null;
     newToday: number | null;
+    newInWindow: number | null;
   }[];
 
   // Per-market network signal: pass the wallet so the tape tags Twin/Tribe/Opp and
