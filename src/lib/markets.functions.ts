@@ -794,23 +794,40 @@ export const getWallet = createServerFn({ method: "GET" })
     // Cost basis is stored in ETH; value it in USD so gain compares like with like.
     const ethUsd = await ethUsdRate(sb);
 
-    const positions = (rows ?? []).map((r) => ({
-      ...r,
-      // The honest "invested": the ETH acquisition cost, valued at the current rate.
-      yes_cost: costBasisUsd(r.yes_cost, ethUsd),
-      no_cost: costBasisUsd(r.no_cost, ethUsd),
-      yes_shares: povValue.get(Number(r.onchain_id))?.yesShares ?? r.yes_shares,
-      no_shares: povValue.get(Number(r.onchain_id))?.noShares ?? r.no_shares,
-      yes_value_usd:
-        povValue.get(Number(r.onchain_id))?.yes ??
-        (r.yes_value_usd == null ? null : Number(r.yes_value_usd)),
-      no_value_usd:
-        povValue.get(Number(r.onchain_id))?.no ??
-        (r.no_value_usd == null ? null : Number(r.no_value_usd)),
-      markets: metaById.get(Number(r.onchain_id)) ?? null,
-      state: stateById.get(Number(r.onchain_id)) ?? null,
-      chg_window_yes: chgYes.get(Number(r.onchain_id)) ?? null,
-      chg_window_no: chgNo.get(Number(r.onchain_id)) ?? null,
-    }));
+    // Staleness: the POV poller re-prices every ~2 min, so a stored marked value
+    // older than this — with no live POV value this cycle — is not a trustworthy
+    // mark. A never-priced row (null timestamp) is stale by definition. Callers
+    // prefer a fresh shares×price mark and suppress gain rather than subtract a
+    // stale value from a fresh cost basis.
+    const STALE_MS = 60 * 60 * 1000; // 1 hour
+    const nowMs = Date.now();
+    const staleAt = (ts: unknown): boolean => {
+      if (ts == null) return true;
+      const t = new Date(String(ts)).getTime();
+      return !Number.isFinite(t) || nowMs - t > STALE_MS;
+    };
+
+    const positions = (rows ?? []).map((r) => {
+      const pov = povValue.get(Number(r.onchain_id));
+      const stale = staleAt(r.value_updated_at);
+      return {
+        ...r,
+        // The honest "invested": the ETH acquisition cost, valued at the current rate.
+        yes_cost: costBasisUsd(r.yes_cost, ethUsd),
+        no_cost: costBasisUsd(r.no_cost, ethUsd),
+        yes_shares: pov?.yesShares ?? r.yes_shares,
+        no_shares: pov?.noShares ?? r.no_shares,
+        yes_value_usd: pov?.yes ?? (r.yes_value_usd == null ? null : Number(r.yes_value_usd)),
+        no_value_usd: pov?.no ?? (r.no_value_usd == null ? null : Number(r.no_value_usd)),
+        // A live POV value this cycle is fresh; otherwise trust the stored mark
+        // only if its timestamp is recent.
+        yes_value_stale: pov?.yes == null && stale,
+        no_value_stale: pov?.no == null && stale,
+        markets: metaById.get(Number(r.onchain_id)) ?? null,
+        state: stateById.get(Number(r.onchain_id)) ?? null,
+        chg_window_yes: chgYes.get(Number(r.onchain_id)) ?? null,
+        chg_window_no: chgNo.get(Number(r.onchain_id)) ?? null,
+      };
+    });
     return { wallet, positions, window: win };
   });

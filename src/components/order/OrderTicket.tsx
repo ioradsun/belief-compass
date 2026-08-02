@@ -22,10 +22,9 @@ import {
   fmtUsd,
   sharesForPct,
   weiToEth,
-  weiToUsd,
   type OrderSide,
 } from "@/domain/order";
-import { formatMoney } from "@/domain/money";
+import { formatMoney, type DisplayUnit } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
 import type { useTrade } from "@/lib/chain-trade";
 
@@ -46,56 +45,83 @@ export function useSpendableBalance() {
 }
 
 /** Dollar input that accepts decimals (e.g. 0.25, 12.50). */
+/** Trim an ETH amount to at most 6 decimals for the entry field. */
+function ethText(eth: number): string {
+  if (!Number.isFinite(eth) || eth === 0) return "";
+  const s = eth.toFixed(6);
+  return s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
+}
+
+/**
+ * The amount input. `amount` is ALWAYS the USD value — the trade-sizing pipeline
+ * (usdToWei) is unchanged — but when the viewer's display unit is ETH the field
+ * shows and accepts ETH, converting to USD at the boundary through the one rate.
+ * The USD value never round-trips through the field, so trade math is untouched.
+ */
 export function AmountField({
   amount,
   setAmount,
-  ariaLabel = "Amount in dollars",
+  unit = "USD",
+  ethUsd = 0,
+  ariaLabel = "Amount",
 }: {
   amount: number;
   setAmount: (n: number) => void;
+  unit?: DisplayUnit;
+  ethUsd?: number;
   ariaLabel?: string;
 }) {
-  const [text, setText] = useState(amount ? String(amount) : "");
+  const eth = unit === "ETH";
+  const decimals = eth ? 6 : 2;
+  const toUsd = (v: number) => (eth ? (ethUsd > 0 ? v * ethUsd : 0) : v);
+  const toDisplayText = (usd: number) =>
+    usd ? (eth ? ethText(ethUsd > 0 ? usd / ethUsd : 0) : String(usd)) : "";
 
-  // Re-sync when the amount is changed from the outside (Max, min default, draft).
+  const [text, setText] = useState(() => toDisplayText(amount));
+
+  // Re-sync when the external amount changes (Max, min default, draft) OR the
+  // display unit flips. Compare in USD with a tolerance so the viewer's own
+  // keystrokes are never clobbered, and a live-rate tick (not a dep) can't reset
+  // the field mid-type.
   useEffect(() => {
-    const parsed = parseFloat(text);
-    if ((Number.isNaN(parsed) ? 0 : parsed) !== amount) {
-      setText(amount ? String(amount) : "");
-    }
+    const impliedUsd = toUsd(parseFloat(text));
+    const same = Math.abs((Number.isNaN(impliedUsd) ? 0 : impliedUsd) - amount) < 0.005;
+    if (!same) setText(toDisplayText(amount));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount]);
+  }, [amount, unit]);
 
   return (
     <span
       className="flex h-[52px] items-center gap-1 rounded-[12px] px-3"
       style={{ border: "1px solid var(--border)" }}
     >
-      <span className="num text-[15px] text-[var(--text-muted)]">$</span>
+      <span className="num text-[15px] text-[var(--text-muted)]">{eth ? "Ξ" : "$"}</span>
       <input
         inputMode="decimal"
         value={text}
         onChange={(e) => {
-          // Keep digits and a single decimal point, max 2 decimals.
+          // Keep digits and a single decimal point, capped to the unit's precision.
           let raw = e.target.value.replace(/[^0-9.]/g, "");
           const first = raw.indexOf(".");
           if (first !== -1) {
             raw = raw.slice(0, first + 1) + raw.slice(first + 1).replace(/\./g, "");
             const [int, dec] = raw.split(".");
-            raw = `${int}.${(dec ?? "").slice(0, 2)}`;
+            raw = `${int}.${(dec ?? "").slice(0, decimals)}`;
           }
           const n = parseFloat(raw);
-          if (!Number.isNaN(n) && n > 1_000_000) {
-            setText("1000000");
+          const usd = Number.isNaN(n) ? 0 : toUsd(n);
+          // The $1,000,000 ceiling is enforced on the USD value in either unit.
+          if (usd > 1_000_000) {
+            setText(toDisplayText(1_000_000));
             setAmount(1_000_000);
             return;
           }
           setText(raw);
-          setAmount(Number.isNaN(n) ? 0 : n);
+          setAmount(usd);
         }}
-        onBlur={() => setText(amount ? String(amount) : "")}
+        onBlur={() => setText(toDisplayText(amount))}
         aria-label={ariaLabel}
-        className="num w-[86px] bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
+        className="num w-[96px] bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
         placeholder="0"
       />
     </span>
@@ -303,6 +329,9 @@ function BuyTicket({
 }: BuyTicketProps) {
   // Execution mechanics (shares, avg price) live under a disclosure, off by default.
   const [showOrderDetails, setShowOrderDetails] = useState(false);
+  const { unit } = useDisplayUnit();
+  // `amount` is USD-native; the fee is a wei quote. Both show in the chosen unit.
+  const money = (usd: number) => formatMoney(usd, { from: "USD", to: unit, ethUsd });
   // Receipt.
   if (trade.isSuccess && side) {
     return (
@@ -342,7 +371,9 @@ function BuyTicket({
   }
 
   const busy = trade.isSubmitting || trade.isMining;
-  const amtField = <AmountField amount={amount} setAmount={setAmount} />;
+  const amtField = (
+    <AmountField amount={amount} setAmount={setAmount} unit={unit} ethUsd={ethUsd} />
+  );
 
   // Neutral: NO · PASS · YES.
   if (!side) {
@@ -366,7 +397,7 @@ function BuyTicket({
     ? "Connect wallet"
     : !ready.onBase
       ? "Switch to Base"
-      : `Back ${side} · ${fmtUsd(amount)}`;
+      : `Back ${side} · ${money(amount)}`;
   const disabled = ready.connected && ready.onBase && (busy || !quote || ethWei <= 0n);
 
   return (
@@ -376,8 +407,13 @@ function BuyTicket({
           Back {side} to reveal the House’s pick.
         </div>
         <AvailRow ethUsd={ethUsd} />
-        <QuoteRow k="You invest" v={fmtUsd(amount)} />
-        {quote && <QuoteRow k="Protocol fee" v={fmtUsd(weiToUsd(quote.fee, ethUsd))} />}
+        <QuoteRow k="You invest" v={money(amount)} />
+        {quote && (
+          <QuoteRow
+            k="Protocol fee"
+            v={formatMoney(weiToEth(quote.fee), { from: "ETH", to: unit, ethUsd })}
+          />
+        )}
         {trade.isError && (
           <div className="text-[11px] text-[var(--no)]">
             {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}

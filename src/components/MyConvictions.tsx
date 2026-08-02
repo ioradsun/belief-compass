@@ -46,6 +46,9 @@ type Position = {
   chg_window_no?: number | null;
   yes_value_usd?: number | null;
   no_value_usd?: number | null;
+  /** The stored marked value is too old to trust as a live mark (see getWallet). */
+  yes_value_stale?: boolean;
+  no_value_stale?: boolean;
 };
 
 /** Formats a money amount, converting to the viewer's chosen unit (USD/ETH). */
@@ -234,11 +237,14 @@ export function MyConvictions({
           (side === "YES" ? st?.yes_price_usd : st?.no_price_usd) ??
           0,
       );
+      // A stale marked value is not trusted as a live mark: fall through to a
+      // fresh shares×price mark instead, so worth stays current and any gain is
+      // never a stale value minus a fresh cost basis.
+      const stale = side === "YES" ? p.yes_value_stale : p.no_value_stale;
       const reported = side === "YES" ? p.yes_value_usd : p.no_value_usd;
-      const value =
-        reported != null && Number.isFinite(Number(reported)) && Number(reported) > 0
-          ? Number(reported)
-          : shares * price;
+      const marked =
+        !stale && reported != null && Number.isFinite(Number(reported)) && Number(reported) > 0;
+      const value = marked ? Number(reported) : shares * price;
       if (!(value > 0)) return null;
       const rawChg =
         (side === "YES" ? m?.chg_window_yes : m?.chg_window_no) ??

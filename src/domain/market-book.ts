@@ -26,7 +26,12 @@
  * ZERO IO, pure, fully testable.
  */
 import type { TapeTrade } from "./conviction-series";
-import type { VitalityPoint } from "./market-vitality";
+
+/** One step in an event-driven value history: value `v` at epoch-ms `t`. */
+export interface VitalityPoint {
+  t: number;
+  v: number;
+}
 
 /** Net stance magnitude at/above which a wallet is a directional believer. */
 export const DIRECTIONAL_THRESHOLD = 0.1;

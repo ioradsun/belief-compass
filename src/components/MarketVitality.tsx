@@ -12,9 +12,13 @@
  * mobile; only the layout (and the sparkline size) changes.
  */
 import { useMemo } from "react";
-import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
+import {
+  marketBook,
+  type BookMetric,
+  type BookWindow,
+  type VitalityPoint,
+} from "@/domain/market-book";
 import type { TapeTrade } from "@/domain/conviction-series";
-import type { VitalityPoint } from "@/domain/market-vitality";
 import { formatMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
 
