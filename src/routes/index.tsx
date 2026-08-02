@@ -742,14 +742,17 @@ function Feed() {
                 </Suspense>
               </div>
             ) : createOpen ? (
-              <Suspense fallback={<DeckSkeleton />}>
-                <CreateMarket
-                  ethUsd={data?.ethUsd ?? 0}
-                  onCreated={(marketId) => selectMarket(marketId)}
-                  onCancel={closeCreate}
-                  onOpenTerms={openTerms}
-                />
-              </Suspense>
+              <PanelBoundary label="Create market" onDismiss={closeCreate}>
+                <Suspense fallback={<DeckSkeleton />}>
+                  <CreateMarket
+                    ethUsd={data?.ethUsd ?? 0}
+                    onCreated={(marketId) => selectMarket(marketId)}
+                    onCancel={closeCreate}
+                    onOpenTerms={openTerms}
+                  />
+                </Suspense>
+              </PanelBoundary>
+
             ) : selectedPerson ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <Suspense fallback={<DeckSkeleton />}>
