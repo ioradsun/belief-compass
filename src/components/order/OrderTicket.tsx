@@ -21,9 +21,12 @@ import {
   fmtShares,
   fmtUsd,
   sharesForPct,
+  weiToEth,
   weiToUsd,
   type OrderSide,
 } from "@/domain/order";
+import { formatMoney } from "@/domain/money";
+import { useDisplayUnit } from "@/lib/display-unit";
 import type { useTrade } from "@/lib/chain-trade";
 
 /** The trade controller the deck owns; the ticket only reads its state + calls it. */
@@ -444,6 +447,13 @@ function SellTicket({
 }: SellTicketProps) {
   // Token counts live under a disclosure — you sell in human percentages.
   const [showDetails, setShowDetails] = useState(false);
+  const { unit } = useDisplayUnit();
+  // Proceeds are ETH-native (a wei quote); worth is USD-native. Both go to the
+  // viewer's chosen unit through the one rate.
+  const proceedsStr = (signed = false) =>
+    proceeds == null
+      ? "—"
+      : formatMoney(weiToEth(proceeds), { from: "ETH", to: unit, ethUsd, signed });
   // Receipt.
   if (trade.isSuccess) {
     return (
@@ -462,7 +472,7 @@ function SellTicket({
             <div className="text-[15px] font-semibold text-[var(--text)]">Left {held.side}</div>
             {proceeds != null && (
               <div className="num text-[11px] text-[var(--text-muted)]">
-                Sold {pct}% · +{fmtUsd(weiToUsd(proceeds, ethUsd))}
+                Sold {pct}% · {proceedsStr(true)}
               </div>
             )}
           </div>
@@ -523,10 +533,13 @@ function SellTicket({
       <div className="mb-2 space-y-1 px-1">
         <QuoteRow
           k="Estimated proceeds"
-          v={quoting ? "…" : proceeds != null ? `≈ ${fmtUsd(weiToUsd(proceeds, ethUsd))}` : "—"}
+          v={quoting ? "…" : proceeds != null ? `≈ ${proceedsStr()}` : "—"}
         />
         {remainingUsd != null && pct < 100 && (
-          <QuoteRow k="Position remaining" v={`≈ ${fmtUsd(remainingUsd)}`} />
+          <QuoteRow
+            k="Position remaining"
+            v={`≈ ${formatMoney(remainingUsd, { from: "USD", to: unit, ethUsd })}`}
+          />
         )}
         {trade.isError && (
           <div className="text-[11px] text-[var(--no)]">

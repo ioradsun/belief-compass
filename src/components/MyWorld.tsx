@@ -27,6 +27,7 @@ export function MyWorld({
   rows,
   window: win,
   winLabel,
+  ethUsd = 0,
   onSelectMarket,
   selectedPerson,
   onSelectPerson,
@@ -37,6 +38,8 @@ export function MyWorld({
   rows: MarketRow[];
   window?: VolumeWindow;
   winLabel?: string;
+  /** Live ETH/USD rate, forwarded so positions render in the chosen unit. */
+  ethUsd?: number;
   onSelectMarket: (id: number) => void;
   selectedPerson?: string;
   onSelectPerson: (wallet: string) => void;
@@ -94,6 +97,7 @@ export function MyWorld({
             rows={rows}
             window={win}
             winLabel={winLabel}
+            ethUsd={ethUsd}
             onSelect={onSelectMarket}
             onCount={setConvictionCount}
             onExplore={() => {

@@ -15,6 +15,8 @@ import { listLiveEvents } from "@/lib/live.functions";
 import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
 import { type MarketRow } from "@/components/MarketCard";
 import { positionPnl } from "@/domain/position";
+import { formatMoney } from "@/domain/money";
+import { useDisplayUnit } from "@/lib/display-unit";
 import {
   positionSignal,
   type PositionSignal,
@@ -46,17 +48,8 @@ type Position = {
   no_value_usd?: number | null;
 };
 
-function usd(n: number) {
-  const v = Math.abs(n);
-  const s =
-    v >= 1000
-      ? v.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `${n < 0 ? "−" : ""}$${s}`;
-}
-function signedUsd(n: number) {
-  return `${n < 0 ? "−" : "+"}${usd(Math.abs(n))}`;
-}
+/** Formats a money amount, converting to the viewer's chosen unit (USD/ETH). */
+type MoneyFmt = (n: number) => string;
 
 /** The one accent colour a tone earns — green for strengthening, red for
  *  weakening, quiet otherwise. Typography carries the rest of the hierarchy. */
@@ -85,7 +78,17 @@ type Built = {
  * One conviction card. Question → side → worth+gain → market believers → personal
  * Pulse → the one dynamic story. No invested amount, no giant %, no raw price.
  */
-function ConvictionCard({ p, onSelect }: { p: Built; onSelect: (id: number) => void }) {
+function ConvictionCard({
+  p,
+  onSelect,
+  money,
+  signedMoney,
+}: {
+  p: Built;
+  onSelect: (id: number) => void;
+  money: MoneyFmt;
+  signedMoney: MoneyFmt;
+}) {
   const sideColor = p.side === "YES" ? "var(--yes)" : "var(--no)";
   const { pulse, pulseTone, story } = p.signal;
   return (
@@ -108,13 +111,15 @@ function ConvictionCard({ p, onSelect }: { p: Built; onSelect: (id: number) => v
         </span>
       </div>
 
-      {/* 3 — How is my conviction performing? Worth now, then gain. Never cost. */}
+      {/* 3 — How is my conviction performing? Marked value now, then gain. Never
+        cost. "Marked value" = shares × current price (what it's worth on paper);
+        the realizable amount on exit is quoted in the sell ticket. */}
       <div className="mt-2.5 flex items-baseline gap-2">
         <span className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-          Worth
+          Marked value
         </span>
         <span className="num text-[20px] font-semibold leading-none text-[var(--text)]">
-          {usd(p.value)}
+          {money(p.value)}
         </span>
         {p.gainUsd != null &&
           (Math.abs(p.gainUsd) >= 0.005 ? (
@@ -122,7 +127,7 @@ function ConvictionCard({ p, onSelect }: { p: Built; onSelect: (id: number) => v
               className="num ml-auto text-[12px] font-semibold"
               style={{ color: p.gainUsd > 0 ? "var(--yes)" : "var(--no)" }}
             >
-              {signedUsd(p.gainUsd)}
+              {signedMoney(p.gainUsd)}
               <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">
                 since entered
               </span>
@@ -132,7 +137,6 @@ function ConvictionCard({ p, onSelect }: { p: Built; onSelect: (id: number) => v
               No change
             </span>
           ))}
-
       </div>
 
       {/* 4 — How is the market reacting? Believers (scale + movement), then Pulse. */}
@@ -180,6 +184,7 @@ export function MyConvictions({
   rows,
   window: win = "24h",
   winLabel = "24H",
+  ethUsd = 0,
   onSelect,
   onExplore,
   onCount,
@@ -188,12 +193,21 @@ export function MyConvictions({
   rows: MarketRow[];
   window?: VolumeWindow;
   winLabel?: string;
+  /** Live ETH/USD rate — needed to render money in the viewer's chosen unit. */
+  ethUsd?: number;
   onSelect: (id: number) => void;
   /** Empty-state CTA — take me to the markets. */
   onExplore?: () => void;
   /** Reports the number of live convictions to the tab strip. */
   onCount?: (n: number) => void;
 }) {
+  const { unit } = useDisplayUnit();
+  // Position value and gain are USD-native (POV marks the tokens in dollars); one
+  // rate takes them to the viewer's chosen unit so both sides share a rate.
+  const money: MoneyFmt = (n) => formatMoney(n, { from: "USD", to: unit, ethUsd });
+  const signedMoney: MoneyFmt = (n) =>
+    formatMoney(n, { from: "USD", to: unit, ethUsd, signed: true });
+
   const { data } = useQuery({
     queryKey: ["my-convictions", wallet ?? null, win],
     queryFn: async () => await getWallet({ data: { wallet: wallet as string, window: win } }),
@@ -304,7 +318,7 @@ export function MyConvictions({
         net,
         milestone: net?.milestone ?? null,
       },
-      (n) => usd(n),
+      (n) => money(n),
     );
     return {
       id: f.id,
@@ -356,15 +370,15 @@ export function MyConvictions({
       {/* Summary — one financial story, money only. */}
       <div className="pb-4">
         <div className="mt-2.5 text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-          Worth
+          Marked value
         </div>
-        <div className="num text-[24px] leading-none text-[var(--text)]">{usd(total)}</div>
+        <div className="num text-[24px] leading-none text-[var(--text)]">{money(total)}</div>
         {trueGain != null && Math.abs(trueGain) >= 0.005 ? (
           <div
             className="num mt-1.5 text-[12px] font-semibold"
             style={{ color: trueGain > 0 ? "var(--yes)" : "var(--no)" }}
           >
-            {signedUsd(trueGain)}{" "}
+            {signedMoney(trueGain)}{" "}
             <span className="font-normal text-[var(--text-muted)]">since you started</span>
           </div>
         ) : Math.abs(periodUsd) >= 0.01 ? (
@@ -372,20 +386,25 @@ export function MyConvictions({
             className="num mt-1.5 text-[12px] font-semibold"
             style={{ color: periodUsd > 0 ? "var(--yes)" : "var(--no)" }}
           >
-            {signedUsd(periodUsd)}{" "}
+            {signedMoney(periodUsd)}{" "}
             <span className="font-normal text-[var(--text-muted)]">{winLabel.toLowerCase()}</span>
           </div>
         ) : (
           <div className="mt-1.5 text-[11px] font-normal text-[var(--text-muted)]">No change</div>
         )}
-
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)" }} />
 
       <div className="flex flex-col gap-2.5 pt-4">
         {positions.map((p) => (
-          <ConvictionCard key={p.id} p={p} onSelect={onSelect} />
+          <ConvictionCard
+            key={p.id}
+            p={p}
+            onSelect={onSelect}
+            money={money}
+            signedMoney={signedMoney}
+          />
         ))}
       </div>
     </div>

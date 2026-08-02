@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { WalletProviders } from "../components/WalletConnect";
+import { DisplayUnitProvider } from "../lib/display-unit";
 import { VersionWatcher } from "../components/VersionWatcher";
 import { restoreQueryCache, startQueryPersist } from "../lib/query-persist";
 
@@ -169,9 +170,11 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <WalletProviders>
-        <VersionWatcher />
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
+        <DisplayUnitProvider>
+          <VersionWatcher />
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+        </DisplayUnitProvider>
       </WalletProviders>
     </QueryClientProvider>
   );
