@@ -367,7 +367,7 @@ export function CreateMarket({
               rows={3}
               autoFocus
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Must be answerable with yes or no"
+              placeholder={"State your conviction\n\nWrite a statement people can answer Yes or No."}
               className="w-full resize-none bg-transparent px-3 pt-2.5 text-[16px] leading-snug text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
             />
             {/* Inside the field: Add media on the left (only until one is
@@ -377,10 +377,7 @@ export function CreateMarket({
               {attachment ? (
                 <span />
               ) : (
-                <AddMedia
-                  onPick={openPicker}
-                  onLink={(url) => setAttachment({ kind: "link", url })}
-                />
+                <AddMedia onPick={openPicker} />
               )}
               <span className="num text-[11px] text-[var(--text-muted)]">
                 {question.length}/{QUESTION_MAX}
@@ -426,14 +423,11 @@ export function CreateMarket({
               onClick={() => setSide("NO")}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
-            <span className="num shrink-0 text-[12px] text-[var(--text-muted)]">
-              ≈ {(Number(seedWei) / 1e18).toFixed(4)} ETH
-            </span>
-          </div>
+          <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
           <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} onMax={setMax} />
         </div>
+
+
 
         {/* 4 · Creator earnings — one quiet line. */}
         <CreatorEarnings bps={econ.creatorFeeBps} />
