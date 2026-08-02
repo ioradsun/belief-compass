@@ -404,12 +404,9 @@ export function CreateMarket({
               />
             </div>
           </div>
-          <div>
-            <StepLabel>Amount</StepLabel>
-            <div className="space-y-2">
-              <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
-              <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} />
-            </div>
+          <div className="space-y-2">
+            <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
+            <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} />
           </div>
         </div>
 
