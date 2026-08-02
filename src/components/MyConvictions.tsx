@@ -70,12 +70,17 @@ type Built = {
   side: Side;
   value: number;
   gainUsd: number | null;
+  /** Change in marked value over the SELECTED window (null when unknown). */
+  deltaUsd: number | null;
+  /** What that delta is measured against — "24H", "1W" … or "since entered". */
+  deltaLabel: string;
   title: string;
   believers: number | null;
   newToday: number | null;
   chg: number | null;
   signal: PositionSignal;
 };
+
 
 /**
  * One conviction card. Question → side → worth+gain → market believers → personal
