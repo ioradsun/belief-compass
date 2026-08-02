@@ -310,7 +310,7 @@ export function CreateMarket({
           provenance tag sits inline, top-right. */}
       <div className="flex shrink-0 items-start gap-2">
         <h2 className="flex-1 text-[15px] font-semibold leading-snug text-[var(--text)]">
-          State Your Conviction. Earn 4.5% on Every Trade.
+          Create a Market. Earn 4.5% on Every Trade.
         </h2>
       </div>
 
@@ -330,6 +330,7 @@ export function CreateMarket({
 
         {/* 2 · The conviction statement. */}
         <div>
+          <StepLabel>State your conviction</StepLabel>
           <div
             className="rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
             style={{ borderColor: "var(--border)" }}
@@ -386,6 +387,7 @@ export function CreateMarket({
 
         {/* 3 · YES or NO? + How much? — the shared order ticket. */}
         <div className="space-y-2 rounded-[16px] p-3" style={{ border: "1px solid var(--border)" }}>
+          <StepLabel>Take your position</StepLabel>
           <div className="flex gap-2">
             <SideButton
               label="Yes"
@@ -400,6 +402,7 @@ export function CreateMarket({
               onClick={() => setSide("NO")}
             />
           </div>
+          <StepLabel>Back your conviction</StepLabel>
           <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
           <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} />
         </div>
@@ -459,6 +462,16 @@ export function CreateMarket({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Quiet navigational step label — identical weight, colour and spacing across
+ * all three steps so they read as wayfinding, not section headings.
+ */
+function StepLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-1 text-[11px] font-medium leading-none text-[var(--text-muted)]">{children}</p>
   );
 }
 
