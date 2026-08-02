@@ -22,7 +22,8 @@ import { fmtUsd, usdToWei } from "@/domain/order";
 import {
   MEDIA_LIMITS,
   QUESTION_MAX,
-  accept,
+  acceptAll,
+  SUPPORTED_MEDIA_HINT,
   assertAllowedBytes,
   kindForMime,
   type MediaKind,
@@ -90,7 +91,6 @@ export function CreateMarket({
   const [localError, setLocalError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [pickKind, setPickKind] = useState<Exclude<MediaKind, "link">>("image");
 
   const minSeedEth = econ.minSeedWei != null ? Number(econ.minSeedWei) / 1e18 : null;
   const minUsd = minSeedEth != null && ethUsd > 0 ? minSeedEth * ethUsd : null;
@@ -162,8 +162,7 @@ export function CreateMarket({
     }
   }, []);
 
-  const openPicker = (kind: Exclude<MediaKind, "link">) => {
-    setPickKind(kind);
+  const openPicker = () => {
     requestAnimationFrame(() => fileRef.current?.click());
   };
 
@@ -466,7 +465,7 @@ export function CreateMarket({
         ref={fileRef}
         type="file"
         className="hidden"
-        accept={accept(pickKind)}
+        accept={acceptAll()}
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) void pickFile(f);
@@ -484,95 +483,82 @@ export function CreateMarket({
   );
 }
 
-/** "Add media" trigger → a small popover with the four sources. */
+/**
+ * Media affordance: one picker for every supported file (the OS dialog does the
+ * filtering) plus a Link toggle. No type menu — it was unusable on mobile and
+ * the type list is now just a tooltip.
+ */
 function AddMedia({
   onPick,
   onLink,
 }: {
-  onPick: (kind: Exclude<MediaKind, "link">) => void;
+  onPick: () => void;
   onLink: (url: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [linking, setLinking] = useState(false);
   const [url, setUrl] = useState("");
-  const wrap = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) {
-        setOpen(false);
-        setLinking(false);
-      }
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+  const [hint, setHint] = useState(false);
 
   const commitLink = () => {
     const v = url.trim();
     if (v.startsWith("https://")) onLink(v);
-    setOpen(false);
     setLinking(false);
     setUrl("");
   };
 
+  if (linking) {
+    return (
+      <input
+        autoFocus
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commitLink();
+          if (e.key === "Escape") {
+            setLinking(false);
+            setUrl("");
+          }
+        }}
+        onBlur={commitLink}
+        placeholder="https://…"
+        className="w-full max-w-[240px] rounded-[8px] bg-transparent text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
+      />
+    );
+  }
+
   return (
-    <div ref={wrap} className="relative">
+    <div className="relative flex items-center gap-3">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={onPick}
+        title={SUPPORTED_MEDIA_HINT}
         className="flex items-center gap-1 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
       >
         <span aria-hidden>＋</span> Add media
       </button>
-      {open && (
+      <button
+        type="button"
+        onClick={() => setLinking(true)}
+        className="text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+      >
+        Link
+      </button>
+      <button
+        type="button"
+        aria-label="Supported file types"
+        onClick={() => setHint((v) => !v)}
+        onBlur={() => setHint(false)}
+        className="grid size-4 place-items-center rounded-full border text-[9px] text-[var(--text-muted)]"
+        style={{ borderColor: "var(--border)" }}
+      >
+        ?
+      </button>
+      {hint && (
         <div
-          className="absolute bottom-6 left-0 z-20 w-[180px] rounded-[12px] bg-[var(--surface)] p-1 shadow-lg"
+          className="absolute bottom-6 left-0 z-20 w-[min(280px,calc(100vw-64px))] rounded-[10px] bg-[var(--surface)] p-2 text-[11px] leading-relaxed text-[var(--text-secondary)] shadow-lg"
           style={{ border: "1px solid var(--border)" }}
         >
-          {linking ? (
-            <input
-              autoFocus
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && commitLink()}
-              onBlur={commitLink}
-              placeholder="https://…"
-              className="w-full rounded-[8px] bg-transparent px-2 py-1.5 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
-            />
-          ) : (
-            (
-              [
-                ["image", "Image"],
-                ["video", "Video"],
-                ["audio", "Audio"],
-              ] as const
-            )
-              .map(([k, label]) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => {
-                    onPick(k);
-                    setOpen(false);
-                  }}
-                  className="block w-full rounded-[8px] px-2 py-1.5 text-left text-[13px] text-[var(--text)] transition-colors hover:bg-[var(--bg)]"
-                >
-                  {label}
-                </button>
-              ))
-              .concat(
-                <button
-                  key="link"
-                  type="button"
-                  onClick={() => setLinking(true)}
-                  className="block w-full rounded-[8px] px-2 py-1.5 text-left text-[13px] text-[var(--text)] transition-colors hover:bg-[var(--bg)]"
-                >
-                  Link
-                </button>,
-              )
-          )}
+          {SUPPORTED_MEDIA_HINT}
         </div>
       )}
     </div>
