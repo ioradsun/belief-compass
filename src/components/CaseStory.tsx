@@ -204,21 +204,8 @@ export function CaseStory({
         </section>
       </div>
 
-      {/* The one action this story argues for. */}
-      <div className="shrink-0 pt-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="w-full rounded-[12px] py-3 text-[14px] font-semibold transition-colors"
-          style={{
-            border: `1.5px solid ${color}`,
-            background: backed ? `color-mix(in oklab, ${color} 16%, transparent)` : "transparent",
-            color: "var(--text)",
-          }}
-        >
-          Back {side}
-        </button>
-      </div>
+      {/* No side action here — the decision dock below already owns Back YES/NO. */}
+
     </div>
   );
 }
