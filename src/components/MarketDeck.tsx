@@ -483,8 +483,6 @@ export function MarketDeck({
           marketId={marketId}
           ethUsd={ethUsd}
           viewerWallet={viewerWallet}
-          backed={side === storySide}
-          onBack={() => chooseSide(storySide)}
           onClose={() => onCloseStory?.()}
         />
       ) : mobileCaseOpen ? (
