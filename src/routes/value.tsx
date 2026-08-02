@@ -3,11 +3,12 @@
  * value Conviction Company creates for the POV ecosystem. Not analytics: every
  * number answers one question — "why is Conviction valuable to POV?"
  *
- * Data is real and already indexed (getEcosystemValue: market_state + markets +
- * events). Fee + creator-earnings money is DERIVED from the contract's own fee
- * rate (feeBps / FEE_DENOMINATOR / CREATOR_FEE_SHARE) applied to real volume — no
- * invented number. Headline figures count up and the page re-polls, so it stays
- * alive.
+ * Scope is wallets CONNECTED to conviction.company (the wallet_links set): their
+ * buy volume, trades and activity across any market. Data is real and already
+ * indexed (getEcosystemValue). Fee + creator-earnings money is DERIVED from the
+ * contract's own fee rate (feeBps / FEE_DENOMINATOR / CREATOR_FEE_SHARE) applied to
+ * that real volume — no invented number. Headline figures count up and the page
+ * re-polls, so it stays alive.
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -153,16 +154,16 @@ function ValuePage() {
           <div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
             Conviction Company Value
           </div>
-          <h1 className="mt-3 max-w-[22ch] text-[32px] font-semibold leading-[1.1] tracking-[-0.02em] text-[var(--text)] sm:text-[42px]">
-            Growing the POV ecosystem through creators, conviction, and new markets.
+          <h1 className="mt-3 max-w-[24ch] text-[32px] font-semibold leading-[1.1] tracking-[-0.02em] text-[var(--text)] sm:text-[42px]">
+            The trading Conviction brings to POV — from every wallet connected here.
           </h1>
           <div className="mt-9 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--border)] sm:grid-cols-3">
-            <Hero label="Trading Volume Generated" value={t.volumeUsd} format={fmtUsd} />
+            <Hero label="Buy Volume" value={t.volumeUsd} format={fmtUsd} />
             <Hero label="Trading Fees Generated" value={feesUsd} format={fmtUsd} />
             <Hero label="Creator Earnings Paid" value={creatorEarningsUsd} format={fmtUsd} />
             <Hero label="Markets Created" value={t.marketsCreated} format={fmtNum} />
             <Hero label="Trades Executed" value={t.tradesExecuted} format={fmtNum} />
-            <Hero label="Traders Introduced" value={t.activeTraders} format={fmtNum} />
+            <Hero label="Connected Traders" value={t.activeTraders} format={fmtNum} />
           </div>
         </header>
 
@@ -179,7 +180,7 @@ function ValuePage() {
             </Section>
 
             {/* CREATOR ECONOMY */}
-            <Section title="Creator Economy" note="Conviction pays creators for the markets they bring">
+            <Section title="Creator Economy" note="What connected traders' volume earns the markets they back">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Panel>
                   <Kpi label="Total Creator Earnings" value={creatorEarningsUsd == null ? "—" : fmtUsd(creatorEarningsUsd)} />
@@ -224,7 +225,7 @@ function ValuePage() {
             </Section>
 
             {/* CATEGORIES */}
-            <Section title="Categories" note="Ecosystem activity by theme">
+            <Section title="Categories" note="Connected-wallet activity by theme">
               <div className="overflow-hidden rounded-2xl border border-[var(--border)]">
                 <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                   <span>Category</span>
@@ -257,10 +258,11 @@ function ValuePage() {
         </div>
 
         <footer className="mt-16 border-t border-[var(--border)] pt-6 text-[12px] leading-relaxed text-[var(--text-muted)]">
-          Every figure counts only markets created on conviction.company — the volume, trades,
-          creators and traders Conviction brings to the ecosystem, not POV&rsquo;s own. Fees and
-          creator earnings are computed from the protocol&rsquo;s own fee rate applied to that real
-          trading volume. Updated continuously.
+          Buy volume, trades and traders count only wallets connected to conviction.company —
+          their trading across any market, pov- or conviction-born — so this is the value
+          Conviction brings to the ecosystem, not POV&rsquo;s own. Markets Created counts markets
+          born on conviction.company. Fees and creator earnings are computed from the
+          protocol&rsquo;s own fee rate applied to that real buy volume. Updated continuously.
         </footer>
       </div>
     </div>
@@ -279,7 +281,7 @@ function GrowthChart({ growth }: { growth: EcosystemValue["growth"] }) {
   const area = `${line} L${w},${h} L0,${h} Z`;
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-      <div className="mb-1 text-[12px] text-[var(--text-muted)]">Cumulative trading volume</div>
+      <div className="mb-1 text-[12px] text-[var(--text-muted)]">Cumulative buy volume</div>
       <div className="text-[22px] font-semibold tabular-nums text-[var(--text)]">
         {fmtUsd(pts[pts.length - 1].volumeUsd)}
       </div>

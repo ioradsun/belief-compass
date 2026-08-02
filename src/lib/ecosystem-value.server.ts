@@ -8,11 +8,17 @@
  * the client from the contract's own fee rate + per-market creator fees, so no
  * number is invented. SWR-cached — every visitor reads one warm snapshot.
  *
- * SCOPE — this page is about Conviction, not the whole ecosystem. Markets born
- * on conviction.company are tagged `markets.source = 'conviction'` (POV-discovered
- * markets default to 'pov'). Every figure below — volume, fees, trades, traders,
- * growth, activity — is restricted to that set, so the report card counts only the
- * value that flows through conviction.company, never pov.co's.
+ * SCOPE — this page measures the value that flows through wallets CONNECTED to
+ * conviction.company, not the whole POV ecosystem. A connected wallet is either
+ * side of a wallet_links row (the conviction sign-in wallet, or the pov.co trading
+ * wallet the user linked). Buy value, fees, trades, traders, growth and activity
+ * all come from those wallets' trading across ANY market — a connected user backing
+ * a pov-only market is still value Conviction brought. The heavy join lives in the
+ * conviction_connected_value RPC (rides events_wallet_idx); we only join market
+ * metadata (titles/categories/authors) and derive money on the client here.
+ *
+ * "Markets Created" is the one supply-side figure: markets born on conviction.company
+ * (markets.source = 'conviction'), which is unambiguously Conviction's own.
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { swrCache } from "@/lib/server-cache";
@@ -72,51 +78,79 @@ export interface EcosystemValue {
 
 const GROWTH_DAYS = 30;
 
+// The shape conviction_connected_value returns (money fields are wei strings —
+// numeric sums exceed JS safe-integer range, so we parse then scale by 1e18).
+interface ConnectedValue {
+  connectedWallets: number;
+  trades: number;
+  buys: number;
+  traders: number;
+  buyWei: string;
+  perMarket: Array<{ marketId: string; trades: number; buyWei: string }>;
+  byDay: Array<{ day: string; trades: number; buyWei: string }>;
+  recent: Array<{ marketId: string; wallet: string; side: string | null; action: string | null; amountEth: string; at: string }>;
+}
+
+const weiToEth = (wei: string | null | undefined): number => num(wei) / 1e18;
+
 async function build(): Promise<EcosystemValue> {
   const sb = serviceClient();
 
-  const [{ data: ethRow }, { data: msData }] = await Promise.all([
+  const [{ data: ethRow }, rpc, { count: convictionMarkets }] = await Promise.all([
     sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
-    sb
-      .from("market_state")
-      // !inner + the source filter scopes the whole page to conviction.company's
-      // own markets — POV-discovered markets never enter the aggregation.
-      .select("onchain_id, volume_total_usd, markets:onchain_id!inner ( title, category, author_wallet, author_name )")
-      .eq("markets.source", "conviction")
-      .order("volume_total_usd", { ascending: false, nullsFirst: false })
-      .limit(2000),
+    sb.rpc("conviction_connected_value", { p_growth_days: GROWTH_DAYS }),
+    // "Markets Created" — the one supply-side figure: markets born on conviction.company.
+    sb.from("markets").select("onchain_id", { count: "exact", head: true }).eq("source", "conviction"),
   ]);
   const ethUsd = num((ethRow as { value?: number } | null)?.value);
 
-  const rows = (msData ?? []) as Array<{
-    onchain_id: number | string;
-    volume_total_usd: unknown;
-    markets: { title: string | null; category: string | null; author_wallet: string | null; author_name: string | null } | null;
-  }>;
-  const ids = rows.map((r) => Number(r.onchain_id));
-
-  // Lifetime trade counts per market — the same precomputed RPC the feed uses.
-  const tradesById = new Map<number, number>();
-  if (ids.length) {
-    const vol = await sb.rpc("market_volume_window", { p_ids: ids, p_since: null });
-    for (const t of (vol.data ?? []) as { onchain_id: number; trade_count: number }[])
-      tradesById.set(Number(t.onchain_id), (tradesById.get(Number(t.onchain_id)) ?? 0) + num(t.trade_count));
+  // If the RPC isn't present yet (migration not applied), degrade to honest zeros
+  // rather than crash or leak whole-ecosystem numbers.
+  const cv = (rpc.data ?? null) as ConnectedValue | null;
+  if (!cv) {
+    return {
+      ethUsd,
+      totals: { volumeUsd: 0, marketsCreated: convictionMarkets ?? 0, tradesExecuted: 0, activeTraders: 0 },
+      categories: [],
+      markets: [],
+      growth: [],
+      recentActivity: [],
+    };
   }
 
-  const markets: MarketStat[] = rows.map((r) => ({
-    onchainId: Number(r.onchain_id),
-    title: r.markets?.title ?? "Untitled market",
-    category: r.markets?.category ?? null,
-    authorWallet: r.markets?.author_wallet ?? null,
-    authorName: r.markets?.author_name ?? null,
-    volumeUsd: num(r.volume_total_usd),
-    trades: tradesById.get(Number(r.onchain_id)) ?? 0,
-  }));
+  const volumeUsd = weiToEth(cv.buyWei) * ethUsd;
 
-  const volumeUsd = markets.reduce((s, m) => s + m.volumeUsd, 0);
-  const tradesExecuted = markets.reduce((s, m) => s + m.trades, 0);
+  // Market metadata (title/category/author) for every market these wallets traded —
+  // works for pov- and conviction-born markets alike, since `markets` holds both.
+  const marketIds = cv.perMarket.map((p) => Number(p.marketId)).filter((n) => Number.isFinite(n));
+  const metaById = new Map<number, { title: string | null; category: string | null; author_wallet: string | null; author_name: string | null }>();
+  if (marketIds.length) {
+    const { data: meta } = await sb
+      .from("markets")
+      .select("onchain_id, title, category, author_wallet, author_name")
+      .in("onchain_id", marketIds)
+      .limit(5000);
+    for (const m of (meta ?? []) as Array<{ onchain_id: number | string; title: string | null; category: string | null; author_wallet: string | null; author_name: string | null }>)
+      metaById.set(Number(m.onchain_id), m);
+  }
 
-  // Categories.
+  const markets: MarketStat[] = cv.perMarket
+    .map((p) => {
+      const id = Number(p.marketId);
+      const meta = metaById.get(id);
+      return {
+        onchainId: id,
+        title: meta?.title ?? `Market #${id}`,
+        category: meta?.category ?? null,
+        authorWallet: meta?.author_wallet ?? null,
+        authorName: meta?.author_name ?? null,
+        volumeUsd: weiToEth(p.buyWei) * ethUsd,
+        trades: num(p.trades),
+      };
+    })
+    .sort((a, b) => b.volumeUsd - a.volumeUsd);
+
+  // Categories — aggregated from the connected wallets' own trading.
   const catMap = new Map<string, { markets: number; volumeUsd: number; trades: number; creators: Set<string> }>();
   for (const m of markets) {
     const c = m.category ?? "Other";
@@ -131,43 +165,11 @@ async function build(): Promise<EcosystemValue> {
     .map(([category, e]) => ({ category, markets: e.markets, volumeUsd: e.volumeUsd, trades: e.trades, creators: e.creators.size }))
     .sort((a, b) => b.volumeUsd - a.volumeUsd);
 
-  // Active traders — distinct wallets holding a position in a conviction.company
-  // market (bounded). Scoped to our market ids, so pov.co-only traders don't count.
-  let activeTraders = 0;
-  if (ids.length) {
-    const { data: wb } = await sb
-      .from("wallet_beliefs")
-      .select("wallet")
-      .in("onchain_id", ids)
-      .limit(100_000);
-    const set = new Set<string>();
-    for (const r of (wb ?? []) as Array<{ wallet: string | null }>) if (r.wallet) set.add(r.wallet.toLowerCase());
-    activeTraders = set.size;
-  }
-
-  // Growth — cumulative volume + trades per UTC day over the recent window.
-  const stringIds = ids.map(String);
+  // Growth — cumulative buy volume + trades per UTC day over the window.
+  const byDay = new Map<string, { vol: number; trades: number }>();
+  for (const d of cv.byDay) byDay.set(d.day, { vol: weiToEth(d.buyWei) * ethUsd, trades: num(d.trades) });
   const growth: GrowthPoint[] = [];
-  if (ids.length) {
-    const since = new Date(Date.now() - GROWTH_DAYS * 86_400_000);
-    since.setUTCHours(0, 0, 0, 0);
-    const { data: evs } = await sb
-      .from("events")
-      .select("occurred_at, amount_eth")
-      .eq("is_canonical", true)
-      .eq("kind", "trade")
-      .in("market_id", stringIds)
-      .gte("occurred_at", since.toISOString())
-      .order("occurred_at", { ascending: true })
-      .limit(50_000);
-    const byDay = new Map<string, { vol: number; trades: number }>();
-    for (const e of (evs ?? []) as Array<{ occurred_at: string; amount_eth: unknown }>) {
-      const day = e.occurred_at.slice(0, 10);
-      const d = byDay.get(day) ?? { vol: 0, trades: 0 };
-      d.vol += (num(e.amount_eth) / 1e18) * ethUsd;
-      d.trades += 1;
-      byDay.set(day, d);
-    }
+  {
     let cumV = 0;
     let cumT = 0;
     for (let i = GROWTH_DAYS; i >= 0; i--) {
@@ -183,45 +185,30 @@ async function build(): Promise<EcosystemValue> {
     }
   }
 
-  // Recent activity seed — newest trades + created markets, with titles.
-  const titleById = new Map<number, string>(markets.map((m) => [m.onchainId, m.title]));
-  const recentActivity: ActivityItem[] = [];
-  if (ids.length) {
-    const { data: evs } = await sb
-      .from("events")
-      .select("event_key:source_key, kind, side, action, market_id, amount_eth, occurred_at")
-      .eq("is_canonical", true)
-      .in("kind", ["trade", "market_created"])
-      .in("market_id", stringIds)
-      .order("occurred_at", { ascending: false })
-      .limit(24);
-    for (const e of (evs ?? []) as Array<{
-      event_key: string;
-      kind: string;
-      side: string | null;
-      action: string | null;
-      market_id: string | null;
-      amount_eth: unknown;
-      occurred_at: string;
-    }>) {
-      const mid = Number(e.market_id);
-      recentActivity.push({
-        key: e.event_key,
-        kind: e.kind === "market_created" ? "market_created" : "trade",
-        side: e.side === "YES" || e.side === "NO" ? e.side : null,
-        action: e.action === "BUY" || e.action === "SELL" ? e.action : null,
-        marketId: mid,
-        title: titleById.get(mid) ?? `Market #${mid}`,
-        ethUsd,
-        amountEth: num(e.amount_eth) / 1e18,
-        at: e.occurred_at,
-      });
-    }
-  }
+  // Recent activity — the connected wallets' newest trades, with titles.
+  const recentActivity: ActivityItem[] = cv.recent.map((r) => {
+    const mid = Number(r.marketId);
+    return {
+      key: `${r.wallet}:${mid}:${r.at}`,
+      kind: "trade",
+      side: r.side === "YES" || r.side === "NO" ? r.side : null,
+      action: r.action === "BUY" || r.action === "SELL" ? r.action : null,
+      marketId: mid,
+      title: metaById.get(mid)?.title ?? `Market #${mid}`,
+      ethUsd,
+      amountEth: weiToEth(r.amountEth),
+      at: r.at,
+    };
+  });
 
   return {
     ethUsd,
-    totals: { volumeUsd, marketsCreated: markets.length, tradesExecuted, activeTraders },
+    totals: {
+      volumeUsd,
+      marketsCreated: convictionMarkets ?? 0,
+      tradesExecuted: cv.trades,
+      activeTraders: cv.traders,
+    },
     categories,
     markets,
     growth,
