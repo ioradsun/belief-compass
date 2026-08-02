@@ -7,6 +7,12 @@
  * the canonical events log (activity + growth). Fee/earnings money is derived on
  * the client from the contract's own fee rate + per-market creator fees, so no
  * number is invented. SWR-cached — every visitor reads one warm snapshot.
+ *
+ * SCOPE — this page is about Conviction, not the whole ecosystem. Markets born
+ * on conviction.company are tagged `markets.source = 'conviction'` (POV-discovered
+ * markets default to 'pov'). Every figure below — volume, fees, trades, traders,
+ * growth, activity — is restricted to that set, so the report card counts only the
+ * value that flows through conviction.company, never pov.co's.
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { swrCache } from "@/lib/server-cache";
@@ -73,7 +79,10 @@ async function build(): Promise<EcosystemValue> {
     sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
     sb
       .from("market_state")
-      .select("onchain_id, volume_total_usd, markets:onchain_id ( title, category, author_wallet, author_name )")
+      // !inner + the source filter scopes the whole page to conviction.company's
+      // own markets — POV-discovered markets never enter the aggregation.
+      .select("onchain_id, volume_total_usd, markets:onchain_id!inner ( title, category, author_wallet, author_name )")
+      .eq("markets.source", "conviction")
       .order("volume_total_usd", { ascending: false, nullsFirst: false })
       .limit(2000),
   ]);
@@ -122,18 +131,24 @@ async function build(): Promise<EcosystemValue> {
     .map(([category, e]) => ({ category, markets: e.markets, volumeUsd: e.volumeUsd, trades: e.trades, creators: e.creators.size }))
     .sort((a, b) => b.volumeUsd - a.volumeUsd);
 
-  // Active traders — distinct wallets that have ever taken a position (bounded).
+  // Active traders — distinct wallets holding a position in a conviction.company
+  // market (bounded). Scoped to our market ids, so pov.co-only traders don't count.
   let activeTraders = 0;
-  {
-    const { data: wb } = await sb.from("wallet_beliefs").select("wallet").limit(100_000);
+  if (ids.length) {
+    const { data: wb } = await sb
+      .from("wallet_beliefs")
+      .select("wallet")
+      .in("onchain_id", ids)
+      .limit(100_000);
     const set = new Set<string>();
     for (const r of (wb ?? []) as Array<{ wallet: string | null }>) if (r.wallet) set.add(r.wallet.toLowerCase());
     activeTraders = set.size;
   }
 
   // Growth — cumulative volume + trades per UTC day over the recent window.
+  const stringIds = ids.map(String);
   const growth: GrowthPoint[] = [];
-  {
+  if (ids.length) {
     const since = new Date(Date.now() - GROWTH_DAYS * 86_400_000);
     since.setUTCHours(0, 0, 0, 0);
     const { data: evs } = await sb
@@ -141,6 +156,7 @@ async function build(): Promise<EcosystemValue> {
       .select("occurred_at, amount_eth")
       .eq("is_canonical", true)
       .eq("kind", "trade")
+      .in("market_id", stringIds)
       .gte("occurred_at", since.toISOString())
       .order("occurred_at", { ascending: true })
       .limit(50_000);
@@ -170,12 +186,13 @@ async function build(): Promise<EcosystemValue> {
   // Recent activity seed — newest trades + created markets, with titles.
   const titleById = new Map<number, string>(markets.map((m) => [m.onchainId, m.title]));
   const recentActivity: ActivityItem[] = [];
-  {
+  if (ids.length) {
     const { data: evs } = await sb
       .from("events")
       .select("event_key:source_key, kind, side, action, market_id, amount_eth, occurred_at")
       .eq("is_canonical", true)
       .in("kind", ["trade", "market_created"])
+      .in("market_id", stringIds)
       .order("occurred_at", { ascending: false })
       .limit(24);
     for (const e of (evs ?? []) as Array<{

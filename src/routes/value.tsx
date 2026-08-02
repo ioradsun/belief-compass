@@ -144,7 +144,9 @@ function ValuePage() {
   const avgTradesPerMarket = data.markets.length ? t.tradesExecuted / data.markets.length : 0;
 
   return (
-    <div className="min-h-[100svh] bg-[var(--bg)] text-[var(--text)]">
+    // The app shell locks html/body to overflow:hidden (it's a fixed-viewport
+    // experience), so this long report needs to own its own vertical scroll.
+    <div className="h-[100svh] overflow-y-auto bg-[var(--bg)] text-[var(--text)]">
       <div className="mx-auto w-full max-w-[1080px] px-5 py-10 sm:px-8 sm:py-14">
         {/* HERO */}
         <header className="mb-12">
@@ -255,9 +257,10 @@ function ValuePage() {
         </div>
 
         <footer className="mt-16 border-t border-[var(--border)] pt-6 text-[12px] leading-relaxed text-[var(--text-muted)]">
-          Every figure is drawn from on-chain activity indexed by Conviction. Fees and creator
-          earnings are computed from the protocol&rsquo;s own fee rate applied to real trading
-          volume. Updated continuously.
+          Every figure counts only markets created on conviction.company — the volume, trades,
+          creators and traders Conviction brings to the ecosystem, not POV&rsquo;s own. Fees and
+          creator earnings are computed from the protocol&rsquo;s own fee rate applied to that real
+          trading volume. Updated continuously.
         </footer>
       </div>
     </div>
