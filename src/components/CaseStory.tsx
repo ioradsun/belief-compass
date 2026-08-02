@@ -19,8 +19,9 @@ import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { ConvictionSpark } from "@/components/ConvictionSpark";
 import { CaseRoster, StatRow } from "@/components/CaseFile";
-import { FLOW_WINDOW_SHORT } from "@/domain/market-flow";
-import { useDeckWindow } from "@/lib/deck-window";
+import { WindowFilter } from "@/components/WindowFilter";
+import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
+
 
 import { convictionStory, narrateStory, timelineEvents } from "@/domain/conviction-series";
 import { FLOW_WINDOW_PHRASE } from "@/domain/market-flow";
