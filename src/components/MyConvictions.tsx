@@ -129,15 +129,15 @@ function ConvictionCard({
         <span className="num text-[20px] font-semibold leading-none text-[var(--text)]">
           {money(p.value)}
         </span>
-        {p.gainUsd != null &&
-          (Math.abs(p.gainUsd) >= 0.005 ? (
+        {p.deltaUsd != null &&
+          (Math.abs(p.deltaUsd) >= 0.005 ? (
             <span
               className="num ml-auto text-[12px] font-semibold"
-              style={{ color: p.gainUsd > 0 ? "var(--yes)" : "var(--no)" }}
+              style={{ color: p.deltaUsd > 0 ? "var(--yes)" : "var(--no)" }}
             >
-              {signedMoney(p.gainUsd)}
+              {signedMoney(p.deltaUsd)}
               <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">
-                since entered
+                {p.deltaLabel}
               </span>
             </span>
           ) : (
@@ -145,6 +145,7 @@ function ConvictionCard({
               No change
             </span>
           ))}
+
       </div>
 
       {/* 4 — How is the market reacting? Believers (scale + movement), then Pulse. */}
