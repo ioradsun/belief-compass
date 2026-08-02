@@ -105,6 +105,12 @@ export function CaseStory({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+        {/* THE ONE TIMEFRAME — same control, same position as when the timeline is
+        closed, so opening a story never moves or hides it. */}
+        <div className="mb-3 max-w-[300px]">
+          <WindowFilter win={win} onWin={setDeckWindow} />
+        </div>
+
         {/* Headline — the story's one sentence. Side colour is an accent only. */}
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
@@ -139,10 +145,6 @@ export function CaseStory({
           </button>
         </div>
 
-        {/* The one shared timeframe lives in the center panel — echoed here. */}
-        <div className="mt-3 text-[11px] font-semibold tracking-wide text-[var(--text-muted)]">
-          Over {FLOW_WINDOW_SHORT[win]}
-        </div>
 
 
         {/* The three real signals over time — believers, capital, price. */}
