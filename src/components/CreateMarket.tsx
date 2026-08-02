@@ -64,7 +64,7 @@ const MIN_QUESTION = 8;
 export function CreateMarket({
   ethUsd,
   onCreated,
-  onCancel,
+  onCancel: _onCancel,
   onOpenTerms,
 }: {
   ethUsd: number;
@@ -313,18 +313,11 @@ export function CreateMarket({
       {/* 1 · Compact header — pinned. Title carries the earn promise; the
           provenance tag sits inline, top-right. */}
       <div className="flex shrink-0 items-start gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          aria-label="Back"
-          className="mt-0.5 text-[16px] leading-none text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-        >
-          ←
-        </button>
         <h2 className="flex-1 text-[15px] font-semibold leading-snug text-[var(--text)]">
-          Share Your Conviction. Earn 4.5% on Every Trade.
+          State Your Conviction. Earn 4.5% on Every Trade.
         </h2>
       </div>
+
 
 
 
@@ -355,7 +348,7 @@ export function CreateMarket({
               rows={3}
               autoFocus
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder={"State your conviction\n\nWrite a statement people can answer Yes or No."}
+              placeholder={"Write a statement people can answer Yes or No."}
               className="w-full resize-none bg-transparent px-3 pt-2.5 text-[16px] leading-snug text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
             />
             {/* Inside the field: Add media on the left (only until one is
