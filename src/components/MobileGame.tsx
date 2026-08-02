@@ -38,6 +38,7 @@ import { requestConnect } from "@/lib/connect-bridge";
 import { CHAIN_ID } from "@/chain/decoder";
 import { useBuyQuote, useTrade, useTradeReady } from "@/lib/chain-trade";
 import { fmtUsd, usdToWei, type OrderSide } from "@/domain/order";
+import { useDisplayUnit } from "@/lib/display-unit";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
@@ -452,6 +453,7 @@ function BothSides({
   onBack: () => void;
 }) {
   const [open, setOpen] = useState<OrderSide | null>(null);
+  const { unit } = useDisplayUnit();
   const { data: evidence } = useQuery({
     queryKey: ["evidence", marketId],
     queryFn: () => getMarketEvidence({ data: { marketId } }),
@@ -545,7 +547,7 @@ function BothSides({
                         .slice(0, 5)
                         .map((e, i) => (
                           <li key={i} className="text-[14px] text-[var(--text-secondary)]">
-                            {pulseLine(e, ethUsd)}
+                            {pulseLine(e, ethUsd, unit)}
                           </li>
                         ))}
                     </ul>

@@ -696,6 +696,7 @@ function Feed() {
                 rows={rows as unknown as MarketRow[]}
                 window={win}
                 winLabel={winLabel}
+                ethUsd={data?.ethUsd ?? 0}
                 onSelectMarket={selectMarket}
                 selectedPerson={selectedPerson}
                 onSelectPerson={selectPerson}

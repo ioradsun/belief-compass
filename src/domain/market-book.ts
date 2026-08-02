@@ -26,9 +26,13 @@
  * ZERO IO, pure, fully testable.
  */
 import type { TapeTrade } from "./conviction-series";
-import type { VitalityPoint } from "./market-vitality";
 import { FLOW_WINDOW_MS, type FlowWindow } from "./market-flow";
 
+/** One step in an event-driven value history: value `v` at epoch-ms `t`. */
+export interface VitalityPoint {
+  t: number;
+  v: number;
+}
 
 /** Net stance magnitude at/above which a wallet is a directional believer. */
 export const DIRECTIONAL_THRESHOLD = 0.1;
@@ -156,7 +160,6 @@ export function marketBook(tape: TapeTrade[], nowMs: number, win?: FlowWindow): 
   const sorted = tape.filter((t) => Number.isFinite(t.t)).sort((a, b) => a.t - b.t);
   const firstEventAt = sorted.length ? sorted[0].t : null;
   const window = bookWindow(firstEventAt, nowMs, win);
-
 
   const books = new Map<string, Book>();
   let yesB = 0;

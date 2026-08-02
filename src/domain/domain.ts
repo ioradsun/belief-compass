@@ -40,7 +40,9 @@ export interface Trade {
   side: "YES" | "NO";
   direction: Direction;
   token_amount: number; // shares
-  eth_amount: number; // USD-equivalent cost/proceeds (upstream converts)
+  // Acquisition cost / sale proceeds in ETH (position-core folds amount_eth/1e18).
+  // NOT USD — yes_cost/no_cost accumulate ETH; a caller values them at a USD rate.
+  eth_amount: number;
   ts: Date;
 }
 

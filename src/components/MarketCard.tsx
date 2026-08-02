@@ -15,6 +15,7 @@ import { relationshipTone } from "@/lib/dna-labels";
 import { marketVitals, marketBadge, type PulseLevel } from "@/lib/market-vitals";
 import { StoryStrip } from "@/components/StoryStrip";
 import type { MarketStory } from "@/domain/story";
+import { formatMoney, type DisplayUnit } from "@/domain/money";
 
 // Pulse bar colour by aliveness. Amber for a living market (kept off the
 // YES-emerald / NO-rose axis so it never reads as a side), fading to muted as
@@ -87,9 +88,13 @@ function ago(iso: string) {
 function personName(p: Pulse) {
   return p.name || shortWallet(p.wallet);
 }
-export function pulseLine(p: Pulse, ethUsd: number) {
-  const usd = ethUsd > 0 ? p.eth * ethUsd : 0;
-  const size = usd > 0 ? fmtUsd(usd) : `${p.eth.toFixed(3)} ETH`;
+export function pulseLine(p: Pulse, ethUsd: number, unit: DisplayUnit = "USD") {
+  // Trade size is ETH-native; show it in the viewer's chosen unit. When USD is
+  // wanted but no rate is known, fall back to the raw ETH so a size still shows.
+  const size =
+    unit === "USD" && !(ethUsd > 0)
+      ? `${p.eth.toFixed(3)} ETH`
+      : formatMoney(p.eth, { from: "ETH", to: unit, ethUsd });
   const verb = p.type === "reduced" ? "cut" : "backed";
   return `${personName(p)} ${verb} ${p.side} · ${size}`;
 }

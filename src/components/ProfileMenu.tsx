@@ -28,6 +28,8 @@ const WalletIdentity = lazy(() =>
 );
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 import { requestDisconnect, requestSwitchAccount } from "@/lib/connect-bridge";
+import { useDisplayUnit } from "@/lib/display-unit";
+import { formatRate, type DisplayUnit } from "@/domain/money";
 
 /** Base is the one chain this app trades on. */
 const NETWORK = "Base";
@@ -253,7 +255,9 @@ export function ProfileMenu({
           onClose={() => setPanel(null)}
         >
           <Suspense
-            fallback={<div className="py-6 text-center text-[12px] text-[var(--text-muted)]">…</div>}
+            fallback={
+              <div className="py-6 text-center text-[12px] text-[var(--text-muted)]">…</div>
+            }
           >
             {panel === "edit" && <ProfileEditor wallet={me} fallbackName={name} />}
             {panel === "earnings" && <CreatorEarnings ethUsd={ethUsd} />}
@@ -267,7 +271,11 @@ export function ProfileMenu({
             )}
           </Suspense>
           {panel === "settings" && (
-            <SettingsPanel onOpenTerms={onOpenTerms} onClose={() => setPanel(null)} />
+            <SettingsPanel
+              onOpenTerms={onOpenTerms}
+              onClose={() => setPanel(null)}
+              ethUsd={ethUsd}
+            />
           )}
         </Modal>
       )}
@@ -346,12 +354,16 @@ function Modal({
 function SettingsPanel({
   onOpenTerms,
   onClose,
+  ethUsd = 0,
 }: {
   onOpenTerms?: () => void;
   onClose: () => void;
+  ethUsd?: number;
 }) {
   return (
     <div className="space-y-1">
+      <CurrencySetting ethUsd={ethUsd} />
+      <Divider />
       {onOpenTerms && (
         <button
           type="button"
@@ -364,6 +376,47 @@ function SettingsPanel({
           Terms &amp; risk
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Display currency — one universal switch. Every money figure in the app (worth,
+ * cost, committed capital, volume, fees) reads this and converts through the one
+ * live rate, so the viewer can see the whole product in USD or in ETH. The rate
+ * in use is shown plainly beneath, so the conversion is never a black box.
+ */
+function CurrencySetting({ ethUsd }: { ethUsd: number }) {
+  const { unit, setUnit } = useDisplayUnit();
+  const rate = formatRate(ethUsd);
+  const opts: DisplayUnit[] = ["USD", "ETH"];
+  return (
+    <div className="px-1 py-1.5">
+      <div className="mb-1.5 text-[13px] text-[var(--text)]">Display currency</div>
+      <div
+        className="flex rounded-[10px] p-0.5"
+        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+        role="radiogroup"
+        aria-label="Display currency"
+      >
+        {opts.map((o) => (
+          <button
+            key={o}
+            type="button"
+            role="radio"
+            aria-checked={unit === o}
+            onClick={() => setUnit(o)}
+            className={`flex-1 rounded-[8px] px-3 py-1.5 text-[12px] font-medium transition-colors ${
+              unit === o ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
+            }`}
+          >
+            {o === "USD" ? "USD ($)" : "ETH (Ξ)"}
+          </button>
+        ))}
+      </div>
+      <div className="num mt-1.5 text-[11px] text-[var(--text-muted)]">
+        {rate ?? "Live rate unavailable"}
+      </div>
     </div>
   );
 }

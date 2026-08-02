@@ -12,11 +12,16 @@
  * mobile; only the layout (and the sparkline size) changes.
  */
 import { useMemo } from "react";
-import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
+import {
+  marketBook,
+  type BookMetric,
+  type BookWindow,
+  type VitalityPoint,
+} from "@/domain/market-book";
 import type { TapeTrade } from "@/domain/conviction-series";
-import type { VitalityPoint } from "@/domain/market-vitality";
 import type { FlowWindow } from "@/domain/market-flow";
-
+import { formatMoney } from "@/domain/money";
+import { useDisplayUnit } from "@/lib/display-unit";
 
 /** Below these bases a percentage is noise, so we show the absolute change only. */
 const BELIEVER_PCT_MIN = 5;
@@ -25,8 +30,8 @@ const CAPITAL_PCT_MIN_USD = 10;
 const dirTone = (d: "up" | "down" | "flat"): string =>
   d === "up" ? "var(--yes)" : d === "down" ? "var(--no)" : "var(--text-muted)";
 
-const fmtMoney = (usd: number) =>
-  usd >= 1000 ? `$${Math.round(usd).toLocaleString("en-US")}` : `$${usd.toFixed(usd < 10 ? 2 : 0)}`;
+/** Formats an ETH-native capital amount in the viewer's chosen unit. */
+type CapFmt = (eth: number, signed?: boolean) => string;
 
 // The sparkline answers only up / down / flat. Its box is set by the caller's
 // wrapper (small inline on mobile, wider on desktop); the path fills it.
@@ -128,12 +133,19 @@ function believerCopy(m: BookMetric, w: BookWindow): RowCopy {
   };
 }
 
-function capitalCopy(m: BookMetric, w: BookWindow, usd: (eth: number) => number): RowCopy {
+// Materiality (direction, the percentage floor) is judged in USD so a display in
+// ETH never changes what counts as a real move; only the shown figure converts.
+function capitalCopy(
+  m: BookMetric,
+  w: BookWindow,
+  usd: (eth: number) => number,
+  money: CapFmt,
+): RowCopy {
   const baseUsd = usd(m.base);
   const deltaUsd = usd(m.delta);
   const direction = deltaUsd > 0.5 ? "up" : deltaUsd < -0.5 ? "down" : "flat";
   if (baseUsd < 0.5 && usd(m.current) > 0.5) {
-    return { pct: null, absolute: `First capital · ${fmtMoney(usd(m.current))}`, direction: "up" };
+    return { pct: null, absolute: `First capital · ${money(m.current)}`, direction: "up" };
   }
   const pct =
     baseUsd >= CAPITAL_PCT_MIN_USD
@@ -143,7 +155,7 @@ function capitalCopy(m: BookMetric, w: BookWindow, usd: (eth: number) => number)
     return { pct: pct ? "0%" : null, absolute: `No change ${w.since}`, direction: "flat" };
   return {
     pct,
-    absolute: `${deltaUsd > 0 ? "+" : "−"}${fmtMoney(Math.abs(deltaUsd))} committed ${w.since}`,
+    absolute: `${money(m.delta, true)} committed ${w.since}`,
     direction,
   };
 }
@@ -218,8 +230,11 @@ export function MarketMomentum({
   nowMs?: number;
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs, win), [tape, nowMs, win]);
-
+  const { unit } = useDisplayUnit();
   const usd = (eth: number) => eth * (ethUsd > 0 ? ethUsd : 0);
+  // Capital is ETH-native; one rate takes it to the viewer's chosen display unit.
+  const money: CapFmt = (eth, signed) =>
+    formatMoney(eth, { from: "ETH", to: unit, ethUsd, signed });
 
   const b = book.believers.market;
   const c = book.capitalEth.market;
@@ -236,9 +251,9 @@ export function MarketMomentum({
         points={b.series}
       />
       <MomentumMetric
-        total={fmtMoney(usd(c.current))}
+        total={money(c.current)}
         unit="committed"
-        copy={capitalCopy(c, book.window, usd)}
+        copy={capitalCopy(c, book.window, usd, money)}
         points={c.series}
       />
     </section>

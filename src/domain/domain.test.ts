@@ -76,6 +76,38 @@ describe("applyTrade — trade-driven state", () => {
   });
 });
 
+describe("cost basis — unit-agnostic weighted average (guards the ETH/USD reducer bug)", () => {
+  // The reducer folds each trade's eth_amount VERBATIM. It must never scale cost
+  // by a price/USD rate — that conflation was the PR #95 "gain in ETH vs USD" bug.
+  // These lock the two properties that keep the basis honest.
+
+  it("accumulates buy cost verbatim — no price/rate ever applied inside the fold", () => {
+    // Three buys at very different price-per-share; the stored cost is the plain
+    // sum of eth_amount, independent of how many shares each ETH bought.
+    const r = reduce([
+      buy("YES", 100, 0.5, "2026-01-01"), // 200 shares/ETH
+      buy("YES", 10, 0.5, "2026-01-02"), //   20 shares/ETH
+      buy("YES", 1000, 0.5, "2026-01-03"), // 2000 shares/ETH
+    ]);
+    expect(r.yes_shares).toBe(1110);
+    expect(r.yes_cost).toBeCloseTo(1.5, 12); // 0.5 + 0.5 + 0.5, units untouched
+  });
+
+  it("remaining cost basis is invariant to SELL proceeds — only the sold fraction matters", () => {
+    // Two identical positions, one sold at a tiny proceed, one at a huge proceed.
+    // Remaining cost basis must be identical: proceeds are realized cash-out, they
+    // do NOT rewrite what the still-held shares cost.
+    const open = () => applyTrade(emptyRow(), buy("YES", 100, 80, "2026-01-01"));
+    const cheap = applyTrade(open(), sell("YES", 40, 0.01, "2026-02-01"));
+    const rich = applyTrade(open(), sell("YES", 40, 999, "2026-02-01"));
+    expect(cheap.yes_cost).toBeCloseTo(48, 12); // 80 · (1 − 40/100)
+    expect(rich.yes_cost).toBeCloseTo(48, 12);
+    expect(cheap.yes_cost).toBe(rich.yes_cost);
+    // And the average cost-per-remaining-share is conserved across the partial sell.
+    expect(cheap.yes_cost / cheap.yes_shares).toBeCloseTo(80 / 100, 12);
+  });
+});
+
 describe("evaluate — price-driven view", () => {
   it("computes stance and side from live prices", () => {
     const r = applyTrade(emptyRow(), buy("YES", 100, 50, "2026-01-01"));
