@@ -162,9 +162,13 @@ function ConvictionCard({
               {p.believers.toLocaleString("en-US")}
             </span>
             <span className="text-[11px] text-[var(--text-muted)]">Market Believers</span>
-            {p.newToday != null && p.newToday > 0 && (
+            {p.newInWindow != null && p.newInWindow > 0 && (
               <span className="num ml-auto text-[11px] font-semibold text-[var(--yes)]">
-                +{p.newToday.toLocaleString("en-US")} today
+                +{p.newInWindow.toLocaleString("en-US")}
+                {p.believers != null && p.believers - p.newInWindow > 0
+                  ? ` (+${Math.round((p.newInWindow / (p.believers - p.newInWindow)) * 100)}%)`
+                  : ""}
+                <span className="ml-1 font-normal text-[var(--text-muted)]">{p.windowLabel}</span>
               </span>
             )}
           </div>
