@@ -429,9 +429,6 @@ export function CreateMarket({
 
 
 
-        {/* 4 · Creator earnings — one quiet line. */}
-        <CreatorEarnings bps={econ.creatorFeeBps} />
-
         {belowMin && amount > 0 && (
           <p className="text-[12px] text-[var(--no)]">Seed is below the contract minimum.</p>
         )}
