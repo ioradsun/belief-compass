@@ -640,14 +640,18 @@ export function MarketDeck({
 
 /**
  * Who opened the question — a real identity, not a raw address. Avatar + name
- * (resolved server-side in one request), with fresh markets reading "Just opened
- * this market". Clicking opens the creator's profile, never a block explorer.
+ * (resolved server-side in one request), plus how old the market reads in plain
+ * words. Hovering the face reveals the viewer's shared Conviction DNA with the
+ * creator (relationship, agreement, shared beliefs) when one exists. Clicking
+ * opens the creator's profile, never a block explorer.
  */
 function MarketByline({
   onchainId,
+  viewerWallet,
   onSelectPerson,
 }: {
   onchainId: number;
+  viewerWallet?: string;
   onSelectPerson?: (wallet: string) => void;
 }) {
   const { data } = useQuery({
@@ -655,23 +659,40 @@ function MarketByline({
     queryFn: () => getConvictionMarket({ data: { onchainId } }),
     staleTime: 5 * 60_000,
   });
+  // Reuses the deck's existing network query — no extra request.
+  const { data: net } = useQuery({
+    queryKey: ["network", viewerWallet ?? null, "all", "relevant", ""],
+    queryFn: () => getNetwork({ data: { wallet: viewerWallet, limit: 60 } }),
+    enabled: !!viewerWallet,
+    staleTime: 60_000,
+  });
+
   const c = data?.creator ?? null;
+  const createdAt = data?.createdAt ?? c?.createdAt ?? null;
   if (!c) return null;
 
-  const fresh = c.createdAt ? marketFreshness(Date.now() - new Date(c.createdAt).getTime()) : null;
-  const when = fresh?.fresh
-    ? "just opened this market"
-    : c.createdAt
-      ? `opened ${ageWords(Date.now() - new Date(c.createdAt).getTime())}`
-      : "opened this market";
+  const when = createdAt
+    ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()).toLowerCase()
+    : "opened this market";
   const clickable = !!onSelectPerson;
+
+  const match =
+    viewerWallet && viewerWallet.toLowerCase() !== c.wallet.toLowerCase()
+      ? (net?.people ?? []).find((p) => p.wallet.toLowerCase() === c.wallet.toLowerCase())
+      : undefined;
+  const dna =
+    match && match.relationship !== "insufficient"
+      ? `${RELATIONSHIP_TEXT[match.relationship]} · ${match.agreement}% agreement across ${match.sharedBeliefs} shared beliefs`
+      : null;
+  const tone = match ? relationshipTone(match.relationship) : null;
 
   return (
     <button
       type="button"
       disabled={!clickable}
       onClick={() => onSelectPerson?.(c.wallet)}
-      className="mt-2 flex items-center gap-2 text-left disabled:cursor-default"
+      title={dna ? `Your Conviction DNA with ${c.name}: ${dna}` : undefined}
+      className="group relative mt-2 flex items-center gap-2 text-left disabled:cursor-default"
     >
       {c.avatarUrl ? (
         <img src={c.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
@@ -690,9 +711,23 @@ function MarketByline({
         </span>
         <span className="text-[var(--text-muted)]"> · {when}</span>
       </span>
+      {dna && tone && (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-lg group-hover:block"
+          style={{
+            color: tone.fg,
+            background: "var(--surface)",
+            border: `1px solid color-mix(in oklab, ${tone.fg} 35%, transparent)`,
+          }}
+        >
+          {dna}
+        </span>
+      )}
     </button>
   );
 }
+
 
 function ageWords(ms: number): string {
   const h = Math.max(0, ms) / 3_600_000;
