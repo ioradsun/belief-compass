@@ -303,7 +303,43 @@ export function OmniHeader({
           </span>
         </button>
 
-        <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-4">
+        {/* Mobile: the primary action owns the middle of the bar. */}
+        {center && (
+          <div
+            className={`${expanded ? "hidden" : "flex"} min-w-0 flex-1 items-center justify-center lg:hidden`}
+          >
+            {center}
+          </div>
+        )}
+
+        {/* Mobile: search is a tap target until you need it. */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(true);
+            setOpen(true);
+            requestAnimationFrame(() => inputRef.current?.focus());
+          }}
+          aria-label="Search markets and people"
+          className={`${expanded ? "hidden" : "grid"} h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--border)] text-[var(--text-secondary)] lg:hidden`}
+        >
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" strokeLinecap="round" />
+          </svg>
+        </button>
+
+        <div
+          className={`${expanded ? "flex" : "hidden"} h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 lg:flex`}
+        >
           <svg
             aria-hidden
             viewBox="0 0 24 24"
@@ -316,21 +352,49 @@ export function OmniHeader({
             <path d="m20 20-3.5-3.5" strokeLinecap="round" />
           </svg>
           <input
+            ref={inputRef}
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
-            onKeyDown={onKeyDown}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setExpanded(false);
+              onKeyDown(e);
+            }}
             placeholder="Search markets and people"
             aria-label="Search markets and people"
             className="min-w-0 flex-1 bg-transparent text-sm text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
           />
+          {expanded && (
+            <button
+              type="button"
+              onClick={() => {
+                setQ("");
+                setOpen(false);
+                setExpanded(false);
+              }}
+              aria-label="Close search"
+              className="shrink-0 text-[var(--text-muted)] lg:hidden"
+            >
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {right}
       </div>
+
 
       {/* Results */}
       {showResults && (
