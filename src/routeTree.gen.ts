@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ValueRouteImport } from './routes/value'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AdminRouteImport } from './routes/admin'
@@ -23,6 +24,11 @@ import { Route as ApiPublicJobsMarketRefresherRouteImport } from './routes/api/p
 import { Route as ApiPublicJobsChainPollerRouteImport } from './routes/api/public/jobs/chain-poller'
 import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/public/jobs/belief-rollup'
 
+const ValueRoute = ValueRouteImport.update({
+  id: '/value',
+  path: '/value',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/value': typeof ValueRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/value': typeof ValueRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/value': typeof ValueRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -149,6 +158,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/sitemap.xml'
     | '/terms'
+    | '/value'
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -164,6 +174,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/sitemap.xml'
     | '/terms'
+    | '/value'
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -179,6 +190,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/sitemap.xml'
     | '/terms'
+    | '/value'
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -195,6 +207,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsRoute: typeof TermsRoute
+  ValueRoute: typeof ValueRoute
   ApiPublicBuildIdRoute: typeof ApiPublicBuildIdRoute
   ApiPublicJobsBeliefRollupRoute: typeof ApiPublicJobsBeliefRollupRoute
   ApiPublicJobsChainPollerRoute: typeof ApiPublicJobsChainPollerRoute
@@ -208,6 +221,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/value': {
+      id: '/value'
+      path: '/value'
+      fullPath: '/value'
+      preLoaderRoute: typeof ValueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/terms': {
       id: '/terms'
       path: '/terms'
@@ -307,6 +327,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsRoute: TermsRoute,
+  ValueRoute: ValueRoute,
   ApiPublicBuildIdRoute: ApiPublicBuildIdRoute,
   ApiPublicJobsBeliefRollupRoute: ApiPublicJobsBeliefRollupRoute,
   ApiPublicJobsChainPollerRoute: ApiPublicJobsChainPollerRoute,
