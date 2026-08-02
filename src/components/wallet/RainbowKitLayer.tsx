@@ -37,7 +37,7 @@ export default function RainbowKitLayer() {
  */
 function RainbowKitBridge() {
   const { openConnectModal } = useConnectModal();
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, connector } = useAccount();
   const { disconnectAsync } = useDisconnect();
 
   useEffect(() => {
@@ -53,15 +53,50 @@ function RainbowKitBridge() {
       }
       clearDisconnectedWalletFromUrl(address);
     };
+    /**
+     * Account switching lives in the wallet, not in us: ask the connected
+     * provider to re-prompt for `eth_accounts` permission, which is what opens
+     * Coinbase's / MetaMask's own account picker. wagmi then picks up the new
+     * active account through `accountsChanged`. Providers that don't implement
+     * the permission RPC fall back to a full reconnect.
+     */
+    const onSwitch = async () => {
+      if (!isConnected) {
+        openConnectModal?.();
+        return;
+      }
+      try {
+        const provider = (await connector?.getProvider?.()) as
+          | { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> }
+          | undefined;
+        if (!provider?.request) throw new Error("no provider");
+        await provider.request({
+          method: "wallet_requestPermissions",
+          params: [{ eth_accounts: {} }],
+        });
+      } catch (err) {
+        const rejected = /reject|denied|4001/i.test(String((err as Error)?.message ?? err));
+        if (rejected) return;
+        try {
+          await disconnectAsync();
+        } catch {
+          /* ignore */
+        }
+        openConnectModal?.();
+      }
+    };
     window.addEventListener(CONNECT_EVENT, onOpen);
     window.addEventListener(DISCONNECT_EVENT, onOut);
+    window.addEventListener(SWITCH_ACCOUNT_EVENT, onSwitch);
     // A click that landed before this layer mounted still opens the modal.
     if (!isConnected && takePendingConnect() && openConnectModal) openConnectModal();
     return () => {
       window.removeEventListener(CONNECT_EVENT, onOpen);
       window.removeEventListener(DISCONNECT_EVENT, onOut);
+      window.removeEventListener(SWITCH_ACCOUNT_EVENT, onSwitch);
     };
-  }, [openConnectModal, isConnected, address, disconnectAsync]);
+  }, [openConnectModal, isConnected, address, disconnectAsync, connector]);
+
 
   return null;
 }
