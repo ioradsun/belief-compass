@@ -119,7 +119,7 @@ export function CaseColumn({
   // Headline Believers + Capital come from the CANONICAL reducer (the same one the
   // center uses), so YES + NO always equals the center's Market total. Price is a
   // per-share fact, not a total, so it stays with the side summary.
-  const book = useMemo(() => (tape?.length ? marketBook(tape, Date.now()) : null), [tape]);
+  const book = useMemo(() => (tape?.length ? marketBook(tape, Date.now(), win) : null), [tape, win]);
   const sideKey = side === "YES" ? "yes" : "no";
   const believerMetric = book?.believers[sideKey] ?? null;
   const capitalMetric = book?.capitalEth[sideKey] ?? null;
