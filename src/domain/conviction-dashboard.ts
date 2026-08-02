@@ -213,3 +213,52 @@ export function gainBreakdown(sources: GainSource[]): Array<GainSource & { pct: 
     pct: x.usd > 0 && positiveTotal > 0 ? Math.round((x.usd / positiveTotal) * 100) : null,
   }));
 }
+
+/**
+ * The Journey — a wallet's whole economic story as one reconciling identity.
+ *
+ *   Total Return = Current Value + Total Withdrawn + Creator Earnings
+ *   Net Profit   = Total Return − Total Invested
+ *
+ * Nothing is inferred and nothing is double counted: invested is cumulative
+ * lifetime capital in (never netted against withdrawals), withdrawn is cumulative
+ * sale proceeds, current value is the POV valuation of open positions, and creator
+ * earnings are contract truth. ROI is only defined against real invested capital.
+ */
+export interface JourneyMath {
+  investedUsd: number;
+  currentValueUsd: number;
+  withdrawnUsd: number;
+  creatorUsd: number;
+  totalReturnUsd: number;
+  netProfitUsd: number;
+  /** netProfit / invested × 100, or null when nothing has ever been invested. */
+  roiPct: number | null;
+  /** True when the wallet has no economic history at all. */
+  empty: boolean;
+}
+
+export function journeyMath(input: {
+  investedUsd: number;
+  currentValueUsd: number;
+  withdrawnUsd: number;
+  creatorUsd: number;
+}): JourneyMath {
+  const n = (v: number) => (Number.isFinite(v) ? v : 0);
+  const investedUsd = n(input.investedUsd);
+  const currentValueUsd = n(input.currentValueUsd);
+  const withdrawnUsd = n(input.withdrawnUsd);
+  const creatorUsd = n(input.creatorUsd);
+  const totalReturnUsd = currentValueUsd + withdrawnUsd + creatorUsd;
+  const netProfitUsd = totalReturnUsd - investedUsd;
+  return {
+    investedUsd,
+    currentValueUsd,
+    withdrawnUsd,
+    creatorUsd,
+    totalReturnUsd,
+    netProfitUsd,
+    roiPct: investedUsd > 0 ? (netProfitUsd / investedUsd) * 100 : null,
+    empty: investedUsd <= 0 && totalReturnUsd <= 0,
+  };
+}
