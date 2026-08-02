@@ -16,6 +16,8 @@ import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
 
 import { DeckSkeleton } from "@/components/DeckSkeleton";
+import { PanelBoundary } from "@/components/PanelBoundary";
+
 import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
 
 // Split off the surfaces that never render for the SSR/desktop first paint.
