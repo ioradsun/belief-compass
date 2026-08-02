@@ -103,6 +103,7 @@ export function CreateMarket({
   const seedWei = usdToWei(amount, ethUsd);
   const belowMin = econ.minSeedWei != null && seedWei < econ.minSeedWei;
   const overBalance = balance.wei != null && seedWei > balance.wei;
+  const availUsd = balance.eth != null && ethUsd > 0 ? balance.eth * ethUsd : null;
 
 
 
