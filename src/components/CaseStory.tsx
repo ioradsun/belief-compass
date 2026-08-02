@@ -12,7 +12,7 @@
  * It fetches nothing new: the same React Query keys the deck and the Case File
  * columns already run supply the tape, the believers and the network.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketChange } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
@@ -22,7 +22,7 @@ import { CaseRoster, StatRow } from "@/components/CaseFile";
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { convictionStory, narrateStory, timelineEvents } from "@/domain/conviction-series";
-import { FLOW_WINDOW_PHRASE, type FlowWindow } from "@/domain/market-flow";
+import { FLOW_WINDOW_PHRASE } from "@/domain/market-flow";
 import { sideCaseSummary } from "@/domain/case-file";
 import { fmtUsd } from "@/domain/order";
 
