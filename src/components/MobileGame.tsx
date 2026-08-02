@@ -107,7 +107,11 @@ export function MobileGame({
     },
   });
 
+  // The one on-screen timeframe, shared with the desktop deck and both cases.
+  const deckWin = useDeckWindow();
+
   const { data: change } = useQuery({
+
     queryKey: ["market-change", marketId],
     queryFn: () => getMarketChange({ data: { id: marketId } }),
     staleTime: 10_000,
