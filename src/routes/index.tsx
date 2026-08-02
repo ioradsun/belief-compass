@@ -624,7 +624,17 @@ function Feed() {
             onSelectMarket={selectMarket}
             onSelectPerson={selectPerson}
             onOpenMenu={() => setMenuOpen(true)}
+            center={
+              <button
+                type="button"
+                onClick={openCreate}
+                className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full bg-[var(--text)] px-4 text-[13px] font-semibold text-[var(--bg)]"
+              >
+                <span aria-hidden="true">+</span> Conviction
+              </button>
+            }
           />
+
         }
         profile={
           wallet ? (
