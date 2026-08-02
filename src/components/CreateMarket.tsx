@@ -294,8 +294,6 @@ export function CreateMarket({
       onPaste={(e) => {
         const f = e.clipboardData.files?.[0];
         if (f) return void pickFile(f);
-        const text = e.clipboardData.getData("text")?.trim();
-        if (text?.startsWith("https://")) setAttachment({ kind: "link", url: text });
       }}
       onDragEnter={(e) => {
         e.preventDefault();
@@ -603,27 +601,8 @@ function MediaChip({ attachment, onRemove }: { attachment: Attachment; onRemove:
   );
 }
 
-/** One quiet inline row; the explanation lives behind a hover/tap. */
-function CreatorEarnings({ bps }: { bps: number | null }) {
-  if (bps == null) return null;
-  return (
-    <div
-      className="flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)]"
-      title={rewardLine(bps)}
-    >
-      <span>Creator earnings</span>
-      <span className="text-[var(--text-muted)]">·</span>
-      <span className="num font-semibold text-[var(--text)]">{(bps / 100).toFixed(2)}%</span>
-      <span
-        className="grid h-3.5 w-3.5 place-items-center rounded-full text-[9px] text-[var(--text-muted)]"
-        style={{ border: "1px solid var(--border)" }}
-        aria-hidden
-      >
-        ?
-      </span>
-    </div>
-  );
-}
+
+
 
 /** Read a clip's duration from the browser before we ever upload it. */
 function probeDuration(url: string, kind: "audio" | "video"): Promise<number | null> {
