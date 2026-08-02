@@ -45,12 +45,6 @@ import { assembleRevealInput } from "@/lib/reveal-input";
 const money = (usd: number) =>
   usd >= 1000 ? `$${Math.round(usd).toLocaleString("en-US")}` : `$${usd.toFixed(usd < 10 ? 2 : 0)}`;
 
-function ago(ms: number): string {
-  const h = Math.max(0, ms) / 3_600_000;
-  if (h < 1) return `${Math.max(1, Math.round(h * 60))}m ago`;
-  if (h < 48) return `${Math.round(h)}h ago`;
-  return `${Math.round(h / 24)}d ago`;
-}
 
 type Phase = "question" | "passed" | "sides";
 
