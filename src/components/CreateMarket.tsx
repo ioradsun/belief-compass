@@ -104,12 +104,8 @@ export function CreateMarket({
   const belowMin = econ.minSeedWei != null && seedWei < econ.minSeedWei;
   const overBalance = balance.wei != null && seedWei > balance.wei;
 
-  // Max leaves a little ETH for gas so the seed itself can't spend the wallet dry.
-  const setMax = useCallback(() => {
-    if (balance.wei == null || ethUsd <= 0) return;
-    const availUsd = (Number(balance.wei) / 1e18) * ethUsd;
-    setAmount(Math.max(0, Math.floor(availUsd * 0.99 * 100) / 100));
-  }, [balance.wei, ethUsd]);
+
+
 
   // Debounced AI review + duplicate search. Advisory only — never blocks the button.
   const [debounced, setDebounced] = useState("");
@@ -405,7 +401,7 @@ export function CreateMarket({
             />
           </div>
           <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
-          <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} onMax={setMax} />
+          <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} />
         </div>
 
 
