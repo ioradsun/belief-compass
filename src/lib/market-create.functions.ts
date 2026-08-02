@@ -309,13 +309,45 @@ export const getConvictionMarket = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const { serviceClient } = await import("@/lib/supabase-clients");
     const db = serviceClient();
+
+    // Every market has an author and a birthday — POV-sourced ones live in
+    // `markets`. Resolve that first so the byline/age never goes blank on a
+    // market we didn't create ourselves.
+    const povIdentity = async (): Promise<{
+      creator: MarketCreatorIdentity | null;
+      createdAt: string | null;
+    }> => {
+      const { data: m } = await db
+        .from("markets")
+        .select("author_wallet, author_name, author_pfp, created_at, first_seen")
+        .eq("onchain_id", data.onchainId)
+        .maybeSingle();
+      if (!m) return { creator: null, createdAt: null };
+      const createdAt = (m.created_at as string | null) ?? (m.first_seen as string | null) ?? null;
+      const w = m.author_wallet ? String(m.author_wallet).toLowerCase() : null;
+      if (!w) return { creator: null, createdAt };
+      const { resolveProfiles } = await import("@/lib/profiles.server");
+      const { aliasFor } = await import("@/lib/wallet-identity");
+      const prof = (await resolveProfiles([w], 4)).get(w);
+      return {
+        creator: {
+          wallet: w,
+          name: prof?.displayName ?? (m.author_name as string | null) ?? aliasFor(w),
+          avatarUrl: prof?.pfpUrl ?? (m.author_pfp as string | null) ?? null,
+          createdAt,
+        },
+        createdAt,
+      };
+    };
+
     const { data: row } = await db
       .from("conviction_markets")
       .select("question_id, question, description, category, media, creator_wallet, created_at, hidden, moderation_status, status")
       .eq("onchain_id", data.onchainId)
       .maybeSingle();
     if (!row || row.status !== "active" || row.hidden || row.moderation_status === "blocked") {
-      return { market: null };
+      const pov = await povIdentity();
+      return { market: null, creator: pov.creator, createdAt: pov.createdAt };
     }
     const media = row.media as { kind?: string; path?: string } | null;
     let url: string | null = null;
@@ -328,6 +360,7 @@ export const getConvictionMarket = createServerFn({ method: "GET" })
     // profile lookup), so the byline can render an avatar + name instead of a
     // shortened wallet. Falls back to the deterministic alias, then the wallet.
     let creator: MarketCreatorIdentity | null = null;
+    const createdAt = (row.created_at as string | null) ?? null;
     const cw = row.creator_wallet ? String(row.creator_wallet).toLowerCase() : null;
     if (cw) {
       const { resolveProfiles } = await import("@/lib/profiles.server");
@@ -337,11 +370,12 @@ export const getConvictionMarket = createServerFn({ method: "GET" })
         wallet: cw,
         name: prof?.displayName ?? aliasFor(cw),
         avatarUrl: prof?.pfpUrl ?? null,
-        createdAt: (row.created_at as string | null) ?? null,
+        createdAt,
       };
     }
-    return { market: { ...row, mediaUrl: url }, creator };
+    return { market: { ...row, mediaUrl: url }, creator, createdAt };
   });
+
 
 /** Resolved creator identity for the market byline (one request, profile-aware). */
 export interface MarketCreatorIdentity {

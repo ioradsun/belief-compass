@@ -16,6 +16,8 @@ import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
 
 import { DeckSkeleton } from "@/components/DeckSkeleton";
+import { PanelBoundary } from "@/components/PanelBoundary";
+
 import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
 
 // Split off the surfaces that never render for the SSR/desktop first paint.
@@ -45,6 +47,9 @@ const PersonProfile = lazy(() =>
 );
 const DnaOverview = lazy(() =>
   import("@/components/DnaOverview").then((m) => ({ default: m.DnaOverview })),
+);
+const ConvictionDashboard = lazy(() =>
+  import("@/components/ConvictionDashboard").then((m) => ({ default: m.ConvictionDashboard })),
 );
 // Phase 5: the SERVER owns opportunity classification + score. The client only
 // filters by the canonical type and reads the precomputed order — no scoreFeed().
@@ -87,6 +92,9 @@ import { OmniHeader } from "@/components/OmniHeader";
 import { ProfileMenu } from "@/components/ProfileMenu";
 
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
+import { useAccount } from "wagmi";
+import { usePositionStream } from "@/lib/realtime/use-position-stream";
+import { usePredictivePrefetch } from "@/lib/realtime/use-predictive-prefetch";
 import { useIsDesktop } from "@/hooks/use-mobile";
 import { LandingPanel } from "@/components/LandingPanel";
 import { useLandingPanelState } from "@/hooks/useLandingPanelState";
@@ -115,8 +123,18 @@ const feedQO = (wallet: string | undefined, window: VolumeWindow = "24h", lens =
           ...feedSession(),
         },
       }),
-    // Prices, capital and volume re-poll so the cards move on their own.
-    refetchInterval: 8_000,
+    // The realtime coordinator (startRealtime) now moves each card's canonical
+    // market_state fields in place over one socket, so this poll no longer owns
+    // "the cards move." It is a slow STRUCTURAL reconcile: it catches what the
+    // stream can't patch — feed ordering, a newly created market entering, the
+    // house idea, and tribe faces — and re-syncs after a dropped socket.
+    refetchInterval: 20_000,
+    // The SSR loader hands this query a real, server-fetched payload. Without a
+    // staleTime that data is stale the instant it lands, so hydration fires an
+    // immediate duplicate request for bytes we already shipped in the HTML.
+    // 15s (< the 20s reconcile) means: adopt the server snapshot, then keep the
+    // normal poll cadence.
+    staleTime: 15_000,
     // Never blank the feed while a poll (or a window switch) is in flight.
     placeholderData: (prev) => prev,
   });
@@ -126,7 +144,9 @@ const pulsesQO = (ids: number[]) =>
     queryKey: ["market-pulses", ids.join(",")],
     queryFn: async () => await listMarketPulses({ data: { ids: ids.slice(0, 120) } }),
     enabled: ids.length > 0,
-    refetchInterval: 8_000,
+    // The events stream refetches this the moment one of these markets trades;
+    // the interval is now just a slow safety reconcile.
+    refetchInterval: 30_000,
     placeholderData: (prev) => prev,
   });
 
@@ -139,6 +159,7 @@ type Search = {
   create?: boolean;
   terms?: boolean;
   case?: boolean;
+  dash?: boolean;
 };
 
 export const Route = createFileRoute("/")({
@@ -155,6 +176,8 @@ export const Route = createFileRoute("/")({
     terms: search.terms === true || search.terms === "1" ? true : undefined,
     // Case File mode — preserved in the URL so it survives market switches + back/forward.
     case: search.case === true || search.case === "1" ? true : undefined,
+    // Conviction Dashboard — the financial story, a center-panel destination.
+    dash: search.dash === true || search.dash === "1" ? true : undefined,
   }),
   head: () => ({
     meta: [
@@ -189,9 +212,11 @@ export const Route = createFileRoute("/")({
         getOpportunityFeed({ data: { window: "24h" } }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 200)),
       ]);
-      return { feed };
+      // fetchedAt travels with the payload so the client can age the snapshot
+      // correctly instead of treating it as "fetched at hydration time".
+      return { feed, fetchedAt: Date.now() };
     } catch {
-      return { feed: null };
+      return { feed: null, fetchedAt: Date.now() };
     }
   },
   staleTime: 10_000,
@@ -219,10 +244,22 @@ function Feed() {
     create: createOpen,
     terms: termsOpen,
     case: caseOpen,
+    dash: dashOpen,
   } = Route.useSearch();
 
   const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
+  // On a return visit wagmi silently reconnects the wallet AFTER hydration. Until
+  // that settles, treat the viewer as "resolving" — not "signed out" — so the left
+  // rail holds neutral space instead of flashing the Connect CTA, then swapping to
+  // positions the moment the wallet appears. A first-time visitor with no stored
+  // connection is 'disconnected' immediately, so their CTA is not delayed.
+  const { status: walletStatus } = useAccount();
+  const walletResolving =
+    !wallet && (walletStatus === "reconnecting" || walletStatus === "connecting");
+  // One viewer-scoped socket keeps the connected wallet's positions live; a
+  // belief change refetches only the mounted position slices (server-valued).
+  usePositionStream(wallet);
   // Case File is DESKTOP-ONLY: a research surface for side-by-side comparison. A
   // phone is for action, so it never exposes Case File (button, columns, or the
   // ?case flag). Desktop is >= lg, where the three columns actually sit together.
@@ -298,6 +335,23 @@ function Feed() {
       search: (prev: Search) => ({
         ...prev,
         dna: true,
+        p: undefined,
+        m: undefined,
+        create: undefined,
+        terms: undefined,
+      }),
+    });
+    setTab("belief");
+    enterProduct();
+  };
+  // The Conviction Dashboard is a center-panel destination (never a modal): it
+  // deep-links, survives refresh, and back returns you to the deck.
+  const openDashboard = () => {
+    navigate({
+      search: (prev: Search) => ({
+        ...prev,
+        dash: true,
+        dna: undefined,
         p: undefined,
         m: undefined,
         create: undefined,
@@ -403,7 +457,11 @@ function Feed() {
     !wallet && win === "24h" && lens === "all" ? (loaderData?.feed ?? undefined) : undefined;
   const { data } = useQuery({
     ...feedQO(wallet, win, lens),
-    ...(initialFeed ? { initialData: initialFeed } : {}),
+    // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
+    // React Query ages it against staleTime instead of refetching on hydration.
+    ...(initialFeed
+      ? { initialData: initialFeed, initialDataUpdatedAt: loaderData?.fetchedAt ?? Date.now() }
+      : {}),
   });
 
   // The server returned a finished sequence: market / market_idea items in
@@ -449,6 +507,8 @@ function Feed() {
   const foundIdx =
     activeMarket == null ? -1 : marketRows.findIndex((r) => Number(r.onchain_id) === activeMarket);
   const currentIdx = Math.max(0, foundIdx);
+  // Warm the immediate neighbors' deck-core so "Next" (and back) feels local.
+  usePredictivePrefetch(ids, currentIdx);
 
   // Forward only — never a carousel. If the current market has left the feed
   // (just decided), the next one is the new top; otherwise it's the following id.
@@ -555,7 +615,7 @@ function Feed() {
   return (
     <div className="flex h-[100svh] w-full flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)] supports-[height:100dvh]:h-[100dvh]">
       <LandingPanel
-        state={landing.hydrated ? landing.state : "collapsed"}
+        state={landing.state}
         onEnter={enterProduct}
         onCollapse={landing.collapse}
         onExpand={landing.expand}
@@ -566,7 +626,17 @@ function Feed() {
             onSelectMarket={selectMarket}
             onSelectPerson={selectPerson}
             onOpenMenu={() => setMenuOpen(true)}
+            center={
+              <button
+                type="button"
+                onClick={openCreate}
+                className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full bg-[var(--text)] px-4 text-[13px] font-semibold text-[var(--bg)]"
+              >
+                <span aria-hidden="true">+</span> Conviction
+              </button>
+            }
           />
+
         }
         profile={
           wallet ? (
@@ -574,6 +644,7 @@ function Feed() {
               wallet={wallet}
               onViewProfile={selectPerson}
               onOpenTerms={openTerms}
+              onOpenDashboard={openDashboard}
               ethUsd={data?.ethUsd ?? 0}
             />
           ) : undefined
@@ -604,6 +675,10 @@ function Feed() {
                 onInvestigate={toggleStory}
               />
             </Suspense>
+          ) : walletResolving ? (
+            /* Wallet still reconnecting on load — hold neutral space so the rail
+               never flashes the Connect CTA before positions appear. */
+            <div className="min-h-0 flex-1" aria-hidden />
           ) : !wallet ? (
             /* Signed out: nothing to show but the one thing to do. */
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
@@ -656,15 +731,31 @@ function Feed() {
                   <TermsContent />
                 </Suspense>
               </div>
+            ) : dashOpen ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <Suspense fallback={<DeckSkeleton />}>
+                  <ConvictionDashboard
+                    wallet={wallet}
+                    onSelectMarket={selectMarket}
+                    onCreate={openCreate}
+                    onExplore={() =>
+                      navigate({ search: (prev: Search) => ({ ...prev, dash: undefined }) })
+                    }
+                  />
+                </Suspense>
+              </div>
             ) : createOpen ? (
-              <Suspense fallback={<DeckSkeleton />}>
-                <CreateMarket
-                  ethUsd={data?.ethUsd ?? 0}
-                  onCreated={(marketId) => selectMarket(marketId)}
-                  onCancel={closeCreate}
-                  onOpenTerms={openTerms}
-                />
-              </Suspense>
+              <PanelBoundary label="Create market" onDismiss={closeCreate}>
+                <Suspense fallback={<DeckSkeleton />}>
+                  <CreateMarket
+                    ethUsd={data?.ethUsd ?? 0}
+                    onCreated={(marketId) => selectMarket(marketId)}
+                    onCancel={closeCreate}
+                    onOpenTerms={openTerms}
+                  />
+                </Suspense>
+              </PanelBoundary>
+
             ) : selectedPerson ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <Suspense fallback={<DeckSkeleton />}>

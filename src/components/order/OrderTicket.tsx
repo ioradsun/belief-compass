@@ -31,6 +31,14 @@ import type { useTrade } from "@/lib/chain-trade";
 /** The trade controller the deck owns; the ticket only reads its state + calls it. */
 type TradeApi = ReturnType<typeof useTrade>;
 
+// ONE control system for every order surface — Buy, Buy More, Sell, Create and
+// their Cancel / confirm / receipt bars all use the same height, radius and
+// button language, so moving between them never resizes or shocks.
+const CTRL = "h-[52px] rounded-[12px]"; // every button + the amount field
+const CARD = "rounded-[16px] p-3.5"; // every ticket container
+const PRIMARY_STYLE = { background: "var(--text)", color: "var(--bg)" } as const;
+const GHOST_STYLE = { border: "1px solid var(--border)" } as const;
+
 /** The connected wallet's spendable ETH on Base — one reader for every order surface. */
 export function useSpendableBalance() {
   const { address, isConnected } = useAccount();
@@ -44,7 +52,6 @@ export function useSpendableBalance() {
   return { wei, eth, isConnected, isLoading };
 }
 
-/** Dollar input that accepts decimals (e.g. 0.25, 12.50). */
 /** Trim an ETH amount to at most 6 decimals for the entry field. */
 function ethText(eth: number): string {
   if (!Number.isFinite(eth) || eth === 0) return "";
@@ -64,12 +71,15 @@ export function AmountField({
   unit = "USD",
   ethUsd = 0,
   ariaLabel = "Amount",
+  grow = false,
 }: {
   amount: number;
   setAmount: (n: number) => void;
   unit?: DisplayUnit;
   ethUsd?: number;
   ariaLabel?: string;
+  /** Fill the row width (the order form) rather than a fixed field (Create). */
+  grow?: boolean;
 }) {
   const eth = unit === "ETH";
   const decimals = eth ? 6 : 2;
@@ -92,10 +102,10 @@ export function AmountField({
 
   return (
     <span
-      className="flex h-[52px] items-center gap-1 rounded-[12px] px-3"
-      style={{ border: "1px solid var(--border)" }}
+      className={`flex ${CTRL} items-center gap-1.5 px-3.5 ${grow ? "flex-1" : ""}`}
+      style={GHOST_STYLE}
     >
-      <span className="num text-[15px] text-[var(--text-muted)]">{eth ? "Ξ" : "$"}</span>
+      <span className="num text-[16px] text-[var(--text-muted)]">{eth ? "Ξ" : "$"}</span>
       <input
         inputMode="decimal"
         value={text}
@@ -121,7 +131,7 @@ export function AmountField({
         }}
         onBlur={() => setText(toDisplayText(amount))}
         aria-label={ariaLabel}
-        className="num w-[96px] bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
+        className={`num bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none ${grow ? "w-full flex-1" : "w-[96px]"}`}
         placeholder="0"
       />
     </span>
@@ -327,19 +337,17 @@ function BuyTicket({
   onConfirm,
   onDone,
 }: BuyTicketProps) {
-  // Execution mechanics (shares, avg price) live under a disclosure, off by default.
-  const [showOrderDetails, setShowOrderDetails] = useState(false);
   const { unit } = useDisplayUnit();
   // `amount` is USD-native; the fee is a wei quote. Both show in the chosen unit.
   const money = (usd: number) => formatMoney(usd, { from: "USD", to: unit, ethUsd });
-  // Receipt.
+  const busy = trade.isSubmitting || trade.isMining;
+
+  // Receipt — the confirmation bar sits in the SAME card footprint as the form's
+  // confirm button, so nothing resizes on success. One full-width action: next.
   if (trade.isSuccess && side) {
     return (
-      <div
-        className="rounded-[16px] p-4"
-        style={{ border: "1px solid var(--border-strong,var(--border))" }}
-      >
-        <div className="flex items-center gap-3">
+      <div className={CARD} style={{ border: "1px solid var(--border-strong,var(--border))" }}>
+        <div className="mb-3 flex items-center gap-3 px-0.5">
           <span
             className="grid h-7 w-7 place-items-center rounded-full"
             style={{ background: "var(--surface)" }}
@@ -347,7 +355,7 @@ function BuyTicket({
             <span style={{ color: side === "YES" ? "var(--yes)" : "var(--no)" }}>✓</span>
           </span>
           <div>
-            <div className="text-[15px] font-semibold text-[var(--text)]">
+            <div className="text-[14px] font-semibold text-[var(--text)]">
               Joined {side} · House read revealed ↑
             </div>
             {quote && (
@@ -357,42 +365,41 @@ function BuyTicket({
               </div>
             )}
           </div>
-          <button
-            type="button"
-            onClick={onDone}
-            className="ml-auto rounded-[12px] px-4 py-2 text-[13px] font-semibold text-[var(--bg)]"
-            style={{ background: "var(--text)" }}
-          >
-            Next market
-          </button>
         </div>
+        <button
+          type="button"
+          onClick={onDone}
+          className={`${CTRL} w-full text-[15px] font-semibold`}
+          style={PRIMARY_STYLE}
+        >
+          Next market
+        </button>
       </div>
     );
   }
 
-  const busy = trade.isSubmitting || trade.isMining;
-  const amtField = (
-    <AmountField amount={amount} setAmount={setAmount} unit={unit} ethUsd={ethUsd} />
-  );
-
-  // Neutral: NO · PASS · YES.
+  // Neutral: the decision only — one tap on an action opens the full order form.
   if (!side) {
     return (
-      <div
-        className="flex items-center gap-2 rounded-[16px] p-3"
-        style={{ border: "1px solid var(--border)" }}
-      >
-        {amtField}
-        <div className="flex flex-1 gap-2">
-          <SideButton label="← NO" tone="no" onClick={() => onSelect("NO")} />
-          <SideButton label="↑ PASS" tone="pass" onClick={onPass} />
-          <SideButton label="YES →" tone="yes" onClick={() => onSelect("YES")} />
-        </div>
+      <div className={`${CARD} flex gap-2`} style={GHOST_STYLE}>
+        <SideButton
+          label="← NO"
+          tone="no"
+          onClick={() => onSelect("NO")}
+          className={`${CTRL} flex-1`}
+        />
+        <SideButton label="Pass" tone="pass" onClick={onPass} className={`${CTRL} w-[92px]`} />
+        <SideButton
+          label="YES →"
+          tone="yes"
+          onClick={() => onSelect("YES")}
+          className={`${CTRL} flex-1`}
+        />
       </div>
     );
   }
 
-  // Belief expressed → optional financial backing. Nothing happens without confirm.
+  // Action chosen → the full order form, every detail visible before you confirm.
   const confirmLabel = !ready.connected
     ? "Connect wallet"
     : !ready.onBase
@@ -401,67 +408,63 @@ function BuyTicket({
   const disabled = ready.connected && ready.onBase && (busy || !quote || ethWei <= 0n);
 
   return (
-    <div className="rounded-[16px] p-3" style={{ border: "1px solid var(--border)" }}>
-      <div className="mb-2 space-y-1 px-1">
-        <div className="pb-1 text-[11px] font-semibold text-[var(--text)]">
-          Back {side} to reveal the House’s pick.
-        </div>
+    <div className={CARD} style={GHOST_STYLE}>
+      <div className="mb-3 px-0.5 text-[13px] font-semibold text-[var(--text)]">
+        Back {side} to reveal the House’s pick.
+      </div>
+      <div className="mb-3">
+        <AmountField
+          grow
+          amount={amount}
+          setAmount={setAmount}
+          unit={unit}
+          ethUsd={ethUsd}
+          ariaLabel="Amount to back"
+        />
+      </div>
+      <div className="mb-3.5 space-y-1.5 px-0.5">
         <AvailRow ethUsd={ethUsd} />
         <QuoteRow k="You invest" v={money(amount)} />
+        <QuoteRow
+          k="You pay"
+          v={`${fmtUsd(amount)}  ·  ${(Number(ethWei) / 1e18).toFixed(4)} ETH`}
+        />
         {quote && (
           <QuoteRow
             k="Protocol fee"
             v={formatMoney(weiToEth(quote.fee), { from: "ETH", to: unit, ethUsd })}
           />
         )}
+        <QuoteRow k="Est. shares" v={quoting ? "…" : quote ? fmtShares(quote.tokens) : "—"} />
+        <QuoteRow
+          k="Avg execution"
+          v={quote ? `$${avgPriceUsd(ethWei, quote.tokens, ethUsd).toFixed(2)}` : "—"}
+        />
+        <QuoteRow k="Network" v="Base" />
         {trade.isError && (
           <div className="text-[11px] text-[var(--no)]">
             {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
           </div>
         )}
-        <button
-          type="button"
-          onClick={() => setShowOrderDetails((v) => !v)}
-          className="pt-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
-        >
-          {showOrderDetails ? "Hide order details" : "Order details"}
-        </button>
-        {showOrderDetails && (
-          <div className="space-y-1 border-t pt-1" style={{ borderColor: "var(--border)" }}>
-            <QuoteRow
-              k="You pay"
-              v={`${fmtUsd(amount)}  ·  ${(Number(ethWei) / 1e18).toFixed(4)} ETH`}
-            />
-            <QuoteRow k="Est. shares" v={quoting ? "…" : quote ? fmtShares(quote.tokens) : "—"} />
-            <QuoteRow
-              k="Avg execution"
-              v={quote ? `$${avgPriceUsd(ethWei, quote.tokens, ethUsd).toFixed(2)}` : "—"}
-            />
-            <QuoteRow k="Network" v="Base" />
-          </div>
-        )}
       </div>
       <div className="flex items-center gap-2">
-        {amtField}
-        <div className="flex flex-1 gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="h-[52px] flex-1 rounded-[12px] text-[14px] font-medium text-[var(--text-secondary)]"
-            style={{ border: "1px solid var(--border)" }}
-          >
-            Not now
-          </button>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={onConfirm}
-            className="h-[52px] flex-[2] rounded-[12px] text-[15px] font-semibold disabled:opacity-40"
-            style={{ background: "var(--text)", color: "var(--bg)" }}
-          >
-            {busy ? "Confirming…" : confirmLabel}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onCancel}
+          className={`${CTRL} flex-1 text-[14px] font-medium text-[var(--text-secondary)]`}
+          style={GHOST_STYLE}
+        >
+          Not now
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onConfirm}
+          className={`${CTRL} flex-[2] text-[15px] font-semibold disabled:opacity-40`}
+          style={PRIMARY_STYLE}
+        >
+          {busy ? "Confirming…" : confirmLabel}
+        </button>
       </div>
     </div>
   );
@@ -481,8 +484,6 @@ function SellTicket({
   onCancel,
   onDone,
 }: SellTicketProps) {
-  // Token counts live under a disclosure — you sell in human percentages.
-  const [showDetails, setShowDetails] = useState(false);
   const { unit } = useDisplayUnit();
   // Proceeds are ETH-native (a wei quote); worth is USD-native. Both go to the
   // viewer's chosen unit through the one rate.
@@ -490,14 +491,14 @@ function SellTicket({
     proceeds == null
       ? "—"
       : formatMoney(weiToEth(proceeds), { from: "ETH", to: unit, ethUsd, signed });
-  // Receipt.
+  const busy = trade.isSubmitting || trade.isMining;
+
+  // Receipt — same card footprint + full-width action as the form, so leaving a
+  // sell never resizes the surface.
   if (trade.isSuccess) {
     return (
-      <div
-        className="rounded-[16px] p-4"
-        style={{ border: "1px solid var(--border-strong,var(--border))" }}
-      >
-        <div className="flex items-center gap-3">
+      <div className={CARD} style={{ border: "1px solid var(--border-strong,var(--border))" }}>
+        <div className="mb-3 flex items-center gap-3 px-0.5">
           <span
             className="grid h-7 w-7 place-items-center rounded-full"
             style={{ background: "color-mix(in oklab,var(--text-muted) 18%,transparent)" }}
@@ -505,27 +506,26 @@ function SellTicket({
             <span className="text-[var(--text-secondary)]">✓</span>
           </span>
           <div>
-            <div className="text-[15px] font-semibold text-[var(--text)]">Left {held.side}</div>
+            <div className="text-[14px] font-semibold text-[var(--text)]">Left {held.side}</div>
             {proceeds != null && (
               <div className="num text-[11px] text-[var(--text-muted)]">
                 Sold {pct}% · {proceedsStr(true)}
               </div>
             )}
           </div>
-          <button
-            type="button"
-            onClick={onDone}
-            className="ml-auto rounded-[12px] px-4 py-2 text-[13px] font-semibold text-[var(--bg)]"
-            style={{ background: "var(--text)" }}
-          >
-            Done
-          </button>
         </div>
+        <button
+          type="button"
+          onClick={onDone}
+          className={`${CTRL} w-full text-[15px] font-semibold`}
+          style={PRIMARY_STYLE}
+        >
+          Done
+        </button>
       </div>
     );
   }
 
-  const busy = trade.isSubmitting || trade.isMining;
   const shares = sharesForPct(held.tokens, pct);
   const remainingUsd = worthUsd != null ? worthUsd * (1 - pct / 100) : null;
   const confirmLabel = !ready.connected
@@ -536,12 +536,9 @@ function SellTicket({
   const disabled = ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n);
 
   return (
-    <div
-      className="rounded-[16px] p-3"
-      style={{ border: "1px solid var(--border-strong,var(--border))" }}
-    >
-      <div className="mb-2 flex items-center gap-2 px-1">
-        <span className="text-[12px] font-semibold text-[var(--text)]">
+    <div className={CARD} style={{ border: "1px solid var(--border-strong,var(--border))" }}>
+      <div className="mb-3 flex items-center gap-2 px-0.5">
+        <span className="text-[13px] font-semibold text-[var(--text)]">
           Sell your{" "}
           <span style={{ color: held.side === "YES" ? "var(--yes)" : "var(--no)" }}>
             {held.side}
@@ -554,7 +551,7 @@ function SellTicket({
               key={p}
               type="button"
               onClick={() => setPct(p)}
-              className="rounded-[8px] px-2 py-1 text-[11px] font-semibold"
+              className="rounded-[8px] px-2.5 py-1.5 text-[12px] font-semibold"
               style={
                 pct === p
                   ? { background: "var(--text)", color: "var(--bg)" }
@@ -566,7 +563,7 @@ function SellTicket({
           ))}
         </span>
       </div>
-      <div className="mb-2 space-y-1 px-1">
+      <div className="mb-3.5 space-y-1.5 px-0.5">
         <QuoteRow
           k="Estimated proceeds"
           v={quoting ? "…" : proceeds != null ? `≈ ${proceedsStr()}` : "—"}
@@ -577,21 +574,11 @@ function SellTicket({
             v={`≈ ${formatMoney(remainingUsd, { from: "USD", to: unit, ethUsd })}`}
           />
         )}
+        <QuoteRow k="Shares sold" v={`${fmtShares(shares)} of ${fmtShares(held.tokens)}`} />
+        <QuoteRow k="Network" v="Base" />
         {trade.isError && (
           <div className="text-[11px] text-[var(--no)]">
             {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => setShowDetails((v) => !v)}
-          className="pt-0.5 text-[10px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
-        >
-          {showDetails ? "Hide order details" : "Order details"}
-        </button>
-        {showDetails && (
-          <div className="border-t pt-1" style={{ borderColor: "var(--border)" }}>
-            <QuoteRow k="Shares sold" v={`${fmtShares(shares)} of ${fmtShares(held.tokens)}`} />
           </div>
         )}
       </div>
@@ -599,8 +586,8 @@ function SellTicket({
         <button
           type="button"
           onClick={onCancel}
-          className="h-[52px] flex-1 rounded-[12px] text-[14px] font-medium text-[var(--text-secondary)]"
-          style={{ border: "1px solid var(--border)" }}
+          className={`${CTRL} flex-1 text-[14px] font-medium text-[var(--text-secondary)]`}
+          style={GHOST_STYLE}
         >
           Cancel
         </button>
@@ -608,8 +595,8 @@ function SellTicket({
           type="button"
           disabled={disabled}
           onClick={onConfirm}
-          className="h-[52px] flex-[2] rounded-[12px] text-[15px] font-semibold disabled:opacity-40"
-          style={{ background: "var(--text)", color: "var(--bg)" }}
+          className={`${CTRL} flex-[2] text-[15px] font-semibold disabled:opacity-40`}
+          style={PRIMARY_STYLE}
         >
           {busy ? "Selling…" : confirmLabel}
         </button>

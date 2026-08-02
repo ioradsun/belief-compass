@@ -7,7 +7,11 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, type ReactNode } from "react";
+
+// useLayoutEffect warns when run during SSR; fall back to useEffect on the server
+// (both are no-ops there). On the client this runs before paint.
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -15,6 +19,7 @@ import { WalletProviders } from "../components/WalletConnect";
 import { DisplayUnitProvider } from "../lib/display-unit";
 import { VersionWatcher } from "../components/VersionWatcher";
 import { restoreQueryCache, startQueryPersist } from "../lib/query-persist";
+import { startRealtime } from "../lib/realtime/coordinator";
 
 // Web fonts, loaded OFF the critical path. The system fallback stack in styles.css
 // (system-ui / -apple-system / Segoe UI …) paints instantly; Inter + JetBrains
@@ -157,14 +162,25 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
-  // Instant-on-return: re-hydrate last session's cache the moment we mount (so
-  // client panels paint their last-seen state instead of skeletons), then mirror
-  // the cache forward. Restore runs in an effect so the first client render still
-  // matches the SSR HTML (no hydration mismatch); the fill lands on the next frame
-  // and the panels revalidate on their own via staleTime / refetchInterval.
-  useEffect(() => {
+  // Instant-on-return: re-hydrate last session's cache before the browser paints,
+  // so client panels show their last-seen data instead of flashing a skeleton
+  // first. A LAYOUT effect runs after hydration completes (so the first client
+  // render still matches the SSR HTML — no mismatch) but BEFORE paint, so the
+  // restore-driven re-render is flushed without a visible empty→data blink. The
+  // isomorphic wrapper keeps React from warning about useLayoutEffect on the
+  // server, where restoreQueryCache is a no-op anyway.
+  useIsomorphicLayoutEffect(() => {
     restoreQueryCache(queryClient);
-    return startQueryPersist(queryClient);
+  }, [queryClient]);
+
+  // Persistence + the realtime socket come alive after paint (never blocking it).
+  useEffect(() => {
+    const stopPersist = startQueryPersist(queryClient);
+    const stopRealtime = startRealtime(queryClient);
+    return () => {
+      stopRealtime();
+      stopPersist();
+    };
   }, [queryClient]);
 
   return (

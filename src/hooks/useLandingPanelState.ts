@@ -10,8 +10,12 @@ const KEY = "conviction.landing-panel";
  * responsive or temporary is ever written.
  */
 export function useLandingPanelState() {
-  // Start collapsed for SSR/hydration parity, then restore on the client.
-  const [state, setState] = useState<LandingPanelState>("collapsed");
+  // Default to the FIRST-VISIT state ("expanded") for SSR/hydration parity, so the
+  // first paint already matches what a first-time visitor should see — no
+  // collapsed→expanded flip on load. The effect below only ever *collapses*, and
+  // only for a returning user who explicitly collapsed (localStorage), which is a
+  // smooth shrink rather than a blink.
+  const [state, setState] = useState<LandingPanelState>("expanded");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {

@@ -14,6 +14,7 @@ import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getHouseRead } from "@/lib/house.functions";
 import { requestConnect } from "@/lib/connect-bridge";
+import { walletIntent } from "@/lib/wagmi";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { useHouseFinalize, houseKey } from "@/lib/house-round";
@@ -28,7 +29,8 @@ import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
 import { SharedConviction } from "@/components/SharedConviction";
-import { marketFreshness } from "@/domain/market-freshness";
+import { marketAgeCopy } from "@/domain/market-freshness";
+import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import type { TapeTrade } from "@/domain/conviction-series";
 
@@ -51,10 +53,14 @@ import {
 } from "@/domain/order";
 import { marketBook } from "@/domain/market-book";
 import { marketPulse } from "@/domain/market-pulse";
+import { WindowFilter } from "@/components/WindowFilter";
+import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { OrderTicket } from "@/components/order/OrderTicket";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
 import { getConvictionMarket } from "@/lib/market-create.functions";
+import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
+
 
 /**
  * Momentum tags — the six canonical opportunity classifications from the
@@ -172,11 +178,14 @@ export function MarketDeck({
     refetchInterval: 15_000,
   });
 
+  // The one on-screen timeframe — the center owns it, both cases follow it.
+  const deckWin = useDeckWindow();
+
   // The momentum shape, told as a tension — bait on the Case File door.
   const caseTeaser = useMemo(() => {
     const t = change?.tape ?? [];
-    return t.length ? marketPulse(marketBook(t, Date.now())).meaning : null;
-  }, [change]);
+    return t.length ? marketPulse(marketBook(t, Date.now(), deckWin)).meaning : null;
+  }, [change, deckWin]);
 
   // Creator/age for the identity row's freshness token (deduped with the byline).
   const { data: cm } = useQuery({
@@ -184,9 +193,12 @@ export function MarketDeck({
     queryFn: () => getConvictionMarket({ data: { onchainId: marketId } }),
     staleTime: 5 * 60_000,
   });
-  const createdAt = cm?.creator?.createdAt ?? null;
+  // Evidence, when the creator attached any. Null keeps the layout untouched.
+  const stageMedia = useMemo(() => stageMediaFrom(cm), [cm]);
+  const createdAt = cm?.createdAt ?? cm?.creator?.createdAt ?? null;
+
   const freshToken = createdAt
-    ? marketFreshness(Date.now() - new Date(createdAt).getTime()).token
+    ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()).toUpperCase()
     : null;
 
   const connected = useEffectiveWallet();
@@ -377,12 +389,20 @@ export function MarketDeck({
   // the side panels; the center never becomes analytics or takes a side.
   const marketInner = (
     <>
+      {/* THE ONE TIMEFRAME — a single control in the center. Every number below
+      and in both Case columns (totals' deltas, percentages, sparklines, copy)
+      is measured over exactly this period. */}
+      <div className="max-w-[300px]">
+        <WindowFilter win={deckWin} onWin={setDeckWindow} />
+      </div>
+
       {/* MARKET MOMENTUM — the one block that answers "why should I care about
       this market now?": believers + capital (value · sparkline · %), a status
       pill for the shape. Believers + capital + the momentum label, from the
       canonical marketBook so the totals reconcile with the side panels. The
       narrative, the House voice and the activity all live in the right feed. */}
-      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} />
+      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} win={deckWin} />
+
 
       {/* SHARED CONVICTION — side-blind belonging: your Tribe/Twin/Opp are here. */}
       <SharedConviction
@@ -406,6 +426,14 @@ export function MarketDeck({
           {(category || freshToken) && (
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
               {[category, freshToken].filter(Boolean).join(" · ")}
+            </span>
+          )}
+          {cm?.market && (
+            <span
+              title="Markets created here don't appear on pov.co yet."
+              className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-secondary)]"
+            >
+              · Company exclusive
             </span>
           )}
           {lens && lenses && onLens ? (
@@ -445,7 +473,11 @@ export function MarketDeck({
         <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
           {title}
         </h1>
-        <MarketByline onchainId={Number(row.onchain_id)} onSelectPerson={onSelectPerson} />
+        <MarketByline
+          onchainId={Number(row.onchain_id)}
+          viewerWallet={viewer}
+          onSelectPerson={onSelectPerson}
+        />
       </div>
 
       {/* Investigation Mode: one side's story replaces the comparison, while the
@@ -456,8 +488,6 @@ export function MarketDeck({
           marketId={marketId}
           ethUsd={ethUsd}
           viewerWallet={viewerWallet}
-          backed={side === storySide}
-          onBack={() => chooseSide(storySide)}
           onClose={() => onCloseStory?.()}
         />
       ) : mobileCaseOpen ? (
@@ -472,14 +502,22 @@ export function MarketDeck({
         >
           {marketInner}
         </MobileCaseView>
+      ) : stageMedia ? (
+        /* Markets WITH evidence: same panel, now one of two stage states. */
+        <MediaStage media={stageMedia} className="flex min-h-0 flex-1 touch-pan-y flex-col">
+          {marketInner}
+        </MediaStage>
       ) : (
         <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
           {marketInner}
         </div>
       )}
 
-      {/* Decision dock — buy by default; sell takes over when opened on a holding. */}
-      <div className="shrink-0 space-y-2">
+
+      {/* Decision dock — buy by default; sell takes over when opened on a holding.
+        Reaching the dock is the strongest signal a wallet is about to be needed,
+        so hover/touch/focus here starts the wallet chunks before the click. */}
+      <div className="shrink-0 space-y-2" {...walletIntent}>
         {onToggleCase && !storySide && !mobileCaseOpen && (
           <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
         )}
@@ -607,14 +645,18 @@ export function MarketDeck({
 
 /**
  * Who opened the question — a real identity, not a raw address. Avatar + name
- * (resolved server-side in one request), with fresh markets reading "Just opened
- * this market". Clicking opens the creator's profile, never a block explorer.
+ * (resolved server-side in one request), plus how old the market reads in plain
+ * words. Hovering the face reveals the viewer's shared Conviction DNA with the
+ * creator (relationship, agreement, shared beliefs) when one exists. Clicking
+ * opens the creator's profile, never a block explorer.
  */
 function MarketByline({
   onchainId,
+  viewerWallet,
   onSelectPerson,
 }: {
   onchainId: number;
+  viewerWallet?: string;
   onSelectPerson?: (wallet: string) => void;
 }) {
   const { data } = useQuery({
@@ -622,23 +664,40 @@ function MarketByline({
     queryFn: () => getConvictionMarket({ data: { onchainId } }),
     staleTime: 5 * 60_000,
   });
+  // Reuses the deck's existing network query — no extra request.
+  const { data: net } = useQuery({
+    queryKey: ["network", viewerWallet ?? null, "all", "relevant", ""],
+    queryFn: () => getNetwork({ data: { wallet: viewerWallet, limit: 60 } }),
+    enabled: !!viewerWallet,
+    staleTime: 60_000,
+  });
+
   const c = data?.creator ?? null;
+  const createdAt = data?.createdAt ?? c?.createdAt ?? null;
   if (!c) return null;
 
-  const fresh = c.createdAt ? marketFreshness(Date.now() - new Date(c.createdAt).getTime()) : null;
-  const when = fresh?.fresh
-    ? "just opened this market"
-    : c.createdAt
-      ? `opened ${ageWords(Date.now() - new Date(c.createdAt).getTime())}`
-      : "opened this market";
+  const when = createdAt
+    ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()).toLowerCase()
+    : "opened this market";
   const clickable = !!onSelectPerson;
+
+  const match =
+    viewerWallet && viewerWallet.toLowerCase() !== c.wallet.toLowerCase()
+      ? (net?.people ?? []).find((p) => p.wallet.toLowerCase() === c.wallet.toLowerCase())
+      : undefined;
+  const dna =
+    match && match.relationship !== "insufficient"
+      ? `${RELATIONSHIP_TEXT[match.relationship]} · ${match.agreement}% agreement across ${match.sharedBeliefs} shared beliefs`
+      : null;
+  const tone = match ? relationshipTone(match.relationship) : null;
 
   return (
     <button
       type="button"
       disabled={!clickable}
       onClick={() => onSelectPerson?.(c.wallet)}
-      className="mt-2 flex items-center gap-2 text-left disabled:cursor-default"
+      title={dna ? `Your Conviction DNA with ${c.name}: ${dna}` : undefined}
+      className="group relative mt-2 flex items-center gap-2 text-left disabled:cursor-default"
     >
       {c.avatarUrl ? (
         <img src={c.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
@@ -657,17 +716,24 @@ function MarketByline({
         </span>
         <span className="text-[var(--text-muted)]"> · {when}</span>
       </span>
+      {dna && tone && (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-medium shadow-lg group-hover:block"
+          style={{
+            color: tone.fg,
+            background: "var(--surface)",
+            border: `1px solid color-mix(in oklab, ${tone.fg} 35%, transparent)`,
+          }}
+        >
+          {dna}
+        </span>
+      )}
     </button>
   );
 }
 
-function ageWords(ms: number): string {
-  const h = Math.max(0, ms) / 3_600_000;
-  if (h < 1) return `${Math.max(1, Math.round(h * 60))}m ago`;
-  if (h < 48) return `${Math.round(h)}h ago`;
-  const d = Math.round(h / 24);
-  return `${d} day${d === 1 ? "" : "s"} ago`;
-}
+
 
 /**
  * The one door from the neutral overview into the evidence. The arrows point the

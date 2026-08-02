@@ -22,7 +22,8 @@ import { fmtUsd, usdToWei } from "@/domain/order";
 import {
   MEDIA_LIMITS,
   QUESTION_MAX,
-  accept,
+  acceptAll,
+  SUPPORTED_MEDIA_HINT,
   assertAllowedBytes,
   kindForMime,
   type MediaKind,
@@ -63,7 +64,7 @@ const MIN_QUESTION = 8;
 export function CreateMarket({
   ethUsd,
   onCreated,
-  onCancel,
+  onCancel: _onCancel,
   onOpenTerms,
 }: {
   ethUsd: number;
@@ -90,7 +91,6 @@ export function CreateMarket({
   const [localError, setLocalError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [pickKind, setPickKind] = useState<Exclude<MediaKind, "link">>("image");
 
   const minSeedEth = econ.minSeedWei != null ? Number(econ.minSeedWei) / 1e18 : null;
   const minUsd = minSeedEth != null && ethUsd > 0 ? minSeedEth * ethUsd : null;
@@ -104,12 +104,8 @@ export function CreateMarket({
   const belowMin = econ.minSeedWei != null && seedWei < econ.minSeedWei;
   const overBalance = balance.wei != null && seedWei > balance.wei;
 
-  // Max leaves a little ETH for gas so the seed itself can't spend the wallet dry.
-  const setMax = useCallback(() => {
-    if (balance.wei == null || ethUsd <= 0) return;
-    const availUsd = (Number(balance.wei) / 1e18) * ethUsd;
-    setAmount(Math.max(0, Math.floor(availUsd * 0.99 * 100) / 100));
-  }, [balance.wei, ethUsd]);
+
+
 
   // Debounced AI review + duplicate search. Advisory only — never blocks the button.
   const [debounced, setDebounced] = useState("");
@@ -162,8 +158,7 @@ export function CreateMarket({
     }
   }, []);
 
-  const openPicker = (kind: Exclude<MediaKind, "link">) => {
-    setPickKind(kind);
+  const openPicker = () => {
     requestAnimationFrame(() => fileRef.current?.click());
   };
 
@@ -282,7 +277,7 @@ export function CreateMarket({
           ? "Creating market…"
           : failed
             ? "Try again"
-            : `Create & Back ${side}`;
+            : "Publish Market";
 
   const errorText =
     localError ??
@@ -295,8 +290,6 @@ export function CreateMarket({
       onPaste={(e) => {
         const f = e.clipboardData.files?.[0];
         if (f) return void pickFile(f);
-        const text = e.clipboardData.getData("text")?.trim();
-        if (text?.startsWith("https://")) setAttachment({ kind: "link", url: text });
       }}
       onDragEnter={(e) => {
         e.preventDefault();
@@ -313,19 +306,18 @@ export function CreateMarket({
         if (f) void pickFile(f);
       }}
     >
-      {/* 1 · Compact header — pinned. */}
-      <div className="flex shrink-0 items-center justify-between">
-        <button
-          type="button"
-          onClick={onCancel}
-          aria-label="Back"
-          className="text-[16px] leading-none text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-        >
-          ←
-        </button>
-        <h2 className="text-[15px] font-semibold text-[var(--text)]">Create market</h2>
-        <span className="w-4" />
+      {/* 1 · Compact header — pinned. Title carries the earn promise; the
+          provenance tag sits inline, top-right. */}
+      <div className="flex shrink-0 items-start gap-2">
+        <h2 className="flex-1 text-[15px] font-semibold leading-snug text-[var(--text)]">
+          State Your Conviction. Earn 4.5% on Every Trade.
+        </h2>
       </div>
+
+
+
+
+
 
       {/* Scrolls only on short (mobile) viewports; on desktop the whole form fits. */}
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-3">
@@ -336,16 +328,10 @@ export function CreateMarket({
           </p>
         )}
 
-        {/* 2 · What do you believe? */}
+        {/* 2 · The conviction statement. */}
         <div>
-          <label
-            htmlFor="conviction"
-            className="block text-[12px] font-medium text-[var(--text-secondary)]"
-          >
-            What do you believe?
-          </label>
           <div
-            className="mt-1.5 rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
+            className="rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
             style={{ borderColor: "var(--border)" }}
           >
             {attachment && (
@@ -358,7 +344,7 @@ export function CreateMarket({
               rows={3}
               autoFocus
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Must be answerable with yes or no"
+              placeholder={"Write a statement people can answer Yes or No."}
               className="w-full resize-none bg-transparent px-3 pt-2.5 text-[16px] leading-snug text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
             />
             {/* Inside the field: Add media on the left (only until one is
@@ -368,10 +354,7 @@ export function CreateMarket({
               {attachment ? (
                 <span />
               ) : (
-                <AddMedia
-                  onPick={openPicker}
-                  onLink={(url) => setAttachment({ kind: "link", url })}
-                />
+                <AddMedia onPick={openPicker} />
               )}
               <span className="num text-[11px] text-[var(--text-muted)]">
                 {question.length}/{QUESTION_MAX}
@@ -417,17 +400,11 @@ export function CreateMarket({
               onClick={() => setSide("NO")}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
-            <span className="num shrink-0 text-[12px] text-[var(--text-muted)]">
-              ≈ {(Number(seedWei) / 1e18).toFixed(4)} ETH
-            </span>
-          </div>
-          <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} onMax={setMax} />
+          <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
+          <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} />
         </div>
 
-        {/* 4 · Creator earnings — one quiet line. */}
-        <CreatorEarnings bps={econ.creatorFeeBps} />
+
 
         {belowMin && amount > 0 && (
           <p className="text-[12px] text-[var(--no)]">Seed is below the contract minimum.</p>
@@ -451,7 +428,7 @@ export function CreateMarket({
 
         {/* 6 · Disclosure — one compact line. */}
         <p className="text-center text-[11px] text-[var(--text-muted)]">
-          Media appears in this app only ·{" "}
+          Conviction Company Exclusive. Not available on pov.co yet.{" "}
           <button
             type="button"
             onClick={() => (onOpenTerms ? onOpenTerms() : window.open("/terms", "_blank"))}
@@ -460,13 +437,14 @@ export function CreateMarket({
             Terms
           </button>
         </p>
+
       </div>
 
       <input
         ref={fileRef}
         type="file"
         className="hidden"
-        accept={accept(pickKind)}
+        accept={acceptAll()}
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) void pickFile(f);
@@ -484,95 +462,41 @@ export function CreateMarket({
   );
 }
 
-/** "Add media" trigger → a small popover with the four sources. */
-function AddMedia({
-  onPick,
-  onLink,
-}: {
-  onPick: (kind: Exclude<MediaKind, "link">) => void;
-  onLink: (url: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [linking, setLinking] = useState(false);
-  const [url, setUrl] = useState("");
-  const wrap = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) {
-        setOpen(false);
-        setLinking(false);
-      }
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
-
-  const commitLink = () => {
-    const v = url.trim();
-    if (v.startsWith("https://")) onLink(v);
-    setOpen(false);
-    setLinking(false);
-    setUrl("");
-  };
+/**
+ * Media affordance: one picker for every supported file (the OS dialog does the
+ * filtering). No type menu — it was unusable on mobile and the type list is now
+ * just a tooltip.
+ */
+function AddMedia({ onPick }: { onPick: () => void }) {
+  const [hint, setHint] = useState(false);
 
   return (
-    <div ref={wrap} className="relative">
+    <div className="relative flex items-center gap-3">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={onPick}
+        title={SUPPORTED_MEDIA_HINT}
         className="flex items-center gap-1 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
       >
         <span aria-hidden>＋</span> Add media
       </button>
-      {open && (
+
+      <button
+        type="button"
+        aria-label="Supported file types"
+        onClick={() => setHint((v) => !v)}
+        onBlur={() => setHint(false)}
+        className="grid size-4 place-items-center rounded-full border text-[9px] text-[var(--text-muted)]"
+        style={{ borderColor: "var(--border)" }}
+      >
+        ?
+      </button>
+      {hint && (
         <div
-          className="absolute bottom-6 left-0 z-20 w-[180px] rounded-[12px] bg-[var(--surface)] p-1 shadow-lg"
+          className="absolute bottom-6 left-0 z-20 w-[min(280px,calc(100vw-64px))] rounded-[10px] bg-[var(--surface)] p-2 text-[11px] leading-relaxed text-[var(--text-secondary)] shadow-lg"
           style={{ border: "1px solid var(--border)" }}
         >
-          {linking ? (
-            <input
-              autoFocus
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && commitLink()}
-              onBlur={commitLink}
-              placeholder="https://…"
-              className="w-full rounded-[8px] bg-transparent px-2 py-1.5 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
-            />
-          ) : (
-            (
-              [
-                ["image", "Image"],
-                ["video", "Video"],
-                ["audio", "Audio"],
-              ] as const
-            )
-              .map(([k, label]) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => {
-                    onPick(k);
-                    setOpen(false);
-                  }}
-                  className="block w-full rounded-[8px] px-2 py-1.5 text-left text-[13px] text-[var(--text)] transition-colors hover:bg-[var(--bg)]"
-                >
-                  {label}
-                </button>
-              ))
-              .concat(
-                <button
-                  key="link"
-                  type="button"
-                  onClick={() => setLinking(true)}
-                  className="block w-full rounded-[8px] px-2 py-1.5 text-left text-[13px] text-[var(--text)] transition-colors hover:bg-[var(--bg)]"
-                >
-                  Link
-                </button>,
-              )
-          )}
+          {SUPPORTED_MEDIA_HINT}
         </div>
       )}
     </div>
@@ -657,27 +581,8 @@ function MediaChip({ attachment, onRemove }: { attachment: Attachment; onRemove:
   );
 }
 
-/** One quiet inline row; the explanation lives behind a hover/tap. */
-function CreatorEarnings({ bps }: { bps: number | null }) {
-  if (bps == null) return null;
-  return (
-    <div
-      className="flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)]"
-      title={rewardLine(bps)}
-    >
-      <span>Creator earnings</span>
-      <span className="text-[var(--text-muted)]">·</span>
-      <span className="num font-semibold text-[var(--text)]">{(bps / 100).toFixed(2)}%</span>
-      <span
-        className="grid h-3.5 w-3.5 place-items-center rounded-full text-[9px] text-[var(--text-muted)]"
-        style={{ border: "1px solid var(--border)" }}
-        aria-hidden
-      >
-        ?
-      </span>
-    </div>
-  );
-}
+
+
 
 /** Read a clip's duration from the browser before we ever upload it. */
 function probeDuration(url: string, kind: "audio" | "video"): Promise<number | null> {

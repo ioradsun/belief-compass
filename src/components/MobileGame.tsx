@@ -13,19 +13,23 @@
  * desktop deck uses (marketBook / marketPulse / evidence / house read), so the
  * two experiences can never disagree.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSwitchChain } from "wagmi";
 
 import type { MarketRow } from "@/components/MarketCard";
 import { pulseLine } from "@/components/MarketCard";
 import { MarketMomentum } from "@/components/MarketVitality";
+import { WindowFilter } from "@/components/WindowFilter";
+import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { useHouseFinalize } from "@/lib/house-round";
 import { getMarketChange, listMarketPulses } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getConvictionMarket } from "@/lib/market-create.functions";
+import { marketAgeCopy } from "@/domain/market-freshness";
+import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
 import { getHouseRead } from "@/lib/house.functions";
 import { houseKey } from "@/lib/house-round";
 import { expressBelief } from "@/lib/beliefs.functions";
@@ -38,19 +42,12 @@ import { useDisplayUnit } from "@/lib/display-unit";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
-import { houseAfter } from "@/domain/the-house";
 
 const money = (usd: number) =>
   usd >= 1000 ? `$${Math.round(usd).toLocaleString("en-US")}` : `$${usd.toFixed(usd < 10 ? 2 : 0)}`;
 
-function ago(ms: number): string {
-  const h = Math.max(0, ms) / 3_600_000;
-  if (h < 1) return `${Math.max(1, Math.round(h * 60))}m ago`;
-  if (h < 48) return `${Math.round(h)}h ago`;
-  return `${Math.round(h / 24)}d ago`;
-}
 
-type Phase = "question" | "decided" | "passed" | "sides";
+type Phase = "question" | "passed" | "sides";
 
 export function MobileGame({
   row,
@@ -106,7 +103,11 @@ export function MobileGame({
     },
   });
 
+  // The one on-screen timeframe, shared with the desktop deck and both cases.
+  const deckWin = useDeckWindow();
+
   const { data: change } = useQuery({
+
     queryKey: ["market-change", marketId],
     queryFn: () => getMarketChange({ data: { id: marketId } }),
     staleTime: 10_000,
@@ -136,21 +137,14 @@ export function MobileGame({
     staleTime: 60_000,
   });
 
-  const houseReaction = useMemo(() => {
-    if (!side) return null;
-    const p = houseRead?.preview ?? null;
-    if (p === "YES" || p === "NO") return houseAfter(p === side, marketId);
-    return "I'm still learning how you think.";
-  }, [side, houseRead, marketId]);
-
   const choose = useCallback(
     (s: OrderSide) => {
+      // Free belief, recorded silently — it NEVER reveals the House pick and never
+      // swaps the screen (matches desktop). The question stays put; only the dock
+      // transforms into the order controls. The House pick + celebration wait for
+      // a placed order.
       if (viewerWallet) express.mutate(s);
       setSide(s);
-      setPhase("decided");
-      // Drop straight into backing — the amount + Confirm is right there, so buying
-      // is YES → Confirm (two taps). The reveal + community still show above; the
-      // amount panel's Cancel steps back out for anyone who isn't ready.
       setBacking(true);
     },
     [viewerWallet], // eslint-disable-line react-hooks/exhaustive-deps
@@ -177,10 +171,11 @@ export function MobileGame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trade.isSuccess, trade.hash, side]);
 
-  const createdAt = cm?.creator?.createdAt ?? null;
+  const stageMedia = stageMediaFrom(cm);
+  const createdAt = cm?.createdAt ?? cm?.creator?.createdAt ?? null;
   const byline = [
     cm?.creator?.name ? `by ${cm.creator.name}` : null,
-    createdAt ? ago(Date.now() - new Date(createdAt).getTime()) : null,
+    createdAt ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()).toLowerCase() : null,
   ]
     .filter(Boolean)
     .join(" • ");
@@ -227,7 +222,7 @@ export function MobileGame({
         title={title}
         ethUsd={ethUsd}
         row={row}
-        onBack={() => setPhase(side ? "decided" : "question")}
+        onBack={() => setPhase("question")}
       />
     );
 
@@ -246,20 +241,96 @@ export function MobileGame({
       </Screen>
     );
 
-  if (phase === "decided" && side)
-    return (
-      <Reveal
-        marketId={marketId}
-        side={side}
-        row={row}
-        houseReaction={houseReaction}
-        viewerWallet={viewerWallet}
-        onSelectPerson={onSelectPerson}
-        onSeeBothSides={() => setPhase("sides")}
-        onNext={onNext}
-        backing={backing}
-        onBack={() => setBacking(true)}
-        amountPanel={
+  // ---- The Question — ONE screen. The dock transforms decision → order in place;
+  // the House pick + celebration only arrive after the order is placed (above). ----
+  // The question block — fixed above the stage when there's evidence, part of
+  // the single scroll column when there isn't (that layout is unchanged).
+  const questionBlock = (
+    <div>
+      {(category || createdAt || cm?.market) && (
+        <div className="text-[12px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          {[
+            category,
+            createdAt ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()) : null,
+            cm?.market ? "Company exclusive" : null,
+          ]
+            .filter(Boolean)
+            .join(" • ")}
+        </div>
+      )}
+      <h1 className="mt-3 text-[26px] font-semibold leading-[1.2] tracking-[-0.02em] text-[var(--text)]">
+        {title}
+      </h1>
+      {byline && (
+        <button
+          type="button"
+          onClick={() => cm?.creator && onSelectPerson?.(cm.creator.wallet)}
+          className="mt-3 text-left text-[13px] text-[var(--text-muted)]"
+        >
+          {byline}
+        </button>
+      )}
+    </div>
+  );
+
+  const marketBody = (
+    <>
+      <Rule />
+
+      {/* Momentum — believers, capital, the trend. The same <MarketMomentum>
+        the desktop deck renders, in its mobile layout. */}
+      <WindowFilter win={deckWin} onWin={setDeckWindow} />
+
+      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} win={deckWin} />
+
+      <Rule />
+
+      {/* The story — House + this market's activity — as the pinned scope of the
+        Live feed, expandable in place. Same component desktop pins to its feed. */}
+      <CurrentMarketActivity marketId={marketId} wallet={viewerWallet} onSelect={() => undefined} />
+
+      {/* Compare the two cases — an explicit exploration, never part of the
+        order flow, so the decision → order path is never interrupted. */}
+      <button
+        type="button"
+        onClick={() => setPhase("sides")}
+        className="text-left text-[15px] font-semibold text-[var(--text-secondary)]"
+      >
+        See both sides →
+      </button>
+    </>
+  );
+
+  return (
+    <Screen>
+      {stageMedia ? (
+        <>
+          <div className="shrink-0 pt-1">{questionBlock}</div>
+          <MediaStage
+            media={stageMedia}
+            className="mt-4 flex min-h-0 flex-1 flex-col gap-7 pb-4"
+          >
+            {marketBody}
+          </MediaStage>
+        </>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
+          {questionBlock}
+          {marketBody}
+        </div>
+      )}
+
+
+      {/* One dock, transforming in place: the decision, then the order controls —
+        never a screen swap. The House pick + celebration wait for a placed order. */}
+      <Dock>
+        {side == null ? (
+          <div className="flex gap-2.5">
+            <BigButton label="NO" tone="no" onClick={() => choose("NO")} />
+            <BigButton label="PASS" tone="neutral" onClick={pass} />
+            <BigButton label="YES" tone="yes" onClick={() => choose("YES")} />
+          </div>
+        ) : (
           <AmountPanel
             amount={amount}
             setAmount={setAmount}
@@ -274,7 +345,10 @@ export function MobileGame({
                   ? "Switch to Base"
                   : `Confirm ${fmtUsd(amount)}`
             }
-            onCancel={() => setBacking(false)}
+            onCancel={() => {
+              setBacking(false);
+              setSide(null);
+            }}
             onConfirm={async () => {
               if (!ready.connected) return requestConnect();
               if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
@@ -288,189 +362,6 @@ export function MobileGame({
             }}
             onNext={onNext}
           />
-        }
-      />
-    );
-
-  // ---- Screen 1 — The Question ----
-  return (
-    <Screen>
-      <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
-        <div>
-          {(category || createdAt) && (
-            <div className="text-[12px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-              {[category, createdAt ? ago(Date.now() - new Date(createdAt).getTime()) : null]
-                .filter(Boolean)
-                .join(" • ")}
-            </div>
-          )}
-          <h1 className="mt-3 text-[26px] font-semibold leading-[1.2] tracking-[-0.02em] text-[var(--text)]">
-            {title}
-          </h1>
-          {byline && (
-            <button
-              type="button"
-              onClick={() => cm?.creator && onSelectPerson?.(cm.creator.wallet)}
-              className="mt-3 text-left text-[13px] text-[var(--text-muted)]"
-            >
-              {byline}
-            </button>
-          )}
-        </div>
-
-        <Rule />
-
-        {/* Momentum — believers, capital, the trend. The same <MarketMomentum>
-          the desktop deck renders, in its mobile layout. */}
-        <MarketMomentum tape={change?.tape} ethUsd={ethUsd} />
-
-        <Rule />
-
-        {/* The story — House + this market's activity — as the pinned scope of the
-          Live feed, expandable in place. Same component desktop pins to its feed. */}
-        <CurrentMarketActivity
-          marketId={marketId}
-          wallet={viewerWallet}
-          onSelect={() => undefined}
-        />
-      </div>
-
-      <Dock>
-        <div className="flex gap-2.5">
-          <BigButton label="NO" tone="no" onClick={() => choose("NO")} />
-          <BigButton label="PASS" tone="neutral" onClick={pass} />
-          <BigButton label="YES" tone="yes" onClick={() => choose("YES")} />
-        </div>
-      </Dock>
-    </Screen>
-  );
-}
-
-/** Screen 2 — the reveal. The crowd is the reward for deciding first. */
-function Reveal({
-  marketId,
-  side,
-  row,
-  houseReaction,
-  viewerWallet,
-  onSeeBothSides,
-  onNext,
-  backing,
-  onBack,
-  amountPanel,
-}: {
-  marketId: number;
-  side: OrderSide;
-  row: MarketRow;
-  houseReaction: string | null;
-  viewerWallet?: string;
-  onSelectPerson?: (wallet: string) => void;
-  onSeeBothSides: () => void;
-  onNext: () => void;
-  backing: boolean;
-  onBack: () => void;
-  amountPanel: React.ReactNode;
-}) {
-  const { data: evidence } = useQuery({
-    queryKey: ["evidence", marketId],
-    queryFn: () => getMarketEvidence({ data: { marketId } }),
-    staleTime: 30_000,
-  });
-  const { data: net } = useQuery({
-    queryKey: ["network", viewerWallet ?? null, "all", "relevant", ""],
-    queryFn: () => getNetwork({ data: { wallet: viewerWallet, limit: 60 } }),
-    enabled: !!viewerWallet,
-    staleTime: 60_000,
-  });
-
-  const yes = evidence?.believersYes ?? row.believers_yes ?? 0;
-  const no = evidence?.believersNo ?? row.believers_no ?? 0;
-  const mine = side === "YES" ? yes : no;
-  const theirs = side === "YES" ? no : yes;
-  const other: OrderSide = side === "YES" ? "NO" : "YES";
-
-  const tribeAgreed = useMemo(() => {
-    const believers = evidence?.believers ?? [];
-    const bySide = new Map(believers.map((b) => [b.wallet.toLowerCase(), b.side]));
-    return (net?.people ?? []).filter(
-      (p) =>
-        ["tribe", "twin"].includes(p.relationship) && bySide.get(p.wallet.toLowerCase()) === side,
-    ).length;
-  }, [evidence, net, side]);
-
-  const tone = side === "YES" ? "var(--yes)" : "var(--no)";
-
-  return (
-    <Screen>
-      <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
-        {houseReaction && (
-          <p className="text-[16px] leading-relaxed text-[var(--text-secondary)]">
-            <span aria-hidden>🏠</span> {houseReaction}
-          </p>
-        )}
-
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-            You chose
-          </div>
-          <div
-            className="mt-1 text-[30px] font-semibold tracking-[-0.02em]"
-            style={{ color: tone }}
-          >
-            {side}
-          </div>
-        </div>
-
-        <Rule />
-
-        <div className="space-y-1.5">
-          <div className="num text-[16px] text-[var(--text)]">
-            {mine} believer{mine === 1 ? "" : "s"}
-          </div>
-          <div className="num text-[16px] text-[var(--text-secondary)]">
-            {theirs} chose {other}
-          </div>
-        </div>
-
-        {tribeAgreed > 0 && (
-          <>
-            <Rule />
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                Your Tribe
-              </div>
-              <div className="num mt-2 text-[16px] text-[var(--text)]">{tribeAgreed} agreed</div>
-            </div>
-          </>
-        )}
-
-        <Rule />
-
-        <button
-          type="button"
-          onClick={onSeeBothSides}
-          className="text-left text-[16px] font-semibold text-[var(--text)]"
-        >
-          See Both Sides →
-        </button>
-
-        <p className="text-[13px] text-[var(--text-muted)]">
-          Another conviction mapped. The House understands you a little better.
-        </p>
-      </div>
-
-      <Dock>
-        {backing ? (
-          amountPanel
-        ) : (
-          <div className="flex gap-2.5">
-            <BigButton label="Next question" tone="neutral" onClick={onNext} />
-            <BigButton
-              label={`Back ${side}`}
-              tone={side === "YES" ? "yes" : "no"}
-              onClick={onBack}
-            />
-          </div>
         )}
       </Dock>
     </Screen>
@@ -501,8 +392,6 @@ function AmountPanel({
   onConfirm: () => void;
   onNext: () => void;
 }) {
-  const [custom, setCustom] = useState(false);
-
   if (success)
     return (
       <div className="space-y-3">
@@ -516,59 +405,25 @@ function AmountPanel({
   return (
     <div className="space-y-3">
       <div className="text-[13px] text-[var(--text-muted)]">How much conviction?</div>
-      <div className="flex gap-2.5">
-        {[1, 5, 10].map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => {
-              setCustom(false);
-              setAmount(v);
-            }}
-            className="h-[52px] flex-1 rounded-[14px] text-[18px] font-semibold"
-            style={
-              !custom && amount === v
-                ? { background: "var(--text)", color: "var(--bg)" }
-                : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
-            }
-          >
-            ${v}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => setCustom(true)}
-          className="h-[52px] flex-1 rounded-[14px] text-[18px] font-semibold"
-          style={
-            custom
-              ? { background: "var(--text)", color: "var(--bg)" }
-              : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
-          }
-        >
-          Custom
-        </button>
-      </div>
-      {custom && (
-        <span
-          className="flex h-[52px] items-center gap-1 rounded-[14px] px-3"
-          style={{ border: "1px solid var(--border)" }}
-        >
-          <span className="num text-[18px] text-[var(--text-muted)]">$</span>
-          <input
-            autoFocus
-            inputMode="decimal"
-            value={amount ? String(amount) : ""}
-            onChange={(e) => {
-              const raw = e.target.value.replace(/[^0-9.]/g, "");
-              const n = parseFloat(raw);
-              setAmount(Number.isNaN(n) ? 0 : Math.min(n, 1_000_000));
-            }}
-            aria-label="Amount in dollars"
-            className="num w-full bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
-            placeholder="0"
-          />
-        </span>
-      )}
+      <span
+        className="flex h-[52px] items-center gap-1 rounded-[14px] px-3"
+        style={{ border: "1px solid var(--border)" }}
+      >
+        <span className="num text-[18px] text-[var(--text-muted)]">$</span>
+        <input
+          autoFocus
+          inputMode="decimal"
+          value={amount ? String(amount) : ""}
+          onChange={(e) => {
+            const raw = e.target.value.replace(/[^0-9.]/g, "");
+            const n = parseFloat(raw);
+            setAmount(Number.isNaN(n) ? 0 : Math.min(n, 1_000_000));
+          }}
+          aria-label="Amount in dollars"
+          className="num w-full bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
+          placeholder="0"
+        />
+      </span>
       {error && <div className="text-[13px] text-[var(--no)]">{error}</div>}
       <div className="flex gap-2.5">
         <BigButton label="Not now" tone="neutral" onClick={onCancel} />

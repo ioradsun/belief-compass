@@ -131,6 +131,36 @@ export type Database = {
         }
         Relationships: []
       }
+      conviction_trades: {
+        Row: {
+          action: string | null
+          chain_id: number | null
+          market_id: string | null
+          recorded_at: string
+          side: string | null
+          tx_hash: string
+          wallet: string
+        }
+        Insert: {
+          action?: string | null
+          chain_id?: number | null
+          market_id?: string | null
+          recorded_at?: string
+          side?: string | null
+          tx_hash: string
+          wallet: string
+        }
+        Update: {
+          action?: string | null
+          chain_id?: number | null
+          market_id?: string | null
+          recorded_at?: string
+          side?: string | null
+          tx_hash?: string
+          wallet?: string
+        }
+        Relationships: []
+      }
       events: {
         Row: {
           action: string | null
@@ -1328,6 +1358,11 @@ export type Database = {
           requested_at: string
         }[]
       }
+      conviction_attributed_value: {
+        Args: { p_growth_days?: number }
+        Returns: Json
+      }
+      conviction_ecosystem_share: { Args: { p_days?: number }; Returns: Json }
       detect_believer_milestones: { Args: never; Returns: number }
       detect_tribe_doublings: { Args: never; Returns: number }
       enqueue_market_refresh: {

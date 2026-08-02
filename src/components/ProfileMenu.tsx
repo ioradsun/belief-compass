@@ -8,17 +8,26 @@
  * occasionally need: Edit Profile, Import POV Wallet, Settings, Sign Out. No
  * account switcher, no multiple profiles, no advanced wallet management.
  */
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
 import { lookupPovUser } from "@/lib/pov-user.functions";
 import { getPersonProfile } from "@/lib/dna.functions";
 import { getProfileOverride } from "@/lib/profile-edit.functions";
-import { ProfileEditor } from "@/components/ProfileEditor";
-import { CreatorEarnings } from "@/components/CreatorEarnings";
-import { WalletIdentity } from "@/components/WalletIdentity";
+// The three account panels only exist behind a menu click, and each drags in
+// its own contract/signing code. Keeping them out of the header's chunk keeps
+// them off every first paint.
+const ProfileEditor = lazy(() =>
+  import("@/components/ProfileEditor").then((m) => ({ default: m.ProfileEditor })),
+);
+const CreatorEarnings = lazy(() =>
+  import("@/components/CreatorEarnings").then((m) => ({ default: m.CreatorEarnings })),
+);
+const WalletIdentity = lazy(() =>
+  import("@/components/WalletIdentity").then((m) => ({ default: m.WalletIdentity })),
+);
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
-import { requestDisconnect } from "@/lib/connect-bridge";
+import { requestDisconnect, requestSwitchAccount } from "@/lib/connect-bridge";
 import { useDisplayUnit } from "@/lib/display-unit";
 import { formatRate, type DisplayUnit } from "@/domain/money";
 
@@ -41,6 +50,7 @@ export function ProfileMenu({
   wallet,
   onViewProfile,
   onOpenTerms,
+  onOpenDashboard,
   ethUsd = 0,
 }: {
   /** The effective (POV / trading) wallet being represented. */
@@ -49,6 +59,8 @@ export function ProfileMenu({
   onViewProfile: (wallet: string) => void;
   /** Open Terms & risk in the center (the one privacy surface we have). */
   onOpenTerms?: () => void;
+  /** Open the Conviction Dashboard in the center panel. */
+  onOpenDashboard?: () => void;
   /** Live ETH price, so claimable fees can be shown in dollars too. */
   ethUsd?: number;
 }) {
@@ -197,11 +209,27 @@ export function ProfileMenu({
           </div>
 
           <Divider />
+          {onOpenDashboard && (
+            <Item
+              label="Conviction Dashboard"
+              onClick={() => {
+                onOpenDashboard();
+                setOpen(false);
+              }}
+            />
+          )}
           <Item label="Edit Profile" onClick={() => setPanel("edit")} />
           <Item label="Creator Earnings" onClick={() => setPanel("earnings")} />
           <Item label="Import POV Wallet" onClick={() => setPanel("import")} />
           <Divider />
           <Item label="Settings" onClick={() => setPanel("settings")} />
+          <Item
+            label="Switch Wallet"
+            onClick={() => {
+              requestSwitchAccount();
+              setOpen(false);
+            }}
+          />
           <Item
             label="Sign Out"
             muted
@@ -226,16 +254,22 @@ export function ProfileMenu({
           }
           onClose={() => setPanel(null)}
         >
-          {panel === "edit" && <ProfileEditor wallet={me} fallbackName={name} />}
-          {panel === "earnings" && <CreatorEarnings ethUsd={ethUsd} />}
-          {panel === "import" && (
-            <>
-              <p className="mb-1 text-[12px] leading-relaxed text-[var(--text-muted)]">
-                Link the wallet you trade from so your conviction history comes with you.
-              </p>
-              <WalletIdentity viewing={me} compact />
-            </>
-          )}
+          <Suspense
+            fallback={
+              <div className="py-6 text-center text-[12px] text-[var(--text-muted)]">…</div>
+            }
+          >
+            {panel === "edit" && <ProfileEditor wallet={me} fallbackName={name} />}
+            {panel === "earnings" && <CreatorEarnings ethUsd={ethUsd} />}
+            {panel === "import" && (
+              <>
+                <p className="mb-1 text-[12px] leading-relaxed text-[var(--text-muted)]">
+                  Link the wallet you trade from so your conviction history comes with you.
+                </p>
+                <WalletIdentity viewing={me} compact />
+              </>
+            )}
+          </Suspense>
           {panel === "settings" && (
             <SettingsPanel
               onOpenTerms={onOpenTerms}

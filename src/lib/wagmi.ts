@@ -18,15 +18,40 @@ export const wagmiConfig = createConfig({
 });
 
 /** Build the browser config with real connectors. Client-only, post-paint. */
+let configPromise: Promise<Config> | null = null;
+
 export async function loadWalletConfig(): Promise<Config> {
-  const { browserConnectors } = await import("@/lib/wallet-connectors");
-  return createConfig({
-    chains: [base],
-    transports: { [base.id]: http() },
-    connectors: browserConnectors(),
-    ssr: true,
-  });
+  configPromise ??= (async () => {
+    const { browserConnectors } = await import("@/lib/wallet-connectors");
+    return createConfig({
+      chains: [base],
+      transports: { [base.id]: http() },
+      connectors: browserConnectors(),
+      ssr: true,
+    });
+  })();
+  return configPromise;
 }
+
+/**
+ * Intent warming. Idle-boot already pulls the wallet stack in the background,
+ * but a visitor who hovers "Connect wallet" or reaches the decision dock is
+ * about to need it NOW — start the connector + modal chunks on that signal so
+ * the click never waits on a download. Safe to call repeatedly: both the config
+ * promise and the dynamic import are de-duplicated.
+ */
+export function warmWallet(): void {
+  if (typeof window === "undefined") return;
+  void loadWalletConfig();
+  void import("@/components/wallet/RainbowKitLayer");
+}
+
+/** Handlers to spread onto any element that precedes a wallet interaction. */
+export const walletIntent = {
+  onPointerEnter: warmWallet,
+  onFocus: warmWallet,
+  onTouchStart: warmWallet,
+} as const;
 
 /** True on phone/tablet web browsers. */
 export function isMobileWeb(): boolean {

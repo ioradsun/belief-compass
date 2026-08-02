@@ -3,7 +3,7 @@ import { WagmiProvider, useAccount } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Config } from "wagmi";
 
-import { wagmiConfig, loadWalletConfig } from "@/lib/wagmi";
+import { wagmiConfig, loadWalletConfig, walletIntent } from "@/lib/wagmi";
 import { requestConnect, requestDisconnect } from "@/lib/connect-bridge";
 
 // Isolated query client for wagmi to avoid interfering with the app's router-level client.
@@ -79,13 +79,19 @@ export function WalletConnectButton() {
   }
   if (isConnected && address) {
     return (
-      <button type="button" className={cls} onClick={() => requestDisconnect()} title="Sign out">
+      <button
+        type="button"
+        className={cls}
+        {...walletIntent}
+        onClick={() => requestDisconnect()}
+        title="Sign out"
+      >
         {short(address)}
       </button>
     );
   }
   return (
-    <button type="button" className={cls} onClick={() => requestConnect()}>
+    <button type="button" className={cls} {...walletIntent} onClick={() => requestConnect()}>
       Connect wallet
     </button>
   );

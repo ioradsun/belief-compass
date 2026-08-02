@@ -12,15 +12,19 @@
  * It fetches nothing new: the same React Query keys the deck and the Case File
  * columns already run supply the tape, the believers and the network.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketChange } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { ConvictionSpark } from "@/components/ConvictionSpark";
-import { CaseRoster, StatRow, WindowFilter } from "@/components/CaseFile";
+import { CaseRoster, StatRow } from "@/components/CaseFile";
+import { WindowFilter } from "@/components/WindowFilter";
+import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
+
+
 import { convictionStory, narrateStory, timelineEvents } from "@/domain/conviction-series";
-import { FLOW_WINDOW_PHRASE, type FlowWindow } from "@/domain/market-flow";
+import { FLOW_WINDOW_PHRASE } from "@/domain/market-flow";
 import { sideCaseSummary } from "@/domain/case-file";
 import { fmtUsd } from "@/domain/order";
 
@@ -30,8 +34,6 @@ export function CaseStory({
   ethUsd,
   viewerWallet,
   onClose,
-  onBack,
-  backed,
 }: {
   side: "YES" | "NO";
   marketId: number;
@@ -39,14 +41,13 @@ export function CaseStory({
   viewerWallet?: string;
   /** Return to Discovery (both sides side-by-side). */
   onClose: () => void;
-  /** The one action this story argues for — selects the side in the dock. */
-  onBack: () => void;
-  /** True when the dock is already open on this side. */
-  backed: boolean;
 }) {
+
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
-  // Investigation detaches its own timeframe — the comparison keeps the shared one.
-  const [win, setWin] = useState<FlowWindow>("24h");
+  // One timeframe everywhere: investigation reads (and can change) the same
+  // selection the center panel owns, so no two surfaces quote different periods.
+  const win = useDeckWindow();
+  
 
   // Escape always returns to comparison — investigation is a temporary lens.
   useEffect(() => {
@@ -100,6 +101,12 @@ export function CaseStory({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+        {/* THE ONE TIMEFRAME — same control, same position as when the timeline is
+        closed, so opening a story never moves or hides it. */}
+        <div className="mb-3 max-w-[300px]">
+          <WindowFilter win={win} onWin={setDeckWindow} />
+        </div>
+
         {/* Headline — the story's one sentence. Side colour is an accent only. */}
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
@@ -134,10 +141,7 @@ export function CaseStory({
           </button>
         </div>
 
-        {/* This side's own timeframe. */}
-        <div className="mt-3 max-w-[280px]">
-          <WindowFilter win={win} onWin={setWin} />
-        </div>
+
 
         {/* The three real signals over time — believers, capital, price. */}
         <div className="mt-4 space-y-3">
@@ -195,21 +199,8 @@ export function CaseStory({
         </section>
       </div>
 
-      {/* The one action this story argues for. */}
-      <div className="shrink-0 pt-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="w-full rounded-[12px] py-3 text-[14px] font-semibold transition-colors"
-          style={{
-            border: `1.5px solid ${color}`,
-            background: backed ? `color-mix(in oklab, ${color} 16%, transparent)` : "transparent",
-            color: "var(--text)",
-          }}
-        >
-          Back {side}
-        </button>
-      </div>
+      {/* No side action here — the decision dock below already owns Back YES/NO. */}
+
     </div>
   );
 }

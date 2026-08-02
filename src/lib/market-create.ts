@@ -49,6 +49,15 @@ export function accept(kind: Exclude<MediaKind, "link">): string {
   return [...ALLOWED_MIME[kind], ...ACCEPT_EXT[kind]].join(",");
 }
 
+/** One picker for every supported file — the browser filters, we don't ask. */
+export function acceptAll(): string {
+  return (["image", "audio", "video"] as const).map(accept).join(",");
+}
+
+/** Human-readable summary of what can be attached, used as the picker tooltip. */
+export const SUPPORTED_MEDIA_HINT =
+  "Images (JPG, PNG, WEBP, AVIF, GIF · 10MB) · Video (MP4, WEBM · 50MB, 60s) · Audio (MP3, M4A, AAC, WAV, OGG · 20MB, 5min)";
+
 export function kindForMime(mime: string): Exclude<MediaKind, "link"> | null {
   for (const k of ["image", "audio", "video"] as const) {
     if (ALLOWED_MIME[k].includes(mime)) return k;
