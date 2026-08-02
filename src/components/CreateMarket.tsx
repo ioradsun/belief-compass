@@ -320,7 +320,7 @@ export function CreateMarket({
 
 
       {/* Scrolls only on short (mobile) viewports; on desktop the whole form fits. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-3">
         {source && (
           <p className="text-[11px] text-[var(--text-muted)]">
             <span aria-hidden>🏠</span> The House found this question — edit anything before it goes
@@ -385,26 +385,32 @@ export function CreateMarket({
           )}
         </div>
 
-        {/* 3 · YES or NO? + How much? — the shared order ticket. */}
-        <div className="space-y-2 rounded-[16px] p-3" style={{ border: "1px solid var(--border)" }}>
-          <StepLabel>Take your position</StepLabel>
-          <div className="flex gap-2">
-            <SideButton
-              label="Yes"
-              tone="yes"
-              selected={side === "YES"}
-              onClick={() => setSide("YES")}
-            />
-            <SideButton
-              label="No"
-              tone="no"
-              selected={side === "NO"}
-              onClick={() => setSide("NO")}
-            />
+        {/* 3 · Position + amount — grouped by spacing, not by extra chrome. */}
+        <div className="space-y-4 rounded-[16px] p-4" style={{ border: "1px solid var(--border)" }}>
+          <div>
+            <StepLabel>Your position</StepLabel>
+            <div className="flex gap-2">
+              <SideButton
+                label="Yes"
+                tone="yes"
+                selected={side === "YES"}
+                onClick={() => setSide("YES")}
+              />
+              <SideButton
+                label="No"
+                tone="no"
+                selected={side === "NO"}
+                onClick={() => setSide("NO")}
+              />
+            </div>
           </div>
-          <StepLabel>Back your conviction</StepLabel>
-          <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
-          <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} />
+          <div>
+            <StepLabel>Amount</StepLabel>
+            <div className="space-y-2">
+              <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
+              <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} />
+            </div>
+          </div>
         </div>
 
 
