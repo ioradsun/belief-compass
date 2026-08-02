@@ -137,11 +137,13 @@ export function ConvictionDashboard({
   const sinceStart = holdingGain + tradingGain + creatingGain;
 
   // The reconciling journey identity (see domain/conviction-dashboard).
+  const tradingFees = data?.progress.tradingFeesUsd ?? 0;
   const journey = journeyMath({
     investedUsd: putIn,
     currentValueUsd: worthToday,
     withdrawnUsd: cashedOut,
     creatorUsd: creatingGain,
+    feesUsd: tradingFees,
   });
   const winningMarkets = (data?.heldBest ?? []).filter((h) => h.gainUsd > 0).length;
 
@@ -418,26 +420,49 @@ export function ConvictionDashboard({
               </div>
             ) : (
               <>
+                <GroupLabel>Capital</GroupLabel>
                 <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
                   <FlowRow
                     label="Total Invested"
-                    hint="The total amount you’ve invested into markets over time."
+                    hint="Total dollars you’ve committed to markets over your lifetime."
                     value={fmtUsd(journey.investedUsd)}
                   />
+                </div>
+
+                <GroupLabel>Costs</GroupLabel>
+                <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+                  <FlowRow
+                    label="Trading Fees Paid"
+                    hint="Total buy fees you’ve paid to enter markets — what it cost you to participate, not a trading loss."
+                    value={fmtUsd(journey.feesUsd)}
+                  />
+                </div>
+
+                <GroupLabel>Portfolio</GroupLabel>
+                <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
                   <FlowRow
                     label="Current Value"
-                    hint="What your active positions are worth right now."
+                    hint="What your open positions are worth right now."
                     value={fmtUsd(journey.currentValueUsd)}
                   />
                   <FlowRow
                     label="Total Withdrawn"
-                    hint="Money you’ve already taken back out of the market."
+                    hint="Money you’ve already taken back from selling positions."
                     value={fmtUsd(journey.withdrawnUsd)}
                   />
                   <FlowRow
                     label="Creator Earnings"
                     hint="Fees you’ve earned when other people trade markets you created."
                     value={fmtUsd(journey.creatorUsd)}
+                  />
+                </div>
+
+                <GroupLabel>Overall Performance</GroupLabel>
+                <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+                  <FlowRow
+                    label="Total Return"
+                    hint="Current Value + Total Withdrawn + Creator Earnings."
+                    value={fmtUsd(journey.totalReturnUsd)}
                   />
                   <div className="flex items-center justify-between border-t border-[var(--border)] bg-[var(--bg)]/40 px-4 py-3.5">
                     <span className="text-[13px] font-medium text-[var(--text)]">Net Profit</span>
@@ -450,10 +475,11 @@ export function ConvictionDashboard({
                   </div>
                 </div>
                 <p className="mt-2.5 px-1 text-[11.5px] leading-relaxed tabular-nums text-[var(--text-muted)]">
-                  Current Value + Total Withdrawn + Creator Earnings ={" "}
                   {fmtUsd(journey.totalReturnUsd)} total return, minus{" "}
-                  {fmtUsd(journey.investedUsd)} invested.
+                  {fmtUsd(journey.investedUsd)} invested and {fmtUsd(journey.feesUsd)} in trading
+                  fees.
                 </p>
+
 
                 <details className="group mt-3">
                   <summary className="cursor-pointer list-none px-1 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]">
@@ -461,7 +487,12 @@ export function ConvictionDashboard({
                     <span className="hidden group-open:inline">Hide details</span>
                   </summary>
                   <div className="mt-2 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-                    <FlowRow label="Total Return" value={fmtUsd(journey.totalReturnUsd)} />
+                    <FlowRow
+                      label="Total Spent"
+                      hint="Total Invested plus Trading Fees Paid."
+                      value={fmtUsd(journey.investedUsd + journey.feesUsd)}
+                    />
+
                     <FlowRow
                       label="Lifetime ROI"
                       value={journey.roiPct == null ? "—" : fmtPct(journey.roiPct)}
@@ -720,6 +751,16 @@ function Section({
     </section>
   );
 }
+
+/** A small heading that separates the Journey into Capital / Costs / Portfolio. */
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-1.5 mt-4 px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] first:mt-0">
+      {children}
+    </div>
+  );
+}
+
 
 function FlowRow({
   label,

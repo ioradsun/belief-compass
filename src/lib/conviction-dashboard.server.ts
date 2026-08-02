@@ -9,7 +9,7 @@
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { readWalletTradesAscending } from "@/lib/conviction-dashboard.trades.server";
-import { decodeBuyCreatorFeeWei } from "@/chain/decoder";
+import { decodeBuyCreatorFeeWei, decodeBuyTotalFeeWei } from "@/chain/decoder";
 import {
   realizedTradingEth,
   bucketCreatorFees,
@@ -59,6 +59,8 @@ export interface ConvictionDashboardData {
   progress: {
     putInUsd: number;
     cashedOutUsd: number;
+    /** Lifetime protocol buy fees this wallet paid (USD) — on top of putIn. */
+    tradingFeesUsd: number;
   };
   /** Today's counts for the Recent Activity story. */
   activity: {
@@ -297,6 +299,25 @@ export async function buildConvictionDashboard(
     uniqueTradersTodayCount = today.size;
   }
 
+  // --- Trading fees this wallet PAID (exact, decoded from its own buys) ------
+  // `TokensBought.ethSpent` is net of the protocol fee, so the `fee` field is a
+  // real cost on top of what was invested — disclosed, never double counted.
+  let tradingFeesEth = 0;
+  {
+    const { data: myBuys } = await sb
+      .from("events")
+      .select("payload")
+      .eq("is_canonical", true)
+      .eq("kind", "trade")
+      .eq("action", "BUY")
+      .eq("wallet", wallet)
+      .limit(5000);
+    for (const row of (myBuys ?? []) as Array<{ payload: unknown }>) {
+      const feeWei = decodeBuyTotalFeeWei((row.payload as { raw_log?: unknown } | null)?.raw_log);
+      if (feeWei != null && feeWei > 0n) tradingFeesEth += Number(feeWei) / 1e18;
+    }
+  }
+
   return {
     wallet,
     ethUsd,
@@ -309,7 +330,11 @@ export async function buildConvictionDashboard(
     trading: { realizedUsd, realizedTodayUsd },
     today: { portfolioUsd: portfolioTodayUsd, creatorEarnedUsd: creatorEarnedTodayUsd },
     creatorWindows: { thisWeekUsd: creatorThisWeekUsd, lastWeekUsd: creatorLastWeekUsd },
-    progress: { putInUsd: flows.putInEth * ethUsd, cashedOutUsd: flows.cashedOutEth * ethUsd },
+    progress: {
+      putInUsd: flows.putInEth * ethUsd,
+      cashedOutUsd: flows.cashedOutEth * ethUsd,
+      tradingFeesUsd: tradingFeesEth * ethUsd,
+    },
     activity: { tradesTodayCount, uniqueTradersTodayCount },
     peopleReached,
     facts: { tradeCount: trades.length, longestHeldDays, hasProfit, ideasBacked },

@@ -218,21 +218,25 @@ export function gainBreakdown(sources: GainSource[]): Array<GainSource & { pct: 
  * The Journey — a wallet's whole economic story as one reconciling identity.
  *
  *   Total Return = Current Value + Total Withdrawn + Creator Earnings
- *   Net Profit   = Total Return − Total Invested
+ *   Net Profit   = Total Return − Total Invested − Trading Fees Paid
  *
  * Nothing is inferred and nothing is double counted: invested is cumulative
- * lifetime capital in (never netted against withdrawals), withdrawn is cumulative
- * sale proceeds, current value is the POV valuation of open positions, and creator
- * earnings are contract truth. ROI is only defined against real invested capital.
+ * lifetime capital in (the NET amount that reached the markets, never netted
+ * against withdrawals), trading fees are the protocol's buy fee paid on top of
+ * that, withdrawn is cumulative sale proceeds, current value is the POV valuation
+ * of open positions, and creator earnings are contract truth. ROI is measured
+ * against everything the wallet actually spent: invested + fees.
  */
 export interface JourneyMath {
   investedUsd: number;
   currentValueUsd: number;
   withdrawnUsd: number;
   creatorUsd: number;
+  /** Protocol buy fees paid over the wallet's lifetime (a real cost). */
+  feesUsd: number;
   totalReturnUsd: number;
   netProfitUsd: number;
-  /** netProfit / invested × 100, or null when nothing has ever been invested. */
+  /** netProfit / (invested + fees) × 100, or null when nothing was ever spent. */
   roiPct: number | null;
   /** True when the wallet has no economic history at all. */
   empty: boolean;
@@ -243,22 +247,26 @@ export function journeyMath(input: {
   currentValueUsd: number;
   withdrawnUsd: number;
   creatorUsd: number;
+  feesUsd?: number;
 }): JourneyMath {
-  const n = (v: number) => (Number.isFinite(v) ? v : 0);
+  const n = (v: number | undefined) => (Number.isFinite(Number(v)) ? Number(v) : 0);
   const investedUsd = n(input.investedUsd);
   const currentValueUsd = n(input.currentValueUsd);
   const withdrawnUsd = n(input.withdrawnUsd);
   const creatorUsd = n(input.creatorUsd);
+  const feesUsd = Math.max(0, n(input.feesUsd));
   const totalReturnUsd = currentValueUsd + withdrawnUsd + creatorUsd;
-  const netProfitUsd = totalReturnUsd - investedUsd;
+  const spentUsd = investedUsd + feesUsd;
+  const netProfitUsd = totalReturnUsd - spentUsd;
   return {
     investedUsd,
     currentValueUsd,
     withdrawnUsd,
     creatorUsd,
+    feesUsd,
     totalReturnUsd,
     netProfitUsd,
-    roiPct: investedUsd > 0 ? (netProfitUsd / investedUsd) * 100 : null,
-    empty: investedUsd <= 0 && totalReturnUsd <= 0,
+    roiPct: spentUsd > 0 ? (netProfitUsd / spentUsd) * 100 : null,
+    empty: spentUsd <= 0 && totalReturnUsd <= 0,
   };
 }

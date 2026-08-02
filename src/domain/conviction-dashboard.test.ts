@@ -215,19 +215,31 @@ describe("gainBreakdown", () => {
 });
 
 describe("journeyMath", () => {
-  it("reconciles return and net profit", () => {
+  it("reconciles return, costs and net profit", () => {
     const j = journeyMath({
       investedUsd: 2290,
       currentValueUsd: 1800,
       withdrawnUsd: 800,
       creatorUsd: 118.35,
+      feesUsd: 229,
     });
     expect(j.totalReturnUsd).toBeCloseTo(2718.35);
-    expect(j.netProfitUsd).toBeCloseTo(428.35);
-    expect(j.roiPct).toBeCloseTo((428.35 / 2290) * 100);
+    expect(j.netProfitUsd).toBeCloseTo(199.35);
+    expect(j.roiPct).toBeCloseTo((199.35 / 2519) * 100);
   });
 
-  it("has no ROI without invested capital", () => {
+  it("treats missing fees as zero", () => {
+    const j = journeyMath({
+      investedUsd: 100,
+      currentValueUsd: 120,
+      withdrawnUsd: 0,
+      creatorUsd: 0,
+    });
+    expect(j.feesUsd).toBe(0);
+    expect(j.netProfitUsd).toBe(20);
+  });
+
+  it("has no ROI without money spent", () => {
     const j = journeyMath({ investedUsd: 0, currentValueUsd: 0, withdrawnUsd: 0, creatorUsd: 12 });
     expect(j.roiPct).toBeNull();
     expect(j.netProfitUsd).toBe(12);
@@ -240,9 +252,15 @@ describe("journeyMath", () => {
     ).toBe(true);
   });
 
-  it("reports a loss", () => {
-    const j = journeyMath({ investedUsd: 100, currentValueUsd: 40, withdrawnUsd: 10, creatorUsd: 0 });
-    expect(j.netProfitUsd).toBe(-50);
-    expect(j.roiPct).toBe(-50);
+  it("reports a loss including fees", () => {
+    const j = journeyMath({
+      investedUsd: 100,
+      currentValueUsd: 40,
+      withdrawnUsd: 10,
+      creatorUsd: 0,
+      feesUsd: 10,
+    });
+    expect(j.netProfitUsd).toBe(-60);
+    expect(j.roiPct).toBeCloseTo(-54.5454, 3);
   });
 });
