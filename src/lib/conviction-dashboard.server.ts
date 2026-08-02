@@ -9,7 +9,7 @@
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { readWalletTradesAscending } from "@/lib/conviction-dashboard.trades.server";
-import { decodeBuyCreatorFeeWei } from "@/chain/decoder";
+import { decodeBuyCreatorFeeWei, decodeBuyTotalFeeWei } from "@/chain/decoder";
 import {
   realizedTradingEth,
   bucketCreatorFees,
