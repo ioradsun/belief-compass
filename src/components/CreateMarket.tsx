@@ -466,6 +466,16 @@ export function CreateMarket({
 }
 
 /**
+ * Quiet navigational step label — identical weight, colour and spacing across
+ * all three steps so they read as wayfinding, not section headings.
+ */
+function StepLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-1 text-[11px] font-medium leading-none text-[var(--text-muted)]">{children}</p>
+  );
+}
+
+/**
  * Media affordance: one picker for every supported file (the OS dialog does the
  * filtering). No type menu — it was unusable on mobile and the type list is now
  * just a tooltip.
