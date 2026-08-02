@@ -281,7 +281,7 @@ export function CreateMarket({
           ? "Creating market…"
           : failed
             ? "Try again"
-            : `Create & Back ${side}`;
+            : "Publish Market";
 
   const errorText =
     localError ??
@@ -312,36 +312,34 @@ export function CreateMarket({
         if (f) void pickFile(f);
       }}
     >
-      {/* 1 · Compact header — pinned. */}
-      <div className="flex shrink-0 items-center justify-between">
+      {/* 1 · Compact header — pinned. Title carries the earn promise; the
+          provenance tag sits inline, top-right. */}
+      <div className="flex shrink-0 items-start gap-2">
         <button
           type="button"
           onClick={onCancel}
           aria-label="Back"
-          className="text-[16px] leading-none text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+          className="mt-0.5 text-[16px] leading-none text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
         >
           ←
         </button>
-        <h2 className="text-[15px] font-semibold text-[var(--text)]">Create market</h2>
-        <span className="w-4" />
-      </div>
-
-      {/* Provenance pill — this market lives here, not on POV (not yet). */}
-      <div className="mt-2 flex shrink-0 flex-col items-center gap-1">
+        <h2 className="flex-1 text-[15px] font-semibold leading-snug text-[var(--text)]">
+          Share Your Conviction. Earn 4.5% on Every Trade.
+        </h2>
         <span
-          title="Markets created here don't appear on pov.co yet."
-          className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10.5px] font-medium uppercase tracking-[0.08em] text-[var(--text-secondary)]"
-          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+          title="Not on pov.co yet"
+          className="mt-0.5 shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em]"
+          style={{
+            borderColor: "#C9A227",
+            color: "#D9B640",
+            background: "color-mix(in srgb, #C9A227 8%, transparent)",
+          }}
         >
-          <span
-            aria-hidden
-            className="h-1.5 w-1.5 rounded-full"
-            style={{ background: "var(--accent, var(--text-secondary))" }}
-          />
           Company exclusive
         </span>
-        <p className="text-[10.5px] text-[var(--text-muted)]">Not on pov.co yet.</p>
       </div>
+
+
 
 
       {/* Scrolls only on short (mobile) viewports; on desktop the whole form fits. */}
@@ -353,16 +351,10 @@ export function CreateMarket({
           </p>
         )}
 
-        {/* 2 · What do you believe? */}
+        {/* 2 · The conviction statement. */}
         <div>
-          <label
-            htmlFor="conviction"
-            className="block text-[12px] font-medium text-[var(--text-secondary)]"
-          >
-            What do you believe?
-          </label>
           <div
-            className="mt-1.5 rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
+            className="rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
             style={{ borderColor: "var(--border)" }}
           >
             {attachment && (
