@@ -66,13 +66,16 @@ export function LandingPanel({
           >
             <BrandMark
               size={expanded ? 40 : 22}
-              className="shrink-0 text-[var(--text)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+              className={`shrink-0 text-[var(--text)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+                expanded ? "" : "hidden lg:block"
+              }`}
             />
             {!expanded && (
               <span className="hidden shrink-0 truncate text-[12px] text-[var(--text-secondary)] md:block">
                 Conviction needs company.
               </span>
             )}
+
             {!expanded && search && (
               <div
                 className="ml-auto flex min-w-0 flex-1 items-center lg:w-[344px] lg:max-w-[344px] lg:flex-none"
