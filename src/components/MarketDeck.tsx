@@ -29,7 +29,7 @@ import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
 import { SharedConviction } from "@/components/SharedConviction";
-import { marketFreshness } from "@/domain/market-freshness";
+import { marketAgeCopy, marketFreshness } from "@/domain/market-freshness";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import type { TapeTrade } from "@/domain/conviction-series";
 
