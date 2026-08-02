@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { marketFreshness } from "@/domain/market-freshness";
+import { marketAgeCopy, marketFreshness } from "@/domain/market-freshness";
+
+describe("marketAgeCopy", () => {
+  it("reads as plain human age", () => {
+    expect(marketAgeCopy(60_000)).toBe("Just created");
+    expect(marketAgeCopy(40 * 60_000)).toBe("40 minutes old");
+    expect(marketAgeCopy(3 * 3_600_000)).toBe("3 hours old");
+    expect(marketAgeCopy(26 * 3_600_000)).toBe("1 day old");
+    expect(marketAgeCopy(3 * 86_400_000)).toBe("3 days old");
+    expect(marketAgeCopy(9 * 86_400_000)).toBe("About a week old");
+    expect(marketAgeCopy(20 * 86_400_000)).toBe("2 weeks old");
+    expect(marketAgeCopy(40 * 86_400_000)).toBe("About a month old");
+    expect(marketAgeCopy(120 * 86_400_000)).toBe("4 months old");
+    expect(marketAgeCopy(500 * 86_400_000)).toBe("Over a year old");
+  });
+});
+
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
