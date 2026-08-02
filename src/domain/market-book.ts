@@ -27,6 +27,8 @@
  */
 import type { TapeTrade } from "./conviction-series";
 import type { VitalityPoint } from "./market-vitality";
+import { FLOW_WINDOW_MS, type FlowWindow } from "./market-flow";
+
 
 /** Net stance magnitude at/above which a wallet is a directional believer. */
 export const DIRECTIONAL_THRESHOLD = 0.1;
