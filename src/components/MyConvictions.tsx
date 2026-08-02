@@ -77,8 +77,11 @@ type Built = {
   /** What that delta is measured against — "24H", "1W" … or "since entered". */
   deltaLabel: string;
   title: string;
-  believers: number | null;
-  newToday: number | null;
+  believers: null | number;
+  /** New believers on this side over the SELECTED window (null when unknown). */
+  newInWindow: number | null;
+  /** The window's short name, e.g. "24H" / "1W" — what newInWindow is measured over. */
+  windowLabel: string;
   chg: number | null;
   signal: PositionSignal;
 };
