@@ -17,6 +17,7 @@ import { FEES_ABI, useFeeBalances, useClaimFees } from "@/lib/creator-fees";
 import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
 import {
   gainBreakdown,
+  journeyMath,
   buildMilestones,
   milestonePct,
   type Milestone,
@@ -30,6 +31,8 @@ const fmtUsd = (n: number, sign = false): string => {
       : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `${n < 0 ? "−" : sign ? "+" : ""}$${body}`;
 };
+const fmtPct = (n: number): string =>
+  `${n < 0 ? "−" : "+"}${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
 const weiToUsd = (wei: bigint | null | undefined, ethUsd: number): number =>
   wei == null || !(ethUsd > 0) ? 0 : Number(formatEther(wei)) * ethUsd;
 
@@ -132,6 +135,15 @@ export function ConvictionDashboard({
   const creatingGain = weiToUsd(lifetimeWei, ethUsd);
   const availableUsd = weiToUsd(availableWei, ethUsd);
   const sinceStart = holdingGain + tradingGain + creatingGain;
+
+  // The reconciling journey identity (see domain/conviction-dashboard).
+  const journey = journeyMath({
+    investedUsd: putIn,
+    currentValueUsd: worthToday,
+    withdrawnUsd: cashedOut,
+    creatorUsd: creatingGain,
+  });
+  const winningMarkets = (data?.heldBest ?? []).filter((h) => h.gainUsd > 0).length;
 
   const sources = gainBreakdown([
     { key: "holding", label: "Holding Markets", usd: holdingGain },
@@ -709,10 +721,23 @@ function Section({
   );
 }
 
-function FlowRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function FlowRow({
+  label,
+  value,
+  strong,
+  hint,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+  /** Plain-language explanation, shown as a native tooltip on the label. */
+  hint?: string;
+}) {
   return (
-    <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3.5 last:border-b-0">
-      <span className="text-[13px] text-[var(--text-secondary)]">{label}</span>
+    <div className="flex items-center justify-between gap-4 border-b border-[var(--border)] px-4 py-3.5 last:border-b-0">
+      <span className="text-[13px] text-[var(--text-secondary)]" title={hint}>
+        {label}
+      </span>
       <span
         className={`tabular-nums ${strong ? "text-[18px] font-semibold" : "text-[15px] font-medium"} text-[var(--text)]`}
       >
