@@ -13,7 +13,7 @@
  * desktop deck uses (marketBook / marketPulse / evidence / house read), so the
  * two experiences can never disagree.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSwitchChain } from "wagmi";
 
@@ -37,7 +37,6 @@ import { fmtUsd, usdToWei, type OrderSide } from "@/domain/order";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
-import { houseAfter } from "@/domain/the-house";
 
 const money = (usd: number) =>
   usd >= 1000 ? `$${Math.round(usd).toLocaleString("en-US")}` : `$${usd.toFixed(usd < 10 ? 2 : 0)}`;
@@ -49,7 +48,7 @@ function ago(ms: number): string {
   return `${Math.round(h / 24)}d ago`;
 }
 
-type Phase = "question" | "decided" | "passed" | "sides";
+type Phase = "question" | "passed" | "sides";
 
 export function MobileGame({
   row,
@@ -135,21 +134,14 @@ export function MobileGame({
     staleTime: 60_000,
   });
 
-  const houseReaction = useMemo(() => {
-    if (!side) return null;
-    const p = houseRead?.preview ?? null;
-    if (p === "YES" || p === "NO") return houseAfter(p === side, marketId);
-    return "I'm still learning how you think.";
-  }, [side, houseRead, marketId]);
-
   const choose = useCallback(
     (s: OrderSide) => {
+      // Free belief, recorded silently — it NEVER reveals the House pick and never
+      // swaps the screen (matches desktop). The question stays put; only the dock
+      // transforms into the order controls. The House pick + celebration wait for
+      // a placed order.
       if (viewerWallet) express.mutate(s);
       setSide(s);
-      setPhase("decided");
-      // Drop straight into backing — the amount + Confirm is right there, so buying
-      // is YES → Confirm (two taps). The reveal + community still show above; the
-      // amount panel's Cancel steps back out for anyone who isn't ready.
       setBacking(true);
     },
     [viewerWallet], // eslint-disable-line react-hooks/exhaustive-deps
@@ -226,7 +218,7 @@ export function MobileGame({
         title={title}
         ethUsd={ethUsd}
         row={row}
-        onBack={() => setPhase(side ? "decided" : "question")}
+        onBack={() => setPhase("question")}
       />
     );
 
@@ -245,53 +237,8 @@ export function MobileGame({
       </Screen>
     );
 
-  if (phase === "decided" && side)
-    return (
-      <Reveal
-        marketId={marketId}
-        side={side}
-        row={row}
-        houseReaction={houseReaction}
-        viewerWallet={viewerWallet}
-        onSelectPerson={onSelectPerson}
-        onSeeBothSides={() => setPhase("sides")}
-        onNext={onNext}
-        backing={backing}
-        onBack={() => setBacking(true)}
-        amountPanel={
-          <AmountPanel
-            amount={amount}
-            setAmount={setAmount}
-            side={side}
-            busy={trade.isSubmitting || trade.isMining}
-            success={trade.isSuccess}
-            error={trade.isError ? (trade.error?.message?.slice(0, 90) ?? "Failed") : null}
-            label={
-              !ready.connected
-                ? "Connect wallet"
-                : !ready.onBase
-                  ? "Switch to Base"
-                  : `Confirm ${fmtUsd(amount)}`
-            }
-            onCancel={() => setBacking(false)}
-            onConfirm={async () => {
-              if (!ready.connected) return requestConnect();
-              if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
-              if (quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
-                try {
-                  await trade.buy(marketId, side === "YES", ethWei, quote.tokens);
-                } catch {
-                  /* surfaced via trade.error */
-                }
-              }
-            }}
-            onNext={onNext}
-          />
-        }
-      />
-    );
-
-  // ---- Screen 1 — The Question ----
+  // ---- The Question — ONE screen. The dock transforms decision → order in place;
+  // the House pick + celebration only arrive after the order is placed (above). ----
   return (
     <Screen>
       <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
@@ -332,144 +279,59 @@ export function MobileGame({
           wallet={viewerWallet}
           onSelect={() => undefined}
         />
-      </div>
 
-      <Dock>
-        <div className="flex gap-2.5">
-          <BigButton label="NO" tone="no" onClick={() => choose("NO")} />
-          <BigButton label="PASS" tone="neutral" onClick={pass} />
-          <BigButton label="YES" tone="yes" onClick={() => choose("YES")} />
-        </div>
-      </Dock>
-    </Screen>
-  );
-}
-
-/** Screen 2 — the reveal. The crowd is the reward for deciding first. */
-function Reveal({
-  marketId,
-  side,
-  row,
-  houseReaction,
-  viewerWallet,
-  onSeeBothSides,
-  onNext,
-  backing,
-  onBack,
-  amountPanel,
-}: {
-  marketId: number;
-  side: OrderSide;
-  row: MarketRow;
-  houseReaction: string | null;
-  viewerWallet?: string;
-  onSelectPerson?: (wallet: string) => void;
-  onSeeBothSides: () => void;
-  onNext: () => void;
-  backing: boolean;
-  onBack: () => void;
-  amountPanel: React.ReactNode;
-}) {
-  const { data: evidence } = useQuery({
-    queryKey: ["evidence", marketId],
-    queryFn: () => getMarketEvidence({ data: { marketId } }),
-    staleTime: 30_000,
-  });
-  const { data: net } = useQuery({
-    queryKey: ["network", viewerWallet ?? null, "all", "relevant", ""],
-    queryFn: () => getNetwork({ data: { wallet: viewerWallet, limit: 60 } }),
-    enabled: !!viewerWallet,
-    staleTime: 60_000,
-  });
-
-  const yes = evidence?.believersYes ?? row.believers_yes ?? 0;
-  const no = evidence?.believersNo ?? row.believers_no ?? 0;
-  const mine = side === "YES" ? yes : no;
-  const theirs = side === "YES" ? no : yes;
-  const other: OrderSide = side === "YES" ? "NO" : "YES";
-
-  const tribeAgreed = useMemo(() => {
-    const believers = evidence?.believers ?? [];
-    const bySide = new Map(believers.map((b) => [b.wallet.toLowerCase(), b.side]));
-    return (net?.people ?? []).filter(
-      (p) =>
-        ["tribe", "twin"].includes(p.relationship) && bySide.get(p.wallet.toLowerCase()) === side,
-    ).length;
-  }, [evidence, net, side]);
-
-  const tone = side === "YES" ? "var(--yes)" : "var(--no)";
-
-  return (
-    <Screen>
-      <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
-        {houseReaction && (
-          <p className="text-[16px] leading-relaxed text-[var(--text-secondary)]">
-            <span aria-hidden>🏠</span> {houseReaction}
-          </p>
-        )}
-
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-            You chose
-          </div>
-          <div
-            className="mt-1 text-[30px] font-semibold tracking-[-0.02em]"
-            style={{ color: tone }}
-          >
-            {side}
-          </div>
-        </div>
-
-        <Rule />
-
-        <div className="space-y-1.5">
-          <div className="num text-[16px] text-[var(--text)]">
-            {mine} believer{mine === 1 ? "" : "s"}
-          </div>
-          <div className="num text-[16px] text-[var(--text-secondary)]">
-            {theirs} chose {other}
-          </div>
-        </div>
-
-        {tribeAgreed > 0 && (
-          <>
-            <Rule />
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                Your Tribe
-              </div>
-              <div className="num mt-2 text-[16px] text-[var(--text)]">{tribeAgreed} agreed</div>
-            </div>
-          </>
-        )}
-
-        <Rule />
-
+        {/* Compare the two cases — an explicit exploration, never part of the
+          order flow, so the decision → order path is never interrupted. */}
         <button
           type="button"
-          onClick={onSeeBothSides}
-          className="text-left text-[16px] font-semibold text-[var(--text)]"
+          onClick={() => setPhase("sides")}
+          className="text-left text-[15px] font-semibold text-[var(--text-secondary)]"
         >
-          See Both Sides →
+          See both sides →
         </button>
-
-        <p className="text-[13px] text-[var(--text-muted)]">
-          Another conviction mapped. The House understands you a little better.
-        </p>
       </div>
 
+      {/* One dock, transforming in place: the decision, then the order controls —
+        never a screen swap. The House pick + celebration wait for a placed order. */}
       <Dock>
-        {backing ? (
-          amountPanel
-        ) : (
+        {side == null ? (
           <div className="flex gap-2.5">
-            <BigButton label="Next question" tone="neutral" onClick={onNext} />
-            <BigButton
-              label={`Back ${side}`}
-              tone={side === "YES" ? "yes" : "no"}
-              onClick={onBack}
-            />
+            <BigButton label="NO" tone="no" onClick={() => choose("NO")} />
+            <BigButton label="PASS" tone="neutral" onClick={pass} />
+            <BigButton label="YES" tone="yes" onClick={() => choose("YES")} />
           </div>
+        ) : (
+          <AmountPanel
+            amount={amount}
+            setAmount={setAmount}
+            side={side}
+            busy={trade.isSubmitting || trade.isMining}
+            success={trade.isSuccess}
+            error={trade.isError ? (trade.error?.message?.slice(0, 90) ?? "Failed") : null}
+            label={
+              !ready.connected
+                ? "Connect wallet"
+                : !ready.onBase
+                  ? "Switch to Base"
+                  : `Confirm ${fmtUsd(amount)}`
+            }
+            onCancel={() => {
+              setBacking(false);
+              setSide(null);
+            }}
+            onConfirm={async () => {
+              if (!ready.connected) return requestConnect();
+              if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
+              if (quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
+                try {
+                  await trade.buy(marketId, side === "YES", ethWei, quote.tokens);
+                } catch {
+                  /* surfaced via trade.error */
+                }
+              }
+            }}
+            onNext={onNext}
+          />
         )}
       </Dock>
     </Screen>
