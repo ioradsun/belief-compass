@@ -217,11 +217,15 @@ export function OmniHeader({
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
-      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+      if (!boxRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+        setExpanded(false);
+      }
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
+
 
   // Markets: full-catalog, intent-ranked search (server), not just the loaded feed.
   const { data: marketHits = [] } = useQuery({
