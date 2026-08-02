@@ -43,7 +43,7 @@ import { completeSuggestion, trackSuggestion } from "@/lib/market-suggestion.fun
 import { DEFAULT_CURVE, useCreateEconomics, useCreateMarket } from "@/chain/market-create";
 import {
   AmountField,
-  BalanceLine,
+  
   PrimaryAction,
   SideButton,
   useSpendableBalance,
