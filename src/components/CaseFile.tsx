@@ -30,7 +30,7 @@ import {
   type LensMetric,
 } from "@/domain/side-lens";
 import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT, type FlowWindow } from "@/domain/market-flow";
-import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
+import { useDeckWindow } from "@/lib/deck-window";
 import { marketBook, type BookMetric } from "@/domain/market-book";
 import {
   RELATIONSHIP_LABEL,
