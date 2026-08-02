@@ -34,7 +34,8 @@ function reloadOnce(): void {
   window.location.replace(url.toString());
 }
 
-export function lazyRetry<T extends ComponentType<never>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function lazyRetry<T extends ComponentType<any>>(
   factory: () => Promise<{ default: T }>,
 ) {
   return lazy(() =>
