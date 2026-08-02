@@ -411,7 +411,7 @@ export function MyConvictions({
   }
 
   return (
-    <div data-win={win} data-winlabel={winLabel}>
+    <div>
       {/* Summary — one financial story, money only. */}
       <div className="pb-4">
         <div className="mt-2.5 text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">

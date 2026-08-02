@@ -9,12 +9,17 @@
 import { useSyncExternalStore } from "react";
 import type { FlowWindow } from "@/domain/market-flow";
 
-let current: FlowWindow = "24h";
-const listeners = new Set<() => void>();
+// A single shared cell across module instances: with code-splitting the deck and
+// the rails can end up importing separate copies of this module, and two copies
+// would mean two timeframes on screen. Pinning it to globalThis keeps ONE.
+type Cell = { current: FlowWindow; listeners: Set<() => void> };
+const g = globalThis as unknown as { __deckWindow?: Cell };
+const cell: Cell = (g.__deckWindow ??= { current: "24h", listeners: new Set() });
+const listeners = cell.listeners;
 
 export function setDeckWindow(win: FlowWindow) {
-  if (win === current) return;
-  current = win;
+  if (win === cell.current) return;
+  cell.current = win;
   for (const l of listeners) l();
 }
 
@@ -24,7 +29,7 @@ export function useDeckWindow(): FlowWindow {
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
-    () => current,
-    () => current,
+    () => cell.current,
+    () => cell.current,
   );
 }
