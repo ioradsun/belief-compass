@@ -83,6 +83,33 @@ export function formatRate(ethUsd: number): string | null {
   return `1 ETH = $${usdBody(ethUsd)}`;
 }
 
+/**
+ * The rate itself as a plain price with cents — "$3,421.18" — for the currency
+ * toggle's live USD side. Null when the rate is unknown (the toggle then shows a
+ * stale/unavailable state rather than a fabricated number).
+ */
+export function formatUsdPrice(ethUsd: number): string | null {
+  if (!(ethUsd > 0) || !Number.isFinite(ethUsd)) return null;
+  return `$${ethUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * A rate older than this counts as stale — surfaced as a subtle marker so a
+ * conversion is never silently made against a rate that has stopped updating. The
+ * rate refreshes on the order of minutes; 30 minutes flags a genuinely stalled
+ * feed without false-positiving on ordinary jitter.
+ */
+export const RATE_STALE_MS = 30 * 60_000;
+
+/**
+ * Is the rate stale? A missing timestamp is stale by definition (we can't prove
+ * it's fresh). Pure — the caller passes `now` so it stays deterministic.
+ */
+export function isRateStale(updatedAtMs: number | null | undefined, nowMs: number): boolean {
+  if (updatedAtMs == null || !Number.isFinite(updatedAtMs)) return true;
+  return nowMs - updatedAtMs > RATE_STALE_MS;
+}
+
 /** The short unit tag for a header/label, e.g. "USD" or "ETH". */
 export function unitLabel(unit: DisplayUnit): string {
   return unit;

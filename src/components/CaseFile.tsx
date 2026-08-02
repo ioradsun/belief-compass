@@ -20,7 +20,7 @@ import { getMarketChange, getMarketBaselines, type VolumeWindow } from "@/lib/ma
 import { windowChange } from "@/domain/window-change";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
-import { fmtUsd } from "@/domain/order";
+import { useMoney } from "@/lib/display-unit";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { timelineEvents } from "@/domain/conviction-series";
 import {
@@ -83,6 +83,7 @@ export function CaseColumn({
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
   // The shared timeframe: YES and NO always quote the same period so they compare.
   const win = useDeckWindow();
+  const { format } = useMoney();
 
   // Same query keys the deck already runs → React Query dedupes, no new requests.
   const { data: evidence } = useQuery({
@@ -157,7 +158,9 @@ export function CaseColumn({
   // resets which lens you're investigating.
   const metric = useDeckLens();
   const series = useMemo(() => summary?.series ?? [], [summary]);
-  const money = useMemo(() => (eth: number) => fmtUsd(eth * (ethUsd || 0)), [ethUsd]);
+  // The one shared formatter: capital/proceeds are ETH-native, POV worth is USD —
+  // each renders in the viewer's chosen unit through the single global rate.
+  const money = useMemo(() => (eth: number) => format(eth, "ETH"), [format]);
   const facts = useMemo(() => lensFacts(series), [series]);
   const markers = useMemo(() => lensMarkers(metric, series, money), [metric, series, money]);
   const coldStart = lensColdStart(metric, series);
@@ -194,7 +197,11 @@ export function CaseColumn({
       metric: "capital",
       label: `${side} Capital`,
       value:
-        capChange != null ? fmtUsd(authCapitalUsd!) : capitalUsd != null ? fmtUsd(capitalUsd) : "—",
+        capChange != null
+          ? format(authCapitalUsd!, "USD")
+          : capitalUsd != null
+            ? format(capitalUsd, "USD")
+            : "—",
       pct:
         capChange != null
           ? capChange.pct
@@ -205,7 +212,7 @@ export function CaseColumn({
     {
       metric: "price",
       label: "Price",
-      value: priceUsd != null ? `$${priceUsd.toFixed(2)}` : "—",
+      value: priceUsd != null ? format(priceUsd, "USD") : "—",
       pct: summary?.pricePct ?? null,
     },
   ];
@@ -276,7 +283,7 @@ export function CaseColumn({
                   <li key={e.id} className="flex items-baseline gap-1.5 text-[11px]">
                     <span aria-hidden>{e.emoji}</span>
                     <span className="min-w-0 flex-1 truncate text-[var(--text-muted)]">
-                      {e.eth != null ? `${fmtUsd(e.eth * (ethUsd || 0))} ${e.text}` : e.text}
+                      {e.eth != null ? `${format(e.eth, "ETH")} ${e.text}` : e.text}
                     </span>
                   </li>
                 ))}
@@ -419,6 +426,7 @@ export function CaseRoster({
   believers: Believer[];
   people?: { wallet: string; relationship: string }[];
 }) {
+  const { format } = useMoney();
   const relOf = useMemo(() => {
     const m = new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p.relationship]));
     return (w: string) => m.get(w) ?? null;
@@ -468,7 +476,7 @@ export function CaseRoster({
                 </div>
                 <div className="num text-[10px] text-[var(--text-muted)]">
                   {heldFor(b.daysHeld)}
-                  {b.valueUsd >= 1 ? ` · ${fmtUsd(b.valueUsd)} backed` : ""}
+                  {b.valueUsd >= 1 ? ` · ${format(b.valueUsd, "USD")} backed` : ""}
                 </div>
               </div>
             </li>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { convertMoney, formatMoney, formatRate } from "./money";
+import { convertMoney, formatMoney, formatRate, formatUsdPrice, isRateStale } from "./money";
 
 const RATE = 2000; // 1 ETH = $2,000
 
@@ -76,5 +76,29 @@ describe("formatRate", () => {
   it("is null when the rate is unknown", () => {
     expect(formatRate(0)).toBeNull();
     expect(formatRate(-1)).toBeNull();
+  });
+});
+
+describe("formatUsdPrice", () => {
+  it("shows the rate as a plain price with cents", () => {
+    expect(formatUsdPrice(3421.18)).toBe("$3,421.18");
+    expect(formatUsdPrice(2000)).toBe("$2,000.00");
+  });
+  it("is null when the rate is unknown (never a fabricated number)", () => {
+    expect(formatUsdPrice(0)).toBeNull();
+    expect(formatUsdPrice(Number.NaN)).toBeNull();
+  });
+});
+
+describe("isRateStale", () => {
+  const now = 1_000_000_000;
+  it("is fresh within the window, stale beyond it", () => {
+    expect(isRateStale(now - 60_000, now)).toBe(false); // 1 min old
+    expect(isRateStale(now - 31 * 60_000, now)).toBe(true); // 31 min old
+  });
+  it("treats a missing timestamp as stale (cannot prove freshness)", () => {
+    expect(isRateStale(null, now)).toBe(true);
+    expect(isRateStale(undefined, now)).toBe(true);
+    expect(isRateStale(Number.NaN, now)).toBe(true);
   });
 });

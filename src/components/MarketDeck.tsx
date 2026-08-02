@@ -46,7 +46,6 @@ import {
   pulseFor,
   usdToWei,
   fmtShares,
-  fmtUsd,
   selectSide,
   sharesForPct,
   type OrderSide,
@@ -61,13 +60,10 @@ import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader"
 import { getConvictionMarket } from "@/lib/market-create.functions";
 import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
 
-
 /**
  * Momentum tags — the six canonical opportunity classifications from the
  * server-side engine. Color is a second signal only; the word carries meaning.
  */
-/** Signed dollar/percent for personal gain (loss uses a true minus glyph). */
-const signedUsd = (n: number) => `${n < 0 ? "−" : "+"}${fmtUsd(Math.abs(n))}`;
 const signedPct = (n: number | null) =>
   n == null || !Number.isFinite(n)
     ? "—"
@@ -403,7 +399,6 @@ export function MarketDeck({
       narrative, the House voice and the activity all live in the right feed. */}
       <MarketMomentum tape={change?.tape} ethUsd={ethUsd} win={deckWin} />
 
-
       {/* SHARED CONVICTION — side-blind belonging: your Tribe/Twin/Opp are here. */}
       <SharedConviction
         marketId={marketId}
@@ -413,7 +408,6 @@ export function MarketDeck({
 
       {/* One-time nudge: the first real match, surfaced to explore. */}
       <DnaFirstReveal viewerWallet={viewerWallet} onSelectPerson={onSelectPerson} />
-
     </>
   );
 
@@ -512,7 +506,6 @@ export function MarketDeck({
           {marketInner}
         </div>
       )}
-
 
       {/* Decision dock — buy by default; sell takes over when opened on a holding.
         Reaching the dock is the strongest signal a wallet is about to be needed,
@@ -732,8 +725,6 @@ function MarketByline({
     </button>
   );
 }
-
-
 
 /**
  * The one door from the neutral overview into the evidence. The arrows point the
