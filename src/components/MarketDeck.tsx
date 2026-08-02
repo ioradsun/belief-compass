@@ -52,7 +52,7 @@ import {
 } from "@/domain/order";
 import { marketBook } from "@/domain/market-book";
 import { marketPulse } from "@/domain/market-pulse";
-import { WindowFilter } from "@/components/CaseFile";
+import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { OrderTicket } from "@/components/order/OrderTicket";
 

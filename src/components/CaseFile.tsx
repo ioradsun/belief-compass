@@ -29,7 +29,8 @@ import {
   lensStory,
   type LensMetric,
 } from "@/domain/side-lens";
-import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT, type FlowWindow } from "@/domain/market-flow";
+import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT } from "@/domain/market-flow";
+export { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow } from "@/lib/deck-window";
 import { marketBook, type BookMetric } from "@/domain/market-book";
 import {
@@ -45,8 +46,6 @@ import {
 const metricPct = (m: BookMetric): number | null => (m.base > 0 ? (m.delta / m.base) * 100 : null);
 
 type Side = "YES" | "NO";
-
-const WINDOWS: FlowWindow[] = ["1h", "24h", "7d", "30d", "all"];
 
 /** The relationship word's colour — the one primary badge. Status stays quiet. */
 const REL_TONE: Record<CaseRelationship, string> = {
@@ -264,36 +263,6 @@ export function CaseColumn({
           {investigating ? "Reading the full timeline ↗" : "Open the full timeline ↗"}
         </button>
       )}
-    </div>
-  );
-}
-
-/** The shared time filter: 1H · 1D · 1W · 1M · All. */
-export function WindowFilter({ win, onWin }: { win: FlowWindow; onWin: (w: FlowWindow) => void }) {
-  return (
-    <div
-      className="flex rounded-[9px] p-0.5"
-      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-      role="tablist"
-      aria-label="Timeframe"
-    >
-      {WINDOWS.map((w) => {
-        const on = w === win;
-        return (
-          <button
-            key={w}
-            role="tab"
-            aria-selected={on}
-            type="button"
-            onClick={() => onWin(w)}
-            className={`flex-1 rounded-[7px] px-1.5 py-1 text-[11px] font-semibold transition-colors ${
-              on ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
-            }`}
-          >
-            {FLOW_WINDOW_SHORT[w]}
-          </button>
-        );
-      })}
     </div>
   );
 }
