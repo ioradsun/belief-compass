@@ -245,9 +245,13 @@ export function MobileGame({
   // the single scroll column when there isn't (that layout is unchanged).
   const questionBlock = (
     <div>
-      {(category || createdAt) && (
+      {(category || createdAt || cm?.market) && (
         <div className="text-[12px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          {[category, createdAt ? ago(Date.now() - new Date(createdAt).getTime()) : null]
+          {[
+            category,
+            createdAt ? ago(Date.now() - new Date(createdAt).getTime()) : null,
+            cm?.market ? "Company exclusive" : null,
+          ]
             .filter(Boolean)
             .join(" • ")}
         </div>
