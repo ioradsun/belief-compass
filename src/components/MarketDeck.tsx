@@ -414,6 +414,14 @@ export function MarketDeck({
               {[category, freshToken].filter(Boolean).join(" · ")}
             </span>
           )}
+          {cm?.market && (
+            <span
+              title="Markets created here don't appear on pov.co yet."
+              className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-secondary)]"
+            >
+              · Company exclusive
+            </span>
+          )}
           {lens && lenses && onLens ? (
             <span className="ml-auto">
               <LensPicker
