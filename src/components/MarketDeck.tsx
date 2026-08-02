@@ -52,6 +52,8 @@ import {
 } from "@/domain/order";
 import { marketBook } from "@/domain/market-book";
 import { marketPulse } from "@/domain/market-pulse";
+import { WindowFilter } from "@/components/CaseFile";
+import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { OrderTicket } from "@/components/order/OrderTicket";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
@@ -175,11 +177,14 @@ export function MarketDeck({
     refetchInterval: 15_000,
   });
 
+  // The one on-screen timeframe — the center owns it, both cases follow it.
+  const deckWin = useDeckWindow();
+
   // The momentum shape, told as a tension — bait on the Case File door.
   const caseTeaser = useMemo(() => {
     const t = change?.tape ?? [];
-    return t.length ? marketPulse(marketBook(t, Date.now())).meaning : null;
-  }, [change]);
+    return t.length ? marketPulse(marketBook(t, Date.now(), deckWin)).meaning : null;
+  }, [change, deckWin]);
 
   // Creator/age for the identity row's freshness token (deduped with the byline).
   const { data: cm } = useQuery({
