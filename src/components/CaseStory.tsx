@@ -138,10 +138,11 @@ export function CaseStory({
           </button>
         </div>
 
-        {/* The one shared timeframe. */}
-        <div className="mt-3 max-w-[280px]">
-          <WindowFilter win={win} onWin={setWin} />
+        {/* The one shared timeframe lives in the center panel — echoed here. */}
+        <div className="mt-3 text-[11px] font-semibold tracking-wide text-[var(--text-muted)]">
+          Over {FLOW_WINDOW_SHORT[win]}
         </div>
+
 
         {/* The three real signals over time — believers, capital, price. */}
         <div className="mt-4 space-y-3">
