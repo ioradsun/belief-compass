@@ -27,7 +27,7 @@ const WalletIdentity = lazy(() =>
   import("@/components/WalletIdentity").then((m) => ({ default: m.WalletIdentity })),
 );
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
-import { requestDisconnect } from "@/lib/connect-bridge";
+import { requestDisconnect, requestSwitchAccount } from "@/lib/connect-bridge";
 
 /** Base is the one chain this app trades on. */
 const NETWORK = "Base";
@@ -221,6 +221,13 @@ export function ProfileMenu({
           <Item label="Import POV Wallet" onClick={() => setPanel("import")} />
           <Divider />
           <Item label="Settings" onClick={() => setPanel("settings")} />
+          <Item
+            label="Switch Wallet"
+            onClick={() => {
+              requestSwitchAccount();
+              setOpen(false);
+            }}
+          />
           <Item
             label="Sign Out"
             muted

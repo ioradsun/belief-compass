@@ -60,3 +60,14 @@ export function clearDisconnectedWalletFromUrl(wallet?: string): boolean {
   window.location.replace(url.href);
   return true;
 }
+
+/**
+ * Ask the connected provider (Coinbase, MetaMask, …) to reopen its own account
+ * picker so the user can choose which of their wallets/accounts this app uses.
+ */
+export const SWITCH_ACCOUNT_EVENT = "conviction:switch-account";
+
+export function requestSwitchAccount() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(SWITCH_ACCOUNT_EVENT));
+}
