@@ -29,7 +29,7 @@ import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
 import { SharedConviction } from "@/components/SharedConviction";
-import { marketAgeCopy, marketFreshness } from "@/domain/market-freshness";
+import { marketAgeCopy } from "@/domain/market-freshness";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import type { TapeTrade } from "@/domain/conviction-series";
@@ -734,13 +734,6 @@ function MarketByline({
 }
 
 
-function ageWords(ms: number): string {
-  const h = Math.max(0, ms) / 3_600_000;
-  if (h < 1) return `${Math.max(1, Math.round(h * 60))}m ago`;
-  if (h < 48) return `${Math.round(h)}h ago`;
-  const d = Math.round(h / 24);
-  return `${d} day${d === 1 ? "" : "s"} ago`;
-}
 
 /**
  * The one door from the neutral overview into the evidence. The arrows point the
