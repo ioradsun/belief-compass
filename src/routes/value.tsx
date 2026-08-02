@@ -54,6 +54,8 @@ const fmtUsd = (n: number): string => {
   return `$${Math.round(n).toLocaleString("en-US")}`;
 };
 const fmtNum = (n: number): string => Math.round(n).toLocaleString("en-US");
+/** Two decimals, as the story starts at 0.00% — but never round a real share to zero. */
+const fmtPct = (n: number): string => (n > 0 && n < 0.01 ? "<0.01%" : `${n.toFixed(2)}%`);
 const short = (w: string) => `${w.slice(0, 6)}…${w.slice(-4)}`;
 
 /** Count toward a target whenever it changes — the "alive" feel, cheaply. */
@@ -173,13 +175,47 @@ function ValuePage() {
           </div>
         </header>
 
+        {/* SHARE OF THE ECOSYSTEM — the lead story: the whole market, and our slice
+            of it. Renders even before any trade is attributed, because the markets
+            share is real history from day one. */}
+        {data.share && (
+          <section className="mb-12">
+            <div className="mb-3 flex items-baseline gap-3">
+              <h2 className="text-[15px] font-semibold text-[var(--text)]">Share of the ecosystem</h2>
+              <span className="text-[12px] text-[var(--text-muted)]">
+                POV and Conviction combined · last {data.share.days} days
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ShareCard
+                label="Buy Volume"
+                pct={data.share.volume.pct}
+                ecoValue={data.share.volume.ecoUsd}
+                convValue={data.share.volume.convUsd}
+                format={fmtUsd}
+                points={data.share.series.map((p) => ({ eco: p.ecoVolumeUsd, conv: p.convVolumeUsd }))}
+              />
+              <ShareCard
+                label="Markets"
+                pct={data.share.markets.pct}
+                ecoValue={data.share.markets.eco}
+                convValue={data.share.markets.conv}
+                format={fmtNum}
+                points={data.share.series.map((p) => ({ eco: p.ecoMarkets, conv: p.convMarkets }))}
+              />
+            </div>
+          </section>
+        )}
+
         {t.tradesExecuted === 0 && (
           <div className="mb-12 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="text-[14px] font-semibold text-[var(--text)]">No trades attributed yet</div>
             <p className="mt-2 max-w-[70ch] text-[12.5px] leading-relaxed text-[var(--text-muted)]">
               A trade counts here only once Conviction has provably routed it. The contract records
-              no referrer, so trades sent before attribution shipped can&rsquo;t be recovered — and
-              we don&rsquo;t estimate them. These figures start at zero and build from real activity.
+              no referrer, so trades sent before attribution shipped can&rsquo;t be recovered — and we
+              don&rsquo;t estimate them. That is why the volume share above reads 0.00% while the
+              markets share is already real: market origin has been recorded since the beginning.
+              Trade figures build from here.
             </p>
           </div>
         )}
@@ -275,13 +311,75 @@ function ValuePage() {
         </div>
 
         <footer className="mt-16 border-t border-[var(--border)] pt-6 text-[12px] leading-relaxed text-[var(--text-muted)]">
-          Buy volume, trades and traders count only transactions Conviction routed, recorded when
-          we send them and matched to on-chain events by transaction hash — across any market, pov-
-          or conviction-born. Trades made elsewhere are never counted, and trades predating
-          attribution are not estimated. Markets Created counts markets born on conviction.company.
+          Share of the ecosystem compares Conviction against the combined POV + Conviction total:
+          markets by origin, which is recorded from the beginning, and buy volume by attribution,
+          which begins when we started recording it. Buy volume, trades and traders count only
+          transactions Conviction routed, recorded when we send them and matched to on-chain events
+          by transaction hash — across any market, pov- or conviction-born. Trades made elsewhere
+          are never counted, and trades predating attribution are not estimated.
           Fees and creator earnings are computed from the protocol&rsquo;s own fee rate applied to
           that real buy volume. Updated continuously.
         </footer>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One half of the lead story: the combined ecosystem curve with Conviction's slice
+ * filled underneath it, and the share percentage as the headline. The slice is drawn
+ * with a hairline stroke so a fraction of a percent is still visible rather than
+ * vanishing into the axis.
+ */
+function ShareCard({
+  label,
+  pct,
+  ecoValue,
+  convValue,
+  format,
+  points,
+}: {
+  label: string;
+  pct: number;
+  ecoValue: number;
+  convValue: number;
+  format: (n: number) => string;
+  points: Array<{ eco: number; conv: number }>;
+}) {
+  const w = 320;
+  const h = 96;
+  const pts = points.length ? points : [{ eco: 0, conv: 0 }];
+  const max = Math.max(1, ...pts.map((p) => p.eco));
+  const stepX = pts.length > 1 ? w / (pts.length - 1) : w;
+  const y = (v: number) => h - (v / max) * (h - 6) - 3;
+  const path = (get: (p: { eco: number; conv: number }) => number) =>
+    pts.map((p, i) => `${i === 0 ? "M" : "L"}${(i * stepX).toFixed(1)},${y(get(p)).toFixed(1)}`).join(" ");
+  const ecoLine = path((p) => p.eco);
+  const convLine = path((p) => p.conv);
+
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</div>
+      <div className="mt-1.5 text-[30px] font-semibold leading-none tabular-nums tracking-[-0.02em]" style={{ color: "var(--yes)" }}>
+        {fmtPct(pct)}
+      </div>
+      <div className="mt-1.5 text-[12px] text-[var(--text-muted)]">
+        of {format(ecoValue)} across the ecosystem
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 h-[96px] w-full" preserveAspectRatio="none">
+        {/* the whole market */}
+        <path d={`${ecoLine} L${w},${h} L0,${h} Z`} fill="var(--text-muted)" opacity="0.13" />
+        <path d={ecoLine} fill="none" stroke="var(--text-muted)" strokeWidth="1.5" opacity="0.5" vectorEffect="non-scaling-stroke" />
+        {/* our slice of it */}
+        <path d={`${convLine} L${w},${h} L0,${h} Z`} fill="var(--yes)" opacity="0.22" />
+        <path d={convLine} fill="none" stroke="var(--yes)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div className="mt-2.5 flex items-center justify-between text-[11.5px] tabular-nums">
+        <span className="flex items-center gap-1.5 text-[var(--text)]">
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--yes)" }} />
+          Conviction {format(convValue)}
+        </span>
+        <span className="text-[var(--text-muted)]">Ecosystem {format(ecoValue)}</span>
       </div>
     </div>
   );
