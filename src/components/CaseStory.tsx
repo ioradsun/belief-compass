@@ -51,7 +51,7 @@ export function CaseStory({
   // One timeframe everywhere: investigation reads (and can change) the same
   // selection the center panel owns, so no two surfaces quote different periods.
   const win = useDeckWindow();
-  const setWin = setDeckWindow;
+  
 
   // Escape always returns to comparison — investigation is a temporary lens.
   useEffect(() => {
