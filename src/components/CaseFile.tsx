@@ -179,7 +179,7 @@ export function CaseColumn({
           <span className="text-[13px] font-semibold" style={{ color }}>
             {side}
           </span>
-          <span className="text-[13px] font-semibold text-[var(--text)]">Case</span>
+          
           <span className="ml-auto text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
             {FLOW_WINDOW_SHORT[win]}
           </span>
