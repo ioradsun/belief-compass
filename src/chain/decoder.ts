@@ -128,7 +128,7 @@ function decodeBuyFeeField(rawLog: unknown, field: "fee" | "creatorFee"): bigint
       strict: false,
     }) as unknown as { eventName: string; args: Record<string, unknown> };
     if (decoded.eventName !== "TokensBought") return null;
-    const fee = decoded.args.creatorFee;
+    const fee = decoded.args[field];
     return typeof fee === "bigint" ? fee : null;
   } catch {
     return null;
