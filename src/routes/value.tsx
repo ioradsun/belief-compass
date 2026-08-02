@@ -3,12 +3,12 @@
  * value Conviction Company creates for the POV ecosystem. Not analytics: every
  * number answers one question — "why is Conviction valuable to POV?"
  *
- * Scope is wallets CONNECTED to conviction.company (the wallet_links set): their
- * buy volume, trades and activity across any market. Data is real and already
- * indexed (getEcosystemValue). Fee + creator-earnings money is DERIVED from the
- * contract's own fee rate (feeBps / FEE_DENOMINATOR / CREATOR_FEE_SHARE) applied to
- * that real volume — no invented number. Headline figures count up and the page
- * re-polls, so it stays alive.
+ * Scope is trades conviction.company actually SENT — recorded at submit time and
+ * joined to the canonical events log by transaction hash. Nothing is inferred from
+ * wallets, so a figure here is a trade we can prove we routed. Fee +
+ * creator-earnings money is DERIVED from the contract's own fee rate (feeBps /
+ * FEE_DENOMINATOR / CREATOR_FEE_SHARE) applied to that real volume — no invented
+ * number. Headline figures count up and the page re-polls, so it stays alive.
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -155,8 +155,14 @@ function ValuePage() {
             Conviction Company Value
           </div>
           <h1 className="mt-3 max-w-[24ch] text-[32px] font-semibold leading-[1.1] tracking-[-0.02em] text-[var(--text)] sm:text-[42px]">
-            The trading Conviction brings to POV — from every wallet connected here.
+            The trading Conviction brings to POV — every trade we routed.
           </h1>
+          {data.since && (
+            <div className="mt-3 text-[12.5px] text-[var(--text-muted)]">
+              Measured from {new Date(data.since).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })},
+              when trade attribution began.
+            </div>
+          )}
           <div className="mt-9 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--border)] sm:grid-cols-3">
             <Hero label="Buy Volume" value={t.volumeUsd} format={fmtUsd} />
             <Hero label="Trading Fees Generated" value={feesUsd} format={fmtUsd} />
@@ -167,7 +173,18 @@ function ValuePage() {
           </div>
         </header>
 
-        <div className="grid gap-12 lg:grid-cols-[1fr_360px]">
+        {t.tradesExecuted === 0 && (
+          <div className="mb-12 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="text-[14px] font-semibold text-[var(--text)]">No trades attributed yet</div>
+            <p className="mt-2 max-w-[70ch] text-[12.5px] leading-relaxed text-[var(--text-muted)]">
+              A trade counts here only once Conviction has provably routed it. The contract records
+              no referrer, so trades sent before attribution shipped can&rsquo;t be recovered — and
+              we don&rsquo;t estimate them. These figures start at zero and build from real activity.
+            </p>
+          </div>
+        )}
+
+        <div className={`grid gap-12 lg:grid-cols-[1fr_360px] ${t.tradesExecuted === 0 ? "hidden" : ""}`}>
           <div className="min-w-0 space-y-12">
             {/* GROWTH */}
             <Section title="Growth" note="Cumulative, last 30 days">
@@ -258,11 +275,12 @@ function ValuePage() {
         </div>
 
         <footer className="mt-16 border-t border-[var(--border)] pt-6 text-[12px] leading-relaxed text-[var(--text-muted)]">
-          Buy volume, trades and traders count only wallets connected to conviction.company —
-          their trading across any market, pov- or conviction-born — so this is the value
-          Conviction brings to the ecosystem, not POV&rsquo;s own. Markets Created counts markets
-          born on conviction.company. Fees and creator earnings are computed from the
-          protocol&rsquo;s own fee rate applied to that real buy volume. Updated continuously.
+          Buy volume, trades and traders count only transactions Conviction routed, recorded when
+          we send them and matched to on-chain events by transaction hash — across any market, pov-
+          or conviction-born. Trades made elsewhere are never counted, and trades predating
+          attribution are not estimated. Markets Created counts markets born on conviction.company.
+          Fees and creator earnings are computed from the protocol&rsquo;s own fee rate applied to
+          that real buy volume. Updated continuously.
         </footer>
       </div>
     </div>

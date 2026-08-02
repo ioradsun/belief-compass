@@ -19,6 +19,7 @@ import {
 } from "wagmi";
 import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
 import { minOut } from "@/domain/order";
+import { recordConvictionTrade } from "@/lib/conviction-trades.functions";
 
 export const TRADE_ABI = parseAbi([
   "function buy(uint256 marketId, bool yes, uint256 minTokens) payable",
@@ -106,7 +107,24 @@ export function isUserRejection(err: unknown): boolean {
   );
 }
 
+/** What we tag a submitted transaction with, for /value attribution. */
+type TradeMeta = { marketId: number; side: "YES" | "NO"; action: "BUY" | "SELL" };
+
+/**
+ * Record that THIS app sent the transaction — the only moment that fact exists
+ * (the contract takes no referrer, so on-chain it is invisible). Fire-and-forget
+ * by design: attribution must never block, slow, or fail a trade, so a failed
+ * record is simply a trade /value won't count.
+ */
+function tagConvictionTrade(txHash: string, wallet: string | undefined, meta: TradeMeta) {
+  if (!wallet) return;
+  void recordConvictionTrade({
+    data: { txHash, wallet, marketId: meta.marketId, side: meta.side, action: meta.action, chainId: CHAIN_ID },
+  }).catch(() => {});
+}
+
 export function useTrade() {
+  const { address } = useAccount();
   const { writeContractAsync, isPending, error, reset } = useWriteContract();
   const [hash, setHash] = useState<`0x${string}` | undefined>(undefined);
   // Own submit flag: some wallets (smart-wallet popups) never settle wagmi's
@@ -115,12 +133,15 @@ export function useTrade() {
   const [localError, setLocalError] = useState<Error | null>(null);
   const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
 
-  async function send(fn: () => Promise<`0x${string}`>) {
+  async function send(fn: () => Promise<`0x${string}`>, meta: TradeMeta) {
     setLocalError(null);
     setSubmitting(true);
     try {
       const h = await fn();
       setHash(h);
+      // Tag at submit time, before the block lands: /value requires the record to
+      // predate the block, which is what stops a replayed public hash counting.
+      tagConvictionTrade(h, address, meta);
       return h;
     } catch (e) {
       setLocalError(
@@ -138,25 +159,29 @@ export function useTrade() {
   }
 
   async function buy(marketId: number, yes: boolean, ethWei: bigint, quotedTokens: bigint) {
-    return send(() =>
-      writeContractAsync({
-        ...CONTRACT,
-        functionName: "buy",
-        args: [BigInt(marketId), yes, minOut(quotedTokens)],
-        value: ethWei,
-        chainId: CHAIN_ID,
-      }),
+    return send(
+      () =>
+        writeContractAsync({
+          ...CONTRACT,
+          functionName: "buy",
+          args: [BigInt(marketId), yes, minOut(quotedTokens)],
+          value: ethWei,
+          chainId: CHAIN_ID,
+        }),
+      { marketId, side: yes ? "YES" : "NO", action: "BUY" },
     );
   }
 
   async function sell(marketId: number, yes: boolean, tokenAmount: bigint, quotedProceeds: bigint) {
-    return send(() =>
-      writeContractAsync({
-        ...CONTRACT,
-        functionName: "sell",
-        args: [BigInt(marketId), yes, tokenAmount, minOut(quotedProceeds)],
-        chainId: CHAIN_ID,
-      }),
+    return send(
+      () =>
+        writeContractAsync({
+          ...CONTRACT,
+          functionName: "sell",
+          args: [BigInt(marketId), yes, tokenAmount, minOut(quotedProceeds)],
+          chainId: CHAIN_ID,
+        }),
+      { marketId, side: yes ? "YES" : "NO", action: "SELL" },
     );
   }
 

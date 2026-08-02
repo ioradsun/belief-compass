@@ -8,14 +8,13 @@
  * the client from the contract's own fee rate + per-market creator fees, so no
  * number is invented. SWR-cached — every visitor reads one warm snapshot.
  *
- * SCOPE — this page measures the value that flows through wallets CONNECTED to
- * conviction.company, not the whole POV ecosystem. A connected wallet is either
- * side of a wallet_links row (the conviction sign-in wallet, or the pov.co trading
- * wallet the user linked). Buy value, fees, trades, traders, growth and activity
- * all come from those wallets' trading across ANY market — a connected user backing
- * a pov-only market is still value Conviction brought. The heavy join lives in the
- * conviction_connected_value RPC (rides events_wallet_idx); we only join market
- * metadata (titles/categories/authors) and derive money on the client here.
+ * SCOPE — every trading figure here is a trade conviction.company actually sent.
+ * The contract takes no referrer, so that fact exists nowhere on-chain; we record
+ * the tx hash at submit time (conviction_trades) and the conviction_attributed_value
+ * RPC joins the canonical events log to those hashes. Nothing is inferred from
+ * wallets: a trade counts only if we can prove we routed it, on any market, pov- or
+ * conviction-born. Attribution therefore begins the day it shipped — earlier trades
+ * are unrecoverable and are NOT estimated.
  *
  * "Markets Created" is the one supply-side figure: markets born on conviction.company
  * (markets.source = 'conviction'), which is unambiguously Conviction's own.
@@ -63,6 +62,8 @@ export interface ActivityItem {
 
 export interface EcosystemValue {
   ethUsd: number;
+  /** When trade attribution started; null before the first recorded trade. */
+  since: string | null;
   totals: {
     volumeUsd: number;
     marketsCreated: number;
@@ -78,14 +79,15 @@ export interface EcosystemValue {
 
 const GROWTH_DAYS = 30;
 
-// The shape conviction_connected_value returns (money fields are wei strings —
+// The shape conviction_attributed_value returns (money fields are wei strings —
 // numeric sums exceed JS safe-integer range, so we parse then scale by 1e18).
-interface ConnectedValue {
-  connectedWallets: number;
+interface AttributedValue {
   trades: number;
   buys: number;
   traders: number;
   buyWei: string;
+  /** When attribution started — null until the first trade is recorded. */
+  since: string | null;
   perMarket: Array<{ marketId: string; trades: number; buyWei: string }>;
   byDay: Array<{ day: string; trades: number; buyWei: string }>;
   recent: Array<{ marketId: string; wallet: string; side: string | null; action: string | null; amountEth: string; at: string }>;
@@ -98,18 +100,19 @@ async function build(): Promise<EcosystemValue> {
 
   const [{ data: ethRow }, rpc, { count: convictionMarkets }] = await Promise.all([
     sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
-    sb.rpc("conviction_connected_value", { p_growth_days: GROWTH_DAYS }),
+    sb.rpc("conviction_attributed_value", { p_growth_days: GROWTH_DAYS }),
     // "Markets Created" — the one supply-side figure: markets born on conviction.company.
     sb.from("markets").select("onchain_id", { count: "exact", head: true }).eq("source", "conviction"),
   ]);
   const ethUsd = num((ethRow as { value?: number } | null)?.value);
 
   // If the RPC isn't present yet (migration not applied), degrade to honest zeros
-  // rather than crash or leak whole-ecosystem numbers.
-  const cv = (rpc.data ?? null) as ConnectedValue | null;
+  // rather than crash or fall back to numbers we can't attribute.
+  const cv = (rpc.data ?? null) as AttributedValue | null;
   if (!cv) {
     return {
       ethUsd,
+      since: null,
       totals: { volumeUsd: 0, marketsCreated: convictionMarkets ?? 0, tradesExecuted: 0, activeTraders: 0 },
       categories: [],
       markets: [],
@@ -120,7 +123,7 @@ async function build(): Promise<EcosystemValue> {
 
   const volumeUsd = weiToEth(cv.buyWei) * ethUsd;
 
-  // Market metadata (title/category/author) for every market these wallets traded —
+  // Market metadata (title/category/author) for every market we routed a trade on —
   // works for pov- and conviction-born markets alike, since `markets` holds both.
   const marketIds = cv.perMarket.map((p) => Number(p.marketId)).filter((n) => Number.isFinite(n));
   const metaById = new Map<number, { title: string | null; category: string | null; author_wallet: string | null; author_name: string | null }>();
@@ -150,7 +153,7 @@ async function build(): Promise<EcosystemValue> {
     })
     .sort((a, b) => b.volumeUsd - a.volumeUsd);
 
-  // Categories — aggregated from the connected wallets' own trading.
+  // Categories — aggregated from the trades we routed.
   const catMap = new Map<string, { markets: number; volumeUsd: number; trades: number; creators: Set<string> }>();
   for (const m of markets) {
     const c = m.category ?? "Other";
@@ -185,7 +188,7 @@ async function build(): Promise<EcosystemValue> {
     }
   }
 
-  // Recent activity — the connected wallets' newest trades, with titles.
+  // Recent activity — the newest trades we routed, with titles.
   const recentActivity: ActivityItem[] = cv.recent.map((r) => {
     const mid = Number(r.marketId);
     return {
@@ -203,6 +206,7 @@ async function build(): Promise<EcosystemValue> {
 
   return {
     ethUsd,
+    since: cv.since ?? null,
     totals: {
       volumeUsd,
       marketsCreated: convictionMarkets ?? 0,
