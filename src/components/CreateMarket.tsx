@@ -22,7 +22,8 @@ import { fmtUsd, usdToWei } from "@/domain/order";
 import {
   MEDIA_LIMITS,
   QUESTION_MAX,
-  accept,
+  acceptAll,
+  SUPPORTED_MEDIA_HINT,
   assertAllowedBytes,
   kindForMime,
   type MediaKind,
@@ -90,7 +91,6 @@ export function CreateMarket({
   const [localError, setLocalError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [pickKind, setPickKind] = useState<Exclude<MediaKind, "link">>("image");
 
   const minSeedEth = econ.minSeedWei != null ? Number(econ.minSeedWei) / 1e18 : null;
   const minUsd = minSeedEth != null && ethUsd > 0 ? minSeedEth * ethUsd : null;
@@ -162,8 +162,7 @@ export function CreateMarket({
     }
   }, []);
 
-  const openPicker = (kind: Exclude<MediaKind, "link">) => {
-    setPickKind(kind);
+  const openPicker = () => {
     requestAnimationFrame(() => fileRef.current?.click());
   };
 
@@ -466,7 +465,7 @@ export function CreateMarket({
         ref={fileRef}
         type="file"
         className="hidden"
-        accept={accept(pickKind)}
+        accept={acceptAll()}
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) void pickFile(f);
