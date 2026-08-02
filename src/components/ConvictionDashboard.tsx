@@ -752,6 +752,16 @@ function Section({
   );
 }
 
+/** A small heading that separates the Journey into Capital / Costs / Portfolio. */
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-1.5 mt-4 px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] first:mt-0">
+      {children}
+    </div>
+  );
+}
+
+
 function FlowRow({
   label,
   value,
