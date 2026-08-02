@@ -56,6 +56,8 @@ import { OrderTicket } from "@/components/order/OrderTicket";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
 import { getConvictionMarket } from "@/lib/market-create.functions";
+import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
+
 
 /**
  * Momentum tags — the six canonical opportunity classifications from the
@@ -185,7 +187,10 @@ export function MarketDeck({
     queryFn: () => getConvictionMarket({ data: { onchainId: marketId } }),
     staleTime: 5 * 60_000,
   });
+  // Evidence, when the creator attached any. Null keeps the layout untouched.
+  const stageMedia = useMemo(() => stageMediaFrom(cm), [cm]);
   const createdAt = cm?.creator?.createdAt ?? null;
+
   const freshToken = createdAt
     ? marketFreshness(Date.now() - new Date(createdAt).getTime()).token
     : null;
@@ -473,11 +478,17 @@ export function MarketDeck({
         >
           {marketInner}
         </MobileCaseView>
+      ) : stageMedia ? (
+        /* Markets WITH evidence: same panel, now one of two stage states. */
+        <MediaStage media={stageMedia} className="flex min-h-0 flex-1 touch-pan-y flex-col">
+          {marketInner}
+        </MediaStage>
       ) : (
         <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
           {marketInner}
         </div>
       )}
+
 
       {/* Decision dock — buy by default; sell takes over when opened on a holding.
         Reaching the dock is the strongest signal a wallet is about to be needed,
