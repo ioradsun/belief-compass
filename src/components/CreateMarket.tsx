@@ -401,7 +401,7 @@ export function CreateMarket({
             />
           </div>
           <AmountField amount={amount} setAmount={setAmount} ariaLabel="Seed amount in dollars" />
-          <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} onMax={setMax} />
+          <BalanceLine ethUsd={ethUsd} minWei={econ.minSeedWei} />
         </div>
 
 
