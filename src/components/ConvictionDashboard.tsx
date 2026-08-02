@@ -315,39 +315,42 @@ export function ConvictionDashboard({
 
         {/* Right — one long scrolling story */}
         <div className="min-w-0 flex-1 pb-24">
-          {/* SECTION 1 — Your Conviction. Lead with the GAIN — people anchor on
-              growth, not balance. Worth Today is the supporting line. */}
+          {/* SECTION 1 — Net Profit. The one number that answers "am I ahead?",
+              and the number the Journey card below reconciles to exactly. */}
           <section id="overview" className="scroll-mt-4 pt-2">
             <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-              Your Conviction
+              Net Profit
             </div>
-            <div
-              className="mt-4 text-[56px] font-semibold leading-none tracking-[-0.035em] tabular-nums"
-              style={{ color: sinceStart >= 0 ? "var(--yes)" : "var(--no)" }}
-            >
-              {fmtUsd(sinceStart, sinceStart !== 0)}
-            </div>
-            <div className="mt-2 text-[14px] text-[var(--text-muted)]">since you started</div>
-            <div className="mt-4 flex items-baseline gap-2">
-              <span className="text-[13px] text-[var(--text-muted)]">Worth Today</span>
-              <span className="text-[18px] font-semibold tabular-nums text-[var(--text)]">
-                {fmtUsd(worthToday)}
+            <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span
+                className="text-[56px] font-semibold leading-none tracking-[-0.035em] tabular-nums"
+                style={{ color: journey.netProfitUsd >= 0 ? "var(--yes)" : "var(--no)" }}
+              >
+                {fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
               </span>
+              {journey.roiPct != null && (
+                <span
+                  className="text-[18px] font-semibold tabular-nums"
+                  style={{ color: journey.netProfitUsd >= 0 ? "var(--yes)" : "var(--no)" }}
+                >
+                  ({fmtPct(journey.roiPct)})
+                </span>
+              )}
             </div>
+            <p className="mt-3 max-w-[46ch] text-[13px] leading-relaxed text-[var(--text-secondary)]">
+              Everything you’ve built by investing, trading, and creating markets.
+            </p>
             {/* The living pulse — did my conviction grow today? */}
             {netToday !== 0 && (
               <div
-                className="mt-2 text-[13px] font-medium tabular-nums"
+                className="mt-3 text-[13px] font-medium tabular-nums"
                 style={{ color: netToday >= 0 ? "var(--yes)" : "var(--no)" }}
               >
                 {netToday >= 0 ? "↑" : "↓"} Today {fmtUsd(netToday, true)}
               </div>
             )}
-            {/* One lifetime sentence — identity, not accounting. */}
-            <p className="mt-5 max-w-[46ch] text-[13px] leading-relaxed text-[var(--text-secondary)]">
-              {lifetimeLine ?? "Everything you’ve built through investing, trading and creating."}
-            </p>
           </section>
+
 
           {/* Ready to Claim — the one thing you can DO. Premium placement, right
               under the hero, only when there's something to collect. */}
