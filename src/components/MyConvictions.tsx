@@ -322,6 +322,19 @@ export function MyConvictions({
     netByMarket.set(id, cur);
   }
 
+  // The delta always answers "over the period you selected". For a finite window
+  // that's the mark-to-mark move (value now − value at the start of the window,
+  // implied by the window price change). For "All" the honest starting point IS
+  // your purchase price, so it falls back to gain vs cost basis.
+  const lifetime = win === "all";
+  const deltaLabel = lifetime ? "since entered" : winLabel.toUpperCase();
+  const windowDelta = (value: number, chg: number | null): number | null => {
+    if (chg == null) return null;
+    const f = 1 + chg / 100;
+    if (!(f > 0)) return null;
+    return value - value / f;
+  };
+
   // Second pass: attach the story + pulse, then rank by urgency.
   const built: Built[] = facts.map((f) => {
     const net = netByMarket.get(f.id);
@@ -342,6 +355,8 @@ export function MyConvictions({
       side: f.side,
       value: f.value,
       gainUsd: f.gainUsd,
+      deltaUsd: lifetime ? f.gainUsd : windowDelta(f.value, f.chg),
+      deltaLabel,
       title: f.title,
       believers: f.believers,
       newToday: f.newToday,
@@ -354,7 +369,7 @@ export function MyConvictions({
   built.sort(
     (a, b) =>
       b.signal.urgency - a.signal.urgency ||
-      Math.abs(b.gainUsd ?? 0) - Math.abs(a.gainUsd ?? 0) ||
+      Math.abs(b.deltaUsd ?? 0) - Math.abs(a.deltaUsd ?? 0) ||
       (b.believers ?? 0) - (a.believers ?? 0) ||
       b.value - a.value,
   );
@@ -362,16 +377,12 @@ export function MyConvictions({
 
   const total = built.reduce((s, p) => s + p.value, 0);
 
-  // "Since you started": authoritative unrealized gain when every position has a
-  // real cost basis; otherwise the period move, labelled as such. Money only — no
-  // percentages, which explode to nonsense on tiny starting values.
+  // Summary mirrors the cards: the selected period's move, or — on "All" — the
+  // authoritative unrealized gain when every position has a real cost basis.
   const fullBasis = built.length > 0 && built.every((p) => p.gainUsd != null);
-  const trueGain = fullBasis ? built.reduce((s, p) => s + (p.gainUsd ?? 0), 0) : null;
-  const prev = built.reduce((s, p) => {
-    const f = 1 + (p.chg ?? 0) / 100;
-    return s + (f > 0 ? p.value / f : p.value);
-  }, 0);
-  const periodUsd = total - prev;
+  const trueGain = lifetime && fullBasis ? built.reduce((s, p) => s + (p.gainUsd ?? 0), 0) : null;
+  const periodUsd = built.reduce((s, p) => s + (windowDelta(p.value, p.chg) ?? 0), 0);
+
 
   const count = built.length;
   useEffect(() => {
