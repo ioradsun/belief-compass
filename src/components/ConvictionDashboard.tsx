@@ -487,7 +487,12 @@ export function ConvictionDashboard({
                     <span className="hidden group-open:inline">Hide details</span>
                   </summary>
                   <div className="mt-2 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-                    <FlowRow label="Total Return" value={fmtUsd(journey.totalReturnUsd)} />
+                    <FlowRow
+                      label="Total Spent"
+                      hint="Total Invested plus Trading Fees Paid."
+                      value={fmtUsd(journey.investedUsd + journey.feesUsd)}
+                    />
+
                     <FlowRow
                       label="Lifetime ROI"
                       value={journey.roiPct == null ? "—" : fmtPct(journey.roiPct)}
