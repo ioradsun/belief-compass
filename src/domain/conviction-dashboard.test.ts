@@ -6,6 +6,7 @@ import {
   moneyFlows,
   buildMilestones,
   milestonePct,
+  journeyMath,
   type DashTrade,
   type MilestoneFacts,
 } from "./conviction-dashboard";
@@ -210,5 +211,38 @@ describe("gainBreakdown", () => {
         { key: "creating", label: "c", usd: 0 },
       ]).map((x) => x.pct),
     ).toEqual([null, 100, null]);
+  });
+});
+
+describe("journeyMath", () => {
+  it("reconciles return and net profit", () => {
+    const j = journeyMath({
+      investedUsd: 2290,
+      currentValueUsd: 1800,
+      withdrawnUsd: 800,
+      creatorUsd: 118.35,
+    });
+    expect(j.totalReturnUsd).toBeCloseTo(2718.35);
+    expect(j.netProfitUsd).toBeCloseTo(428.35);
+    expect(j.roiPct).toBeCloseTo((428.35 / 2290) * 100);
+  });
+
+  it("has no ROI without invested capital", () => {
+    const j = journeyMath({ investedUsd: 0, currentValueUsd: 0, withdrawnUsd: 0, creatorUsd: 12 });
+    expect(j.roiPct).toBeNull();
+    expect(j.netProfitUsd).toBe(12);
+    expect(j.empty).toBe(false);
+  });
+
+  it("flags a truly empty journey", () => {
+    expect(
+      journeyMath({ investedUsd: 0, currentValueUsd: 0, withdrawnUsd: 0, creatorUsd: 0 }).empty,
+    ).toBe(true);
+  });
+
+  it("reports a loss", () => {
+    const j = journeyMath({ investedUsd: 100, currentValueUsd: 40, withdrawnUsd: 10, creatorUsd: 0 });
+    expect(j.netProfitUsd).toBe(-50);
+    expect(j.roiPct).toBe(-50);
   });
 });
