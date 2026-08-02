@@ -148,13 +148,15 @@ function clip(hist: VitalityPoint[], sinceMs: number, nowMs: number): BookMetric
 type Book = { yes: number; no: number };
 
 /**
- * Replay the tape into the canonical book. `nowMs` fixes the window; the current
- * totals are the end state regardless of window.
+ * Replay the tape into the canonical book. `nowMs` fixes "now"; `win` is the
+ * single on-screen timeframe — when supplied, every delta, percentage and
+ * sparkline in the book is measured over exactly that period.
  */
-export function marketBook(tape: TapeTrade[], nowMs: number): MarketBook {
+export function marketBook(tape: TapeTrade[], nowMs: number, win?: FlowWindow): MarketBook {
   const sorted = tape.filter((t) => Number.isFinite(t.t)).sort((a, b) => a.t - b.t);
   const firstEventAt = sorted.length ? sorted[0].t : null;
-  const window = bookWindow(firstEventAt, nowMs);
+  const window = bookWindow(firstEventAt, nowMs, win);
+
 
   const books = new Map<string, Book>();
   let yesB = 0;
