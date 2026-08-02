@@ -188,6 +188,7 @@ export function OmniHeader({
   onSelectPerson,
   onOpenMenu,
   right,
+  center,
 }: {
   wallet?: string;
   onSelectMarket: (id: number) => void;
@@ -195,11 +196,17 @@ export function OmniHeader({
   onOpenMenu: () => void;
   /** Top-right slot — the account affordance. */
   right?: ReactNode;
+  /** Mobile-only center slot — the primary action (+ Conviction). */
+  center?: ReactNode;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  /** Mobile: the field is a tap target that expands over the row. */
+  const [expanded, setExpanded] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [active_i, setActiveI] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
+
 
   // Debounce the query into the searches so we don't fire on every keystroke.
   const [term, setTerm] = useState("");
