@@ -59,6 +59,8 @@ export interface ConvictionDashboardData {
   progress: {
     putInUsd: number;
     cashedOutUsd: number;
+    /** Lifetime protocol buy fees this wallet paid (USD) — on top of putIn. */
+    tradingFeesUsd: number;
   };
   /** Today's counts for the Recent Activity story. */
   activity: {
