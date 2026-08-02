@@ -486,46 +486,11 @@ export function CreateMarket({
 
 /**
  * Media affordance: one picker for every supported file (the OS dialog does the
- * filtering) plus a Link toggle. No type menu — it was unusable on mobile and
- * the type list is now just a tooltip.
+ * filtering). No type menu — it was unusable on mobile and the type list is now
+ * just a tooltip.
  */
-function AddMedia({
-  onPick,
-  onLink,
-}: {
-  onPick: () => void;
-  onLink: (url: string) => void;
-}) {
-  const [linking, setLinking] = useState(false);
-  const [url, setUrl] = useState("");
+function AddMedia({ onPick }: { onPick: () => void }) {
   const [hint, setHint] = useState(false);
-
-  const commitLink = () => {
-    const v = url.trim();
-    if (v.startsWith("https://")) onLink(v);
-    setLinking(false);
-    setUrl("");
-  };
-
-  if (linking) {
-    return (
-      <input
-        autoFocus
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commitLink();
-          if (e.key === "Escape") {
-            setLinking(false);
-            setUrl("");
-          }
-        }}
-        onBlur={commitLink}
-        placeholder="https://…"
-        className="w-full max-w-[240px] rounded-[8px] bg-transparent text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
-      />
-    );
-  }
 
   return (
     <div className="relative flex items-center gap-3">
@@ -537,13 +502,7 @@ function AddMedia({
       >
         <span aria-hidden>＋</span> Add media
       </button>
-      <button
-        type="button"
-        onClick={() => setLinking(true)}
-        className="text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-      >
-        Link
-      </button>
+
       <button
         type="button"
         aria-label="Supported file types"
