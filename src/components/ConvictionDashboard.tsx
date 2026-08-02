@@ -370,15 +370,110 @@ export function ConvictionDashboard({
             </Section>
           )}
 
-          {/* SECTION 2 — Your Journey (the money-flow timeline) */}
+          {/* SECTION 2 — Your Journey. Four rows that reconcile exactly:
+              Current Value + Withdrawn + Creator Earnings = Total Return,
+              Total Return − Total Invested = Net Profit (the hero). */}
           <Section id="journey" title="Your Journey">
-            <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-              <FlowRow label="You Put In" value={fmtUsd(putIn)} />
-              <FlowRow label="Worth Today" value={fmtUsd(worthToday)} strong />
-              <FlowRow label="You've Cashed Out" value={fmtUsd(cashedOut)} />
-              <FlowRow label="Your Markets Earned" value={fmtUsd(creatingGain)} />
-            </div>
+            {journey.empty ? (
+              <div className="rounded-2xl border border-dashed border-[var(--border)] p-6 text-center">
+                <div className="text-[15px] font-semibold text-[var(--text)]">
+                  Start building your investing journey.
+                </div>
+                <p className="mx-auto mt-2 max-w-[42ch] text-[13px] leading-relaxed text-[var(--text-muted)]">
+                  Back your first market or create one and earn fees every time people trade it.
+                </p>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  {onExplore && (
+                    <button
+                      type="button"
+                      onClick={onExplore}
+                      className="rounded-full px-5 py-2.5 text-[13px] font-semibold text-[var(--bg)] transition-opacity hover:opacity-90"
+                      style={{ background: "var(--text)" }}
+                    >
+                      Browse Markets
+                    </button>
+                  )}
+                  {onCreate && (
+                    <button
+                      type="button"
+                      onClick={onCreate}
+                      className="rounded-full border border-[var(--border)] px-5 py-2.5 text-[13px] font-semibold text-[var(--text)] transition-colors hover:border-[var(--text-muted)]"
+                    >
+                      Create Market
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+                  <FlowRow
+                    label="Total Invested"
+                    hint="The total amount you’ve invested into markets over time."
+                    value={fmtUsd(journey.investedUsd)}
+                  />
+                  <FlowRow
+                    label="Current Value"
+                    hint="What your active positions are worth right now."
+                    value={fmtUsd(journey.currentValueUsd)}
+                  />
+                  <FlowRow
+                    label="Total Withdrawn"
+                    hint="Money you’ve already taken back out of the market."
+                    value={fmtUsd(journey.withdrawnUsd)}
+                  />
+                  <FlowRow
+                    label="Creator Earnings"
+                    hint="Fees you’ve earned when other people trade markets you created."
+                    value={fmtUsd(journey.creatorUsd)}
+                  />
+                  <div className="flex items-center justify-between border-t border-[var(--border)] bg-[var(--bg)]/40 px-4 py-3.5">
+                    <span className="text-[13px] font-medium text-[var(--text)]">Net Profit</span>
+                    <span
+                      className="text-[18px] font-semibold tabular-nums"
+                      style={{ color: journey.netProfitUsd >= 0 ? "var(--yes)" : "var(--no)" }}
+                    >
+                      {fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
+                    </span>
+                  </div>
+                </div>
+                <p className="mt-2.5 px-1 text-[11.5px] leading-relaxed tabular-nums text-[var(--text-muted)]">
+                  Current Value + Total Withdrawn + Creator Earnings ={" "}
+                  {fmtUsd(journey.totalReturnUsd)} total return, minus{" "}
+                  {fmtUsd(journey.investedUsd)} invested.
+                </p>
+
+                <details className="group mt-3">
+                  <summary className="cursor-pointer list-none px-1 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]">
+                    <span className="group-open:hidden">Show details</span>
+                    <span className="hidden group-open:inline">Hide details</span>
+                  </summary>
+                  <div className="mt-2 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+                    <FlowRow label="Total Return" value={fmtUsd(journey.totalReturnUsd)} />
+                    <FlowRow
+                      label="Lifetime ROI"
+                      value={journey.roiPct == null ? "—" : fmtPct(journey.roiPct)}
+                    />
+                    <FlowRow label="Markets Created" value={`${createdIds.length}`} />
+                    <FlowRow
+                      label="Trades Made"
+                      value={`${(data?.facts.tradeCount ?? 0).toLocaleString("en-US")}`}
+                    />
+                    <FlowRow label="Winning Markets" value={`${winningMarkets}`} />
+                    <FlowRow
+                      label="Longest Held Position"
+                      value={
+                        (data?.facts.longestHeldDays ?? 0) >= 1
+                          ? `${Math.floor(data?.facts.longestHeldDays ?? 0)}d`
+                          : "—"
+                      }
+                    />
+                  </div>
+                </details>
+              </>
+            )}
           </Section>
+
 
           {/* SECTION 3 — Your Edge (numbers become identity) */}
           {sinceStart !== 0 && (
