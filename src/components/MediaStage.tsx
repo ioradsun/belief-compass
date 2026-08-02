@@ -75,7 +75,9 @@ export function MediaStage({
   children: ReactNode;
   className?: string;
 }) {
-  const [page, setPage] = useState<0 | 1>(0);
+  // Media is the point of these markets: open on the evidence, with the market
+  // one drag (or one hint tap) to the left.
+  const [page, setPage] = useState<0 | 1>(1);
   const [dx, setDx] = useState(0);
   const drag = useRef<{ x: number; y: number; axis: "" | "x" | "y" } | null>(null);
   const width = useRef(1);
