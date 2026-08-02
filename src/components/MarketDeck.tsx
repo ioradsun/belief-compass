@@ -383,12 +383,20 @@ export function MarketDeck({
   // the side panels; the center never becomes analytics or takes a side.
   const marketInner = (
     <>
+      {/* THE ONE TIMEFRAME — a single control in the center. Every number below
+      and in both Case columns (totals' deltas, percentages, sparklines, copy)
+      is measured over exactly this period. */}
+      <div className="max-w-[300px]">
+        <WindowFilter win={deckWin} onWin={setDeckWindow} />
+      </div>
+
       {/* MARKET MOMENTUM — the one block that answers "why should I care about
       this market now?": believers + capital (value · sparkline · %), a status
       pill for the shape. Believers + capital + the momentum label, from the
       canonical marketBook so the totals reconcile with the side panels. The
       narrative, the House voice and the activity all live in the right feed. */}
-      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} />
+      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} win={deckWin} />
+
 
       {/* SHARED CONVICTION — side-blind belonging: your Tribe/Twin/Opp are here. */}
       <SharedConviction
