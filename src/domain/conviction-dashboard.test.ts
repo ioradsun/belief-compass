@@ -181,7 +181,8 @@ describe("buildMilestones", () => {
       tradeCount: 600,
       sinceStartUsd: 1e6,
       hasProfit: true,
-      creatorLifetimeUsd: 1000,
+      // Must clear the top creator rung (earn-10k needs $10k), not just earn-1k.
+      creatorLifetimeUsd: 10_000,
       hasClaimed: true,
       maxMarketVolumeUsd: 1e6,
       longestHeldDays: 100,
