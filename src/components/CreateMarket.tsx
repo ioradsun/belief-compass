@@ -320,7 +320,7 @@ export function CreateMarket({
 
 
       {/* Scrolls only on short (mobile) viewports; on desktop the whole form fits. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-3">
         {source && (
           <p className="text-[11px] text-[var(--text-muted)]">
             <span aria-hidden>🏠</span> The House found this question — edit anything before it goes
