@@ -185,7 +185,10 @@ export function MarketDeck({
     queryFn: () => getConvictionMarket({ data: { onchainId: marketId } }),
     staleTime: 5 * 60_000,
   });
+  // Evidence, when the creator attached any. Null keeps the layout untouched.
+  const stageMedia = useMemo(() => stageMediaFrom(cm), [cm]);
   const createdAt = cm?.creator?.createdAt ?? null;
+
   const freshToken = createdAt
     ? marketFreshness(Date.now() - new Date(createdAt).getTime()).token
     : null;
