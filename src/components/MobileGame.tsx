@@ -28,6 +28,7 @@ import { getMarketChange, listMarketPulses } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getConvictionMarket } from "@/lib/market-create.functions";
+import { marketAgeCopy } from "@/domain/market-freshness";
 import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
 import { getHouseRead } from "@/lib/house.functions";
 import { houseKey } from "@/lib/house-round";
@@ -44,12 +45,6 @@ import { assembleRevealInput } from "@/lib/reveal-input";
 const money = (usd: number) =>
   usd >= 1000 ? `$${Math.round(usd).toLocaleString("en-US")}` : `$${usd.toFixed(usd < 10 ? 2 : 0)}`;
 
-function ago(ms: number): string {
-  const h = Math.max(0, ms) / 3_600_000;
-  if (h < 1) return `${Math.max(1, Math.round(h * 60))}m ago`;
-  if (h < 48) return `${Math.round(h)}h ago`;
-  return `${Math.round(h / 24)}d ago`;
-}
 
 type Phase = "question" | "passed" | "sides";
 
@@ -176,10 +171,10 @@ export function MobileGame({
   }, [trade.isSuccess, trade.hash, side]);
 
   const stageMedia = stageMediaFrom(cm);
-  const createdAt = cm?.creator?.createdAt ?? null;
+  const createdAt = cm?.createdAt ?? cm?.creator?.createdAt ?? null;
   const byline = [
     cm?.creator?.name ? `by ${cm.creator.name}` : null,
-    createdAt ? ago(Date.now() - new Date(createdAt).getTime()) : null,
+    createdAt ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()).toLowerCase() : null,
   ]
     .filter(Boolean)
     .join(" • ");
@@ -255,7 +250,7 @@ export function MobileGame({
         <div className="text-[12px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
           {[
             category,
-            createdAt ? ago(Date.now() - new Date(createdAt).getTime()) : null,
+            createdAt ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()) : null,
             cm?.market ? "Company exclusive" : null,
           ]
             .filter(Boolean)

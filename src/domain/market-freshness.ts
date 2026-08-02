@@ -17,6 +17,29 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 
+/**
+ * Human age copy — how old a market reads to a person, not a timestamp.
+ * "Just created" / "3 hours old" / "1 day old" / "Less than a week old".
+ * Coarser as it ages, because precision stops mattering.
+ */
+export function marketAgeCopy(ageMs: number): string {
+  const ms = Math.max(0, ageMs);
+  if (ms < 15 * MIN) return "Just created";
+  if (ms < HOUR) return `${Math.max(1, Math.round(ms / MIN))} minutes old`;
+  if (ms < DAY) {
+    const h = Math.max(1, Math.floor(ms / HOUR));
+    return `${h} ${h === 1 ? "hour" : "hours"} old`;
+  }
+  const d = Math.floor(ms / DAY);
+  if (d === 1) return "1 day old";
+  if (d < 7) return `${d} days old`;
+  if (d < 14) return "About a week old";
+  if (d < 30) return `${Math.floor(d / 7)} weeks old`;
+  if (d < 60) return "About a month old";
+  if (d < 365) return `${Math.round(d / 30)} months old`;
+  return "Over a year old";
+}
+
 export function marketFreshness(ageMs: number): Freshness {
   const ms = Math.max(0, ageMs);
   if (ms < 15 * MIN) return { token: "FRESHLY CREATED", fresh: true };
