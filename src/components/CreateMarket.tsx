@@ -326,6 +326,24 @@ export function CreateMarket({
         <span className="w-4" />
       </div>
 
+      {/* Provenance pill — this market lives here, not on POV (not yet). */}
+      <div className="mt-2 flex shrink-0 flex-col items-center gap-1">
+        <span
+          title="Markets created on Conviction Company don't appear on pov.co yet."
+          className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10.5px] font-medium uppercase tracking-[0.08em] text-[var(--text-secondary)]"
+          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+        >
+          <span
+            aria-hidden
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ background: "var(--accent, var(--text-secondary))" }}
+          />
+          Conviction Company exclusive
+        </span>
+        <p className="text-[10.5px] text-[var(--text-muted)]">Not on pov.co yet.</p>
+      </div>
+
+
       {/* Scrolls only on short (mobile) viewports; on desktop the whole form fits. */}
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-3">
         {source && (
