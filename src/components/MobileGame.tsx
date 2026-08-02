@@ -239,57 +239,77 @@ export function MobileGame({
 
   // ---- The Question — ONE screen. The dock transforms decision → order in place;
   // the House pick + celebration only arrive after the order is placed (above). ----
-  return (
-    <Screen>
-      <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
-        <div>
-          {(category || createdAt) && (
-            <div className="text-[12px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-              {[category, createdAt ? ago(Date.now() - new Date(createdAt).getTime()) : null]
-                .filter(Boolean)
-                .join(" • ")}
-            </div>
-          )}
-          <h1 className="mt-3 text-[26px] font-semibold leading-[1.2] tracking-[-0.02em] text-[var(--text)]">
-            {title}
-          </h1>
-          {byline && (
-            <button
-              type="button"
-              onClick={() => cm?.creator && onSelectPerson?.(cm.creator.wallet)}
-              className="mt-3 text-left text-[13px] text-[var(--text-muted)]"
-            >
-              {byline}
-            </button>
-          )}
+  // The question block — fixed above the stage when there's evidence, part of
+  // the single scroll column when there isn't (that layout is unchanged).
+  const questionBlock = (
+    <div>
+      {(category || createdAt) && (
+        <div className="text-[12px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          {[category, createdAt ? ago(Date.now() - new Date(createdAt).getTime()) : null]
+            .filter(Boolean)
+            .join(" • ")}
         </div>
-
-        <Rule />
-
-        {/* Momentum — believers, capital, the trend. The same <MarketMomentum>
-          the desktop deck renders, in its mobile layout. */}
-        <MarketMomentum tape={change?.tape} ethUsd={ethUsd} />
-
-        <Rule />
-
-        {/* The story — House + this market's activity — as the pinned scope of the
-          Live feed, expandable in place. Same component desktop pins to its feed. */}
-        <CurrentMarketActivity
-          marketId={marketId}
-          wallet={viewerWallet}
-          onSelect={() => undefined}
-        />
-
-        {/* Compare the two cases — an explicit exploration, never part of the
-          order flow, so the decision → order path is never interrupted. */}
+      )}
+      <h1 className="mt-3 text-[26px] font-semibold leading-[1.2] tracking-[-0.02em] text-[var(--text)]">
+        {title}
+      </h1>
+      {byline && (
         <button
           type="button"
-          onClick={() => setPhase("sides")}
-          className="text-left text-[15px] font-semibold text-[var(--text-secondary)]"
+          onClick={() => cm?.creator && onSelectPerson?.(cm.creator.wallet)}
+          className="mt-3 text-left text-[13px] text-[var(--text-muted)]"
         >
-          See both sides →
+          {byline}
         </button>
-      </div>
+      )}
+    </div>
+  );
+
+  const marketBody = (
+    <>
+      <Rule />
+
+      {/* Momentum — believers, capital, the trend. The same <MarketMomentum>
+        the desktop deck renders, in its mobile layout. */}
+      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} />
+
+      <Rule />
+
+      {/* The story — House + this market's activity — as the pinned scope of the
+        Live feed, expandable in place. Same component desktop pins to its feed. */}
+      <CurrentMarketActivity marketId={marketId} wallet={viewerWallet} onSelect={() => undefined} />
+
+      {/* Compare the two cases — an explicit exploration, never part of the
+        order flow, so the decision → order path is never interrupted. */}
+      <button
+        type="button"
+        onClick={() => setPhase("sides")}
+        className="text-left text-[15px] font-semibold text-[var(--text-secondary)]"
+      >
+        See both sides →
+      </button>
+    </>
+  );
+
+  return (
+    <Screen>
+      {stageMedia ? (
+        <>
+          <div className="shrink-0 pt-1">{questionBlock}</div>
+          <MediaStage
+            media={stageMedia}
+            className="mt-4 flex min-h-0 flex-1 flex-col gap-7 pb-4"
+          >
+            {marketBody}
+          </MediaStage>
+        </>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
+          {questionBlock}
+          {marketBody}
+        </div>
+      )}
+
 
       {/* One dock, transforming in place: the decision, then the order controls —
         never a screen swap. The House pick + celebration wait for a placed order. */}
