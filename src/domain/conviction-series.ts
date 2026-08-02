@@ -128,7 +128,13 @@ export function convictionSeries(
       ? { ...raw[priorIdx], t: since === -Infinity ? raw[0].t : since }
       : { t: since === -Infinity ? raw[0].t : Math.min(since, raw[0].t), believers: 0, capital: 0, price: inWindow[0]?.price ?? null };
 
+  // Carry the last known state forward to the window's right edge (now). Without
+  // this a window with no recent activity would end at its final event — the flat
+  // "nothing changed since" stretch would be missing, and an all-before-window
+  // side would collapse to a single point instead of an honest flat line.
   const pts = [opening, ...inWindow];
+  const tail = pts[pts.length - 1];
+  if (tail.t < nowMs) pts.push({ ...tail, t: nowMs });
   const base = pts[0];
   const normalized: SeriesPoint[] = pts.map((p) => ({
     ...p,

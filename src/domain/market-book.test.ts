@@ -80,6 +80,28 @@ describe("marketBook invariants", () => {
   });
 });
 
+describe("series spans the full window (carry-forward to now)", () => {
+  it("extends the last value flat to now when the final event is mid-window", () => {
+    // One believer joined 2h ago; nothing since. Over the 24h window the series
+    // must end at `now`, holding the value — not stop at the 2h-ago event.
+    const bk = marketBook([buy("a", "YES", 1, now - 2 * hour)], now, "24h");
+    const s = bk.believers.market.series;
+    expect(s[s.length - 1].t).toBe(now);
+    expect(s[s.length - 1].v).toBe(bk.believers.market.current);
+  });
+
+  it("draws a flat line at the held state when all activity predates the window", () => {
+    // Everything happened 3 days ago; a 24h window has no in-window events, yet
+    // the market still holds 1 believer / 2 ETH — a flat line, delta 0.
+    const bk = marketBook([buy("a", "YES", 2, now - 3 * day)], now, "24h");
+    const cap = bk.capitalEth.market;
+    expect(cap.series[0].t).toBe(bk.window.sinceMs);
+    expect(cap.series[cap.series.length - 1].t).toBe(now);
+    expect(cap.current).toBeCloseTo(2);
+    expect(cap.delta).toBeCloseTo(0); // carried forward, no in-window change
+  });
+});
+
 describe("adaptive window", () => {
   it("labels a young market since open", () => {
     const bk = marketBook([buy("a", "YES", 1, now - 2 * hour)], now);

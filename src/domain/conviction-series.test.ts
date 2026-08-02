@@ -59,6 +59,31 @@ describe("convictionSeries", () => {
     expect(s).toEqual([]);
   });
 
+  it("carries the last state forward to now (flat, not truncated at the last event)", () => {
+    // One trade an hour ago, inside a 24h window. The series must reach `now`,
+    // holding the value flat — inactivity is state, not missing data.
+    const s = convictionSeries([t({ w: "a", eth: 2, t: now - H })], "YES", "24h", now);
+    const last = s[s.length - 1];
+    expect(last.t).toBe(now); // right edge is the window end, not the last event
+    expect(last.believers).toBe(1);
+    expect(last.capital).toBe(2);
+    // Flat carry-forward: the point before `now` holds the same value.
+    expect(s[s.length - 2].capital).toBe(2);
+  });
+
+  it("draws a flat line to now when all activity predates the window", () => {
+    // Last trade 30h ago; a 24h window has no in-window events. Rather than one
+    // orphan point, the side reads as a continuous flat line at its held state.
+    const s = convictionSeries([t({ w: "a", eth: 3, t: now - 30 * H })], "YES", "24h", now);
+    expect(s.length).toBeGreaterThanOrEqual(2);
+    expect(s[s.length - 1].t).toBe(now);
+    expect(s[s.length - 1].believers).toBe(1);
+    expect(s[s.length - 1].capital).toBe(3);
+    // No change across the window → 0% move, never a fabricated jump.
+    expect(s[s.length - 1].believersPct).toBe(0);
+    expect(s[s.length - 1].capitalPct).toBe(0);
+  });
+
   it("downsamples long histories while keeping the last point", () => {
     const many = Array.from({ length: 900 }, (_, i) =>
       t({ w: `w${i}`, t: now - 900 * 1000 + i * 1000 }),
