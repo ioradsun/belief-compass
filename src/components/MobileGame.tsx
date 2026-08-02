@@ -37,15 +37,11 @@ import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { requestConnect } from "@/lib/connect-bridge";
 import { CHAIN_ID } from "@/chain/decoder";
 import { useBuyQuote, useTrade, useTradeReady } from "@/lib/chain-trade";
-import { fmtUsd, usdToWei, type OrderSide } from "@/domain/order";
-import { useDisplayUnit } from "@/lib/display-unit";
+import { usdToWei, type OrderSide } from "@/domain/order";
+import { useMoney } from "@/lib/display-unit";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
-
-const money = (usd: number) =>
-  usd >= 1000 ? `$${Math.round(usd).toLocaleString("en-US")}` : `$${usd.toFixed(usd < 10 ? 2 : 0)}`;
-
 
 type Phase = "question" | "passed" | "sides";
 
@@ -65,6 +61,7 @@ export function MobileGame({
   const marketId = Number(row.onchain_id);
   const title = row.markets?.title ?? `Market #${marketId}`;
   const category = row.markets?.category ?? null;
+  const { format } = useMoney();
 
   const [phase, setPhase] = useState<Phase>("question");
   const [side, setSide] = useState<OrderSide | null>(null);
@@ -107,7 +104,6 @@ export function MobileGame({
   const deckWin = useDeckWindow();
 
   const { data: change } = useQuery({
-
     queryKey: ["market-change", marketId],
     queryFn: () => getMarketChange({ data: { id: marketId } }),
     staleTime: 10_000,
@@ -306,10 +302,7 @@ export function MobileGame({
       {stageMedia ? (
         <>
           <div className="shrink-0 pt-1">{questionBlock}</div>
-          <MediaStage
-            media={stageMedia}
-            className="mt-4 flex min-h-0 flex-1 flex-col gap-7 pb-4"
-          >
+          <MediaStage media={stageMedia} className="mt-4 flex min-h-0 flex-1 flex-col gap-7 pb-4">
             {marketBody}
           </MediaStage>
         </>
@@ -319,7 +312,6 @@ export function MobileGame({
           {marketBody}
         </div>
       )}
-
 
       {/* One dock, transforming in place: the decision, then the order controls —
         never a screen swap. The House pick + celebration wait for a placed order. */}
@@ -343,7 +335,7 @@ export function MobileGame({
                 ? "Connect wallet"
                 : !ready.onBase
                   ? "Switch to Base"
-                  : `Confirm ${fmtUsd(amount)}`
+                  : `Confirm ${format(amount, "USD")}`
             }
             onCancel={() => {
               setBacking(false);
@@ -392,11 +384,12 @@ function AmountPanel({
   onConfirm: () => void;
   onNext: () => void;
 }) {
+  const { format } = useMoney();
   if (success)
     return (
       <div className="space-y-3">
         <p className="text-center text-[16px] text-[var(--text-secondary)]">
-          You backed {side} with {fmtUsd(amount)}.
+          You backed {side} with {format(amount, "USD")}.
         </p>
         <BigButton label="Next question" tone="neutral" onClick={onNext} />
       </div>
@@ -453,7 +446,7 @@ function BothSides({
   onBack: () => void;
 }) {
   const [open, setOpen] = useState<OrderSide | null>(null);
-  const { unit } = useDisplayUnit();
+  const { unit, format } = useMoney();
   const { data: evidence } = useQuery({
     queryKey: ["evidence", marketId],
     queryFn: () => getMarketEvidence({ data: { marketId } }),
@@ -510,7 +503,7 @@ function BothSides({
                 {count(s)} believer{count(s) === 1 ? "" : "s"}
               </div>
               <div className="num mt-1 text-[16px] text-[var(--text-secondary)]">
-                {money(capital(s))} committed
+                {format(capital(s), "USD")} committed
               </div>
             </button>
 

@@ -630,6 +630,26 @@ async function ethUsdRate(sb: ReturnType<typeof serviceClient>): Promise<number>
 }
 
 /**
+ * The live ETH/USD rate + when it was last refreshed — the ONE shared rate the
+ * whole client formats money with (the DisplayUnit context polls this). `rate` is
+ * null when unknown so callers show a stale/unavailable state instead of a
+ * fabricated number; `updatedAt` drives the toggle's subtle staleness marker.
+ */
+export const getEthUsd = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ rate: number | null; updatedAt: string | null }> => {
+    const sb = publicClient();
+    const { data } = await sb
+      .from("calc_cache")
+      .select("value, updated_at")
+      .eq("key", "eth_usd")
+      .maybeSingle();
+    const row = data as { value?: number | null; updated_at?: string | null } | null;
+    const rate = Number(row?.value ?? 0) || 0;
+    return { rate: rate > 0 ? rate : null, updatedAt: row?.updated_at ?? null };
+  },
+);
+
+/**
  * The reducer stores acquisition cost in ETH (it folds each trade's eth_amount).
  * Worth, however, is POV's USD valuation — so gain must compare like with like.
  * Value the ETH cost basis at the current rate, matching how the rest of the app

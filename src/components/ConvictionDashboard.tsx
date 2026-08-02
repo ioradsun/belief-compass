@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAccount, useReadContracts } from "wagmi";
 import { formatEther } from "viem";
 import { getConvictionDashboard } from "@/lib/conviction-dashboard.functions";
+import { useMoney } from "@/lib/display-unit";
 import { FEES_ABI, useFeeBalances, useClaimFees } from "@/lib/creator-fees";
 import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
 import {
@@ -23,14 +24,6 @@ import {
   type Milestone,
 } from "@/domain/conviction-dashboard";
 
-const fmtUsd = (n: number, sign = false): string => {
-  const v = Math.abs(n);
-  const body =
-    v >= 1000
-      ? v.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `${n < 0 ? "−" : sign ? "+" : ""}$${body}`;
-};
 const fmtPct = (n: number): string =>
   `${n < 0 ? "−" : "+"}${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
 const weiToUsd = (wei: bigint | null | undefined, ethUsd: number): number =>
@@ -93,6 +86,11 @@ export function ConvictionDashboard({
   });
 
   const ethUsd = data?.ethUsd ?? 0;
+  // Every figure below is USD-native; the shared formatter renders it in the
+  // viewer's chosen unit (USD/ETH) via the one global rate. Calculations that feed
+  // the domain (weiToUsd → journeyMath) stay in USD, unchanged.
+  const { format } = useMoney();
+  const fmtUsd = (n: number, sign = false): string => format(n, "USD", { signed: sign });
   const { creator: availableWei, refetch: refetchFees } = useFeeBalances(
     address as `0x${string}` | undefined,
   );
@@ -365,7 +363,6 @@ export function ConvictionDashboard({
             )}
           </section>
 
-
           {/* Ready to Claim — the one thing you can DO. Premium placement, right
               under the hero, only when there's something to collect. */}
           {availableUsd > 0.01 && (
@@ -378,7 +375,12 @@ export function ConvictionDashboard({
                   Generated while people traded your markets.
                 </p>
                 <div className="mt-4">
-                  <ClaimButton available={availableWei} claim={claim} onClaimed={refetchFees} full />
+                  <ClaimButton
+                    available={availableWei}
+                    claim={claim}
+                    onClaimed={refetchFees}
+                    full
+                  />
                 </div>
               </div>
             </Section>
@@ -475,11 +477,9 @@ export function ConvictionDashboard({
                   </div>
                 </div>
                 <p className="mt-2.5 px-1 text-[11.5px] leading-relaxed tabular-nums text-[var(--text-muted)]">
-                  {fmtUsd(journey.totalReturnUsd)} total return, minus{" "}
-                  {fmtUsd(journey.investedUsd)} invested and {fmtUsd(journey.feesUsd)} in trading
-                  fees.
+                  {fmtUsd(journey.totalReturnUsd)} total return, minus {fmtUsd(journey.investedUsd)}{" "}
+                  invested and {fmtUsd(journey.feesUsd)} in trading fees.
                 </p>
-
 
                 <details className="group mt-3">
                   <summary className="cursor-pointer list-none px-1 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]">
@@ -517,13 +517,15 @@ export function ConvictionDashboard({
             )}
           </Section>
 
-
           {/* SECTION 3 — Your Edge (numbers become identity) */}
           {sinceStart !== 0 && (
             <Section id="edge" title="Your Edge">
               <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
                 {sources.map((s, i) => (
-                  <div key={s.key} className={`px-4 py-3.5 ${i > 0 ? "border-t border-[var(--border)]" : ""}`}>
+                  <div
+                    key={s.key}
+                    className={`px-4 py-3.5 ${i > 0 ? "border-t border-[var(--border)]" : ""}`}
+                  >
                     <div className="flex items-center">
                       <span className="text-[14px] font-medium text-[var(--text)]">{s.label}</span>
                       <span
@@ -562,7 +564,10 @@ export function ConvictionDashboard({
                     <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[var(--text)]">
                       {m.title}
                     </span>
-                    <span className="shrink-0 text-[14px] font-semibold tabular-nums" style={{ color: "var(--yes)" }}>
+                    <span
+                      className="shrink-0 text-[14px] font-semibold tabular-nums"
+                      style={{ color: "var(--yes)" }}
+                    >
                       {fmtUsd(m.amountUsd, true)}
                     </span>
                     <Badge kind={m.kind} />
@@ -577,7 +582,10 @@ export function ConvictionDashboard({
             {milestones.next && <ActiveGoal goal={milestones.next} />}
             <div className="mb-3 flex items-center gap-3">
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--border)]">
-                <div className="h-full rounded-full" style={{ width: `${milestones.pct}%`, background: "var(--yes)" }} />
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${milestones.pct}%`, background: "var(--yes)" }}
+                />
               </div>
               <span className="text-[12px] font-semibold tabular-nums text-[var(--text-secondary)]">
                 {milestones.pct}%
@@ -585,7 +593,11 @@ export function ConvictionDashboard({
             </div>
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               {milestones.list.map((m) => (
-                <div key={m.key} className="flex items-center gap-2.5 px-1 py-1.5" style={{ opacity: m.done ? 1 : 0.45 }}>
+                <div
+                  key={m.key}
+                  className="flex items-center gap-2.5 px-1 py-1.5"
+                  style={{ opacity: m.done ? 1 : 0.45 }}
+                >
                   <span
                     className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px]"
                     style={{
@@ -597,7 +609,10 @@ export function ConvictionDashboard({
                   >
                     ✓
                   </span>
-                  <span className="text-[13px]" style={{ color: m.done ? "var(--text)" : "var(--text-muted)" }}>
+                  <span
+                    className="text-[13px]"
+                    style={{ color: m.done ? "var(--text)" : "var(--text-muted)" }}
+                  >
                     {m.label}
                   </span>
                 </div>
@@ -647,10 +662,11 @@ export function ConvictionDashboard({
 
 /** The one active goal — always answers "what am I working toward?" */
 function ActiveGoal({ goal }: { goal: Milestone }) {
+  const { format } = useMoney();
   const pct = milestonePct(goal);
   const usd = !goal.key.includes("trades") && goal.key !== "held-30";
   const fmt = (n: number) =>
-    usd ? fmtUsd(n) : goal.key === "held-30" ? `${Math.floor(n)}d` : `${Math.floor(n)}`;
+    usd ? format(n, "USD") : goal.key === "held-30" ? `${Math.floor(n)}d` : `${Math.floor(n)}`;
   return (
     <div className="mb-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
@@ -660,7 +676,10 @@ function ActiveGoal({ goal }: { goal: Milestone }) {
       {pct != null && goal.current != null && goal.target != null && (
         <>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--border)]">
-            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--yes)" }} />
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${pct}%`, background: "var(--yes)" }}
+            />
           </div>
           <div className="mt-2 flex items-center justify-between text-[12px] tabular-nums text-[var(--text-muted)]">
             <span>
@@ -673,7 +692,6 @@ function ActiveGoal({ goal }: { goal: Milestone }) {
     </div>
   );
 }
-
 
 // --- one rotating insight (real, computed — never filler) -------------------
 function pickInsight({
@@ -709,13 +727,17 @@ function pickInsight({
       `Some topics resonate more than others. ${cap(cats[0][0])} has earned you ${Math.round(x)}× more than ${cap(cats[1][0])}.`,
     );
   } else if (cats.length === 1) {
-    out.push(`${cap(cats[0][0])} is your home turf — it generates all of your creator earnings so far.`);
+    out.push(
+      `${cap(cats[0][0])} is your home turf — it generates all of your creator earnings so far.`,
+    );
   }
 
   const trading = sources.find((s) => s.key === "trading")?.usd ?? 0;
   const creating = sources.find((s) => s.key === "creating")?.usd ?? 0;
   if (creating > 0 && trading < 0 && creating >= Math.abs(trading)) {
-    out.push("Here's the beautiful part: your creator earnings now cover all of your trading costs.");
+    out.push(
+      "Here's the beautiful part: your creator earnings now cover all of your trading costs.",
+    );
   }
   const strongest = [...sources].filter((s) => s.usd > 0).sort((a, b) => b.usd - a.usd)[0];
   if (strongest)
@@ -760,7 +782,6 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
 
 function FlowRow({
   label,
@@ -822,7 +843,9 @@ function Empty({
   className?: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-dashed border-[var(--border)] p-6 text-center ${className}`}>
+    <div
+      className={`rounded-2xl border border-dashed border-[var(--border)] p-6 text-center ${className}`}
+    >
       <div className="text-[14px] font-semibold text-[var(--text)]">{title}</div>
       <p className="mx-auto mt-1.5 max-w-[38ch] text-[13px] leading-relaxed text-[var(--text-muted)]">
         {body}

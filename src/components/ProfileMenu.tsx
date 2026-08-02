@@ -29,8 +29,8 @@ const WalletIdentity = lazyRetry(() =>
 );
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 import { requestDisconnect, requestSwitchAccount } from "@/lib/connect-bridge";
-import { useDisplayUnit } from "@/lib/display-unit";
-import { formatRate, type DisplayUnit } from "@/domain/money";
+import { useMoney } from "@/lib/display-unit";
+import { formatUsdPrice } from "@/domain/money";
 
 /** Base is the one chain this app trades on. */
 const NETWORK = "Base";
@@ -272,11 +272,7 @@ export function ProfileMenu({
             )}
           </Suspense>
           {panel === "settings" && (
-            <SettingsPanel
-              onOpenTerms={onOpenTerms}
-              onClose={() => setPanel(null)}
-              ethUsd={ethUsd}
-            />
+            <SettingsPanel onOpenTerms={onOpenTerms} onClose={() => setPanel(null)} />
           )}
         </Modal>
       )}
@@ -355,15 +351,13 @@ function Modal({
 function SettingsPanel({
   onOpenTerms,
   onClose,
-  ethUsd = 0,
 }: {
   onOpenTerms?: () => void;
   onClose: () => void;
-  ethUsd?: number;
 }) {
   return (
     <div className="space-y-1">
-      <CurrencySetting ethUsd={ethUsd} />
+      <CurrencySetting />
       <Divider />
       {onOpenTerms && (
         <button
@@ -382,41 +376,65 @@ function SettingsPanel({
 }
 
 /**
- * Display currency — one universal switch. Every money figure in the app (worth,
- * cost, committed capital, volume, fees) reads this and converts through the one
- * live rate, so the viewer can see the whole product in USD or in ETH. The rate
- * in use is shown plainly beneath, so the conversion is never a black box.
+ * Currency toggle — one horizontal control that IS the rate: `1 ETH ↔ $3,421.18
+ * USD`. ETH on the left, the live USD equivalent on the right, a quiet
+ * bidirectional arrow between. Picking a side sets the app-wide display currency
+ * (everything re-renders instantly). The USD figure is the ONE shared live rate
+ * from the money context — never hardcoded — and a delayed rate shows a subtle
+ * marker so a conversion is never silently made against a stale price.
  */
-function CurrencySetting({ ethUsd }: { ethUsd: number }) {
-  const { unit, setUnit } = useDisplayUnit();
-  const rate = formatRate(ethUsd);
-  const opts: DisplayUnit[] = ["USD", "ETH"];
+function CurrencySetting() {
+  const { unit, setUnit, ethUsd, rateStale } = useMoney();
+  const price = ethUsd != null ? formatUsdPrice(ethUsd) : null;
+  const seg = (active: boolean) =>
+    `flex-1 rounded-[8px] px-3 py-1.5 text-center text-[12px] font-semibold transition-colors ${
+      active ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
+    }`;
   return (
     <div className="px-1 py-1.5">
-      <div className="mb-1.5 text-[13px] text-[var(--text)]">Display currency</div>
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <span className="text-[13px] text-[var(--text)]">Display currency</span>
+        {rateStale && (
+          <span
+            className="inline-flex items-center gap-1 text-[10px] text-[var(--text-muted)]"
+            title="Live rate is delayed — showing the last known price"
+          >
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: "var(--no)" }}
+              aria-hidden
+            />
+            rate delayed
+          </span>
+        )}
+      </div>
       <div
-        className="flex rounded-[10px] p-0.5"
+        className="flex items-center rounded-[10px] p-0.5"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
         role="radiogroup"
         aria-label="Display currency"
       >
-        {opts.map((o) => (
-          <button
-            key={o}
-            type="button"
-            role="radio"
-            aria-checked={unit === o}
-            onClick={() => setUnit(o)}
-            className={`flex-1 rounded-[8px] px-3 py-1.5 text-[12px] font-medium transition-colors ${
-              unit === o ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
-            }`}
-          >
-            {o === "USD" ? "USD ($)" : "ETH (Ξ)"}
-          </button>
-        ))}
-      </div>
-      <div className="num mt-1.5 text-[11px] text-[var(--text-muted)]">
-        {rate ?? "Live rate unavailable"}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={unit === "ETH"}
+          onClick={() => setUnit("ETH")}
+          className={seg(unit === "ETH")}
+        >
+          1 ETH
+        </button>
+        <span className="num shrink-0 px-1.5 text-[13px] text-[var(--text-muted)]" aria-hidden>
+          ↔
+        </span>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={unit === "USD"}
+          onClick={() => setUnit("USD")}
+          className={`num ${seg(unit === "USD")}`}
+        >
+          {price ? `${price} USD` : "USD"}
+        </button>
       </div>
     </div>
   );

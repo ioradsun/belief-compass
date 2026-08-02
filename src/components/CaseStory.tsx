@@ -22,11 +22,10 @@ import { CaseRoster, StatRow } from "@/components/CaseFile";
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 
-
 import { convictionStory, narrateStory, timelineEvents } from "@/domain/conviction-series";
 import { FLOW_WINDOW_PHRASE } from "@/domain/market-flow";
 import { sideCaseSummary } from "@/domain/case-file";
-import { fmtUsd } from "@/domain/order";
+import { useMoney } from "@/lib/display-unit";
 
 export function CaseStory({
   side,
@@ -42,12 +41,11 @@ export function CaseStory({
   /** Return to Discovery (both sides side-by-side). */
   onClose: () => void;
 }) {
-
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
+  const { format } = useMoney();
   // One timeframe everywhere: investigation reads (and can change) the same
   // selection the center panel owns, so no two surfaces quote different periods.
   const win = useDeckWindow();
-  
 
   // Escape always returns to comparison — investigation is a temporary lens.
   useEffect(() => {
@@ -92,7 +90,7 @@ export function CaseStory({
 
   const believers = (evidence?.believers ?? []).filter((b) => b.side === side);
   const narrative = story
-    ? narrateStory(story, side, FLOW_WINDOW_PHRASE[win], (eth) => fmtUsd(eth * (ethUsd || 0)))
+    ? narrateStory(story, side, FLOW_WINDOW_PHRASE[win], (eth) => format(eth, "ETH"))
     : null;
 
   const capitalUsd = summary ? summary.capitalEth * (ethUsd || 0) : null;
@@ -141,8 +139,6 @@ export function CaseStory({
           </button>
         </div>
 
-
-
         {/* The three real signals over time — believers, capital, price. */}
         <div className="mt-4 space-y-3">
           <SignalOverTime
@@ -158,7 +154,7 @@ export function CaseStory({
             side={side}
             icon="💰"
             label="Capital"
-            value={capitalUsd != null ? fmtUsd(capitalUsd) : "—"}
+            value={capitalUsd != null ? format(capitalUsd, "USD") : "—"}
             pct={summary?.capitalPct ?? null}
             points={summary?.series ?? []}
             metric="capital"
@@ -167,7 +163,7 @@ export function CaseStory({
             side={side}
             icon="📈"
             label="Price"
-            value={priceUsd != null ? `$${priceUsd.toFixed(2)}` : "—"}
+            value={priceUsd != null ? format(priceUsd, "USD") : "—"}
             pct={summary?.pricePct ?? null}
             points={summary?.series ?? []}
             metric="price"
@@ -185,7 +181,7 @@ export function CaseStory({
                 <li key={e.id} className="flex items-baseline gap-1.5 text-[12px]">
                   <span aria-hidden>{e.emoji}</span>
                   <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
-                    {e.eth != null ? `${fmtUsd(e.eth * (ethUsd || 0))} ${e.text}` : e.text}
+                    {e.eth != null ? `${format(e.eth, "ETH")} ${e.text}` : e.text}
                   </span>
                 </li>
               ))}
@@ -200,7 +196,6 @@ export function CaseStory({
       </div>
 
       {/* No side action here — the decision dock below already owns Back YES/NO. */}
-
     </div>
   );
 }

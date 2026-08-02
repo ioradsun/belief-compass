@@ -9,7 +9,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { dismissSuggestions, useSuggestionProbe } from "@/lib/create-draft";
 import { suggestExistingMarkets } from "@/lib/market-create.functions";
-import { fmtUsd } from "@/domain/order";
+import { useMoney } from "@/lib/display-unit";
 
 const REASON: Record<string, string> = {
   "same-media": "Same media",
@@ -18,6 +18,7 @@ const REASON: Record<string, string> = {
 };
 
 export function DuplicateSuggestions({ onSelect }: { onSelect: (marketId: number) => void }) {
+  const { format } = useMoney();
   const probe = useSuggestionProbe();
   const question = probe?.question.trim() ?? "";
   const enabled = !!probe && (question.length >= 8 || !!probe.sha256 || !!probe.linkUrl);
@@ -80,7 +81,9 @@ export function DuplicateSuggestions({ onSelect }: { onSelect: (marketId: number
               </div>
 
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--text-secondary)]">
-                {m.backedUsd != null && <span className="num">{fmtUsd(m.backedUsd)} backed</span>}
+                {m.backedUsd != null && (
+                  <span className="num">{format(m.backedUsd, "USD")} backed</span>
+                )}
                 {m.believers != null && m.believers > 0 && (
                   <>
                     <span className="text-[var(--text-muted)]">·</span>
