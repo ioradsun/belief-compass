@@ -11,7 +11,8 @@
  * (so opening the Case File adds no requests) and derives the totals, deltas and
  * roster ordering from the pure src/domain/case-file engine.
  */
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { setDeckLens, useDeckLens } from "@/lib/deck-lens";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
@@ -141,7 +142,7 @@ export function CaseColumn({
   // Believers is always the default lens — conviction.company is about people
   // first. The selection is component state, so changing the timeframe never
   // resets which lens you're investigating.
-  const [metric, setMetric] = useState<LensMetric>("believers");
+  const metric = useDeckLens();
   const series = useMemo(() => summary?.series ?? [], [summary]);
   const money = useMemo(() => (eth: number) => fmtUsd(eth * (ethUsd || 0)), [ethUsd]);
   const facts = useMemo(() => lensFacts(series), [series]);
@@ -205,7 +206,7 @@ export function CaseColumn({
               pct={r.pct}
               active={metric === r.metric}
               color={color}
-              onSelect={() => setMetric(r.metric)}
+              onSelect={() => setDeckLens(r.metric)}
             />
           ))}
         </div>
