@@ -206,13 +206,17 @@ function MomentumMetric({
 export function MarketMomentum({
   tape,
   ethUsd,
+  win,
   nowMs = Date.now(),
 }: {
   tape: TapeTrade[] | undefined;
   ethUsd: number;
+  /** The one on-screen timeframe — every total, delta and spark quotes it. */
+  win?: FlowWindow;
   nowMs?: number;
 }) {
-  const book = useMemo(() => marketBook(tape ?? [], nowMs), [tape, nowMs]);
+  const book = useMemo(() => marketBook(tape ?? [], nowMs, win), [tape, nowMs, win]);
+
   const usd = (eth: number) => eth * (ethUsd > 0 ? ethUsd : 0);
 
   const b = book.believers.market;
