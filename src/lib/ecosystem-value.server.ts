@@ -21,6 +21,12 @@
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { swrCache } from "@/lib/server-cache";
+import {
+  buildShare,
+  type EcosystemShare,
+  type ShareRpc,
+  type SharePoint,
+} from "@/domain/ecosystem-share";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -60,10 +66,14 @@ export interface ActivityItem {
   at: string;
 }
 
+export type { SharePoint, EcosystemShare };
+
 export interface EcosystemValue {
   ethUsd: number;
   /** When trade attribution started; null before the first recorded trade. */
   since: string | null;
+  /** The headline story: how much of the whole market Conviction accounts for. */
+  share: EcosystemShare | null;
   totals: {
     volumeUsd: number;
     marketsCreated: number;
@@ -95,16 +105,20 @@ interface AttributedValue {
 
 const weiToEth = (wei: string | null | undefined): number => num(wei) / 1e18;
 
+const SHARE_DAYS = 90;
+
 async function build(): Promise<EcosystemValue> {
   const sb = serviceClient();
 
-  const [{ data: ethRow }, rpc, { count: convictionMarkets }] = await Promise.all([
+  const [{ data: ethRow }, rpc, shareRpc, { count: convictionMarkets }] = await Promise.all([
     sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
     sb.rpc("conviction_attributed_value", { p_growth_days: GROWTH_DAYS }),
+    sb.rpc("conviction_ecosystem_share", { p_days: SHARE_DAYS }),
     // "Markets Created" — the one supply-side figure: markets born on conviction.company.
     sb.from("markets").select("onchain_id", { count: "exact", head: true }).eq("source", "conviction"),
   ]);
   const ethUsd = num((ethRow as { value?: number } | null)?.value);
+  const share = buildShare((shareRpc.data ?? null) as ShareRpc | null, ethUsd, Date.now(), SHARE_DAYS);
 
   // If the RPC isn't present yet (migration not applied), degrade to honest zeros
   // rather than crash or fall back to numbers we can't attribute.
@@ -113,6 +127,7 @@ async function build(): Promise<EcosystemValue> {
     return {
       ethUsd,
       since: null,
+      share,
       totals: { volumeUsd: 0, marketsCreated: convictionMarkets ?? 0, tradesExecuted: 0, activeTraders: 0 },
       categories: [],
       markets: [],
@@ -207,6 +222,7 @@ async function build(): Promise<EcosystemValue> {
   return {
     ethUsd,
     since: cv.since ?? null,
+    share,
     totals: {
       volumeUsd,
       marketsCreated: convictionMarkets ?? 0,
