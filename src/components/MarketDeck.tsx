@@ -662,7 +662,10 @@ export function MarketDeck({
               onSkip();
             }}
           />
-        )}
+          )}
+        </div>
+
+
 
         {/* The payoff for standing on it: what your link has brought in. Only
           renders once it's real (a believer, not just an open). */}
