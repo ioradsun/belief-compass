@@ -657,7 +657,7 @@ function Feed() {
         {/* LEFT — You (Positions | Network) — fixed 320px rail */}
         <aside
           className={`${show("mine")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
-          style={{ borderRight: "1px solid var(--border)" }}
+          style={{ borderRight: "1px solid var(--hairline)" }}
         >
           {caseActive && currentRow ? (
             // YES Case — the existing YES-supporting intelligence, reorganized.
@@ -855,7 +855,7 @@ function Feed() {
         {/* RIGHT — The Room — fixed 320px rail */}
         <aside
           className={`${show("room")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
-          style={{ borderLeft: "1px solid var(--border)" }}
+          style={{ borderLeft: "1px solid var(--hairline)" }}
         >
           {caseActive && currentRow ? (
             // NO Case replaces the Live feed while investigating. Closing Case File
@@ -914,7 +914,7 @@ function Feed() {
             />
             <div
               className="absolute inset-y-0 left-0 w-64 bg-[var(--panel)] p-4"
-              style={{ borderRight: "1px solid var(--border)" }}
+              style={{ borderRight: "1px solid var(--hairline)" }}
             >
               <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 Menu

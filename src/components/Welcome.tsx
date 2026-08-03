@@ -369,7 +369,7 @@ export function WelcomePrompt({
 
             <div
               className="flex items-center gap-2 px-4 py-3"
-              style={{ borderTop: "1px solid var(--border)" }}
+              style={{ borderTop: "1px solid var(--hairline)" }}
             >
               <button
                 type="button"

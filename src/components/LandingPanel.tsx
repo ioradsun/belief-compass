@@ -38,7 +38,7 @@ export function LandingPanel({
   return (
     <header
       className="relative z-30 shrink-0 bg-[var(--panel)] transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
-      style={{ borderBottom: "1px solid var(--border)" }}
+      style={{ borderBottom: "1px solid var(--hairline)" }}
     >
       <div
         role="button"

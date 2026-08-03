@@ -197,7 +197,7 @@ function ConvictionCard({
   );
 }
 
-const Divider = () => <div className="my-2.5" style={{ borderTop: "1px solid var(--border)" }} />;
+const Divider = () => <div className="my-2.5" style={{ borderTop: "1px solid var(--hairline)" }} />;
 
 export function MyConvictions({
   wallet,
@@ -440,7 +440,7 @@ export function MyConvictions({
         )}
       </div>
 
-      <div style={{ borderTop: "1px solid var(--border)" }} />
+      <div style={{ borderTop: "1px solid var(--hairline)" }} />
 
       <div className="flex flex-col gap-2.5 pt-4">
         {positions.map((p) => (

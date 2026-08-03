@@ -296,7 +296,7 @@ function Item({ label, onClick, muted }: { label: string; onClick: () => void; m
   );
 }
 
-const Divider = () => <div className="my-1" style={{ borderTop: "1px solid var(--border)" }} />;
+const Divider = () => <div className="my-1" style={{ borderTop: "1px solid var(--hairline)" }} />;
 
 /** A quiet centered modal for the occasional deeper action. */
 function Modal({
