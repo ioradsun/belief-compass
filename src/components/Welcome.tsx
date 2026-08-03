@@ -246,10 +246,10 @@ export function WelcomePrompt({
                       </span>
                       <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] text-[var(--text)]">
+                        <span className="block break-words text-[13px] text-[var(--text)]">
                           {p.name}
                         </span>
-                        <span className="block truncate text-[11px] text-[var(--text-muted)]">
+                        <span className="block break-words text-[11px] text-[var(--text-muted)]">
                           <span
                             className="font-semibold"
                             style={{ color: p.side === "YES" ? "var(--yes)" : "var(--no)" }}
@@ -259,6 +259,7 @@ export function WelcomePrompt({
                           · {p.marketTitle}
                         </span>
                       </span>
+
                     </button>
                     {onSelectPerson && (
                       <button
