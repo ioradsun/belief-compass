@@ -27,6 +27,8 @@ export interface Welcomable {
   wallet: string;
   marketId: number;
   side: Side;
+  /** When they became directional — drives "since your last visit". */
+  occurredAt: string;
 }
 
 export interface ReceivedWelcome {
@@ -64,7 +66,7 @@ export function selectWelcomable(params: {
     const key = welcomeKey(w, e.marketId, side);
     if (alreadyWelcomed.has(key) || seen.has(key)) continue;
     seen.add(key);
-    out.push({ wallet: w, marketId: e.marketId, side });
+    out.push({ wallet: w, marketId: e.marketId, side, occurredAt: e.occurredAt });
     if (out.length >= cap) break;
   }
   return out;
