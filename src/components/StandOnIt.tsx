@@ -15,7 +15,7 @@ import { marketShareUrl, shareMessage, type ShareSide } from "@/domain/share";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { useShareCode } from "@/lib/use-share-attribution";
 
-type Variant = "primary" | "card" | "inline";
+type Variant = "primary" | "card" | "inline" | "title";
 
 const CONFIRM = "Link copied — stand on business.";
 
@@ -73,6 +73,34 @@ export function StandOnIt({
     if (ok) onShared?.();
   };
 
+  // The title link — the widely-understood "copy link to this thing" control that
+  // sits beside a heading (GitHub's permalink icon). Borderless, quiet until
+  // hovered, and it answers with a plain "Link copied" pill.
+  if (variant === "title") {
+    return (
+      <span className={`relative inline-flex shrink-0 ${className}`}>
+        <button
+          type="button"
+          onClick={go}
+          aria-label="Copy link to this market"
+          title="Copy link"
+          className="grid h-9 w-9 place-items-center rounded-[10px] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]"
+        >
+          <LinkIcon className="h-[19px] w-[19px]" />
+        </button>
+        {copied && (
+          <span
+            role="status"
+            className="pointer-events-none absolute right-0 top-full z-20 mt-1 whitespace-nowrap rounded-[8px] px-2 py-1 text-[11px] font-semibold text-[var(--text)]"
+            style={{ background: "var(--surface-2)" }}
+          >
+            Link copied
+          </span>
+        )}
+      </span>
+    );
+  }
+
   // Icon-only for dense surfaces (market/position cards); labelled everywhere else.
   if (variant === "card") {
     return (
@@ -81,8 +109,7 @@ export function StandOnIt({
         onClick={go}
         aria-label="Stand on it — share this market"
         title={copied ? CONFIRM : "Stand on it"}
-        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--text-secondary)] transition-colors hover:text-[var(--text)] ${className}`}
-        style={{ border: "1px solid var(--border)" }}
+        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)] ${className}`}
       >
         <LinkIcon className="h-4 w-4" />
       </button>
