@@ -55,12 +55,13 @@ export function useSpendableBalance() {
   return { wei, eth, isConnected, isLoading };
 }
 
-/** Trim an ETH amount to at most 6 decimals for the entry field. */
-function ethText(eth: number): string {
+/** Trim an ETH amount to at most `dp` decimals (default 6) for display/entry. */
+function ethText(eth: number, dp = 6): string {
   if (!Number.isFinite(eth) || eth === 0) return "";
-  const s = eth.toFixed(6);
+  const s = eth.toFixed(dp);
   return s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
 }
+
 
 /**
  * The amount input. `amount` is ALWAYS the USD value — the trade-sizing pipeline
