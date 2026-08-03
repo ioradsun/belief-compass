@@ -66,7 +66,7 @@ function Card({ card }: { card: RevealCard }) {
   return (
     <div
       className="rounded-2xl px-5 py-4 text-center"
-      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+      style={{ background: "var(--surface)" }}
     >
       <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
         <span aria-hidden>{card.icon}</span> {card.title}

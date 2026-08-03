@@ -219,7 +219,7 @@ function SignalOverTime({
   metric: "believers" | "capital" | "price";
 }) {
   return (
-    <div className="rounded-[12px] p-2.5" style={{ border: "1px solid var(--border)" }}>
+    <div className="rounded-[12px] bg-[var(--surface)] p-2.5">
       <StatRow icon={icon} label={label} value={value} pct={pct} />
       {points.length > 1 && (
         <div className="mt-1.5">

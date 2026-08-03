@@ -35,7 +35,7 @@ export function ShareImpact({
   return (
     <div
       className={`rounded-[12px] px-3.5 py-2.5 text-[13px] leading-snug ${className}`}
-      style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
+      style={{ background: "var(--surface)" }}
     >
       <span className="text-[var(--text)]">{data.impact.headline}</span>
       {data.impact.sub && (

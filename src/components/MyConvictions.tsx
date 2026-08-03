@@ -108,8 +108,8 @@ function ConvictionCard({
     <button
       type="button"
       onClick={() => onSelect(p.id)}
-      className="block w-full rounded-[14px] p-3.5 text-left transition-colors hover:border-[var(--text-muted)]/40"
-      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+      className="block w-full rounded-[14px] p-3.5 text-left transition-colors hover:bg-[var(--surface-2)]"
+      style={{ background: "var(--surface)" }}
     >
       {/* 1 — What do I believe? (largest). pr-9 reserves the corner for the
         always-present "Stand on it" share control layered above the card. */}
@@ -121,7 +121,7 @@ function ConvictionCard({
       <div className="mt-2">
         <span
           className="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide"
-          style={{ color: sideColor, background: "var(--surface-2,var(--border))" }}
+          style={{ color: sideColor, background: "var(--surface-2)" }}
         >
           {p.side}
         </span>
@@ -197,7 +197,7 @@ function ConvictionCard({
   );
 }
 
-const Divider = () => <div className="my-2.5" style={{ borderTop: "1px solid var(--border)" }} />;
+const Divider = () => <div className="my-2.5" style={{ borderTop: "1px solid var(--hairline)" }} />;
 
 export function MyConvictions({
   wallet,
@@ -440,7 +440,7 @@ export function MyConvictions({
         )}
       </div>
 
-      <div style={{ borderTop: "1px solid var(--border)" }} />
+      <div style={{ borderTop: "1px solid var(--hairline)" }} />
 
       <div className="flex flex-col gap-2.5 pt-4">
         {positions.map((p) => (
