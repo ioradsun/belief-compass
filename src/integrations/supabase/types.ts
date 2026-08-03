@@ -1179,6 +1179,27 @@ export type Database = {
         }
         Relationships: []
       }
+      viewer_market_decisions: {
+        Row: {
+          decided_at: string
+          decision: string
+          market_id: number
+          viewer_wallet: string
+        }
+        Insert: {
+          decided_at?: string
+          decision: string
+          market_id: number
+          viewer_wallet: string
+        }
+        Update: {
+          decided_at?: string
+          decision?: string
+          market_id?: number
+          viewer_wallet?: string
+        }
+        Relationships: []
+      }
       wallet_beliefs: {
         Row: {
           applied_trade_count: number
