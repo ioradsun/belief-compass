@@ -374,6 +374,96 @@ export type Database = {
         }
         Relationships: []
       }
+      market_ai_analysis: {
+        Row: {
+          analyzed_at: string | null
+          answerability_score: number | null
+          attempts: number
+          audience: string | null
+          category: string | null
+          clarity_score: number | null
+          content_hash: string
+          created_at: string
+          debate_score: number | null
+          duplicate_cluster_id: string | null
+          duplicate_similarity: number | null
+          embedding: Json | null
+          engine_version: number
+          identity_score: number | null
+          last_error: string | null
+          media_relevance: number | null
+          novelty_score: number | null
+          onchain_id: number
+          quality_score: number | null
+          related_topics: string[]
+          risk_flags: string[]
+          status: string
+          subcategory: string | null
+          summary: string | null
+          time_sensitivity: number | null
+          topic: string | null
+          updated_at: string
+        }
+        Insert: {
+          analyzed_at?: string | null
+          answerability_score?: number | null
+          attempts?: number
+          audience?: string | null
+          category?: string | null
+          clarity_score?: number | null
+          content_hash: string
+          created_at?: string
+          debate_score?: number | null
+          duplicate_cluster_id?: string | null
+          duplicate_similarity?: number | null
+          embedding?: Json | null
+          engine_version?: number
+          identity_score?: number | null
+          last_error?: string | null
+          media_relevance?: number | null
+          novelty_score?: number | null
+          onchain_id: number
+          quality_score?: number | null
+          related_topics?: string[]
+          risk_flags?: string[]
+          status?: string
+          subcategory?: string | null
+          summary?: string | null
+          time_sensitivity?: number | null
+          topic?: string | null
+          updated_at?: string
+        }
+        Update: {
+          analyzed_at?: string | null
+          answerability_score?: number | null
+          attempts?: number
+          audience?: string | null
+          category?: string | null
+          clarity_score?: number | null
+          content_hash?: string
+          created_at?: string
+          debate_score?: number | null
+          duplicate_cluster_id?: string | null
+          duplicate_similarity?: number | null
+          embedding?: Json | null
+          engine_version?: number
+          identity_score?: number | null
+          last_error?: string | null
+          media_relevance?: number | null
+          novelty_score?: number | null
+          onchain_id?: number
+          quality_score?: number | null
+          related_topics?: string[]
+          risk_flags?: string[]
+          status?: string
+          subcategory?: string | null
+          summary?: string | null
+          time_sensitivity?: number | null
+          topic?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       market_milestone: {
         Row: {
           market_id: string
@@ -1200,6 +1290,30 @@ export type Database = {
         }
         Relationships: []
       }
+      viewer_market_events: {
+        Row: {
+          count: number
+          kind: string
+          last_at: string
+          market_id: number
+          viewer_wallet: string
+        }
+        Insert: {
+          count?: number
+          kind: string
+          last_at?: string
+          market_id: number
+          viewer_wallet: string
+        }
+        Update: {
+          count?: number
+          kind?: string
+          last_at?: string
+          market_id?: number
+          viewer_wallet?: string
+        }
+        Relationships: []
+      }
       wallet_beliefs: {
         Row: {
           applied_trade_count: number
@@ -1570,6 +1684,10 @@ export type Database = {
         Returns: Json
       }
       recompute_price_changes: { Args: never; Returns: undefined }
+      record_viewer_market_event: {
+        Args: { p_kind: string; p_market: number; p_wallet: string }
+        Returns: undefined
+      }
       refresh_eth_usd_calibration: { Args: never; Returns: number }
       refresh_market_window_change: { Args: never; Returns: undefined }
       request_viewer_match_refresh: {

@@ -11,6 +11,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { readSessionToken } from "@/lib/wallet-session";
 import { noteCardViewed as noteFeedCard, noteIdeaShown } from "@/lib/feed-session";
+import { recordFeedEvent } from "@/lib/opportunity-feed.functions";
+
 import {
   completeSuggestion,
   markSuggestion,
@@ -46,9 +48,16 @@ export function useHouseIdea(serverSuggestion: ReadySuggestion | null): HouseIde
     void fn().catch(() => undefined); // analytics must never surface to the viewer
   }, []);
 
-  const noteCardViewed = useCallback((marketId: number) => {
-    noteFeedCard(marketId);
-  }, []);
+  const noteCardViewed = useCallback(
+    (marketId: number) => {
+      noteFeedCard(marketId);
+      // Durable, cross-session record so the feed's exclusion gate knows this
+      // market was already shown. Fire-and-forget: never blocks scrolling.
+      if (wallet) fire(() => recordFeedEvent({ data: { wallet, marketId, kind: "view" } }));
+    },
+    [wallet, fire],
+  );
+
 
   const onShown = useCallback(() => {
     if (!ready || !wallet || !token) return;
