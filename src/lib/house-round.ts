@@ -25,7 +25,7 @@ export const houseKey = (wallet: string | undefined, marketId: number) =>
 export function useHouseFinalize(marketId: number, viewerWallet?: string) {
   const connected = useEffectiveWallet();
   const wallet = viewerWallet ?? connected;
-  const { ensureSession } = useWalletSession();
+  const { ensureSession, withSession } = useWalletSession();
   const qc = useQueryClient();
   const store = (data: HouseReadView | null) => {
     if (data) qc.setQueryData(houseKey(wallet, marketId), data);
@@ -51,10 +51,12 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
     mutationFn: async () => {
       if (!wallet) return null;
       // Free action: never prompt for a signature just to walk away.
-      return bestEffort(async () => {
-        const session = await ensureSession({ interactive: false });
-        return finalizePass({ data: { wallet, marketId, session } });
-      });
+      return bestEffort(() =>
+        withSession(
+          (session) => finalizePass({ data: { wallet, marketId, session } }),
+          { interactive: false },
+        ),
+      );
     },
     onSuccess: onDecided,
   });
@@ -62,15 +64,19 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
     mutationFn: async (vars: { key: string; action: "YES" | "NO" | "PASS" }) => {
       if (!wallet) return null;
       // Free action: only recorded when the wallet already has a session.
-      return bestEffort(async () => {
-        const session = await ensureSession({ interactive: false });
-        return recordFoundation({
-          data: { wallet, marketId, key: vars.key, action: vars.action, session },
-        });
-      });
+      return bestEffort(() =>
+        withSession(
+          (session) =>
+            recordFoundation({
+              data: { wallet, marketId, key: vars.key, action: vars.action, session },
+            }),
+          { interactive: false },
+        ),
+      );
     },
     onSuccess: store,
   });
+
   return {
     betReveal: (side: "YES" | "NO", txHash: string) => bet.mutate({ side, txHash }),
     pass: () => pass.mutate(),
