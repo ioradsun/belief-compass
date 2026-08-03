@@ -111,6 +111,12 @@ function StepSpark({
 interface RowCopy {
   /** e.g. "+14%" or null when the base is too small to be meaningful. */
   pct: string | null;
+  /**
+   * What the big right-hand figure shows. It is the percentage whenever the
+   * base supports one; on a cold start (no base to divide by) it falls back to
+   * the absolute move so the arrow is never left standing on its own.
+   */
+  trend: string;
   /** e.g. "+1 believer over 24H" / "First believer" / "No change over 24H". */
   absolute: string;
   direction: "up" | "down" | "flat";
@@ -120,23 +126,35 @@ interface RowCopy {
 function believerCopy(m: BookMetric, w: BookWindow): RowCopy {
   const direction = m.delta > 0 ? "up" : m.delta < 0 ? "down" : "flat";
   if (m.base === 0 && m.current > 0) {
-    return m.current === 1
-      ? { pct: null, absolute: "First believer", direction: "up" }
-      : { pct: null, absolute: `+${m.current} believers ${w.since}`, direction: "up" };
+    return {
+      pct: null,
+      trend: `+${m.current}`,
+      absolute:
+        m.current === 1 ? "First believer" : `+${m.current} believers ${w.since}`,
+      direction: "up",
+    };
   }
   const pct =
     m.base >= BELIEVER_PCT_MIN
       ? `${m.delta >= 0 ? "+" : "−"}${Math.round((Math.abs(m.delta) / m.base) * 100)}%`
       : null;
   if (m.delta === 0)
-    return { pct: pct ? "0%" : null, absolute: `No change ${w.since}`, direction: "flat" };
+    return {
+      pct: pct ? "0%" : null,
+      trend: "0%",
+      absolute: `No change ${w.since}`,
+      direction: "flat",
+    };
   const n = Math.abs(m.delta);
+  const signed = `${m.delta > 0 ? "+" : "−"}${n}`;
   return {
     pct,
-    absolute: `${m.delta > 0 ? "+" : "−"}${n} believer${n === 1 ? "" : "s"} ${w.since}`,
+    trend: pct ?? signed,
+    absolute: `${signed} believer${n === 1 ? "" : "s"} ${w.since}`,
     direction,
   };
 }
+
 
 // Materiality (direction, the percentage floor) is judged in USD so a display in
 // ETH never changes what counts as a real move; only the shown figure converts.
