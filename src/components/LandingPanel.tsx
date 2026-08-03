@@ -201,14 +201,35 @@ export function LandingPanel({
 
               {/* trust strip */}
               <div
-                className="mt-6 grid grid-cols-2 gap-x-6 gap-y-2 pt-4 text-[12px] text-[var(--text-muted)] sm:flex sm:flex-wrap sm:items-center sm:gap-x-8 lg:mt-8"
+                className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-3 pt-4 text-[12px] text-[var(--text-muted)] lg:mt-8"
                 style={{ borderTop: "1px solid var(--hairline)" }}
               >
-                <span>Built on Base</span>
-                <span>Powered by POV</span>
-                <span>Trades and pricing are onchain</span>
-                <span>Fees shown before every trade</span>
+                <span className="inline-flex items-center gap-2">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    aria-hidden="true"
+                    className="shrink-0 opacity-80"
+                    fill="currentColor"
+                  >
+                    <path d="M12 24c6.63 0 12-5.37 12-12S18.63 0 12 0C5.7 0 .54 4.86 0 11.04h15.88v1.92H0C.54 19.14 5.7 24 12 24z" />
+                  </svg>
+                  Built on Base
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  <img
+                    src="/pov-mark.png"
+                    alt=""
+                    aria-hidden="true"
+                    width={16}
+                    height={16}
+                    className="h-4 w-4 shrink-0 object-contain opacity-80 [.light_&]:invert"
+                  />
+                  Powered by POV
+                </span>
               </div>
+
             </div>
           </div>
         </div>
