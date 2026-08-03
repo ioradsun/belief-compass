@@ -58,7 +58,7 @@ function Admin() {
             autoComplete="current-password"
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="mt-4 w-full rounded-md bg-[var(--surface)] px-3 py-2 text-[14px] outline-none focus:border-[var(--border-strong)]"
+            className="mt-4 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[14px] outline-none focus:border-[var(--border-strong)]"
           />
           {failed && <p className="mt-2 text-[12px] text-[var(--no)]">Incorrect password.</p>}
           <button

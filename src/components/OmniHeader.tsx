@@ -338,7 +338,7 @@ export function OmniHeader({
         </button>
 
         <div
-          className={`${expanded ? "flex" : "hidden"} h-9 min-w-0 flex-1 items-center gap-2 rounded-full bg-[var(--surface)] px-4 lg:flex`}
+          className={`${expanded ? "flex" : "hidden"} h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 lg:flex`}
         >
           <svg
             aria-hidden
