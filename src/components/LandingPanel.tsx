@@ -40,7 +40,9 @@ export function LandingPanel({
 
   return (
     <header
-      className="relative z-30 shrink-0 bg-[var(--panel)] transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+      className={`relative z-30 shrink-0 bg-[var(--panel)] transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+        expanded ? "max-h-[100svh] overflow-y-auto overscroll-contain" : ""
+      }`}
       style={{ borderBottom: "1px solid var(--hairline)" }}
     >
       <div
