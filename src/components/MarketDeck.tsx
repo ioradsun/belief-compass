@@ -466,9 +466,19 @@ export function MarketDeck({
           )}
         </div>
 
-        <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
-          {title}
-        </h1>
+        <div className="flex items-start gap-1.5">
+          <h1 className="min-w-0 flex-1 text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
+            {title}
+          </h1>
+          <StandOnIt
+            variant="title"
+            className="-mr-1.5 mt-0.5"
+            marketId={marketId}
+            title={title}
+            side={held?.side ?? side ?? null}
+            hasMedia={!!stageMedia}
+          />
+        </div>
         <MarketByline
           onchainId={Number(row.onchain_id)}
           viewerWallet={viewer}
@@ -633,16 +643,6 @@ export function MarketDeck({
             }}
           />
         )}
-
-        {/* Always-on growth action: bring your tribe into THIS market. Prominent
-          but a clear step below Back YES / Back NO. After a backing it's the
-          natural next move — the message leads with the side you're standing on. */}
-        <StandOnIt
-          marketId={marketId}
-          title={title}
-          side={held?.side ?? side ?? null}
-          hasMedia={!!stageMedia}
-        />
 
         {/* The payoff for standing on it: what your link has brought in. Only
           renders once it's real (a believer, not just an open). */}
