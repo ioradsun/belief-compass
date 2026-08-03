@@ -673,54 +673,66 @@ function SellTicket({
   }
 
   const shares = sharesForPct(held.tokens, pct);
-  const remainingUsd = worthUsd != null ? worthUsd * (1 - pct / 100) : null;
+  // The whole ticket is denominated in money, exactly like the buy form: you type
+  // how much you want to take out, not a percentage of something invisible.
+  const priced = worthUsd != null && worthUsd > 0;
+  const amountUsd = priced ? (worthUsd! * pct) / 100 : 0;
+  const setAmountUsd = (usd: number) => {
+    if (!priced) return;
+    const p = Math.max(0, Math.min(100, (usd / worthUsd!) * 100));
+    // Round to the cent so "Max" always lands exactly on the full position.
+    setPct(usd >= worthUsd! ? 100 : Math.round(p * 100) / 100);
+  };
+  const money = (usd: number) => unitAmount(usd, unit, ethUsd);
+  const remainingUsd = priced ? worthUsd! - amountUsd : null;
+
   const confirmLabel = !ready.connected
     ? "Connect wallet"
     : !ready.onBase
       ? "Switch to Base"
-      : `Sell ${pct}% of ${held.side}`;
+      : priced
+        ? `Sell ${money(amountUsd)}`
+        : `Sell all ${held.side}`;
   const disabled = ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n);
 
   return (
     <div className={CARD} style={CARD_STYLE}>
-      <div className="mb-3 flex items-center gap-2 px-0.5">
+      <div className="mb-2 flex items-baseline gap-2 px-0.5">
         <span className="text-[13px] font-semibold text-[var(--text)]">
-          Sell your{" "}
+          Sell{" "}
           <span style={{ color: held.side === "YES" ? "var(--yes)" : "var(--no)" }}>
             {held.side}
-          </span>{" "}
-          conviction
+          </span>
         </span>
-        <span className="ml-auto flex gap-1">
-          {[25, 50, 75, 100].map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setPct(p)}
-              className="rounded-[8px] px-2.5 py-1.5 text-[12px] font-semibold"
-              style={
-                pct === p
-                  ? { background: "var(--text)", color: "var(--bg)" }
-                  : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
-              }
-            >
-              {p === 100 ? "All" : `${p}%`}
-            </button>
-          ))}
+        <span className="num ml-auto text-[11px] text-[var(--text-muted)]">
+          Position {priced ? money(worthUsd!) : `${fmtShares(held.tokens)} shares`}
         </span>
+        {priced && (
+          <button
+            type="button"
+            onClick={() => setPct(100)}
+            className="text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text)]"
+          >
+            Max
+          </button>
+        )}
       </div>
+
+      {priced && (
+        <div className="mb-3 px-0.5">
+          <BigAmount amount={amountUsd} setAmount={setAmountUsd} unit={unit} ethUsd={ethUsd} />
+        </div>
+      )}
+
       <div className="mb-3.5 space-y-1.5 px-0.5">
         <QuoteRow
           k="Estimated proceeds"
           v={quoting ? "…" : proceeds != null ? `≈ ${proceedsStr()}` : "—"}
         />
-        {remainingUsd != null && pct < 100 && (
-          <QuoteRow
-            k="Position remaining"
-            v={`≈ ${formatMoney(remainingUsd, { from: "USD", to: unit, ethUsd })}`}
-          />
-        )}
         <QuoteRow k="Shares sold" v={`${fmtShares(shares)} of ${fmtShares(held.tokens)}`} />
+        {remainingUsd != null && pct < 100 && (
+          <QuoteRow k="Position remaining" v={`≈ ${money(remainingUsd)}`} />
+        )}
         <QuoteRow k="Network" v="Base" />
         {trade.isError && (
           <div className="text-[11px] text-[var(--no)]">
@@ -750,3 +762,4 @@ function SellTicket({
     </div>
   );
 }
+
