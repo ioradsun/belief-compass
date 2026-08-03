@@ -14,25 +14,29 @@ export function PersonAvatar({
   avatarUrl,
   size = 28,
   className = "",
+  interactive = true,
 }: {
   wallet: string;
   name?: string | null;
   avatarUrl?: string | null;
   size?: number;
   className?: string;
+  /** False when the wallet is partial/unresolvable — render the face, no link. */
+  interactive?: boolean;
 }) {
   const label = name || aliasFor(wallet);
   const px = `${size}px`;
   return (
     <button
       type="button"
+      disabled={!interactive}
       onClick={(e) => {
         e.stopPropagation();
-        focusPerson(wallet);
+        if (interactive) focusPerson(wallet);
       }}
-      title={`Open ${label}`}
-      aria-label={`Open ${label}'s profile`}
-      className={`shrink-0 overflow-hidden rounded-full transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--text-muted)] ${className}`}
+      title={interactive ? `Open ${label}` : label}
+      {...(interactive ? { "aria-label": `Open ${label}'s profile` } : { "aria-hidden": true })}
+      className={`shrink-0 overflow-hidden rounded-full transition-opacity ${interactive ? "hover:opacity-80" : "cursor-default"} focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--text-muted)] ${className}`}
       style={{ width: px, height: px }}
     >
       {avatarUrl ? (

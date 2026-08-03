@@ -146,6 +146,15 @@ export function CaseColumn({
     );
     return (w: string) => m.get(w.toLowerCase()) ?? null;
   }, [evidence]);
+  // The trade tape publishes only a 10-char wallet prefix. Resolve it back to the
+  // full address when this market's believer roster contains it — only then can a
+  // face open a profile.
+  const fullWalletOf = useMemo(() => {
+    const m = new Map(
+      (evidence?.believers ?? []).map((b) => [b.wallet.toLowerCase().slice(0, 10), b.wallet]),
+    );
+    return (w: string) => m.get(w.toLowerCase()) ?? null;
+  }, [evidence]);
   const recent = useMemo(() => {
     if (!tape?.length) return [];
     return tape
@@ -155,14 +164,15 @@ export function CaseColumn({
       .slice(0, 5)
       .map((t, i) => ({
         id: `${t.w}-${t.t}-${t.seq ?? i}`,
-        wallet: t.w,
+        wallet: fullWalletOf(t.w) ?? t.w,
+        linkable: fullWalletOf(t.w) != null,
         name: nameOf(t.w),
         avatarUrl: avatarOf(t.w),
         eth: t.eth,
         action: t.action,
         t: t.t,
       }));
-  }, [tape, side, nameOf, avatarOf]);
+  }, [tape, side, nameOf, avatarOf, fullWalletOf]);
 
   // Headline Believers + Capital come from the CANONICAL reducer (the same one the
   // center uses), so YES + NO always equals the center's Market total. Price is a
@@ -322,7 +332,13 @@ export function CaseColumn({
             <ul className="space-y-0.5">
               {recent.map((e) => (
                 <li key={e.id} className="flex items-center gap-2 text-[12px]">
-                  <PersonAvatar wallet={e.wallet} name={e.name} avatarUrl={e.avatarUrl} size={22} />
+                  <PersonAvatar
+                    wallet={e.wallet}
+                    name={e.name}
+                    avatarUrl={e.avatarUrl}
+                    size={22}
+                    interactive={e.linkable}
+                  />
                   <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
                     <span className="text-[var(--text)]">{e.name}</span>{" "}
                     <span style={{ color: e.action === "BUY" ? color : "var(--text-muted)" }}>
