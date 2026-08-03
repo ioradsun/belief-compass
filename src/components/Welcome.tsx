@@ -143,12 +143,12 @@ export function WelcomePrompt({
             👋
           </span>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-semibold text-[var(--text)]">{headline}</div>
-            <div className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-muted)]">
-              Tap a face to explore their convictions.
+            <div className="text-[13px] font-semibold break-words text-[var(--text)]">
+              {headline}
             </div>
           </div>
         </div>
+
 
         <div className="mt-2.5 flex items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center">
@@ -188,7 +188,7 @@ export function WelcomePrompt({
             className="shrink-0 rounded-[10px] px-3 py-1.5 text-[12px] font-semibold"
             style={{ background: "var(--text)", color: "var(--bg)" }}
           >
-            Welcome {faces.length > 1 ? "all" : ""}
+            Say Hi
           </button>
         </div>
       </div>
@@ -246,10 +246,10 @@ export function WelcomePrompt({
                       </span>
                       <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] text-[var(--text)]">
+                        <span className="block break-words text-[13px] text-[var(--text)]">
                           {p.name}
                         </span>
-                        <span className="block truncate text-[11px] text-[var(--text-muted)]">
+                        <span className="block break-words text-[11px] text-[var(--text-muted)]">
                           <span
                             className="font-semibold"
                             style={{ color: p.side === "YES" ? "var(--yes)" : "var(--no)" }}
@@ -259,6 +259,7 @@ export function WelcomePrompt({
                           · {p.marketTitle}
                         </span>
                       </span>
+
                     </button>
                     {onSelectPerson && (
                       <button
@@ -296,11 +297,8 @@ export function WelcomePrompt({
                 className="flex-1 rounded-[12px] py-2.5 text-[14px] font-semibold disabled:opacity-40"
                 style={{ background: "var(--text)", color: "var(--bg)" }}
               >
-                {send.isPending
-                  ? "Welcoming…"
-                  : selectedCount === people.length
-                    ? `Welcome all (${selectedCount})`
-                    : `Welcome (${selectedCount})`}
+                {send.isPending ? "Saying hi…" : `Say Hi (${selectedCount})`}
+
               </button>
             </div>
           </div>
@@ -387,7 +385,7 @@ export function WelcomeReceived({ wallet }: { wallet?: string }) {
           {data.welcomers.map((w) => (
             <li key={w.wallet} className="flex items-center gap-2">
               <Avatar url={w.avatarUrl} name={w.name} seed={w.wallet} size={20} />
-              <span className="truncate text-[12px] text-[var(--text-secondary)]">{w.name}</span>
+              <span className="break-words text-[12px] text-[var(--text-secondary)]">{w.name}</span>
             </li>
           ))}
         </ul>
