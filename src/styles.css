@@ -141,9 +141,9 @@
  * darken so they read as text on white rather than glowing on black.
  */
 .light {
-  --bg: #ffffff;
+  --bg: #f6f7f9;
   --panel: #ffffff;
-  --surface: #f4f5f7;
+  --surface: #eef0f4;
   --border-strong: #b9bec7;
   --text: #0e1420;
   --text-secondary: #4a5262;
