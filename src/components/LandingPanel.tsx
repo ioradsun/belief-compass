@@ -143,7 +143,7 @@ export function LandingPanel({
               <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)] lg:gap-12">
                 <div className="min-w-0">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                    Live belief markets
+                    Live conviction markets
                   </div>
 
                   <h1 className="mt-3 max-w-[14ch] text-[38px] font-semibold leading-[1.02] tracking-[-0.03em] text-[var(--text)] sm:text-[52px] lg:text-[62px]">
@@ -151,11 +151,11 @@ export function LandingPanel({
                   </h1>
 
                   <p className="mt-3 text-[19px] leading-snug text-[var(--text)] sm:text-[23px]">
-                    Back what you believe and find your tribe.
+                    Back what you believe. Find your tribe.
                   </p>
 
                   <p className="mt-3 max-w-[46ch] text-[15px] leading-relaxed text-[var(--text-secondary)] sm:text-[17px]">
-                    Pick a side and as capital comes in your position can grow.
+                    Pick a side. As more capital backs it, your position can grow.
                   </p>
 
                   <p className="mt-1.5 text-[13px] text-[var(--text-muted)]">
@@ -172,7 +172,7 @@ export function LandingPanel({
                       tabIndex={expanded ? 0 : -1}
                       className="h-11 rounded-full bg-[var(--text)] px-6 text-[14px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] motion-reduce:transition-none"
                     >
-                      Enter Conviction
+                      Enter Conviction Market
                     </button>
                     <button
                       type="button"
