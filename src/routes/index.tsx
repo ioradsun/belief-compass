@@ -555,6 +555,7 @@ function Feed() {
     queryFn: () => getMarketRow({ data: { id: activeMarket as number } }),
     enabled: missing,
     staleTime: 15_000,
+    placeholderData: (prev) => prev,
   });
   const liveRow: MarketRow | null =
     foundIdx >= 0

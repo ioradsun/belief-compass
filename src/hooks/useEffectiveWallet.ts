@@ -17,6 +17,10 @@ export function useEffectiveWallet(searchWallet?: string): string | undefined {
     queryKey: ["wallet-link", vendor ?? null],
     queryFn: async () => await getWalletLink({ data: { wallet: vendor as string } }),
     enabled: !!vendor,
+    // Identity barely changes: keep the known link through refetches and account
+    // switches so the app never briefly re-renders as "unknown viewer".
+    staleTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
   });
 
   // localStorage is browser-only: read after hydration so SSR markup matches.
