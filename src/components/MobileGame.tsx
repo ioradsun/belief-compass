@@ -296,18 +296,9 @@ export function MobileGame({
       {/* The story — House + this market's activity — as the pinned scope of the
         Live feed, expandable in place. Same component desktop pins to its feed. */}
       <CurrentMarketActivity marketId={marketId} wallet={viewerWallet} onSelect={() => undefined} />
-
-      {/* Compare the two cases — an explicit exploration, never part of the
-        order flow, so the decision → order path is never interrupted. */}
-      <button
-        type="button"
-        onClick={() => setPhase("sides")}
-        className="text-left text-[15px] font-semibold text-[var(--text-secondary)]"
-      >
-        See both sides →
-      </button>
     </>
   );
+
 
   return (
     <Screen>
