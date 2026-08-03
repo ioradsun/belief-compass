@@ -99,36 +99,13 @@ export function pulseLine(p: Pulse, ethUsd: number, unit: DisplayUnit = "USD") {
   return `${personName(p)} ${verb} ${p.side} · ${size}`;
 }
 
-/** Small face for a trader: real POV picture, else initials on a stable hue. */
+/** Small face for a trader: real POV picture, else initials. Opens the profile. */
 export function Face({ p, size = 18 }: { p: Pulse; size?: number }) {
-  const name = personName(p);
-  if (p.pfpUrl)
-    return (
-      <img
-        src={p.pfpUrl}
-        alt={name}
-        loading="lazy"
-        className="shrink-0 rounded-full object-cover"
-        style={{ width: size, height: size }}
-      />
-    );
-  const hue = hueFor(p.wallet);
   return (
-    <span
-      className="shrink-0 rounded-full text-center font-semibold text-white"
-      style={{
-        width: size,
-        height: size,
-        lineHeight: `${size}px`,
-        fontSize: size * 0.45,
-        background: `hsl(${hue} 55% 45%)`,
-      }}
-      aria-hidden
-    >
-      {initialsFor(name)}
-    </span>
+    <PersonAvatar wallet={p.wallet} name={personName(p)} avatarUrl={p.pfpUrl} size={size} />
   );
 }
+
 
 /** Flash helper: returns true for ~1s after `value` changes. */
 function useFlash(value: number | null | undefined) {
