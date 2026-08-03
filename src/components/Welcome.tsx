@@ -1,26 +1,40 @@
 /**
- * Welcome — belonging, one tap.
+ * The Daily Room — belonging, one tap, once a day.
  *
- * Two calm banners on top of the existing rails:
- *  - WelcomePrompt (right rail): "👋 N people like you joined your tribe" → a
- *    lightweight sheet to welcome them all in one tap. No chat, no typing.
- *  - WelcomeReceived (left rail): "👋 N believers welcomed you", aggregated into
- *    one line (never N notifications), dismissible and remembered so it doesn't nag.
+ * Two calm surfaces on top of the existing rails:
+ *  - WelcomePrompt (center rail): the room. Everyone who joined a side you
+ *    hold, grouped by WHO THEY ARE TO YOU (Twin / Tribe / crossed-over Opp /
+ *    new face) rather than by market, with a "since you were last here" line
+ *    that refills every day. One tap says hi to all of them.
+ *  - WelcomeReceived (left rail): "N believers welcomed you", aggregated into
+ *    one line (never N notifications), dismissible and remembered.
  *
- * Presentation over the welcomes.functions server layer; all matching/aggregation
- * is server + pure domain. Reuses the belief tap's wallet-session for the write.
+ * Presentation over the welcomes.functions server layer; all matching,
+ * grouping and headline copy is server + pure domain (@/domain/welcome).
  */
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getWelcomable,
   getWelcomesReceived,
+  markRoomSeen,
   sendWelcomes,
   type WelcomablePerson,
 } from "@/lib/welcomes.functions";
 import { welcomeKey } from "@/domain/welcome";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
+import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
+import type { RelationshipLabel } from "@/domain/dna/config";
+
+function relLabel(relationship: string | null): string | null {
+  if (!relationship || relationship === "insufficient" || relationship === "neutral") return null;
+  return RELATIONSHIP_TEXT[relationship as RelationshipLabel] ?? null;
+}
+
+function relTone(relationship: string | null) {
+  return relationshipTone((relationship ?? "insufficient") as RelationshipLabel);
+}
 
 function Avatar({
   url,
@@ -52,7 +66,22 @@ function Avatar({
   );
 }
 
-/* ─────────────────────────── Sender: welcome them in ─────────────────────── */
+/** Small relationship chip — the vocabulary of the whole app, in one word. */
+function RelChip({ relationship }: { relationship: string | null }) {
+  const label = relLabel(relationship);
+  if (!label) return null;
+  const tone = relTone(relationship);
+  return (
+    <span
+      className="shrink-0 rounded-[5px] px-1.5 py-[1px] text-[9.5px] font-semibold uppercase tracking-wide"
+      style={{ color: tone.fg, background: tone.bg }}
+    >
+      {label}
+    </span>
+  );
+}
+
+/* ─────────────────────────── The room: say hi ─────────────────────── */
 
 export function WelcomePrompt({
   wallet,
@@ -77,22 +106,24 @@ export function WelcomePrompt({
   });
   const people = data?.people ?? [];
   const count = data?.count ?? 0;
+  const sections = data?.sections ?? [];
 
   const keyOf = (p: WelcomablePerson) => welcomeKey(p.wallet, p.marketId, p.side);
 
   const openSheet = () => {
-    setSelected(new Set(people.map(keyOf))); // default: welcome everyone
+    setSelected(new Set(people.map(keyOf))); // default: say hi to everyone
     setOpen(true);
   };
 
+  /** Saying hi also marks the room seen — that's what makes tomorrow a delta. */
   const send = useMutation({
     mutationFn: async () => {
       const chosen = people.filter((p) => selected.has(keyOf(p)));
       if (chosen.length === 0) return { welcomed: 0 };
-      // Welcoming is free — never prompt the wallet to sign for it.
+      // Saying hi is free — never prompt the wallet to sign for it.
       return bestEffort(async () => {
         const session = await ensureSession({ interactive: false });
-        return sendWelcomes({
+        const res = await sendWelcomes({
           data: {
             wallet: wallet as string,
             session,
@@ -103,6 +134,8 @@ export function WelcomePrompt({
             })),
           },
         });
+        await markRoomSeen({ data: { wallet: wallet as string, session } });
+        return res;
       });
     },
     onSuccess: () => {
@@ -111,26 +144,19 @@ export function WelcomePrompt({
     },
   });
 
+  /** "Seen it" without saying hi — the room resets, the people stay. */
+  const seen = useMutation({
+    mutationFn: async () =>
+      bestEffort(async () => {
+        const session = await ensureSession({ interactive: false });
+        return markRoomSeen({ data: { wallet: wallet as string, session } });
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["welcomable", wallet ?? null] }),
+  });
+
   if (!wallet || count === 0) return null;
   const selectedCount = selected.size;
-
-  // One face per person, even if they joined you on several markets.
-  const faces: WelcomablePerson[] = [];
-  const seenFaces = new Set<string>();
-  for (const p of people) {
-    if (seenFaces.has(p.wallet)) continue;
-    seenFaces.add(p.wallet);
-    faces.push(p);
-  }
-  const shown = faces.slice(0, 5);
-  const overflow = faces.length - shown.length;
-  const lead = shown[0]?.name ?? "Someone";
-  const headline =
-    faces.length === 1
-      ? `${lead} joined your side`
-      : faces.length === 2
-        ? `${lead} and ${shown[1].name} joined your side`
-        : `${lead} and ${faces.length - 1} others joined your side`;
+  const headline = data?.headline ?? "";
 
   return (
     <>
@@ -138,7 +164,7 @@ export function WelcomePrompt({
         className="mb-4 rounded-[14px] px-3.5 py-3"
         style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
       >
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-2.5">
           <span className="mt-[1px] text-[17px] leading-none" aria-hidden>
             👋
           </span>
@@ -147,52 +173,71 @@ export function WelcomePrompt({
               {headline}
             </div>
           </div>
-        </div>
-
-
-        <div className="mt-2.5 flex items-center gap-2">
-          <div className="flex min-w-0 flex-1 items-center">
-            {shown.map((p, i) => (
-              <button
-                key={p.wallet}
-                type="button"
-                onClick={() => onSelectPerson?.(p.wallet)}
-                disabled={!onSelectPerson}
-                title={`${p.name} · ${p.side} · ${p.marketTitle}`}
-                aria-label={`View ${p.name}'s convictions`}
-                className="relative rounded-full transition-transform hover:z-10 hover:-translate-y-0.5 disabled:cursor-default"
-                style={{
-                  marginLeft: i === 0 ? 0 : -8,
-                  padding: 2,
-                  background: p.side === "YES" ? "var(--yes)" : "var(--no)",
-                  borderRadius: 999,
-                }}
-              >
-                <span className="block rounded-full" style={{ background: "var(--surface)" }}>
-                  <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} size={30} />
-                </span>
-              </button>
-            ))}
-            {overflow > 0 && (
-              <span
-                className="ml-1 shrink-0 text-[11px] font-medium text-[var(--text-muted)]"
-                aria-hidden
-              >
-                +{overflow}
-              </span>
-            )}
-          </div>
           <button
             type="button"
-            onClick={openSheet}
-            className="shrink-0 rounded-[10px] px-3 py-1.5 text-[12px] font-semibold"
-            style={{ background: "var(--text)", color: "var(--bg)" }}
+            aria-label="Mark the room as seen"
+            onClick={() => seen.mutate()}
+            className="shrink-0 rounded-full px-1.5 text-[13px] leading-none text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
           >
-            Say Hi
+            ✕
           </button>
         </div>
-      </div>
 
+        {/* Grouped by relationship — rarest signal first. */}
+        <div className="mt-2.5 space-y-2.5">
+          {sections.map((s) => (
+            <div key={s.group}>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
+                  {s.label}
+                </span>
+                <span className="text-[10.5px] break-words text-[var(--text-muted)]">
+                  {s.blurb}
+                </span>
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {s.people.map((p) => (
+                  <button
+                    key={p.wallet}
+                    type="button"
+                    onClick={() => onSelectPerson?.(p.wallet)}
+                    disabled={!onSelectPerson}
+                    title={`${p.name}${relLabel(p.relationship) ? ` · ${relLabel(p.relationship)}${p.agreement != null ? ` ${p.agreement}%` : ""}` : ""} · ${p.side} · ${p.marketTitle}`}
+                    aria-label={`View ${p.name}'s convictions`}
+                    className="flex max-w-full items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 transition-transform hover:-translate-y-0.5 disabled:cursor-default"
+                    style={{
+                      border: `1px solid ${p.isNew ? "var(--text)" : "var(--border)"}`,
+                      background: "var(--surface-2, transparent)",
+                    }}
+                  >
+                    <span
+                      className="block rounded-full p-[1.5px]"
+                      style={{ background: p.side === "YES" ? "var(--yes)" : "var(--no)" }}
+                    >
+                      <span className="block rounded-full" style={{ background: "var(--surface)" }}>
+                        <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} size={22} />
+                      </span>
+                    </span>
+                    <span className="min-w-0 break-words text-[11.5px] text-[var(--text)]">
+                      {p.name}
+                    </span>
+                    <RelChip relationship={p.relationship} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={openSheet}
+          className="mt-3 w-full rounded-[10px] py-2 text-[12.5px] font-semibold"
+          style={{ background: "var(--text)", color: "var(--bg)" }}
+        >
+          Say Hi
+        </button>
+      </div>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
@@ -207,11 +252,9 @@ export function WelcomePrompt({
             style={{ background: "var(--panel,var(--bg))", border: "1px solid var(--border)" }}
           >
             <div className="px-4 pb-2 pt-4">
-              <div className="text-[15px] font-semibold text-[var(--text)]">
-                Welcome new believers
-              </div>
-              <div className="mt-0.5 text-[12px] text-[var(--text-muted)]">
-                They just joined a side you back. One tap says you saw them.
+              <div className="text-[15px] font-semibold text-[var(--text)]">Today's room</div>
+              <div className="mt-0.5 text-[12px] break-words text-[var(--text-muted)]">
+                {headline}
               </div>
             </div>
 
@@ -246,8 +289,16 @@ export function WelcomePrompt({
                       </span>
                       <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} />
                       <span className="min-w-0 flex-1">
-                        <span className="block break-words text-[13px] text-[var(--text)]">
-                          {p.name}
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="break-words text-[13px] text-[var(--text)]">
+                            {p.name}
+                          </span>
+                          <RelChip relationship={p.relationship} />
+                          {p.agreement != null && relLabel(p.relationship) && (
+                            <span className="text-[10.5px] text-[var(--text-muted)]">
+                              {p.agreement}% agree
+                            </span>
+                          )}
                         </span>
                         <span className="block break-words text-[11px] text-[var(--text-muted)]">
                           <span
@@ -259,7 +310,6 @@ export function WelcomePrompt({
                           · {p.marketTitle}
                         </span>
                       </span>
-
                     </button>
                     {onSelectPerson && (
                       <button
@@ -274,7 +324,6 @@ export function WelcomePrompt({
                       </button>
                     )}
                   </li>
-
                 );
               })}
             </ul>
@@ -298,7 +347,6 @@ export function WelcomePrompt({
                 style={{ background: "var(--text)", color: "var(--bg)" }}
               >
                 {send.isPending ? "Saying hi…" : `Say Hi (${selectedCount})`}
-
               </button>
             </div>
           </div>
@@ -312,7 +360,13 @@ export function WelcomePrompt({
 
 const seenKey = (wallet: string) => `cc:welcomes-seen:${wallet.toLowerCase()}`;
 
-export function WelcomeReceived({ wallet }: { wallet?: string }) {
+export function WelcomeReceived({
+  wallet,
+  onSelectPerson,
+}: {
+  wallet?: string;
+  onSelectPerson?: (wallet: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [dismissedAt, setDismissedAt] = useState<string | null>(() => {
     if (typeof window === "undefined" || !wallet) return null;
@@ -351,6 +405,16 @@ export function WelcomeReceived({ wallet }: { wallet?: string }) {
   };
 
   const tribe = data.side ? ` to the ${data.side} tribe` : "";
+  // Lead with the relationship when there is one — "your Twin said hi" is a
+  // different event from "someone said hi".
+  const lead = data.welcomers[0];
+  const leadRel = relLabel(lead?.relationship ?? null);
+  const line =
+    data.count === 1 && lead
+      ? leadRel
+        ? `Your ${leadRel} ${lead.name} said hi.`
+        : `${lead.name} welcomed you${tribe}.`
+      : `${data.count} believers welcomed you${tribe}.`;
 
   return (
     <div
@@ -367,9 +431,9 @@ export function WelcomeReceived({ wallet }: { wallet?: string }) {
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="min-w-0 flex-1 text-left text-[12px] leading-snug text-[var(--text)]"
+          className="min-w-0 flex-1 text-left text-[12px] leading-snug break-words text-[var(--text)]"
         >
-          {data.count} {data.count === 1 ? "believer" : "believers"} welcomed you{tribe}.
+          {line}
         </button>
         <button
           type="button"
@@ -385,7 +449,17 @@ export function WelcomeReceived({ wallet }: { wallet?: string }) {
           {data.welcomers.map((w) => (
             <li key={w.wallet} className="flex items-center gap-2">
               <Avatar url={w.avatarUrl} name={w.name} seed={w.wallet} size={20} />
-              <span className="break-words text-[12px] text-[var(--text-secondary)]">{w.name}</span>
+              <button
+                type="button"
+                onClick={() => onSelectPerson?.(w.wallet)}
+                disabled={!onSelectPerson}
+                className="flex min-w-0 flex-1 items-center gap-1.5 text-left disabled:cursor-default"
+              >
+                <span className="break-words text-[12px] text-[var(--text-secondary)]">
+                  {w.name}
+                </span>
+                <RelChip relationship={w.relationship} />
+              </button>
             </li>
           ))}
         </ul>
