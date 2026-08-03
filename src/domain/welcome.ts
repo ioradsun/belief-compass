@@ -114,7 +114,7 @@ export const ROOM_GROUP_BLURB: Record<RoomGroup, string> = {
   crossing: "You normally land on opposite sides. On this one, you didn't.",
   twin: "Your closest match in conviction — and they just backed your side again.",
   tribe: "You've backed the same side more often than not. Add one more.",
-  new: "One market in common so far — this one. That's where every match starts.",
+  new: "",
 };
 
 
@@ -204,7 +204,7 @@ export function roomReason(p: RoomPerson): { why: string; history: string } {
   const group = roomGroupFor(p.relationship);
 
   if (group === "new" || shared < 1 || agree == null) {
-    return { why, history: "This is the only market you've both taken a side on" };
+    return { why, history: "Your first market together" };
   }
   const markets = plural(shared, "market", "markets");
   if (group === "crossing") {
