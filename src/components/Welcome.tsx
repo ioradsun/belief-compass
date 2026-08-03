@@ -21,7 +21,7 @@ import {
   sendWelcomes,
   type WelcomablePerson,
 } from "@/lib/welcomes.functions";
-import { roomReason, welcomeKey } from "@/domain/welcome";
+import { ROOM_GROUP_LABEL, roomGroupFor, roomReason, welcomeKey } from "@/domain/welcome";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
@@ -112,6 +112,14 @@ export function WelcomePrompt({
 
   const peeked = peek ? (people.find((p) => p.wallet === peek) ?? null) : null;
 
+  // Rarest commonality first, one face per person; the stack tightens and then
+  // spills into a "+N" so the row height is constant no matter how full it is.
+  const ordered = useMemo(() => sections.flatMap((s) => s.people), [sections]);
+  const MAX_FACES = 7;
+  const shown = ordered.slice(0, MAX_FACES);
+  const hidden = ordered.length - shown.length;
+  const overlap = shown.length > 5 ? -12 : shown.length > 3 ? -8 : -4;
+
   const keyOf = (p: WelcomablePerson) => welcomeKey(p.wallet, p.marketId, p.side);
 
   const openSheet = () => {
@@ -187,63 +195,74 @@ export function WelcomePrompt({
           </button>
         </div>
 
-        {/* Grouped by what you have in common — rarest signal first. Faces only:
-            identity is the reward for looking closer, commonality is the hook. */}
-        <div className="mt-2.5 space-y-3">
-          {sections.map((s) => (
-            <div key={s.group}>
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
-                  {s.label}
-                </span>
-                {s.fresh > 0 && (
-                  <span className="text-[10px] font-semibold text-[var(--text)]">
-                    {s.fresh} new
+        {/* One line: the faces (rarest commonality first) and the action. The
+            stack tightens as the room fills, so height never grows with it. */}
+        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+          <div className="flex min-w-0 items-center">
+            {shown.map((p, i) => {
+              const active = peek === p.wallet;
+              return (
+                <button
+                  key={p.wallet}
+                  type="button"
+                  onClick={() => setPeek(active ? null : p.wallet)}
+                  aria-expanded={active}
+                  aria-label={`Why this believer is in your room: ${roomReason(p).why}`}
+                  className="shrink-0 rounded-full p-[2px] transition-transform hover:-translate-y-0.5 hover:z-10"
+                  style={{
+                    background: p.side === "YES" ? "var(--yes)" : "var(--no)",
+                    marginLeft: i === 0 ? 0 : overlap,
+                    zIndex: active ? 20 : shown.length - i,
+                    outline: active ? "2px solid var(--text)" : "none",
+                    outlineOffset: "1px",
+                    opacity: p.isNew || active ? 1 : 0.78,
+                  }}
+                >
+                  <span className="block rounded-full p-[1.5px]" style={{ background: "var(--surface)" }}>
+                    <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} size={28} />
                   </span>
-                )}
-              </div>
-              {s.blurb && (
-                <div className="text-[10.5px] break-words text-[var(--text-muted)]">{s.blurb}</div>
-              )}
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                {s.people.map((p) => {
-                  const active = peek === p.wallet;
-                  return (
-                    <button
-                      key={p.wallet}
-                      type="button"
-                      onClick={() => setPeek(active ? null : p.wallet)}
-                      aria-expanded={active}
-                      aria-label={`Why this believer is in your room: ${roomReason(p).why}`}
-                      className="rounded-full p-[2px] transition-transform hover:-translate-y-0.5"
-                      style={{
-                        background: p.side === "YES" ? "var(--yes)" : "var(--no)",
-                        outline: active ? "2px solid var(--text)" : "none",
-                        outlineOffset: "2px",
-                        opacity: p.isNew || active ? 1 : 0.72,
-                      }}
-                    >
-                      <span
-                        className="block rounded-full p-[1.5px]"
-                        style={{ background: "var(--surface)" }}
-                      >
-                        <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} size={30} />
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+                </button>
+              );
+            })}
+            {hidden > 0 && (
+              <button
+                type="button"
+                onClick={openSheet}
+                aria-label={`See ${hidden} more in the room`}
+                className="grid h-[32px] shrink-0 place-items-center rounded-full px-2 text-[11px] font-semibold text-[var(--text-secondary)]"
+                style={{
+                  marginLeft: overlap,
+                  border: "1px solid var(--border)",
+                  background: "var(--surface)",
+                }}
+              >
+                +{hidden}
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={openSheet}
+            className="shrink-0 rounded-[10px] px-3.5 py-2 text-[12.5px] font-semibold"
+            style={{ background: "var(--text)", color: "var(--bg)" }}
+          >
+            Say Hi
+          </button>
         </div>
 
         {/* One face at a time: why they're here, then what you already share. */}
         {peeked && (
           <div
-            className="mt-2.5 rounded-[10px] px-2.5 py-2"
+            className="mt-2 rounded-[10px] px-2.5 py-2"
             style={{ border: "1px solid var(--border)", background: "var(--surface-2,transparent)" }}
           >
-            <div className="text-[11.5px] leading-snug break-words text-[var(--text)]">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+                {ROOM_GROUP_LABEL[roomGroupFor(peeked.relationship)]}
+              </span>
+              <RelChip relationship={peeked.relationship} />
+            </div>
+            <div className="mt-0.5 text-[11.5px] leading-snug break-words text-[var(--text)]">
               {roomReason(peeked).why}
             </div>
             <div className="mt-0.5 text-[11px] leading-snug break-words text-[var(--text-muted)]">
@@ -261,14 +280,6 @@ export function WelcomePrompt({
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={openSheet}
-          className="mt-3 w-full rounded-[10px] py-2 text-[12.5px] font-semibold"
-          style={{ background: "var(--text)", color: "var(--bg)" }}
-        >
-          Say Hi
-        </button>
       </div>
 
       {open && (
