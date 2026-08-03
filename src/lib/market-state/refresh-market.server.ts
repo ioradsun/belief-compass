@@ -53,7 +53,7 @@ export async function refreshMarket(
     const nowIso = new Date().toISOString();
     const now = Date.now();
 
-    const [mkt, ms, ev, pos, tr] = await Promise.all([
+    const [mkt, ms, ev, pos, tr, snap] = await Promise.all([
       sb.from("markets").select("created_at").eq("onchain_id", market).maybeSingle(),
       sb
         .from("market_state")
@@ -65,6 +65,17 @@ export async function refreshMarket(
       sb.rpc("market_event_windows", { p_market: market, p_now: nowIso }),
       sb.rpc("market_position_aggregates", { p_market: market, p_now: nowIso }),
       sb.rpc("market_transition_windows", { p_market: market, p_now: nowIso }),
+      // The window-open per-side capital ~24h ago (authoritative snapshot baseline),
+      // for the per-side 24h capital delta the universal-feed transition emitter
+      // needs. Absent when no old-enough snapshot exists → delta stays null.
+      sb
+        .from("market_state_snapshots")
+        .select("yes_capital_usd, no_capital_usd")
+        .eq("onchain_id", market)
+        .lte("captured_at", new Date(now - 86_400_000).toISOString())
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     const e = (ev.data ?? {}) as Record<string, unknown>;
@@ -97,6 +108,18 @@ export async function refreshMarket(
     const buy24 = num(e.buy_count_24h);
     const sell24 = num(e.sell_count_24h);
     const totalCapitalUsd = num(state.yes_capital_usd) + num(state.no_capital_usd);
+
+    // Per-side 24h capital delta = current per-side capital − the authoritative
+    // snapshot baseline from ~24h ago. Null when there is no old-enough snapshot,
+    // so a missing/stale history never becomes a dramatic zero downstream.
+    const snapBase = (snap.data ?? null) as {
+      yes_capital_usd?: number;
+      no_capital_usd?: number;
+    } | null;
+    const yesCapitalDelta24h =
+      snapBase == null ? null : num(state.yes_capital_usd) - num(snapBase.yes_capital_usd);
+    const noCapitalDelta24h =
+      snapBase == null ? null : num(state.no_capital_usd) - num(snapBase.no_capital_usd);
 
     // Transitions
     const nb = {
@@ -154,6 +177,8 @@ export async function refreshMarket(
       capital_held_yes: capHeldYes,
       capital_held_no: capHeldNo,
       capital_held_total: capHeldYes + capHeldNo,
+      yes_capital_delta_24h: yesCapitalDelta24h,
+      no_capital_delta_24h: noCapitalDelta24h,
       side_balance: directional > 0 ? (believersYes - believersNo) / directional : null,
       // tenure / conviction evidence
       avg_directional_days: numOrNull(p.avg_directional_days),
