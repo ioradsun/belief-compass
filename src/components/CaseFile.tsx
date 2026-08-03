@@ -230,7 +230,10 @@ export function CaseColumn({
     {
       metric: "believers",
       label: `${side} Believers`,
-      value: (belChange != null ? authBelievers! : believersTotal).toLocaleString("en-US"),
+      // One source of holders: the authoritative per-side count, else the roster
+      // we actually list. Never the tape-derived tally — it can drift from the
+      // holder table and make the headline disagree with the names below it.
+      value: (authBelievers ?? believers.length).toLocaleString("en-US"),
       pct:
         belChange != null
           ? belChange.pct
