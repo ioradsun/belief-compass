@@ -132,6 +132,23 @@ export function sideCaseSummary(
             : null,
     };
   });
+  // Anchor the FIRST plotted point to the window-open baseline. When the window
+  // opens at the very instant of the first trade (e.g. the "all" window), the
+  // merged-timeline sample would otherwise jump straight to the post-trade value
+  // — so the line would start at 1 believer while the % is measured from 0. The
+  // %'s base is bel.base/cap.base by definition, so the chart must start there,
+  // or the sparkline and the number tell different stories.
+  if (raw.length) {
+    raw[0] = {
+      ...raw[0],
+      believers: bel.base,
+      capital: cap.base,
+      price: priceBase,
+      believersPct: 0,
+      capitalPct: 0,
+      pricePct: priceBase != null ? 0 : null,
+    };
+  }
   const series = downsample(raw, 120);
   const last = series[series.length - 1];
 

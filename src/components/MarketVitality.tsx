@@ -22,6 +22,7 @@ import type { TapeTrade } from "@/domain/conviction-series";
 import type { FlowWindow } from "@/domain/market-flow";
 import { formatMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
+import { sparkDomain, SPARK_DOMAIN, type SparkDomainOpts } from "@/domain/spark-domain";
 
 /** Below these bases a percentage is noise, so we show the absolute change only. */
 const BELIEVER_PCT_MIN = 1;
@@ -64,10 +65,13 @@ function FlatSpark({ className }: { className?: string }) {
 function StepSpark({
   points,
   tone,
+  domain,
   className,
 }: {
   points: VitalityPoint[];
   tone: string;
+  /** Per-metric materiality floor so an immaterial move renders near-flat. */
+  domain: SparkDomainOpts;
   className?: string;
 }) {
   const vs = points.map((p) => p.v);
@@ -76,11 +80,12 @@ function StepSpark({
 
   const t0 = points[0].t;
   const t1 = Math.max(points[points.length - 1].t, t0 + 1);
-  const lo = Math.min(...vs);
-  const hi = Math.max(...vs);
-  const pad = (hi - lo) * 0.12;
-  const min = lo - pad;
-  const max = hi + pad;
+  // Scale against a per-metric floor anchored on the window baseline (points[0]),
+  // so a −2% or sub-percent move reads as a gentle slope, not a full-height crash.
+  const dom = sparkDomain(vs, points[0].v, domain);
+  const pad = (dom.max - dom.min) * 0.1;
+  const min = dom.min - pad;
+  const max = dom.max + pad;
   const x = (t: number) => ((t - t0) / (t1 - t0)) * (SPARK_W - 2) + 1;
   const y = (v: number) => SPARK_H - 2 - ((v - min) / (max - min || 1)) * (SPARK_H - 4);
 
@@ -172,11 +177,13 @@ function MomentumMetric({
   unit,
   copy,
   points,
+  domain,
 }: {
   total: string;
   unit: string;
   copy: RowCopy;
   points: VitalityPoint[];
+  domain: SparkDomainOpts;
 }) {
   const tone = dirTone(copy.direction);
   const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
@@ -196,7 +203,7 @@ function MomentumMetric({
           sparkline can never butt against "believers" / "committed". */}
         <div className="ml-auto flex shrink-0 items-center gap-2 pl-6">
           <div className="hidden h-[22px] w-[72px] shrink-0 min-[380px]:block sm:h-[44px] sm:w-[168px]">
-            <StepSpark points={points} tone={tone} className="h-full w-full" />
+            <StepSpark points={points} tone={tone} domain={domain} className="h-full w-full" />
           </div>
           <span
             className="num shrink-0 text-[13px] font-semibold tabular-nums"
@@ -249,12 +256,14 @@ export function MarketMomentum({
         unit="believers"
         copy={believerCopy(b, book.window)}
         points={b.series}
+        domain={SPARK_DOMAIN.believers}
       />
       <MomentumMetric
         total={money(c.current)}
         unit="committed"
         copy={capitalCopy(c, book.window, usd, money)}
         points={c.series}
+        domain={SPARK_DOMAIN.capital}
       />
     </section>
   );
