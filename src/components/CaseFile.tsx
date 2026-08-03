@@ -446,7 +446,7 @@ function MetricRow({
   );
 }
 
-/** The people, as one ranked roster — People and Network merged, no duplicates. */
+/** The people, as one ranked roster — name, amount, and shared DNA when there is any. */
 export function CaseRoster({
   side,
   believers,
@@ -454,13 +454,17 @@ export function CaseRoster({
 }: {
   side: Side;
   believers: Believer[];
-  people?: { wallet: string; relationship: string }[];
+  people?: { wallet: string; relationship: string; agreement?: number; sharedBeliefs?: number }[];
 }) {
   const { format } = useMoney();
-  const relOf = useMemo(() => {
-    const m = new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p.relationship]));
-    return (w: string) => m.get(w) ?? null;
-  }, [people]);
+  const byWallet = useMemo(
+    () => new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p])),
+    [people],
+  );
+  const relOf = useMemo(
+    () => (w: string) => byWallet.get(w)?.relationship ?? null,
+    [byWallet],
+  );
   const roster = useMemo(() => rankBelievers(believers, relOf), [believers, relOf]);
 
   return (
@@ -477,42 +481,53 @@ export function CaseRoster({
         <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No one on this side yet.</p>
       ) : (
         <ul className="space-y-0.5">
-          {roster.map(({ believer: b, relationship, status }) => (
-            <li key={b.wallet} className="flex items-center gap-2 rounded-[8px] px-1 py-1">
-              {b.avatarUrl ? (
-                <img
-                  src={b.avatarUrl}
-                  alt=""
-                  className="h-7 w-7 shrink-0 rounded-full object-cover"
-                />
-              ) : (
-                <span
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
-                  style={{ background: `hsl(${hueFor(b.wallet)} 45% 45%)` }}
-                  aria-hidden
-                >
-                  {initialsFor(b.name)}
-                </span>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[12px] text-[var(--text)]">{b.name}</div>
-                <div className="text-[11px]">
-                  <span className="font-medium" style={{ color: REL_TONE[relationship] }}>
-                    {RELATIONSHIP_LABEL[relationship]}
+          {roster.map(({ believer: b, relationship }) => {
+            const p = byWallet.get(b.wallet.toLowerCase());
+            // Only a real overlap earns a DNA line — no "unmapped", no filler.
+            const dna =
+              p && (p.sharedBeliefs ?? 0) > 0 && Number.isFinite(p.agreement)
+                ? `${Math.round(p.agreement as number)}% shared DNA`
+                : null;
+            const amount = b.valueUsd >= 1 ? format(b.valueUsd, "USD") : null;
+            return (
+              <li key={b.wallet} className="flex items-center gap-2 rounded-[8px] px-1 py-1">
+                {b.avatarUrl ? (
+                  <img
+                    src={b.avatarUrl}
+                    alt=""
+                    className="h-7 w-7 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <span
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
+                    style={{ background: `hsl(${hueFor(b.wallet)} 45% 45%)` }}
+                    aria-hidden
+                  >
+                    {initialsFor(b.name)}
                   </span>
-                  {status && (
-                    <span className="text-[var(--text-muted)]"> · {STATUS_LABEL[status]}</span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[12px] text-[var(--text)]">{b.name}</div>
+                  {dna && (
+                    <div
+                      className="num text-[10px] font-medium"
+                      style={{ color: REL_TONE[relationship] }}
+                    >
+                      {dna}
+                    </div>
                   )}
                 </div>
-                <div className="num text-[10px] text-[var(--text-muted)]">
-                  {heldFor(b.daysHeld)}
-                  {b.valueUsd >= 1 ? ` · ${format(b.valueUsd, "USD")} backed` : ""}
-                </div>
-              </div>
-            </li>
-          ))}
+                {amount && (
+                  <span className="num shrink-0 text-[12px] font-semibold text-[var(--text)]">
+                    {amount}
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
+
     </div>
   );
 }
