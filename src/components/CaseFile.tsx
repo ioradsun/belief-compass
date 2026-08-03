@@ -21,7 +21,9 @@ import { windowChange } from "@/domain/window-change";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useMoney } from "@/lib/display-unit";
-import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
+import { aliasFor } from "@/lib/wallet-identity";
+import { PersonAvatar } from "@/components/PersonAvatar";
+
 
 import {
   LENS_META,
