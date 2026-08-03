@@ -143,6 +143,14 @@ export function LandingPanel({
                 >
                   Enter Conviction
                 </button>
+                <a
+                  href="/how"
+                  onClick={(e) => e.stopPropagation()}
+                  tabIndex={expanded ? 0 : -1}
+                  className="text-[13px] font-medium text-[var(--text-secondary)] underline decoration-[var(--border-strong)] underline-offset-4 transition-colors hover:text-[var(--text)]"
+                >
+                  How Conviction Company works
+                </a>
                 <span className="text-[12px] text-[var(--text-muted)]">
                   Powered by pov.co and $DEGEN
                 </span>

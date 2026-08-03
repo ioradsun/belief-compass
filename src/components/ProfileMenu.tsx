@@ -363,6 +363,13 @@ function SettingsPanel({
       <CurrencySetting />
       <Divider />
 
+      <a
+        href="/how"
+        onClick={onClose}
+        className="block w-full rounded-xl px-1 py-2 text-left text-[13px] text-[var(--text)] transition-colors hover:bg-[var(--surface)]"
+      >
+        How Conviction Company works
+      </a>
       {onOpenTerms && (
         <button
           type="button"
