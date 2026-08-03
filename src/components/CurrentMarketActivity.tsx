@@ -15,8 +15,8 @@
  */
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getMarketChange } from "@/lib/markets.functions";
 import { getHouseRead } from "@/lib/house.functions";
+import { listLiveEvents } from "@/lib/live.functions";
 import { houseKey } from "@/lib/house-round";
 import { houseNote } from "@/domain/house-note";
 import { LiveTape } from "@/components/LiveTape";
@@ -35,14 +35,7 @@ export function CurrentMarketActivity({
 }) {
   const [open, setOpen] = useState(false);
 
-  // Both reads share the deck's query keys, so opening a market never double-fetches.
-  const { data: change } = useQuery({
-    queryKey: ["market-change", marketId],
-    queryFn: () => getMarketChange({ data: { id: marketId } }),
-    staleTime: 10_000,
-    refetchInterval: 15_000,
-    placeholderData: (prev) => prev,
-  });
+  // Reads share the deck's query keys, so opening a market never double-fetches.
   const { data: house } = useQuery({
     queryKey: houseKey(wallet, marketId),
     queryFn: () => getHouseRead({ data: { wallet: wallet ?? null, marketId } }),
@@ -73,8 +66,8 @@ export function CurrentMarketActivity({
   // while the number quietly climbs. Opening marks everything seen.
   const [seenCount, setSeenCount] = useState<number | null>(null);
   useEffect(() => {
-    if (seenCount == null && change) setSeenCount(count);
-  }, [change, count, seenCount]);
+    if (seenCount == null && live) setSeenCount(count);
+  }, [live, count, seenCount]);
   const unread = seenCount == null ? 0 : Math.max(0, count - seenCount);
   const toggle = () =>
     setOpen((v) => {
