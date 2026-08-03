@@ -649,6 +649,8 @@ function Feed() {
             onSelectMarket={selectMarket}
             onSelectPerson={selectPerson}
             onOpenMenu={() => setMenuOpen(true)}
+            onFeed={openFeed}
+            feedActive={feedActive}
             center={
               <button
                 type="button"
