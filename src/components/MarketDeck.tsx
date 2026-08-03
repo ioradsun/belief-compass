@@ -794,38 +794,9 @@ function SplitPanelIcon({ open }: { open: boolean }) {
 }
 
 /**
- * MARKET SIGNAL — a quiet analytical strip, not a card and not a notification.
- * It states what is happening; the Case File handle below reveals why.
- */
-function MarketSignal({ headline }: { headline: string }) {
-  return (
-    <div
-      className="mx-auto w-full max-w-[460px] rounded-[11px] px-4 py-[11px] text-center"
-      style={{
-        background: "color-mix(in oklab, var(--surface) 60%, transparent)",
-        border: "1px solid var(--hairline)",
-      }}
-    >
-      <div className="flex items-center justify-center gap-1.5">
-        <span
-          aria-hidden
-          className="h-[5px] w-[5px] rounded-full"
-          style={{ background: "var(--text-muted)" }}
-        />
-        <span className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-          Market Signal
-        </span>
-      </div>
-      <p className="mt-1 text-[13px] font-medium leading-snug text-[var(--text)]">{headline}</p>
-    </div>
-  );
-}
-
-/**
- * The Case File disclosure handle — a small tab that appears to emerge from the
- * top edge of the order dock. Deliberately NOT a button surface: the trading
- * actions below own that weight. Borders on top and sides only, so the handle
- * reads as physically continuous with the dock it is pulling open.
+ * The utility row — the market signal on the left, the Case File disclosure on
+ * the right. One quiet line, no cards and no protruding tab: it belongs to the
+ * order surface below it, and stays subordinate to the transaction button.
  */
 function ExamineCta({
   open,
@@ -834,43 +805,33 @@ function ExamineCta({
 }: {
   open: boolean;
   onToggle: () => void;
-  /** The momentum/pulse read, shown as the Market Signal above the handle. */
+  /** The momentum/pulse read, shown as the market signal. */
   teaser?: string | null;
 }) {
   return (
-    <div className="space-y-3">
-      {teaser && <MarketSignal headline={teaser} />}
-      <div className="-mb-2 flex justify-center">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-label={open ? "Close YES and NO Case File" : "Open YES and NO Case File"}
-          className="group flex min-h-[42px] min-w-[136px] flex-col items-center justify-center rounded-t-[9px] px-4 pb-2 pt-1.5 transition-all duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--text)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] active:scale-[0.98] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-          style={{
-            borderTop: "1px solid var(--hairline)",
-            borderLeft: "1px solid var(--hairline)",
-            borderRight: "1px solid var(--hairline)",
-            borderBottom: "none",
-            background: open
-              ? "color-mix(in oklab, var(--surface) 70%, transparent)"
-              : "transparent",
-          }}
-        >
-          <span className="flex items-center gap-1.5 text-[var(--text-secondary)] group-hover:text-[var(--text)]">
-            <SplitPanelIcon open={open} />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.1em]">
-              {open ? "Close Case File" : "Case File"}
-            </span>
-          </span>
-          {!open && (
-            <span className="mt-0.5 text-[10px] text-[var(--text-muted)]">YES vs NO</span>
-          )}
-        </button>
-      </div>
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-0.5">
+      <p className="flex min-w-0 items-center gap-2 text-[13px] leading-snug text-[var(--text-secondary)]">
+        <span
+          aria-hidden
+          className="h-[5px] w-[5px] shrink-0 rounded-full"
+          style={{ background: "var(--text-muted)" }}
+        />
+        <span className="truncate">{teaser ?? "Market signal forming."}</span>
+      </p>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label={open ? "Close YES and NO Case File" : "Open YES and NO Case File"}
+        className="group -mx-1 flex shrink-0 items-center gap-1.5 rounded-[8px] px-1 py-1 text-[var(--text-secondary)] transition-colors hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--text)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
+      >
+        <SplitPanelIcon open={open} />
+        <span className="text-[12px] font-medium">{open ? "Close Case File" : "Case File"}</span>
+      </button>
     </div>
   );
 }
+
 
 /** A quiet hairline between the center's sections — the reading path, not a card. */
 function Hairline() {
