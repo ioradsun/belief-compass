@@ -133,8 +133,6 @@ export function MarketDeck({
   // means "not selling"; the buy dock owns the surface. Buying the opposite side
   // never sells (they're separate token balances), so a flip can't silently exit.
   const [sellPct, setSellPct] = useState<number | null>(null);
-  // The viewer walked away here (pass finalizes the round; the pick stays sealed).
-  const [passed, setPassed] = useState(false);
   // State 2 (owned): the viewer chose "Buy more" from the position summary and is
   // now in the shared buy OrderTicket. false → resting on the summary + Sell /
   // Buy More. (Sell is driven by sellPct, below.)
@@ -255,13 +253,13 @@ export function MarketDeck({
     [viewerWallet],
   );
 
-  // Pass finalizes the round: the House pick stays sealed (you never paid to see
-  // it). This is the FOMO lever, so it's a deliberate, explicit action.
+  // Pass finalizes the round silently and moves straight to the next market —
+  // no interstitial. The House pick stays sealed (you never paid to see it).
   const choosePass = useCallback(() => {
     setSide(null);
-    setPassed(true);
     house.pass();
-  }, [house]);
+    onSkip();
+  }, [house, onSkip]);
 
   // Reveal the House pick exactly once, when a bet confirms on-chain.
   const betRevealed = useRef(false);
@@ -270,7 +268,6 @@ export function MarketDeck({
   useEffect(() => {
     setSide(null);
     setSellPct(null);
-    setPassed(false);
     setBuyMore(false);
     betRevealed.current = false;
     trade.reset();
@@ -567,50 +564,6 @@ export function MarketDeck({
               closeSell();
             }}
           />
-        ) : passed ? (
-          house.passFailed ? (
-            /* The pass didn't persist — never silently advance; offer a retry. */
-            <div
-              className="flex items-center gap-3 rounded-[16px] p-4"
-              style={{ border: "1px solid var(--no)" }}
-            >
-              <div className="min-w-0">
-                <div className="text-[14px] font-semibold text-[var(--text)]">
-                  We couldn&rsquo;t save your pass.
-                </div>
-                <div className="text-[12px] text-[var(--text-muted)]">Try again.</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => house.retryPass()}
-                disabled={house.passing}
-                className="ml-auto shrink-0 rounded-[12px] px-4 py-2 text-[13px] font-semibold disabled:opacity-60"
-                style={{ background: "var(--text)", color: "var(--bg)" }}
-              >
-                {house.passing ? "Saving…" : "Try again"}
-              </button>
-            </div>
-          ) : (
-            /* Walked away: the round is closed and the House pick stays sealed. */
-            <div
-              className="flex items-center gap-3 rounded-[16px] bg-[var(--surface)] p-4"
-            >
-              <div className="min-w-0">
-                <div className="text-[14px] font-semibold text-[var(--text)]">You walked away</div>
-                <div className="text-[12px] text-[var(--text-muted)]">
-                  The House kept its read — you never paid to see it.
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={onSkip}
-                className="ml-auto shrink-0 rounded-[12px] px-4 py-2 text-[13px] font-semibold"
-                style={{ background: "var(--text)", color: "var(--bg)" }}
-              >
-                Next market
-              </button>
-            </div>
-          )
         ) : held && !buyMore ? (
           /* State 2 — you own this market: manage the position. The first choice
             is only Sell or Buy More; each hands off to the same OrderTicket. */
