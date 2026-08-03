@@ -79,7 +79,7 @@ function HowItWorks() {
   }, [filter]);
 
   return (
-    <div className="min-h-[100dvh] bg-[var(--bg)] text-[var(--text)] [scroll-behavior:smooth]">
+    <div className="h-[100dvh] overflow-y-auto overscroll-contain bg-[var(--bg)] text-[var(--text)] [-webkit-overflow-scrolling:touch] [scroll-behavior:smooth]">
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       <header
         className="sticky top-0 z-30 bg-[var(--panel)]/95 backdrop-blur"
