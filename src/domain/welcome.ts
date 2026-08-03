@@ -189,9 +189,37 @@ export function groupRoom(people: RoomPerson[]): RoomSection[] {
   return out;
 }
 
+/**
+ * Why this face is in your room, in commonality terms only.
+ *
+ * `why` is the event that put them here (they took a side you already hold).
+ * `history` is how much you already have in common — the reason it matters.
+ * Names are deliberately absent: the room is explored by what you share, and
+ * identity is the reward for looking closer.
+ */
+export function roomReason(p: RoomPerson): { why: string; history: string } {
+  const why = `Backed ${p.side} with you on "${p.marketTitle}"`;
+  const shared = p.sharedBeliefs ?? 0;
+  const agree = p.agreement;
+  const group = roomGroupFor(p.relationship);
+
+  if (group === "new" || shared < 1 || agree == null) {
+    return { why, history: "This is the only market you've both taken a side on" };
+  }
+  const markets = plural(shared, "market", "markets");
+  if (group === "crossing") {
+    return {
+      why,
+      history: `Across ${markets} you agree only ${agree}% of the time — today you match`,
+    };
+  }
+  return { why, history: `You agree ${agree}% of the time across ${markets}` };
+}
+
 function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
+
 
 /**
  * The one line at the top of the room. It reports CHANGE when the viewer has
