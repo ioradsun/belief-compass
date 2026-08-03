@@ -232,19 +232,30 @@ export function MobileGame({
   // the single scroll column when there isn't (that layout is unchanged).
   const questionBlock = (
     <div>
-      {(category || createdAt || cm?.market) && (
-        <div className="text-[12px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          {[
-            category,
-            createdAt ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()) : null,
-            cm?.market ? "Company exclusive" : null,
-          ]
-            .filter(Boolean)
-            .join(" • ")}
+      {(category || createdAt || cm?.market || byline) && (
+        <div className="flex flex-wrap items-baseline gap-x-2 text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          <span>
+            {[
+              category,
+              createdAt ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()) : null,
+              cm?.market ? "Company exclusive" : null,
+            ]
+              .filter(Boolean)
+              .join(" • ")}
+          </span>
+          {cm?.creator?.name && (
+            <button
+              type="button"
+              onClick={() => cm?.creator && onSelectPerson?.(cm.creator.wallet)}
+              className="normal-case tracking-normal text-[12px] text-[var(--text-muted)]"
+            >
+              by {cm.creator.name}
+            </button>
+          )}
         </div>
       )}
-      <div className="mt-3 flex items-start gap-1.5">
-        <h1 className="min-w-0 flex-1 text-[26px] font-semibold leading-[1.2] tracking-[-0.02em] text-[var(--text)]">
+      <div className="mt-1.5 flex items-start gap-1.5">
+        <h1 className="min-w-0 flex-1 text-[21px] font-semibold leading-[1.18] tracking-[-0.02em] text-[var(--text)]">
           {title}
         </h1>
         <StandOnIt
@@ -256,33 +267,28 @@ export function MobileGame({
           hasMedia={!!stageMedia}
         />
       </div>
-      {byline && (
-        <button
-          type="button"
-          onClick={() => cm?.creator && onSelectPerson?.(cm.creator.wallet)}
-          className="mt-3 text-left text-[13px] text-[var(--text-muted)]"
-        >
-          {byline}
-        </button>
-      )}
     </div>
   );
 
   const marketBody = (
     <>
-      <Rule />
+      {/* Momentum — believers + capital side by side, in the one on-screen
+        timeframe. Same numbers the desktop deck shows, phone-tight. */}
+      <div className="flex items-center justify-end">
+        <WindowFilter win={deckWin} onWin={setDeckWindow} />
+      </div>
 
-      {/* Momentum — believers, capital, the trend. The same <MarketMomentum>
-        the desktop deck renders, in its mobile layout. */}
-      <WindowFilter win={deckWin} onWin={setDeckWindow} />
+      <MarketMomentum dense tape={change?.tape} ethUsd={ethUsd} win={deckWin} />
 
-      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} win={deckWin} />
-
-      <Rule />
-
-      {/* The story — House + this market's activity — as the pinned scope of the
-        Live feed, expandable in place. Same component desktop pins to its feed. */}
-      <CurrentMarketActivity marketId={marketId} wallet={viewerWallet} onSelect={() => undefined} />
+      {/* The story — House + this market's activity. Takes whatever height is
+        left; it is the only thing that may scroll, never the screen. */}
+      <div className="min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch]">
+        <CurrentMarketActivity
+          marketId={marketId}
+          wallet={viewerWallet}
+          onSelect={() => undefined}
+        />
+      </div>
     </>
   );
 
@@ -291,12 +297,12 @@ export function MobileGame({
       {stageMedia ? (
         <>
           <div className="shrink-0 pt-1">{questionBlock}</div>
-          <MediaStage media={stageMedia} className="mt-3 flex min-h-0 flex-1 flex-col gap-5 pb-2">
+          <MediaStage media={stageMedia} className="mt-2 flex min-h-0 flex-1 flex-col gap-3 pb-1">
             {marketBody}
           </MediaStage>
         </>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pb-2 pt-1 [-webkit-overflow-scrolling:touch]">
+        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden pb-1 pt-1">
           {questionBlock}
           {marketBody}
         </div>
@@ -305,14 +311,15 @@ export function MobileGame({
       {/* One dock, transforming in place: the decision, then the order controls —
         never a screen swap. The House pick + celebration wait for a placed order. */}
       <Dock>
-        {/* Always reachable without scrolling — pinned to the action surface. */}
+        {/* Desktop's utility row, phone-sized: one quiet line above the buttons. */}
         <button
           type="button"
           onClick={() => setPhase("sides")}
-          className="mb-3 block w-full border-t border-[var(--border)] pt-3 text-left text-[15px] font-semibold text-[var(--text-secondary)]"
+          className="mb-2 block w-full border-t border-[var(--border)] pt-2 text-left text-[13px] font-medium text-[var(--text-secondary)]"
         >
           See both sides →
         </button>
+
         {side == null ? (
           <div className="flex gap-2.5">
             <BigButton label="NO" tone="no" onClick={() => choose("NO")} />
@@ -405,31 +412,30 @@ function AmountPanel({
       </div>
     );
 
+  // Desktop's order-bar economy on a phone: amount and the single primary
+  // action share one row; "Not now" is a quiet link, not a second big button.
   return (
-    <div className="space-y-3">
-      <div className="text-[13px] text-[var(--text-muted)]">How much conviction?</div>
-      <span
-        className="flex h-[52px] items-center gap-1 rounded-[14px] px-3"
-        style={{ border: "1px solid var(--border)" }}
-      >
-        <span className="num text-[18px] text-[var(--text-muted)]">$</span>
-        <input
-          autoFocus
-          inputMode="decimal"
-          value={amount ? String(amount) : ""}
-          onChange={(e) => {
-            const raw = e.target.value.replace(/[^0-9.]/g, "");
-            const n = parseFloat(raw);
-            setAmount(Number.isNaN(n) ? 0 : Math.min(n, 1_000_000));
-          }}
-          aria-label="Amount in dollars"
-          className="num w-full bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
-          placeholder="0"
-        />
-      </span>
-      {error && <div className="text-[13px] text-[var(--no)]">{error}</div>}
-      <div className="flex gap-2.5">
-        <BigButton label="Not now" tone="neutral" onClick={onCancel} />
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span
+          className="flex h-[52px] w-[112px] shrink-0 items-center gap-1 rounded-[14px] px-3"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          <span className="num text-[18px] text-[var(--text-muted)]">$</span>
+          <input
+            autoFocus
+            inputMode="decimal"
+            value={amount ? String(amount) : ""}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[^0-9.]/g, "");
+              const n = parseFloat(raw);
+              setAmount(Number.isNaN(n) ? 0 : Math.min(n, 1_000_000));
+            }}
+            aria-label="Amount in dollars"
+            className="num w-full bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
+            placeholder="0"
+          />
+        </span>
         <BigButton
           label={busy ? "Confirming…" : label}
           tone={side === "YES" ? "yes" : "no"}
@@ -437,9 +443,18 @@ function AmountPanel({
           disabled={busy || amount <= 0}
         />
       </div>
+      {error && <div className="text-[12px] text-[var(--no)]">{error}</div>}
+      <button
+        type="button"
+        onClick={onCancel}
+        className="block w-full text-center text-[12px] text-[var(--text-muted)]"
+      >
+        Not now
+      </button>
     </div>
   );
 }
+
 
 /** Screen 3 — See Both Sides. Totals first; one tap opens a side's case. */
 function BothSides({
@@ -574,7 +589,7 @@ function Screen({ children }: { children: React.ReactNode }) {
 function Dock({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="shrink-0 pt-3"
+      className="shrink-0 pt-2"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom), 8px)" }}
     >
       {children}
