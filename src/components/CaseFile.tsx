@@ -514,11 +514,7 @@ export function CaseRoster({
           Who backs {side}
         </span>
         {roster.length > 0 && (
-          <span className="num text-[10px] text-[var(--text-muted)]">
-            {total != null && total > roster.length
-              ? `${roster.length} of ${total.toLocaleString("en-US")}`
-              : roster.length}
-          </span>
+          <span className="num text-[10px] text-[var(--text-muted)]">{roster.length}</span>
         )}
       </div>
       {roster.length === 0 ? (
