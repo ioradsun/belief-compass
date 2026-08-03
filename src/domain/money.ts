@@ -41,14 +41,17 @@ function usdBody(abs: number): string {
     : abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** The ETH unit is rendered as a symbol, never the word — it keeps money on one
+ *  line inside narrow rails. */
+export const ETH_SYMBOL = "\u039E";
+
 /**
- * ETH magnitude → string with adaptive precision. ETH amounts span many orders
- * of magnitude (a $12 dust trade is ~0.004 ETH), so small amounts earn more
- * decimals while large ones stay readable. Trailing zeros are trimmed.
+ * ETH magnitude → string with adaptive precision, capped at 5 decimals so a
+ * figure never grows wide enough to wrap. Trailing zeros are trimmed.
  */
 function ethBody(abs: number): string {
   if (abs === 0) return "0";
-  const decimals = abs >= 100 ? 2 : abs >= 1 ? 3 : abs >= 0.01 ? 4 : 6;
+  const decimals = abs >= 100 ? 2 : abs >= 1 ? 3 : abs >= 0.01 ? 4 : 5;
   const s = abs.toFixed(decimals);
   return s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
 }
@@ -65,7 +68,7 @@ export interface FormatMoneyOpts {
 
 /**
  * Format a money amount in the viewer's chosen unit. USD renders as `$1,234` /
- * `$12.34`; ETH renders as `0.0842 ETH`. When the rate is unavailable the value
+ * `$12.34`; ETH renders as `Ξ0.0842`. When the rate is unavailable the value
  * can't be honestly shown → "—".
  */
 export function formatMoney(value: number, opts: FormatMoneyOpts): string {
@@ -74,7 +77,7 @@ export function formatMoney(value: number, opts: FormatMoneyOpts): string {
   if (converted == null) return "—";
   const abs = Math.abs(converted);
   const sign = converted < 0 ? "−" : signed ? "+" : "";
-  return to === "USD" ? `${sign}$${usdBody(abs)}` : `${sign}${ethBody(abs)} ETH`;
+  return to === "USD" ? `${sign}$${usdBody(abs)}` : `${sign}${ETH_SYMBOL}${ethBody(abs)}`;
 }
 
 /** The live rate, shown beside the toggle: "1 ETH = $3,214". Null when unknown. */
