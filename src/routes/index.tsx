@@ -452,6 +452,26 @@ function Feed() {
       }),
     });
   };
+  // The way home. Every center destination (market, person, DNA, create, terms,
+  // dashboard, case) is a search param, so returning to the feed is simply
+  // dropping them — one predictable exit from anywhere in the app.
+  const openFeed = () => {
+    navigate({ search: (prev: Search) => ({ wallet: prev.wallet, r: prev.r }) });
+    setTab("belief");
+    setStorySide(null);
+    setCaughtUp(false);
+    enterProduct();
+  };
+  const feedActive = !(
+    selectedMarket ||
+    selectedPerson ||
+    dnaOpen ||
+    createOpen ||
+    termsOpen ||
+    dashOpen
+  );
+
+
 
   // ONE timeframe for the whole app. The center's WindowFilter publishes to the
   // deck-window store; the feed, the left rail and every metric read it here, so
