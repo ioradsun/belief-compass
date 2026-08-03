@@ -521,6 +521,12 @@ export type PersonProfile = {
   relationship: RelationshipLabel;
   agreement: number;
   sharedBeliefs: number;
+  /** Shared markets on the SAME side (together). */
+  together: number;
+  /** Shared markets on OPPOSITE sides (apart). */
+  apart: number;
+  /** Distinct belief topics compared (breadth). */
+  topicCount: number;
   evidenceLevel: EvidenceLevel;
   summary: string;
   alignedDomains: { domain: string; agreement: number }[];
@@ -571,6 +577,9 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       sharedBeliefs: 0,
       evidenceLevel: "insufficient",
       summary: "Connect your wallet to see how your beliefs compare.",
+      together: 0,
+      apart: 0,
+      topicCount: 0,
       alignedDomains: [],
       opposedDomains: [],
       sharedBoth: [],
@@ -629,6 +638,14 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       relationship,
       agreement: Math.round(score.agreement),
       sharedBeliefs: score.sharedBeliefs,
+      together: score.sameSideBeliefs,
+      apart: score.oppositeSideBeliefs,
+      // Breadth = distinct topics among the markets both hold.
+      topicCount: new Set(
+        [...both.map((b) => b.id), ...opp.map((o) => o.id)]
+          .map((id) => domainOf.get(Number(id)))
+          .filter((d): d is string => !!d),
+      ).size,
       evidenceLevel: score.evidenceLevel,
       summary: personSummary(aligned, opposed),
       alignedDomains: aligned.map((d) => ({ domain: d.domain, agreement: d.agreement })),
