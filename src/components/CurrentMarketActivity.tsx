@@ -49,7 +49,11 @@ export function CurrentMarketActivity({
     staleTime: 30_000,
     placeholderData: (prev) => prev,
   });
-  const houseText = houseNote(wallet, house, marketId).text;
+  // Wallet is restored client-side, so gate the copy until after hydration to
+  // keep SSR and first client render identical.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+  const houseText = houseNote(hydrated ? wallet : undefined, hydrated ? house : undefined, marketId).text;
 
   const count = change?.tape?.length ?? 0;
 
