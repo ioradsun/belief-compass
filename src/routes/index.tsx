@@ -269,8 +269,12 @@ function Feed() {
   // positions the moment the wallet appears. A first-time visitor with no stored
   // connection is 'disconnected' immediately, so their CTA is not delayed.
   const { status: walletStatus } = useAccount();
+  // The first client render must match the SSR HTML exactly, so any wallet
+  // restored from storage is only allowed to change the rail after hydration.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   const walletResolving =
-    !wallet && (walletStatus === "reconnecting" || walletStatus === "connecting");
+    !hydrated || (!wallet && (walletStatus === "reconnecting" || walletStatus === "connecting"));
   // One viewer-scoped socket keeps the connected wallet's positions live; a
   // belief change refetches only the mounted position slices (server-valued).
   usePositionStream(wallet);
