@@ -385,7 +385,7 @@ export function WelcomeReceived({ wallet }: { wallet?: string }) {
           {data.welcomers.map((w) => (
             <li key={w.wallet} className="flex items-center gap-2">
               <Avatar url={w.avatarUrl} name={w.name} seed={w.wallet} size={20} />
-              <span className="truncate text-[12px] text-[var(--text-secondary)]">{w.name}</span>
+              <span className="break-words text-[12px] text-[var(--text-secondary)]">{w.name}</span>
             </li>
           ))}
         </ul>
