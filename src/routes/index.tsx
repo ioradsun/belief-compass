@@ -99,6 +99,8 @@ import { useAccount } from "wagmi";
 import { usePositionStream } from "@/lib/realtime/use-position-stream";
 import { usePredictivePrefetch } from "@/lib/realtime/use-predictive-prefetch";
 import { useIsDesktop } from "@/hooks/use-mobile";
+import { registerPersonFocus } from "@/lib/person-focus";
+
 import { LandingPanel } from "@/components/LandingPanel";
 import { useLandingPanelState } from "@/hooks/useLandingPanelState";
 import { useDeckWindow } from "@/lib/deck-window";
@@ -348,6 +350,8 @@ function Feed() {
     setTab("belief");
     enterProduct();
   };
+  // Universal behaviour: any avatar anywhere opens that profile in the center.
+  useEffect(() => registerPersonFocus(selectPerson));
   const openDna = () => {
     navigate({
       search: (prev: Search) => ({
@@ -470,8 +474,6 @@ function Feed() {
     termsOpen ||
     dashOpen
   );
-
-
 
   // ONE timeframe for the whole app. The center's WindowFilter publishes to the
   // deck-window store; the feed, the left rail and every metric read it here, so

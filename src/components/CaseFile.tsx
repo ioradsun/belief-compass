@@ -21,13 +21,14 @@ import { windowChange } from "@/domain/window-change";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useMoney } from "@/lib/display-unit";
-import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
+import { formatMoney } from "@/domain/money";
+import { aliasFor } from "@/lib/wallet-identity";
+import { PersonAvatar } from "@/components/PersonAvatar";
 
 import {
   LENS_META,
   lensColdStart,
   lensFacts,
-
   lensStory,
   type LensMetric,
 } from "@/domain/side-lens";
@@ -35,12 +36,7 @@ import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT } from "@/domain/market-flow";
 export { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow } from "@/lib/deck-window";
 import { marketBook, type BookMetric } from "@/domain/market-book";
-import {
-  rankBelievers,
-  sideCaseSummary,
-  type CaseRelationship,
-} from "@/domain/case-file";
-
+import { rankBelievers, sideCaseSummary, type CaseRelationship } from "@/domain/case-file";
 
 /** Window-relative % for a book metric, or null when the base is too small. */
 const metricPct = (m: BookMetric): number | null => (m.base > 0 ? (m.delta / m.base) * 100 : null);
@@ -90,7 +86,13 @@ export function CaseColumn({
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
   // The shared timeframe: YES and NO always quote the same period so they compare.
   const win = useDeckWindow();
-  const { format } = useMoney();
+  const { format, ethUsd: rateUsd } = useMoney();
+  // Trade sizes are ETH-native; without a live rate we still show the ETH figure
+  // rather than an empty dash, so activity always carries an amount.
+  const tradeAmount = (eth: number) =>
+    (rateUsd ?? 0) > 0
+      ? format(eth, "ETH")
+      : formatMoney(eth, { from: "ETH", to: "ETH", ethUsd: 0 });
 
   // Same query keys the deck already runs → React Query dedupes, no new requests.
   const { data: evidence } = useQuery({
@@ -138,6 +140,21 @@ export function CaseColumn({
     );
     return (w: string) => m.get(w.toLowerCase()) ?? aliasFor(w);
   }, [evidence]);
+  const avatarOf = useMemo(() => {
+    const m = new Map(
+      (evidence?.believers ?? []).map((b) => [b.wallet.toLowerCase(), b.avatarUrl] as const),
+    );
+    return (w: string) => m.get(w.toLowerCase()) ?? null;
+  }, [evidence]);
+  // The trade tape publishes only a 10-char wallet prefix. Resolve it back to the
+  // full address when this market's believer roster contains it — only then can a
+  // face open a profile.
+  const fullWalletOf = useMemo(() => {
+    const m = new Map(
+      (evidence?.believers ?? []).map((b) => [b.wallet.toLowerCase().slice(0, 10), b.wallet]),
+    );
+    return (w: string) => m.get(w.toLowerCase()) ?? null;
+  }, [evidence]);
   const recent = useMemo(() => {
     if (!tape?.length) return [];
     return tape
@@ -147,13 +164,15 @@ export function CaseColumn({
       .slice(0, 5)
       .map((t, i) => ({
         id: `${t.w}-${t.t}-${t.seq ?? i}`,
+        wallet: fullWalletOf(t.w) ?? t.w,
+        linkable: fullWalletOf(t.w) != null,
         name: nameOf(t.w),
+        avatarUrl: avatarOf(t.w),
         eth: t.eth,
         action: t.action,
         t: t.t,
       }));
-  }, [tape, side, nameOf]);
-
+  }, [tape, side, nameOf, avatarOf, fullWalletOf]);
 
   // Headline Believers + Capital come from the CANONICAL reducer (the same one the
   // center uses), so YES + NO always equals the center's Market total. Price is a
@@ -313,13 +332,20 @@ export function CaseColumn({
             <ul className="space-y-0.5">
               {recent.map((e) => (
                 <li key={e.id} className="flex items-center gap-2 text-[12px]">
+                  <PersonAvatar
+                    wallet={e.wallet}
+                    name={e.name}
+                    avatarUrl={e.avatarUrl}
+                    size={22}
+                    interactive={e.linkable}
+                  />
                   <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
                     <span className="text-[var(--text)]">{e.name}</span>{" "}
                     <span style={{ color: e.action === "BUY" ? color : "var(--text-muted)" }}>
                       {e.action === "BUY" ? "bought" : "sold"}
                     </span>{" "}
                     <span className="num font-semibold text-[var(--text)]">
-                      {format(e.eth, "ETH")}
+                      {tradeAmount(e.eth)}
                     </span>
                   </span>
                   <span className="num shrink-0 text-[10px] text-[var(--text-muted)]">
@@ -331,10 +357,8 @@ export function CaseColumn({
           )}
         </div>
 
-
         {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}
-        <CaseRoster side={side} believers={believers} people={net?.people} />
-
+        <CaseRoster side={side} believers={believers} people={net?.people} priceUsd={priceUsd} />
       </div>
 
       {/* Optional deep-dive into the full center timeline (desktop investigation). */}
@@ -462,20 +486,20 @@ export function CaseRoster({
   side,
   believers,
   people,
+  priceUsd,
 }: {
   side: Side;
   believers: Believer[];
   people?: { wallet: string; relationship: string; agreement?: number; sharedBeliefs?: number }[];
+  /** Live price per share on this side — used to value positions the indexer hasn't priced. */
+  priceUsd?: number | null;
 }) {
   const { format } = useMoney();
   const byWallet = useMemo(
     () => new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p])),
     [people],
   );
-  const relOf = useMemo(
-    () => (w: string) => byWallet.get(w)?.relationship ?? null,
-    [byWallet],
-  );
+  const relOf = useMemo(() => (w: string) => byWallet.get(w)?.relationship ?? null, [byWallet]);
   const roster = useMemo(() => rankBelievers(believers, relOf), [believers, relOf]);
 
   return (
@@ -499,29 +523,19 @@ export function CaseRoster({
               p && (p.sharedBeliefs ?? 0) > 0 && Number.isFinite(p.agreement)
                 ? `${Math.round(p.agreement as number)}% shared DNA`
                 : null;
-            const amount =
+            // The indexed value can be missing (no valuation pass yet) — fall back
+            // to shares × the side's live price so an amount always shows.
+            const valueUsd =
               b.valueUsd > 0
-                ? b.valueUsd >= 1
-                  ? format(b.valueUsd, "USD")
-                  : "<$1"
-                : null;
+                ? b.valueUsd
+                : priceUsd != null && b.shares > 0
+                  ? b.shares * priceUsd
+                  : 0;
+            const amount = valueUsd > 0 ? (valueUsd >= 1 ? format(valueUsd, "USD") : "<$1") : null;
             return (
               <li key={b.wallet} className="flex items-center gap-2 rounded-[8px] px-1 py-1">
-                {b.avatarUrl ? (
-                  <img
-                    src={b.avatarUrl}
-                    alt=""
-                    className="h-7 w-7 shrink-0 rounded-full object-cover"
-                  />
-                ) : (
-                  <span
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
-                    style={{ background: `hsl(${hueFor(b.wallet)} 45% 45%)` }}
-                    aria-hidden
-                  >
-                    {initialsFor(b.name)}
-                  </span>
-                )}
+                <PersonAvatar wallet={b.wallet} name={b.name} avatarUrl={b.avatarUrl} size={28} />
+
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[12px] text-[var(--text)]">{b.name}</div>
                   {dna && (
@@ -543,7 +557,6 @@ export function CaseRoster({
           })}
         </ul>
       )}
-
     </div>
   );
 }
