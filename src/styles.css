@@ -133,6 +133,39 @@
   --sidebar-ring: var(--border-strong);
 }
 
+/*
+ * Light theme — applied by adding `.light` to <html> (see src/lib/theme.ts).
+ * Same token names, re-tuned for a bright, high-contrast reading surface:
+ * white page, faintly grey panels, hairline borders, near-black text. Body and
+ * secondary text stay at or above WCAG AA on their own surfaces, and YES/NO
+ * darken so they read as text on white rather than glowing on black.
+ */
+.light {
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --surface: #f4f5f7;
+  --border-strong: #b9bec7;
+  --text: #0e1420;
+  --text-secondary: #4a5262;
+  --text-muted: #69707e;
+  --yes: #0f9d58;
+  --no: #d02b2b;
+
+  --primary-foreground: #ffffff;
+  --destructive-foreground: #ffffff;
+  --sidebar-primary-foreground: #ffffff;
+  --border: #e3e6ea;
+  --input: #e3e6ea;
+  --sidebar-border: #e3e6ea;
+}
+
+.light body {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+
+
 
 @theme inline {
   --color-panel: var(--panel);
