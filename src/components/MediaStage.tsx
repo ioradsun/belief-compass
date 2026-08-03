@@ -10,10 +10,12 @@
  * Pure presentation: the media record comes straight from getConvictionMarket.
  */
 import { useRef, useState, type ReactNode } from "react";
+import { MediaEmbed } from "@/components/MediaEmbed";
+import { embedFromRecord, PLATFORM_LABEL, type EmbedMedia } from "@/lib/embed";
 
 export interface StageMedia {
-  kind: "image" | "video" | "audio" | "link";
-  /** Signed URL for uploaded files; the target URL for links. */
+  kind: "image" | "video" | "audio" | "link" | "embed";
+  /** Signed URL for uploaded files; the target URL for links/embeds. */
   url: string | null;
   mime?: string | null;
   alt?: string | null;
@@ -21,6 +23,8 @@ export interface StageMedia {
   title?: string | null;
   image?: string | null;
   site?: string | null;
+  /** Third-party embeds only. */
+  embed?: EmbedMedia | null;
 }
 
 /** The word the hint uses for each kind of evidence. */
@@ -29,6 +33,7 @@ const KIND_LABEL: Record<StageMedia["kind"], string> = {
   video: "Video",
   audio: "Audio",
   link: "Article",
+  embed: "Media",
 };
 
 /** Reads the stage's media out of a getConvictionMarket response. Null = no media. */
@@ -43,6 +48,13 @@ export function stageMediaFrom(
   const raw = cm?.market?.media as Record<string, unknown> | null | undefined;
   if (!raw || typeof raw !== "object") return null;
   const kind = String(raw.kind ?? "");
+
+  if (kind === "embed") {
+    const embed = embedFromRecord(raw);
+    if (!embed) return null;
+    return { kind: "embed", url: embed.url, embed, title: embed.title ?? null };
+  }
+
   if (!["image", "video", "audio", "link"].includes(kind)) return null;
   const url =
     kind === "link"
@@ -61,6 +73,7 @@ export function stageMediaFrom(
     site: typeof raw.site === "string" ? raw.site : null,
   };
 }
+
 
 /** How far a horizontal drag must travel (px) before the page flips. */
 const FLIP = 56;
@@ -108,7 +121,7 @@ export function MediaStage({
     setDx(0);
   };
 
-  const label = KIND_LABEL[media.kind];
+  const label = media.embed ? PLATFORM_LABEL[media.embed.platform] : KIND_LABEL[media.kind];
 
   return (
     <div
@@ -168,8 +181,10 @@ function Hint({
 }
 
 function Evidence({ media }: { media: StageMedia }) {
+  if (media.kind === "embed" && media.embed) return <MediaEmbed media={media.embed} />;
   const url = media.url as string;
   if (media.kind === "image") {
+
     return (
       <img
         src={url}

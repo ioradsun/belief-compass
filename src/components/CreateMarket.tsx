@@ -13,31 +13,29 @@
  * money, and the wallet is only prompted once every precondition has passed a
  * simulation. A failed send leaves a resumable draft, never a half-created market.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import { useWalletSession } from "@/hooks/useWalletSession";
 import { requestConnect } from "@/lib/connect-bridge";
 import { fmtUsd, usdToWei } from "@/domain/order";
+import { QUESTION_MAX, kindForMime } from "@/lib/market-create";
 import {
-  MEDIA_LIMITS,
-  QUESTION_MAX,
-  acceptAll,
-  SUPPORTED_MEDIA_HINT,
-  assertAllowedBytes,
-  kindForMime,
-  type MediaKind,
-} from "@/lib/market-create";
+  EMBED_HINT,
+  PLATFORM_LABEL,
+  instantThumbnail,
+  parseEmbed,
+  type EmbedMedia,
+} from "@/lib/embed";
+import { MediaEmbed, preconnectEmbed } from "@/components/MediaEmbed";
+import { attachMarketEmbed, resolveEmbed } from "@/lib/embed.functions";
 import {
-  attachMarketLink,
-  attachMarketMedia,
   createMarketDraft,
   finalizeMarketCreate,
   recordCreateFailure,
   reviewMarketQuestion,
-  signMarketUpload,
 } from "@/lib/market-create.functions";
-import { clearDraft, getDraft, hashFile, setDraft, setProbe } from "@/lib/create-draft";
+import { clearDraft, getDraft, setDraft, setProbe } from "@/lib/create-draft";
 import { rewardLine } from "@/domain/market-suggestion";
 import { completeSuggestion, trackSuggestion } from "@/lib/market-suggestion.functions";
 import { DEFAULT_CURVE, useCreateEconomics, useCreateMarket } from "@/chain/market-create";
@@ -49,17 +47,16 @@ import {
   useSpendableBalance,
 } from "@/components/order/OrderTicket";
 
-type Attachment =
-  | {
-      kind: Exclude<MediaKind, "link">;
-      file: File;
-      previewUrl: string;
-      durationSeconds: number | null;
-      sha256: string | null;
-    }
-  | { kind: "link"; url: string };
+/**
+ * A market carries exactly one piece of evidence, and it is always a link to a
+ * post that lives on its own platform. Direct uploads are intentionally
+ * disabled (the signed-upload pipeline is still on the server, unused) —
+ * Conviction hosts the market, not the media.
+ */
+type Attachment = { kind: "embed"; media: EmbedMedia };
 
 const MIN_QUESTION = 8;
+
 
 export function CreateMarket({
   ethUsd,
@@ -85,12 +82,12 @@ export function CreateMarket({
   const [question, setQuestion] = useState(saved.question);
   const [side, setSide] = useState<"YES" | "NO">(saved.side);
   const [amount, setAmount] = useState<number>(saved.amount);
-  const [attachment, setAttachment] = useState<Attachment | null>(
-    (saved.attachment as Attachment | null) ?? null,
-  );
+  const [attachment, setAttachment] = useState<Attachment | null>(() => {
+    const a = saved.attachment as { embed?: EmbedMedia } | null;
+    return a?.embed ? { kind: "embed", media: a.embed } : null;
+  });
   const [localError, setLocalError] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+
 
   const minSeedEth = econ.minSeedWei != null ? Number(econ.minSeedWei) / 1e18 : null;
   const minUsd = minSeedEth != null && ethUsd > 0 ? minSeedEth * ethUsd : null;
@@ -117,13 +114,21 @@ export function CreateMarket({
   // Keep the session draft in sync, and publish the (debounced) probe the right
   // rail searches on. `type` is derived — there is no Text/Media toggle anymore.
   useEffect(() => {
-    setDraft({ question, side, amount, type: attachment ? "media" : "text", attachment });
+    setDraft({
+      question,
+      side,
+      amount,
+      type: attachment ? "media" : "text",
+      attachment: attachment
+        ? { kind: "link", url: attachment.media.url, embed: attachment.media }
+        : null,
+    });
   }, [question, side, amount, attachment]);
   useEffect(() => {
     setProbe({
       question: debounced,
-      sha256: attachment && attachment.kind !== "link" ? (attachment.sha256 ?? null) : null,
-      linkUrl: attachment?.kind === "link" ? attachment.url : null,
+      sha256: null,
+      linkUrl: attachment?.media.url ?? null,
     });
   }, [debounced, attachment]);
   useEffect(() => () => setProbe(null), []);
@@ -135,33 +140,7 @@ export function CreateMarket({
     staleTime: 5 * 60_000,
   });
 
-  const pickFile = useCallback(async (file: File) => {
-    setLocalError(null);
-    try {
-      const head = new Uint8Array(await file.slice(0, 64).arrayBuffer());
-      const { kind } = assertAllowedBytes(head, file.size);
-      const previewUrl = URL.createObjectURL(file);
-      let durationSeconds: number | null = null;
-      if (kind !== "image") {
-        durationSeconds = await probeDuration(previewUrl, kind);
-        const max = MEDIA_LIMITS[kind].seconds;
-        if (max && durationSeconds && durationSeconds > max + 1) {
-          URL.revokeObjectURL(previewUrl);
-          throw new Error(
-            `${kind === "video" ? "Video" : "Audio"} must be under ${max / 60 >= 1 ? `${max / 60} min` : `${max}s`}.`,
-          );
-        }
-      }
-      const sha256 = await hashFile(file);
-      setAttachment({ kind, file, previewUrl, durationSeconds, sha256 });
-    } catch (e) {
-      setLocalError(e instanceof Error ? e.message : "That file can't be used.");
-    }
-  }, []);
 
-  const openPicker = () => {
-    requestAnimationFrame(() => fileRef.current?.click());
-  };
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -187,32 +166,12 @@ export function CreateMarket({
       });
 
       try {
-        if (attachment?.kind === "link") {
-          await attachMarketLink({
-            data: { wallet: address, token, questionId, url: attachment.url },
-          });
-        } else if (attachment) {
-          const ext = attachment.file.name.split(".").pop() ?? "bin";
-          const signed = await signMarketUpload({
-            data: { wallet: address, token, questionId, ext },
-          });
-          const put = await fetch(signed.signedUrl, {
-            method: "PUT",
-            headers: { "Content-Type": attachment.file.type || "application/octet-stream" },
-            body: attachment.file,
-          });
-          if (!put.ok) throw new Error("Upload failed.");
-          await attachMarketMedia({
-            data: {
-              wallet: address,
-              token,
-              questionId,
-              path: signed.path,
-              durationSeconds: attachment.durationSeconds,
-              sha256: attachment.sha256,
-            },
+        if (attachment) {
+          await attachMarketEmbed({
+            data: { wallet: address, token, questionId, url: attachment.media.url },
           });
         }
+
 
         const result = await create({ questionId, yes: side === "YES", seedWei });
         await finalizeMarketCreate({
@@ -286,27 +245,8 @@ export function CreateMarket({
     (submit.error instanceof Error ? submit.error.message.split("\n")[0] : null);
 
   return (
-    <div
-      className="relative mx-auto flex h-full min-h-0 w-full max-w-[600px] flex-col"
-      onPaste={(e) => {
-        const f = e.clipboardData.files?.[0];
-        if (f) return void pickFile(f);
-      }}
-      onDragEnter={(e) => {
-        e.preventDefault();
-        setDragOver(true);
-      }}
-      onDragOver={(e) => e.preventDefault()}
-      onDragLeave={(e) => {
-        if (e.currentTarget === e.target) setDragOver(false);
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        const f = e.dataTransfer.files?.[0];
-        if (f) void pickFile(f);
-      }}
-    >
+    <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[600px] flex-col">
+
       {/* 1 · Compact header — pinned. Title carries the earn promise; the
           provenance tag sits inline, top-right. */}
       <div className="flex shrink-0 items-start gap-2">
@@ -460,24 +400,9 @@ export function CreateMarket({
 
       </div>
 
-      <input
-        ref={fileRef}
-        type="file"
-        className="hidden"
-        accept={acceptAll()}
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void pickFile(f);
-          e.target.value = "";
-        }}
-      />
+      {/* Direct uploads are intentionally disabled in this version — a market's
+          evidence is always a link to a post that lives on its own platform. */}
 
-      {/* Drag reveal — only while a file is over the composer. */}
-      {dragOver && (
-        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-[16px] border-2 border-dashed border-[var(--border-strong)] bg-[var(--bg)]/85 text-[13px] font-medium text-[var(--text-secondary)]">
-          Drop image, video, or audio to attach
-        </div>
-      )}
     </div>
   );
 }
