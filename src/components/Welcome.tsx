@@ -458,8 +458,7 @@ export function WelcomeReceived({
     <div
       className="mb-4 rounded-[12px] px-3 py-2.5"
       style={{
-        border: "1px solid var(--border)",
-        background: "color-mix(in oklab, var(--rel,#9b87f5) 8%, transparent)",
+        background: "color-mix(in oklab, var(--rel,#9b87f5) 12%, var(--surface))",
       }}
     >
       <div className="flex items-center gap-2.5">
