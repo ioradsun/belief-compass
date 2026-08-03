@@ -18,6 +18,7 @@ import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getMarketChange, getMarketBaselines, type VolumeWindow } from "@/lib/markets.functions";
 import { windowChange } from "@/domain/window-change";
+import { priceMove } from "@/domain/metric-display";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useMoney } from "@/lib/display-unit";
@@ -213,6 +214,29 @@ export function CaseColumn({
   const meta = LENS_META[metric];
   const lensSentence = lensStory(metric, side, facts, FLOW_WINDOW_PHRASE[win], money);
 
+  // Price is the one metric where the % leads (traders read price proportionally),
+  // so its sentence must carry a number — the current price, the %, and the exact
+  // per-share change — never just "climbed". The other lenses already state their
+  // magnitude ("3 believers joined", "$142 entered"), so they keep lensStory.
+  const priceLine = useMemo(() => {
+    if (metric !== "price" || priceUsd == null || summary?.pricePct == null) return null;
+    const pct = summary.pricePct;
+    const prev = priceUsd / (1 + pct / 100);
+    const delta = Number.isFinite(prev) ? priceUsd - prev : null;
+    const move = priceMove({
+      pricePct: pct,
+      priceDelta: delta,
+      since: FLOW_WINDOW_PHRASE[win],
+      money: (v, signed) => format(v, "USD", { signed }),
+    });
+    if (move.direction === "flat") {
+      return `${side} holds at ${format(priceUsd, "USD")} ${FLOW_WINDOW_PHRASE[win]}.`;
+    }
+    const verb = move.direction === "up" ? "climbed to" : "eased to";
+    const change = move.absolute ? ` (${move.absolute})` : "";
+    return `${side} ${verb} ${format(priceUsd, "USD")} · ${move.pct}${change}.`;
+  }, [metric, priceUsd, summary?.pricePct, win, side, format]);
+
   // Prefer the AUTHORITATIVE current (market_state row) + the snapshot baseline for
   // the selected window: correct even on a >1000-trade market where the tape can't
   // reach the window's opening state. When either is unavailable, fall back to the
@@ -316,7 +340,7 @@ export function CaseColumn({
             key={metric}
             className="animate-in fade-in duration-200 text-[12px] leading-snug text-[var(--text-secondary)] motion-reduce:animate-none"
           >
-            {lensSentence}
+            {metric === "price" && priceLine ? priceLine : lensSentence}
           </p>
         </div>
 

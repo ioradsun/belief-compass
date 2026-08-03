@@ -15,6 +15,7 @@ import { listLiveEvents } from "@/lib/live.functions";
 import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
 import { type MarketRow } from "@/components/MarketCard";
 import { positionPnl } from "@/domain/position";
+import { positionReturn, formatPct } from "@/domain/metric-display";
 import { formatMoney } from "@/domain/money";
 import { StandOnIt } from "@/components/StandOnIt";
 import { useDisplayUnit } from "@/lib/display-unit";
@@ -73,6 +74,14 @@ type Built = {
   side: Side;
   value: number;
   gainUsd: number | null;
+  /** Return on remaining cost basis (gain / invested × 100), null when no basis. */
+  gainPct: number | null;
+  /** Shares still held on this side. */
+  shares: number;
+  /** Average entry price per share (USD), null when no authoritative basis. */
+  entryPrice: number | null;
+  /** Live per-share price (USD), null when unpriced. */
+  currentPrice: number | null;
   /** Change in marked value over the SELECTED window (null when unknown). */
   deltaUsd: number | null;
   /** What that delta is measured against — "24H", "1W" … or "since entered". */
@@ -104,6 +113,14 @@ function ConvictionCard({
 }) {
   const sideColor = p.side === "YES" ? "var(--yes)" : "var(--no)";
   const { pulse, pulseTone, story } = p.signal;
+  // The personal outcome, by the one rule: value leads, P&L is the answer, the
+  // return % is paired to it. Never a market price %. Null → no trusted cost basis.
+  const ret = positionReturn({
+    gainUsd: p.gainUsd,
+    gainPct: p.gainPct,
+    money: (v, signed) => (signed ? signedMoney(v) : money(v)),
+  });
+  const sharesLabel = p.shares.toLocaleString("en-US", { maximumFractionDigits: 2 });
   return (
     <button
       type="button"
@@ -127,9 +144,10 @@ function ConvictionCard({
         </span>
       </div>
 
-      {/* 3 — How is my conviction performing? Marked value now, then gain. Never
-        cost. "Marked value" = shares × current price (what it's worth on paper);
-        the realizable amount on exit is quoted in the sell ticket. */}
+      {/* 3 — How am I doing? Position value leads, then P&L · return% (the answer),
+        then the supporting facts (shares · entry → now). "Marked value" = shares ×
+        current price; the realizable amount on exit is quoted in the sell ticket.
+        With no trusted cost basis we fall back to the selected window's move. */}
       <div className="mt-2.5 flex items-baseline gap-2">
         <span className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
           Marked value
@@ -137,7 +155,8 @@ function ConvictionCard({
         <span className="num text-[20px] font-semibold leading-none text-[var(--text)]">
           {money(p.value)}
         </span>
-        {p.deltaUsd != null &&
+        {!ret &&
+          p.deltaUsd != null &&
           (Math.abs(p.deltaUsd) >= 0.005 ? (
             <span
               className="num ml-auto text-[12px] font-semibold"
@@ -154,6 +173,35 @@ function ConvictionCard({
             </span>
           ))}
       </div>
+
+      {/* P&L · return% — the pair that answers "what did I make?" */}
+      {ret && (
+        <div className="mt-1.5 flex items-baseline gap-1.5">
+          <span
+            className="num text-[13px] font-semibold"
+            style={{
+              color:
+                ret.direction === "up"
+                  ? "var(--yes)"
+                  : ret.direction === "down"
+                    ? "var(--no)"
+                    : "var(--text-secondary)",
+            }}
+          >
+            {ret.pnl}
+            {ret.pct && <span className="ml-1">· {ret.pct}</span>}
+          </span>
+          <span className="text-[10px] font-normal text-[var(--text-muted)]">your return</span>
+        </div>
+      )}
+
+      {/* Supporting facts — quiet, one line: efficiency of the outcome. */}
+      {p.entryPrice != null && p.currentPrice != null && p.shares > 0 && (
+        <div className="num mt-1 text-[10px] text-[var(--text-muted)]">
+          {sharesLabel} {p.side} share{p.shares === 1 ? "" : "s"} · entry {money(p.entryPrice)} →
+          now {money(p.currentPrice)}
+        </div>
+      )}
 
       {/* 4 — How is the market reacting? Believers (scale + movement), then Pulse. */}
       {p.believers != null && p.believers > 0 && (
@@ -284,6 +332,9 @@ export function MyConvictions({
         (win === "24h" ? newTodayRaw : null);
       const invested = side === "YES" ? p.yes_cost : p.no_cost;
       const pnl = positionPnl({ invested, worth: value });
+      // Average entry = remaining cost basis ÷ shares still held (both authoritative);
+      // null unless we can quote it honestly. Current price is the live per-share mark.
+      const entryPrice = pnl.investedUsd != null && shares > 0 ? pnl.investedUsd / shares : null;
       return {
         id,
         side,
@@ -291,6 +342,10 @@ export function MyConvictions({
         chg,
         invested: pnl.investedUsd,
         gainUsd: pnl.gainUsd,
+        gainPct: pnl.gainPct,
+        shares,
+        entryPrice,
+        currentPrice: price > 0 ? price : null,
         title: p.markets?.title ?? `Market #${id}`,
         believers: believersRaw == null ? null : Number(believersRaw),
         newToday: newTodayRaw == null ? null : Number(newTodayRaw),
@@ -304,6 +359,10 @@ export function MyConvictions({
     chg: number | null;
     invested: number | null;
     gainUsd: number | null;
+    gainPct: number | null;
+    shares: number;
+    entryPrice: number | null;
+    currentPrice: number | null;
     title: string;
     believers: number | null;
     newToday: number | null;
@@ -373,6 +432,10 @@ export function MyConvictions({
       side: f.side,
       value: f.value,
       gainUsd: f.gainUsd,
+      gainPct: f.gainPct,
+      shares: f.shares,
+      entryPrice: f.entryPrice,
+      currentPrice: f.currentPrice,
       deltaUsd: lifetime ? f.gainUsd : windowDelta(f.value, f.chg),
       deltaLabel,
       title: f.title,
@@ -424,7 +487,15 @@ export function MyConvictions({
             className="num mt-1.5 text-[12px] font-semibold"
             style={{ color: trueGain > 0 ? "var(--yes)" : "var(--no)" }}
           >
-            {signedMoney(trueGain)}{" "}
+            {signedMoney(trueGain)}
+            {(() => {
+              // Aggregate return on the pooled cost basis (total − gain), paired to
+              // the dollar P&L just like each card.
+              const invested = total - trueGain;
+              const pct =
+                invested > 0 ? formatPct((trueGain / invested) * 100, { precise: true }) : null;
+              return pct ? <span> · {pct}</span> : null;
+            })()}{" "}
             <span className="font-normal text-[var(--text-muted)]">since you started</span>
           </div>
         ) : Math.abs(periodUsd) >= 0.01 ? (
