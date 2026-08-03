@@ -41,11 +41,13 @@ export function CurrentMarketActivity({
     queryFn: () => getMarketChange({ data: { id: marketId } }),
     staleTime: 10_000,
     refetchInterval: 15_000,
+    placeholderData: (prev) => prev,
   });
   const { data: house } = useQuery({
     queryKey: houseKey(wallet, marketId),
     queryFn: () => getHouseRead({ data: { wallet: wallet ?? null, marketId } }),
     staleTime: 30_000,
+    placeholderData: (prev) => prev,
   });
   const houseText = houseNote(wallet, house, marketId).text;
 

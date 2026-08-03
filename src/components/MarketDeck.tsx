@@ -174,6 +174,8 @@ export function MarketDeck({
     queryFn: () => getMarketChange({ data: { id: marketId } }),
     staleTime: 10_000,
     refetchInterval: 15_000,
+    // Hold the last tape while the next poll (or a market switch) is in flight.
+    placeholderData: (prev) => prev,
   });
 
   // The one on-screen timeframe — the center owns it, both cases follow it.
@@ -190,6 +192,7 @@ export function MarketDeck({
     queryKey: ["conviction-market", marketId],
     queryFn: () => getConvictionMarket({ data: { onchainId: marketId } }),
     staleTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
   });
   // Evidence, when the creator attached any. Null keeps the layout untouched.
   const stageMedia = useMemo(() => stageMediaFrom(cm), [cm]);
@@ -217,11 +220,13 @@ export function MarketDeck({
     queryFn: () => getNetwork({ data: { wallet: viewer, limit: 60 } }),
     enabled: !!viewer,
     staleTime: 60_000,
+    placeholderData: (prev) => prev,
   });
   const { data: houseRead } = useQuery({
     queryKey: houseKey(viewer, marketId),
     queryFn: () => getHouseRead({ data: { wallet: viewer ?? null, marketId } }),
     staleTime: 30_000,
+    placeholderData: (prev) => prev,
   });
 
   const ethWei = usdToWei(amount, ethUsd);
