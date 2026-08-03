@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { BrandMark } from "@/components/BrandMark";
+import { LandingExampleCard } from "@/components/LandingExample";
+import { HowItWorksSheet } from "@/components/HowItWorksSheet";
 import type { LandingPanelState } from "@/hooks/useLandingPanelState";
 
 /**
