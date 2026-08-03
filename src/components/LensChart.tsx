@@ -32,7 +32,8 @@ export function LensChart({
 }: {
   side: "YES" | "NO";
   metric: LensMetric;
-  title: string;
+  /** Optional heading. Omit for a bare, label-free spark. */
+  title?: string;
   kind: "step" | "line";
   series: SeriesPoint[];
   markers: LensMarker[];
