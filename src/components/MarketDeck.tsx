@@ -412,7 +412,16 @@ export function MarketDeck({
       pill for the shape. Believers + capital + the momentum label, from the
       canonical marketBook so the totals reconcile with the side panels. The
       narrative, the House voice and the activity all live in the right feed. */}
-      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} win={deckWin} />
+      <MarketMomentum
+        tape={change?.tape}
+        ethUsd={ethUsd}
+        win={deckWin}
+        footer={
+          onToggleCase && !storySide && !mobileCaseOpen ? (
+            <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
+          ) : null
+        }
+      />
 
       {/* SHARED CONVICTION — side-blind belonging: your Tribe/Twin/Opp are here. */}
       <SharedConviction
@@ -536,11 +545,10 @@ export function MarketDeck({
         Reaching the dock is the strongest signal a wallet is about to be needed,
         so hover/touch/focus here starts the wallet chunks before the click. */}
       <div className="shrink-0 space-y-3 pb-[env(safe-area-inset-bottom)]" {...walletIntent}>
-        {/* One composed instrument: analysis rail → divider → the controls. */}
+        {/* The controls. The analysis rail now lives inside the Total Market
+          instrument above, so the dock is only the order surface. */}
         <div className="overflow-hidden rounded-[16px]" style={{ background: "var(--surface)" }}>
-          {onToggleCase && !storySide && !mobileCaseOpen && (
-            <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
-          )}
+
 
           {held && sellPct != null ? (
             <OrderTicket
@@ -813,33 +821,36 @@ function ExamineCta({
   }, [signal]);
 
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={open}
-      aria-label={
-        open
-          ? "Close YES and NO Case File."
-          : `Open YES and NO Case File. Current market signal: ${signal}`
-      }
-      className="group flex min-h-[48px] w-full cursor-pointer flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-[var(--hairline)] px-4 py-3 text-left transition-[background-color,transform,border-color] duration-200 hover:border-[var(--border)] active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--text)] motion-reduce:transition-none motion-reduce:active:scale-100 sm:px-5"
-      style={{
-        background: hot
-          ? "color-mix(in oklab,#d99a2b 9%,transparent)"
-          : open
-            ? "color-mix(in oklab,#d99a2b 5%,transparent)"
-            : "color-mix(in oklab,#d99a2b 3%,transparent)",
-      }}
-    >
-      <span className="flex min-w-0 items-center gap-2 text-[13px] leading-snug text-[var(--text)]">
+    <div>
+      {/* The concise market insight — a row of the instrument, not a card. */}
+      <div
+        className="flex min-w-0 items-center gap-2 px-4 py-3 text-[13px] leading-snug text-[var(--text)] transition-[background-color] duration-200 sm:px-5"
+        style={{
+          background: hot ? "color-mix(in oklab,#d99a2b 9%,transparent)" : "transparent",
+        }}
+      >
         <SignalSpark hot={hot} />
         <span className="min-w-0">{signal}</span>
-      </span>
-      <span className="flex shrink-0 items-center gap-[7px] text-[12px] font-semibold text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text)]">
-        <SplitPanelIcon open={open} />
-        {open ? "Close Case File" : "Open Case File"}
-      </span>
-    </button>
+      </div>
+      <div className="border-t border-[var(--hairline)]" aria-hidden />
+      {/* Case File disclosure — says plainly what opening it reveals. */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label={open ? "Close YES and NO Case File." : "Open YES and NO Case File."}
+        className="group flex min-h-[48px] w-full cursor-pointer flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 text-left transition-[background-color,transform] duration-200 active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--text)] motion-reduce:transition-none motion-reduce:active:scale-100 sm:px-5"
+      >
+        <span className="min-w-0 text-[13px] leading-snug text-[var(--text-secondary)]">
+          Case File — the YES / NO split behind these totals
+        </span>
+        <span className="flex shrink-0 items-center gap-[7px] text-[12px] font-semibold text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text)]">
+          <SplitPanelIcon open={open} />
+          {open ? "Close Case File" : "Open Case File"}
+        </span>
+      </button>
+    </div>
+
   );
 }
 

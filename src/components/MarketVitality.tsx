@@ -11,7 +11,7 @@
  * unchanged. Side-blind by construction. The SAME component renders on desktop and
  * mobile; only the layout (and the sparkline size) changes.
  */
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   marketBook,
   type BookMetric,
@@ -166,21 +166,21 @@ function capitalCopy(
 }
 
 /**
- * One metric row: value + unit on the left, a capped sparkline + the percentage
- * pinned to the endpoint on the right, an absolute change beneath. On mobile the
- * sparkline shrinks and the absolute line hides unless it carries the only signal
- * (cold-start, when there's no percentage). Below ~380px the chart drops before
- * the percentage — the percentage carries more per pixel.
+ * One full-width metric row inside the Total Market instrument: the current
+ * total in large type on the left, the percentage change in large type on the
+ * right, the metric label beneath, and the exact absolute change over the
+ * selected timeframe beneath that. A faint full-width sparkline keeps the shape
+ * of the move without turning the row back into a card.
  */
 function MomentumMetric({
   total,
-  unit,
+  label,
   copy,
   points,
   domain,
 }: {
   total: string;
-  unit: string;
+  label: string;
   copy: RowCopy;
   points: VitalityPoint[];
   domain: SparkDomainOpts;
@@ -189,36 +189,27 @@ function MomentumMetric({
   const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
   const trend = copy.pct ?? (copy.direction === "flat" ? "0%" : "");
   return (
-    <div>
-      <div className="flex items-center gap-3">
-        <div className="flex min-w-0 items-baseline gap-1.5">
-          <span className="num text-[19px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)] sm:text-[21px]">
-            {total}
-          </span>
-          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            {unit}
-          </span>
-        </div>
-        {/* pl-6 guarantees clear air between the label and the chart so the
-          sparkline can never butt against "believers" / "committed". */}
-        <div className="ml-auto flex shrink-0 items-center gap-2 pl-6">
-          <div className="hidden h-[22px] w-[72px] shrink-0 min-[380px]:block sm:h-[44px] sm:w-[168px]">
-            <StepSpark points={points} tone={tone} domain={domain} className="h-full w-full" />
-          </div>
-          <span
-            className="num shrink-0 text-[13px] font-semibold tabular-nums"
-            style={{ color: tone }}
-          >
-            {arrow ? `${arrow} ` : ""}
-            {trend}
-          </span>
-        </div>
+    <div className="px-4 py-3 sm:px-5">
+      <div className="flex items-baseline justify-between gap-4">
+        <span className="num min-w-0 truncate text-[26px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)] sm:text-[30px]">
+          {total}
+        </span>
+        <span
+          className="num shrink-0 text-[22px] font-semibold leading-none tabular-nums sm:text-[26px]"
+          style={{ color: tone }}
+        >
+          {arrow ? `${arrow} ` : ""}
+          {trend}
+        </span>
       </div>
-      <div
-        className={`num mt-0.5 text-[11px] ${copy.pct ? "hidden sm:block" : ""}`}
-        style={{ color: tone }}
-      >
+      <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+        {label}
+      </div>
+      <div className="num mt-0.5 text-[12px]" style={{ color: tone }}>
         {copy.absolute}
+      </div>
+      <div className="mt-1.5 h-[18px] w-full opacity-60">
+        <StepSpark points={points} tone={tone} domain={domain} className="h-full w-full" />
       </div>
     </div>
   );
@@ -229,12 +220,15 @@ export function MarketMomentum({
   ethUsd,
   win,
   nowMs = Date.now(),
+  footer,
 }: {
   tape: TapeTrade[] | undefined;
   ethUsd: number;
   /** The one on-screen timeframe — every total, delta and spark quotes it. */
   win?: FlowWindow;
   nowMs?: number;
+  /** The insight + Case File disclosure, rendered inside the same instrument. */
+  footer?: ReactNode;
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs, win), [tape, nowMs, win]);
   const { unit } = useDisplayUnit();
@@ -246,25 +240,39 @@ export function MarketMomentum({
   const b = book.believers.market;
   const c = book.capitalEth.market;
 
-  // Just the shape — two metric rows. No momentum word, no narrative: the
-  // sparklines and percentages already say which way and how hard. The momentum
-  // story is the tension teaser on the Case File door; the voice is in the feed.
+  // ONE analytical container: heading → believers → cap → insight → Case File.
+  // No floating typography, no nested cards — a single market instrument.
   return (
-    <section aria-label="Market momentum" className="space-y-2.5">
+    <section
+      aria-label="Total market"
+      className="shrink-0 overflow-hidden rounded-[16px]"
+      style={{ background: "var(--surface)", border: "1px solid var(--hairline)" }}
+    >
+      <div className="px-4 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] sm:px-5">
+        Total market
+      </div>
       <MomentumMetric
         total={b.current.toLocaleString("en-US")}
-        unit="believers"
+        label="Believers"
         copy={believerCopy(b, book.window)}
         points={b.series}
         domain={SPARK_DOMAIN.believers}
       />
+      <div className="border-t border-[var(--hairline)]" aria-hidden />
       <MomentumMetric
         total={money(c.current)}
-        unit="committed"
+        label="Total market cap"
         copy={capitalCopy(c, book.window, usd, money)}
         points={c.series}
         domain={SPARK_DOMAIN.capital}
       />
+      {footer && (
+        <>
+          <div className="border-t border-[var(--hairline)]" aria-hidden />
+          {footer}
+        </>
+      )}
     </section>
   );
 }
+
