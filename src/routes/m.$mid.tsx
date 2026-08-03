@@ -45,6 +45,8 @@ export const Route = createFileRoute("/m/$mid")({
       title: og.title,
       description: og.description,
       canonical: `${BASE_URL}${marketPath(id, data.question)}`,
+      // Stable per-market image URL (the endpoint resolves media vs. fallback).
+      image: `${BASE_URL}/og/market/${id}`,
     };
   },
 
@@ -56,7 +58,7 @@ export const Route = createFileRoute("/m/$mid")({
         meta: [{ title: "Conviction — pick a side" }, { name: "twitter:card", content: "summary" }],
       };
     }
-    const { title, description, canonical } = loaderData;
+    const { title, description, canonical, image } = loaderData;
     return {
       meta: [
         { title: `${title} — Conviction` },
@@ -67,11 +69,15 @@ export const Route = createFileRoute("/m/$mid")({
         { property: "og:type", content: "website" },
         { property: "og:url", content: canonical },
         { property: "og:site_name", content: "Conviction" },
-        // A text card until the dynamic preview image lands (Phase 3); with no
-        // og:image a large-image card would render blank, so ask for summary.
-        { name: "twitter:card", content: "summary" },
+        // A real image on every card: the market's own media, or the branded
+        // fallback (resolved by /og/market/<id>). 1200×630 large card.
+        { property: "og:image", content: image },
+        { property: "og:image:width", content: "1200" },
+        { property: "og:image:height", content: "630" },
+        { name: "twitter:card", content: "summary_large_image" },
         { name: "twitter:title", content: title },
         { name: "twitter:description", content: description },
+        { name: "twitter:image", content: image },
       ],
       links: [{ rel: "canonical", href: canonical }],
     };
