@@ -11,6 +11,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { readSessionToken } from "@/lib/wallet-session";
 import { noteCardViewed as noteFeedCard, noteIdeaShown } from "@/lib/feed-session";
+import { recordFeedEvent } from "@/lib/opportunity-feed.functions";
+
 import {
   completeSuggestion,
   markSuggestion,
