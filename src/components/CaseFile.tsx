@@ -358,7 +358,14 @@ export function CaseColumn({
         </div>
 
         {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}
-        <CaseRoster side={side} believers={believers} people={net?.people} priceUsd={priceUsd} />
+        <CaseRoster
+          side={side}
+          believers={believers}
+          people={net?.people}
+          priceUsd={priceUsd}
+          total={belChange != null ? authBelievers : believersTotal}
+        />
+
       </div>
 
       {/* Optional deep-dive into the full center timeline (desktop investigation). */}
@@ -487,12 +494,19 @@ export function CaseRoster({
   believers,
   people,
   priceUsd,
+  total,
 }: {
   side: Side;
   believers: Believer[];
   people?: { wallet: string; relationship: string; agreement?: number; sharedBeliefs?: number }[];
   /** Live price per share on this side — used to value positions the indexer hasn't priced. */
   priceUsd?: number | null;
+  /**
+   * The panel's headline believer count (canonical). The roster can only list the
+   * holders the indexer has already resolved, so when it is short we say so
+   * instead of printing a second, smaller number that contradicts the headline.
+   */
+  total?: number | null;
 }) {
   const { format } = useMoney();
   const byWallet = useMemo(
@@ -509,7 +523,11 @@ export function CaseRoster({
           Who backs {side}
         </span>
         {roster.length > 0 && (
-          <span className="num text-[10px] text-[var(--text-muted)]">{roster.length}</span>
+          <span className="num text-[10px] text-[var(--text-muted)]">
+            {total != null && total > roster.length
+              ? `${roster.length} of ${total.toLocaleString("en-US")}`
+              : roster.length}
+          </span>
         )}
       </div>
       {roster.length === 0 ? (
