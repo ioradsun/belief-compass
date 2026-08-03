@@ -63,7 +63,7 @@ export async function emitMarketTransitions(
     db
       .from("market_state")
       .select(
-        "onchain_id, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, chg_24h_yes, chg_24h_no, trade_count_1h, trade_count_24h, velocity_5m",
+        "onchain_id, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, chg_24h_yes, chg_24h_no, trade_count_1h, trade_count_24h, velocity_5m, yes_capital_usd, no_capital_usd, yes_capital_delta_24h, no_capital_delta_24h",
       )
       .in("onchain_id", marketIds),
     db
@@ -101,24 +101,33 @@ export async function emitMarketTransitions(
     );
     const prevStore = storedById.get(id) ?? null;
 
+    // Per-side 24h capital delta from market_state (snapshot-derived; null when no
+    // baseline → treated as no signal so capital transitions can't fake it). Base =
+    // current − delta, so the emitter's market-relative safeguard has a denominator.
+    const yesCapDelta = numOrNull(r.yes_capital_delta_24h);
+    const noCapDelta = numOrNull(r.no_capital_delta_24h);
+    const yesCapNow = num(r.yes_capital_usd);
+    const noCapNow = num(r.no_capital_usd);
+
     const transition = emitMarketTransition({
       timeframeShort: "24H",
       yes: {
         believerDelta: dYes,
         believerBase: Math.max(0, believersYes - dYes),
-        capitalDeltaUsd: 0,
-        capitalBaseUsd: 0,
+        capitalDeltaUsd: yesCapDelta ?? 0,
+        capitalBaseUsd: yesCapDelta == null ? 0 : Math.max(0, yesCapNow - yesCapDelta),
         pricePct: numOrNull(r.chg_24h_yes),
       },
       no: {
         believerDelta: dNo,
         believerBase: Math.max(0, believersNo - dNo),
-        capitalDeltaUsd: 0,
-        capitalBaseUsd: 0,
+        capitalDeltaUsd: noCapDelta ?? 0,
+        capitalBaseUsd: noCapDelta == null ? 0 : Math.max(0, noCapNow - noCapDelta),
         pricePct: numOrNull(r.chg_24h_no),
       },
       baseline: { accelerationMultiple: accel },
       prev: prevStore ? parsePrev(prevStore.fingerprint) : null,
+      money: (usd) => `$${Math.round(usd)}`,
     });
 
     const decision = decideTransitionEmit({

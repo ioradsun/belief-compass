@@ -23,23 +23,56 @@ const input = (over: Partial<MarketTransitionInput>): MarketTransitionInput => (
 
 describe("contradictions carry the most information", () => {
   it("believers up, capital down → people/capital divergence", () => {
-    const t = emitMarketTransition(input({ yes: side({ believerDelta: 4, capitalDeltaUsd: -60 }) }));
+    // −$120 on a $500 base clears both the absolute and the 15%-relative bar.
+    const t = emitMarketTransition(input({ yes: side({ believerDelta: 4, capitalDeltaUsd: -120 }) }));
     expect(t?.type).toBe("people_capital_divergence");
     expect(t?.side).toBe("YES");
     expect(t?.headline).toBe("More believers. Less capital.");
+    expect(t?.detail).toBe("4 people joined while $120.00 left the market.");
     expect(t?.tier).toBe(1);
   });
 
   it("capital up sharply, believers flat → concentration rising", () => {
     const t = emitMarketTransition(input({ yes: side({ believerDelta: 0, capitalDeltaUsd: 300 }) }));
     expect(t?.type).toBe("concentration_rising");
-    expect(t?.headline).toBe("Capital is rising without broader participation.");
+    expect(t?.headline).toBe("Capital is concentrating on YES.");
+    expect(t?.detail).toBe("YES gained $300.00 without adding new believers.");
   });
 
   it("price up, believers and capital flat → price without conviction", () => {
     const t = emitMarketTransition(input({ yes: side({ believerDelta: 0, capitalDeltaUsd: 0, pricePct: 12 }) }));
     expect(t?.type).toBe("price_conviction_divergence");
     expect(t?.headline).toBe("Price moved, but conviction did not.");
+  });
+
+  it("believers and capital rising together → participation broadening", () => {
+    const t = emitMarketTransition(input({ yes: side({ believerDelta: 4, capitalDeltaUsd: 200 }) }));
+    expect(t?.type).toBe("participation_broadening");
+    expect(t?.headline).toBe("Participation is broadening.");
+  });
+});
+
+describe("capital safeguards — no drama from noise", () => {
+  it("ignores a capital move below the absolute floor (tiny market)", () => {
+    // −$10 is under the $25 floor even though it's a big fraction of a $30 book.
+    const t = emitMarketTransition(
+      input({ yes: side({ believerDelta: 4, capitalDeltaUsd: -10, capitalBaseUsd: 30 }) }),
+    );
+    expect(t?.type).not.toBe("people_capital_divergence");
+  });
+
+  it("ignores a capital move that is normal noise in a huge market", () => {
+    // −$120 absolute, but only 2.4% of a $5000 book → below the relative bar.
+    const t = emitMarketTransition(
+      input({ yes: side({ believerDelta: 4, capitalDeltaUsd: -120, capitalBaseUsd: 5000 }) }),
+    );
+    expect(t?.type).not.toBe("people_capital_divergence");
+  });
+
+  it("makes no capital claim when the delta is unavailable (0)", () => {
+    const t = emitMarketTransition(input({ yes: side({ believerDelta: 4, capitalDeltaUsd: 0 }) }));
+    expect(t?.type).not.toBe("people_capital_divergence");
+    expect(t?.type).not.toBe("concentration_rising");
   });
 });
 
@@ -142,25 +175,27 @@ describe("acceleration needs a trustworthy baseline", () => {
 });
 
 describe("priority, dedup, and calm", () => {
-  it("prefers the structural read over a simultaneous divergence", () => {
-    // Both sides gaining (dividing) AND YES shows people-up/capital-down.
+  it("prefers a contradiction over a simultaneous dividing market", () => {
+    // Both sides gaining believers (dividing) AND YES shows people-up/capital-down.
+    // The contradiction is more informative, so it wins.
     const t = emitMarketTransition(
       input({
-        yes: side({ believerDelta: 4, capitalDeltaUsd: -60 }),
-        no: side({ believerDelta: 4, capitalDeltaUsd: 60 }),
+        yes: side({ believerDelta: 4, capitalDeltaUsd: -120 }),
+        no: side({ believerDelta: 4, capitalDeltaUsd: 120 }),
       }),
     );
-    expect(t?.type).toBe("market_dividing");
+    expect(t?.type).toBe("people_capital_divergence");
   });
 
   it("gives a repeated state the same fingerprint (dedupe)", () => {
-    const a = emitMarketTransition(input({ yes: side({ believerDelta: 4, capitalDeltaUsd: -60 }) }));
+    const a = emitMarketTransition(input({ yes: side({ believerDelta: 4, capitalDeltaUsd: -120 }) }));
     const b = emitMarketTransition(
       input({
-        yes: side({ believerDelta: 6, capitalDeltaUsd: -90 }),
+        yes: side({ believerDelta: 6, capitalDeltaUsd: -150 }),
         prev: { type: "people_capital_divergence", side: "YES" },
       }),
     );
+    expect(a?.type).toBe("people_capital_divergence");
     expect(a?.fingerprint).toBe(b?.fingerprint);
   });
 
@@ -181,10 +216,10 @@ describe("money formatter is used when supplied", () => {
   it("formats capital in the caller's unit", () => {
     const t = emitMarketTransition(
       input({
-        yes: side({ believerDelta: 4, capitalDeltaUsd: -60 }),
+        yes: side({ believerDelta: 4, capitalDeltaUsd: -120 }),
         money: (usd) => `€${usd.toFixed(0)}`,
       }),
     );
-    expect(t?.detail).toContain("€60");
+    expect(t?.detail).toContain("€120");
   });
 });
