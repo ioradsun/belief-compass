@@ -40,7 +40,9 @@ export function LandingPanel({
 
   return (
     <header
-      className="relative z-30 shrink-0 bg-[var(--panel)] transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+      className={`relative z-30 shrink-0 bg-[var(--panel)] transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+        expanded ? "max-h-[100svh] overflow-y-auto overscroll-contain" : ""
+      }`}
       style={{ borderBottom: "1px solid var(--hairline)" }}
     >
       <div
@@ -67,12 +69,24 @@ export function LandingPanel({
               expanded ? "gap-3" : "gap-2.5"
             }`}
           >
-            <BrandMark
-              size={expanded ? 40 : 22}
-              className={`shrink-0 text-[var(--text)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
-                expanded ? "" : "hidden lg:block"
-              }`}
-            />
+            {expanded ? (
+              <BrandMark
+                size={40}
+                className="shrink-0 text-[var(--text)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+              />
+            ) : (
+              <button
+                type="button"
+                aria-label="Expand introduction"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onExpand();
+                }}
+                className="-ml-1 flex shrink-0 items-center rounded-full p-1 text-[var(--text)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)]"
+              >
+                <BrandMark size={22} className="shrink-0" />
+              </button>
+            )}
             {!expanded && (
               <span className="hidden shrink-0 truncate text-[12px] text-[var(--text-secondary)] md:block">
                 Conviction needs company.
