@@ -537,7 +537,7 @@ export function MarketDeck({
       {/* Decision dock — buy by default; sell takes over when opened on a holding.
         Reaching the dock is the strongest signal a wallet is about to be needed,
         so hover/touch/focus here starts the wallet chunks before the click. */}
-      <div className="shrink-0 space-y-2" {...walletIntent}>
+      <div className="shrink-0 space-y-3 pb-[env(safe-area-inset-bottom)]" {...walletIntent}>
         {onToggleCase && !storySide && !mobileCaseOpen && (
           <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
         )}
