@@ -261,10 +261,9 @@ export function CaseColumn({
           <LensChart
             side={side}
             metric={metric}
-            title={meta.title}
             kind={meta.kind}
             series={series}
-            markers={markers}
+            markers={[]}
             coldStart={coldStart}
           />
           <p
