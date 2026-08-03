@@ -845,7 +845,6 @@ function ExamineCta({
           type="button"
           onClick={onToggle}
           aria-expanded={open}
-          aria-controls="case-file-panels"
           aria-label={open ? "Close YES and NO Case File" : "Open YES and NO Case File"}
           className="group flex min-h-[42px] min-w-[136px] flex-col items-center justify-center rounded-t-[9px] px-4 pb-2 pt-1.5 transition-all duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--text)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] active:scale-[0.98] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
           style={{
