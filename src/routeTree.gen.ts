@@ -14,6 +14,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as MMidRouteImport } from './routes/m.$mid'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
 import { Route as ApiPublicJobsSuggestionGeneratorRouteImport } from './routes/api/public/jobs/suggestion-generator'
 import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
@@ -47,6 +48,11 @@ const AdminRoute = AdminRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MMidRoute = MMidRouteImport.update({
+  id: '/m/$mid',
+  path: '/m/$mid',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicBuildIdRoute = ApiPublicBuildIdRouteImport.update({
@@ -108,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/value': typeof ValueRoute
+  '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -124,6 +131,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/value': typeof ValueRoute
+  '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/value': typeof ValueRoute
+  '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terms'
     | '/value'
+    | '/m/$mid'
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terms'
     | '/value'
+    | '/m/$mid'
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -191,6 +202,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terms'
     | '/value'
+    | '/m/$mid'
     | '/api/public/build-id'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -208,6 +220,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsRoute: typeof TermsRoute
   ValueRoute: typeof ValueRoute
+  MMidRoute: typeof MMidRoute
   ApiPublicBuildIdRoute: typeof ApiPublicBuildIdRoute
   ApiPublicJobsBeliefRollupRoute: typeof ApiPublicJobsBeliefRollupRoute
   ApiPublicJobsChainPollerRoute: typeof ApiPublicJobsChainPollerRoute
@@ -254,6 +267,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/m/$mid': {
+      id: '/m/$mid'
+      path: '/m/$mid'
+      fullPath: '/m/$mid'
+      preLoaderRoute: typeof MMidRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/build-id': {
@@ -328,6 +348,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsRoute: TermsRoute,
   ValueRoute: ValueRoute,
+  MMidRoute: MMidRoute,
   ApiPublicBuildIdRoute: ApiPublicBuildIdRoute,
   ApiPublicJobsBeliefRollupRoute: ApiPublicJobsBeliefRollupRoute,
   ApiPublicJobsChainPollerRoute: ApiPublicJobsChainPollerRoute,
@@ -341,3 +362,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

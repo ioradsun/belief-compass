@@ -649,6 +649,85 @@ export const getEthUsd = createServerFn({ method: "GET" }).handler(
   },
 );
 
+/** The latest verified state a market's share preview (Open Graph) is built from. */
+export interface MarketOgData {
+  id: number;
+  question: string | null;
+  /** Current YES share, 0–100 (money-weighted), or null when unpriced. */
+  yesPct: number | null;
+  believers: number | null;
+  capitalUsd: number | null;
+  /** New believers in the last 24h — recent movement, never a total. */
+  newBelievers: number | null;
+  /** A media thumbnail URL for a media market (drives the OG image); else null. */
+  imageUrl: string | null;
+  /** When the state was last refreshed — the preview quotes the same source. */
+  updatedAt: string | null;
+}
+
+/**
+ * The share-preview data for one market, from the SAME market_state the deck,
+ * chart and current-state copy read — so a link preview never contradicts the
+ * page it opens. Null when the market doesn't exist.
+ */
+export const getMarketOg = createServerFn({ method: "GET" })
+  .inputValidator((d: { id: number }) => z.object({ id: z.number().int().nonnegative() }).parse(d))
+  .handler(async ({ data }): Promise<MarketOgData | null> => {
+    const sb = serviceClient();
+    const fin = (v: unknown): number | null =>
+      v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+    const { data: st } = await sb
+      .from("market_state")
+      .select(
+        `onchain_id, money_yes_pct, believers_yes, believers_no,
+         yes_capital_usd, no_capital_usd, new_believers_24h, updated_at,
+         markets:onchain_id ( title )`,
+      )
+      .eq("onchain_id", data.id)
+      .maybeSingle();
+
+    if (!st) {
+      const { data: mk } = await sb
+        .from("markets")
+        .select("title")
+        .eq("onchain_id", data.id)
+        .maybeSingle();
+      if (!mk) return null;
+      return {
+        id: data.id,
+        question: (mk as { title?: string | null }).title ?? null,
+        yesPct: null,
+        believers: null,
+        capitalUsd: null,
+        newBelievers: null,
+        imageUrl: null,
+        updatedAt: null,
+      };
+    }
+
+    const r = st as unknown as Record<string, unknown> & {
+      // PostgREST types a to-one embed as an array; accept either shape.
+      markets?: { title?: string | null } | { title?: string | null }[] | null;
+    };
+    const mk = Array.isArray(r.markets) ? r.markets[0] : r.markets;
+    const bel = (fin(r.believers_yes) ?? 0) + (fin(r.believers_no) ?? 0);
+    const cap = (fin(r.yes_capital_usd) ?? 0) + (fin(r.no_capital_usd) ?? 0);
+    // The media thumbnail lives in conviction_markets.media (a private-bucket path
+    // that needs signing), not on market_state — so the OG *image* is resolved by
+    // the dedicated image endpoint (Phase 3), which can mint a stable URL. Here we
+    // only carry the honest text state; imageUrl stays null for the preview meta.
+    return {
+      id: data.id,
+      question: mk?.title ?? null,
+      yesPct: fin(r.money_yes_pct),
+      believers: bel > 0 ? bel : null,
+      capitalUsd: cap > 0 ? cap : null,
+      newBelievers: fin(r.new_believers_24h),
+      imageUrl: null,
+      updatedAt: (r.updated_at as string | null) ?? null,
+    };
+  });
+
 /**
  * The reducer stores acquisition cost in ETH (it folds each trade's eth_amount).
  * Worth, however, is POV's USD valuation — so gain must compare like with like.
