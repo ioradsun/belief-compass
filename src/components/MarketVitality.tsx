@@ -245,7 +245,7 @@ export function MarketMomentum({
   return (
     <section
       aria-label="Total market"
-      className="overflow-hidden rounded-[16px]"
+      className="shrink-0 overflow-hidden rounded-[16px]"
       style={{ background: "var(--surface)", border: "1px solid var(--hairline)" }}
     >
       <div className="px-4 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] sm:px-5">
