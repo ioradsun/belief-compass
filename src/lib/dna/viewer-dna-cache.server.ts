@@ -33,6 +33,8 @@ export interface CachedRelationship {
   sharedBeliefs: number;
   sameSideBeliefs: number;
   oppositeSideBeliefs: number;
+  /** Distinct belief topics compared (breadth) — 0 in caches predating this field. */
+  topicCount?: number;
   confidence: number;
   evidenceLevel: EvidenceLevel;
   relationship: RelationshipLabel;

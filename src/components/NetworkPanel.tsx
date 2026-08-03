@@ -1,14 +1,14 @@
 /**
- * LEFT PANEL — "Network", reimagined as People Discovery.
+ * YOUR PEOPLE — the belonging surface.
  *
- * People are the product; controls are not. The screen leads with people: a
- * single compact DNA progress row, a collapsed search and ONE filter dropdown,
- * then the person list immediately — the first person is visible within the first
- * screenful. Every person reads as a story (a discovery stage + one human
- * sentence), never a row of statistics, and the list is ordered by curiosity so
- * the most interesting person is always first. Presentation only: getNetwork owns
- * the relationships and evidence; the pure src/domain/person-story engine turns
- * them into stages, sentences and rank; clicking opens the profile in the center.
+ * Two questions, answered simply: who stands with me (Tribe), and who takes the
+ * other side (Rivals). No category dropdown, no "still forming" on every row —
+ * uncertainty lives ONCE, at the page. Every card gives an insight even early:
+ * honest counts ("3 together · 1 apart") until there's enough evidence for a
+ * percentage, and Twin/Opp only when truly earned.
+ *
+ * Presentation only: getNetwork owns the relationships + evidence; the pure
+ * src/domain/relationship engine turns them into one consistent social story.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -16,59 +16,42 @@ import { getNetwork, type NetworkPersonRow } from "@/lib/dna.functions";
 import { ago } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { WalletConnectButton } from "@/components/WalletConnect";
-import { personStory, type PersonStory } from "@/domain/person-story";
 import {
-  DNA_STAGE_LABEL,
-  DNA_STAGE_ORDER,
-  decisionsToNextStage,
-  dnaReveal,
-  dnaStage,
-  matchCountLine,
-  stageAtLeast,
-} from "@/domain/conviction-dna";
+  presentRelationship,
+  relationshipInsight,
+  relationshipSupport,
+  relationshipBreakdown,
+  relationshipTopicLine,
+  relationshipLabel,
+  sortTribe,
+  sortRivals,
+  dnaMaturity,
+  type RelationshipPresentation,
+} from "@/domain/relationship";
 
-type RelFilter = "all" | "twin" | "tribe" | "opp" | "inverse";
-type Sort = "relevant" | "closest" | "active" | "newest";
+type Tab = "tribe" | "rivals";
 
-/** One dropdown replaces five chips + a sort control. Each lens maps to a server
- *  filter/sort; curiosity views re-rank by story, activity views keep server order. */
-type Lens = {
-  key: string;
-  label: string;
-  filter: RelFilter;
-  sort: Sort;
-  /** Re-order client-side by curiosity (story rank); else trust the server sort. */
-  curiosity: boolean;
-};
-const LENSES: Lens[] = [
-  { key: "everyone", label: "Everyone", filter: "all", sort: "relevant", curiosity: true },
-  { key: "twin", label: "Potential Twin", filter: "twin", sort: "relevant", curiosity: true },
-  { key: "tribe", label: "Tribe", filter: "tribe", sort: "relevant", curiosity: true },
-  { key: "opp", label: "Opps", filter: "opp", sort: "relevant", curiosity: true },
-  { key: "active", label: "Recently Active", filter: "all", sort: "active", curiosity: false },
-  { key: "newest", label: "Newest", filter: "all", sort: "newest", curiosity: false },
-  { key: "closest", label: "Highest Match", filter: "all", sort: "closest", curiosity: false },
-  { key: "different", label: "Different", filter: "inverse", sort: "relevant", curiosity: true },
-];
+/** Present one person, keeping the row for the UI. */
+interface PersonView {
+  row: NetworkPersonRow;
+  rel: RelationshipPresentation;
+}
 
-const toneFg = (t: PersonStory["tone"]): string =>
-  t === "aligned" ? "var(--yes)" : t === "opposed" ? "var(--no)" : "var(--text-muted)";
-const toneBg = (t: PersonStory["tone"]): string =>
-  t === "aligned"
-    ? "color-mix(in oklab, var(--yes) 14%, transparent)"
-    : t === "opposed"
-      ? "color-mix(in oklab, var(--no) 14%, transparent)"
-      : "color-mix(in oklab, var(--text-muted) 12%, transparent)";
+const present = (row: NetworkPersonRow): PersonView => ({
+  row,
+  rel: presentRelationship({
+    agreement: row.agreement,
+    sharedConvictions: row.sharedBeliefs,
+    together: row.together,
+    apart: row.apart,
+    topicCount: row.topicCount,
+    strongestAlignedTopic: row.strongestAlignedDomain?.name ?? null,
+    strongestOpposedTopic: row.strongestOpposedDomain?.name ?? null,
+  }),
+});
 
-const storyOf = (p: NetworkPersonRow): PersonStory =>
-  personStory({
-    relationship: p.relationship,
-    evidence: p.evidenceLevel,
-    agreement: p.agreement,
-    sharedBeliefs: p.sharedBeliefs,
-    alignedDomain: p.strongestAlignedDomain?.name ?? null,
-    opposedDomain: p.strongestOpposedDomain?.name ?? null,
-  });
+const toneColor = (tone: "aligned" | "opposed" | "neutral"): string =>
+  tone === "aligned" ? "var(--yes)" : tone === "opposed" ? "var(--no)" : "var(--text-secondary)";
 
 export function NetworkPanel({
   wallet,
@@ -81,19 +64,18 @@ export function NetworkPanel({
   wallet?: string;
   selectedPerson?: string;
   onSelectPerson: (wallet: string) => void;
-  onOpenDna: () => void;
+  /** Opens the aggregate Conviction DNA overview (topics, circles) in the center. */
+  onOpenDna?: () => void;
   /** Empty-state CTA — take me to the markets. */
   onExplore?: () => void;
-  /** Reports the number of matched people to the tab strip. */
+  /** Reports the number of placed relationships to the tab strip. */
   onCount?: (n: number) => void;
 }) {
-  const [lensKey, setLensKey] = useState<string>("everyone");
-  const lens = LENSES.find((l) => l.key === lensKey) ?? LENSES[0];
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>("tribe");
   const [rawQuery, setRawQuery] = useState("");
   const [query, setQuery] = useState("");
 
-  // Debounce the search into the server query (server stays authoritative).
+  // Debounce search into the server query (server stays authoritative for search).
   const t = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (t.current) clearTimeout(t.current);
@@ -103,67 +85,55 @@ export function NetworkPanel({
     };
   }, [rawQuery]);
 
+  // One call returns everyone with meaningful overlap; the client splits Tribe
+  // vs Rivals so switching tabs never refetches.
   const { data, isLoading } = useQuery({
-    queryKey: ["network", wallet ?? null, lens.filter, lens.sort, query],
+    queryKey: ["network", wallet ?? null, "all", "relevant", query],
     queryFn: () =>
-      getNetwork({
-        data: { wallet, relationship: lens.filter, sort: lens.sort, query, limit: 40 },
-      }),
+      getNetwork({ data: { wallet, relationship: "all", sort: "relevant", query, limit: 60 } }),
     enabled: !!wallet,
     placeholderData: (prev) => prev,
     refetchInterval: 60_000,
   });
 
-  const summary = data?.summary;
-  const rawPeople = useMemo(() => data?.people ?? [], [data]);
+  const views = useMemo(() => (data?.people ?? []).map(present), [data]);
+  const tribe = useMemo(
+    () => views.filter((v) => v.rel.group === "tribe").sort((a, b) => sortTribe(a.rel, b.rel)),
+    [views],
+  );
+  const rivals = useMemo(
+    () => views.filter((v) => v.rel.group === "rival").sort((a, b) => sortRivals(a.rel, b.rel)),
+    [views],
+  );
 
-  // Curiosity order: the most interesting person first. Activity views keep the
-  // server's order so "Recently Active" / "Newest" mean what they say.
-  const people = useMemo(() => {
-    if (!lens.curiosity || query) return rawPeople;
-    return [...rawPeople].sort((a, b) => {
-      const ra = storyOf(a).rank;
-      const rb = storyOf(b).rank;
-      if (rb !== ra) return rb - ra;
-      const ta = a.latestActivity ? Date.parse(a.latestActivity.occurredAt) : 0;
-      const tb = b.latestActivity ? Date.parse(b.latestActivity.occurredAt) : 0;
-      return tb - ta || b.sharedBeliefs - a.sharedBeliefs;
-    });
-  }, [rawPeople, lens.curiosity, query]);
+  // When searching, show ALL matches (any group) in the active tab so a search
+  // is never trapped by placement — but keep the tabs live.
+  const searching = query.length > 0;
+  const active = tab === "tribe" ? tribe : rivals;
+  const list = searching ? views : active;
 
-  // The compact DNA progress — one row, tap for the full overview.
-  const counts = {
-    twin: summary?.twinCount ?? 0,
-    tribe: summary?.tribeCount ?? 0,
-    opp: summary?.oppCount ?? 0,
-  };
-  const matched = counts.twin + counts.tribe + counts.opp;
+  const placed = tribe.length + rivals.length;
   useEffect(() => {
-    onCount?.(matched);
-  }, [matched, onCount]);
-  const decisions = summary?.expressedBeliefs ?? 0;
-  const stage = dnaStage({ decisions, hasTwinCandidate: counts.twin > 0 });
-  const reveal = dnaReveal(stage, counts);
-  const next = decisionsToNextStage(decisions);
-  const progress = DNA_STAGE_ORDER.indexOf(stage) / (DNA_STAGE_ORDER.length - 1);
-  const dnaLine = useMemo(() => {
-    if (!stageAtLeast(stage, "recognizable")) {
-      return next
-        ? `${next.need} decision${next.need === 1 ? "" : "s"} until your first Tribe.`
-        : "Your people are beginning to surface.";
+    onCount?.(placed);
+  }, [placed, onCount]);
+
+  // Page-level DNA maturity — the ONE uncertainty message, never per row.
+  const mapped = data?.summary?.expressedBeliefs ?? 0;
+  const topicSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const v of views) {
+      if (v.row.strongestAlignedDomain?.name) s.add(v.row.strongestAlignedDomain.name);
+      if (v.row.strongestOpposedDomain?.name) s.add(v.row.strongestOpposedDomain.name);
     }
-    const parts: string[] = [];
-    if (reveal.canNameTwin) parts.push(matchCountLine(counts.twin, "Twin"));
-    if (reveal.canNameTribe) parts.push(matchCountLine(counts.tribe, "Tribe member"));
-    if (reveal.canNameOpp) parts.push(matchCountLine(counts.opp, "Opp"));
-    return parts.length ? parts.join(" · ") : "Keep deciding — your people are surfacing.";
-  }, [stage, next, reveal, counts.twin, counts.tribe, counts.opp]);
+    return s;
+  }, [views]);
+  const maturity = dnaMaturity(mapped, topicSet.size);
 
   if (!wallet) {
     return (
       <div className="pt-4">
         <div className="pb-3 text-[13px] text-[var(--text-muted)]">
-          Connect your wallet to find people who see the world like you.
+          Connect your wallet to find the people who stand with you.
         </div>
         <WalletConnectButton />
       </div>
@@ -172,112 +142,103 @@ export function NetworkPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Compact DNA progress — never a quarter of the screen. */}
+      {/* Header — belonging, not analytics. Tap to open the full DNA overview. */}
       <button
         type="button"
         onClick={onOpenDna}
-        className="mb-2.5 w-full rounded-[10px] px-2.5 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
-        style={{ background: "var(--surface)" }}
+        disabled={!onOpenDna}
+        className="mb-2.5 block w-full rounded-[10px] px-1 text-left transition-colors enabled:hover:bg-[var(--surface)]"
       >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
-            🧬 Conviction DNA
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+            Your People
           </span>
           <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            {DNA_STAGE_LABEL[stage]}
+            {maturity.stage}
           </span>
         </div>
-        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-[var(--border)]">
-          <div
-            className="h-full rounded-full"
-            style={{
-              width: `${Math.round(progress * 100)}%`,
-              background: "var(--yes)",
-              transition: "width .3s ease",
-            }}
-          />
-        </div>
-        <div className="num mt-1 text-[11px] text-[var(--text-muted)]">{dnaLine}</div>
+        <p className="mt-1 text-[12px] leading-snug text-[var(--text-secondary)]">
+          <span className="num text-[var(--text)]">{maturity.convictionsMapped}</span> convictions
+          mapped
+          <span className="block text-[var(--text-muted)]">{maturity.note}</span>
+        </p>
       </button>
 
-      {/* One toolbar row: collapsed search + one filter dropdown. */}
-      <div className="mb-2.5 flex items-center gap-2">
-        {searchOpen ? (
-          <div className="flex flex-1 items-center gap-1">
-            <input
-              autoFocus
-              value={rawQuery}
-              onChange={(e) => setRawQuery(e.target.value)}
-              placeholder="Search people…"
-              aria-label="Search people"
-              className="w-full rounded-md bg-[var(--surface)] px-2.5 py-1.5 text-[13px] outline-none"
-              style={{ border: "1px solid var(--border)" }}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setSearchOpen(false);
-                setRawQuery("");
-              }}
-              aria-label="Close search"
-              className="shrink-0 px-1 text-[13px] text-[var(--text-muted)] hover:text-[var(--text)]"
-            >
-              ✕
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
-            aria-label="Search people"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-[14px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-            style={{ border: "1px solid var(--border)" }}
-          >
-            ⌕
-          </button>
-        )}
-        {!searchOpen && (
-          <select
-            value={lensKey}
-            onChange={(e) => setLensKey(e.target.value)}
-            aria-label="Filter people"
-            className="ml-auto rounded-md bg-[var(--surface)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--text-secondary)]"
-            style={{ border: "1px solid var(--border)" }}
-          >
-            {LENSES.map((l) => (
-              <option key={l.key} value={l.key}>
-                {l.label}
-              </option>
-            ))}
-          </select>
-        )}
+      {/* Tribe / Rivals — a visible segmented control, never a dropdown. */}
+      <div
+        role="tablist"
+        aria-label="Your people"
+        className="mb-2.5 flex rounded-full p-0.5"
+        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+      >
+        <TabButton
+          label="Tribe"
+          count={tribe.length}
+          active={tab === "tribe"}
+          tone="var(--yes)"
+          onSelect={() => setTab("tribe")}
+        />
+        <TabButton
+          label="Rivals"
+          count={rivals.length}
+          active={tab === "rivals"}
+          tone="var(--no)"
+          onSelect={() => setTab("rivals")}
+        />
       </div>
 
-      {/* People — the product. First person visible immediately. */}
+      {/* Tab intro — concise, contextual (not repeated on every card). */}
+      {!searching && (
+        <p className="mb-2 text-[12px] leading-snug text-[var(--text-secondary)]">
+          {tab === "tribe" ? (
+            <>
+              <span className="font-semibold text-[var(--text)]">You&rsquo;re not alone.</span>{" "}
+              People who most consistently stand with you.
+            </>
+          ) : (
+            <>
+              <span className="font-semibold text-[var(--text)]">Meet your other side.</span> People
+              who consistently take the other side.
+            </>
+          )}
+        </p>
+      )}
+
+      {/* Search — keeps the tabs live. */}
+      <input
+        value={rawQuery}
+        onChange={(e) => setRawQuery(e.target.value)}
+        placeholder="Search people…"
+        aria-label="Search people"
+        className="mb-2.5 w-full rounded-md bg-[var(--surface)] px-2.5 py-1.5 text-[13px] outline-none"
+        style={{ border: "1px solid var(--border)" }}
+      />
+
+      {/* The people. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {isLoading && people.length === 0 ? (
+        {isLoading && list.length === 0 ? (
           <ul className="space-y-2" aria-hidden>
             {Array.from({ length: 8 }).map((_, i) => (
               <li key={i} className="h-16 animate-pulse rounded-[12px] bg-[var(--border)]/40" />
             ))}
           </ul>
-        ) : people.length === 0 ? (
-          query ? (
+        ) : list.length === 0 ? (
+          searching ? (
             <p className="pt-3 text-[12.5px] text-[var(--text-muted)]">
-              No one in your network matches this search.
+              No people match this search.
             </p>
           ) : (
-            <EmptyState onExplore={onExplore} />
+            <EmptyTab tab={tab} onExplore={onExplore} />
           )
         ) : (
-          <ul className="flex flex-col gap-1.5">
-            {people.map((p, i) => (
-              <PersonCard
-                key={p.wallet}
-                p={p}
-                spotlight={i === 0 && lens.curiosity && !query}
-                selected={selectedPerson?.toLowerCase() === p.wallet.toLowerCase()}
-                onSelect={() => onSelectPerson(p.wallet)}
+          <ul role="tabpanel" className="flex flex-col gap-1">
+            {list.map((v, i) => (
+              <PersonRow
+                key={v.row.wallet}
+                v={v}
+                isTop={i === 0 && !searching}
+                selected={selectedPerson?.toLowerCase() === v.row.wallet.toLowerCase()}
+                onSelect={() => onSelectPerson(v.row.wallet)}
               />
             ))}
           </ul>
@@ -287,73 +248,154 @@ export function NetworkPanel({
   );
 }
 
+function TabButton({
+  label,
+  count,
+  active,
+  tone,
+  onSelect,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  tone: string;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onSelect}
+      className="flex flex-1 items-center justify-center gap-1.5 rounded-full py-1.5 text-[13px] font-semibold transition-colors"
+      style={
+        active
+          ? {
+              background: "var(--bg)",
+              color: "var(--text)",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+            }
+          : { color: "var(--text-muted)" }
+      }
+    >
+      <span>{label}</span>
+      {count > 0 && (
+        <span
+          className="num text-[11px] font-semibold"
+          style={{ color: active ? tone : "var(--text-muted)" }}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
 /**
- * One person, as a story. The most curious person (spotlight) also shows their
- * most recent move, so the top of the list always invites a tap.
+ * One person — every card answers: who, with or against me, on what evidence,
+ * and where we connect or divide. Typography over chrome; the whole row opens
+ * the Compare DNA profile.
  */
-function PersonCard({
-  p,
-  spotlight,
+function PersonRow({
+  v,
+  isTop,
   selected,
   onSelect,
 }: {
-  p: NetworkPersonRow;
-  spotlight: boolean;
+  v: PersonView;
+  isTop: boolean;
   selected: boolean;
   onSelect: () => void;
 }) {
-  const s = storyOf(p);
-  const act = p.latestActivity;
+  const { row, rel } = v;
+  const label = relationshipLabel(rel, isTop);
+  const insight = relationshipInsight(rel);
+  const support = relationshipSupport(rel);
+  const topic = relationshipTopicLine(rel);
+  const isTwin = rel.earnedLabel === "twin";
+  const insightColor = rel.group === "rival" ? "var(--no)" : "var(--yes)";
+
   return (
     <li>
       <button
         type="button"
         onClick={onSelect}
         aria-current={selected ? "true" : undefined}
-        aria-label={`${p.displayName}, ${s.stageLabel}. ${s.sentence}`}
-        className="block w-full rounded-[12px] p-2.5 text-left transition-colors"
+        aria-label={`${row.displayName}${label ? `, ${label.text}` : ""}. ${insight}, ${support}. Compare DNA.`}
+        className="block w-full rounded-[12px] p-2.5 text-left transition-colors hover:bg-[var(--surface)]"
         style={{
-          background: spotlight ? toneBg(s.tone) : selected ? "var(--surface)" : "transparent",
-          border: `1px solid ${spotlight ? toneFg(s.tone) + "55" : selected ? "var(--border)" : "transparent"}`,
+          background: selected
+            ? "var(--surface)"
+            : isTwin
+              ? "color-mix(in oklab, var(--yes) 6%, transparent)"
+              : "transparent",
+          border: `1px solid ${selected ? "var(--border)" : isTwin ? "color-mix(in oklab, var(--yes) 28%, transparent)" : "transparent"}`,
         }}
       >
         <div className="flex items-center gap-2.5">
-          {p.avatarUrl ? (
+          {row.avatarUrl ? (
             <img
-              src={p.avatarUrl}
+              src={row.avatarUrl}
               alt=""
-              className={`${spotlight ? "h-9 w-9" : "h-8 w-8"} shrink-0 rounded-full object-cover`}
+              className="h-8 w-8 shrink-0 rounded-full object-cover"
             />
           ) : (
             <span
-              className={`${spotlight ? "h-9 w-9 text-[12px]" : "h-8 w-8 text-[11px]"} grid shrink-0 place-items-center rounded-full font-semibold text-white`}
-              style={{ background: `hsl(${hueFor(p.wallet)} 45% 45%)` }}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-white"
+              style={{ background: `hsl(${hueFor(row.wallet)} 45% 45%)` }}
               aria-hidden
             >
-              {initialsFor(p.displayName)}
+              {initialsFor(row.displayName)}
             </span>
           )}
           <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[var(--text)]">
-            {p.displayName}
+            {row.displayName}
           </span>
-          <span
-            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide"
-            style={{ color: toneFg(s.tone), background: toneBg(s.tone) }}
-          >
-            {s.stageLabel}
-          </span>
+          {label && (
+            <span
+              className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
+              style={{
+                color: toneColor(label.tone),
+                background:
+                  label.kind === "provisional"
+                    ? "transparent"
+                    : `color-mix(in oklab, ${toneColor(label.tone)} 14%, transparent)`,
+                border:
+                  label.kind === "provisional"
+                    ? "1px solid var(--border)"
+                    : "1px solid transparent",
+              }}
+            >
+              {label.text}
+            </span>
+          )}
         </div>
 
-        {/* The one meaningful sentence. */}
-        <div className="mt-1.5 pl-[42px] text-[12px] leading-snug text-[var(--text-secondary)]">
-          {s.sentence}
+        {/* Primary insight + evidence — honest at every stage. */}
+        <div className="mt-1.5 flex items-baseline gap-1.5 pl-[42px]">
+          <span className="num text-[13px] font-semibold" style={{ color: insightColor }}>
+            {insight}
+          </span>
+          <span className="text-[11px] text-[var(--text-muted)]">· {support}</span>
         </div>
 
-        {/* Spotlight only: their most recent move, so the top card invites a tap. */}
-        {spotlight && act && (
+        {/* Mature breakdown, then the topic line. */}
+        {rel.tier === "mature" && (
+          <div className="num mt-0.5 pl-[42px] text-[11px] text-[var(--text-muted)]">
+            {relationshipBreakdown(rel)}
+          </div>
+        )}
+        {topic && (
+          <div className="mt-0.5 truncate pl-[42px] text-[11px] text-[var(--text-secondary)]">
+            {topic}
+          </div>
+        )}
+
+        {/* Top card only: their most recent move, so the list invites a tap. */}
+        {isTop && row.latestActivity && (
           <div className="mt-1 truncate pl-[42px] text-[11px] text-[var(--text-muted)]">
-            Recently {act.action.toLowerCase()} {act.side} · “{act.marketTitle}” ·{" "}
-            {ago(act.occurredAt)}
+            Recently {row.latestActivity.action.toLowerCase()} {row.latestActivity.side} ·{" "}
+            {ago(row.latestActivity.occurredAt)}
           </div>
         )}
       </button>
@@ -361,13 +403,17 @@ function PersonCard({
   );
 }
 
-/** No people yet — an invitation, not a dead end. */
-function EmptyState({ onExplore }: { onExplore?: () => void }) {
+/** Empty Tribe / Rivals — an invitation, never an apology. */
+function EmptyTab({ tab, onExplore }: { tab: Tab; onExplore?: () => void }) {
   return (
     <div className="pt-2">
-      <div className="text-[15px] font-semibold text-[var(--text)]">Nobody knows you yet.</div>
+      <div className="text-[14px] font-semibold text-[var(--text)]">
+        {tab === "tribe" ? "No clear Tribe yet." : "No clear Rivals yet."}
+      </div>
       <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--text-muted)]">
-        Every market you back helps The House find your people.
+        {tab === "tribe"
+          ? "Keep taking sides. We’ll show you who consistently stands with you."
+          : "You haven’t shared enough opposing convictions with anyone yet."}
       </p>
       {onExplore && (
         <button
@@ -376,7 +422,7 @@ function EmptyState({ onExplore }: { onExplore?: () => void }) {
           className="mt-4 rounded-[10px] px-3.5 py-2 text-[12px] font-semibold text-[var(--bg)] transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
           style={{ background: "var(--text)" }}
         >
-          Explore Markets
+          Explore markets
         </button>
       )}
     </div>

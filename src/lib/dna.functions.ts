@@ -166,7 +166,6 @@ async function expressedBeliefCount(sb: Sb, wallet: string): Promise<number> {
   return (await loadFactors(sb, wallet)).length;
 }
 
-
 // ── /api/me/network ──────────────────────────────────────────────────────────
 
 export type NetworkPersonRow = {
@@ -176,6 +175,12 @@ export type NetworkPersonRow = {
   relationship: RelationshipLabel;
   agreement: number;
   sharedBeliefs: number;
+  /** Shared markets on the SAME side (together). */
+  together: number;
+  /** Shared markets on OPPOSITE sides (apart). */
+  apart: number;
+  /** Distinct belief topics compared (breadth). */
+  topicCount: number;
   evidenceLevel: EvidenceLevel;
   strongestAlignedDomain?: DomainSummary;
   strongestOpposedDomain?: DomainSummary;
@@ -375,6 +380,9 @@ export const getNetwork = createServerFn({ method: "GET" })
         relationship: r.relationship,
         agreement: r.agreement,
         sharedBeliefs: r.sharedBeliefs,
+        together: r.sameSideBeliefs ?? 0,
+        apart: r.oppositeSideBeliefs ?? 0,
+        topicCount: r.topicCount ?? 0,
         evidenceLevel: r.evidenceLevel,
         strongestAlignedDomain: r.strongestAlignedDomain,
         strongestOpposedDomain: r.strongestOpposedDomain,
@@ -470,6 +478,9 @@ export const getDnaOverview = createServerFn({ method: "GET" })
         relationship: r.relationship,
         agreement: r.agreement,
         sharedBeliefs: r.sharedBeliefs,
+        together: r.sameSideBeliefs ?? 0,
+        apart: r.oppositeSideBeliefs ?? 0,
+        topicCount: r.topicCount ?? 0,
         evidenceLevel: r.evidenceLevel,
         strongestAlignedDomain: r.strongestAlignedDomain,
         strongestOpposedDomain: r.strongestOpposedDomain,
