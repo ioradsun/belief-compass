@@ -88,21 +88,14 @@
 :root {
   --radius: 0.625rem;
 
-  /*
-   * Core surface palette (three-column shell).
-   *
-   * Depth is expressed as a FILL LADDER, not as strokes: bg -> panel ->
-   * surface -> surface-2. A container earns its edge by being a step lighter
-   * than what it sits on, so grouping costs zero lines. Strokes are reserved
-   * for interactive elements (buttons, inputs, segmented controls) — a border
-   * is the signal "you can hit this". `--hairline` is the only structural
-   * line: seams between regions and section rules inside a panel.
-   */
+  /* Core surface palette (three-column shell) */
   --bg: #10100f;
   --panel: #141413;
   --surface: #191918;
-  --surface-2: #201f1d;
-  --hairline: #1e1e1c;
+  /* One step above --surface: grouping without a border (the fill ladder). */
+  --surface-2: #212120;
+  /* Structural seams: a whisper, not a line. */
+  --hairline: rgba(255, 255, 255, 0.06);
   --border-strong: #343430;
   --text: #f7f5ef;
   --text-secondary: #aaa79f;
@@ -155,8 +148,8 @@
   --bg: #f6f7f9;
   --panel: #ffffff;
   --surface: #eef0f4;
-  --surface-2: #e4e8ee;
-  --hairline: #e9ecf0;
+  --surface-2: #e3e6ec;
+  --hairline: rgba(14, 20, 32, 0.08);
   --border-strong: #b9bec7;
   --text: #0e1420;
   --text-secondary: #4a5262;
@@ -222,30 +215,3 @@
   font-feature-settings: "tnum";
 }
 
-
-/*
- * Quiet-container utilities.
- *
- * Grouping is done with a fill one step above the parent instead of a stroke,
- * so nested content never draws a second box. Use `card-1` for a container
- * resting on the page/panel, `card-2` only when it sits inside a `card-1`.
- * Never nest two filled surfaces beyond that.
- */
-@utility card-1 {
-  background: var(--surface);
-  border: 0;
-}
-
-@utility card-2 {
-  background: var(--surface-2);
-  border: 0;
-}
-
-/* The only structural line: a seam between regions or sections. */
-@utility rule {
-  border-top: 1px solid var(--hairline);
-}
-
-@utility rule-b {
-  border-bottom: 1px solid var(--hairline);
-}

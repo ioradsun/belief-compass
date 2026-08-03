@@ -94,7 +94,7 @@ export function LiveTape({
       {isLoading && rows.length === 0 ? (
         <ul className="space-y-2" aria-hidden>
           {Array.from({ length: skeletonRows }).map((_, i) => (
-            <li key={i} className="h-8 animate-pulse rounded bg-[var(--border)]/40" />
+            <li key={i} className="h-8 animate-pulse rounded bg-[var(--surface-2)]" />
           ))}
         </ul>
       ) : rows.length === 0 ? (
@@ -114,7 +114,7 @@ export function LiveTape({
                 <button
                   type="button"
                   onClick={() => onSelect(Number(r.marketId))}
-                  className="block w-full rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--border)]/25"
+                  className="block w-full rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
                   // Personal (network) rows carry a faint "this is about you" wash —
                   // the only rows with a background, so belonging quietly stands out.
                   style={

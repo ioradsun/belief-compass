@@ -256,9 +256,19 @@ export function MobileGame({
             .join(" • ")}
         </div>
       )}
-      <h1 className="mt-3 text-[26px] font-semibold leading-[1.2] tracking-[-0.02em] text-[var(--text)]">
-        {title}
-      </h1>
+      <div className="mt-3 flex items-start gap-1.5">
+        <h1 className="min-w-0 flex-1 text-[26px] font-semibold leading-[1.2] tracking-[-0.02em] text-[var(--text)]">
+          {title}
+        </h1>
+        <StandOnIt
+          variant="title"
+          className="-mr-1.5"
+          marketId={marketId}
+          title={title}
+          side={side}
+          hasMedia={!!stageMedia}
+        />
+      </div>
       {byline && (
         <button
           type="button"
@@ -357,11 +367,6 @@ export function MobileGame({
             onNext={onNext}
           />
         )}
-        {/* Always-on: bring your tribe in. On phones this opens the native share
-          sheet; the message leads with the side you're standing on. */}
-        <div className="mt-2">
-          <StandOnIt marketId={marketId} title={title} side={side} hasMedia={!!stageMedia} />
-        </div>
         {/* What your link has brought into this market — only once it's real. */}
         <div className="mt-2">
           <ShareImpact marketId={marketId} wallet={viewerWallet} />
@@ -584,7 +589,7 @@ function Dock({ children }: { children: React.ReactNode }) {
 }
 
 function Rule() {
-  return <div className="border-t border-[var(--hairline)]" aria-hidden />;
+  return <div className="border-t border-[var(--border)]" aria-hidden />;
 }
 
 function BigButton({

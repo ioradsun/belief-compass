@@ -391,7 +391,7 @@ export function ConvictionDashboard({
               Total Return − Total Invested = Net Profit (the hero). */}
           <Section id="journey" title="Your Journey">
             {journey.empty ? (
-              <div className="rounded-2xl border border-dashed border-[var(--border)] p-6 text-center">
+              <div className="rounded-2xl bg-[var(--surface)] p-6 text-center">
                 <div className="text-[15px] font-semibold text-[var(--text)]">
                   Start building your investing journey.
                 </div>

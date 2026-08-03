@@ -173,7 +173,7 @@ export function LensPicker({
                 onLens("all");
                 setOpen(false);
               }}
-              className="mt-1 w-full rounded-lg border-t border-[var(--hairline)] px-3 py-2 text-left text-[12px] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text)]"
+              className="mt-1 w-full rounded-lg border-t border-[var(--border)] px-3 py-2 text-left text-[12px] text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-[var(--text)]"
             >
               Clear filter — show everything
             </button>

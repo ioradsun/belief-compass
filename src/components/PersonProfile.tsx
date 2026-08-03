@@ -25,7 +25,7 @@ export function PersonProfile({
   });
 
   if (isLoading || !data) {
-    return <div className="h-40 animate-pulse rounded-xl bg-[var(--border)]/40" />;
+    return <div className="h-40 animate-pulse rounded-xl bg-[var(--surface-2)]" />;
   }
 
   const tone = relationshipTone(data.relationship);
@@ -119,7 +119,7 @@ export function PersonProfile({
               key={a.marketId}
               type="button"
               onClick={() => onSelectMarket(Number(a.marketId))}
-              className="block w-full rounded-lg px-2 py-2 text-left text-[13px] transition-colors hover:bg-[var(--border)]/30"
+              className="block w-full rounded-lg px-2 py-2 text-left text-[13px] transition-colors hover:bg-[var(--surface-2)]"
             >
               <span className="text-[var(--text)]">{data.displayName}</span> {a.action}{" "}
               <SideTag side={a.side} /> ·{" "}
@@ -197,7 +197,7 @@ function BeliefSection({
             <button
               type="button"
               onClick={() => onSelectMarket(Number(m.marketId))}
-              className="block w-full rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--border)]/30"
+              className="block w-full rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-2)]"
             >
               <span className="text-[13px] text-[var(--text)]">{m.title}</span>
               <span className="ml-2 text-[11px] text-[var(--text-muted)]">{render(m)}</span>

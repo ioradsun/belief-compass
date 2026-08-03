@@ -279,7 +279,7 @@ function ValuePage() {
 
             {/* CATEGORIES */}
             <Section title="Categories" note="Connected-wallet activity by theme">
-              <div className="overflow-hidden rounded-2xl border border-[var(--border)]">
+              <div className="overflow-hidden rounded-2xl bg-[var(--surface)]">
                 <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                   <span>Category</span>
                   <span className="text-right">Markets</span>

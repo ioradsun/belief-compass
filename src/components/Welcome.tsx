@@ -316,7 +316,7 @@ export function WelcomePrompt({
                           return next;
                         })
                       }
-                      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--border)]/30"
+                      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
                     >
                       <span
                         className="grid h-4 w-4 shrink-0 place-items-center rounded-[5px] text-[10px] font-bold"

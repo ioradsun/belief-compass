@@ -121,7 +121,7 @@ function ConvictionCard({
       <div className="mt-2">
         <span
           className="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide"
-          style={{ color: sideColor, background: "var(--surface-2,var(--border))" }}
+          style={{ color: sideColor, background: "var(--surface-2)" }}
         >
           {p.side}
         </span>
