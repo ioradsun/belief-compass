@@ -134,7 +134,6 @@ export function MarketDeck({
   // never sells (they're separate token balances), so a flip can't silently exit.
   const [sellPct, setSellPct] = useState<number | null>(null);
   // The viewer walked away here (pass finalizes the round; the pick stays sealed).
-  const [passed, setPassed] = useState(false);
   // State 2 (owned): the viewer chose "Buy more" from the position summary and is
   // now in the shared buy OrderTicket. false → resting on the summary + Sell /
   // Buy More. (Sell is driven by sellPct, below.)
@@ -270,7 +269,6 @@ export function MarketDeck({
   useEffect(() => {
     setSide(null);
     setSellPct(null);
-    setPassed(false);
     setBuyMore(false);
     betRevealed.current = false;
     trade.reset();
