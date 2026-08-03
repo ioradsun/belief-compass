@@ -30,6 +30,7 @@ import { getNetwork } from "@/lib/dna.functions";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 import { marketAgeCopy } from "@/domain/market-freshness";
 import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
+import { StandOnIt } from "@/components/StandOnIt";
 import { getHouseRead } from "@/lib/house.functions";
 import { houseKey } from "@/lib/house-round";
 import { expressBelief } from "@/lib/beliefs.functions";
@@ -355,6 +356,11 @@ export function MobileGame({
             onNext={onNext}
           />
         )}
+        {/* Always-on: bring your tribe in. On phones this opens the native share
+          sheet; the message leads with the side you're standing on. */}
+        <div className="mt-2">
+          <StandOnIt marketId={marketId} title={title} side={side} hasMedia={!!stageMedia} />
+        </div>
       </Dock>
     </Screen>
   );

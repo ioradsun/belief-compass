@@ -55,6 +55,7 @@ import { marketPulse } from "@/domain/market-pulse";
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { OrderTicket } from "@/components/order/OrderTicket";
+import { StandOnIt } from "@/components/StandOnIt";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
 import { getConvictionMarket } from "@/lib/market-create.functions";
@@ -631,6 +632,16 @@ export function MarketDeck({
             }}
           />
         )}
+
+        {/* Always-on growth action: bring your tribe into THIS market. Prominent
+          but a clear step below Back YES / Back NO. After a backing it's the
+          natural next move — the message leads with the side you're standing on. */}
+        <StandOnIt
+          marketId={marketId}
+          title={title}
+          side={held?.side ?? side ?? null}
+          hasMedia={!!stageMedia}
+        />
       </div>
     </div>
   );
