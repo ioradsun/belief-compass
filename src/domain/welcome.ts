@@ -104,18 +104,19 @@ export type RoomGroup = "crossing" | "twin" | "tribe" | "new";
 export const ROOM_GROUP_ORDER: RoomGroup[] = ["crossing", "twin", "tribe", "new"];
 
 export const ROOM_GROUP_LABEL: Record<RoomGroup, string> = {
-  crossing: "Crossed over",
-  twin: "Your Twins",
-  tribe: "Your Tribe",
-  new: "New faces",
+  crossing: "Crossed to your side",
+  twin: "Move exactly like you",
+  tribe: "Usually with you",
+  new: "First time together",
 };
 
 export const ROOM_GROUP_BLURB: Record<RoomGroup, string> = {
-  crossing: "People who usually disagree with you took your side.",
-  twin: "Near-identical conviction. They moved with you.",
-  tribe: "Same instincts, most of the time.",
-  new: "No shared history yet — a relationship starts here.",
+  crossing: "You normally land on opposite sides. On this one, you didn't.",
+  twin: "Your closest match in conviction — and they just backed your side again.",
+  tribe: "You've backed the same side more often than not. Add one more.",
+  new: "One market in common so far — this one. That's where every match starts.",
 };
+
 
 /** DNA label → room group. Opp/Inverse arriving on YOUR side is a crossing. */
 export function roomGroupFor(relationship: string | null | undefined): RoomGroup {
@@ -188,9 +189,37 @@ export function groupRoom(people: RoomPerson[]): RoomSection[] {
   return out;
 }
 
+/**
+ * Why this face is in your room, in commonality terms only.
+ *
+ * `why` is the event that put them here (they took a side you already hold).
+ * `history` is how much you already have in common — the reason it matters.
+ * Names are deliberately absent: the room is explored by what you share, and
+ * identity is the reward for looking closer.
+ */
+export function roomReason(p: RoomPerson): { why: string; history: string } {
+  const why = `Backed ${p.side} with you on "${p.marketTitle}"`;
+  const shared = p.sharedBeliefs ?? 0;
+  const agree = p.agreement;
+  const group = roomGroupFor(p.relationship);
+
+  if (group === "new" || shared < 1 || agree == null) {
+    return { why, history: "This is the only market you've both taken a side on" };
+  }
+  const markets = plural(shared, "market", "markets");
+  if (group === "crossing") {
+    return {
+      why,
+      history: `Across ${markets} you agree only ${agree}% of the time — today you match`,
+    };
+  }
+  return { why, history: `You agree ${agree}% of the time across ${markets}` };
+}
+
 function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
+
 
 /**
  * The one line at the top of the room. It reports CHANGE when the viewer has
@@ -213,10 +242,10 @@ export function roomHeadline(sections: RoomSection[], hasVisitedBefore: boolean)
   for (const s of scope) {
     const n = count(s);
     if (n <= 0) continue;
-    if (s.group === "crossing") parts.push(`${plural(n, "Opp", "Opps")} crossed over`);
+    if (s.group === "crossing") parts.push(`${plural(n, "Opp", "Opps")} crossed to your side`);
     else if (s.group === "twin") parts.push(`${plural(n, "Twin", "Twins")}`);
     else if (s.group === "tribe") parts.push(`${n} from your Tribe`);
-    else parts.push(`${plural(n, "new face", "new faces")}`);
+    else parts.push(`${plural(n, "first-timer", "first-timers")}`);
   }
   const body = parts.join(" · ");
   return hasVisitedBefore ? `Since you were last here: ${body}` : `In the room: ${body}`;

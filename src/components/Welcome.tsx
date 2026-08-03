@@ -21,7 +21,7 @@ import {
   sendWelcomes,
   type WelcomablePerson,
 } from "@/lib/welcomes.functions";
-import { welcomeKey } from "@/domain/welcome";
+import { roomReason, welcomeKey } from "@/domain/welcome";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
@@ -95,6 +95,8 @@ export function WelcomePrompt({
   const { ensureSession } = useWalletSession();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** Which face the viewer is curious about (wallet), or null. */
+  const [peek, setPeek] = useState<string | null>(null);
 
   const { data } = useQuery({
     queryKey: ["welcomable", wallet ?? null],
@@ -107,6 +109,8 @@ export function WelcomePrompt({
   const people = data?.people ?? [];
   const count = data?.count ?? 0;
   const sections = data?.sections ?? [];
+
+  const peeked = peek ? (people.find((p) => p.wallet === peek) ?? null) : null;
 
   const keyOf = (p: WelcomablePerson) => welcomeKey(p.wallet, p.marketId, p.side);
 
@@ -183,51 +187,77 @@ export function WelcomePrompt({
           </button>
         </div>
 
-        {/* Grouped by relationship — rarest signal first. */}
-        <div className="mt-2.5 space-y-2.5">
+        {/* Grouped by what you have in common — rarest signal first. Faces only:
+            identity is the reward for looking closer, commonality is the hook. */}
+        <div className="mt-2.5 space-y-3">
           {sections.map((s) => (
             <div key={s.group}>
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
                   {s.label}
                 </span>
-                <span className="text-[10.5px] break-words text-[var(--text-muted)]">
-                  {s.blurb}
-                </span>
+                {s.fresh > 0 && (
+                  <span className="text-[10px] font-semibold text-[var(--text)]">
+                    {s.fresh} new
+                  </span>
+                )}
               </div>
+              <div className="text-[10.5px] break-words text-[var(--text-muted)]">{s.blurb}</div>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                {s.people.map((p) => (
-                  <button
-                    key={p.wallet}
-                    type="button"
-                    onClick={() => onSelectPerson?.(p.wallet)}
-                    disabled={!onSelectPerson}
-                    title={`${p.name}${relLabel(p.relationship) ? ` · ${relLabel(p.relationship)}${p.agreement != null ? ` ${p.agreement}%` : ""}` : ""} · ${p.side} · ${p.marketTitle}`}
-                    aria-label={`View ${p.name}'s convictions`}
-                    className="flex max-w-full items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 transition-transform hover:-translate-y-0.5 disabled:cursor-default"
-                    style={{
-                      border: `1px solid ${p.isNew ? "var(--text)" : "var(--border)"}`,
-                      background: "var(--surface-2, transparent)",
-                    }}
-                  >
-                    <span
-                      className="block rounded-full p-[1.5px]"
-                      style={{ background: p.side === "YES" ? "var(--yes)" : "var(--no)" }}
+                {s.people.map((p) => {
+                  const active = peek === p.wallet;
+                  return (
+                    <button
+                      key={p.wallet}
+                      type="button"
+                      onClick={() => setPeek(active ? null : p.wallet)}
+                      aria-expanded={active}
+                      aria-label={`Why this believer is in your room: ${roomReason(p).why}`}
+                      className="rounded-full p-[2px] transition-transform hover:-translate-y-0.5"
+                      style={{
+                        background: p.side === "YES" ? "var(--yes)" : "var(--no)",
+                        outline: active ? "2px solid var(--text)" : "none",
+                        outlineOffset: "2px",
+                        opacity: p.isNew || active ? 1 : 0.72,
+                      }}
                     >
-                      <span className="block rounded-full" style={{ background: "var(--surface)" }}>
-                        <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} size={22} />
+                      <span
+                        className="block rounded-full p-[1.5px]"
+                        style={{ background: "var(--surface)" }}
+                      >
+                        <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} size={30} />
                       </span>
-                    </span>
-                    <span className="min-w-0 break-words text-[11.5px] text-[var(--text)]">
-                      {p.name}
-                    </span>
-                    <RelChip relationship={p.relationship} />
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
         </div>
+
+        {/* One face at a time: why they're here, then what you already share. */}
+        {peeked && (
+          <div
+            className="mt-2.5 rounded-[10px] px-2.5 py-2"
+            style={{ border: "1px solid var(--border)", background: "var(--surface-2,transparent)" }}
+          >
+            <div className="text-[11.5px] leading-snug break-words text-[var(--text)]">
+              {roomReason(peeked).why}
+            </div>
+            <div className="mt-0.5 text-[11px] leading-snug break-words text-[var(--text-muted)]">
+              {roomReason(peeked).history}
+            </div>
+            {onSelectPerson && (
+              <button
+                type="button"
+                onClick={() => onSelectPerson(peeked.wallet)}
+                className="mt-1.5 text-[11px] font-semibold text-[var(--text-secondary)] underline"
+              >
+                See who they are →
+              </button>
+            )}
+          </div>
+        )}
 
         <button
           type="button"
@@ -287,27 +317,23 @@ export function WelcomePrompt({
                       >
                         {on ? "✓" : ""}
                       </span>
-                      <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} />
+                      <span
+                        className="block shrink-0 rounded-full p-[2px]"
+                        style={{ background: p.side === "YES" ? "var(--yes)" : "var(--no)" }}
+                      >
+                        <span className="block rounded-full p-[1.5px]" style={{ background: "var(--surface)" }}>
+                          <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} size={26} />
+                        </span>
+                      </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <span className="break-words text-[13px] text-[var(--text)]">
-                            {p.name}
+                          <span className="break-words text-[12.5px] text-[var(--text)]">
+                            {roomReason(p).why}
                           </span>
                           <RelChip relationship={p.relationship} />
-                          {p.agreement != null && relLabel(p.relationship) && (
-                            <span className="text-[10.5px] text-[var(--text-muted)]">
-                              {p.agreement}% agree
-                            </span>
-                          )}
                         </span>
                         <span className="block break-words text-[11px] text-[var(--text-muted)]">
-                          <span
-                            className="font-semibold"
-                            style={{ color: p.side === "YES" ? "var(--yes)" : "var(--no)" }}
-                          >
-                            {p.side}
-                          </span>{" "}
-                          · {p.marketTitle}
+                          {roomReason(p).history}
                         </span>
                       </span>
                     </button>
@@ -320,7 +346,7 @@ export function WelcomePrompt({
                         }}
                         className="shrink-0 rounded-[8px] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] underline"
                       >
-                        View
+                        Reveal
                       </button>
                     )}
                   </li>
