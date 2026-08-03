@@ -12,6 +12,8 @@
  */
 import { useShare } from "@/lib/use-share";
 import { marketShareUrl, shareMessage, type ShareSide } from "@/domain/share";
+import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
+import { useShareCode } from "@/lib/use-share-attribution";
 
 type Variant = "primary" | "card" | "inline";
 
@@ -53,13 +55,19 @@ export function StandOnIt({
   onShared?: () => void;
 }) {
   const { standOnIt, copied } = useShare();
+  // Attribution: stamp the link with the sharer's ?r= code so their tribe's
+  // arrivals count. An explicit refCode prop wins; otherwise the connected
+  // wallet's own code (null when signed out — the link still works, unattributed).
+  const viewer = useEffectiveWallet();
+  const myCode = useShareCode(viewer);
+  const attributionCode = refCode ?? myCode;
 
   const go = async (e: React.MouseEvent) => {
     // These controls live inside clickable cards; a share must never also navigate.
     e.stopPropagation();
     e.preventDefault();
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const url = marketShareUrl(origin, marketId, title, refCode ?? null);
+    const url = marketShareUrl(origin, marketId, title, attributionCode ?? null);
     const text = shareMessage({ side, hasMedia });
     const ok = await standOnIt({ url, text });
     if (ok) onShared?.();

@@ -56,6 +56,7 @@ import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { OrderTicket } from "@/components/order/OrderTicket";
 import { StandOnIt } from "@/components/StandOnIt";
+import { ShareImpact } from "@/components/ShareImpact";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
 import { getConvictionMarket } from "@/lib/market-create.functions";
@@ -642,6 +643,10 @@ export function MarketDeck({
           side={held?.side ?? side ?? null}
           hasMedia={!!stageMedia}
         />
+
+        {/* The payoff for standing on it: what your link has brought in. Only
+          renders once it's real (a believer, not just an open). */}
+        <ShareImpact marketId={marketId} wallet={viewerWallet} />
       </div>
     </div>
   );

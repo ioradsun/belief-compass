@@ -100,6 +100,7 @@ import { useIsDesktop } from "@/hooks/use-mobile";
 import { LandingPanel } from "@/components/LandingPanel";
 import { useLandingPanelState } from "@/hooks/useLandingPanelState";
 import { useDeckWindow } from "@/lib/deck-window";
+import { useCaptureShareVisit } from "@/lib/use-share-attribution";
 
 const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
   { key: "1h", label: "1H" },
@@ -162,6 +163,8 @@ type Search = {
   terms?: boolean;
   case?: boolean;
   dash?: boolean;
+  /** Share attribution code — who this visitor arrived via (?r=). */
+  r?: string;
 };
 
 export const Route = createFileRoute("/")({
@@ -180,6 +183,9 @@ export const Route = createFileRoute("/")({
     case: search.case === true || search.case === "1" ? true : undefined,
     // Conviction Dashboard — the financial story, a center-panel destination.
     dash: search.dash === true || search.dash === "1" ? true : undefined,
+    // Attribution code carried from a shared link; kept in the URL so it
+    // survives hydration and the arrival is recorded once.
+    r: typeof search.r === "string" && search.r.length >= 3 ? search.r : undefined,
   }),
   head: () => ({
     meta: [
@@ -247,10 +253,14 @@ function Feed() {
     terms: termsOpen,
     case: caseOpen,
     dash: dashOpen,
+    r: refCode,
   } = Route.useSearch();
 
   const navigate = Route.useNavigate();
   const wallet = useEffectiveWallet(searchWallet);
+  // Share attribution: record the open for an arriving ?r= link, and bind this
+  // browser's opens to the wallet once one connects. Fails silently.
+  useCaptureShareVisit(refCode, selectedMarket, wallet);
   // On a return visit wagmi silently reconnects the wallet AFTER hydration. Until
   // that settles, treat the viewer as "resolving" — not "signed out" — so the left
   // rail holds neutral space instead of flashing the Connect CTA, then swapping to

@@ -111,7 +111,10 @@ export const Route = createFileRoute("/m/$mid")({
 function MarketShareRedirect() {
   const { id } = Route.useLoaderData();
   useEffect(() => {
-    window.location.replace(`/?m=${id}`);
+    // Carry the attribution code through to the app so the arrival is recorded.
+    const ref = new URLSearchParams(window.location.search).get("r");
+    const q = ref ? `?m=${id}&r=${encodeURIComponent(ref)}` : `?m=${id}`;
+    window.location.replace(`/${q}`);
   }, [id]);
 
   return (
