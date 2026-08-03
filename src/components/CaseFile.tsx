@@ -27,7 +27,7 @@ import {
   LENS_META,
   lensColdStart,
   lensFacts,
-  lensMarkers,
+
   lensStory,
   type LensMetric,
 } from "@/domain/side-lens";
@@ -162,7 +162,6 @@ export function CaseColumn({
   // each renders in the viewer's chosen unit through the single global rate.
   const money = useMemo(() => (eth: number) => format(eth, "ETH"), [format]);
   const facts = useMemo(() => lensFacts(series), [series]);
-  const markers = useMemo(() => lensMarkers(metric, series, money), [metric, series, money]);
   const coldStart = lensColdStart(metric, series);
   const meta = LENS_META[metric];
   const lensSentence = lensStory(metric, side, facts, FLOW_WINDOW_PHRASE[win], money);
