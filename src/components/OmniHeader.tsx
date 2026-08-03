@@ -189,6 +189,8 @@ export function OmniHeader({
   onSelectMarket,
   onSelectPerson,
   onOpenMenu,
+  onFeed,
+  feedActive,
   right,
   center,
 }: {
@@ -196,6 +198,10 @@ export function OmniHeader({
   onSelectMarket: (id: number) => void;
   onSelectPerson: (w: string) => void;
   onOpenMenu: () => void;
+  /** Return to the market feed from any center destination. */
+  onFeed?: () => void;
+  /** True when the feed itself is what's on screen. */
+  feedActive?: boolean;
   /** Top-right slot — the account affordance. */
   right?: ReactNode;
   /** Mobile-only center slot — the primary action (+ Conviction). */
