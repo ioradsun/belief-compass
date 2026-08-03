@@ -107,11 +107,24 @@ export function ageHoursOf(createdAt: string | null, now: number): number | null
   return Math.max(0, (now - t) / 3_600_000);
 }
 
+/**
+ * Recent rate ÷ its own baseline — acceleration, not size. This is the ONE
+ * baseline definition (normal = the market's own 24h trade rate); every surface
+ * that needs "× normal" must call this rather than re-deriving a second baseline.
+ */
+export function accelerationFrom(
+  tradeCount1h: number,
+  tradeCount24h: number,
+  velocity5m: number,
+): number {
+  const baseline = Math.max(0.5, tradeCount24h / 24);
+  const recent = Math.max(tradeCount1h, velocity5m * 12);
+  return Math.min(MOMENTUM_CAPS.ACCELERATION, recent / baseline);
+}
+
 /** Recent rate ÷ its own baseline. Acceleration, not size. */
 export function accelerationOf(s: FeedMarketSignals): number {
-  const baseline = Math.max(0.5, s.tradeCount24h / 24);
-  const recent = Math.max(s.tradeCount1h, s.velocity5m * 12);
-  return Math.min(MOMENTUM_CAPS.ACCELERATION, recent / baseline);
+  return accelerationFrom(s.tradeCount1h, s.tradeCount24h, s.velocity5m);
 }
 
 function momentum(s: FeedMarketSignals): number {
@@ -133,7 +146,9 @@ function personal(s: FeedMarketSignals, ai: FeedAiAnalysis | undefined, v: Viewe
   const creatorAff = s.creator ? clamp01(v.creatorAffinity[s.creator.toLowerCase()] ?? 0) : 0;
   const semantic = cosine(v.tasteEmbedding, ai?.embedding ?? null);
   const social = s.tribeSide ? 0.6 : s.oppSide ? 0.4 : 0;
-  return clamp01(0.3 * catAff + 0.2 * topicAff + 0.15 * creatorAff + 0.2 * semantic + 0.15 * social);
+  return clamp01(
+    0.3 * catAff + 0.2 * topicAff + 0.15 * creatorAff + 0.2 * semantic + 0.15 * social,
+  );
 }
 
 function freshness(s: FeedMarketSignals, v: ViewerProfile, now: number): number {
@@ -143,7 +158,9 @@ function freshness(s: FeedMarketSignals, v: ViewerProfile, now: number): number 
   if (age != null) {
     if (age <= FRESHNESS.BRAND_NEW_HOURS) byAge = 0.65;
     else if (age <= FRESHNESS.NEW_HOURS)
-      byAge = 0.65 * (1 - (age - FRESHNESS.BRAND_NEW_HOURS) / (FRESHNESS.NEW_HOURS - FRESHNESS.BRAND_NEW_HOURS));
+      byAge =
+        0.65 *
+        (1 - (age - FRESHNESS.BRAND_NEW_HOURS) / (FRESHNESS.NEW_HOURS - FRESHNESS.BRAND_NEW_HOURS));
   }
   return clamp01(unseen + byAge);
 }

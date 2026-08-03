@@ -92,6 +92,41 @@ describe("acceleration needs a trustworthy baseline", () => {
     expect(t?.type).not.toBe("accelerating");
   });
 
+  it("uses the ranker's acceleration multiple, attributed to the gaining side", () => {
+    const t = emitMarketTransition(
+      input({
+        yes: side({ believerDelta: 5, capitalDeltaUsd: 300 }),
+        no: side({ capitalDeltaUsd: 10 }),
+        baseline: { accelerationMultiple: 4 },
+      }),
+    );
+    expect(t?.type).toBe("accelerating");
+    expect(t?.side).toBe("YES");
+    expect(t?.detail).toBe("Flow is 4.0× normal.");
+  });
+
+  it("makes no acceleration claim from the multiple when no side is gaining capital", () => {
+    const t = emitMarketTransition(
+      input({
+        yes: side({ believerDelta: 0, capitalDeltaUsd: -5 }),
+        no: side({ capitalDeltaUsd: -5 }),
+        baseline: { accelerationMultiple: 5 },
+      }),
+    );
+    expect(t?.type).not.toBe("accelerating");
+  });
+
+  it("hysteresis on the multiple: below 3× only holds if already accelerating", () => {
+    const below = input({
+      yes: side({ believerDelta: 3, capitalDeltaUsd: 100 }),
+      baseline: { accelerationMultiple: 2.5 },
+    });
+    expect(emitMarketTransition(below)?.type).not.toBe("accelerating");
+    expect(
+      emitMarketTransition({ ...below, prev: { type: "accelerating", side: "YES" } })?.type,
+    ).toBe("accelerating");
+  });
+
   it("hysteresis: enters at 3×, holds until below 2×", () => {
     // 2.6× — below the enter bar, so a fresh read does NOT accelerate…
     expect(emitMarketTransition(accelInput(130))?.type).not.toBe("accelerating");

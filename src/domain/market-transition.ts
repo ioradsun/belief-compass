@@ -56,6 +56,13 @@ export interface SideWindow {
 }
 
 export interface MarketBaseline {
+  /**
+   * The ranker's acceleration multiple (recent trade rate ÷ normal 24h rate),
+   * from accelerationFrom — the canonical, server-computed baseline. Preferred
+   * over the raw capital fields below; when present it drives the acceleration
+   * state directly (attributed to whichever side is drawing capital now).
+   */
+  accelerationMultiple?: number | null;
   /** The market's normal capital velocity (USD over the same recent window). */
   normalCapitalUsd?: number | null;
 }
@@ -250,7 +257,29 @@ export function emitMarketTransition(input: MarketTransitionInput): MarketTransi
     }
   }
 
-  // 4 — ACCELERATION: only with a trustworthy baseline — never faked.
+  // 4a — ACCELERATION from the canonical ranker multiple (preferred). Market-wide,
+  // so attribute it to the side actually drawing capital now; only claim it when a
+  // side is genuinely gaining, and never fake it without the multiple.
+  if (baseline?.accelerationMultiple != null) {
+    const multiple = baseline.accelerationMultiple;
+    const side: Side = yes.capitalDeltaUsd >= no.capitalDeltaUsd ? "YES" : "NO";
+    const gaining = Math.max(yes.capitalDeltaUsd, no.capitalDeltaUsd) > 0;
+    const bar = held(prev, "accelerating", side) ? ACCEL_EXIT : ACCEL_ENTER;
+    if (gaining && multiple >= bar) {
+      return {
+        type: "accelerating",
+        side,
+        tier: TIER.accelerating,
+        headline: `${side} is accelerating.`,
+        detail: `Flow is ${multiple.toFixed(1)}× normal.`,
+        evidence: [{ label: "Flow", value: `${multiple.toFixed(1)}× normal` }],
+        fingerprint: fp("accelerating", side),
+      };
+    }
+  }
+
+  // 4b — ACCELERATION from raw capital velocity — only with a trustworthy
+  // baseline, never faked.
   if (baseline?.normalCapitalUsd != null && baseline.normalCapitalUsd > 0) {
     for (const side of ["YES", "NO"] as Side[]) {
       const s = side === "YES" ? yes : no;
