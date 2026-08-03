@@ -39,13 +39,13 @@ describe("formatMoney", () => {
   });
 
   it("renders ETH with adaptive precision and trimmed zeros", () => {
-    expect(formatMoney(0.05, { from: "ETH", to: "ETH", ethUsd: RATE })).toBe("0.05 ETH");
-    expect(formatMoney(0.004, { from: "ETH", to: "ETH", ethUsd: RATE })).toBe("0.004 ETH");
-    expect(formatMoney(12.5, { from: "ETH", to: "ETH", ethUsd: RATE })).toBe("12.5 ETH");
+    expect(formatMoney(0.05, { from: "ETH", to: "ETH", ethUsd: RATE })).toBe("\u039E0.05");
+    expect(formatMoney(0.004, { from: "ETH", to: "ETH", ethUsd: RATE })).toBe("\u039E0.004");
+    expect(formatMoney(12.5, { from: "ETH", to: "ETH", ethUsd: RATE })).toBe("\u039E12.5");
   });
 
   it("converts a USD-native value into the chosen ETH display", () => {
-    expect(formatMoney(100, { from: "USD", to: "ETH", ethUsd: RATE })).toBe("0.05 ETH");
+    expect(formatMoney(100, { from: "USD", to: "ETH", ethUsd: RATE })).toBe("\u039E0.05");
   });
 
   it("converts an ETH-native value (committed capital) into USD display", () => {
