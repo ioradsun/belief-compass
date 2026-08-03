@@ -111,6 +111,7 @@ export function MarketMomentum({
   win,
   nowMs = Date.now(),
   footer,
+  dense,
 }: {
   tape: TapeTrade[] | undefined;
   ethUsd: number;
@@ -119,6 +120,8 @@ export function MarketMomentum({
   nowMs?: number;
   /** The insight + Case File disclosure, rendered inside the same instrument. */
   footer?: ReactNode;
+  /** Phone: believers and capital sit side by side so the market fits one screen. */
+  dense?: boolean;
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs, win), [tape, nowMs, win]);
   const { unit } = useDisplayUnit();
@@ -138,20 +141,41 @@ export function MarketMomentum({
       className="shrink-0 overflow-hidden rounded-[16px]"
       style={{ background: "var(--surface)", border: "1px solid var(--hairline)" }}
     >
-      <div className="px-4 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] sm:px-5">
-        Total market
-      </div>
-      <MomentumMetric
-        total={b.current.toLocaleString("en-US")}
-        label="Believers"
-        copy={believerCopy(b, book.window)}
-      />
-      <div className="border-t border-[var(--hairline)]" aria-hidden />
-      <MomentumMetric
-        total={money(c.current)}
-        label="Total market cap"
-        copy={capitalCopy(c, book.window, usd, money)}
-      />
+      {!dense && (
+        <div className="px-4 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] sm:px-5">
+          Total market
+        </div>
+      )}
+      {dense ? (
+        <div className="grid grid-cols-2 divide-x divide-[var(--hairline)]">
+          <MomentumMetric
+            dense
+            total={b.current.toLocaleString("en-US")}
+            label="Believers"
+            copy={believerCopy(b, book.window)}
+          />
+          <MomentumMetric
+            dense
+            total={money(c.current)}
+            label="Market cap"
+            copy={capitalCopy(c, book.window, usd, money)}
+          />
+        </div>
+      ) : (
+        <>
+          <MomentumMetric
+            total={b.current.toLocaleString("en-US")}
+            label="Believers"
+            copy={believerCopy(b, book.window)}
+          />
+          <div className="border-t border-[var(--hairline)]" aria-hidden />
+          <MomentumMetric
+            total={money(c.current)}
+            label="Total market cap"
+            copy={capitalCopy(c, book.window, usd, money)}
+          />
+        </>
+      )}
 
       {footer && (
         <>
@@ -162,3 +186,4 @@ export function MarketMomentum({
     </section>
   );
 }
+
