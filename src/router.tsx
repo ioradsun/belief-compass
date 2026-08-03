@@ -3,7 +3,27 @@ import { createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 
 export const getRouter = () => {
-  const queryClient = new QueryClient();
+  // One cache policy for the whole app, so no panel has to opt in to "don't
+  // blank on refetch". Per-query staleTime/refetchInterval still win.
+  //  • staleTime > 0        → a remount (route change, tab switch) reuses the
+  //                           cached value instead of firing a fresh request.
+  //  • long gcTime          → returning to a screen paints its last state.
+  //  • retry with backoff   → a transient failure never erases visible data
+  //                           (React Query keeps `data` through errors).
+  //  • refetchOnReconnect   → coming back online resumes silently.
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 30_000,
+        gcTime: 30 * 60_000,
+        retry: 3,
+        retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 15_000),
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
+      },
+    },
+  });
+
 
   const router = createRouter({
     routeTree,
