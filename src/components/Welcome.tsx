@@ -202,7 +202,9 @@ export function WelcomePrompt({
                   </span>
                 )}
               </div>
-              <div className="text-[10.5px] break-words text-[var(--text-muted)]">{s.blurb}</div>
+              {s.blurb && (
+                <div className="text-[10.5px] break-words text-[var(--text-muted)]">{s.blurb}</div>
+              )}
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 {s.people.map((p) => {
                   const active = peek === p.wallet;
