@@ -269,17 +269,14 @@ export function MarketMomentum({
         total={b.current.toLocaleString("en-US")}
         label="Believers"
         copy={believerCopy(b, book.window)}
-        points={b.series}
-        domain={SPARK_DOMAIN.believers}
       />
       <div className="border-t border-[var(--hairline)]" aria-hidden />
       <MomentumMetric
         total={money(c.current)}
         label="Total market cap"
         copy={capitalCopy(c, book.window, usd, money)}
-        points={c.series}
-        domain={SPARK_DOMAIN.capital}
       />
+
       {footer && (
         <>
           <div className="border-t border-[var(--hairline)]" aria-hidden />
