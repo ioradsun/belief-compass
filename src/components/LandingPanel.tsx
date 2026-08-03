@@ -211,11 +211,11 @@ export function LandingPanel({
                   },
                   {
                     k: "Back your side",
-                    v: "Choose YES or NO and take a position behind your conviction.",
+                    v: "Take a position and back your conviction.",
                   },
                   {
                     k: "Benefit if it grows",
-                    v: "Your position can grow when more capital backs your side.",
+                    v: "More capital, bigger position.",
                   },
                 ].map((b) => (
                   <div key={b.k} className="min-w-0">

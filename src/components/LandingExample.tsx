@@ -131,8 +131,7 @@ export function LandingExampleCard({
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
-        Illustrative values only. Actual position value depends on entry price, market demand, fees,
-        and exit timing.
+        Illustrative values only.
       </p>
     </div>
   );
