@@ -144,8 +144,9 @@ function momentumBeat(input: StoryInput): StoryBeat | null {
 const LABEL_TEXT: Record<NetworkLabel, string> = {
   twin: "Twin",
   tribe: "Tribe",
-  opp: "Opp",
-  inverse: "Inverse",
+  // One vocabulary: a mid-tier opposite is a Rival; the strongest is an Opp.
+  opp: "Rival",
+  inverse: "Opp",
 };
 const isAligned = (l: NetworkLabel) => l === "twin" || l === "tribe";
 // Prominence when picking the single lead face.
@@ -176,10 +177,10 @@ function relationshipBeat(network: NetworkFace[]): StoryBeat | null {
       text = `${lead.name} (your Tribe) backed ${lead.side}`;
       break;
     case "opp":
-      text = `Your Opp ${lead.name} is on ${lead.side}`;
+      text = `Your Rival ${lead.name} is on ${lead.side}`;
       break;
     default:
-      text = `Your Inverse ${lead.name} backed ${lead.side}`;
+      text = `Your Opp ${lead.name} backed ${lead.side}`;
   }
   return { kind: "relationship", text, tone };
 }
@@ -288,8 +289,8 @@ const sideTone = (side: Side | null, negative = false): BeatTone =>
 const REL_HEADLINE: Record<NetworkLabel, string> = {
   twin: "YOUR TWIN",
   tribe: "YOUR TRIBE",
-  opp: "YOUR OPP",
-  inverse: "YOUR INVERSE",
+  opp: "YOUR RIVAL",
+  inverse: "YOUR OPP",
 };
 
 /** The side-blind body for a network member's move — never names their side. */

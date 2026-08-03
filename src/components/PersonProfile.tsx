@@ -1,13 +1,27 @@
 /**
- * CENTER — person profile. Explains "me ↔ person", mirroring market detail's
- * hierarchy: relationship summary → strongest domains → shared beliefs → opposing
- * beliefs → recent activity. Server-owned via getPersonProfile; market rows open
- * the market in the center.
+ * COMPARE DNA — you ↔ this person, told as a social story, not a stat sheet.
+ *
+ * The magic isn't the percentage; it's seeing exactly WHICH beliefs connect two
+ * people. So the header states the relationship honestly (earned Twin/Opp, a
+ * mature % with its evidence, or early counts), then the page shows your
+ * strongest common ground and divide, the markets you both backed, the ones you
+ * split on, and — where it exists — a per-topic breakdown.
+ *
+ * Presentation only: getPersonProfile owns the comparison; the pure
+ * src/domain/relationship engine turns it into one consistent story.
  */
 import { useQuery } from "@tanstack/react-query";
 import { getPersonProfile } from "@/lib/dna.functions";
-import { RELATIONSHIP_TEXT, EVIDENCE_TEXT, relationshipTone, ago } from "@/lib/dna-labels";
+import { ago } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
+import {
+  presentRelationship,
+  relationshipInsight,
+  relationshipSupport,
+  relationshipBreakdown,
+  relationshipTopicLine,
+  relationshipLabel,
+} from "@/domain/relationship";
 
 export function PersonProfile({
   wallet,
@@ -28,39 +42,65 @@ export function PersonProfile({
     return <div className="h-40 animate-pulse rounded-xl bg-[var(--surface-2)]" />;
   }
 
-  const tone = relationshipTone(data.relationship);
-  const rel = RELATIONSHIP_TEXT[data.relationship];
+  const rel = presentRelationship({
+    agreement: data.agreement,
+    sharedConvictions: data.sharedBeliefs,
+    together: data.together,
+    apart: data.apart,
+    topicCount: data.topicCount,
+    strongestAlignedTopic: data.alignedDomains[0]?.domain ?? null,
+    strongestOpposedTopic: data.opposedDomains[0]?.domain ?? null,
+  });
+  const label = data.hasViewer ? relationshipLabel(rel) : null;
+  const insightColor = rel.group === "rival" ? "var(--no)" : "var(--yes)";
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <header className="flex items-center gap-3">
+      {/* Header — YOU + PERSON, and the relationship in one honest line. */}
+      <header className="flex items-start gap-3">
         {data.avatarUrl ? (
-          <img src={data.avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover" />
+          <img
+            src={data.avatarUrl}
+            alt=""
+            className="h-12 w-12 shrink-0 rounded-full object-cover"
+          />
         ) : (
           <span
-            className="grid h-12 w-12 place-items-center rounded-full text-sm font-semibold text-white"
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-semibold text-white"
             style={{ background: `hsl(${hueFor(data.wallet)} 45% 45%)` }}
             aria-hidden
           >
             {initialsFor(data.displayName)}
           </span>
         )}
-        <div className="min-w-0">
-          <div className="truncate text-lg font-semibold text-[var(--text)]">
-            {data.displayName}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-lg font-semibold text-[var(--text)]">
+              {data.displayName}
+            </span>
+            {label && (
+              <span
+                className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
+                style={{
+                  color: label.tone === "opposed" ? "var(--no)" : "var(--yes)",
+                  background:
+                    label.kind === "provisional"
+                      ? "transparent"
+                      : `color-mix(in oklab, ${label.tone === "opposed" ? "var(--no)" : "var(--yes)"} 14%, transparent)`,
+                  border: label.kind === "provisional" ? "1px solid var(--border)" : undefined,
+                }}
+              >
+                {label.text}
+              </span>
+            )}
           </div>
           {data.hasViewer ? (
-            <div className="num mt-0.5 flex items-center gap-2 text-[13px] text-[var(--text-secondary)]">
-              <span
-                className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                style={{ color: tone.fg, background: tone.bg }}
-              >
-                {rel}
+            <div className="mt-1 flex items-baseline gap-1.5">
+              <span className="num text-[15px] font-semibold" style={{ color: insightColor }}>
+                {relationshipInsight(rel)}
               </span>
-              <span>{data.agreement}%</span>
-              <span className="text-[var(--text-muted)]">
-                {data.sharedBeliefs} shared · {EVIDENCE_TEXT[data.evidenceLevel]}
+              <span className="text-[12px] text-[var(--text-muted)]">
+                · {relationshipSupport(rel)}
               </span>
             </div>
           ) : (
@@ -71,38 +111,65 @@ export function PersonProfile({
 
       {data.hasViewer && (
         <>
-          <p className="max-w-prose text-[14px] leading-relaxed text-[var(--text-secondary)]">
-            {data.summary}
-          </p>
-
-          {(data.alignedDomains.length > 0 || data.opposedDomains.length > 0) && (
-            <div className="grid gap-6 sm:grid-cols-2">
-              {data.alignedDomains.length > 0 && (
-                <DomainList title="Where you align" items={data.alignedDomains} tone="var(--yes)" />
-              )}
-              {data.opposedDomains.length > 0 && (
-                <DomainList title="Where you differ" items={data.opposedDomains} tone="var(--no)" />
-              )}
-            </div>
+          {/* Together / Apart — the shape of the relationship at a glance. */}
+          <div className="grid grid-cols-2 gap-3">
+            <Stat
+              label="Together"
+              value={data.together}
+              tone="var(--yes)"
+              sub={
+                rel.strongestAlignedTopic ? `Strongest: ${rel.strongestAlignedTopic}` : undefined
+              }
+            />
+            <Stat
+              label="Apart"
+              value={data.apart}
+              tone="var(--no)"
+              sub={
+                rel.strongestOpposedTopic ? `Strongest: ${rel.strongestOpposedTopic}` : undefined
+              }
+            />
+          </div>
+          {rel.tier === "mature" && relationshipTopicLine(rel) && (
+            <p className="text-[12px] text-[var(--text-muted)]">
+              {relationshipBreakdown(rel)} · {relationshipTopicLine(rel)}
+            </p>
           )}
 
+          {/* Per-topic breakdown, where the evidence exists. */}
+          {(data.alignedDomains.length > 0 || data.opposedDomains.length > 0) && (
+            <section>
+              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                By topic
+              </h3>
+              <ul className="space-y-1.5">
+                {[...data.alignedDomains, ...data.opposedDomains]
+                  .sort((a, b) => b.agreement - a.agreement)
+                  .map((d) => (
+                    <TopicRow key={d.domain} domain={d.domain} agreement={d.agreement} />
+                  ))}
+              </ul>
+            </section>
+          )}
+
+          {/* The 23andMe moment: the actual beliefs that connect or divide you. */}
           <BeliefSection
-            title="Shared beliefs"
+            title="You both backed"
             markets={data.sharedBoth}
             onSelectMarket={onSelectMarket}
             render={(m) => (
               <>
-                You both back <SideTag side={m.viewerSide} />
+                Both <SideTag side={m.viewerSide} />
               </>
             )}
           />
           <BeliefSection
-            title="Opposing beliefs"
+            title="You split on"
             markets={data.opposing}
             onSelectMarket={onSelectMarket}
             render={(m) => (
               <>
-                You <SideTag side={m.viewerSide} /> · they <SideTag side={m.personSide} />
+                You <SideTag side={m.viewerSide} /> · them <SideTag side={m.personSide} />
               </>
             )}
           />
@@ -133,39 +200,62 @@ export function PersonProfile({
   );
 }
 
+function Stat({
+  label,
+  value,
+  tone,
+  sub,
+}: {
+  label: string;
+  value: number;
+  tone: string;
+  sub?: string;
+}) {
+  return (
+    <div
+      className="rounded-[12px] px-3.5 py-2.5"
+      style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
+        {label}
+      </div>
+      <div className="num text-[22px] font-semibold leading-tight" style={{ color: tone }}>
+        {value}
+      </div>
+      {sub && <div className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{sub}</div>}
+    </div>
+  );
+}
+
+/** One topic as a mini alignment bar — green toward aligned, red toward opposite. */
+function TopicRow({ domain, agreement }: { domain: string; agreement: number }) {
+  const aligned = agreement >= 50;
+  const tone = aligned ? "var(--yes)" : "var(--no)";
+  const label = aligned ? `${agreement}% aligned` : `${100 - agreement}% opposite`;
+  return (
+    <li className="flex items-center gap-3">
+      <span className="w-24 shrink-0 truncate text-[13px] text-[var(--text)]">{domain}</span>
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--bg)]">
+        <span
+          className="block h-full rounded-full"
+          style={{ width: `${Math.max(4, agreement)}%`, background: tone }}
+        />
+      </span>
+      <span
+        className="num w-20 shrink-0 text-right text-[12px] font-semibold"
+        style={{ color: tone }}
+      >
+        {label}
+      </span>
+    </li>
+  );
+}
+
 function SideTag({ side }: { side: "YES" | "NO" }) {
   return (
     <span style={{ color: side === "YES" ? "var(--yes)" : "var(--no)" }} className="font-semibold">
       {side}
     </span>
-  );
-}
-
-function DomainList({
-  title,
-  items,
-  tone,
-}: {
-  title: string;
-  items: { domain: string; agreement: number }[];
-  tone: string;
-}) {
-  return (
-    <div>
-      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-        {title}
-      </h3>
-      <ul className="space-y-1">
-        {items.map((d) => (
-          <li key={d.domain} className="flex items-center justify-between text-[13px]">
-            <span className="text-[var(--text)]">{d.domain}</span>
-            <span className="num tabular-nums" style={{ color: tone }}>
-              {d.agreement}%
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 
@@ -197,10 +287,12 @@ function BeliefSection({
             <button
               type="button"
               onClick={() => onSelectMarket(Number(m.marketId))}
-              className="block w-full rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-2)]"
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-2)]"
             >
-              <span className="text-[13px] text-[var(--text)]">{m.title}</span>
-              <span className="ml-2 text-[11px] text-[var(--text-muted)]">{render(m)}</span>
+              <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text)]">
+                {m.title}
+              </span>
+              <span className="shrink-0 text-[11px] text-[var(--text-muted)]">{render(m)}</span>
             </button>
           </li>
         ))}

@@ -57,17 +57,18 @@ export function SharedConviction({
   if (!viewerWallet || here.length === 0) return null;
 
   const twin = here.find((p) => p.relationship === "twin");
-  const opp = here.find((p) => p.relationship === "opp");
-  const tribe = here.filter((p) => p.relationship === "tribe");
+  const rival = here.find((p) => p.relationship === "opp" || p.relationship === "inverse");
+  const tribe = here.filter((p) => p.relationship === "tribe" || p.relationship === "twin");
 
   // One line, strongest signal first — never a side, never a number of shares.
+  // (Side-blind by design: who is here, not which way they went.)
   const headline = twin
-    ? "A possible Conviction Twin is in this market"
+    ? "Your Twin is in this market"
     : tribe.length > 0
-      ? `${tribe.length} ${tribe.length === 1 ? "person" : "people"} in your Tribe ${tribe.length === 1 ? "is" : "are"} participating`
-      : opp
-        ? "One of your Opps has a position here"
-        : `${here.length} ${here.length === 1 ? "person" : "people"} you match with ${here.length === 1 ? "is" : "are"} here`;
+      ? `${tribe.length} ${tribe.length === 1 ? "person" : "people"} from your Tribe ${tribe.length === 1 ? "is" : "are"} here`
+      : rival
+        ? "One of your Rivals is here"
+        : `${here.length} ${here.length === 1 ? "person" : "people"} from your circle ${here.length === 1 ? "is" : "are"} here`;
 
   const faces = here.slice(0, 3);
   const extra = here.length - faces.length;

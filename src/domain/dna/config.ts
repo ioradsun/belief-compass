@@ -57,6 +57,43 @@ export const DNA_THRESHOLDS: DnaThresholdConfig = {
 export const DOMAIN_MIN_SHARED = 5;
 
 /**
+ * EARNED top-tier relationship labels — Twin (proven alike) and Opp (proven
+ * opposite). These are NOT navigation; they are rare, hard-won badges. A label is
+ * earned only when alignment, evidence AND topic breadth all clear the bar, so
+ * "4 agreements out of 4" can never mint a Twin. One owner for these thresholds.
+ */
+export interface EarnedLabelConfig {
+  /** Alignment (for twin) or opposition (for opp), 0–100. */
+  minStrength: number;
+  /** Minimum shared directional convictions (evidence). */
+  minShared: number;
+  /** Minimum distinct belief topics compared (breadth). */
+  minTopics: number;
+  /** Minimum confidence (evidence-depth shrink). */
+  minConfidence: number;
+}
+
+export const EARNED_LABELS: { twin: EarnedLabelConfig; opp: EarnedLabelConfig } = {
+  twin: { minStrength: 90, minShared: 15, minTopics: 3, minConfidence: 0.65 },
+  opp: { minStrength: 85, minShared: 15, minTopics: 3, minConfidence: 0.65 },
+};
+
+/**
+ * Evidence floor to appear in the primary Tribe / Rivals lists at all. Below this
+ * there's no shared history worth a relationship — the person is search-only.
+ * Deliberately low so a thin viewer's People are never empty, while the mature
+ * percentage (and earned labels) still wait for real evidence.
+ */
+export const RELATIONSHIP_LIST_MIN_SHARED = 1;
+
+/**
+ * At/above this many shared convictions a relationship is "mature" enough to lead
+ * with a percentage; below it we show honest counts (together/apart) instead of
+ * false precision. Aligns with evidenceLevelFor's growing/established tiers.
+ */
+export const MATURE_MIN_SHARED = 10;
+
+/**
  * "Closest people" floor — the graceful fallback when no one crosses a real
  * relationship band yet. Anyone sharing at least this many directional beliefs is
  * eligible to appear as a closest match, so a new/thin viewer's Network is never

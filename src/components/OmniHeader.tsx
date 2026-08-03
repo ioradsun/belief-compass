@@ -11,7 +11,12 @@ import { useQuery } from "@tanstack/react-query";
 import { getNetwork } from "@/lib/dna.functions";
 import { searchMarkets } from "@/lib/markets.functions";
 import { composeMarketRow } from "@/domain/market-row";
-import { personStory } from "@/domain/person-story";
+import {
+  presentRelationship,
+  relationshipInsight,
+  relationshipSupport,
+  relationshipLabel,
+} from "@/domain/relationship";
 
 export type Lens = "all" | "hot" | "early" | "hidden" | "contested" | "conviction" | "new";
 
@@ -517,22 +522,19 @@ export function OmniHeader({
               </p>
               {visiblePeople.map((p, i) => {
                 const idx = visibleMarkets.length + i;
-                // What a searcher wants about a person: their relationship to YOU,
-                // in words — not a bare "34%". The pure engine names it and says why.
-                const story = personStory({
-                  relationship: p.relationship,
-                  evidence: p.evidenceLevel,
+                // What a searcher wants about a person: their relationship to YOU
+                // — the same honest story the People page tells, not a bare "34%".
+                const rel = presentRelationship({
                   agreement: p.agreement,
-                  sharedBeliefs: p.sharedBeliefs,
-                  alignedDomain: p.strongestAlignedDomain?.name ?? null,
-                  opposedDomain: p.strongestOpposedDomain?.name ?? null,
+                  sharedConvictions: p.sharedBeliefs,
+                  together: p.together,
+                  apart: p.apart,
+                  topicCount: p.topicCount,
+                  strongestAlignedTopic: p.strongestAlignedDomain?.name ?? null,
+                  strongestOpposedTopic: p.strongestOpposedDomain?.name ?? null,
                 });
-                const toneFg =
-                  story.tone === "aligned"
-                    ? "var(--yes)"
-                    : story.tone === "opposed"
-                      ? "var(--no)"
-                      : "var(--text-muted)";
+                const label = relationshipLabel(rel);
+                const toneFg = rel.group === "rival" ? "var(--no)" : "var(--yes)";
                 return (
                   <button
                     key={p.wallet}
@@ -556,18 +558,26 @@ export function OmniHeader({
                         {p.displayName}
                       </span>
                       <span className="block truncate text-[11px] text-[var(--text-muted)]">
-                        {story.sentence}
+                        <span style={{ color: toneFg }}>{relationshipInsight(rel)}</span> ·{" "}
+                        {relationshipSupport(rel)}
                       </span>
                     </span>
-                    <span
-                      className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
-                      style={{
-                        color: toneFg,
-                        background: `color-mix(in oklab, ${toneFg} 14%, transparent)`,
-                      }}
-                    >
-                      {story.stageLabel}
-                    </span>
+                    {label && (
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
+                        style={{
+                          color: toneFg,
+                          background:
+                            label.kind === "provisional"
+                              ? "transparent"
+                              : `color-mix(in oklab, ${toneFg} 14%, transparent)`,
+                          border:
+                            label.kind === "provisional" ? "1px solid var(--border)" : undefined,
+                        }}
+                      >
+                        {label.text}
+                      </span>
+                    )}
                   </button>
                 );
               })}

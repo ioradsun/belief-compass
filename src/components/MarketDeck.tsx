@@ -57,6 +57,7 @@ import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { OrderTicket } from "@/components/order/OrderTicket";
 import { StandOnIt } from "@/components/StandOnIt";
 import { ShareImpact } from "@/components/ShareImpact";
+import { MovementLine } from "@/components/MovementLine";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
 import { getConvictionMarket } from "@/lib/market-create.functions";
@@ -536,89 +537,93 @@ export function MarketDeck({
         so hover/touch/focus here starts the wallet chunks before the click. */}
       <div className="shrink-0 space-y-3 pb-[env(safe-area-inset-bottom)]" {...walletIntent}>
         {/* One composed instrument: analysis rail → divider → the controls. */}
-        <div
-          className="overflow-hidden rounded-[16px]"
-          style={{ background: "var(--surface)" }}
-        >
+        <div className="overflow-hidden rounded-[16px]" style={{ background: "var(--surface)" }}>
           {onToggleCase && !storySide && !mobileCaseOpen && (
             <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
           )}
 
           {held && sellPct != null ? (
-
-          <OrderTicket
-            mode="sell"
-            held={held}
-            pct={sellPct}
-            setPct={setSellPct}
-            proceeds={proceeds}
-            quoting={sellQuoting}
-            ethUsd={ethUsd}
-            worthUsd={heldSideData?.worth ?? null}
-            ready={ready}
-            trade={trade}
-            onConfirm={onSellConfirm}
-            onCancel={closeSell}
-            onDone={() => {
-              void bal.refetch();
-              closeSell();
-            }}
-          />
-        ) : held && !buyMore ? (
-          /* State 2 — you own this market: manage the position. The first choice
+            <OrderTicket
+              mode="sell"
+              held={held}
+              pct={sellPct}
+              setPct={setSellPct}
+              proceeds={proceeds}
+              quoting={sellQuoting}
+              ethUsd={ethUsd}
+              worthUsd={heldSideData?.worth ?? null}
+              ready={ready}
+              trade={trade}
+              onConfirm={onSellConfirm}
+              onCancel={closeSell}
+              onDone={() => {
+                void bal.refetch();
+                closeSell();
+              }}
+            />
+          ) : held && !buyMore ? (
+            /* State 2 — you own this market: manage the position. The first choice
             is only Sell or Buy More; each hands off to the same OrderTicket. */
-          <PositionActions
-            side={held.side}
-            onSell={openSell}
-            onBuyMore={() => {
-              trade.reset();
-              setBuyMore(true);
-              setSide(held.side); // preselect the side you already own
-            }}
-          />
-        ) : (
-          /* State 1 — discovery buy (NO / PASS / YES), OR Buy More with your side
+            <PositionActions
+              side={held.side}
+              onSell={openSell}
+              onBuyMore={() => {
+                trade.reset();
+                setBuyMore(true);
+                setSide(held.side); // preselect the side you already own
+              }}
+            />
+          ) : (
+            /* State 1 — discovery buy (NO / PASS / YES), OR Buy More with your side
             preselected. Same OrderTicket either way; only the initial state differs. */
-          <OrderTicket
-            mode="buy"
-            side={side}
-            amount={amount}
-            setAmount={setAmount}
-            onSelect={(s) => {
-              trade.reset();
-              chooseSide(s);
-            }}
-            onCancel={() => {
-              setSide(null);
-              if (held) setBuyMore(false); // back to the position summary
-            }}
-            onPass={() => choosePass()}
-            quote={quote}
-            quoting={quoting}
-            ethWei={ethWei}
-            ethUsd={ethUsd}
-            ready={ready}
-            trade={trade}
-            onConfirm={async () => {
-              if (!ready.connected) return requestConnect();
-              if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
-              if (side && quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
-                try {
-                  await trade.buy(marketId, side === "YES", ethWei, quote.tokens);
-                } catch {
-                  /* surfaced via trade.error */
+            <OrderTicket
+              mode="buy"
+              side={side}
+              amount={amount}
+              setAmount={setAmount}
+              onSelect={(s) => {
+                trade.reset();
+                chooseSide(s);
+              }}
+              onCancel={() => {
+                setSide(null);
+                if (held) setBuyMore(false); // back to the position summary
+              }}
+              onPass={() => choosePass()}
+              quote={quote}
+              quoting={quoting}
+              ethWei={ethWei}
+              ethUsd={ethUsd}
+              ready={ready}
+              trade={trade}
+              onConfirm={async () => {
+                if (!ready.connected) return requestConnect();
+                if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
+                if (side && quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
+                  try {
+                    await trade.buy(marketId, side === "YES", ethWei, quote.tokens);
+                  } catch {
+                    /* surfaced via trade.error */
+                  }
                 }
-              }
-            }}
-            onDone={() => {
-              void bal.refetch();
-              onSkip();
-            }}
-          />
+              }}
+              onDone={() => {
+                void bal.refetch();
+                onSkip();
+              }}
+            />
           )}
         </div>
 
-
+        {/* Once you've backed a side, the movement it belongs to — and how close
+          it is to its next stage. Believers only; a whale can't fake a crowd. */}
+        {held && (
+          <MovementLine
+            believers={Number(held.side === "YES" ? rr.believers_yes : rr.believers_no) || 0}
+            side={held.side}
+            className="mt-2"
+          />
+        )}
 
         {/* The payoff for standing on it: what your link has brought in. Only
           renders once it's real (a believer, not just an open). */}
@@ -837,8 +842,6 @@ function ExamineCta({
     </button>
   );
 }
-
-
 
 /** A quiet hairline between the center's sections — the reading path, not a card. */
 function Hairline() {

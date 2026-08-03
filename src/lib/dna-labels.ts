@@ -7,12 +7,15 @@
  */
 import type { EvidenceLevel, RelationshipLabel } from "@/domain/dna/config";
 
+// One vocabulary across the app: Tribe/Rivals are the groups; Twin/Opp are the
+// earned top tiers. The engine's mid-tier "opp" reads as a Rival; the strong
+// "inverse" tier reads as the earned Opp.
 export const RELATIONSHIP_TEXT: Record<RelationshipLabel, string> = {
   twin: "Twin",
   tribe: "Tribe",
   neutral: "Neutral",
-  opp: "Opp",
-  inverse: "Inverse",
+  opp: "Rival",
+  inverse: "Opp",
   insufficient: "—",
 };
 

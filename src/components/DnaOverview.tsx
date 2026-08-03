@@ -60,10 +60,10 @@ export function DnaOverview({
 
       {/* Relationship counts */}
       <div className="flex flex-wrap gap-4 text-[13px]">
-        <Count n={data.counts.twin} label="Twin" />
+        <Count n={data.counts.twin} label="Twins" />
         <Count n={data.counts.tribe} label="Tribe" />
-        <Count n={data.counts.opp} label="Opps" />
-        <Count n={data.counts.inverse} label="Inverse" />
+        <Count n={data.counts.opp} label="Rivals" />
+        <Count n={data.counts.inverse} label="Opps" />
       </div>
 
       {/* Closest people */}

@@ -188,6 +188,10 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
   const closestPool: CachedRelationship[] = [];
   let scored = 0;
 
+  // The viewer's own markets — used to count how many distinct TOPICS a
+  // relationship spans (breadth), which the earned Twin/Opp labels require.
+  const viewerMarketIds = new Set(viewerFactors.map((f) => String(f.marketId)));
+
   for (const [wallet, factors] of candidateFactors) {
     const s = scoreRelationship(viewerFactors, factors);
     scored += 1;
@@ -199,12 +203,21 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
 
     const domains = scoreDomains(viewerFactors, factors, domainOf);
     const { aligned, opposed } = splitDomains(domains, 1);
+    // Breadth: distinct topics among the markets BOTH hold — evidence quality,
+    // not just quantity (a Twin must span topics, not repeat one).
+    const topics = new Set<string>();
+    for (const f of factors) {
+      if (!viewerMarketIds.has(String(f.marketId))) continue;
+      const d = domainOf(f.marketId);
+      if (d) topics.add(d);
+    }
     const row: CachedRelationship = {
       wallet,
       agreement: Math.round(s.agreement),
       sharedBeliefs: s.sharedBeliefs,
       sameSideBeliefs: s.sameSideBeliefs,
       oppositeSideBeliefs: s.oppositeSideBeliefs,
+      topicCount: topics.size,
       confidence: s.confidence,
       evidenceLevel: s.evidenceLevel,
       // Un-banded people read as "neutral" (some overlap, no strong signal yet).
