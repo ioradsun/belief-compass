@@ -151,7 +151,7 @@ export function LandingPanel({
                   </h1>
 
                   <p className="mt-3 text-[19px] leading-snug text-[var(--text)] sm:text-[23px]">
-                    Back what you believe and find your people.
+                    Back what you believe and find your tribe.
                   </p>
 
                   <p className="mt-3 max-w-[46ch] text-[15px] leading-relaxed text-[var(--text-secondary)] sm:text-[17px]">
