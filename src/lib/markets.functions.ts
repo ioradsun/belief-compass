@@ -341,6 +341,8 @@ export interface MarketSearchHit {
   category: string | null;
   believers: number;
   yesPrice: number | null;
+  /** Money-weighted YES share, 0–100, or null when unpriced — the current split. */
+  yesPct: number | null;
 }
 
 /** Escape ilike wildcards so user input matches literally. */
@@ -364,7 +366,7 @@ export const searchMarkets = createServerFn({ method: "GET" })
     const { data: rows } = await sb
       .from("market_state")
       .select(
-        "onchain_id, believers_yes, believers_no, yes_price_usd, markets:onchain_id!inner ( title, category )",
+        "onchain_id, believers_yes, believers_no, yes_price_usd, money_yes_pct, markets:onchain_id!inner ( title, category )",
       )
       .ilike("markets.title", like)
       .order("directional_believers", { ascending: false, nullsFirst: false })
@@ -377,6 +379,7 @@ export const searchMarkets = createServerFn({ method: "GET" })
         believers_yes: number | null;
         believers_no: number | null;
         yes_price_usd: number | null;
+        money_yes_pct: number | null;
         markets: { title: string | null; category: string | null } | null;
       }>
     )
@@ -388,6 +391,10 @@ export const searchMarkets = createServerFn({ method: "GET" })
           category: r.markets?.category ?? null,
           believers: (Number(r.believers_yes) || 0) + (Number(r.believers_no) || 0),
           yesPrice: r.yes_price_usd == null ? null : Number(r.yes_price_usd),
+          yesPct:
+            r.money_yes_pct == null || !Number.isFinite(Number(r.money_yes_pct))
+              ? null
+              : Number(r.money_yes_pct),
           _prefix: title.toLowerCase().startsWith(lower) ? 1 : 0,
         };
       })
@@ -900,7 +907,6 @@ export const getWallet = createServerFn({ method: "GET" })
         /* best-effort: the card falls back to the plain believer count */
       }
     }
-
 
     // POV is the authority on what a position is worth right now (it prices the
     // wallet's own tokens). Refresh live, best-effort: if POV is slow or down we
