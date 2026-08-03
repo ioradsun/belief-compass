@@ -12,25 +12,16 @@
  * roster ordering from the pure src/domain/case-file engine.
  */
 import { useMemo } from "react";
-import { setDeckLens, useDeckLens } from "@/lib/deck-lens";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getMarketChange, getMarketBaselines, type VolumeWindow } from "@/lib/markets.functions";
 import { windowChange } from "@/domain/window-change";
-import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useMoney } from "@/lib/display-unit";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { timelineEvents } from "@/domain/conviction-series";
-import {
-  LENS_META,
-  lensColdStart,
-  lensFacts,
-  lensMarkers,
-  lensStory,
-  type LensMetric,
-} from "@/domain/side-lens";
+import { LENS_META, lensFacts, lensStory, type LensMetric } from "@/domain/side-lens";
 import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT } from "@/domain/market-flow";
 export { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow } from "@/lib/deck-window";
