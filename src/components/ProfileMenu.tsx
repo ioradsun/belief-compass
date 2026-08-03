@@ -31,6 +31,8 @@ import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 import { requestDisconnect, requestSwitchAccount } from "@/lib/connect-bridge";
 import { useMoney } from "@/lib/display-unit";
 import { formatUsdPrice } from "@/domain/money";
+import { setTheme, useTheme } from "@/lib/theme";
+
 
 /** Base is the one chain this app trades on. */
 const NETWORK = "Base";
