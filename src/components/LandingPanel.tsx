@@ -155,7 +155,7 @@ export function LandingPanel({
                   </p>
 
                   <p className="mt-3 max-w-[46ch] text-[15px] leading-relaxed text-[var(--text-secondary)] sm:text-[17px]">
-                    Back YES or NO. When more capital backs your side, your position can grow.
+                    Pick a side. As capital joins yours, your position grows.
                   </p>
 
                   <p className="mt-1.5 text-[13px] text-[var(--text-muted)]">
@@ -199,39 +199,9 @@ export function LandingPanel({
                 </div>
               </div>
 
-              {/* three-part explanation — text, not feature cards */}
-              <div
-                className="mt-6 grid gap-4 pt-5 sm:grid-cols-3 lg:mt-8"
-                style={{ borderTop: "1px solid var(--hairline)" }}
-              >
-                {[
-                  {
-                    k: "Find your people",
-                    v: "See who repeatedly backs the same beliefs you do.",
-                  },
-                  {
-                    k: "Back your side",
-                    v: "Take a position and back your conviction.",
-                  },
-                  {
-                    k: "Benefit if it grows",
-                    v: "More capital, bigger position.",
-                  },
-                ].map((b) => (
-                  <div key={b.k} className="min-w-0">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text)]">
-                      {b.k}
-                    </div>
-                    <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">
-                      {b.v}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
               {/* trust strip */}
               <div
-                className="mt-5 grid grid-cols-2 gap-x-6 gap-y-2 pt-4 text-[12px] text-[var(--text-muted)] sm:flex sm:flex-wrap sm:items-center sm:gap-x-8"
+                className="mt-6 grid grid-cols-2 gap-x-6 gap-y-2 pt-4 text-[12px] text-[var(--text-muted)] sm:flex sm:flex-wrap sm:items-center sm:gap-x-8 lg:mt-8"
                 style={{ borderTop: "1px solid var(--hairline)" }}
               >
                 <span>Built on Base</span>
