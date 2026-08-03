@@ -305,20 +305,23 @@ export function CaseColumn({
               {recent.map((e) => (
                 <li key={e.id} className="flex items-center gap-2 text-[12px]">
                   <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
-                    {e.name}
+                    <span className="text-[var(--text)]">{e.name}</span>{" "}
+                    <span style={{ color: e.action === "BUY" ? color : "var(--text-muted)" }}>
+                      {e.action === "BUY" ? "bought" : "sold"}
+                    </span>{" "}
+                    <span className="num font-semibold text-[var(--text)]">
+                      {format(e.eth, "ETH")}
+                    </span>
                   </span>
-                  <span
-                    className="num shrink-0 font-semibold"
-                    style={{ color: e.action === "BUY" ? color : "var(--text-muted)" }}
-                  >
-                    {e.action === "BUY" ? "+" : "−"}
-                    {format(e.eth, "ETH")}
+                  <span className="num shrink-0 text-[10px] text-[var(--text-muted)]">
+                    {timeAgo(e.t)}
                   </span>
                 </li>
               ))}
             </ul>
           )}
         </div>
+
 
         {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}
         <CaseRoster side={side} believers={believers} people={net?.people} />
