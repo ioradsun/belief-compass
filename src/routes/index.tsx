@@ -99,6 +99,8 @@ import { useAccount } from "wagmi";
 import { usePositionStream } from "@/lib/realtime/use-position-stream";
 import { usePredictivePrefetch } from "@/lib/realtime/use-predictive-prefetch";
 import { useIsDesktop } from "@/hooks/use-mobile";
+import { registerPersonFocus } from "@/lib/person-focus";
+
 import { LandingPanel } from "@/components/LandingPanel";
 import { useLandingPanelState } from "@/hooks/useLandingPanelState";
 import { useDeckWindow } from "@/lib/deck-window";
