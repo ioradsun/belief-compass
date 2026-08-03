@@ -244,22 +244,8 @@ function MatchStrip({
         tribe ? "bg-violet-500/10" : "bg-red-500/10"
       }`}
     >
-      {person.pfpUrl ? (
-        <img
-          src={person.pfpUrl}
-          alt={name}
-          loading="lazy"
-          className="h-4 w-4 shrink-0 rounded-full object-cover"
-        />
-      ) : (
-        <span
-          className="h-4 w-4 shrink-0 rounded-full text-center text-[8px] font-semibold leading-4 text-white"
-          style={{ background: `hsl(${hueFor(person.wallet)} 55% 45%)` }}
-          aria-hidden
-        >
-          {initialsFor(name)}
-        </span>
-      )}
+      <PersonAvatar wallet={person.wallet} name={name} avatarUrl={person.pfpUrl} size={16} />
+
       <span
         className={`shrink-0 font-semibold uppercase tracking-wide ${
           tribe ? "text-violet-600" : "text-red-600"
