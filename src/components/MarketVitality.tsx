@@ -217,7 +217,7 @@ function MomentumMetric({
 }) {
   const tone = dirTone(copy.direction);
   const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
-  const trend = copy.pct ?? (copy.direction === "flat" ? "0%" : "");
+  const trend = copy.trend;
   return (
     <div className="px-4 py-3 sm:px-5">
       <div className="flex items-baseline justify-between gap-4">
