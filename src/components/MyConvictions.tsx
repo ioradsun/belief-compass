@@ -108,8 +108,8 @@ function ConvictionCard({
     <button
       type="button"
       onClick={() => onSelect(p.id)}
-      className="block w-full rounded-[14px] p-3.5 text-left transition-colors hover:border-[var(--text-muted)]/40"
-      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+      className="block w-full rounded-[14px] p-3.5 text-left transition-colors hover:bg-[var(--surface-2)]"
+      style={{ background: "var(--surface)" }}
     >
       {/* 1 — What do I believe? (largest). pr-9 reserves the corner for the
         always-present "Stand on it" share control layered above the card. */}

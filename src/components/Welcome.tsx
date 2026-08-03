@@ -174,7 +174,7 @@ export function WelcomePrompt({
     <>
       <div
         className="mb-4 rounded-[14px] px-3.5 py-3"
-        style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
+        style={{ background: "var(--surface)" }}
       >
         <div className="flex items-start gap-2.5">
           <span className="mt-[1px] text-[17px] leading-none" aria-hidden>
@@ -232,8 +232,7 @@ export function WelcomePrompt({
                 className="grid h-[32px] shrink-0 place-items-center rounded-full px-2 text-[11px] font-semibold text-[var(--text-secondary)]"
                 style={{
                   marginLeft: overlap,
-                  border: "1px solid var(--border)",
-                  background: "var(--surface)",
+                  background: "var(--surface-2)",
                 }}
               >
                 +{hidden}
@@ -254,7 +253,7 @@ export function WelcomePrompt({
         {peeked && (
           <div
             className="mt-2 rounded-[10px] px-2.5 py-2"
-            style={{ border: "1px solid var(--border)", background: "var(--surface-2,transparent)" }}
+            style={{ background: "var(--surface-2)" }}
           >
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
@@ -292,7 +291,7 @@ export function WelcomePrompt({
           />
           <div
             className="relative z-10 flex max-h-[80vh] w-full max-w-[420px] flex-col rounded-t-[18px] sm:rounded-[18px]"
-            style={{ background: "var(--panel,var(--bg))", border: "1px solid var(--border)" }}
+            style={{ background: "var(--panel,var(--bg))", boxShadow: "0 -12px 40px rgba(0,0,0,.35)" }}
           >
             <div className="px-4 pb-2 pt-4">
               <div className="text-[15px] font-semibold text-[var(--text)]">Today's room</div>
