@@ -90,7 +90,9 @@ export function CaseColumn({
   // Trade sizes are ETH-native; without a live rate we still show the ETH figure
   // rather than an empty dash, so activity always carries an amount.
   const tradeAmount = (eth: number) =>
-    rateUsd > 0 ? format(eth, "ETH") : formatMoney(eth, { from: "ETH", to: "ETH", ethUsd: 0 });
+    (rateUsd ?? 0) > 0
+      ? format(eth, "ETH")
+      : formatMoney(eth, { from: "ETH", to: "ETH", ethUsd: 0 });
 
   // Same query keys the deck already runs → React Query dedupes, no new requests.
   const { data: evidence } = useQuery({
