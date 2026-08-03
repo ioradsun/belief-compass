@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { BrandMark } from "@/components/BrandMark";
+import { LandingExampleCard } from "@/components/LandingExample";
+import { HowItWorksSheet } from "@/components/HowItWorksSheet";
 import type { LandingPanelState } from "@/hooks/useLandingPanelState";
 
 /**
@@ -34,6 +36,7 @@ export function LandingPanel({
   profile?: ReactNode;
 }) {
   const expanded = state === "expanded";
+  const [howOpen, setHowOpen] = useState(false);
 
   return (
     <header
@@ -54,7 +57,7 @@ export function LandingPanel({
           }
         }}
         className={`mx-auto w-full max-w-[1180px] cursor-pointer px-4 transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none motion-reduce:transition-none lg:px-8 ${
-          expanded ? "py-8 lg:py-12" : "py-2.5"
+          expanded ? "py-4 lg:py-5" : "py-2.5"
         }`}
       >
         {/* identity row — persists across both states */}
@@ -121,44 +124,114 @@ export function LandingPanel({
           aria-hidden={!expanded}
         >
           <div className="overflow-hidden">
-            <div className="pt-6 lg:pt-10">
-              <h1 className="max-w-[18ch] text-[34px] font-semibold leading-[1.05] tracking-[-0.03em] text-[var(--text)] sm:text-[46px] lg:text-[60px]">
-                Conviction needs company.
-              </h1>
+            <div className="pt-5 lg:pt-7">
+              {/* hero — 55 / 45 on desktop, stacked on mobile */}
+              <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)] lg:gap-12">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                    Live belief markets
+                  </div>
 
-              <div className="mt-5 space-y-1.5 text-[15px] leading-relaxed text-[var(--text-secondary)] sm:text-[17px]">
-                <p>Put your money where your mouth is.</p>
-                <p>Find your tribe. Beat your opps.</p>
+                  <h1 className="mt-3 max-w-[14ch] text-[38px] font-semibold leading-[1.02] tracking-[-0.03em] text-[var(--text)] sm:text-[52px] lg:text-[62px]">
+                    Conviction needs company.
+                  </h1>
+
+                  <p className="mt-3 text-[19px] leading-snug text-[var(--text)] sm:text-[23px]">
+                    Find your people. Back what you believe.
+                  </p>
+
+                  <p className="mt-3 max-w-[46ch] text-[15px] leading-relaxed text-[var(--text-secondary)] sm:text-[17px]">
+                    Back YES or NO. When more capital backs your side, your position can grow.
+                  </p>
+
+                  <p className="mt-1.5 text-[13px] text-[var(--text-muted)]">
+                    No expiry. No resolution. Sell whenever you choose.
+                  </p>
+
+                  <div className="mt-5 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEnter();
+                      }}
+                      tabIndex={expanded ? 0 : -1}
+                      className="h-11 rounded-full bg-[var(--text)] px-6 text-[14px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] motion-reduce:transition-none"
+                    >
+                      Enter Conviction
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHowOpen(true);
+                      }}
+                      tabIndex={expanded ? 0 : -1}
+                      className="h-11 rounded-full px-5 text-[13px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
+                      style={{ border: "1px solid var(--hairline)" }}
+                    >
+                      See how it works
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  className="flex min-w-0 justify-start lg:justify-end"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  role="presentation"
+                >
+                  <LandingExampleCard onEnter={onEnter} />
+                </div>
               </div>
 
-              <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEnter();
-                  }}
-                  tabIndex={expanded ? 0 : -1}
-                  className="rounded-full bg-[var(--text)] px-6 py-3 text-[14px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] motion-reduce:transition-none"
-                >
-                  Enter Conviction
-                </button>
-                <a
-                  href="/how"
-                  onClick={(e) => e.stopPropagation()}
-                  tabIndex={expanded ? 0 : -1}
-                  className="text-[13px] font-medium text-[var(--text-secondary)] underline decoration-[var(--border-strong)] underline-offset-4 transition-colors hover:text-[var(--text)]"
-                >
-                  How Conviction Company works
-                </a>
-                <span className="text-[12px] text-[var(--text-muted)]">
-                  Powered by pov.co and $DEGEN
-                </span>
+              {/* three-part explanation — text, not feature cards */}
+              <div
+                className="mt-6 grid gap-4 pt-5 sm:grid-cols-3 lg:mt-8"
+                style={{ borderTop: "1px solid var(--hairline)" }}
+              >
+                {[
+                  {
+                    k: "Find your people",
+                    v: "See who repeatedly backs the same beliefs you do.",
+                  },
+                  {
+                    k: "Back your side",
+                    v: "Choose YES or NO and take a position behind your conviction.",
+                  },
+                  {
+                    k: "Benefit if it grows",
+                    v: "Your position can grow when more capital backs your side.",
+                  },
+                ].map((b) => (
+                  <div key={b.k} className="min-w-0">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text)]">
+                      {b.k}
+                    </div>
+                    <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">
+                      {b.v}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* trust strip */}
+              <div
+                className="mt-5 grid grid-cols-2 gap-x-6 gap-y-2 pt-4 text-[12px] text-[var(--text-muted)] sm:flex sm:flex-wrap sm:items-center sm:gap-x-8"
+                style={{ borderTop: "1px solid var(--hairline)" }}
+              >
+                <span>Built on Base</span>
+                <span>Powered by POV</span>
+                <span>Trades and pricing are onchain</span>
+                <span>Fees shown before every trade</span>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {howOpen && <HowItWorksSheet onClose={() => setHowOpen(false)} />}
     </header>
   );
 }
+
