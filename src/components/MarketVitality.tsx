@@ -51,7 +51,7 @@ function believerCopy(m: BookMetric, w: BookWindow): RowCopy {
   if (m.base === 0 && m.current > 0) {
     return {
       pct: null,
-      trend: `+${m.current}`,
+      trend: "New",
       absolute:
         m.current === 1 ? "First believer" : `+${m.current} believers ${w.since}`,
       direction: "up",
@@ -72,7 +72,7 @@ function believerCopy(m: BookMetric, w: BookWindow): RowCopy {
   const signed = `${m.delta > 0 ? "+" : "−"}${n}`;
   return {
     pct,
-    trend: pct ?? signed,
+    trend: pct ?? "New",
     absolute: `${signed} believer${n === 1 ? "" : "s"} ${w.since}`,
     direction,
   };
@@ -93,7 +93,7 @@ function capitalCopy(
   if (baseUsd < 0.5 && usd(m.current) > 0.5) {
     return {
       pct: null,
-      trend: money(m.current, true),
+      trend: "New",
       absolute: `First capital · ${money(m.current)}`,
       direction: "up",
     };
@@ -111,7 +111,7 @@ function capitalCopy(
     };
   return {
     pct,
-    trend: pct ?? money(m.delta, true),
+    trend: pct ?? "New",
     absolute: `${money(m.delta, true)} committed ${w.since}`,
     direction,
   };
