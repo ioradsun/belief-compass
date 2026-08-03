@@ -843,7 +843,7 @@ function ExamineCta({
       >
         <SplitPanelIcon open={open} />
         <span className="min-w-0 text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text)]">
-          {open ? "Close Case File · Return to Total Market" : "Case File · How the Market Divides (YES vs NO)"}
+          {open ? "Close Case File" : "Case File · How the Market Divides (YES vs NO)"}
         </span>
       </button>
     </div>
