@@ -29,7 +29,20 @@ export interface TapeTrade {
   price: number | null;
   /** Epoch ms of the canonical event time. */
   t: number;
+  /**
+   * Chain order within the same second: block_number · 1e5 + log_index. Many
+   * trades share one `occurred_at` (the whole block), and a BUY replayed after
+   * its matching SELL leaves phantom shares behind, so this — never the
+   * timestamp alone — decides the replay order.
+   */
+  seq?: number;
 }
+
+/** Chronological, then chain-ordered — the only correct replay order. */
+export function compareTape(a: TapeTrade, b: TapeTrade): number {
+  return a.t - b.t || (a.seq ?? 0) - (b.seq ?? 0);
+}
+
 
 export interface SeriesPoint {
   t: number;
@@ -93,7 +106,7 @@ export function convictionSeries(
 ): SeriesPoint[] {
   const mine = trades
     .filter((t) => t.side === side && Number.isFinite(t.t))
-    .sort((a, b) => a.t - b.t);
+    .sort(compareTape);
   if (mine.length === 0) return [];
 
   const since = win === "all" ? -Infinity : nowMs - FLOW_WINDOW_MS[win];
@@ -175,7 +188,7 @@ export function timelineEvents(
   const since = win === "all" ? -Infinity : nowMs - FLOW_WINDOW_MS[win];
   const all = trades
     .filter((t) => t.side === side && Number.isFinite(t.t))
-    .sort((a, b) => a.t - b.t);
+    .sort(compareTape);
 
   // Believer count entering the window, so milestones are truthful.
   const seenBefore = new Set<string>();

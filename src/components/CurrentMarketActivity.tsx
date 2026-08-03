@@ -15,8 +15,8 @@
  */
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getMarketChange } from "@/lib/markets.functions";
 import { getHouseRead } from "@/lib/house.functions";
+import { listLiveEvents } from "@/lib/live.functions";
 import { houseKey } from "@/lib/house-round";
 import { houseNote } from "@/domain/house-note";
 import { LiveTape } from "@/components/LiveTape";
@@ -35,14 +35,7 @@ export function CurrentMarketActivity({
 }) {
   const [open, setOpen] = useState(false);
 
-  // Both reads share the deck's query keys, so opening a market never double-fetches.
-  const { data: change } = useQuery({
-    queryKey: ["market-change", marketId],
-    queryFn: () => getMarketChange({ data: { id: marketId } }),
-    staleTime: 10_000,
-    refetchInterval: 15_000,
-    placeholderData: (prev) => prev,
-  });
+  // Reads share the deck's query keys, so opening a market never double-fetches.
   const { data: house } = useQuery({
     queryKey: houseKey(wallet, marketId),
     queryFn: () => getHouseRead({ data: { wallet: wallet ?? null, marketId } }),
@@ -55,15 +48,26 @@ export function CurrentMarketActivity({
   useEffect(() => setHydrated(true), []);
   const houseText = houseNote(hydrated ? wallet : undefined, hydrated ? house : undefined, marketId).text;
 
-  const count = change?.tape?.length ?? 0;
+  // Count exactly what the list below will show — the SAME scoped live query
+  // LiveTape runs (React Query dedupes it), not the market's whole-life tape.
+  // Otherwise a quiet market promises "12 updates" and then opens on nothing.
+  const { data: live } = useQuery({
+    queryKey: ["live-tape", wallet ?? null, [marketId], 200],
+    queryFn: () => listLiveEvents({ data: { wallet, marketIds: [marketId], limit: 200 } }),
+    refetchInterval: 30_000,
+    placeholderData: (prev) => prev,
+  });
+  const count = live?.rows?.length ?? 0;
+
+
 
   // The House line is the always-on lead; only the count changes. Unread = events
   // that arrived since the viewer last opened this section, so the words stay put
   // while the number quietly climbs. Opening marks everything seen.
   const [seenCount, setSeenCount] = useState<number | null>(null);
   useEffect(() => {
-    if (seenCount == null && change) setSeenCount(count);
-  }, [change, count, seenCount]);
+    if (seenCount == null && live) setSeenCount(count);
+  }, [live, count, seenCount]);
   const unread = seenCount == null ? 0 : Math.max(0, count - seenCount);
   const toggle = () =>
     setOpen((v) => {
@@ -112,8 +116,11 @@ export function CurrentMarketActivity({
             </div>
           )}
           {/* An explicit height gives the tape a real scroll box — without it the
-            list grows and the section can't scroll on touch. */}
-          <div className="h-[300px] min-h-0">
+            list grows and the section can't scroll on touch. When the window is
+            empty there is nothing to scroll, so the box collapses to its one
+            line instead of leaving a tall blank panel. */}
+          <div className={count > 0 ? "h-[300px] min-h-0" : "min-h-0"}>
+
             <LiveTape
               wallet={wallet}
               onSelect={onSelect}

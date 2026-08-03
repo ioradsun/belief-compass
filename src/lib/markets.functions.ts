@@ -498,6 +498,13 @@ export const getMarketChange = createServerFn({ method: "GET" })
       const eth = Number.isFinite(wei) ? wei / 1e18 : 0;
       const at = new Date(t.occurred_at).getTime();
       const priceWei = t.price == null ? null : Number(t.price);
+      // Chain order inside the block. Whole blocks share one occurred_at, so
+      // without this a SELL can be replayed before the BUY it closes and the
+      // wallet keeps phantom shares (and phantom believer/capital totals).
+      const blk = Number(t.block_number ?? 0);
+      const lg = Number(t.log_index ?? 0);
+      const seq =
+        Number.isFinite(blk) && Number.isFinite(lg) ? blk * 100_000 + Math.max(0, lg) : 0;
       tape.push({
         // Short, stable key — enough to count distinct believers, and nothing
         // more than the feed already publishes.
@@ -507,7 +514,9 @@ export const getMarketChange = createServerFn({ method: "GET" })
         eth,
         price: priceWei != null && Number.isFinite(priceWei) ? priceWei / 1e18 : null,
         t: at,
+        seq,
       });
+
     }
     return { tape };
   });
