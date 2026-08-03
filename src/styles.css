@@ -222,3 +222,30 @@
   font-feature-settings: "tnum";
 }
 
+
+/*
+ * Quiet-container utilities.
+ *
+ * Grouping is done with a fill one step above the parent instead of a stroke,
+ * so nested content never draws a second box. Use `card-1` for a container
+ * resting on the page/panel, `card-2` only when it sits inside a `card-1`.
+ * Never nest two filled surfaces beyond that.
+ */
+@utility card-1 {
+  background: var(--surface);
+  border: 0;
+}
+
+@utility card-2 {
+  background: var(--surface-2);
+  border: 0;
+}
+
+/* The only structural line: a seam between regions or sections. */
+@utility rule {
+  border-top: 1px solid var(--hairline);
+}
+
+@utility rule-b {
+  border-bottom: 1px solid var(--hairline);
+}
