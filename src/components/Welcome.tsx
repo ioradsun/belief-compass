@@ -188,7 +188,7 @@ export function WelcomePrompt({
             className="shrink-0 rounded-[10px] px-3 py-1.5 text-[12px] font-semibold"
             style={{ background: "var(--text)", color: "var(--bg)" }}
           >
-            Welcome {faces.length > 1 ? "all" : ""}
+            Say Hi
           </button>
         </div>
       </div>
