@@ -141,6 +141,7 @@ export function CaseColumn({
         name: nameOf(t.w),
         eth: t.eth,
         action: t.action,
+        t: t.t,
       }));
   }, [tape, side, nameOf]);
 
