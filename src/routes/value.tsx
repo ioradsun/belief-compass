@@ -208,7 +208,7 @@ function ValuePage() {
         )}
 
         {t.tradesExecuted === 0 && (
-          <div className="mb-12 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <div className="mb-12 rounded-2xl bg-[var(--surface)] p-5">
             <div className="text-[14px] font-semibold text-[var(--text)]">No trades attributed yet</div>
             <p className="mt-2 max-w-[70ch] text-[12.5px] leading-relaxed text-[var(--text-muted)]">
               A trade counts here only once Conviction has provably routed it. The contract records
@@ -279,15 +279,15 @@ function ValuePage() {
 
             {/* CATEGORIES */}
             <Section title="Categories" note="Connected-wallet activity by theme">
-              <div className="overflow-hidden rounded-2xl border border-[var(--border)]">
-                <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              <div className="overflow-hidden rounded-2xl bg-[var(--surface)]">
+                <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                   <span>Category</span>
                   <span className="text-right">Markets</span>
                   <span className="text-right">Trades</span>
                   <span className="text-right">Volume</span>
                 </div>
                 {data.categories.map((c, i) => (
-                  <div key={c.category} className={`grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 px-4 py-3 text-[13px] tabular-nums ${i > 0 ? "border-t border-[var(--border)]" : ""}`}>
+                  <div key={c.category} className={`grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 px-4 py-3 text-[13px] tabular-nums ${i > 0 ? "border-t border-[var(--hairline)]" : ""}`}>
                     <span className="truncate font-medium text-[var(--text)]">{c.category}</span>
                     <span className="text-right text-[var(--text-secondary)]">{fmtNum(c.markets)}</span>
                     <span className="text-right text-[var(--text-secondary)]">{fmtNum(c.trades)}</span>
@@ -310,7 +310,7 @@ function ValuePage() {
           </aside>
         </div>
 
-        <footer className="mt-16 border-t border-[var(--border)] pt-6 text-[12px] leading-relaxed text-[var(--text-muted)]">
+        <footer className="mt-16 border-t border-[var(--hairline)] pt-6 text-[12px] leading-relaxed text-[var(--text-muted)]">
           Share of the ecosystem compares Conviction against the combined POV + Conviction total:
           markets by origin, which is recorded from the beginning, and buy volume by attribution,
           which begins when we started recording it. Buy volume, trades and traders count only
@@ -358,7 +358,7 @@ function ShareCard({
   const convLine = path((p) => p.conv);
 
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className="rounded-2xl bg-[var(--surface)] p-4">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</div>
       <div className="mt-1.5 text-[30px] font-semibold leading-none tabular-nums tracking-[-0.02em]" style={{ color: "var(--yes)" }}>
         {fmtPct(pct)}
@@ -396,7 +396,7 @@ function GrowthChart({ growth }: { growth: EcosystemValue["growth"] }) {
   const line = xy.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
   const area = `${line} L${w},${h} L0,${h} Z`;
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className="rounded-2xl bg-[var(--surface)] p-4">
       <div className="mb-1 text-[12px] text-[var(--text-muted)]">Cumulative buy volume</div>
       <div className="text-[22px] font-semibold tabular-nums text-[var(--text)]">
         {fmtUsd(pts[pts.length - 1].volumeUsd)}
@@ -417,7 +417,7 @@ function ActivityRow({ a }: { a: EcosystemValue["recentActivity"][number] }) {
       : `${a.action === "SELL" ? "Sold" : "Backed"} ${a.side ?? ""}${usd > 0 ? ` · ${fmtUsd(usd)}` : ""}`;
   const dot = a.kind === "market_created" ? "var(--text-secondary)" : a.side === "NO" ? "var(--no)" : "var(--yes)";
   return (
-    <div className="flex items-start gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
+    <div className="flex items-start gap-2.5 rounded-xl bg-[var(--surface)] px-3 py-2.5">
       <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: dot }} />
       <div className="min-w-0">
         <div className="truncate text-[13px] font-medium text-[var(--text)]">{a.title}</div>
@@ -477,7 +477,7 @@ function Section({ title, note, children }: { title: string; note?: string; chil
 
 function Panel({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 ${className}`}>
+    <div className={`rounded-2xl bg-[var(--surface)] p-4 ${className}`}>
       {title && <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{title}</div>}
       <div className="space-y-1">{children}</div>
     </div>
@@ -495,7 +495,7 @@ function Kpi({ label, value }: { label: string; value: string }) {
 
 function Mini({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
+    <div className="rounded-xl bg-[var(--surface)] px-3 py-2.5">
       <div className="text-[11px] text-[var(--text-muted)]">{label}</div>
       <div className="text-[16px] font-semibold tabular-nums text-[var(--text)]">{value}</div>
     </div>

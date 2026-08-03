@@ -572,8 +572,7 @@ export function MarketDeck({
           ) : (
             /* Walked away: the round is closed and the House pick stays sealed. */
             <div
-              className="flex items-center gap-3 rounded-[16px] p-4"
-              style={{ border: "1px solid var(--border)" }}
+              className="flex items-center gap-3 rounded-[16px] bg-[var(--surface)] p-4"
             >
               <div className="min-w-0">
                 <div className="text-[14px] font-semibold text-[var(--text)]">You walked away</div>
@@ -797,7 +796,7 @@ function ExamineCta({
 
 /** A quiet hairline between the center's sections — the reading path, not a card. */
 function Hairline() {
-  return <div className="border-t border-[var(--border)]" aria-hidden />;
+  return <div className="border-t border-[var(--hairline)]" aria-hidden />;
 }
 
 /**

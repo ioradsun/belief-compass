@@ -367,7 +367,7 @@ export function ConvictionDashboard({
               under the hero, only when there's something to collect. */}
           {availableUsd > 0.01 && (
             <Section id="claim" title="Ready to Claim" anchorless>
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+              <div className="rounded-2xl bg-[var(--surface)] p-5">
                 <div className="text-[34px] font-semibold leading-none tabular-nums text-[var(--text)]">
                   {fmtUsd(availableUsd)}
                 </div>
@@ -391,7 +391,7 @@ export function ConvictionDashboard({
               Total Return − Total Invested = Net Profit (the hero). */}
           <Section id="journey" title="Your Journey">
             {journey.empty ? (
-              <div className="rounded-2xl border border-dashed border-[var(--border)] p-6 text-center">
+              <div className="rounded-2xl bg-[var(--surface)] p-6 text-center">
                 <div className="text-[15px] font-semibold text-[var(--text)]">
                   Start building your investing journey.
                 </div>
@@ -423,7 +423,7 @@ export function ConvictionDashboard({
             ) : (
               <>
                 <GroupLabel>Capital</GroupLabel>
-                <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+                <div className="overflow-hidden rounded-2xl bg-[var(--surface)]">
                   <FlowRow
                     label="Total Invested"
                     hint="Total dollars you’ve committed to markets over your lifetime."
@@ -432,7 +432,7 @@ export function ConvictionDashboard({
                 </div>
 
                 <GroupLabel>Costs</GroupLabel>
-                <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+                <div className="overflow-hidden rounded-2xl bg-[var(--surface)]">
                   <FlowRow
                     label="Trading Fees Paid"
                     hint="Total buy fees you’ve paid to enter markets — what it cost you to participate, not a trading loss."
@@ -441,7 +441,7 @@ export function ConvictionDashboard({
                 </div>
 
                 <GroupLabel>Portfolio</GroupLabel>
-                <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+                <div className="overflow-hidden rounded-2xl bg-[var(--surface)]">
                   <FlowRow
                     label="Current Value"
                     hint="What your open positions are worth right now."
@@ -460,13 +460,13 @@ export function ConvictionDashboard({
                 </div>
 
                 <GroupLabel>Overall Performance</GroupLabel>
-                <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+                <div className="overflow-hidden rounded-2xl bg-[var(--surface)]">
                   <FlowRow
                     label="Total Return"
                     hint="Current Value + Total Withdrawn + Creator Earnings."
                     value={fmtUsd(journey.totalReturnUsd)}
                   />
-                  <div className="flex items-center justify-between border-t border-[var(--border)] bg-[var(--bg)]/40 px-4 py-3.5">
+                  <div className="flex items-center justify-between border-t border-[var(--hairline)] bg-[var(--bg)]/40 px-4 py-3.5">
                     <span className="text-[13px] font-medium text-[var(--text)]">Net Profit</span>
                     <span
                       className="text-[18px] font-semibold tabular-nums"
@@ -486,7 +486,7 @@ export function ConvictionDashboard({
                     <span className="group-open:hidden">Show details</span>
                     <span className="hidden group-open:inline">Hide details</span>
                   </summary>
-                  <div className="mt-2 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+                  <div className="mt-2 overflow-hidden rounded-2xl bg-[var(--surface)]">
                     <FlowRow
                       label="Total Spent"
                       hint="Total Invested plus Trading Fees Paid."
@@ -520,11 +520,11 @@ export function ConvictionDashboard({
           {/* SECTION 3 — Your Edge (numbers become identity) */}
           {sinceStart !== 0 && (
             <Section id="edge" title="Your Edge">
-              <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+              <div className="overflow-hidden rounded-2xl bg-[var(--surface)]">
                 {sources.map((s, i) => (
                   <div
                     key={s.key}
-                    className={`px-4 py-3.5 ${i > 0 ? "border-t border-[var(--border)]" : ""}`}
+                    className={`px-4 py-3.5 ${i > 0 ? "border-t border-[var(--hairline)]" : ""}`}
                   >
                     <div className="flex items-center">
                       <span className="text-[14px] font-medium text-[var(--text)]">{s.label}</span>
@@ -559,7 +559,7 @@ export function ConvictionDashboard({
                     key={`${m.kind}-${m.onchainId}`}
                     type="button"
                     onClick={() => onSelectMarket(m.onchainId)}
-                    className="flex w-full items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-left transition-colors hover:border-[var(--text-muted)]/40"
+                    className="flex w-full items-center gap-3 rounded-xl bg-[var(--surface)] px-4 py-3 text-left transition-colors hover:border-[var(--text-muted)]/40"
                   >
                     <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[var(--text)]">
                       {m.title}
@@ -622,7 +622,7 @@ export function ConvictionDashboard({
 
           {/* SECTION 6 — Today's Story (sentences, not a list) */}
           <Section id="today" title="Today's Story">
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-[15px] leading-relaxed text-[var(--text)]">
+            <div className="rounded-2xl bg-[var(--surface)] p-5 text-[15px] leading-relaxed text-[var(--text)]">
               {todaySentences.length > 0 ? (
                 <div className="space-y-1.5">
                   {todaySentences.map((line, i) => (
@@ -640,7 +640,7 @@ export function ConvictionDashboard({
           {/* SECTION 7 — One Insight */}
           {insight && (
             <Section id="insight" title="Insight" anchorless>
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-5 py-4 text-[15px] leading-relaxed text-[var(--text)]">
+              <div className="rounded-2xl bg-[var(--surface)] px-5 py-4 text-[15px] leading-relaxed text-[var(--text)]">
                 {insight}
               </div>
             </Section>
@@ -668,7 +668,7 @@ function ActiveGoal({ goal }: { goal: Milestone }) {
   const fmt = (n: number) =>
     usd ? format(n, "USD") : goal.key === "held-30" ? `${Math.floor(n)}d` : `${Math.floor(n)}`;
   return (
-    <div className="mb-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className="mb-4 rounded-2xl bg-[var(--surface)] p-4">
       <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
         Next
       </div>
@@ -796,7 +796,7 @@ function FlowRow({
   hint?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-[var(--border)] px-4 py-3.5 last:border-b-0">
+    <div className="flex items-center justify-between gap-4 border-b border-[var(--hairline)] px-4 py-3.5 last:border-b-0">
       <span className="text-[13px] text-[var(--text-secondary)]" title={hint}>
         {label}
       </span>
