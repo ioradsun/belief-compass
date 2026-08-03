@@ -55,7 +55,8 @@ export const getShareCode = createServerFn({ method: "GET" })
         .maybeSingle();
       if (race?.code) return { code: race.code as string };
     }
-    throw new Error("Could not mint a share code.");
+    // Attribution is a nice-to-have: never let a minting failure break a page.
+    return { code: "" };
   });
 
 /**
@@ -112,8 +113,11 @@ export const bindShareVisit = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }): Promise<{ bound: number }> => {
-    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
-    const wallet = await assertWalletOwnership(data.wallet, data.sessionToken);
+    const { walletFromToken } = await import("@/lib/wallet-session.server");
+    // Unverified sessions simply don't attribute — never an error to the user.
+    const signer = await walletFromToken(data.sessionToken);
+    const wallet = data.wallet.toLowerCase();
+    if (!signer || signer !== wallet) return { bound: 0 };
     const sb = serviceClient();
 
     // Only bind opens that are still unattributed and NOT this wallet's own links.

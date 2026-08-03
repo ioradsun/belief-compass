@@ -1047,6 +1047,54 @@ export type Database = {
         }
         Relationships: []
       }
+      share_codes: {
+        Row: {
+          code: string
+          created_at: string
+          wallet: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          wallet: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          wallet?: string
+        }
+        Relationships: []
+      }
+      share_visits: {
+        Row: {
+          connected_at: string | null
+          id: number
+          market_id: number | null
+          opened_at: string
+          ref_code: string
+          visitor_id: string
+          wallet: string | null
+        }
+        Insert: {
+          connected_at?: string | null
+          id?: number
+          market_id?: number | null
+          opened_at?: string
+          ref_code: string
+          visitor_id: string
+          wallet?: string | null
+        }
+        Update: {
+          connected_at?: string | null
+          id?: number
+          market_id?: number | null
+          opened_at?: string
+          ref_code?: string
+          visitor_id?: string
+          wallet?: string | null
+        }
+        Relationships: []
+      }
       user_events: {
         Row: {
           dwell_ms: number | null
