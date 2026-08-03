@@ -35,6 +35,10 @@ const MAX_BYTES = 3_000_000; // localStorage safety cap (~3MB); skip oversized w
  */
 const PERSIST_PREFIXES = new Set([
   "feed",
+  // The authoritative sequenced feed — the single most valuable thing to have
+  // painted before the first byte comes back on a return visit.
+  "opp-feed",
+  "market-row",
   "live-tape",
   "market-pulses",
   "my-convictions",
@@ -46,6 +50,7 @@ const PERSIST_PREFIXES = new Set([
   "welcomes-received",
   "conviction-market",
 ]);
+
 
 const persistable = (queryKey: readonly unknown[]): boolean =>
   typeof queryKey[0] === "string" && PERSIST_PREFIXES.has(queryKey[0]);
