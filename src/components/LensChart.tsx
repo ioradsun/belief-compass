@@ -15,6 +15,7 @@
  */
 import { lensValue, type LensMarker, type LensMetric } from "@/domain/side-lens";
 import type { SeriesPoint } from "@/domain/conviction-series";
+import { sparkDomain, SPARK_DOMAIN } from "@/domain/spark-domain";
 
 // Vertical breathing room (in viewBox %) so the line never hugs the edges and
 // markers near the top/bottom stay legible.
@@ -110,8 +111,10 @@ function Plot({
   const t1 = pts[pts.length - 1].t;
   const span = Math.max(1, t1 - t0);
   const vals = pts.map((p) => p.v);
-  const lo = Math.min(...vals);
-  const hi = Math.max(...vals);
+  // Materiality: scale against a per-metric floor anchored on the window baseline
+  // (pts[0]), so a move the headline calls "flat / 0%" renders flat instead of
+  // being stretched to full height. A genuinely large move still fills the box.
+  const { min: lo, max: hi } = sparkDomain(vals, pts[0].v, SPARK_DOMAIN[metric]);
   const range = Math.max(1e-9, hi - lo);
   const x = (t: number) => ((t - t0) / span) * 100;
   const y = (v: number) => BOTTOM - ((v - lo) / range) * (BOTTOM - TOP);
