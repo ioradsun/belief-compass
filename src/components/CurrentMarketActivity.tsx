@@ -55,13 +55,17 @@ export function CurrentMarketActivity({
   useEffect(() => setHydrated(true), []);
   const houseText = houseNote(hydrated ? wallet : undefined, hydrated ? house : undefined, marketId).text;
 
-  // The tape is the market's whole life, but the list below only ever shows the
-  // last 72 hours — so count the same window, or a quiet market promises
-  // "12 updates" and then opens on nothing.
-  const WINDOW_MS = 72 * 3_600_000;
-  const cutoff = Date.now() - WINDOW_MS;
-  const recent = (change?.tape ?? []).filter((t) => t.t >= cutoff);
-  const count = recent.length;
+  // Count exactly what the list below will show — the SAME scoped live query
+  // LiveTape runs (React Query dedupes it), not the market's whole-life tape.
+  // Otherwise a quiet market promises "12 updates" and then opens on nothing.
+  const { data: live } = useQuery({
+    queryKey: ["live-tape", wallet ?? null, [marketId], 200],
+    queryFn: () => listLiveEvents({ data: { wallet, marketIds: [marketId], limit: 200 } }),
+    refetchInterval: 30_000,
+    placeholderData: (prev) => prev,
+  });
+  const count = live?.rows?.length ?? 0;
+
 
 
   // The House line is the always-on lead; only the count changes. Unread = events
