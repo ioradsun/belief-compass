@@ -538,11 +538,17 @@ export function MarketDeck({
         Reaching the dock is the strongest signal a wallet is about to be needed,
         so hover/touch/focus here starts the wallet chunks before the click. */}
       <div className="shrink-0 space-y-3 pb-[env(safe-area-inset-bottom)]" {...walletIntent}>
-        {onToggleCase && !storySide && !mobileCaseOpen && (
-          <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
-        )}
+        {/* One composed instrument: analysis rail → divider → the controls. */}
+        <div
+          className="overflow-hidden rounded-[16px]"
+          style={{ background: "var(--surface)" }}
+        >
+          {onToggleCase && !storySide && !mobileCaseOpen && (
+            <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
+          )}
 
-        {held && sellPct != null ? (
+          {held && sellPct != null ? (
+
           <OrderTicket
             mode="sell"
             held={held}
@@ -656,7 +662,10 @@ export function MarketDeck({
               onSkip();
             }}
           />
-        )}
+          )}
+        </div>
+
+
 
         {/* The payoff for standing on it: what your link has brought in. Only
           renders once it's real (a believer, not just an open). */}
@@ -793,10 +802,30 @@ function SplitPanelIcon({ open }: { open: boolean }) {
   );
 }
 
+/** The analytical spark — an amber four-point mark, decorative. */
+function SignalSpark({ hot }: { hot: boolean }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 12 12"
+      aria-hidden
+      className="shrink-0 transition-opacity duration-500 motion-reduce:transition-none"
+      style={{ color: "var(--signal,#d99a2b)", opacity: hot ? 1 : 0.82 }}
+    >
+      <path
+        d="M6 0.6 L7.05 4.95 L11.4 6 L7.05 7.05 L6 11.4 L4.95 7.05 L0.6 6 L4.95 4.95 Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 /**
- * The utility row — the market signal on the left, the Case File disclosure on
- * the right. One quiet line, no cards and no protruding tab: it belongs to the
- * order surface below it, and stays subordinate to the transaction button.
+ * The analysis rail — the market signal on the left, the Case File disclosure on
+ * the right, as ONE full-width control attached to the top of the action
+ * surface. No card, no tab: a divider does the separating, and the whole strip
+ * opens both Case File panels.
  */
 function ExamineCta({
   open,
@@ -808,29 +837,54 @@ function ExamineCta({
   /** The momentum/pulse read, shown as the market signal. */
   teaser?: string | null;
 }) {
+  const signal = teaser ?? "Market signal forming.";
+  // A single, brief attention beat when the READ itself changes — never on
+  // mount, never on a rerender that says the same thing.
+  const seen = useRef<string | null>(null);
+  const [hot, setHot] = useState(false);
+  useEffect(() => {
+    if (seen.current === null) {
+      seen.current = signal;
+      return;
+    }
+    if (seen.current === signal) return;
+    seen.current = signal;
+    setHot(true);
+    const t = setTimeout(() => setHot(false), 450);
+    return () => clearTimeout(t);
+  }, [signal]);
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-0.5">
-      <p className="flex min-w-0 items-center gap-2 text-[13px] leading-snug text-[var(--text-secondary)]">
-        <span
-          aria-hidden
-          className="h-[5px] w-[5px] shrink-0 rounded-full"
-          style={{ background: "var(--text-muted)" }}
-        />
-        <span className="truncate">{teaser ?? "Market signal forming."}</span>
-      </p>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        aria-label={open ? "Close YES and NO Case File" : "Open YES and NO Case File"}
-        className="group -mx-1 flex shrink-0 items-center gap-1.5 rounded-[8px] px-1 py-1 text-[var(--text-secondary)] transition-colors hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--text)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
-      >
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label={
+        open
+          ? "Close YES and NO Case File."
+          : `Open YES and NO Case File. Current market signal: ${signal}`
+      }
+      className="group flex min-h-[48px] w-full cursor-pointer flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-[var(--hairline)] px-4 py-3 text-left transition-[background-color,transform,border-color] duration-200 hover:border-[var(--border)] active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--text)] motion-reduce:transition-none motion-reduce:active:scale-100 sm:px-5"
+      style={{
+        background: hot
+          ? "color-mix(in oklab,#d99a2b 9%,transparent)"
+          : open
+            ? "color-mix(in oklab,#d99a2b 5%,transparent)"
+            : "color-mix(in oklab,#d99a2b 3%,transparent)",
+      }}
+    >
+      <span className="flex min-w-0 items-center gap-2 text-[13px] leading-snug text-[var(--text)]">
+        <SignalSpark hot={hot} />
+        <span className="min-w-0">{signal}</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-[7px] text-[12px] font-semibold text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text)]">
         <SplitPanelIcon open={open} />
-        <span className="text-[12px] font-medium">{open ? "Close Case File" : "Case File"}</span>
-      </button>
-    </div>
+        {open ? "Close Case File" : "Open Case File"}
+      </span>
+    </button>
   );
 }
+
 
 
 /** A quiet hairline between the center's sections — the reading path, not a card. */
