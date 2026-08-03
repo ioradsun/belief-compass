@@ -839,14 +839,11 @@ function ExamineCta({
         onClick={onToggle}
         aria-expanded={open}
         aria-label={open ? "Close YES and NO Case File." : "Open YES and NO Case File."}
-        className="group flex min-h-[48px] w-full cursor-pointer flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 text-left transition-[background-color,transform] duration-200 active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--text)] motion-reduce:transition-none motion-reduce:active:scale-100 sm:px-5"
+        className="group flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-[9px] px-4 py-3 text-center transition-[background-color,transform] duration-200 active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--text)] motion-reduce:transition-none motion-reduce:active:scale-100 sm:px-5"
       >
-        <span className="min-w-0 text-[13px] leading-snug text-[var(--text-secondary)]">
-          Case File — the YES / NO split behind these totals
-        </span>
-        <span className="flex shrink-0 items-center gap-[7px] text-[12px] font-semibold text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text)]">
-          <SplitPanelIcon open={open} />
-          {open ? "Close Case File" : "Open Case File"}
+        <SplitPanelIcon open={open} />
+        <span className="min-w-0 text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text)]">
+          {open ? "Close Case File · Return to Total Market" : "Case File · How the Market Divides (YES vs NO)"}
         </span>
       </button>
     </div>
