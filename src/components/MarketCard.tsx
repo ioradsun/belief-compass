@@ -93,7 +93,7 @@ export function pulseLine(p: Pulse, ethUsd: number, unit: DisplayUnit = "USD") {
   // wanted but no rate is known, fall back to the raw ETH so a size still shows.
   const size =
     unit === "USD" && !(ethUsd > 0)
-      ? `${p.eth.toFixed(3)} ETH`
+      ? `\u039E${p.eth.toFixed(3)}`
       : formatMoney(p.eth, { from: "ETH", to: unit, ethUsd });
   const verb = p.type === "reduced" ? "cut" : "backed";
   return `${personName(p)} ${verb} ${p.side} · ${size}`;
