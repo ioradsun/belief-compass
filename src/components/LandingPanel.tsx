@@ -226,7 +226,7 @@ export function LandingPanel({
                     height={16}
                     className="h-4 w-4 shrink-0 object-contain opacity-80 [.light_&]:invert"
                   />
-                  Powered by POV
+                  Powered by POV and $degen
                 </span>
               </div>
 
