@@ -98,18 +98,47 @@ async function viewerPositions(
   return map;
 }
 
-/** People the viewer can welcome: new believers on the sides the viewer holds. */
+const EMPTY_ROOM: WelcomeRoom = {
+  people: [],
+  count: 0,
+  sections: [],
+  headline: "Nobody new in the room",
+  lastSeenAt: null,
+  freshCount: 0,
+};
+
+/** The viewer's last room visit (null = first time). */
+async function lastRoomVisit(
+  sb: ReturnType<typeof serviceClient>,
+  viewer: string,
+): Promise<string | null> {
+  const { data } = await sb
+    .from("welcome_room_visits")
+    .select("last_seen_at")
+    .eq("wallet", viewer)
+    .maybeSingle();
+  return (data as { last_seen_at?: string } | null)?.last_seen_at ?? null;
+}
+
+/**
+ * The Daily Room: everyone who joined a side you hold in the last 7 days,
+ * grouped by who they are to you (Twin / Tribe / crossed-over Opp / new face)
+ * and marked fresh when they arrived since your last visit.
+ */
 export const getWelcomable = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) =>
     z.object({ wallet: z.string().min(3).nullable().optional() }).parse(raw),
   )
-  .handler(async ({ data }): Promise<{ people: WelcomablePerson[]; count: number }> => {
-    if (!data.wallet) return { people: [], count: 0 };
+  .handler(async ({ data }): Promise<WelcomeRoom> => {
+    if (!data.wallet) return EMPTY_ROOM;
     const sb = serviceClient();
     const viewer = data.wallet.toLowerCase();
 
-    const positions = await viewerPositions(sb, viewer);
-    if (positions.size === 0) return { people: [], count: 0 };
+    const [positions, lastSeenAt] = await Promise.all([
+      viewerPositions(sb, viewer),
+      lastRoomVisit(sb, viewer),
+    ]);
+    if (positions.size === 0) return { ...EMPTY_ROOM, lastSeenAt };
     const marketIds = [...positions.keys()];
 
     // Recent new-believer transitions on the markets the viewer holds, newest
@@ -149,23 +178,26 @@ export const getWelcomable = createServerFn({ method: "GET" })
       }));
 
     const picks = selectWelcomable({ viewer, positions, events, alreadyWelcomed });
-    if (picks.length === 0) return { people: [], count: 0 };
+    if (picks.length === 0) return { ...EMPTY_ROOM, lastSeenAt };
 
-    // Resolve identities + titles for the picks (one bounded batch each).
+    // Resolve identities, titles and relationships for the picks (bounded batches).
     const { resolveProfiles } = await import("@/lib/profiles.server");
-    const [profiles, titlesRes] = await Promise.all([
+    const [profiles, titlesRes, dna] = await Promise.all([
       resolveProfiles(picks.map((p) => p.wallet)),
       sb
         .from("markets")
         .select("onchain_id, title")
         .in("onchain_id", [...new Set(picks.map((p) => p.marketId))]),
+      relationshipIndex(sb, viewer),
     ]);
     const titleById = new Map<number, string>();
     for (const m of (titlesRes.data ?? []) as { onchain_id: number; title: string | null }[])
       titleById.set(Number(m.onchain_id), m.title ?? `Market #${m.onchain_id}`);
 
+    const seenMs = lastSeenAt ? new Date(lastSeenAt).getTime() : 0;
     const people: WelcomablePerson[] = picks.map((p) => {
       const prof = profiles.get(p.wallet);
+      const rel = dna.get(p.wallet);
       return {
         wallet: p.wallet,
         name: prof?.displayName ?? aliasFor(p.wallet),
@@ -173,10 +205,55 @@ export const getWelcomable = createServerFn({ method: "GET" })
         marketId: p.marketId,
         marketTitle: titleById.get(p.marketId) ?? `Market #${p.marketId}`,
         side: p.side,
+        occurredAt: p.occurredAt,
+        relationship: rel?.relationship ?? null,
+        agreement: rel?.agreement ?? null,
+        sharedBeliefs: rel?.shared ?? null,
+        isNew: seenMs > 0 && new Date(p.occurredAt).getTime() > seenMs,
       };
     });
-    return { people, count: people.length };
+
+    const sections = groupRoom(people);
+    return {
+      people,
+      count: people.length,
+      sections,
+      headline: roomHeadline(sections, Boolean(lastSeenAt)),
+      lastSeenAt,
+      freshCount: sections.reduce((n, s) => n + s.fresh, 0),
+    };
   });
+
+/**
+ * Mark the room as seen. Turns the panel from a static list into a daily
+ * ritual: what's here now becomes the baseline, tomorrow shows the delta.
+ */
+export const markRoomSeen = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({ wallet: z.string().min(3), session: z.string().min(16).max(2000) })
+      .parse(raw),
+  )
+  .handler(async ({ data }): Promise<{ ok: boolean }> => {
+    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+    const viewer = await assertWalletOwnership(data.wallet, data.session);
+    const sb = serviceClient();
+    const now = new Date().toISOString();
+    const { data: prev } = await sb
+      .from("welcome_room_visits")
+      .select("visit_count")
+      .eq("wallet", viewer)
+      .maybeSingle();
+    const visits = Number((prev as { visit_count?: number } | null)?.visit_count ?? 0) + 1;
+    const { error } = await sb
+      .from("welcome_room_visits")
+      .upsert(
+        { wallet: viewer, last_seen_at: now, visit_count: visits, updated_at: now },
+        { onConflict: "wallet" },
+      );
+    return { ok: !error };
+  });
+
 
 /** Record welcomes (idempotent). Proven by the caller's wallet-session token. */
 export const sendWelcomes = createServerFn({ method: "POST" })
