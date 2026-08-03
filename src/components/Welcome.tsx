@@ -21,7 +21,7 @@ import {
   sendWelcomes,
   type WelcomablePerson,
 } from "@/lib/welcomes.functions";
-import { roomReason, welcomeKey } from "@/domain/welcome";
+import { ROOM_GROUP_LABEL, roomGroupFor, roomReason, welcomeKey } from "@/domain/welcome";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
@@ -111,6 +111,14 @@ export function WelcomePrompt({
   const sections = data?.sections ?? [];
 
   const peeked = peek ? (people.find((p) => p.wallet === peek) ?? null) : null;
+
+  // Rarest commonality first, one face per person; the stack tightens and then
+  // spills into a "+N" so the row height is constant no matter how full it is.
+  const ordered = useMemo(() => sections.flatMap((s) => s.people), [sections]);
+  const MAX_FACES = 7;
+  const shown = ordered.slice(0, MAX_FACES);
+  const hidden = ordered.length - shown.length;
+  const overlap = shown.length > 5 ? -12 : shown.length > 3 ? -8 : -4;
 
   const keyOf = (p: WelcomablePerson) => welcomeKey(p.wallet, p.marketId, p.side);
 
