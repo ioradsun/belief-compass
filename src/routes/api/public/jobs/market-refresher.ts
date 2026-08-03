@@ -8,6 +8,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.server";
 import { refreshDirtyBatch } from "@/lib/market-state/refresh-market.server";
+import { emitMarketTransitions } from "@/lib/market-transition-emit.server";
 
 export const Route = createFileRoute("/api/public/jobs/market-refresher")({
   server: {
@@ -34,6 +35,18 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
         const milestonesEmitted = Number(milestones ?? 0) || 0;
         const doublingsEmitted = Number(doublings ?? 0) || 0;
 
+        // Market-wide state transitions ("YES is accelerating", "the market is
+        // becoming divided", …) off the markets we just refreshed — persisted and
+        // deduped so only genuinely-new, persistent Tier 1-2 states reach the feed.
+        // Best-effort: a failure here must never block the refresh loop.
+        let transitionsEmitted = 0;
+        try {
+          const ids = out.results.filter((r) => r.ok).map((r) => r.market);
+          transitionsEmitted = await emitMarketTransitions(sb, ids);
+        } catch {
+          /* transitions are non-critical; skip this cycle on error */
+        }
+
         const { count: remaining } = await sb
           .from("market_refresh_queue")
           .select("*", { count: "exact", head: true });
@@ -53,6 +66,7 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
           market_refresh_failures: out.failed,
           milestones_emitted: milestonesEmitted,
           tribe_doublings_emitted: doublingsEmitted,
+          transitions_emitted: transitionsEmitted,
           processed: out.processed,
           dirty_markets_remaining: remaining ?? 0,
           oldest_dirty_market_age_ms: oldestAgeMs,
