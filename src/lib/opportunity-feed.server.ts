@@ -1,28 +1,38 @@
 /**
- * Server side of the unified opportunity feed.
+ * Server side of the discovery feed (v2).
  *
- * One place assembles everything the center column shows: the global market
- * read-model, the viewer's real personal facts, and the ready market idea. The
- * pure sequencer in `@/domain/opportunity-feed` then decides the order. The
- * client receives a finished sequence and renders it as-is.
+ * One place assembles everything: the live market read-model, the stored AI
+ * meaning, and the viewer's real history. The pure engine in `@/domain/feed`
+ * then gates (hard exclusions), ranks (composite score) and sequences (rhythm +
+ * diversity). The client receives a finished queue and renders it as-is.
  */
-import { serviceClient } from "@/lib/supabase-clients";
+import {
+  eligibilityFor,
+  reentryFor,
+  type ViewerMarketState,
+} from "@/domain/feed/eligibility";
+import { scoreMarket, type FeedAiAnalysis, type FeedMarketSignals } from "@/domain/feed/score";
+import { reasonFor } from "@/domain/feed/reasons";
 import {
   sequenceFeed,
-  excludeDecided,
-  EMPTY_VIEWER_CONTEXT,
-  type FeedMarketCandidate,
   type FeedIdeaCandidate,
-  type ViewerFeedContext,
   type OpportunityFeedItem,
-} from "@/domain/opportunity-feed";
+  type SequenceCandidate,
+} from "@/domain/feed/sequence";
+import { SEQUENCE } from "@/domain/feed/config";
 import { shouldInsertSuggestion } from "@/domain/market-suggestion";
-import { listCompletedMarketIds } from "@/lib/viewer-decisions.server";
 import { listFeed, type VolumeWindow } from "@/lib/markets.functions";
+import {
+  EMPTY_SIGNALS,
+  loadMarketAnalyses,
+  loadViewerSignals,
+} from "@/lib/feed/viewer-signals.server";
 
 export interface FeedSessionState {
   /** Market ids already shown to this viewer in this browsing session. */
   seenIds?: number[];
+  /** Market ids already queued later in this session (never duplicated). */
+  queuedIds?: number[];
   cardsViewed?: number;
   cardsSinceIdea?: number;
   ideasShownThisSession?: number;
@@ -40,65 +50,68 @@ export interface OpportunityFeedInput extends FeedSessionState {
 
 type Row = Record<string, unknown> & { onchain_id: number };
 
-/**
- * The viewer's real facts, bounded to the markets currently in the feed plus a
- * capped slice of their own history. Everything here is already-computed state
- * — the feed never runs DNA or scoring inline.
- */
-async function viewerContext(wallet: string, rows: Row[]): Promise<ViewerFeedContext> {
-  const sb = serviceClient();
-  const ids = rows.map((r) => Number(r.onchain_id));
-  const w = wallet.toLowerCase();
+const num = (v: unknown): number => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+const numOrNull = (v: unknown): number | null => {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
-  const [beliefs, decided, history] = await Promise.all([
-    sb
-      .from("wallet_beliefs")
-      .select("onchain_id, yes_shares, no_shares")
-      .eq("wallet", w)
-      .in("onchain_id", ids),
-    sb
-      .from("house_predictions")
-      .select("onchain_id")
-      .eq("wallet", w)
-      .not("actual_action", "is", null)
-      .in("onchain_id", ids),
-    sb
-      .from("wallet_beliefs")
-      .select("onchain_id")
-      .eq("wallet", w)
-      .in("stance_side", ["YES", "NO"])
-      .order("last_trade_at", { ascending: false, nullsFirst: false })
-      .limit(200),
-  ]);
+/** Read-model row → the bounded live signals the ranker is allowed to see. */
+function signalsOf(r: Row): FeedMarketSignals {
+  const meta = (r["markets"] ?? null) as {
+    category?: string | null;
+    author_wallet?: string | null;
+  } | null;
+  return {
+    onchainId: Number(r.onchain_id),
+    category: meta?.category ?? null,
+    creator: meta?.author_wallet ? String(meta.author_wallet).toLowerCase() : null,
+    createdAt: (r["market_created_at"] as string | null) ?? null,
+    newBelievers1h: num(r["new_believers_1h"]),
+    newBelievers24h: num(r["new_believers_24h"]),
+    tradeCount1h: num(r["trade_count_1h"]),
+    tradeCount24h: num(r["trade_count_24h"]),
+    uniqueWallets1h: num(r["unique_wallets_1h"]),
+    uniqueWallets24h: num(r["unique_wallets_24h"]),
+    velocity5m: num(r["velocity_5m"]),
+    volumeUsd24h: num(r["window_volume_usd"] ?? r["volume_24h_usd"]),
+    directionalBelievers: num(r["directional_believers"]),
+    divergence: num(r["divergence"]),
+    priceMovePct: Math.abs(num(r["chg_24h"])),
+    opportunityType: (r["opportunity_type"] as string | null) ?? null,
+    opportunityReason: (r["opportunity_reason"] as string | null) ?? null,
+    opportunityScore: numOrNull(r["opportunity_score"]),
+    opportunityEligible: Boolean(r["opportunity_eligible"]),
+    tribeSide: (r["tribe_side"] as "YES" | "NO" | null) ?? null,
+    oppSide: (r["opp_side"] as "YES" | "NO" | null) ?? null,
+    hasMedia: Boolean(r["has_media"]),
+  };
+}
 
-  const heldMarkets = (beliefs.data ?? [])
-    .filter((b) => Number(b.yes_shares ?? 0) > 0 || Number(b.no_shares ?? 0) > 0)
-    .map((b) => Number(b.onchain_id));
-  const decidedMarkets = (decided.data ?? []).map((d) => Number(d.onchain_id));
-
-  // Category affinity: which categories this person actually takes sides in.
-  const historyIds = (history.data ?? []).map((h) => Number(h.onchain_id));
-  const affinity: Record<string, number> = {};
-  if (historyIds.length) {
-    const { data: cats } = await sb
-      .from("markets")
-      .select("onchain_id, category")
-      .in("onchain_id", historyIds);
-    const counts = new Map<string, number>();
-    for (const c of cats ?? []) {
-      const cat = (c.category as string | null) ?? null;
-      if (!cat) continue;
-      counts.set(cat, (counts.get(cat) ?? 0) + 1);
-    }
-    const max = Math.max(1, ...counts.values());
-    for (const [cat, n] of counts) affinity[cat] = n / max;
-  }
-
-  // Tribe / opp presence is already resolved per row by the feed read.
-  const tribeMarkets = rows.filter((r) => r["tribe_side"]).map((r) => Number(r.onchain_id));
-  const oppMarkets = rows.filter((r) => r["opp_side"]).map((r) => Number(r.onchain_id));
-
-  return { categoryAffinity: affinity, tribeMarkets, oppMarkets, heldMarkets, decidedMarkets };
+/** Stored analysis row → the ranker's AI view. */
+function aiOf(row: Record<string, unknown> | undefined): FeedAiAnalysis | undefined {
+  if (!row) return undefined;
+  return {
+    category: (row["category"] as string | null) ?? null,
+    topic: (row["topic"] as string | null) ?? null,
+    summary: (row["summary"] as string | null) ?? null,
+    clarity: numOrNull(row["clarity_score"]),
+    answerability: numOrNull(row["answerability_score"]),
+    novelty: numOrNull(row["novelty_score"]),
+    debate: numOrNull(row["debate_score"]),
+    identity: numOrNull(row["identity_score"]),
+    timeSensitivity: numOrNull(row["time_sensitivity"]),
+    mediaRelevance: numOrNull(row["media_relevance"]),
+    quality: numOrNull(row["quality_score"]),
+    riskFlags: Array.isArray(row["risk_flags"]) ? (row["risk_flags"] as string[]) : [],
+    embedding: Array.isArray(row["embedding"]) ? (row["embedding"] as number[]).map(Number) : null,
+    duplicateClusterId: (row["duplicate_cluster_id"] as string | null) ?? null,
+    duplicateSimilarity: numOrNull(row["duplicate_similarity"]),
+  };
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- read-model rows are opaque JSON payloads */
@@ -155,6 +168,9 @@ export interface OpportunityFeedResult {
   historyFrom: string | null;
   tribe: FeedRowPayload | null;
   opp: FeedRowPayload | null;
+  engineVersion: number;
+  /** Why each dropped market was dropped — feed diagnostics, never rendered. */
+  excluded: { onchainId: number; reason: string | null }[];
   error: string | null;
 }
 
@@ -163,57 +179,91 @@ export async function buildOpportunityFeed(
 ): Promise<OpportunityFeedResult> {
   const win: VolumeWindow = input.window ?? "24h";
   const wallet = input.wallet?.toLowerCase() ?? null;
+  const now = Date.now();
 
   const feed = await listFeed({ data: { window: win, ...(wallet ? { wallet } : {}) } });
   const all = (feed.data ?? []) as unknown as Row[];
   const lens = input.lens && input.lens !== "all" ? input.lens : null;
-  const lensed = lens ? all.filter((r) => r["opportunity_type"] === lens) : all;
+  const rows = lens ? all.filter((r) => r["opportunity_type"] === lens) : all;
+  const ids = rows.map((r) => Number(r.onchain_id));
 
-  // V1 discovery rule: once a viewer has made a real decision on a market (a
-  // confirmed YES/NO purchase or a PASS), it leaves the normal discovery queue —
-  // under EVERY lens. Server-side only; anonymous viewers see the full feed.
-  const completed = wallet ? await listCompletedMarketIds(wallet) : new Set<number>();
-  const rows = excludeDecided(
-    lensed.map((r) => ({ r, onchainId: Number(r.onchain_id) })),
-    completed,
-  ).map((x) => x.r);
+  const [signals, analyses, ideaResult] = await Promise.all([
+    wallet && ids.length ? loadViewerSignals(wallet, ids) : Promise.resolve(EMPTY_SIGNALS),
+    loadMarketAnalyses(ids),
+    ideaFor(wallet, input.sessionToken ?? null, input),
+  ]);
 
-  const viewer = wallet && rows.length ? await viewerContext(wallet, rows) : EMPTY_VIEWER_CONTEXT;
-  const { idea, raw } = await ideaFor(wallet, input.sessionToken ?? null, input);
+  const sessionSeen = new Set<number>(input.seenIds ?? []);
+  const sessionQueued = new Set<number>(input.queuedIds ?? []);
+  // A rotating epoch keeps the exploration slot moving without reshuffling the
+  // rest of the feed between polls.
+  const epoch = Math.floor(now / 3_600_000);
 
-  const candidates: FeedMarketCandidate[] = rows.map((r) => ({
-    onchainId: Number(r.onchain_id),
-    category: ((r["markets"] as { category?: string | null } | null)?.category ?? null) as
-      string | null,
-    opportunityEligible: Boolean(r["opportunity_eligible"]),
-    opportunityScore:
-      r["opportunity_score"] == null ? null : Number(r["opportunity_score"] as number),
-    opportunityType: (r["opportunity_type"] as string | null) ?? null,
-    opportunityReason: (r["opportunity_reason"] as string | null) ?? null,
-    windowVolumeUsd:
-      r["window_volume_usd"] == null ? null : Number(r["window_volume_usd"] as number),
-  }));
+  const candidates: SequenceCandidate[] = rows.map((r) => {
+    const s = signalsOf(r);
+    const ai = aiOf(analyses.get(s.onchainId));
+    const state: ViewerMarketState | undefined = signals.states.get(s.onchainId);
+    const scored = scoreMarket({ signals: s, ai, viewer: signals.profile, now, epoch });
+    const eligibility = eligibilityFor({
+      onchainId: s.onchainId,
+      state,
+      sessionSeen,
+      sessionQueued,
+      now,
+    });
+    const holds = signals.held.has(s.onchainId);
+    const reentry = eligibility.eligible
+      ? null
+      : reentryFor(
+          {
+            acceleration: scored.acceleration,
+            newBelievers1h: s.newBelievers1h,
+            priceMovePct: s.priceMovePct,
+            divergence: s.divergence,
+            tribeEntered: Boolean(s.tribeSide),
+            oppEntered: Boolean(s.oppSide),
+            positionMovePct: holds ? num(r["chg_24h"]) : 0,
+          },
+          { holdsPosition: holds, now },
+        );
 
-  const { items } = sequenceFeed({
-    markets: candidates,
-    viewer,
-    idea,
-    ...(input.seenIds ? { seenIds: input.seenIds } : {}),
-    ...(input.limit ? { limit: input.limit } : {}),
+    return {
+      onchainId: s.onchainId,
+      category: s.category ?? ai?.category ?? null,
+      creator: s.creator,
+      clusterId: ai?.duplicateClusterId ?? null,
+      scored,
+      eligibility,
+      reason: reasonFor(s, scored, { category: s.category ?? ai?.category ?? null }),
+      reentry,
+    };
   });
 
+  const { items, engineVersion, excluded } = sequenceFeed({
+    candidates,
+    idea: ideaResult.idea,
+    ...(input.limit ? { limit: input.limit } : { limit: SEQUENCE.DEFAULT_LIMIT }),
+  });
+
+  // Carry the market's classification onto the card for the existing UI badges.
   const byId: Record<number, FeedRowPayload> = {};
   for (const r of rows) byId[Number(r.onchain_id)] = r;
+  for (const it of items) {
+    if (it.kind !== "market") continue;
+    it.opportunityType = (byId[it.onchainId]?.["opportunity_type"] as string | null) ?? null;
+  }
 
   return {
     items,
     rows: byId,
-    idea: raw,
+    idea: ideaResult.raw,
     window: win,
     ethUsd: feed.ethUsd ?? 0,
     historyFrom: feed.historyFrom ?? null,
     tribe: (feed.tribe as FeedRowPayload | null) ?? null,
     opp: (feed.opp as FeedRowPayload | null) ?? null,
+    engineVersion,
+    excluded,
     error: feed.error ?? null,
   };
 }
