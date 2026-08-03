@@ -168,20 +168,32 @@ function capitalCopy(
   const deltaUsd = usd(m.delta);
   const direction = deltaUsd > 0.5 ? "up" : deltaUsd < -0.5 ? "down" : "flat";
   if (baseUsd < 0.5 && usd(m.current) > 0.5) {
-    return { pct: null, absolute: `First capital · ${money(m.current)}`, direction: "up" };
+    return {
+      pct: null,
+      trend: money(m.current, true),
+      absolute: `First capital · ${money(m.current)}`,
+      direction: "up",
+    };
   }
   const pct =
     baseUsd >= CAPITAL_PCT_MIN_USD
       ? `${deltaUsd >= 0 ? "+" : "−"}${Math.round((Math.abs(deltaUsd) / baseUsd) * 100)}%`
       : null;
   if (direction === "flat")
-    return { pct: pct ? "0%" : null, absolute: `No change ${w.since}`, direction: "flat" };
+    return {
+      pct: pct ? "0%" : null,
+      trend: "0%",
+      absolute: `No change ${w.since}`,
+      direction: "flat",
+    };
   return {
     pct,
+    trend: pct ?? money(m.delta, true),
     absolute: `${money(m.delta, true)} committed ${w.since}`,
     direction,
   };
 }
+
 
 /**
  * One full-width metric row inside the Total Market instrument: the current
