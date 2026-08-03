@@ -111,6 +111,12 @@ function StepSpark({
 interface RowCopy {
   /** e.g. "+14%" or null when the base is too small to be meaningful. */
   pct: string | null;
+  /**
+   * What the big right-hand figure shows. It is the percentage whenever the
+   * base supports one; on a cold start (no base to divide by) it falls back to
+   * the absolute move so the arrow is never left standing on its own.
+   */
+  trend: string;
   /** e.g. "+1 believer over 24H" / "First believer" / "No change over 24H". */
   absolute: string;
   direction: "up" | "down" | "flat";
@@ -120,23 +126,35 @@ interface RowCopy {
 function believerCopy(m: BookMetric, w: BookWindow): RowCopy {
   const direction = m.delta > 0 ? "up" : m.delta < 0 ? "down" : "flat";
   if (m.base === 0 && m.current > 0) {
-    return m.current === 1
-      ? { pct: null, absolute: "First believer", direction: "up" }
-      : { pct: null, absolute: `+${m.current} believers ${w.since}`, direction: "up" };
+    return {
+      pct: null,
+      trend: `+${m.current}`,
+      absolute:
+        m.current === 1 ? "First believer" : `+${m.current} believers ${w.since}`,
+      direction: "up",
+    };
   }
   const pct =
     m.base >= BELIEVER_PCT_MIN
       ? `${m.delta >= 0 ? "+" : "−"}${Math.round((Math.abs(m.delta) / m.base) * 100)}%`
       : null;
   if (m.delta === 0)
-    return { pct: pct ? "0%" : null, absolute: `No change ${w.since}`, direction: "flat" };
+    return {
+      pct: pct ? "0%" : null,
+      trend: "0%",
+      absolute: `No change ${w.since}`,
+      direction: "flat",
+    };
   const n = Math.abs(m.delta);
+  const signed = `${m.delta > 0 ? "+" : "−"}${n}`;
   return {
     pct,
-    absolute: `${m.delta > 0 ? "+" : "−"}${n} believer${n === 1 ? "" : "s"} ${w.since}`,
+    trend: pct ?? signed,
+    absolute: `${signed} believer${n === 1 ? "" : "s"} ${w.since}`,
     direction,
   };
 }
+
 
 // Materiality (direction, the percentage floor) is judged in USD so a display in
 // ETH never changes what counts as a real move; only the shown figure converts.
@@ -150,20 +168,32 @@ function capitalCopy(
   const deltaUsd = usd(m.delta);
   const direction = deltaUsd > 0.5 ? "up" : deltaUsd < -0.5 ? "down" : "flat";
   if (baseUsd < 0.5 && usd(m.current) > 0.5) {
-    return { pct: null, absolute: `First capital · ${money(m.current)}`, direction: "up" };
+    return {
+      pct: null,
+      trend: money(m.current, true),
+      absolute: `First capital · ${money(m.current)}`,
+      direction: "up",
+    };
   }
   const pct =
     baseUsd >= CAPITAL_PCT_MIN_USD
       ? `${deltaUsd >= 0 ? "+" : "−"}${Math.round((Math.abs(deltaUsd) / baseUsd) * 100)}%`
       : null;
   if (direction === "flat")
-    return { pct: pct ? "0%" : null, absolute: `No change ${w.since}`, direction: "flat" };
+    return {
+      pct: pct ? "0%" : null,
+      trend: "0%",
+      absolute: `No change ${w.since}`,
+      direction: "flat",
+    };
   return {
     pct,
+    trend: pct ?? money(m.delta, true),
     absolute: `${money(m.delta, true)} committed ${w.since}`,
     direction,
   };
 }
+
 
 /**
  * One full-width metric row inside the Total Market instrument: the current
@@ -187,7 +217,7 @@ function MomentumMetric({
 }) {
   const tone = dirTone(copy.direction);
   const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
-  const trend = copy.pct ?? (copy.direction === "flat" ? "0%" : "");
+  const trend = copy.trend;
   return (
     <div className="px-4 py-3 sm:px-5">
       <div className="flex items-baseline justify-between gap-4">
