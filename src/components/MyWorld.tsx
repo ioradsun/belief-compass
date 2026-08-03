@@ -63,11 +63,11 @@ export function MyWorld({
     }
   };
 
-  const label = (t: Tab): string => {
-    const name = t === "positions" ? "Convictions" : t === "tribe" ? "Tribe" : "Rivals";
-    const n = t === "positions" ? convictionCount : t === "tribe" ? counts?.tribe : counts?.rivals;
-    return n && n > 0 ? `${name} (${n})` : name;
-  };
+  const tabName = (t: Tab): string =>
+    t === "positions" ? "Convictions" : t === "tribe" ? "Tribe" : "Rivals";
+
+  const tabCount = (t: Tab): number | null | undefined =>
+    t === "positions" ? convictionCount : t === "tribe" ? counts?.tribe : counts?.rivals;
 
   const exploreMarkets = () => {
     const first = rows[0];
