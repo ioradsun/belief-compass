@@ -478,11 +478,15 @@ export function CaseRoster({
   side,
   believers,
   people,
+  priceUsd,
 }: {
   side: Side;
   believers: Believer[];
   people?: { wallet: string; relationship: string; agreement?: number; sharedBeliefs?: number }[];
+  /** Live price per share on this side — used to value positions the indexer hasn't priced. */
+  priceUsd?: number | null;
 }) {
+
   const { format } = useMoney();
   const byWallet = useMemo(
     () => new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p])),
