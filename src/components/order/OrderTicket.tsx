@@ -38,6 +38,9 @@ const CTRL = "h-[52px] rounded-[12px]"; // every button + the amount field
 const CARD = "rounded-[16px] p-3.5"; // every ticket container
 const PRIMARY_STYLE = { background: "var(--text)", color: "var(--bg)" } as const;
 const GHOST_STYLE = { border: "1px solid var(--border)" } as const;
+// Containers carry no border: a fill one step above the panel does the grouping,
+// so the only lines on screen belong to things you can actually press or type in.
+const CARD_STYLE = { background: "var(--surface)" } as const;
 
 /** The connected wallet's spendable ETH on Base — one reader for every order surface. */
 export function useSpendableBalance() {
@@ -346,7 +349,7 @@ function BuyTicket({
   // confirm button, so nothing resizes on success. One full-width action: next.
   if (trade.isSuccess && side) {
     return (
-      <div className={CARD} style={{ border: "1px solid var(--border-strong,var(--border))" }}>
+      <div className={CARD} style={CARD_STYLE}>
         <div className="mb-3 flex items-center gap-3 px-0.5">
           <span
             className="grid h-7 w-7 place-items-center rounded-full"
@@ -381,7 +384,7 @@ function BuyTicket({
   // Neutral: the decision only — one tap on an action opens the full order form.
   if (!side) {
     return (
-      <div className={`${CARD} flex gap-2`} style={GHOST_STYLE}>
+      <div className={`${CARD} flex gap-2`} style={CARD_STYLE}>
         <SideButton
           label="← NO"
           tone="no"
@@ -408,7 +411,7 @@ function BuyTicket({
   const disabled = ready.connected && ready.onBase && (busy || !quote || ethWei <= 0n);
 
   return (
-    <div className={CARD} style={GHOST_STYLE}>
+    <div className={CARD} style={CARD_STYLE}>
       <div className="mb-3 px-0.5 text-[13px] font-semibold text-[var(--text)]">
         Back {side} to reveal the House’s pick.
       </div>
@@ -497,7 +500,7 @@ function SellTicket({
   // sell never resizes the surface.
   if (trade.isSuccess) {
     return (
-      <div className={CARD} style={{ border: "1px solid var(--border-strong,var(--border))" }}>
+      <div className={CARD} style={CARD_STYLE}>
         <div className="mb-3 flex items-center gap-3 px-0.5">
           <span
             className="grid h-7 w-7 place-items-center rounded-full"
@@ -536,7 +539,7 @@ function SellTicket({
   const disabled = ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n);
 
   return (
-    <div className={CARD} style={{ border: "1px solid var(--border-strong,var(--border))" }}>
+    <div className={CARD} style={CARD_STYLE}>
       <div className="mb-3 flex items-center gap-2 px-0.5">
         <span className="text-[13px] font-semibold text-[var(--text)]">
           Sell your{" "}

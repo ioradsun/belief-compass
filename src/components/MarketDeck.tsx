@@ -763,11 +763,8 @@ function ExamineCta({
       onClick={onToggle}
       aria-pressed={open}
       aria-label={open ? "Close Case File" : "Open Case File"}
-      className="block w-full rounded-[14px] px-4 py-3 text-center transition-colors"
-      style={{
-        border: `1px solid ${open ? "var(--text)" : "var(--border)"}`,
-        background: open ? "var(--surface)" : "transparent",
-      }}
+      className="block w-full rounded-[14px] px-4 py-3 text-center transition-colors hover:bg-[var(--surface)]"
+      style={{ background: open ? "var(--surface-2)" : "var(--surface)" }}
     >
       <span className="flex items-center justify-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--text)]">
         {open ? (
