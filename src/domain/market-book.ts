@@ -25,7 +25,7 @@
  *
  * ZERO IO, pure, fully testable.
  */
-import type { TapeTrade } from "./conviction-series";
+import { compareTape, type TapeTrade } from "./conviction-series";
 import { FLOW_WINDOW_MS, type FlowWindow } from "./market-flow";
 
 /** One step in an event-driven value history: value `v` at epoch-ms `t`. */
@@ -162,7 +162,7 @@ type Book = { yes: number; no: number };
  * sparkline in the book is measured over exactly that period.
  */
 export function marketBook(tape: TapeTrade[], nowMs: number, win?: FlowWindow): MarketBook {
-  const sorted = tape.filter((t) => Number.isFinite(t.t)).sort((a, b) => a.t - b.t);
+  const sorted = tape.filter((t) => Number.isFinite(t.t)).sort(compareTape);
   const firstEventAt = sorted.length ? sorted[0].t : null;
   const window = bookWindow(firstEventAt, nowMs, win);
 

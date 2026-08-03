@@ -55,7 +55,14 @@ export function CurrentMarketActivity({
   useEffect(() => setHydrated(true), []);
   const houseText = houseNote(hydrated ? wallet : undefined, hydrated ? house : undefined, marketId).text;
 
-  const count = change?.tape?.length ?? 0;
+  // The tape is the market's whole life, but the list below only ever shows the
+  // last 72 hours — so count the same window, or a quiet market promises
+  // "12 updates" and then opens on nothing.
+  const WINDOW_MS = 72 * 3_600_000;
+  const cutoff = Date.now() - WINDOW_MS;
+  const recent = (change?.tape ?? []).filter((t) => t.t >= cutoff);
+  const count = recent.length;
+
 
   // The House line is the always-on lead; only the count changes. Unread = events
   // that arrived since the viewer last opened this section, so the words stay put

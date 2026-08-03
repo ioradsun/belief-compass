@@ -120,3 +120,21 @@ describe("adaptive window", () => {
     expect(bk.believers.market.delta).toBe(1);
   });
 });
+
+describe("marketBook — same-timestamp chain order", () => {
+  const t = 1_700_000_000_000;
+  it("closes a round-trip inside one block instead of leaving phantom shares", () => {
+    // Arrives newest-first (as the wire delivers it) and both legs share one
+    // occurred_at; only block/log order says the BUY came first.
+    const b = marketBook(
+      [
+        { w: "a", side: "YES", action: "SELL", eth: 1, price: null, t, seq: 100_000_002 },
+        { w: "a", side: "YES", action: "BUY", eth: 1, price: null, t, seq: 100_000_001 },
+      ],
+      t + 1000,
+    );
+    expect(b.believers.market.current).toBe(0);
+    expect(b.capitalEth.market.current).toBe(0);
+    expect(b.inactiveParticipants).toBe(1);
+  });
+});
