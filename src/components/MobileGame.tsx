@@ -46,7 +46,7 @@ import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
 
-type Phase = "question" | "passed" | "sides";
+type Phase = "question" | "sides";
 
 export function MobileGame({
   row,
@@ -151,8 +151,8 @@ export function MobileGame({
 
   const pass = () => {
     setSide(null);
-    setPhase("passed");
     house.pass();
+    onNext();
   };
 
   // ---- money: only ever asked for AFTER a side is chosen ----
@@ -225,20 +225,6 @@ export function MobileGame({
       />
     );
 
-  if (phase === "passed")
-    return (
-      <Screen>
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
-          <p className="text-[16px] text-[var(--text-secondary)]">You walked away.</p>
-          <p className="text-[16px] text-[var(--text-secondary)]">
-            <span aria-hidden>🏠</span> I kept my read. You never paid to see it.
-          </p>
-        </div>
-        <Dock>
-          <BigButton label="Next question" tone="neutral" onClick={onNext} />
-        </Dock>
-      </Screen>
-    );
 
   // ---- The Question — ONE screen. The dock transforms decision → order in place;
   // the House pick + celebration only arrive after the order is placed (above). ----

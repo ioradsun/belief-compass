@@ -29,12 +29,19 @@ export function usdToWei(usd: number, ethUsd: number): bigint {
   return BigInt(gwei) * WEI_PER_GWEI;
 }
 
-/** Shares to sell for a percentage of a holding (floored; pct clamped 0..100). */
+/**
+ * Shares to sell for a percentage of a holding (pct clamped 0..100). Resolved in
+ * basis points so a money-denominated sell (e.g. "$3.40 of a $9.10 position")
+ * keeps its precision instead of snapping to whole percents.
+ */
 export function sharesForPct(tokens: bigint, pct: number): bigint {
   if (tokens <= 0n) return 0n;
-  const p = pct <= 0 ? 0 : pct >= 100 ? 100 : Math.floor(pct);
-  return (tokens * BigInt(p)) / 100n;
+  const p = pct <= 0 ? 0 : pct >= 100 ? 100 : pct;
+  if (p === 100) return tokens;
+  const bps = BigInt(Math.floor(p * 100));
+  return (tokens * bps) / 10_000n;
 }
+
 
 export function weiToEth(wei: bigint): number {
   return Number(wei) / 1e18;

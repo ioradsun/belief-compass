@@ -194,6 +194,8 @@ export function OmniHeader({
   onSelectMarket,
   onSelectPerson,
   onOpenMenu,
+  onFeed,
+  feedActive,
   right,
   center,
 }: {
@@ -201,6 +203,10 @@ export function OmniHeader({
   onSelectMarket: (id: number) => void;
   onSelectPerson: (w: string) => void;
   onOpenMenu: () => void;
+  /** Return to the market feed from any center destination. */
+  onFeed?: () => void;
+  /** True when the feed itself is what's on screen. */
+  feedActive?: boolean;
   /** Top-right slot — the account affordance. */
   right?: ReactNode;
   /** Mobile-only center slot — the primary action (+ Conviction). */
@@ -307,6 +313,36 @@ export function OmniHeader({
             <span className="block h-px w-4 bg-current" />
           </span>
         </button>
+
+        {/* The way home. Always present, highlighted when the feed is what you're on. */}
+        {onFeed && (
+          <button
+            type="button"
+            onClick={onFeed}
+            aria-label="Back to the market feed"
+            aria-current={feedActive ? "page" : undefined}
+            title="Market feed"
+            className={`${expanded ? "hidden" : "flex"} h-9 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-semibold transition-colors lg:px-3.5 ${
+              feedActive
+                ? "border-transparent bg-[var(--surface)] text-[var(--text)]"
+                : "border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text)]"
+            }`}
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <path d="M4 6h16M4 12h16M4 18h10" strokeLinecap="round" />
+            </svg>
+            <span className="hidden lg:inline">Feed</span>
+          </button>
+        )}
+
+
 
         {/* Mobile: the primary action owns the middle of the bar. */}
         {center && (
