@@ -143,12 +143,12 @@ export function WelcomePrompt({
             👋
           </span>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-semibold text-[var(--text)]">{headline}</div>
-            <div className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-muted)]">
-              Tap a face to explore their convictions.
+            <div className="text-[13px] font-semibold break-words text-[var(--text)]">
+              {headline}
             </div>
           </div>
         </div>
+
 
         <div className="mt-2.5 flex items-center gap-2">
           <div className="flex min-w-0 flex-1 items-center">
