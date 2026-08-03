@@ -1,28 +1,24 @@
 /**
  * CENTER — Market Momentum: the timeless read of "how big and which way?"
  *
- * Two compact metric rows — believers and capital (value · capped sparkline ·
- * percentage) — plus a one-word status pill for the shape. This is the only
- * momentum surface; the story (the narrative sentence, the House voice, the
- * activity) lives in the right feed. The center never becomes a feed.
+ * Two compact metric rows — believers and capital (total · percentage change) —
+ * plus the exact absolute move over the selected timeframe. No charts here: the
+ * shape of the move lives in the Case File. This is the only momentum surface;
+ * the story (the narrative sentence, the House voice, the activity) lives in the
+ * right feed. The center never becomes a feed.
  *
  * Every number is read off the canonical marketBook, so the totals reconcile with
  * the side panels; the label comes from marketPulse — existing calculations,
  * unchanged. Side-blind by construction. The SAME component renders on desktop and
- * mobile; only the layout (and the sparkline size) changes.
+ * mobile; only the layout changes.
  */
 import { useMemo, type ReactNode } from "react";
-import {
-  marketBook,
-  type BookMetric,
-  type BookWindow,
-  type VitalityPoint,
-} from "@/domain/market-book";
+import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
 import type { TapeTrade } from "@/domain/conviction-series";
 import type { FlowWindow } from "@/domain/market-flow";
 import { formatMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
-import { sparkDomain, SPARK_DOMAIN, type SparkDomainOpts } from "@/domain/spark-domain";
+
 
 /** Below these bases a percentage is noise, so we show the absolute change only. */
 const BELIEVER_PCT_MIN = 1;
