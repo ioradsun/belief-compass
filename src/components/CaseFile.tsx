@@ -86,11 +86,11 @@ export function CaseColumn({
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
   // The shared timeframe: YES and NO always quote the same period so they compare.
   const win = useDeckWindow();
-  const { format, ethUsd } = useMoney();
+  const { format, ethUsd: rateUsd } = useMoney();
   // Trade sizes are ETH-native; without a live rate we still show the ETH figure
   // rather than an empty dash, so activity always carries an amount.
   const tradeAmount = (eth: number) =>
-    ethUsd > 0 ? format(eth, "ETH") : formatMoney(eth, { from: "ETH", to: "ETH", ethUsd: 0 });
+    rateUsd > 0 ? format(eth, "ETH") : formatMoney(eth, { from: "ETH", to: "ETH", ethUsd: 0 });
 
   // Same query keys the deck already runs → React Query dedupes, no new requests.
   const { data: evidence } = useQuery({
