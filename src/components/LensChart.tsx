@@ -32,7 +32,8 @@ export function LensChart({
 }: {
   side: "YES" | "NO";
   metric: LensMetric;
-  title: string;
+  /** Optional heading. Omit for a bare, label-free spark. */
+  title?: string;
   kind: "step" | "line";
   series: SeriesPoint[];
   markers: LensMarker[];
@@ -43,11 +44,13 @@ export function LensChart({
 
   return (
     <div>
-      <div className="mb-1.5 flex items-baseline justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          {title}
-        </span>
-      </div>
+      {title ? (
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            {title}
+          </span>
+        </div>
+      ) : null}
       {/* Keyed on metric → the wrapper remounts and replays the crossfade. */}
       <div key={metric} className="animate-in fade-in duration-200 motion-reduce:animate-none">
         {coldStart ? (
