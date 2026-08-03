@@ -393,7 +393,7 @@ function CurrencySetting() {
   const price = ethUsd != null ? formatUsdPrice(ethUsd) : null;
   const seg = (active: boolean) =>
     `flex-1 rounded-[8px] px-3 py-1.5 text-center text-[12px] font-semibold transition-colors ${
-      active ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
+      active ? "bg-[var(--panel)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)]"
     }`;
   return (
     <div className="px-1 py-1.5">
@@ -454,7 +454,7 @@ function ThemeSetting() {
   const theme = useTheme();
   const seg = (active: boolean) =>
     `flex-1 rounded-[8px] px-3 py-1.5 text-center text-[12px] font-semibold transition-colors ${
-      active ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
+      active ? "bg-[var(--panel)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)]"
     }`;
   return (
     <div className="px-1 py-1.5">
