@@ -57,7 +57,8 @@ const SHAPES = {
   portrait: { ratio: 9 / 16, fixedHeight: null, maxHeight: 560 },
   square: { ratio: 4 / 5, fixedHeight: null, maxHeight: 560 },
   post: { ratio: 3 / 4, fixedHeight: null, maxHeight: 560 },
-  bar: { ratio: null, fixedHeight: 152, maxHeight: 152 },
+  // Spotify's compact player paints an 80px row; anything taller is dead space.
+  bar: { ratio: null, fixedHeight: 80, maxHeight: 80 },
   panel: { ratio: null, fixedHeight: 352, maxHeight: 352 },
 } satisfies Record<string, EmbedShape>;
 
