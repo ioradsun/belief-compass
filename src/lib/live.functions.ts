@@ -20,9 +20,7 @@ import {
   type LiveRow,
 } from "@/lib/live-tape";
 import { composeLiveStory } from "@/domain/story";
-
-/** A single small trade below this (and not from your network) is dust — hidden. */
-const MIN_MATERIAL_USD = 5;
+import { includeInFeed, type NetTag } from "@/domain/feed-event";
 
 type NetLabel = "twin" | "tribe" | "opp" | "inverse";
 
@@ -222,22 +220,25 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       r.text = flattenStory(r.story);
     }
 
-    // Materiality: the feed reports changes in conviction, not dust. Keep every
-    // personal (network) row, every milestone / fresh market / surge / side
-    // switch, and any trade that moved real money or brought several people;
-    // drop lone micro-trades and washes that say nothing.
+    // Materiality: the feed reports changes in conviction, not dust — "volume earns
+    // attention only when it changes the meaning of the market". The importance
+    // engine judges each row MARKET-RELATIVE (the same $6 is dust in a whale market
+    // and a movement in a tiny one), keeping structural transitions and personal
+    // (network) actions and dropping lone dust + washes (Tier 4). Order is left
+    // untouched — the live tape stays chronological so delta-sync merging holds.
     const material = live.filter((r) => {
-      if (r.face?.relationship) return true;
-      if (
-        r.kind === "market_created" ||
-        r.kind === "believer_milestone" ||
-        r.kind === "tribe_doubled" ||
-        r.kind === "side_shift"
-      )
-        return true;
-      if (r.kind === "round_trip") return false;
-      if ((r.amountUsd ?? 0) >= MIN_MATERIAL_USD) return true;
-      return (r.walletCount ?? 1) > 1;
+      const m = momentumById.get(Number(r.marketId));
+      const marketBelievers = m ? (m.believersYes ?? 0) + (m.believersNo ?? 0) : null;
+      return includeInFeed({
+        kind: r.kind,
+        side: r.side,
+        amountUsd: r.amountUsd,
+        walletCount: r.walletCount,
+        tradeCount: r.tradeCount,
+        windowMs: Number((r.payload as { window_ms?: number }).window_ms ?? 0) || null,
+        relationship: (r.face?.relationship as NetTag | null) ?? null,
+        marketBelievers,
+      });
     });
 
     return { rows: material, error: null };
