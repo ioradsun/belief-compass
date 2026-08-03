@@ -52,7 +52,18 @@ const capitalCopy = (
  * right (with its direction arrow trailing it), the metric label beneath, and
  * the exact absolute change over the selected timeframe beneath that.
  */
-function MomentumMetric({ total, label, copy }: { total: string; label: string; copy: MetricMove }) {
+function MomentumMetric({
+  total,
+  label,
+  copy,
+  dense,
+}: {
+  total: string;
+  label: string;
+  copy: MetricMove;
+  /** Phone-tight rhythm so the whole market fits one screen without scrolling. */
+  dense?: boolean;
+}) {
   const tone = dirTone(copy.direction);
   const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
   // Only a trusted (headline) % earns the big right-hand figure. A small-base %
