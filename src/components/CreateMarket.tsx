@@ -296,13 +296,24 @@ export function CreateMarket({
               {attachment ? (
                 <span />
               ) : (
-                <AddMedia onPick={openPicker} />
+                <AddMedia onPick={() => setLinkOpen((v) => !v)} active={linkOpen} />
               )}
               <span className="num text-[11px] text-[var(--text-muted)]">
                 {question.length}/{QUESTION_MAX}
               </span>
             </div>
           </div>
+          {linkOpen && !attachment && (
+            <EmbedPicker
+              onCancel={() => setLinkOpen(false)}
+              onConfirm={(media) => {
+                setAttachment({ kind: "embed", media });
+                setLinkOpen(false);
+                setLocalError(null);
+              }}
+            />
+          )}
+
           {/* AI check / polish — subtle, advisory. */}
           {review && (
             <div className="mt-1 flex items-center gap-1.5 text-[11.5px]">
