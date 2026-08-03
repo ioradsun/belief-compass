@@ -54,7 +54,14 @@ function Avatar({
 
 /* ─────────────────────────── Sender: welcome them in ─────────────────────── */
 
-export function WelcomePrompt({ wallet }: { wallet?: string }) {
+export function WelcomePrompt({
+  wallet,
+  onSelectPerson,
+}: {
+  wallet?: string;
+  /** Open a believer's profile so the viewer can explore their convictions. */
+  onSelectPerson?: (wallet: string) => void;
+}) {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
   const [open, setOpen] = useState(false);
@@ -107,27 +114,85 @@ export function WelcomePrompt({ wallet }: { wallet?: string }) {
   if (!wallet || count === 0) return null;
   const selectedCount = selected.size;
 
+  // One face per person, even if they joined you on several markets.
+  const faces: WelcomablePerson[] = [];
+  const seenFaces = new Set<string>();
+  for (const p of people) {
+    if (seenFaces.has(p.wallet)) continue;
+    seenFaces.add(p.wallet);
+    faces.push(p);
+  }
+  const shown = faces.slice(0, 5);
+  const overflow = faces.length - shown.length;
+  const lead = shown[0]?.name ?? "Someone";
+  const headline =
+    faces.length === 1
+      ? `${lead} joined your side`
+      : faces.length === 2
+        ? `${lead} and ${shown[1].name} joined your side`
+        : `${lead} and ${faces.length - 1} others joined your side`;
+
   return (
     <>
       <div
-        className="mb-4 flex items-center gap-3 rounded-[12px] px-3 py-2.5"
+        className="mb-4 rounded-[14px] px-3.5 py-3"
         style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
       >
-        <span className="text-[16px]" aria-hidden>
-          👋
-        </span>
-        <span className="min-w-0 flex-1 text-[12px] leading-snug text-[var(--text-secondary)]">
-          {count} {count === 1 ? "person" : "people"} like you joined your tribe.
-        </span>
-        <button
-          type="button"
-          onClick={openSheet}
-          className="shrink-0 rounded-[10px] px-3 py-1.5 text-[12px] font-semibold"
-          style={{ background: "var(--text)", color: "var(--bg)" }}
-        >
-          Welcome
-        </button>
+        <div className="flex items-start gap-3">
+          <span className="mt-[1px] text-[17px] leading-none" aria-hidden>
+            👋
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13px] font-semibold text-[var(--text)]">{headline}</div>
+            <div className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-muted)]">
+              Tap a face to explore their convictions.
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-2.5 flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center">
+            {shown.map((p, i) => (
+              <button
+                key={p.wallet}
+                type="button"
+                onClick={() => onSelectPerson?.(p.wallet)}
+                disabled={!onSelectPerson}
+                title={`${p.name} · ${p.side} · ${p.marketTitle}`}
+                aria-label={`View ${p.name}'s convictions`}
+                className="relative rounded-full transition-transform hover:z-10 hover:-translate-y-0.5 disabled:cursor-default"
+                style={{
+                  marginLeft: i === 0 ? 0 : -8,
+                  padding: 2,
+                  background: p.side === "YES" ? "var(--yes)" : "var(--no)",
+                  borderRadius: 999,
+                }}
+              >
+                <span className="block rounded-full" style={{ background: "var(--surface)" }}>
+                  <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} size={30} />
+                </span>
+              </button>
+            ))}
+            {overflow > 0 && (
+              <span
+                className="ml-1 shrink-0 text-[11px] font-medium text-[var(--text-muted)]"
+                aria-hidden
+              >
+                +{overflow}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={openSheet}
+            className="shrink-0 rounded-[10px] px-3 py-1.5 text-[12px] font-semibold"
+            style={{ background: "var(--text)", color: "var(--bg)" }}
+          >
+            Welcome {faces.length > 1 ? "all" : ""}
+          </button>
+        </div>
       </div>
+
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
@@ -155,7 +220,7 @@ export function WelcomePrompt({ wallet }: { wallet?: string }) {
                 const k = keyOf(p);
                 const on = selected.has(k);
                 return (
-                  <li key={k}>
+                  <li key={k} className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() =>
@@ -166,7 +231,7 @@ export function WelcomePrompt({ wallet }: { wallet?: string }) {
                           return next;
                         })
                       }
-                      className="flex w-full items-center gap-2.5 rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--border)]/30"
+                      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--border)]/30"
                     >
                       <span
                         className="grid h-4 w-4 shrink-0 place-items-center rounded-[5px] text-[10px] font-bold"
@@ -195,7 +260,20 @@ export function WelcomePrompt({ wallet }: { wallet?: string }) {
                         </span>
                       </span>
                     </button>
+                    {onSelectPerson && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false);
+                          onSelectPerson(p.wallet);
+                        }}
+                        className="shrink-0 rounded-[8px] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] underline"
+                      >
+                        View
+                      </button>
+                    )}
                   </li>
+
                 );
               })}
             </ul>
