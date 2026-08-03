@@ -22,9 +22,9 @@ import { priceMove } from "@/domain/metric-display";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useMoney } from "@/lib/display-unit";
-import { formatMoney } from "@/domain/money";
-import { aliasFor } from "@/lib/wallet-identity";
 import { PersonAvatar } from "@/components/PersonAvatar";
+import { sideFeed } from "@/domain/side-feed";
+import type { NetTag } from "@/domain/feed-event";
 
 import {
   LENS_META,
@@ -56,15 +56,6 @@ const REL_TONE: Record<CaseRelationship, string> = {
 const num = (v: unknown): number | null =>
   v == null || !Number.isFinite(Number(v)) ? null : Number(v);
 
-/** Compact "how long ago" for the activity feed. */
-function timeAgo(ms: number): string {
-  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m`;
-  if (s < 86_400) return `${Math.floor(s / 3600)}h`;
-  return `${Math.floor(s / 86_400)}d`;
-}
-
 export function CaseColumn({
   side,
   marketId,
@@ -87,13 +78,7 @@ export function CaseColumn({
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
   // The shared timeframe: YES and NO always quote the same period so they compare.
   const win = useDeckWindow();
-  const { format, ethUsd: rateUsd } = useMoney();
-  // Trade sizes are ETH-native; without a live rate we still show the ETH figure
-  // rather than an empty dash, so activity always carries an amount.
-  const tradeAmount = (eth: number) =>
-    (rateUsd ?? 0) > 0
-      ? format(eth, "ETH")
-      : formatMoney(eth, { from: "ETH", to: "ETH", ethUsd: 0 });
+  const { format } = useMoney();
 
   // Same query keys the deck already runs → React Query dedupes, no new requests.
   const { data: evidence } = useQuery({
@@ -132,48 +117,6 @@ export function CaseColumn({
   );
 
   const believers = (evidence?.believers ?? []).filter((b) => b.side === side);
-
-  // Recent activity — the last few real trades on THIS side: who, and how much.
-  // Independent of the selected lens, and never repeats the side (it's the panel).
-  const nameOf = useMemo(() => {
-    const m = new Map(
-      (evidence?.believers ?? []).map((b) => [b.wallet.toLowerCase(), b.name] as const),
-    );
-    return (w: string) => m.get(w.toLowerCase()) ?? aliasFor(w);
-  }, [evidence]);
-  const avatarOf = useMemo(() => {
-    const m = new Map(
-      (evidence?.believers ?? []).map((b) => [b.wallet.toLowerCase(), b.avatarUrl] as const),
-    );
-    return (w: string) => m.get(w.toLowerCase()) ?? null;
-  }, [evidence]);
-  // The trade tape publishes only a 10-char wallet prefix. Resolve it back to the
-  // full address when this market's believer roster contains it — only then can a
-  // face open a profile.
-  const fullWalletOf = useMemo(() => {
-    const m = new Map(
-      (evidence?.believers ?? []).map((b) => [b.wallet.toLowerCase().slice(0, 10), b.wallet]),
-    );
-    return (w: string) => m.get(w.toLowerCase()) ?? null;
-  }, [evidence]);
-  const recent = useMemo(() => {
-    if (!tape?.length) return [];
-    return tape
-      .filter((t) => t.side === side && t.eth > 0)
-      .slice()
-      .sort((a, b) => b.t - a.t || (b.seq ?? 0) - (a.seq ?? 0))
-      .slice(0, 5)
-      .map((t, i) => ({
-        id: `${t.w}-${t.t}-${t.seq ?? i}`,
-        wallet: fullWalletOf(t.w) ?? t.w,
-        linkable: fullWalletOf(t.w) != null,
-        name: nameOf(t.w),
-        avatarUrl: avatarOf(t.w),
-        eth: t.eth,
-        action: t.action,
-        t: t.t,
-      }));
-  }, [tape, side, nameOf, avatarOf, fullWalletOf]);
 
   // Headline Believers + Capital come from the CANONICAL reducer (the same one the
   // center uses), so YES + NO always equals the center's Market total. Price is a
@@ -236,6 +179,38 @@ export function CaseColumn({
     const change = move.absolute ? ` (${move.absolute})` : "";
     return `${side} ${verb} ${format(priceUsd, "USD")} · ${move.pct}${change}.`;
   }, [metric, priceUsd, summary?.pricePct, win, side, format]);
+
+  // The side feed — the anatomy of THIS side as gated, consolidated momentum
+  // beats (people, capital, social), newest first. The same importance engine as
+  // the universal tape decides what's meaningful; raw trades stay in the ledger.
+  const network = useMemo(() => {
+    const m = new Map<string, NetTag>();
+    for (const p of net?.people ?? []) {
+      const r = p.relationship;
+      if (r === "twin" || r === "tribe" || r === "opp" || r === "inverse")
+        m.set(p.wallet.toLowerCase(), r);
+    }
+    return m;
+  }, [net]);
+  const feed = useMemo(
+    () =>
+      tape?.length
+        ? sideFeed({
+            trades: tape,
+            side,
+            win,
+            nowMs: Date.now(),
+            ethUsd,
+            marketBelievers: book?.believers.market.current ?? null,
+            network,
+            believersNow: believersTotal,
+            capitalEthNow: capitalMetric?.current ?? 0,
+            money,
+            limit: 5,
+          })
+        : [],
+    [tape, side, win, ethUsd, book, network, believersTotal, capitalMetric, money],
+  );
 
   // Prefer the AUTHORITATIVE current (market_state row) + the snapshot baseline for
   // the selected window: correct even on a >1000-trade market where the tape can't
@@ -344,36 +319,37 @@ export function CaseColumn({
           </p>
         </div>
 
-        {/* ACT 3 — RECENT ACTIVITY: always on, independent of the chosen lens.
-          Name + amount only — the side is the panel, so we never repeat it. */}
+        {/* ACT 3 — WHAT'S HAPPENING TO {side}: the anatomy of this side as gated,
+          consolidated momentum beats (people, capital, social) — not a raw trade
+          log. What changed leads; the current state trails once per dimension.
+          Raw trades live in the ledger, not here. */}
         <div className="space-y-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-            Recent activity
+            What&rsquo;s happening to {side}
           </span>
-          {recent.length === 0 ? (
-            <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No activity yet.</p>
+          {feed.length === 0 ? (
+            <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No meaningful moves yet.</p>
           ) : (
-            <ul className="space-y-0.5">
-              {recent.map((e) => (
-                <li key={e.id} className="flex items-center gap-2 text-[12px]">
-                  <PersonAvatar
-                    wallet={e.wallet}
-                    name={e.name}
-                    avatarUrl={e.avatarUrl}
-                    size={22}
-                    interactive={e.linkable}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
-                    <span className="text-[var(--text)]">{e.name}</span>{" "}
-                    <span style={{ color: e.action === "BUY" ? color : "var(--text-muted)" }}>
-                      {e.action === "BUY" ? "bought" : "sold"}
-                    </span>{" "}
-                    <span className="num font-semibold text-[var(--text)]">
-                      {tradeAmount(e.eth)}
-                    </span>
+            <ul className="space-y-1.5">
+              {feed.map((e) => (
+                <li key={e.id} className="flex items-baseline gap-2 text-[12px]">
+                  <span aria-hidden className="shrink-0">
+                    {e.emoji}
                   </span>
-                  <span className="num shrink-0 text-[10px] text-[var(--text-muted)]">
-                    {timeAgo(e.t)}
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={`leading-snug ${e.tier === 1 ? "font-semibold" : ""}`}
+                      style={{
+                        color: e.tone === "down" ? "var(--text-muted)" : color,
+                      }}
+                    >
+                      {e.headline}
+                    </span>
+                    {e.current && (
+                      <span className="mt-0.5 block text-[10px] text-[var(--text-muted)]">
+                        {e.current}
+                      </span>
+                    )}
                   </span>
                 </li>
               ))}
