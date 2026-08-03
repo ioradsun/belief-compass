@@ -23,10 +23,7 @@ import type { FlowWindow } from "@/domain/market-flow";
 import { formatMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
 import { sparkDomain, SPARK_DOMAIN, type SparkDomainOpts } from "@/domain/spark-domain";
-
-/** Below these bases a percentage is noise, so we show the absolute change only. */
-const BELIEVER_PCT_MIN = 1;
-const CAPITAL_PCT_MIN_USD = 1;
+import { believerMove, capitalMove, type MetricMove } from "@/domain/metric-display";
 
 const dirTone = (d: "up" | "down" | "flat"): string =>
   d === "up" ? "var(--yes)" : d === "down" ? "var(--no)" : "var(--text-muted)";
@@ -108,62 +105,22 @@ function StepSpark({
   );
 }
 
-interface RowCopy {
-  /** e.g. "+14%" or null when the base is too small to be meaningful. */
-  pct: string | null;
-  /** e.g. "+1 believer over 24H" / "First believer" / "No change over 24H". */
-  absolute: string;
-  direction: "up" | "down" | "flat";
-}
-
-/** Turn a metric + its cold-start context into the row's two copy lines. */
-function believerCopy(m: BookMetric, w: BookWindow): RowCopy {
-  const direction = m.delta > 0 ? "up" : m.delta < 0 ? "down" : "flat";
-  if (m.base === 0 && m.current > 0) {
-    return m.current === 1
-      ? { pct: null, absolute: "First believer", direction: "up" }
-      : { pct: null, absolute: `+${m.current} believers ${w.since}`, direction: "up" };
-  }
-  const pct =
-    m.base >= BELIEVER_PCT_MIN
-      ? `${m.delta >= 0 ? "+" : "−"}${Math.round((Math.abs(m.delta) / m.base) * 100)}%`
-      : null;
-  if (m.delta === 0)
-    return { pct: pct ? "0%" : null, absolute: `No change ${w.since}`, direction: "flat" };
-  const n = Math.abs(m.delta);
-  return {
-    pct,
-    absolute: `${m.delta > 0 ? "+" : "−"}${n} believer${n === 1 ? "" : "s"} ${w.since}`,
-    direction,
-  };
-}
+// Believers and capital are turned into their two copy lines by the ONE shared
+// metric-display rule (src/domain/metric-display): the count/money leads, the %
+// is paired, and a % off a tiny base is kept quiet or dropped. These adapters just
+// feed the canonical book metric into that rule.
+const believerCopy = (m: BookMetric, w: BookWindow): MetricMove =>
+  believerMove(m.current, m.base, w.since);
 
 // Materiality (direction, the percentage floor) is judged in USD so a display in
 // ETH never changes what counts as a real move; only the shown figure converts.
-function capitalCopy(
+const capitalCopy = (
   m: BookMetric,
   w: BookWindow,
   usd: (eth: number) => number,
   money: CapFmt,
-): RowCopy {
-  const baseUsd = usd(m.base);
-  const deltaUsd = usd(m.delta);
-  const direction = deltaUsd > 0.5 ? "up" : deltaUsd < -0.5 ? "down" : "flat";
-  if (baseUsd < 0.5 && usd(m.current) > 0.5) {
-    return { pct: null, absolute: `First capital · ${money(m.current)}`, direction: "up" };
-  }
-  const pct =
-    baseUsd >= CAPITAL_PCT_MIN_USD
-      ? `${deltaUsd >= 0 ? "+" : "−"}${Math.round((Math.abs(deltaUsd) / baseUsd) * 100)}%`
-      : null;
-  if (direction === "flat")
-    return { pct: pct ? "0%" : null, absolute: `No change ${w.since}`, direction: "flat" };
-  return {
-    pct,
-    absolute: `${money(m.delta, true)} committed ${w.since}`,
-    direction,
-  };
-}
+): MetricMove =>
+  capitalMove({ currentEth: m.current, baseEth: m.base, since: w.since, usd, money });
 
 /**
  * One full-width metric row inside the Total Market instrument: the current
@@ -181,13 +138,16 @@ function MomentumMetric({
 }: {
   total: string;
   label: string;
-  copy: RowCopy;
+  copy: MetricMove;
   points: VitalityPoint[];
   domain: SparkDomainOpts;
 }) {
   const tone = dirTone(copy.direction);
   const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
-  const trend = copy.pct ?? (copy.direction === "flat" ? "0%" : "");
+  // Only a trusted (headline) % earns the big right-hand figure. A small-base %
+  // is demoted to a quiet suffix on the absolute line so it never overstates the
+  // move; with no % at all the headline space stays empty.
+  const headlinePct = copy.pct && !copy.pctQuiet ? copy.pct : copy.direction === "flat" ? "0%" : "";
   return (
     <div className="px-4 py-3 sm:px-5">
       <div className="flex items-baseline justify-between gap-4">
@@ -198,8 +158,8 @@ function MomentumMetric({
           className="num shrink-0 text-[22px] font-semibold leading-none tabular-nums sm:text-[26px]"
           style={{ color: tone }}
         >
-          {arrow ? `${arrow} ` : ""}
-          {trend}
+          {arrow && headlinePct ? `${arrow} ` : ""}
+          {headlinePct}
         </span>
       </div>
       <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
@@ -207,6 +167,9 @@ function MomentumMetric({
       </div>
       <div className="num mt-0.5 text-[12px]" style={{ color: tone }}>
         {copy.absolute}
+        {copy.pct && copy.pctQuiet && (
+          <span className="ml-1.5 text-[var(--text-muted)]">· {copy.pct}</span>
+        )}
       </div>
       <div className="mt-1.5 h-[18px] w-full opacity-60">
         <StepSpark points={points} tone={tone} domain={domain} className="h-full w-full" />
@@ -275,4 +238,3 @@ export function MarketMomentum({
     </section>
   );
 }
-
