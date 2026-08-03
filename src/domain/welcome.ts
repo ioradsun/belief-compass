@@ -27,6 +27,8 @@ export interface Welcomable {
   wallet: string;
   marketId: number;
   side: Side;
+  /** When they became directional — drives "since your last visit". */
+  occurredAt: string;
 }
 
 export interface ReceivedWelcome {
@@ -64,7 +66,7 @@ export function selectWelcomable(params: {
     const key = welcomeKey(w, e.marketId, side);
     if (alreadyWelcomed.has(key) || seen.has(key)) continue;
     seen.add(key);
-    out.push({ wallet: w, marketId: e.marketId, side });
+    out.push({ wallet: w, marketId: e.marketId, side, occurredAt: e.occurredAt });
     if (out.length >= cap) break;
   }
   return out;
@@ -87,4 +89,135 @@ export function summarizeReceived(welcomes: ReceivedWelcome[]): {
       ? { marketId: welcomes[0].marketId, side: welcomes[0].side }
       : null;
   return { count: welcomers.length, welcomers, tribe };
+}
+
+/* ───────────────────── The Daily Room — relationship-first ────────────────── */
+
+/**
+ * "Joined your side" is a market-local fact. WHO joined is the social payload,
+ * and the DNA engine already knows: Twin / Tribe / Opp / Inverse / Neutral.
+ * The room groups arrivals by that relationship, so the rare event (an Opp
+ * crossing to your side) never hides behind five anonymous new believers.
+ */
+export type RoomGroup = "crossing" | "twin" | "tribe" | "new";
+
+export const ROOM_GROUP_ORDER: RoomGroup[] = ["crossing", "twin", "tribe", "new"];
+
+export const ROOM_GROUP_LABEL: Record<RoomGroup, string> = {
+  crossing: "Crossed over",
+  twin: "Your Twins",
+  tribe: "Your Tribe",
+  new: "New faces",
+};
+
+export const ROOM_GROUP_BLURB: Record<RoomGroup, string> = {
+  crossing: "People who usually disagree with you took your side.",
+  twin: "Near-identical conviction. They moved with you.",
+  tribe: "Same instincts, most of the time.",
+  new: "No shared history yet — a relationship starts here.",
+};
+
+/** DNA label → room group. Opp/Inverse arriving on YOUR side is a crossing. */
+export function roomGroupFor(relationship: string | null | undefined): RoomGroup {
+  switch (relationship) {
+    case "opp":
+    case "inverse":
+      return "crossing";
+    case "twin":
+      return "twin";
+    case "tribe":
+      return "tribe";
+    default:
+      return "new";
+  }
+}
+
+export interface RoomPerson {
+  wallet: string;
+  name: string;
+  avatarUrl: string | null;
+  marketId: number;
+  marketTitle: string;
+  side: Side;
+  occurredAt: string;
+  /** Canonical DNA label, or null when there isn't enough shared history yet. */
+  relationship: string | null;
+  agreement: number | null;
+  sharedBeliefs: number | null;
+  /** Arrived since the viewer last opened the room. */
+  isNew: boolean;
+}
+
+export interface RoomSection {
+  group: RoomGroup;
+  label: string;
+  blurb: string;
+  people: RoomPerson[];
+  /** How many of these arrived since the last visit. */
+  fresh: number;
+}
+
+/**
+ * One card per person (a wallet that joined you on three markets is still one
+ * human), grouped by relationship and ordered rarest-signal-first.
+ */
+export function groupRoom(people: RoomPerson[]): RoomSection[] {
+  const seen = new Set<string>();
+  const byGroup = new Map<RoomGroup, RoomPerson[]>();
+  for (const p of people) {
+    const w = p.wallet.toLowerCase();
+    if (seen.has(w)) continue;
+    seen.add(w);
+    const g = roomGroupFor(p.relationship);
+    const list = byGroup.get(g);
+    if (list) list.push(p);
+    else byGroup.set(g, [p]);
+  }
+  const out: RoomSection[] = [];
+  for (const group of ROOM_GROUP_ORDER) {
+    const list = byGroup.get(group);
+    if (!list || list.length === 0) continue;
+    out.push({
+      group,
+      label: ROOM_GROUP_LABEL[group],
+      blurb: ROOM_GROUP_BLURB[group],
+      people: list,
+      fresh: list.filter((p) => p.isNew).length,
+    });
+  }
+  return out;
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/**
+ * The one line at the top of the room. It reports CHANGE when the viewer has
+ * been here before ("since you were last here"), and STATE on a first visit —
+ * the same discipline the market Pulse uses.
+ */
+export function roomHeadline(sections: RoomSection[], hasVisitedBefore: boolean): string {
+  const total = sections.reduce((n, s) => n + s.people.length, 0);
+  if (total === 0) return "Nobody new in the room";
+
+  const freshTotal = sections.reduce((n, s) => n + s.fresh, 0);
+  const scope = hasVisitedBefore ? sections.filter((s) => s.fresh > 0) : sections;
+  const count = (s: RoomSection) => (hasVisitedBefore ? s.fresh : s.people.length);
+
+  if (hasVisitedBefore && freshTotal === 0) {
+    return `${plural(total, "person", "people")} still waiting on a hello`;
+  }
+
+  const parts: string[] = [];
+  for (const s of scope) {
+    const n = count(s);
+    if (n <= 0) continue;
+    if (s.group === "crossing") parts.push(`${plural(n, "Opp", "Opps")} crossed over`);
+    else if (s.group === "twin") parts.push(`${plural(n, "Twin", "Twins")}`);
+    else if (s.group === "tribe") parts.push(`${n} from your Tribe`);
+    else parts.push(`${plural(n, "new face", "new faces")}`);
+  }
+  const body = parts.join(" · ");
+  return hasVisitedBefore ? `Since you were last here: ${body}` : `In the room: ${body}`;
 }
