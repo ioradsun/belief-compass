@@ -58,7 +58,7 @@ export function LandingExampleCard({
     >
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-          Live example
+          Example
         </span>
         <span className="num text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
           No expiry
