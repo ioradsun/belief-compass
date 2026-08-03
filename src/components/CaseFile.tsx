@@ -59,6 +59,15 @@ const REL_TONE: Record<CaseRelationship, string> = {
 const num = (v: unknown): number | null =>
   v == null || !Number.isFinite(Number(v)) ? null : Number(v);
 
+/** Compact "how long ago" for the activity feed. */
+function timeAgo(ms: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86_400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86_400)}d`;
+}
+
 export function CaseColumn({
   side,
   marketId,
@@ -141,6 +150,7 @@ export function CaseColumn({
         name: nameOf(t.w),
         eth: t.eth,
         action: t.action,
+        t: t.t,
       }));
   }, [tape, side, nameOf]);
 
@@ -304,20 +314,23 @@ export function CaseColumn({
               {recent.map((e) => (
                 <li key={e.id} className="flex items-center gap-2 text-[12px]">
                   <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
-                    {e.name}
+                    <span className="text-[var(--text)]">{e.name}</span>{" "}
+                    <span style={{ color: e.action === "BUY" ? color : "var(--text-muted)" }}>
+                      {e.action === "BUY" ? "bought" : "sold"}
+                    </span>{" "}
+                    <span className="num font-semibold text-[var(--text)]">
+                      {format(e.eth, "ETH")}
+                    </span>
                   </span>
-                  <span
-                    className="num shrink-0 font-semibold"
-                    style={{ color: e.action === "BUY" ? color : "var(--text-muted)" }}
-                  >
-                    {e.action === "BUY" ? "+" : "−"}
-                    {format(e.eth, "ETH")}
+                  <span className="num shrink-0 text-[10px] text-[var(--text-muted)]">
+                    {timeAgo(e.t)}
                   </span>
                 </li>
               ))}
             </ul>
           )}
         </div>
+
 
         {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}
         <CaseRoster side={side} believers={believers} people={net?.people} />
@@ -486,7 +499,12 @@ export function CaseRoster({
               p && (p.sharedBeliefs ?? 0) > 0 && Number.isFinite(p.agreement)
                 ? `${Math.round(p.agreement as number)}% shared DNA`
                 : null;
-            const amount = b.valueUsd >= 1 ? format(b.valueUsd, "USD") : null;
+            const amount =
+              b.valueUsd > 0
+                ? b.valueUsd >= 1
+                  ? format(b.valueUsd, "USD")
+                  : "<$1"
+                : null;
             return (
               <li key={b.wallet} className="flex items-center gap-2 rounded-[8px] px-1 py-1">
                 {b.avatarUrl ? (
