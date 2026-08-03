@@ -538,11 +538,17 @@ export function MarketDeck({
         Reaching the dock is the strongest signal a wallet is about to be needed,
         so hover/touch/focus here starts the wallet chunks before the click. */}
       <div className="shrink-0 space-y-3 pb-[env(safe-area-inset-bottom)]" {...walletIntent}>
-        {onToggleCase && !storySide && !mobileCaseOpen && (
-          <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
-        )}
+        {/* One composed instrument: analysis rail → divider → the controls. */}
+        <div
+          className="overflow-hidden rounded-[16px]"
+          style={{ background: "var(--surface)" }}
+        >
+          {onToggleCase && !storySide && !mobileCaseOpen && (
+            <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
+          )}
 
-        {held && sellPct != null ? (
+          {held && sellPct != null ? (
+
           <OrderTicket
             mode="sell"
             held={held}
