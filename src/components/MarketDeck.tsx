@@ -255,13 +255,13 @@ export function MarketDeck({
     [viewerWallet],
   );
 
-  // Pass finalizes the round: the House pick stays sealed (you never paid to see
-  // it). This is the FOMO lever, so it's a deliberate, explicit action.
+  // Pass finalizes the round silently and moves straight to the next market —
+  // no interstitial. The House pick stays sealed (you never paid to see it).
   const choosePass = useCallback(() => {
     setSide(null);
-    setPassed(true);
     house.pass();
-  }, [house]);
+    onSkip();
+  }, [house, onSkip]);
 
   // Reveal the House pick exactly once, when a bet confirms on-chain.
   const betRevealed = useRef(false);
