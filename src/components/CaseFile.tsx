@@ -515,29 +515,24 @@ export function CaseRoster({
               p && (p.sharedBeliefs ?? 0) > 0 && Number.isFinite(p.agreement)
                 ? `${Math.round(p.agreement as number)}% shared DNA`
                 : null;
-            const amount =
+            // The indexed value can be missing (no valuation pass yet) — fall back
+            // to shares × the side's live price so an amount always shows.
+            const valueUsd =
               b.valueUsd > 0
-                ? b.valueUsd >= 1
-                  ? format(b.valueUsd, "USD")
-                  : "<$1"
-                : null;
+                ? b.valueUsd
+                : priceUsd != null && b.shares > 0
+                  ? b.shares * priceUsd
+                  : 0;
+            const amount = valueUsd > 0 ? (valueUsd >= 1 ? format(valueUsd, "USD") : "<$1") : null;
             return (
               <li key={b.wallet} className="flex items-center gap-2 rounded-[8px] px-1 py-1">
-                {b.avatarUrl ? (
-                  <img
-                    src={b.avatarUrl}
-                    alt=""
-                    className="h-7 w-7 shrink-0 rounded-full object-cover"
-                  />
-                ) : (
-                  <span
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
-                    style={{ background: `hsl(${hueFor(b.wallet)} 45% 45%)` }}
-                    aria-hidden
-                  >
-                    {initialsFor(b.name)}
-                  </span>
-                )}
+                <PersonAvatar
+                  wallet={b.wallet}
+                  name={b.name}
+                  avatarUrl={b.avatarUrl}
+                  size={28}
+                />
+
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[12px] text-[var(--text)]">{b.name}</div>
                   {dna && (
