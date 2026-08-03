@@ -11,6 +11,7 @@ import { readLatestTradesPerMarket, readLatestTradeEvents } from "@/lib/events.f
 import type { TapeTrade } from "@/domain/conviction-series";
 import { toLegacyFeedEventRow } from "@/lib/events";
 import { composeMarketStory, type NetworkFace, type NetworkLabel } from "@/domain/story";
+import { accelerationFrom } from "@/domain/feed/score";
 import { swrCache } from "@/lib/server-cache";
 
 /** SSR/anon feed snapshots live this long before a background refresh. */
@@ -468,6 +469,13 @@ export interface MarketChange {
    * change and flows are derived client-side, never precomputed here.
    */
   tape: TapeTrade[];
+  /**
+   * The market's acceleration — recent trade rate ÷ its own normal 24h rate,
+   * from the SAME ranker baseline (accelerationFrom) so the center's "× normal"
+   * read and the discovery feed never diverge. Computed server-side from
+   * market_state (never re-derived on the client); null when no state row exists.
+   */
+  acceleration?: number | null;
 }
 
 /**
@@ -503,8 +511,7 @@ export const getMarketChange = createServerFn({ method: "GET" })
       // wallet keeps phantom shares (and phantom believer/capital totals).
       const blk = Number(t.block_number ?? 0);
       const lg = Number(t.log_index ?? 0);
-      const seq =
-        Number.isFinite(blk) && Number.isFinite(lg) ? blk * 100_000 + Math.max(0, lg) : 0;
+      const seq = Number.isFinite(blk) && Number.isFinite(lg) ? blk * 100_000 + Math.max(0, lg) : 0;
       tape.push({
         // Short, stable key — enough to count distinct believers, and nothing
         // more than the feed already publishes.
@@ -516,9 +523,28 @@ export const getMarketChange = createServerFn({ method: "GET" })
         t: at,
         seq,
       });
-
     }
-    return { tape };
+
+    // The ranker's acceleration baseline, surfaced through this canonical path so
+    // the center's state-transition emitter reads "× normal" from the same source
+    // of truth. One tiny market_state read; the multiple is computed by the shared
+    // accelerationFrom helper — never a second client-side baseline.
+    let acceleration: number | null = null;
+    const { data: ms } = await publicClient()
+      .from("market_state")
+      .select("trade_count_1h, trade_count_24h, velocity_5m")
+      .eq("onchain_id", data.id)
+      .maybeSingle();
+    if (ms) {
+      const r = ms as Record<string, unknown>;
+      acceleration = accelerationFrom(
+        Number(r.trade_count_1h ?? 0) || 0,
+        Number(r.trade_count_24h ?? 0) || 0,
+        Number(r.velocity_5m ?? 0) || 0,
+      );
+    }
+
+    return { tape, acceleration };
   });
 
 /** One window's authoritative believers/capital/price as of its opening boundary. */
