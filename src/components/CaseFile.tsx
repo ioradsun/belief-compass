@@ -271,27 +271,39 @@ export function CaseColumn({
           >
             {lensSentence}
           </p>
-          {events.length > 0 && (
-            <div className="space-y-1">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                Recent activity
-              </span>
-              <ul className="space-y-1">
-                {events.map((e) => (
-                  <li key={e.id} className="flex items-baseline gap-1.5 text-[11px]">
-                    <span aria-hidden>{e.emoji}</span>
-                    <span className="min-w-0 flex-1 truncate text-[var(--text-muted)]">
-                      {e.eth != null ? `${format(e.eth, "ETH")} ${e.text}` : e.text}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+        </div>
+
+        {/* ACT 3 — RECENT ACTIVITY: always on, independent of the chosen lens.
+          Name + amount only — the side is the panel, so we never repeat it. */}
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            Recent activity
+          </span>
+          {recent.length === 0 ? (
+            <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No activity yet.</p>
+          ) : (
+            <ul className="space-y-0.5">
+              {recent.map((e) => (
+                <li key={e.id} className="flex items-center gap-2 text-[12px]">
+                  <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
+                    {e.name}
+                  </span>
+                  <span
+                    className="num shrink-0 font-semibold"
+                    style={{ color: e.action === "BUY" ? color : "var(--text-muted)" }}
+                  >
+                    {e.action === "BUY" ? "+" : "−"}
+                    {format(e.eth, "ETH")}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
-        {/* ACT 3 — THE PEOPLE: one roster, one relationship badge, one status. */}
+        {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}
         <CaseRoster side={side} believers={believers} people={net?.people} />
+
       </div>
 
       {/* Optional deep-dive into the full center timeline (desktop investigation). */}
