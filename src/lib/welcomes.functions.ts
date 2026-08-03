@@ -13,10 +13,14 @@ import { z } from "zod";
 import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import {
+  groupRoom,
+  roomHeadline,
   selectWelcomable,
   summarizeReceived,
   welcomeKey,
   type ReceivedWelcome,
+  type RoomPerson,
+  type RoomSection,
   type Side,
 } from "@/domain/welcome";
 
@@ -24,13 +28,54 @@ import {
 const WELCOMABLE_WINDOW_DAYS = 7;
 const RECEIVED_WINDOW_DAYS = 14;
 
-export interface WelcomablePerson {
-  wallet: string;
-  name: string;
-  avatarUrl: string | null;
-  marketId: number;
-  marketTitle: string;
-  side: Side;
+export interface WelcomablePerson extends RoomPerson {}
+
+export interface WelcomeRoom {
+  people: WelcomablePerson[];
+  count: number;
+  sections: RoomSection[];
+  headline: string;
+  /** ISO of the viewer's previous visit, null on a first visit. */
+  lastSeenAt: string | null;
+  /** Arrived since that visit. */
+  freshCount: number;
+}
+
+/**
+ * Every relationship the DNA engine knows about the viewer, flattened to
+ * wallet → label/agreement/shared. Reading the cache is cheap and never
+ * triggers a recompute — an unmapped person simply lands in "New faces".
+ */
+async function relationshipIndex(
+  sb: ReturnType<typeof serviceClient>,
+  viewer: string,
+): Promise<Map<string, { relationship: string; agreement: number; shared: number }>> {
+  const index = new Map<string, { relationship: string; agreement: number; shared: number }>();
+  try {
+    const { readViewerDnaCache } = await import("@/lib/dna/viewer-dna-cache.server");
+    const cache = await readViewerDnaCache(sb, viewer);
+    if (!cache) return index;
+    const buckets = [
+      ...cache.twin,
+      ...cache.tribe,
+      ...cache.opp,
+      ...cache.inverse,
+      ...cache.neutral,
+      ...cache.closest,
+    ];
+    for (const r of buckets) {
+      const w = r.wallet.toLowerCase();
+      if (index.has(w)) continue; // strongest bucket wins (twin → … → closest)
+      index.set(w, {
+        relationship: r.relationship,
+        agreement: Math.round(r.agreement),
+        shared: r.sharedBeliefs,
+      });
+    }
+  } catch {
+    /* DNA is an enrichment, never a dependency — the room still renders. */
+  }
+  return index;
 }
 
 function daysAgoIso(days: number): string {
