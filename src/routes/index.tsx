@@ -348,7 +348,10 @@ function Feed() {
     setTab("belief");
     enterProduct();
   };
+  // Universal behaviour: any avatar anywhere opens that profile in the center.
+  useEffect(() => registerPersonFocus(selectPerson));
   const openDna = () => {
+
     navigate({
       search: (prev: Search) => ({
         ...prev,
