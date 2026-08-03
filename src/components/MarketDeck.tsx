@@ -181,10 +181,10 @@ export function MarketDeck({
   // The one on-screen timeframe — the center owns it, both cases follow it.
   const deckWin = useDeckWindow();
 
-  // The momentum shape, told as a tension — bait on the Case File door.
+  // The momentum shape, compressed to a headline — the Market Signal strip.
   const caseTeaser = useMemo(() => {
     const t = change?.tape ?? [];
-    return t.length ? marketPulse(marketBook(t, Date.now(), deckWin)).meaning : null;
+    return t.length ? marketPulse(marketBook(t, Date.now(), deckWin)).headline : null;
   }, [change, deckWin]);
 
   // Creator/age for the identity row's freshness token (deduped with the byline).
