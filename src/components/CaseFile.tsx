@@ -362,8 +362,6 @@ export function CaseColumn({
 
         {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}
         <CaseRoster side={side} believers={believers} people={net?.people} priceUsd={priceUsd} />
-
-
       </div>
 
       {/* Optional deep-dive into the full center timeline (desktop investigation). */}
