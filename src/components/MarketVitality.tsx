@@ -198,26 +198,12 @@ function capitalCopy(
 /**
  * One full-width metric row inside the Total Market instrument: the current
  * total in large type on the left, the percentage change in large type on the
- * right, the metric label beneath, and the exact absolute change over the
- * selected timeframe beneath that. A faint full-width sparkline keeps the shape
- * of the move without turning the row back into a card.
+ * right (with its direction arrow trailing it), the metric label beneath, and
+ * the exact absolute change over the selected timeframe beneath that.
  */
-function MomentumMetric({
-  total,
-  label,
-  copy,
-  points,
-  domain,
-}: {
-  total: string;
-  label: string;
-  copy: RowCopy;
-  points: VitalityPoint[];
-  domain: SparkDomainOpts;
-}) {
+function MomentumMetric({ total, label, copy }: { total: string; label: string; copy: RowCopy }) {
   const tone = dirTone(copy.direction);
   const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
-  const trend = copy.trend;
   return (
     <div className="px-4 py-3 sm:px-5">
       <div className="flex items-baseline justify-between gap-4">
@@ -228,8 +214,8 @@ function MomentumMetric({
           className="num shrink-0 text-[22px] font-semibold leading-none tabular-nums sm:text-[26px]"
           style={{ color: tone }}
         >
-          {arrow ? `${arrow} ` : ""}
-          {trend}
+          {copy.trend}
+          {arrow ? <span className="ml-1.5 text-[0.6em] align-middle">{arrow}</span> : null}
         </span>
       </div>
       <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
@@ -238,12 +224,10 @@ function MomentumMetric({
       <div className="num mt-0.5 text-[12px]" style={{ color: tone }}>
         {copy.absolute}
       </div>
-      <div className="mt-1.5 h-[18px] w-full opacity-60">
-        <StepSpark points={points} tone={tone} domain={domain} className="h-full w-full" />
-      </div>
     </div>
   );
 }
+
 
 export function MarketMomentum({
   tape,
