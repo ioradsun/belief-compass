@@ -305,12 +305,12 @@ export function MobileGame({
       {stageMedia ? (
         <>
           <div className="shrink-0 pt-1">{questionBlock}</div>
-          <MediaStage media={stageMedia} className="mt-4 flex min-h-0 flex-1 flex-col gap-7 pb-4">
+          <MediaStage media={stageMedia} className="mt-3 flex min-h-0 flex-1 flex-col gap-5 pb-2">
             {marketBody}
           </MediaStage>
         </>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pb-2 pt-1 [-webkit-overflow-scrolling:touch]">
           {questionBlock}
           {marketBody}
         </div>
@@ -319,8 +319,17 @@ export function MobileGame({
       {/* One dock, transforming in place: the decision, then the order controls —
         never a screen swap. The House pick + celebration wait for a placed order. */}
       <Dock>
+        {/* Always reachable without scrolling — pinned to the action surface. */}
+        <button
+          type="button"
+          onClick={() => setPhase("sides")}
+          className="mb-3 block w-full border-t border-[var(--border)] pt-3 text-left text-[15px] font-semibold text-[var(--text-secondary)]"
+        >
+          See both sides →
+        </button>
         {side == null ? (
           <div className="flex gap-2.5">
+
             <BigButton label="NO" tone="no" onClick={() => choose("NO")} />
             <BigButton label="PASS" tone="neutral" onClick={pass} />
             <BigButton label="YES" tone="yes" onClick={() => choose("YES")} />
