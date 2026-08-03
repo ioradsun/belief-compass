@@ -150,8 +150,8 @@ export function MobileGame({
 
   const pass = () => {
     setSide(null);
-    setPhase("passed");
     house.pass();
+    onNext();
   };
 
   // ---- money: only ever asked for AFTER a side is chosen ----
