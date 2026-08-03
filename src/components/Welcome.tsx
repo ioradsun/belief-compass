@@ -297,11 +297,8 @@ export function WelcomePrompt({
                 className="flex-1 rounded-[12px] py-2.5 text-[14px] font-semibold disabled:opacity-40"
                 style={{ background: "var(--text)", color: "var(--bg)" }}
               >
-                {send.isPending
-                  ? "Welcoming…"
-                  : selectedCount === people.length
-                    ? `Welcome all (${selectedCount})`
-                    : `Welcome (${selectedCount})`}
+                {send.isPending ? "Saying hi…" : `Say Hi (${selectedCount})`}
+
               </button>
             </div>
           </div>
