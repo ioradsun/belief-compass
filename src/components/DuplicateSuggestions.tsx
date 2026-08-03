@@ -59,7 +59,7 @@ export function DuplicateSuggestions({ onSelect }: { onSelect: (marketId: number
             <button
               type="button"
               onClick={() => onSelect(m.onchainId)}
-              className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition-colors hover:border-[var(--border-strong)]"
+              className="w-full rounded-xl bg-[var(--surface)] p-3 text-left transition-colors hover:border-[var(--border-strong)]"
             >
               <div className="flex gap-2.5">
                 {m.thumbUrl && (

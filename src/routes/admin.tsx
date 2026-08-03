@@ -58,7 +58,7 @@ function Admin() {
             autoComplete="current-password"
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            className="mt-4 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[14px] outline-none focus:border-[var(--border-strong)]"
+            className="mt-4 w-full rounded-md bg-[var(--surface)] px-3 py-2 text-[14px] outline-none focus:border-[var(--border-strong)]"
           />
           {failed && <p className="mt-2 text-[12px] text-[var(--no)]">Incorrect password.</p>}
           <button
@@ -116,7 +116,7 @@ function Console({ onLock }: { onLock: () => void }) {
         {(data?.reports ?? []).map((r) => (
           <div
             key={String(r.id)}
-            className="flex items-start gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3"
+            className="flex items-start gap-3 rounded-md bg-[var(--surface)] p-3"
           >
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-medium">{r.reason}</div>
@@ -151,7 +151,7 @@ function Console({ onLock }: { onLock: () => void }) {
         {(data?.markets ?? []).map((m) => (
           <div
             key={m.question_id}
-            className="flex items-center gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3"
+            className="flex items-center gap-3 rounded-md bg-[var(--surface)] p-3"
           >
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13px]">{m.question}</div>
