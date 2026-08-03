@@ -278,7 +278,7 @@ export function CreateMarket({
             className="rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
             style={{ borderColor: "var(--border)" }}
           >
-            {attachment && (
+            {attachment && !linkOpen && (
               <MediaChip attachment={attachment} onRemove={() => setAttachment(null)} />
             )}
             <textarea
@@ -295,7 +295,7 @@ export function CreateMarket({
               attached — a market holds a single media object; the chip's Remove
               is then the control), counter on the right. */}
             <div className="flex items-center justify-between px-3 pb-2">
-              {attachment ? (
+              {attachment && !linkOpen ? (
                 <span />
               ) : (
                 <AddMedia onPick={() => setLinkOpen((v) => !v)} active={linkOpen} />
@@ -305,12 +305,15 @@ export function CreateMarket({
               </span>
             </div>
           </div>
-          {linkOpen && !attachment && (
+          {linkOpen && (
             <EmbedPicker
-              onCancel={() => setLinkOpen(false)}
-              onConfirm={(media) => {
-                setAttachment({ kind: "embed", media });
+              initialUrl={attachment?.media.url ?? ""}
+              onClose={() => {
+                setAttachment(null);
                 setLinkOpen(false);
+              }}
+              onChange={(media) => {
+                setAttachment(media ? { kind: "embed", media } : null);
                 setLocalError(null);
               }}
             />
@@ -441,28 +444,37 @@ function AddMedia({ onPick, active }: { onPick: () => void; active: boolean }) {
         active ? "text-[var(--text)]" : "text-[var(--text-muted)]"
       }`}
     >
-      <span aria-hidden>＋</span> Add media
+      <span aria-hidden>🔗</span> Embed a link
     </button>
   );
 }
 
 /**
  * Paste a link → the platform is recognised locally (instantly, with a poster
- * thumbnail and a warmed connection), metadata is filled in from the server a
- * moment later, and OK confirms it. No platform selector, no upload controls.
+ * thumbnail and a warmed connection), metadata fills in from the server a
+ * moment later, and the preview IS the confirmation — no OK button. The X
+ * closes the composer and drops the media.
  */
 function EmbedPicker({
-  onConfirm,
-  onCancel,
+  initialUrl,
+  onChange,
+  onClose,
 }: {
-  onConfirm: (media: EmbedMedia) => void;
-  onCancel: () => void;
+  initialUrl: string;
+  onChange: (media: EmbedMedia | null) => void;
+  onClose: () => void;
 }) {
-  const [raw, setRaw] = useState("");
+  const [raw, setRaw] = useState(initialUrl);
   const [media, setMedia] = useState<EmbedMedia | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
   const seq = useRef(0);
+
+  // Live: every resolved (or cleared) media is published upward immediately.
+  const emit = useRef(onChange);
+  emit.current = onChange;
+  useEffect(() => {
+    emit.current(media);
+  }, [media]);
 
   // Local parse is synchronous: the frame + poster can render on the keystroke
   // that completes the URL, long before oEmbed answers.
@@ -472,7 +484,6 @@ function EmbedPicker({
     if (!value) {
       setMedia(null);
       setError(null);
-      setPending(false);
       return;
     }
     const parsed = parseEmbed(value);
@@ -481,7 +492,6 @@ function EmbedPicker({
       setMedia({ kind: "embed", ...parsed, title: null, author: null, thumbnail: instantThumbnail(parsed) });
       setError(null);
     }
-    setPending(true);
     const t = setTimeout(async () => {
       try {
         const res = await resolveEmbed({ data: { url: value } });
@@ -495,52 +505,38 @@ function EmbedPicker({
         }
       } catch {
         if (seq.current === id && !parsed) setError("Couldn't read that link.");
-      } finally {
-        if (seq.current === id) setPending(false);
       }
     }, parsed ? 250 : 500);
     return () => clearTimeout(t);
   }, [raw]);
 
   return (
-    <div className="mt-2 space-y-2 rounded-[14px] p-3" style={{ border: "1px solid var(--border)" }}>
-      <input
-        value={raw}
-        autoFocus
-        inputMode="url"
-        autoCapitalize="off"
-        autoCorrect="off"
-        spellCheck={false}
-        onChange={(e) => setRaw(e.target.value)}
-        placeholder="Paste a YouTube, Instagram, TikTok, X or Spotify link"
-        className="w-full rounded-[10px] bg-[var(--surface)] px-3 py-2 text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
-        style={{ border: "1px solid var(--border)" }}
-      />
+    <div className="relative mt-2 space-y-2 rounded-[14px] p-3" style={{ border: "1px solid var(--border)" }}>
+      <div className="flex items-center gap-2">
+        <input
+          value={raw}
+          autoFocus
+          inputMode="url"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          onChange={(e) => setRaw(e.target.value)}
+          placeholder="Paste a YouTube, Instagram, TikTok, X or Spotify link"
+          className="min-w-0 flex-1 rounded-[10px] bg-[var(--surface)] px-3 py-2 text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
+          style={{ border: "1px solid var(--border)" }}
+        />
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[13px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          ✕
+        </button>
+      </div>
       {media && <MediaEmbed media={media} />}
       {error && <p className="text-[12px] text-[var(--no)]">{error}</p>}
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] text-[var(--text-muted)]">
-          {media ? PLATFORM_LABEL[media.platform] : pending ? "Checking link…" : EMBED_HINT}
-        </span>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={!media}
-            onClick={() => media && onConfirm(media)}
-            className="rounded-[8px] px-3 py-1 text-[12px] font-semibold text-[var(--text)] disabled:opacity-40"
-            style={{ border: "1px solid var(--border-strong)" }}
-          >
-            OK
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
