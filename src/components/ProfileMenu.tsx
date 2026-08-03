@@ -357,8 +357,11 @@ function SettingsPanel({
 }) {
   return (
     <div className="space-y-1">
+      <ThemeSetting />
+      <Divider />
       <CurrencySetting />
       <Divider />
+
       {onOpenTerms && (
         <button
           type="button"
