@@ -24,6 +24,12 @@ export interface Pulse {
   label: PulseLabel;
   /** One calm, observant sentence. Never a side, never price, never a number. */
   meaning: string;
+  /**
+   * The same read, compressed to a headline for the collapsed Market Signal
+   * strip ("More believers. Less capital."). The full sentence lives inside the
+   * Case File; this is the one-line version that fits above the order dock.
+   */
+  headline: string;
 }
 
 /** A capital move counts as real only past both an absolute and a relative floor. */
@@ -113,9 +119,39 @@ function pulseMeaning(label: PulseLabel, i: PulseInput): string {
   }
 }
 
+/** The compressed, headline-style version of the same read. */
+function pulseHeadline(label: PulseLabel, i: PulseInput): string {
+  const capMove = Math.max(CAP_ABS, Math.abs(i.capitalBaseEth) * CAP_REL);
+  const cUp = i.capitalDeltaEth > capMove;
+  switch (label) {
+    case "New":
+      return "Conviction just forming.";
+    case "Quiet":
+      return "Holding steady.";
+    case "Growing":
+      return "More believers. Steady capital.";
+    case "Accelerating":
+      return "More believers. More capital.";
+    case "Deepening":
+      return "Same believers. More capital.";
+    case "Broadening":
+      return "Believers outpacing capital.";
+    case "Mixed Momentum":
+      return i.believerDelta > 0
+        ? "More believers. Less capital."
+        : "Steady believers. Less capital.";
+    case "Narrowing":
+      return cUp ? "Fewer believers. More capital." : "Fewer believers. Steady capital.";
+    case "Cooling":
+      return "Fewer believers. Less capital.";
+    case "Capital-led":
+      return "Few believers. Rising capital.";
+  }
+}
+
 export function pulse(i: PulseInput): Pulse {
   const label = pulseLabel(i);
-  return { label, meaning: pulseMeaning(label, i) };
+  return { label, meaning: pulseMeaning(label, i), headline: pulseHeadline(label, i) };
 }
 
 /** Read the pulse straight off the canonical book (the center's source). */
