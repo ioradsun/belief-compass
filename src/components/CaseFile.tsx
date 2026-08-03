@@ -351,7 +351,7 @@ export function CaseColumn({
 
 
         {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}
-        <CaseRoster side={side} believers={believers} people={net?.people} />
+        <CaseRoster side={side} believers={believers} people={net?.people} priceUsd={priceUsd} />
 
       </div>
 
