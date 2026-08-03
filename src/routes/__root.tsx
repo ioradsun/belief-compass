@@ -20,6 +20,8 @@ import { DisplayUnitProvider } from "../lib/display-unit";
 import { VersionWatcher } from "../components/VersionWatcher";
 import { restoreQueryCache, startQueryPersist } from "../lib/query-persist";
 import { startRealtime } from "../lib/realtime/coordinator";
+import { THEME_INIT_SCRIPT } from "../lib/theme";
+
 
 // Web fonts, loaded OFF the critical path. The system fallback stack in styles.css
 // (system-ui / -apple-system / Segoe UI …) paints instantly; Inter + JetBrains
@@ -138,7 +140,10 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        {/* Apply the remembered light/dark choice before first paint (no flash). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         {/* Apply the web fonts without blocking first paint: attach the stylesheet
+
             as media="print" (ignored for screen), then flip to "all" on load. */}
         <script
           dangerouslySetInnerHTML={{

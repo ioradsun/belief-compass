@@ -875,7 +875,7 @@ function Feed() {
           ) : (
             <>
               {/* Welcome the newest believers on a side you back — one tap. */}
-              <WelcomePrompt wallet={wallet} />
+              <WelcomePrompt wallet={wallet} onSelectPerson={selectPerson} />
               {/* Duplicate suggestions sit above the feed while creating; the feed
                 below keeps running and is never replaced. */}
               <DuplicateSuggestions onSelect={selectMarket} />

@@ -1304,6 +1304,27 @@ export type Database = {
         }
         Relationships: []
       }
+      welcome_room_visits: {
+        Row: {
+          last_seen_at: string
+          updated_at: string
+          visit_count: number
+          wallet: string
+        }
+        Insert: {
+          last_seen_at?: string
+          updated_at?: string
+          visit_count?: number
+          wallet: string
+        }
+        Update: {
+          last_seen_at?: string
+          updated_at?: string
+          visit_count?: number
+          wallet?: string
+        }
+        Relationships: []
+      }
       welcomes: {
         Row: {
           created_at: string

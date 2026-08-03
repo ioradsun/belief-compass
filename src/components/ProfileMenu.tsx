@@ -31,6 +31,7 @@ import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 import { requestDisconnect, requestSwitchAccount } from "@/lib/connect-bridge";
 import { useMoney } from "@/lib/display-unit";
 import { formatUsdPrice } from "@/domain/money";
+import { setTheme, useTheme } from "@/lib/theme";
 
 /** Base is the one chain this app trades on. */
 const NETWORK = "Base";
@@ -357,8 +358,11 @@ function SettingsPanel({
 }) {
   return (
     <div className="space-y-1">
+      <ThemeSetting />
+      <Divider />
       <CurrencySetting />
       <Divider />
+
       {onOpenTerms && (
         <button
           type="button"
@@ -388,7 +392,7 @@ function CurrencySetting() {
   const price = ethUsd != null ? formatUsdPrice(ethUsd) : null;
   const seg = (active: boolean) =>
     `flex-1 rounded-[8px] px-3 py-1.5 text-center text-[12px] font-semibold transition-colors ${
-      active ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
+      active ? "bg-[var(--panel)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)]"
     }`;
   return (
     <div className="px-1 py-1.5">
@@ -434,6 +438,49 @@ function CurrencySetting() {
           className={`num ${seg(unit === "USD")}`}
         >
           {price ? `${price} USD` : "USD"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Appearance — one segmented control, same shape as the currency toggle. Dark is
+ * the product's default; Light is a bright, high-contrast reading surface. The
+ * choice applies instantly (a class on <html>) and is remembered next visit.
+ */
+function ThemeSetting() {
+  const theme = useTheme();
+  const seg = (active: boolean) =>
+    `flex-1 rounded-[8px] px-3 py-1.5 text-center text-[12px] font-semibold transition-colors ${
+      active ? "bg-[var(--panel)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)]"
+    }`;
+  return (
+    <div className="px-1 py-1.5">
+      <div className="mb-1.5 text-[13px] text-[var(--text)]">Appearance</div>
+      <div
+        className="flex items-center rounded-[10px] p-0.5"
+        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+        role="radiogroup"
+        aria-label="Appearance"
+      >
+        <button
+          type="button"
+          role="radio"
+          aria-checked={theme === "dark"}
+          onClick={() => setTheme("dark")}
+          className={seg(theme === "dark")}
+        >
+          Dark
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={theme === "light"}
+          onClick={() => setTheme("light")}
+          className={seg(theme === "light")}
+        >
+          Light
         </button>
       </div>
     </div>

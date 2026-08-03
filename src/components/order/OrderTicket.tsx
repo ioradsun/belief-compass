@@ -270,7 +270,7 @@ function AvailRow({ ethUsd }: { ethUsd: number }) {
     ? "Connect wallet"
     : isLoading || eth == null
       ? "…"
-      : `${fmtUsd(eth * ethUsd)}  ·  ${eth.toFixed(4)} ETH`;
+      : `${fmtUsd(eth * ethUsd)}  ·  \u039E${eth.toFixed(4)}`;
   return <QuoteRow k="Avail" v={v} />;
 }
 
@@ -427,7 +427,7 @@ function BuyTicket({
         <QuoteRow k="You invest" v={money(amount)} />
         <QuoteRow
           k="You pay"
-          v={`${fmtUsd(amount)}  ·  ${(Number(ethWei) / 1e18).toFixed(4)} ETH`}
+          v={`${fmtUsd(amount)}  ·  \u039E${(Number(ethWei) / 1e18).toFixed(4)}`}
         />
         {quote && (
           <QuoteRow

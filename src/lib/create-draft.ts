@@ -20,10 +20,13 @@ export interface DraftAttachment {
   file?: File;
   previewUrl?: string;
   url?: string;
+  /** Resolved platform embed for link attachments (YouTube, TikTok, …). */
+  embed?: unknown;
   durationSeconds?: number | null;
   /** SHA-256 of the exact bytes — the strongest duplicate signal we have. */
   sha256?: string | null;
 }
+
 
 /**
  * Where a draft came from, when it did not come from a blank form. Carried so a
