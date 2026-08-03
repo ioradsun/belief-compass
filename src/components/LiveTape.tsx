@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { useStickyRows } from "@/hooks/useSticky";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
+import { PersonAvatar } from "@/components/PersonAvatar";
 import { mergeLiveRows, LIVE_DELTA_OVERLAP_MS, type LiveRow } from "@/lib/live-tape";
 import type { BeatTone } from "@/domain/story";
 
@@ -155,19 +156,16 @@ export function LiveTape({
   );
 }
 
-/** A tiny face beside the attribution — the truest "someone" signal, kept last. */
+/** A tiny face beside the attribution — clicking it opens that person. */
 function AttributionFace({ r }: { r: LiveRow }) {
   if (!r.face) return null;
-  return r.face.avatarUrl ? (
-    <img src={r.face.avatarUrl} alt="" className="h-4 w-4 shrink-0 rounded-full object-cover" />
-  ) : (
-    <span
-      className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-[7px] font-semibold text-white"
-      style={{ background: `hsl(${hueFor(r.wallet ?? r.id)} 45% 45%)` }}
-      aria-hidden
-    >
-      {initialsFor(r.face.name)}
-    </span>
+  return (
+    <PersonAvatar
+      wallet={r.wallet ?? r.id}
+      name={r.face.name}
+      avatarUrl={r.face.avatarUrl}
+      size={16}
+    />
   );
 }
 
