@@ -16,6 +16,7 @@ import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
 import { type MarketRow } from "@/components/MarketCard";
 import { positionPnl } from "@/domain/position";
 import { formatMoney } from "@/domain/money";
+import { StandOnIt } from "@/components/StandOnIt";
 import { useDisplayUnit } from "@/lib/display-unit";
 import {
   positionSignal,
@@ -86,7 +87,6 @@ type Built = {
   signal: PositionSignal;
 };
 
-
 /**
  * One conviction card. Question → side → worth+gain → market believers → personal
  * Pulse → the one dynamic story. No invested amount, no giant %, no raw price.
@@ -111,8 +111,11 @@ function ConvictionCard({
       className="block w-full rounded-[14px] p-3.5 text-left transition-colors hover:border-[var(--text-muted)]/40"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
-      {/* 1 — What do I believe? (largest) */}
-      <div className="text-[14px] font-semibold leading-snug text-[var(--text)]">{p.title}</div>
+      {/* 1 — What do I believe? (largest). pr-9 reserves the corner for the
+        always-present "Stand on it" share control layered above the card. */}
+      <div className="pr-9 text-[14px] font-semibold leading-snug text-[var(--text)]">
+        {p.title}
+      </div>
 
       {/* 2 — What side am I on? */}
       <div className="mt-2">
@@ -150,7 +153,6 @@ function ConvictionCard({
               No change
             </span>
           ))}
-
       </div>
 
       {/* 4 — How is the market reacting? Believers (scale + movement), then Pulse. */}
@@ -400,7 +402,6 @@ export function MyConvictions({
   const trueGain = lifetime && fullBasis ? built.reduce((s, p) => s + (p.gainUsd ?? 0), 0) : null;
   const periodUsd = built.reduce((s, p) => s + (windowDelta(p.value, p.chg) ?? 0), 0);
 
-
   const count = built.length;
   useEffect(() => {
     onCount?.(count);
@@ -443,13 +444,14 @@ export function MyConvictions({
 
       <div className="flex flex-col gap-2.5 pt-4">
         {positions.map((p) => (
-          <ConvictionCard
-            key={p.id}
-            p={p}
-            onSelect={onSelect}
-            money={money}
-            signedMoney={signedMoney}
-          />
+          // The share control is a sibling of the card button (never nested — a
+          // button inside a button is invalid), pinned to the corner.
+          <div key={p.id} className="relative">
+            <ConvictionCard p={p} onSelect={onSelect} money={money} signedMoney={signedMoney} />
+            <div className="absolute right-2.5 top-3">
+              <StandOnIt variant="card" marketId={p.id} title={p.title} side={p.side} />
+            </div>
+          </div>
         ))}
       </div>
     </div>

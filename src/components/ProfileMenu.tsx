@@ -33,7 +33,6 @@ import { useMoney } from "@/lib/display-unit";
 import { formatUsdPrice } from "@/domain/money";
 import { setTheme, useTheme } from "@/lib/theme";
 
-
 /** Base is the one chain this app trades on. */
 const NETWORK = "Base";
 const short = (w: string) => `${w.slice(0, 6)}…${w.slice(-4)}`;
