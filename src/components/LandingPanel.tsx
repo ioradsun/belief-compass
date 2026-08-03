@@ -36,6 +36,7 @@ export function LandingPanel({
   profile?: ReactNode;
 }) {
   const expanded = state === "expanded";
+  const [howOpen, setHowOpen] = useState(false);
 
   return (
     <header
