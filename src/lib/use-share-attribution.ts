@@ -23,7 +23,7 @@ export function useShareCode(wallet?: string): string | null {
     enabled: !!wallet,
     staleTime: Infinity,
   });
-  return (data as { code?: string } | undefined)?.code ?? null;
+  return (data as { code?: string } | undefined)?.code || null;
 }
 
 /**
