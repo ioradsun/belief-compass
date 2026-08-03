@@ -116,16 +116,36 @@ export function CaseColumn({
   });
 
   const tape = change?.tape;
-  const { summary, events } = useMemo(() => {
-    if (!tape?.length) return { summary: null, events: [] };
-    const now = Date.now();
-    return {
-      summary: sideCaseSummary(tape, side, win, now),
-      events: timelineEvents(tape, side, win, now, 3),
-    };
-  }, [tape, side, win]);
+  const summary = useMemo(
+    () => (tape?.length ? sideCaseSummary(tape, side, win, Date.now()) : null),
+    [tape, side, win],
+  );
 
   const believers = (evidence?.believers ?? []).filter((b) => b.side === side);
+
+  // Recent activity — the last few real trades on THIS side: who, and how much.
+  // Independent of the selected lens, and never repeats the side (it's the panel).
+  const nameOf = useMemo(() => {
+    const m = new Map(
+      (evidence?.believers ?? []).map((b) => [b.wallet.toLowerCase(), b.name] as const),
+    );
+    return (w: string) => m.get(w.toLowerCase()) ?? aliasFor(w);
+  }, [evidence]);
+  const recent = useMemo(() => {
+    if (!tape?.length) return [];
+    return tape
+      .filter((t) => t.side === side && t.eth > 0)
+      .slice()
+      .sort((a, b) => b.t - a.t || (b.seq ?? 0) - (a.seq ?? 0))
+      .slice(0, 5)
+      .map((t, i) => ({
+        id: `${t.w}-${t.t}-${t.seq ?? i}`,
+        name: nameOf(t.w),
+        eth: t.eth,
+        action: t.action,
+      }));
+  }, [tape, side, nameOf]);
+
 
   // Headline Believers + Capital come from the CANONICAL reducer (the same one the
   // center uses), so YES + NO always equals the center's Market total. Price is a
