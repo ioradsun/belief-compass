@@ -52,7 +52,18 @@ const capitalCopy = (
  * right (with its direction arrow trailing it), the metric label beneath, and
  * the exact absolute change over the selected timeframe beneath that.
  */
-function MomentumMetric({ total, label, copy }: { total: string; label: string; copy: MetricMove }) {
+function MomentumMetric({
+  total,
+  label,
+  copy,
+  dense,
+}: {
+  total: string;
+  label: string;
+  copy: MetricMove;
+  /** Phone-tight rhythm so the whole market fits one screen without scrolling. */
+  dense?: boolean;
+}) {
   const tone = dirTone(copy.direction);
   const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
   // Only a trusted (headline) % earns the big right-hand figure. A small-base %
@@ -60,13 +71,15 @@ function MomentumMetric({ total, label, copy }: { total: string; label: string; 
   // move; with no % at all the headline space stays empty.
   const headlinePct = copy.pct && !copy.pctQuiet ? copy.pct : copy.direction === "flat" ? "0%" : "";
   return (
-    <div className="px-4 py-3 sm:px-5">
+    <div className={dense ? "px-4 py-2" : "px-4 py-3 sm:px-5"}>
       <div className="flex items-baseline justify-between gap-4">
-        <span className="num min-w-0 truncate text-[26px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)] sm:text-[30px]">
+        <span
+          className={`num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] text-[var(--text)] ${dense ? "text-[21px]" : "text-[26px] sm:text-[30px]"}`}
+        >
           {total}
         </span>
         <span
-          className="num shrink-0 text-[22px] font-semibold leading-none tabular-nums sm:text-[26px]"
+          className={`num shrink-0 font-semibold leading-none tabular-nums ${dense ? "text-[18px]" : "text-[22px] sm:text-[26px]"}`}
           style={{ color: tone }}
         >
           {headlinePct}
@@ -75,10 +88,13 @@ function MomentumMetric({ total, label, copy }: { total: string; label: string; 
           ) : null}
         </span>
       </div>
-      <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+      <div
+        className={`${dense ? "mt-1" : "mt-1.5"} text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]`}
+      >
         {label}
       </div>
-      <div className="num mt-0.5 text-[12px]" style={{ color: tone }}>
+      <div className={`num mt-0.5 ${dense ? "text-[11px]" : "text-[12px]"}`} style={{ color: tone }}>
+
         {copy.absolute}
         {copy.pct && copy.pctQuiet && (
           <span className="ml-1.5 text-[var(--text-muted)]">· {copy.pct}</span>
