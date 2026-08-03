@@ -412,7 +412,16 @@ export function MarketDeck({
       pill for the shape. Believers + capital + the momentum label, from the
       canonical marketBook so the totals reconcile with the side panels. The
       narrative, the House voice and the activity all live in the right feed. */}
-      <MarketMomentum tape={change?.tape} ethUsd={ethUsd} win={deckWin} />
+      <MarketMomentum
+        tape={change?.tape}
+        ethUsd={ethUsd}
+        win={deckWin}
+        footer={
+          onToggleCase && !storySide && !mobileCaseOpen ? (
+            <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
+          ) : null
+        }
+      />
 
       {/* SHARED CONVICTION — side-blind belonging: your Tribe/Twin/Opp are here. */}
       <SharedConviction
