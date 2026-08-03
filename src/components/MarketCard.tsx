@@ -14,6 +14,8 @@ import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { relationshipTone } from "@/lib/dna-labels";
 import { marketVitals, marketBadge, type PulseLevel } from "@/lib/market-vitals";
 import { StoryStrip } from "@/components/StoryStrip";
+import { PersonAvatar } from "@/components/PersonAvatar";
+
 import type { MarketStory } from "@/domain/story";
 import { formatMoney, type DisplayUnit } from "@/domain/money";
 
