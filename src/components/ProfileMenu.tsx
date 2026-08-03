@@ -444,3 +444,46 @@ function CurrencySetting() {
     </div>
   );
 }
+
+/**
+ * Appearance — one segmented control, same shape as the currency toggle. Dark is
+ * the product's default; Light is a bright, high-contrast reading surface. The
+ * choice applies instantly (a class on <html>) and is remembered next visit.
+ */
+function ThemeSetting() {
+  const theme = useTheme();
+  const seg = (active: boolean) =>
+    `flex-1 rounded-[8px] px-3 py-1.5 text-center text-[12px] font-semibold transition-colors ${
+      active ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
+    }`;
+  return (
+    <div className="px-1 py-1.5">
+      <div className="mb-1.5 text-[13px] text-[var(--text)]">Appearance</div>
+      <div
+        className="flex items-center rounded-[10px] p-0.5"
+        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+        role="radiogroup"
+        aria-label="Appearance"
+      >
+        <button
+          type="button"
+          role="radio"
+          aria-checked={theme === "dark"}
+          onClick={() => setTheme("dark")}
+          className={seg(theme === "dark")}
+        >
+          Dark
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={theme === "light"}
+          onClick={() => setTheme("light")}
+          className={seg(theme === "light")}
+        >
+          Light
+        </button>
+      </div>
+    </div>
+  );
+}
