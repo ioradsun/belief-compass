@@ -220,7 +220,7 @@ export function WelcomePrompt({
                 const k = keyOf(p);
                 const on = selected.has(k);
                 return (
-                  <li key={k}>
+                  <li key={k} className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() =>
@@ -231,7 +231,7 @@ export function WelcomePrompt({
                           return next;
                         })
                       }
-                      className="flex w-full items-center gap-2.5 rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--border)]/30"
+                      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--border)]/30"
                     >
                       <span
                         className="grid h-4 w-4 shrink-0 place-items-center rounded-[5px] text-[10px] font-bold"
@@ -260,7 +260,20 @@ export function WelcomePrompt({
                         </span>
                       </span>
                     </button>
+                    {onSelectPerson && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false);
+                          onSelectPerson(p.wallet);
+                        }}
+                        className="shrink-0 rounded-[8px] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] underline"
+                      >
+                        View
+                      </button>
+                    )}
                   </li>
+
                 );
               })}
             </ul>
