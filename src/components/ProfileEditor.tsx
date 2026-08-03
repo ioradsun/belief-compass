@@ -113,7 +113,7 @@ export function ProfileEditor({ wallet, fallbackName }: { wallet: string; fallba
             value={name}
             onChange={(e) => setName(e.target.value.slice(0, MAX_DISPLAY_NAME))}
             placeholder={fallbackName || "Display name"}
-            className="w-full rounded-lg bg-[var(--surface)] px-2.5 py-1.5 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--border-strong)]"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--border-strong)]"
           />
           <p className="mt-1 text-[10px] text-[var(--text-muted)]">
             {MAX_DISPLAY_NAME - name.length} characters left
