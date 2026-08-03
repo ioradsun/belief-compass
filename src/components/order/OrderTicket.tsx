@@ -324,6 +324,99 @@ export function OrderTicket(p: OrderTicketProps) {
   return p.mode === "buy" ? <BuyTicket {...p} /> : <SellTicket {...p} />;
 }
 
+/**
+ * Amount in the viewer's currency, from a USD-native value.
+ * USD → `$1.00`; ETH → `0.0005 ETH` (no scientific notation, no trailing zeros).
+ */
+function unitAmount(usd: number, unit: DisplayUnit, ethUsd: number): string {
+  if (unit === "USD")
+    return `$${usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (!(ethUsd > 0)) return "—";
+  return `${ethText(usd / ethUsd, 8) || "0"} ETH`;
+}
+
+/** Amount in the viewer's currency, from an ETH-native value. */
+function unitAmountFromEth(eth: number, unit: DisplayUnit, ethUsd: number): string {
+  if (unit === "ETH") return `${ethText(eth, 8) || "0"} ETH`;
+  if (!(ethUsd > 0)) return "—";
+  return unitAmount(eth * ethUsd, "USD", ethUsd);
+}
+
+/**
+ * The amount, as the primary object in the form: a large tabular figure with the
+ * currency indicator, a hairline underline and no nested field.
+ */
+function BigAmount({
+  amount,
+  setAmount,
+  unit,
+  ethUsd,
+  error,
+}: {
+  amount: number;
+  setAmount: (n: number) => void;
+  unit: DisplayUnit;
+  ethUsd: number;
+  error?: string | null;
+}) {
+  const eth = unit === "ETH";
+  const decimals = eth ? 8 : 2;
+  const toUsd = (v: number) => (eth ? (ethUsd > 0 ? v * ethUsd : 0) : v);
+  const toText = (usd: number) =>
+    usd ? (eth ? ethText(ethUsd > 0 ? usd / ethUsd : 0, 8) : String(usd)) : "";
+  const [text, setText] = useState(() => toText(amount));
+  const [focus, setFocus] = useState(false);
+
+  useEffect(() => {
+    const implied = toUsd(parseFloat(text));
+    if (Math.abs((Number.isNaN(implied) ? 0 : implied) - amount) >= 0.005) setText(toText(amount));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amount, unit]);
+
+  return (
+    <div
+      className="flex items-baseline gap-2 pb-2 transition-colors"
+      style={{
+        borderBottom: `1px solid ${error ? "var(--no)" : focus ? "var(--text)" : "var(--border)"}`,
+      }}
+    >
+      {!eth && <span className="num text-[26px] font-medium text-[var(--text-muted)]">$</span>}
+      <input
+        inputMode="decimal"
+        value={text}
+        onFocus={() => setFocus(true)}
+        onBlur={() => {
+          setFocus(false);
+          setText(toText(amount));
+        }}
+        onChange={(e) => {
+          let raw = e.target.value.replace(/[^0-9.]/g, "");
+          const first = raw.indexOf(".");
+          if (first !== -1) {
+            raw = raw.slice(0, first + 1) + raw.slice(first + 1).replace(/\./g, "");
+            const [int, dec] = raw.split(".");
+            raw = `${int}.${(dec ?? "").slice(0, decimals)}`;
+          }
+          const n = parseFloat(raw);
+          const usd = Number.isNaN(n) ? 0 : toUsd(n);
+          if (usd > 1_000_000) {
+            setText(toText(1_000_000));
+            setAmount(1_000_000);
+            return;
+          }
+          setText(raw);
+          setAmount(usd);
+        }}
+        aria-label={`Amount to back in ${unit}`}
+        aria-invalid={!!error}
+        placeholder="0"
+        className="num min-w-0 flex-1 bg-transparent text-[30px] font-semibold leading-none text-[var(--text)] outline-none [font-variant-numeric:tabular-nums]"
+      />
+      {eth && <span className="text-[15px] font-medium text-[var(--text-muted)]">ETH</span>}
+    </div>
+  );
+}
+
 function BuyTicket({
   side,
   amount,
@@ -341,12 +434,23 @@ function BuyTicket({
   onDone,
 }: BuyTicketProps) {
   const { unit } = useDisplayUnit();
-  // `amount` is USD-native; the fee is a wei quote. Both show in the chosen unit.
-  const money = (usd: number) => formatMoney(usd, { from: "USD", to: unit, ethUsd });
+  const money = (usd: number) => unitAmount(usd, unit, ethUsd);
+  const fromEth = (eth: number) => unitAmountFromEth(eth, unit, ethUsd);
   const busy = trade.isSubmitting || trade.isMining;
+  const [details, setDetails] = useState(false);
+  const { eth: availEth } = useSpendableBalance();
 
-  // Receipt — the confirmation bar sits in the SAME card footprint as the form's
-  // confirm button, so nothing resizes on success. One full-width action: next.
+  // Escape dismisses the order surface, like any other disclosure.
+  useEffect(() => {
+    if (!side) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [side, onCancel]);
+
+  // Receipt — same footprint as the form, so nothing resizes on success.
   if (trade.isSuccess && side) {
     return (
       <div className={CARD} style={CARD_STYLE}>
@@ -358,9 +462,7 @@ function BuyTicket({
             <span style={{ color: side === "YES" ? "var(--yes)" : "var(--no)" }}>✓</span>
           </span>
           <div>
-            <div className="text-[14px] font-semibold text-[var(--text)]">
-              Joined {side} · House read revealed ↑
-            </div>
+            <div className="text-[14px] font-semibold text-[var(--text)]">Backed {side}</div>
             {quote && (
               <div className="num text-[11px] text-[var(--text-muted)]">
                 {fmtShares(quote.tokens)} shares at $
@@ -381,7 +483,7 @@ function BuyTicket({
     );
   }
 
-  // Neutral: the decision only — one tap on an action opens the full order form.
+  // Neutral: the decision only — one tap on an action opens the order form.
   if (!side) {
     return (
       <div className={`${CARD} flex gap-2`} style={CARD_STYLE}>
@@ -402,76 +504,116 @@ function BuyTicket({
     );
   }
 
-  // Action chosen → the full order form, every detail visible before you confirm.
-  const confirmLabel = !ready.connected
+  const availUnit =
+    availEth == null ? null : unitAmountFromEth(availEth, unit, ethUsd);
+  const overBalance = availEth != null && ethUsd > 0 && amount > availEth * ethUsd + 1e-9;
+  const amountError = amount <= 0 ? null : overBalance ? "Insufficient balance" : null;
+
+  const label = !ready.connected
     ? "Connect wallet"
     : !ready.onBase
       ? "Switch to Base"
-      : `Back ${side} · ${money(amount)}`;
-  const disabled = ready.connected && ready.onBase && (busy || !quote || ethWei <= 0n);
+      : busy
+        ? `Backing ${side}…`
+        : amount <= 0
+          ? "Enter an amount"
+          : overBalance
+            ? "Insufficient balance"
+            : `Back ${side} · ${money(amount)}`;
+  const disabled =
+    ready.connected &&
+    ready.onBase &&
+    (busy || !quote || ethWei <= 0n || amount <= 0 || overBalance);
 
   return (
-    <div className={CARD} style={CARD_STYLE}>
-      <div className="mb-3 px-0.5 text-[13px] font-semibold text-[var(--text)]">
-        Back {side} to reveal the House’s pick.
+    <div className="rounded-[16px] p-5 sm:p-[22px]" style={CARD_STYLE}>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-[15px] font-semibold text-[var(--text)]">Back {side}</h3>
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Close order"
+          className="-mr-1 grid h-7 w-7 place-items-center rounded-[8px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--text)]"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+            <path
+              d="M2 2l10 10M12 2L2 12"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
       </div>
-      <div className="mb-3">
-        <AmountField
-          grow
+
+      <div className="mt-4">
+        <BigAmount
           amount={amount}
           setAmount={setAmount}
           unit={unit}
           ethUsd={ethUsd}
-          ariaLabel="Amount to back"
+          error={amountError}
         />
+        <div className="mt-1.5 text-[12px] text-[var(--text-muted)]">
+          {amountError ? (
+            <span style={{ color: "var(--no)" }}>{amountError} · Available {availUnit ?? "—"}</span>
+          ) : (
+            <>Available {availUnit ?? "—"}</>
+          )}
+        </div>
       </div>
-      <div className="mb-3.5 space-y-1.5 px-0.5">
-        <AvailRow ethUsd={ethUsd} />
-        <QuoteRow k="You invest" v={money(amount)} />
-        <QuoteRow
-          k="You pay"
-          v={`${fmtUsd(amount)}  ·  \u039E${(Number(ethWei) / 1e18).toFixed(4)}`}
-        />
-        {quote && (
+
+      <div className="mt-5 flex items-baseline justify-between gap-3 text-[12px]">
+        <span className="num min-w-0 truncate text-[var(--text-secondary)]">
+          {quoting || !quote
+            ? "Calculating…"
+            : `≈ ${fmtShares(quote.tokens)} shares · ${fromEth(weiToEth(quote.fee))} fee`}
+        </span>
+        <button
+          type="button"
+          onClick={() => setDetails((d) => !d)}
+          aria-expanded={details}
+          aria-controls="order-details"
+          className="shrink-0 text-[12px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--text)]"
+        >
+          Details
+        </button>
+      </div>
+
+      {details && (
+        <div id="order-details" className="mt-3 space-y-1.5">
+          <QuoteRow k="Amount invested" v={money(amount)} />
+          <QuoteRow k="Estimated shares" v={quote ? fmtShares(quote.tokens) : "—"} />
           <QuoteRow
-            k="Protocol fee"
-            v={formatMoney(weiToEth(quote.fee), { from: "ETH", to: unit, ethUsd })}
+            k="Avg execution"
+            v={quote ? `$${avgPriceUsd(ethWei, quote.tokens, ethUsd).toFixed(2)}` : "—"}
           />
-        )}
-        <QuoteRow k="Est. shares" v={quoting ? "…" : quote ? fmtShares(quote.tokens) : "—"} />
-        <QuoteRow
-          k="Avg execution"
-          v={quote ? `$${avgPriceUsd(ethWei, quote.tokens, ethUsd).toFixed(2)}` : "—"}
-        />
-        <QuoteRow k="Network" v="Base" />
-        {trade.isError && (
-          <div className="text-[11px] text-[var(--no)]">
-            {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
-          </div>
-        )}
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className={`${CTRL} flex-1 text-[14px] font-medium text-[var(--text-secondary)]`}
-          style={GHOST_STYLE}
-        >
-          Not now
-        </button>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={onConfirm}
-          className={`${CTRL} flex-[2] text-[15px] font-semibold disabled:opacity-40`}
-          style={PRIMARY_STYLE}
-        >
-          {busy ? "Confirming…" : confirmLabel}
-        </button>
-      </div>
+          <QuoteRow k="Protocol fee" v={quote ? fromEth(weiToEth(quote.fee)) : "—"} />
+          <QuoteRow k="Total paid" v={fromEth(Number(ethWei) / 1e18)} />
+          <QuoteRow k="Network" v="Base" />
+        </div>
+      )}
+
+      {trade.isError && (
+        <div className="mt-2 text-[11px]" role="alert" style={{ color: "var(--no)" }}>
+          {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
+        </div>
+      )}
+
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onConfirm}
+        aria-live="polite"
+        className={`${CTRL} mt-4 w-full text-[15px] font-semibold disabled:opacity-40`}
+        style={PRIMARY_STYLE}
+      >
+        {label}
+      </button>
     </div>
   );
 }
+
 
 function SellTicket({
   held,
