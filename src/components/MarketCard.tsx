@@ -103,11 +103,8 @@ export function pulseLine(p: Pulse, ethUsd: number, unit: DisplayUnit = "USD") {
 
 /** Small face for a trader: real POV picture, else initials. Opens the profile. */
 export function Face({ p, size = 18 }: { p: Pulse; size?: number }) {
-  return (
-    <PersonAvatar wallet={p.wallet} name={personName(p)} avatarUrl={p.pfpUrl} size={size} />
-  );
+  return <PersonAvatar wallet={p.wallet} name={personName(p)} avatarUrl={p.pfpUrl} size={size} />;
 }
-
 
 /** Flash helper: returns true for ~1s after `value` changes. */
 function useFlash(value: number | null | undefined) {

@@ -353,7 +353,6 @@ function Feed() {
   // Universal behaviour: any avatar anywhere opens that profile in the center.
   useEffect(() => registerPersonFocus(selectPerson));
   const openDna = () => {
-
     navigate({
       search: (prev: Search) => ({
         ...prev,
@@ -475,8 +474,6 @@ function Feed() {
     termsOpen ||
     dashOpen
   );
-
-
 
   // ONE timeframe for the whole app. The center's WindowFilter publishes to the
   // deck-window store; the feed, the left rail and every metric read it here, so

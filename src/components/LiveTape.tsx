@@ -169,7 +169,6 @@ function AttributionFace({ r }: { r: LiveRow }) {
   );
 }
 
-
 /**
  * Colour discipline: the only tinted glyphs in the tape are the words YES / NO
  * and signed percentages. Everything else stays neutral so the eye isn't asked
