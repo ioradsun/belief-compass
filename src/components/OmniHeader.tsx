@@ -10,6 +10,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getNetwork } from "@/lib/dna.functions";
 import { searchMarkets } from "@/lib/markets.functions";
+import { composeMarketRow } from "@/domain/market-row";
+import { personStory } from "@/domain/person-story";
 
 export type Lens = "all" | "hot" | "early" | "hidden" | "contested" | "conviction" | "new";
 
@@ -207,7 +209,6 @@ export function OmniHeader({
   const [active_i, setActiveI] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
 
-
   // Debounce the query into the searches so we don't fire on every keystroke.
   const [term, setTerm] = useState("");
   useEffect(() => {
@@ -225,7 +226,6 @@ export function OmniHeader({
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
-
 
   // Markets: full-catalog, intent-ranked search (server), not just the loaded feed.
   const { data: marketHits = [] } = useQuery({
@@ -395,7 +395,6 @@ export function OmniHeader({
         {right}
       </div>
 
-
       {/* Results */}
       {showResults && (
         <div className="absolute inset-x-0 top-11 z-50 max-h-[60vh] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl">
@@ -427,30 +426,51 @@ export function OmniHeader({
               <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 Markets
               </p>
-              {visibleMarkets.map((m, i) => (
-                <button
-                  key={m.onchain_id}
-                  type="button"
-                  onMouseEnter={() => setActiveI(i)}
-                  onClick={() => choose({ kind: "market", id: m.onchain_id })}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left"
-                  style={active_i === i ? { background: "var(--surface)" } : undefined}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] text-[var(--text)]">{m.title}</span>
-                    {m.category && (
-                      <span className="block truncate text-[11px] text-[var(--text-muted)]">
-                        {m.category}
+              {visibleMarkets.map((m, i) => {
+                // What a searcher actually wants: who's ahead, and who's in — not
+                // the category. One honest current-state line, coloured by leader.
+                const state = composeMarketRow({ yesPct: m.yesPct, believers: m.believers });
+                const leadColor =
+                  state.leadSide === "YES"
+                    ? "var(--yes)"
+                    : state.leadSide === "NO"
+                      ? "var(--no)"
+                      : "var(--text-muted)";
+                return (
+                  <button
+                    key={m.onchain_id}
+                    type="button"
+                    onMouseEnter={() => setActiveI(i)}
+                    onClick={() => choose({ kind: "market", id: m.onchain_id })}
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left"
+                    style={active_i === i ? { background: "var(--surface)" } : undefined}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] text-[var(--text)]">
+                        {m.title}
                       </span>
-                    )}
-                  </span>
-                  {m.believers > 0 && (
-                    <span className="num shrink-0 text-[11px] text-[var(--text-muted)]">
-                      {m.believers} in
+                      <span className="mt-0.5 flex items-center gap-1.5 truncate text-[11px]">
+                        {state.stateText && (
+                          <span className="num font-semibold" style={{ color: leadColor }}>
+                            {state.stateText}
+                          </span>
+                        )}
+                        {state.stateText && state.crowdText && (
+                          <span className="text-[var(--text-muted)]" aria-hidden>
+                            ·
+                          </span>
+                        )}
+                        {state.crowdText && (
+                          <span className="num text-[var(--text-muted)]">{state.crowdText}</span>
+                        )}
+                        {state.emptyText && (
+                          <span className="text-[var(--text-muted)]">{state.emptyText}</span>
+                        )}
+                      </span>
                     </span>
-                  )}
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </>
           )}
 
@@ -461,6 +481,22 @@ export function OmniHeader({
               </p>
               {visiblePeople.map((p, i) => {
                 const idx = visibleMarkets.length + i;
+                // What a searcher wants about a person: their relationship to YOU,
+                // in words — not a bare "34%". The pure engine names it and says why.
+                const story = personStory({
+                  relationship: p.relationship,
+                  evidence: p.evidenceLevel,
+                  agreement: p.agreement,
+                  sharedBeliefs: p.sharedBeliefs,
+                  alignedDomain: p.strongestAlignedDomain?.name ?? null,
+                  opposedDomain: p.strongestOpposedDomain?.name ?? null,
+                });
+                const toneFg =
+                  story.tone === "aligned"
+                    ? "var(--yes)"
+                    : story.tone === "opposed"
+                      ? "var(--no)"
+                      : "var(--text-muted)";
                 return (
                   <button
                     key={p.wallet}
@@ -474,16 +510,27 @@ export function OmniHeader({
                       <img
                         src={p.avatarUrl}
                         alt=""
-                        className="h-6 w-6 shrink-0 rounded-full object-cover"
+                        className="h-7 w-7 shrink-0 rounded-full object-cover"
                       />
                     ) : (
-                      <span className="h-6 w-6 shrink-0 rounded-full bg-[var(--surface)]" />
+                      <span className="h-7 w-7 shrink-0 rounded-full bg-[var(--surface)]" />
                     )}
-                    <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text)]">
-                      {p.displayName}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] text-[var(--text)]">
+                        {p.displayName}
+                      </span>
+                      <span className="block truncate text-[11px] text-[var(--text-muted)]">
+                        {story.sentence}
+                      </span>
                     </span>
-                    <span className="num shrink-0 text-[11px] text-[var(--text-muted)]">
-                      {p.agreement}%
+                    <span
+                      className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
+                      style={{
+                        color: toneFg,
+                        background: `color-mix(in oklab, ${toneFg} 14%, transparent)`,
+                      }}
+                    >
+                      {story.stageLabel}
                     </span>
                   </button>
                 );
