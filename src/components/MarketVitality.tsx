@@ -11,7 +11,7 @@
  * unchanged. Side-blind by construction. The SAME component renders on desktop and
  * mobile; only the layout (and the sparkline size) changes.
  */
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   marketBook,
   type BookMetric,
