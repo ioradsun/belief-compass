@@ -242,10 +242,10 @@ export function roomHeadline(sections: RoomSection[], hasVisitedBefore: boolean)
   for (const s of scope) {
     const n = count(s);
     if (n <= 0) continue;
-    if (s.group === "crossing") parts.push(`${plural(n, "Opp", "Opps")} crossed over`);
+    if (s.group === "crossing") parts.push(`${plural(n, "Opp", "Opps")} crossed to your side`);
     else if (s.group === "twin") parts.push(`${plural(n, "Twin", "Twins")}`);
     else if (s.group === "tribe") parts.push(`${n} from your Tribe`);
-    else parts.push(`${plural(n, "new face", "new faces")}`);
+    else parts.push(`${plural(n, "first-timer", "first-timers")}`);
   }
   const body = parts.join(" · ");
   return hasVisitedBefore ? `Since you were last here: ${body}` : `In the room: ${body}`;
