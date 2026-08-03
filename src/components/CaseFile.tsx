@@ -36,13 +36,11 @@ export { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow } from "@/lib/deck-window";
 import { marketBook, type BookMetric } from "@/domain/market-book";
 import {
-  RELATIONSHIP_LABEL,
-  STATUS_LABEL,
-  heldFor,
   rankBelievers,
   sideCaseSummary,
   type CaseRelationship,
 } from "@/domain/case-file";
+
 
 /** Window-relative % for a book metric, or null when the base is too small. */
 const metricPct = (m: BookMetric): number | null => (m.base > 0 ? (m.delta / m.base) * 100 : null);
