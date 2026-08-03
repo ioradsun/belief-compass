@@ -61,7 +61,7 @@ export function SuggestedMarketCard({
       </div>
 
       <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain pr-0.5">
-        <div className="border-t border-[var(--border)]" aria-hidden />
+        <div className="border-t border-[var(--hairline)]" aria-hidden />
 
         <p className="text-[14px] leading-relaxed text-[var(--text-secondary)]">
           {suggestion.fitLine}
@@ -87,7 +87,7 @@ export function SuggestedMarketCard({
           </div>
         )}
 
-        <div className="border-t border-[var(--border)]" aria-hidden />
+        <div className="border-t border-[var(--hairline)]" aria-hidden />
 
         <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
           {rewardLine(creatorFeeBps)}

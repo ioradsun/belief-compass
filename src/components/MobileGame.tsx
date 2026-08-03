@@ -584,7 +584,7 @@ function Dock({ children }: { children: React.ReactNode }) {
 }
 
 function Rule() {
-  return <div className="border-t border-[var(--border)]" aria-hidden />;
+  return <div className="border-t border-[var(--hairline)]" aria-hidden />;
 }
 
 function BigButton({

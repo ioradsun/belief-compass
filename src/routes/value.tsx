@@ -280,14 +280,14 @@ function ValuePage() {
             {/* CATEGORIES */}
             <Section title="Categories" note="Connected-wallet activity by theme">
               <div className="overflow-hidden rounded-2xl border border-[var(--border)]">
-                <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                   <span>Category</span>
                   <span className="text-right">Markets</span>
                   <span className="text-right">Trades</span>
                   <span className="text-right">Volume</span>
                 </div>
                 {data.categories.map((c, i) => (
-                  <div key={c.category} className={`grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 px-4 py-3 text-[13px] tabular-nums ${i > 0 ? "border-t border-[var(--border)]" : ""}`}>
+                  <div key={c.category} className={`grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 px-4 py-3 text-[13px] tabular-nums ${i > 0 ? "border-t border-[var(--hairline)]" : ""}`}>
                     <span className="truncate font-medium text-[var(--text)]">{c.category}</span>
                     <span className="text-right text-[var(--text-secondary)]">{fmtNum(c.markets)}</span>
                     <span className="text-right text-[var(--text-secondary)]">{fmtNum(c.trades)}</span>
@@ -310,7 +310,7 @@ function ValuePage() {
           </aside>
         </div>
 
-        <footer className="mt-16 border-t border-[var(--border)] pt-6 text-[12px] leading-relaxed text-[var(--text-muted)]">
+        <footer className="mt-16 border-t border-[var(--hairline)] pt-6 text-[12px] leading-relaxed text-[var(--text-muted)]">
           Share of the ecosystem compares Conviction against the combined POV + Conviction total:
           markets by origin, which is recorded from the beginning, and buy volume by attribution,
           which begins when we started recording it. Buy volume, trades and traders count only

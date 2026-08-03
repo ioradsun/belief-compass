@@ -800,7 +800,7 @@ function ExamineCta({
 
 /** A quiet hairline between the center's sections — the reading path, not a card. */
 function Hairline() {
-  return <div className="border-t border-[var(--border)]" aria-hidden />;
+  return <div className="border-t border-[var(--hairline)]" aria-hidden />;
 }
 
 /**

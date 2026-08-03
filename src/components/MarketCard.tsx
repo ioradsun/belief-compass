@@ -263,7 +263,7 @@ function MatchStrip({
   const name = person.name || shortWallet(person.wallet);
   return (
     <div
-      className={`flex items-center gap-2 border-b border-border px-4 py-2 text-[11px] ${
+      className={`flex items-center gap-2 border-b border-[var(--hairline)] px-4 py-2 text-[11px] ${
         tribe ? "bg-violet-500/10" : "bg-red-500/10"
       }`}
     >
@@ -366,7 +366,7 @@ export function MarketCard({
 
   return (
     <article className="flex flex-col rounded-xl border border-border bg-card/40 transition-shadow hover:shadow-md">
-      <header className="border-b border-border px-4 py-3">
+      <header className="border-b border-[var(--hairline)] px-4 py-3">
         <div className="text-sm font-medium leading-snug">
           {row.markets?.title ?? `Market #${row.onchain_id}`}
         </div>
@@ -383,21 +383,21 @@ export function MarketCard({
 
       {/* The story: what just happened → momentum → your people (server-composed). */}
       {row.story && (row.story.beats.length > 0 || row.story.crowd) && (
-        <div className="border-b border-border px-4 py-2.5">
+        <div className="border-b border-[var(--hairline)] px-4 py-2.5">
           <StoryStrip story={row.story} />
         </div>
       )}
 
       {/* Why this market surfaced for the active lens — intent, not a formula. */}
       {reason && (
-        <div className="border-b border-border bg-muted/30 px-4 py-2 text-[11px] leading-snug text-foreground">
+        <div className="border-b border-[var(--hairline)] bg-muted/30 px-4 py-2 text-[11px] leading-snug text-foreground">
           {reason}
         </div>
       )}
 
       {/* Vital sign: Pulse — is this market alive? A health bar + one-line story,
           no math for the reader. Badge (Battlefield / Ghost Town / …) when earned. */}
-      <div className="border-b border-border px-4 py-2.5">
+      <div className="border-b border-[var(--hairline)] px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span aria-hidden>{vitals.pulse.emoji}</span>
           <span className="text-xs font-semibold">Pulse: {vitals.pulse.label}</span>
@@ -458,7 +458,7 @@ export function MarketCard({
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={pulses.length === 0}
-        className="flex items-center gap-2 border-t border-border px-4 py-2.5 text-left text-xs disabled:cursor-default"
+        className="flex items-center gap-2 border-t border-[var(--hairline)] px-4 py-2.5 text-left text-xs disabled:cursor-default"
         aria-expanded={open}
       >
         <span
@@ -490,7 +490,7 @@ export function MarketCard({
       </button>
 
       {open && pulses.length > 0 && (
-        <ul className="border-t border-border px-4 py-2 text-xs">
+        <ul className="border-t border-[var(--hairline)] px-4 py-2 text-xs">
           {pulses.map((p) => (
             <li key={p.key} className="flex items-center gap-2 py-1">
               <span

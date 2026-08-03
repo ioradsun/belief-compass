@@ -466,7 +466,7 @@ export function ConvictionDashboard({
                     hint="Current Value + Total Withdrawn + Creator Earnings."
                     value={fmtUsd(journey.totalReturnUsd)}
                   />
-                  <div className="flex items-center justify-between border-t border-[var(--border)] bg-[var(--bg)]/40 px-4 py-3.5">
+                  <div className="flex items-center justify-between border-t border-[var(--hairline)] bg-[var(--bg)]/40 px-4 py-3.5">
                     <span className="text-[13px] font-medium text-[var(--text)]">Net Profit</span>
                     <span
                       className="text-[18px] font-semibold tabular-nums"
@@ -524,7 +524,7 @@ export function ConvictionDashboard({
                 {sources.map((s, i) => (
                   <div
                     key={s.key}
-                    className={`px-4 py-3.5 ${i > 0 ? "border-t border-[var(--border)]" : ""}`}
+                    className={`px-4 py-3.5 ${i > 0 ? "border-t border-[var(--hairline)]" : ""}`}
                   >
                     <div className="flex items-center">
                       <span className="text-[14px] font-medium text-[var(--text)]">{s.label}</span>
@@ -796,7 +796,7 @@ function FlowRow({
   hint?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-[var(--border)] px-4 py-3.5 last:border-b-0">
+    <div className="flex items-center justify-between gap-4 border-b border-[var(--hairline)] px-4 py-3.5 last:border-b-0">
       <span className="text-[13px] text-[var(--text-secondary)]" title={hint}>
         {label}
       </span>
