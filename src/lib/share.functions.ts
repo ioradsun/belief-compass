@@ -55,7 +55,8 @@ export const getShareCode = createServerFn({ method: "GET" })
         .maybeSingle();
       if (race?.code) return { code: race.code as string };
     }
-    throw new Error("Could not mint a share code.");
+    // Attribution is a nice-to-have: never let a minting failure break a page.
+    return { code: "" };
   });
 
 /**
