@@ -70,9 +70,10 @@ export function MediaEmbed({
           ...(fixedHeight
             ? { height: fixedHeight }
             : { aspectRatio: String(ratio ?? 16 / 9), maxHeight }),
-          // Portrait media stays centred instead of stretching the column.
-          marginInline: ratio != null && ratio < 1 ? "auto" : undefined,
-          maxWidth: ratio != null && ratio < 1 ? maxHeight * ratio : undefined,
+          // Cap the width to the ratio so a height-capped frame never
+          // letterboxes the embed inside an oversized box.
+          marginInline: ratio != null ? "auto" : undefined,
+          maxWidth: ratio != null ? maxHeight * ratio : undefined,
         }}
       >
         {state !== "failed" ? (
