@@ -322,11 +322,18 @@ export function CaseColumn({
             <ul className="space-y-0.5">
               {recent.map((e) => (
                 <li key={e.id} className="flex items-center gap-2 text-[12px]">
+                  <PersonAvatar
+                    wallet={e.wallet}
+                    name={e.name}
+                    avatarUrl={e.avatarUrl}
+                    size={22}
+                  />
                   <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
                     <span className="text-[var(--text)]">{e.name}</span>{" "}
                     <span style={{ color: e.action === "BUY" ? color : "var(--text-muted)" }}>
                       {e.action === "BUY" ? "bought" : "sold"}
                     </span>{" "}
+
                     <span className="num font-semibold text-[var(--text)]">
                       {format(e.eth, "ETH")}
                     </span>
