@@ -33,7 +33,7 @@ export function DnaOverview({
 
   if (data.expressedBeliefs < 5) {
     return (
-      <div className="rounded-xl p-6" style={{ border: "1px solid var(--border)" }}>
+      <div className="rounded-xl bg-[var(--surface)] p-6">
         <h2 className="text-lg font-semibold text-[var(--text)]">Your DNA is still forming</h2>
         <p className="mt-2 text-[13px] text-[var(--text-secondary)]">
           Express at least 5 beliefs to begin finding people who see the world like you.
@@ -80,8 +80,7 @@ export function DnaOverview({
                   <button
                     type="button"
                     onClick={() => onSelectPerson(p.wallet)}
-                    className="flex w-full items-center gap-2 rounded-[12px] p-2 text-left transition-colors hover:bg-[var(--border)]/30"
-                    style={{ border: "1px solid var(--border)" }}
+                    className="flex w-full items-center gap-2 rounded-[12px] bg-[var(--surface)] p-2 text-left transition-colors hover:bg-[var(--surface-2)]"
                   >
                     {p.avatarUrl ? (
                       <img src={p.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
