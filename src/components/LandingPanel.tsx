@@ -57,7 +57,7 @@ export function LandingPanel({
           }
         }}
         className={`mx-auto w-full max-w-[1180px] cursor-pointer px-4 transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none motion-reduce:transition-none lg:px-8 ${
-          expanded ? "py-8 lg:py-12" : "py-2.5"
+          expanded ? "py-4 lg:py-5" : "py-2.5"
         }`}
       >
         {/* identity row — persists across both states */}
