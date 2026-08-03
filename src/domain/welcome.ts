@@ -104,18 +104,19 @@ export type RoomGroup = "crossing" | "twin" | "tribe" | "new";
 export const ROOM_GROUP_ORDER: RoomGroup[] = ["crossing", "twin", "tribe", "new"];
 
 export const ROOM_GROUP_LABEL: Record<RoomGroup, string> = {
-  crossing: "Crossed over",
-  twin: "Your Twins",
-  tribe: "Your Tribe",
-  new: "New faces",
+  crossing: "Crossed to your side",
+  twin: "Move exactly like you",
+  tribe: "Usually with you",
+  new: "First time together",
 };
 
 export const ROOM_GROUP_BLURB: Record<RoomGroup, string> = {
-  crossing: "People who usually disagree with you took your side.",
-  twin: "Near-identical conviction. They moved with you.",
-  tribe: "Same instincts, most of the time.",
-  new: "No shared history yet — a relationship starts here.",
+  crossing: "You normally land on opposite sides. On this one, you didn't.",
+  twin: "Your closest match in conviction — and they just backed your side again.",
+  tribe: "You've backed the same side more often than not. Add one more.",
+  new: "One market in common so far — this one. That's where every match starts.",
 };
+
 
 /** DNA label → room group. Opp/Inverse arriving on YOUR side is a crossing. */
 export function roomGroupFor(relationship: string | null | undefined): RoomGroup {
