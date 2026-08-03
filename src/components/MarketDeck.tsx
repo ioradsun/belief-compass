@@ -567,50 +567,6 @@ export function MarketDeck({
               closeSell();
             }}
           />
-        ) : passed ? (
-          house.passFailed ? (
-            /* The pass didn't persist — never silently advance; offer a retry. */
-            <div
-              className="flex items-center gap-3 rounded-[16px] p-4"
-              style={{ border: "1px solid var(--no)" }}
-            >
-              <div className="min-w-0">
-                <div className="text-[14px] font-semibold text-[var(--text)]">
-                  We couldn&rsquo;t save your pass.
-                </div>
-                <div className="text-[12px] text-[var(--text-muted)]">Try again.</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => house.retryPass()}
-                disabled={house.passing}
-                className="ml-auto shrink-0 rounded-[12px] px-4 py-2 text-[13px] font-semibold disabled:opacity-60"
-                style={{ background: "var(--text)", color: "var(--bg)" }}
-              >
-                {house.passing ? "Saving…" : "Try again"}
-              </button>
-            </div>
-          ) : (
-            /* Walked away: the round is closed and the House pick stays sealed. */
-            <div
-              className="flex items-center gap-3 rounded-[16px] bg-[var(--surface)] p-4"
-            >
-              <div className="min-w-0">
-                <div className="text-[14px] font-semibold text-[var(--text)]">You walked away</div>
-                <div className="text-[12px] text-[var(--text-muted)]">
-                  The House kept its read — you never paid to see it.
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={onSkip}
-                className="ml-auto shrink-0 rounded-[12px] px-4 py-2 text-[13px] font-semibold"
-                style={{ background: "var(--text)", color: "var(--bg)" }}
-              >
-                Next market
-              </button>
-            </div>
-          )
         ) : held && !buyMore ? (
           /* State 2 — you own this market: manage the position. The first choice
             is only Sell or Buy More; each hands off to the same OrderTicket. */
