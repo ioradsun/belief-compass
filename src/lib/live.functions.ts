@@ -30,6 +30,7 @@ const LIVE_KINDS = [
   "position_changed_side",
   "believer_milestone",
   "tribe_doubled",
+  "market_transition",
 ];
 
 /** The live feed only reports the last 72 hours. Older events are history. */
@@ -75,7 +76,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       // log is pure over-the-wire weight for limit*3 rows. We select only the one
       // JSON sub-field a milestone row needs (its threshold), which is tiny.
       .select(
-        "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index, milestone_threshold:payload->>threshold",
+        "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index, milestone_threshold:payload->>threshold, transition_headline:payload->>headline, transition_detail:payload->>detail",
       )
       .eq("is_canonical", true)
       .in("kind", LIVE_KINDS);
@@ -146,7 +147,12 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       payload:
         r.kind === "believer_milestone"
           ? { threshold: Number((r as Record<string, unknown>).milestone_threshold ?? 0) }
-          : null,
+          : r.kind === "market_transition"
+            ? {
+                headline: ((r as Record<string, unknown>).transition_headline as string) ?? "",
+                detail: ((r as Record<string, unknown>).transition_detail as string | null) ?? null,
+              }
+            : null,
     }));
 
     const live = groupLiveRows(events, ethUsd).slice(0, limit);
@@ -196,6 +202,22 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           avatarUrl: prof?.pfpUrl ?? null,
           relationship,
         } satisfies LiveFace;
+      }
+
+      // Market-wide transitions carry their own composed copy in the payload
+      // (the emitter already ran the interpretation + dedup) — render it directly.
+      if (r.kind === "market_transition") {
+        const p = r.payload as { headline?: string; detail?: string | null };
+        r.story = {
+          category: "momentum",
+          headline: "MARKET SIGNAL",
+          body: p.headline ?? "",
+          attribution: p.detail ?? null,
+          tone: r.side === "YES" ? "yes" : r.side === "NO" ? "no" : "neutral",
+          personal: false,
+        };
+        r.text = flattenStory(r.story);
+        continue;
       }
 
       // Milestone / surge rows are already final from grouping (no actor to name).

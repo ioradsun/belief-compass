@@ -59,6 +59,7 @@ const REL_BOOST: Record<NetTag, number> = { twin: 1.9, opp: 1.7, tribe: 1.5, inv
 
 /** How novel each kind of row is by nature — a transition beats a trade. */
 const NOVELTY: Record<string, number> = {
+  market_transition: 0.95,
   market_created: 0.9,
   tribe_doubled: 0.9,
   believer_milestone: 0.85,
@@ -68,8 +69,15 @@ const NOVELTY: Record<string, number> = {
   round_trip: 0,
 };
 
-/** The structural transitions that change a side's composition or direction. */
-const STRUCTURAL = new Set(["market_created", "side_shift", "believer_milestone", "tribe_doubled"]);
+/** The structural transitions that change a side's composition or direction. A
+ *  market_transition is already dedup-gated upstream, so it is always feed-worthy. */
+const STRUCTURAL = new Set([
+  "market_transition",
+  "market_created",
+  "side_shift",
+  "believer_milestone",
+  "tribe_doubled",
+]);
 
 /** One candidate event, distilled to what importance needs. */
 export interface FeedCandidate {
