@@ -45,7 +45,7 @@ import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
 
-type Phase = "question" | "passed" | "sides";
+type Phase = "question" | "sides";
 
 export function MobileGame({
   row,
