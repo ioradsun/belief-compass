@@ -21,8 +21,8 @@ import { windowChange } from "@/domain/window-change";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useMoney } from "@/lib/display-unit";
-import { hueFor, initialsFor } from "@/lib/wallet-identity";
-import { timelineEvents } from "@/domain/conviction-series";
+import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
+
 import {
   LENS_META,
   lensColdStart,
@@ -36,13 +36,11 @@ export { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow } from "@/lib/deck-window";
 import { marketBook, type BookMetric } from "@/domain/market-book";
 import {
-  RELATIONSHIP_LABEL,
-  STATUS_LABEL,
-  heldFor,
   rankBelievers,
   sideCaseSummary,
   type CaseRelationship,
 } from "@/domain/case-file";
+
 
 /** Window-relative % for a book metric, or null when the base is too small. */
 const metricPct = (m: BookMetric): number | null => (m.base > 0 ? (m.delta / m.base) * 100 : null);
@@ -116,16 +114,36 @@ export function CaseColumn({
   });
 
   const tape = change?.tape;
-  const { summary, events } = useMemo(() => {
-    if (!tape?.length) return { summary: null, events: [] };
-    const now = Date.now();
-    return {
-      summary: sideCaseSummary(tape, side, win, now),
-      events: timelineEvents(tape, side, win, now, 3),
-    };
-  }, [tape, side, win]);
+  const summary = useMemo(
+    () => (tape?.length ? sideCaseSummary(tape, side, win, Date.now()) : null),
+    [tape, side, win],
+  );
 
   const believers = (evidence?.believers ?? []).filter((b) => b.side === side);
+
+  // Recent activity — the last few real trades on THIS side: who, and how much.
+  // Independent of the selected lens, and never repeats the side (it's the panel).
+  const nameOf = useMemo(() => {
+    const m = new Map(
+      (evidence?.believers ?? []).map((b) => [b.wallet.toLowerCase(), b.name] as const),
+    );
+    return (w: string) => m.get(w.toLowerCase()) ?? aliasFor(w);
+  }, [evidence]);
+  const recent = useMemo(() => {
+    if (!tape?.length) return [];
+    return tape
+      .filter((t) => t.side === side && t.eth > 0)
+      .slice()
+      .sort((a, b) => b.t - a.t || (b.seq ?? 0) - (a.seq ?? 0))
+      .slice(0, 5)
+      .map((t, i) => ({
+        id: `${t.w}-${t.t}-${t.seq ?? i}`,
+        name: nameOf(t.w),
+        eth: t.eth,
+        action: t.action,
+      }));
+  }, [tape, side, nameOf]);
+
 
   // Headline Believers + Capital come from the CANONICAL reducer (the same one the
   // center uses), so YES + NO always equals the center's Market total. Price is a
@@ -271,27 +289,39 @@ export function CaseColumn({
           >
             {lensSentence}
           </p>
-          {events.length > 0 && (
-            <div className="space-y-1">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                Recent activity
-              </span>
-              <ul className="space-y-1">
-                {events.map((e) => (
-                  <li key={e.id} className="flex items-baseline gap-1.5 text-[11px]">
-                    <span aria-hidden>{e.emoji}</span>
-                    <span className="min-w-0 flex-1 truncate text-[var(--text-muted)]">
-                      {e.eth != null ? `${format(e.eth, "ETH")} ${e.text}` : e.text}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+        </div>
+
+        {/* ACT 3 — RECENT ACTIVITY: always on, independent of the chosen lens.
+          Name + amount only — the side is the panel, so we never repeat it. */}
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            Recent activity
+          </span>
+          {recent.length === 0 ? (
+            <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No activity yet.</p>
+          ) : (
+            <ul className="space-y-0.5">
+              {recent.map((e) => (
+                <li key={e.id} className="flex items-center gap-2 text-[12px]">
+                  <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
+                    {e.name}
+                  </span>
+                  <span
+                    className="num shrink-0 font-semibold"
+                    style={{ color: e.action === "BUY" ? color : "var(--text-muted)" }}
+                  >
+                    {e.action === "BUY" ? "+" : "−"}
+                    {format(e.eth, "ETH")}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
-        {/* ACT 3 — THE PEOPLE: one roster, one relationship badge, one status. */}
+        {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}
         <CaseRoster side={side} believers={believers} people={net?.people} />
+
       </div>
 
       {/* Optional deep-dive into the full center timeline (desktop investigation). */}
@@ -414,7 +444,7 @@ function MetricRow({
   );
 }
 
-/** The people, as one ranked roster — People and Network merged, no duplicates. */
+/** The people, as one ranked roster — name, amount, and shared DNA when there is any. */
 export function CaseRoster({
   side,
   believers,
@@ -422,13 +452,17 @@ export function CaseRoster({
 }: {
   side: Side;
   believers: Believer[];
-  people?: { wallet: string; relationship: string }[];
+  people?: { wallet: string; relationship: string; agreement?: number; sharedBeliefs?: number }[];
 }) {
   const { format } = useMoney();
-  const relOf = useMemo(() => {
-    const m = new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p.relationship]));
-    return (w: string) => m.get(w) ?? null;
-  }, [people]);
+  const byWallet = useMemo(
+    () => new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p])),
+    [people],
+  );
+  const relOf = useMemo(
+    () => (w: string) => byWallet.get(w)?.relationship ?? null,
+    [byWallet],
+  );
   const roster = useMemo(() => rankBelievers(believers, relOf), [believers, relOf]);
 
   return (
@@ -445,42 +479,53 @@ export function CaseRoster({
         <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No one on this side yet.</p>
       ) : (
         <ul className="space-y-0.5">
-          {roster.map(({ believer: b, relationship, status }) => (
-            <li key={b.wallet} className="flex items-center gap-2 rounded-[8px] px-1 py-1">
-              {b.avatarUrl ? (
-                <img
-                  src={b.avatarUrl}
-                  alt=""
-                  className="h-7 w-7 shrink-0 rounded-full object-cover"
-                />
-              ) : (
-                <span
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
-                  style={{ background: `hsl(${hueFor(b.wallet)} 45% 45%)` }}
-                  aria-hidden
-                >
-                  {initialsFor(b.name)}
-                </span>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[12px] text-[var(--text)]">{b.name}</div>
-                <div className="text-[11px]">
-                  <span className="font-medium" style={{ color: REL_TONE[relationship] }}>
-                    {RELATIONSHIP_LABEL[relationship]}
+          {roster.map(({ believer: b, relationship }) => {
+            const p = byWallet.get(b.wallet.toLowerCase());
+            // Only a real overlap earns a DNA line — no "unmapped", no filler.
+            const dna =
+              p && (p.sharedBeliefs ?? 0) > 0 && Number.isFinite(p.agreement)
+                ? `${Math.round(p.agreement as number)}% shared DNA`
+                : null;
+            const amount = b.valueUsd >= 1 ? format(b.valueUsd, "USD") : null;
+            return (
+              <li key={b.wallet} className="flex items-center gap-2 rounded-[8px] px-1 py-1">
+                {b.avatarUrl ? (
+                  <img
+                    src={b.avatarUrl}
+                    alt=""
+                    className="h-7 w-7 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <span
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
+                    style={{ background: `hsl(${hueFor(b.wallet)} 45% 45%)` }}
+                    aria-hidden
+                  >
+                    {initialsFor(b.name)}
                   </span>
-                  {status && (
-                    <span className="text-[var(--text-muted)]"> · {STATUS_LABEL[status]}</span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[12px] text-[var(--text)]">{b.name}</div>
+                  {dna && (
+                    <div
+                      className="num text-[10px] font-medium"
+                      style={{ color: REL_TONE[relationship] }}
+                    >
+                      {dna}
+                    </div>
                   )}
                 </div>
-                <div className="num text-[10px] text-[var(--text-muted)]">
-                  {heldFor(b.daysHeld)}
-                  {b.valueUsd >= 1 ? ` · ${format(b.valueUsd, "USD")} backed` : ""}
-                </div>
-              </div>
-            </li>
-          ))}
+                {amount && (
+                  <span className="num shrink-0 text-[12px] font-semibold text-[var(--text)]">
+                    {amount}
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
+
     </div>
   );
 }
