@@ -176,8 +176,8 @@ export function NetworkPanel({
       <button
         type="button"
         onClick={onOpenDna}
-        className="mb-2.5 w-full rounded-[10px] px-2.5 py-2 text-left transition-colors hover:bg-[var(--border)]/30"
-        style={{ border: "1px solid var(--border)" }}
+        className="mb-2.5 w-full rounded-[10px] px-2.5 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
+        style={{ background: "var(--surface)" }}
       >
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">

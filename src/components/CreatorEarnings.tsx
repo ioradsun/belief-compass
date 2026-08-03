@@ -108,7 +108,7 @@ function Row({
   return (
     <div
       className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5"
-      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+      style={{ background: "var(--surface)" }}
     >
       <div className="min-w-0">
         <div className="text-[12px] text-[var(--text-secondary)]">{label}</div>

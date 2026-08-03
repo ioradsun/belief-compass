@@ -343,7 +343,7 @@ export function CreateMarket({
         </div>
 
         {/* 3 · Position + amount — grouped by spacing, not by extra chrome. */}
-        <div className="space-y-4 rounded-[16px] p-4" style={{ border: "1px solid var(--border)" }}>
+        <div className="space-y-4 rounded-[16px] bg-[var(--surface)] p-4">
           <div>
             <StepLabel>Your position</StepLabel>
             <div className="flex gap-2">
@@ -511,7 +511,7 @@ function EmbedPicker({
   }, [raw]);
 
   return (
-    <div className="relative mt-2 space-y-2 rounded-[14px] p-3" style={{ border: "1px solid var(--border)" }}>
+    <div className="relative mt-2 space-y-2 rounded-[14px] bg-[var(--surface)] p-3">
       <div className="flex items-center gap-2">
         <input
           value={raw}

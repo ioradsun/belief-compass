@@ -387,7 +387,7 @@ function MetricRow({
       role="radio"
       aria-checked={active}
       onClick={onSelect}
-      className="flex w-full items-center gap-2.5 rounded-[10px] py-1.5 pr-2 text-left transition-colors hover:bg-[var(--border)]/20"
+      className="flex w-full items-center gap-2.5 rounded-[10px] py-1.5 pr-2 text-left transition-colors hover:bg-[var(--surface-2)]"
       style={{
         paddingLeft: "8px",
         borderLeft: `2px solid ${active ? color : "transparent"}`,

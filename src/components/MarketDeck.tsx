@@ -466,9 +466,19 @@ export function MarketDeck({
           )}
         </div>
 
-        <h1 className="text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
-          {title}
-        </h1>
+        <div className="flex items-start gap-1.5">
+          <h1 className="min-w-0 flex-1 text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
+            {title}
+          </h1>
+          <StandOnIt
+            variant="title"
+            className="-mr-1.5 mt-0.5"
+            marketId={marketId}
+            title={title}
+            side={held?.side ?? side ?? null}
+            hasMedia={!!stageMedia}
+          />
+        </div>
         <MarketByline
           onchainId={Number(row.onchain_id)}
           viewerWallet={viewer}
@@ -562,8 +572,7 @@ export function MarketDeck({
           ) : (
             /* Walked away: the round is closed and the House pick stays sealed. */
             <div
-              className="flex items-center gap-3 rounded-[16px] p-4"
-              style={{ border: "1px solid var(--border)" }}
+              className="flex items-center gap-3 rounded-[16px] bg-[var(--surface)] p-4"
             >
               <div className="min-w-0">
                 <div className="text-[14px] font-semibold text-[var(--text)]">You walked away</div>
@@ -633,16 +642,6 @@ export function MarketDeck({
             }}
           />
         )}
-
-        {/* Always-on growth action: bring your tribe into THIS market. Prominent
-          but a clear step below Back YES / Back NO. After a backing it's the
-          natural next move — the message leads with the side you're standing on. */}
-        <StandOnIt
-          marketId={marketId}
-          title={title}
-          side={held?.side ?? side ?? null}
-          hasMedia={!!stageMedia}
-        />
 
         {/* The payoff for standing on it: what your link has brought in. Only
           renders once it's real (a believer, not just an open). */}
@@ -763,11 +762,8 @@ function ExamineCta({
       onClick={onToggle}
       aria-pressed={open}
       aria-label={open ? "Close Case File" : "Open Case File"}
-      className="block w-full rounded-[14px] px-4 py-3 text-center transition-colors"
-      style={{
-        border: `1px solid ${open ? "var(--text)" : "var(--border)"}`,
-        background: open ? "var(--surface)" : "transparent",
-      }}
+      className="block w-full rounded-[14px] px-4 py-3 text-center transition-colors hover:bg-[var(--surface)]"
+      style={{ background: open ? "var(--surface-2)" : "var(--surface)" }}
     >
       <span className="flex items-center justify-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--text)]">
         {open ? (
@@ -800,7 +796,7 @@ function ExamineCta({
 
 /** A quiet hairline between the center's sections — the reading path, not a card. */
 function Hairline() {
-  return <div className="border-t border-[var(--border)]" aria-hidden />;
+  return <div className="border-t border-[var(--hairline)]" aria-hidden />;
 }
 
 /**

@@ -191,7 +191,6 @@ function Evidence({ media }: { media: StageMedia }) {
         alt={media.alt ?? "Evidence attached to this market"}
         loading="lazy"
         className="max-h-full w-full rounded-[16px] object-contain"
-        style={{ border: "1px solid var(--border)" }}
       />
     );
   }
@@ -203,13 +202,12 @@ function Evidence({ media }: { media: StageMedia }) {
         playsInline
         preload="metadata"
         className="max-h-full w-full rounded-[16px] bg-black object-contain"
-        style={{ border: "1px solid var(--border)" }}
       />
     );
   }
   if (media.kind === "audio") {
     return (
-      <div className="rounded-[16px] p-4" style={{ border: "1px solid var(--border)" }}>
+      <div className="rounded-[16px] bg-[var(--surface)] p-4">
         <div className="mb-3 text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
           Audio evidence
         </div>
@@ -222,8 +220,7 @@ function Evidence({ media }: { media: StageMedia }) {
       href={url}
       target="_blank"
       rel="noreferrer noopener"
-      className="block overflow-hidden rounded-[16px]"
-      style={{ border: "1px solid var(--border)" }}
+      className="block overflow-hidden rounded-[16px] bg-[var(--surface)]"
     >
       {media.image && (
         <img

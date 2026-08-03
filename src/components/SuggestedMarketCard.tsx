@@ -61,7 +61,7 @@ export function SuggestedMarketCard({
       </div>
 
       <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain pr-0.5">
-        <div className="border-t border-[var(--border)]" aria-hidden />
+        <div className="border-t border-[var(--hairline)]" aria-hidden />
 
         <p className="text-[14px] leading-relaxed text-[var(--text-secondary)]">
           {suggestion.fitLine}
@@ -78,8 +78,7 @@ export function SuggestedMarketCard({
             {suggestion.topics.slice(0, 5).map((t) => (
               <span
                 key={t}
-                className="rounded-full px-2.5 py-1 text-[11px] font-medium text-[var(--text-muted)]"
-                style={{ border: "1px solid var(--border)" }}
+                className="rounded-full bg-[var(--surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-muted)]"
               >
                 {t}
               </span>
@@ -87,7 +86,7 @@ export function SuggestedMarketCard({
           </div>
         )}
 
-        <div className="border-t border-[var(--border)]" aria-hidden />
+        <div className="border-t border-[var(--hairline)]" aria-hidden />
 
         <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
           {rewardLine(creatorFeeBps)}
@@ -105,8 +104,7 @@ export function SuggestedMarketCard({
       {/* Decision dock — CREATE and PASS sit exactly where YES and NO sit. */}
       <div className="shrink-0">
         <div
-          className="flex items-center gap-2 rounded-[16px] p-3"
-          style={{ border: "1px solid var(--border)" }}
+          className="flex items-center gap-2 rounded-[16px] bg-[var(--surface)] p-3"
         >
           <div className="flex flex-1 gap-2">
             <button

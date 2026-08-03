@@ -92,6 +92,10 @@
   --bg: #10100f;
   --panel: #141413;
   --surface: #191918;
+  /* One step above --surface: grouping without a border (the fill ladder). */
+  --surface-2: #212120;
+  /* Structural seams: a whisper, not a line. */
+  --hairline: rgba(255, 255, 255, 0.06);
   --border-strong: #343430;
   --text: #f7f5ef;
   --text-secondary: #aaa79f;
@@ -144,6 +148,8 @@
   --bg: #f6f7f9;
   --panel: #ffffff;
   --surface: #eef0f4;
+  --surface-2: #e3e6ec;
+  --hairline: rgba(14, 20, 32, 0.08);
   --border-strong: #b9bec7;
   --text: #0e1420;
   --text-secondary: #4a5262;
@@ -170,6 +176,8 @@
 @theme inline {
   --color-panel: var(--panel);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-hairline: var(--hairline);
   --color-border-strong: var(--border-strong);
   --color-text: var(--text);
   --color-text-secondary: var(--text-secondary);

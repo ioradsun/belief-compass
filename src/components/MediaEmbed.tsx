@@ -66,7 +66,6 @@ export function MediaEmbed({
       <div
         className="relative w-full overflow-hidden rounded-[16px] bg-[var(--surface)]"
         style={{
-          border: "1px solid var(--border)",
           ...(fixedHeight
             ? { height: fixedHeight }
             : { aspectRatio: String(ratio ?? 16 / 9), maxHeight }),
