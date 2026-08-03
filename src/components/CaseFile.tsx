@@ -499,7 +499,12 @@ export function CaseRoster({
               p && (p.sharedBeliefs ?? 0) > 0 && Number.isFinite(p.agreement)
                 ? `${Math.round(p.agreement as number)}% shared DNA`
                 : null;
-            const amount = b.valueUsd >= 1 ? format(b.valueUsd, "USD") : null;
+            const amount =
+              b.valueUsd > 0
+                ? b.valueUsd >= 1
+                  ? format(b.valueUsd, "USD")
+                  : "<$1"
+                : null;
             return (
               <li key={b.wallet} className="flex items-center gap-2 rounded-[8px] px-1 py-1">
                 {b.avatarUrl ? (
