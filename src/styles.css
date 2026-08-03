@@ -88,10 +88,21 @@
 :root {
   --radius: 0.625rem;
 
-  /* Core surface palette (three-column shell) */
+  /*
+   * Core surface palette (three-column shell).
+   *
+   * Depth is expressed as a FILL LADDER, not as strokes: bg -> panel ->
+   * surface -> surface-2. A container earns its edge by being a step lighter
+   * than what it sits on, so grouping costs zero lines. Strokes are reserved
+   * for interactive elements (buttons, inputs, segmented controls) — a border
+   * is the signal "you can hit this". `--hairline` is the only structural
+   * line: seams between regions and section rules inside a panel.
+   */
   --bg: #10100f;
   --panel: #141413;
   --surface: #191918;
+  --surface-2: #201f1d;
+  --hairline: #1e1e1c;
   --border-strong: #343430;
   --text: #f7f5ef;
   --text-secondary: #aaa79f;
