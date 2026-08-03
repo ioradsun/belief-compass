@@ -87,6 +87,8 @@ export function CreateMarket({
     return a?.embed ? { kind: "embed", media: a.embed } : null;
   });
   const [localError, setLocalError] = useState<string | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
+
 
 
   const minSeedEth = econ.minSeedWei != null ? Number(econ.minSeedWei) / 1e18 : null;
