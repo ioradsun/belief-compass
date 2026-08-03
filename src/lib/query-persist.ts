@@ -49,6 +49,8 @@ const PERSIST_PREFIXES = new Set([
   "welcomable",
   "welcomes-received",
   "conviction-market",
+  // Who the viewer is, so a return visit paints signed-in immediately.
+  "wallet-link",
 ]);
 
 
