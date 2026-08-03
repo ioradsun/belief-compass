@@ -138,7 +138,10 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        {/* Apply the remembered light/dark choice before first paint (no flash). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         {/* Apply the web fonts without blocking first paint: attach the stylesheet
+
             as media="print" (ignored for screen), then flip to "all" on load. */}
         <script
           dangerouslySetInnerHTML={{
