@@ -278,7 +278,7 @@ export function CreateMarket({
             className="rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
             style={{ borderColor: "var(--border)" }}
           >
-            {attachment && (
+            {attachment && !linkOpen && (
               <MediaChip attachment={attachment} onRemove={() => setAttachment(null)} />
             )}
             <textarea
@@ -295,7 +295,7 @@ export function CreateMarket({
               attached — a market holds a single media object; the chip's Remove
               is then the control), counter on the right. */}
             <div className="flex items-center justify-between px-3 pb-2">
-              {attachment ? (
+              {attachment && !linkOpen ? (
                 <span />
               ) : (
                 <AddMedia onPick={() => setLinkOpen((v) => !v)} active={linkOpen} />
@@ -305,12 +305,15 @@ export function CreateMarket({
               </span>
             </div>
           </div>
-          {linkOpen && !attachment && (
+          {linkOpen && (
             <EmbedPicker
-              onCancel={() => setLinkOpen(false)}
-              onConfirm={(media) => {
-                setAttachment({ kind: "embed", media });
+              initialUrl={attachment?.media.url ?? ""}
+              onClose={() => {
+                setAttachment(null);
                 setLinkOpen(false);
+              }}
+              onChange={(media) => {
+                setAttachment(media ? { kind: "embed", media } : null);
                 setLocalError(null);
               }}
             />
