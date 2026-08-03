@@ -21,8 +21,8 @@ import { windowChange } from "@/domain/window-change";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useMoney } from "@/lib/display-unit";
-import { hueFor, initialsFor } from "@/lib/wallet-identity";
-import { timelineEvents } from "@/domain/conviction-series";
+import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
+
 import {
   LENS_META,
   lensColdStart,
