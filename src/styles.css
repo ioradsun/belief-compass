@@ -155,6 +155,8 @@
   --bg: #f6f7f9;
   --panel: #ffffff;
   --surface: #eef0f4;
+  --surface-2: #e4e8ee;
+  --hairline: #e9ecf0;
   --border-strong: #b9bec7;
   --text: #0e1420;
   --text-secondary: #4a5262;
@@ -181,6 +183,8 @@
 @theme inline {
   --color-panel: var(--panel);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-hairline: var(--hairline);
   --color-border-strong: var(--border-strong);
   --color-text: var(--text);
   --color-text-secondary: var(--text-secondary);
