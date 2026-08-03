@@ -80,14 +80,14 @@ describe("relationship beat", () => {
     );
     expect(s.beats.find((b) => b.kind === "relationship")!.text).toBe("Maya (your Twin) is on YES");
   });
-  it("names an Opp", () => {
+  it("names a Rival (the mid-tier opposite)", () => {
     const s = composeMarketStory(
       base({
         momentum: { moneyYesPct: 40 },
         network: [face({ name: "Ravi", relationship: "opp", side: "NO" })],
       }),
     );
-    expect(s.beats.find((b) => b.kind === "relationship")!.text).toBe("Your Opp Ravi is on NO");
+    expect(s.beats.find((b) => b.kind === "relationship")!.text).toBe("Your Rival Ravi is on NO");
   });
   it("an ally + adversary on opposite sides becomes the split beat", () => {
     const s = composeMarketStory(
@@ -100,7 +100,7 @@ describe("relationship beat", () => {
       }),
     );
     expect(s.beats.find((b) => b.kind === "relationship")!.text).toBe(
-      "Your Tribe and your Opp are split here",
+      "Your Tribe and your Rival are split here",
     );
   });
 });
@@ -148,7 +148,9 @@ describe("composeLiveStory — market as protagonist", () => {
   });
 
   it("a sell reads as the side losing a believer", () => {
-    const s = composeLiveStory(liveBase({ action: "SELL", side: "NO", market: { believersNo: 8 } }));
+    const s = composeLiveStory(
+      liveBase({ action: "SELL", side: "NO", market: { believersNo: 8 } }),
+    );
     expect(s.headline).toBe("NO LOST A BELIEVER");
     expect(s.body).toBe("8 still back NO.");
     expect(s.attribution).toBe("John exited.");
@@ -189,19 +191,20 @@ describe("composeLiveStory — network is side-blind", () => {
     expect(`${s.headline} ${s.body}`).not.toMatch(/\bYES\b|\bNO\b/);
   });
 
-  it("a Tribe / Opp move surfaces belonging, not a side", () => {
-    expect(composeLiveStory(liveBase({ actor: { name: "A", relationship: "tribe" } })).headline).toBe(
-      "YOUR TRIBE",
-    );
+  it("a Tribe / Rival move surfaces belonging, not a side", () => {
+    expect(
+      composeLiveStory(liveBase({ actor: { name: "A", relationship: "tribe" } })).headline,
+    ).toBe("YOUR TRIBE");
     expect(composeLiveStory(liveBase({ actor: { name: "B", relationship: "opp" } })).headline).toBe(
-      "YOUR OPP",
+      "YOUR RIVAL",
     );
   });
 });
 
 describe("composeLiveStory — copy discipline", () => {
   it("never says a side has a 'tribe' and never uses banned terms", () => {
-    const banned = /tribe|wallet|address|transaction|position|holder|whale|smart money|moon|pouring/i;
+    const banned =
+      /tribe|wallet|address|transaction|position|holder|whale|smart money|moon|pouring/i;
     const inputs: LiveStoryInput[] = [
       liveBase({ market: { believersYes: 9 } }),
       liveBase({ action: "SELL", side: "NO", market: { believersNo: 8 } }),
