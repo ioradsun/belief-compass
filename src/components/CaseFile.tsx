@@ -21,6 +21,7 @@ import { windowChange } from "@/domain/window-change";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useMoney } from "@/lib/display-unit";
+import { formatMoney } from "@/domain/money";
 import { aliasFor } from "@/lib/wallet-identity";
 import { PersonAvatar } from "@/components/PersonAvatar";
 
@@ -85,7 +86,11 @@ export function CaseColumn({
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
   // The shared timeframe: YES and NO always quote the same period so they compare.
   const win = useDeckWindow();
-  const { format } = useMoney();
+  const { format, ethUsd } = useMoney();
+  // Trade sizes are ETH-native; without a live rate we still show the ETH figure
+  // rather than an empty dash, so activity always carries an amount.
+  const tradeAmount = (eth: number) =>
+    ethUsd > 0 ? format(eth, "ETH") : formatMoney(eth, { from: "ETH", to: "ETH", ethUsd: 0 });
 
   // Same query keys the deck already runs → React Query dedupes, no new requests.
   const { data: evidence } = useQuery({
@@ -322,7 +327,7 @@ export function CaseColumn({
                       {e.action === "BUY" ? "bought" : "sold"}
                     </span>{" "}
                     <span className="num font-semibold text-[var(--text)]">
-                      {format(e.eth, "ETH")}
+                      {tradeAmount(e.eth)}
                     </span>
                   </span>
                   <span className="num shrink-0 text-[10px] text-[var(--text-muted)]">
