@@ -54,7 +54,14 @@ function Avatar({
 
 /* ─────────────────────────── Sender: welcome them in ─────────────────────── */
 
-export function WelcomePrompt({ wallet }: { wallet?: string }) {
+export function WelcomePrompt({
+  wallet,
+  onSelectPerson,
+}: {
+  wallet?: string;
+  /** Open a believer's profile so the viewer can explore their convictions. */
+  onSelectPerson?: (wallet: string) => void;
+}) {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
   const [open, setOpen] = useState(false);
