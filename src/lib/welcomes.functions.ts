@@ -300,7 +300,13 @@ export const sendWelcomes = createServerFn({ method: "POST" })
 
 export interface WelcomeReceived {
   count: number;
-  welcomers: { wallet: string; name: string; avatarUrl: string | null }[];
+  welcomers: {
+    wallet: string;
+    name: string;
+    avatarUrl: string | null;
+    relationship: string | null;
+    agreement: number | null;
+  }[];
   /** The most recent welcome's timestamp — the client uses it to not re-nag. */
   latestAt: string | null;
   side: Side | null;
@@ -340,10 +346,20 @@ export const getWelcomesReceived = createServerFn({ method: "GET" })
     const summary = summarizeReceived(received);
 
     const { resolveProfiles } = await import("@/lib/profiles.server");
-    const profiles = await resolveProfiles(summary.welcomers);
+    const [profiles, dna] = await Promise.all([
+      resolveProfiles(summary.welcomers),
+      relationshipIndex(sb, viewer),
+    ]);
     const welcomers = summary.welcomers.slice(0, 12).map((w) => {
       const prof = profiles.get(w);
-      return { wallet: w, name: prof?.displayName ?? aliasFor(w), avatarUrl: prof?.pfpUrl ?? null };
+      const rel = dna.get(w);
+      return {
+        wallet: w,
+        name: prof?.displayName ?? aliasFor(w),
+        avatarUrl: prof?.pfpUrl ?? null,
+        relationship: rel?.relationship ?? null,
+        agreement: rel?.agreement ?? null,
+      };
     });
 
     return {
