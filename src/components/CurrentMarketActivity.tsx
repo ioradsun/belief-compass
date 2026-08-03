@@ -119,8 +119,11 @@ export function CurrentMarketActivity({
             </div>
           )}
           {/* An explicit height gives the tape a real scroll box — without it the
-            list grows and the section can't scroll on touch. */}
-          <div className="h-[300px] min-h-0">
+            list grows and the section can't scroll on touch. When the window is
+            empty there is nothing to scroll, so the box collapses to its one
+            line instead of leaving a tall blank panel. */}
+          <div className={count > 0 ? "h-[300px] min-h-0" : "min-h-0"}>
+
             <LiveTape
               wallet={wallet}
               onSelect={onSelect}
