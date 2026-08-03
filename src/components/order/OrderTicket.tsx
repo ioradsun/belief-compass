@@ -655,7 +655,7 @@ function SellTicket({
             <div className="text-[14px] font-semibold text-[var(--text)]">Left {held.side}</div>
             {proceeds != null && (
               <div className="num text-[11px] text-[var(--text-muted)]">
-                Sold {pct}% · {proceedsStr(true)}
+                Sold {fmtShares(sharesForPct(held.tokens, pct))} shares · {proceedsStr(true)}
               </div>
             )}
           </div>
