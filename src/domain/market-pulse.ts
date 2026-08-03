@@ -24,6 +24,12 @@ export interface Pulse {
   label: PulseLabel;
   /** One calm, observant sentence. Never a side, never price, never a number. */
   meaning: string;
+  /**
+   * The same read, compressed to a headline for the collapsed Market Signal
+   * strip ("More believers. Less capital."). The full sentence lives inside the
+   * Case File; this is the one-line version that fits above the order dock.
+   */
+  headline: string;
 }
 
 /** A capital move counts as real only past both an absolute and a relative floor. */
