@@ -497,19 +497,12 @@ export function CaseRoster({
   believers,
   people,
   priceUsd,
-  total,
 }: {
   side: Side;
   believers: Believer[];
   people?: { wallet: string; relationship: string; agreement?: number; sharedBeliefs?: number }[];
   /** Live price per share on this side — used to value positions the indexer hasn't priced. */
   priceUsd?: number | null;
-  /**
-   * The panel's headline believer count (canonical). The roster can only list the
-   * holders the indexer has already resolved, so when it is short we say so
-   * instead of printing a second, smaller number that contradicts the headline.
-   */
-  total?: number | null;
 }) {
   const { format } = useMoney();
   const byWallet = useMemo(
