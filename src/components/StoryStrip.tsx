@@ -7,6 +7,7 @@
  */
 import type { MarketStory, StoryBeat, BeatTone } from "@/domain/story";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
+import { PersonAvatar } from "@/components/PersonAvatar";
 
 // Beat dots stay neutral on purpose: only YES/NO words and percentages carry
 // colour, so the feed reads as text instead of a traffic-light board.
@@ -56,25 +57,16 @@ export function FacePile({ story }: { story: MarketStory }) {
     <div className="flex items-center gap-2 pt-0.5">
       {(faces.length > 0 || crowd) && (
         <div className="flex -space-x-1.5">
-          {faces.map((f) =>
-            f.avatarUrl ? (
-              <img
-                key={f.wallet}
-                src={f.avatarUrl}
-                alt=""
-                className="h-5 w-5 rounded-full object-cover ring-1 ring-[var(--bg)]"
-              />
-            ) : (
-              <span
-                key={f.wallet}
-                className="grid h-5 w-5 place-items-center rounded-full text-[8px] font-semibold text-white ring-1 ring-[var(--bg)]"
-                style={{ background: `hsl(${hueFor(f.wallet)} 45% 45%)` }}
-                aria-hidden
-              >
-                {initialsFor(f.name)}
-              </span>
-            ),
-          )}
+          {faces.map((f) => (
+            <PersonAvatar
+              key={f.wallet}
+              wallet={f.wallet}
+              name={f.name}
+              avatarUrl={f.avatarUrl}
+              size={20}
+              className="ring-1 ring-[var(--bg)]"
+            />
+          ))}
           {/* Anonymous crowd chips — no identity, just presence. */}
           {crowd &&
             Array.from({ length: Math.min(3, Math.max(0, crowd.count - faces.length)) }).map(
