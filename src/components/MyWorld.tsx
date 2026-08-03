@@ -90,11 +90,14 @@ export function MyWorld({
             aria-selected={tab === t}
             type="button"
             onClick={() => select(t)}
-            className={`flex-1 rounded-[8px] px-2 py-1.5 text-[12px] font-medium transition-colors ${
+            className={`flex flex-1 flex-col items-center rounded-[8px] px-2 py-1 leading-tight transition-colors ${
               tab === t ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
             }`}
           >
-            {label(t)}
+            <span className="text-[12px] font-medium">{tabName(t)}</span>
+            <span className="text-[11px] tabular-nums opacity-70">
+              {tabCount(t) != null ? tabCount(t) : "\u00A0"}
+            </span>
           </button>
         ))}
       </div>
