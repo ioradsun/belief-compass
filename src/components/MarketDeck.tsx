@@ -52,6 +52,7 @@ import {
 } from "@/domain/order";
 import { marketBook } from "@/domain/market-book";
 import { marketPulse } from "@/domain/market-pulse";
+import { emitMarketTransition, type TransitionType, type Side } from "@/domain/market-transition";
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { OrderTicket } from "@/components/order/OrderTicket";
@@ -180,11 +181,32 @@ export function MarketDeck({
   // The one on-screen timeframe — the center owns it, both cases follow it.
   const deckWin = useDeckWindow();
 
-  // The momentum shape, compressed to a headline — the Market Signal strip.
+  // The center's ONE interpretation. The state-transition emitter reads YES and
+  // NO together and names the strongest market-wide meaning (a contradiction, a
+  // dividing market, a side losing conviction); when nothing rises above noise it
+  // falls back to the momentum label. `prevTransition` carries the last state so
+  // the emitter's hysteresis keeps the read calm instead of flipping per trade.
+  const prevTransition = useRef<{ type: TransitionType; side?: Side } | null>(null);
   const caseTeaser = useMemo(() => {
     const t = change?.tape ?? [];
-    return t.length ? marketPulse(marketBook(t, Date.now(), deckWin)).headline : null;
-  }, [change, deckWin]);
+    if (!t.length) return null;
+    const book = marketBook(t, Date.now(), deckWin);
+    const toWin = (bel: { delta: number; base: number }, cap: { delta: number; base: number }) => ({
+      believerDelta: bel.delta,
+      believerBase: bel.base,
+      capitalDeltaUsd: cap.delta * ethUsd,
+      capitalBaseUsd: cap.base * ethUsd,
+      pricePct: null,
+    });
+    const transition = emitMarketTransition({
+      timeframeShort: book.window.short,
+      yes: toWin(book.believers.yes, book.capitalEth.yes),
+      no: toWin(book.believers.no, book.capitalEth.no),
+      prev: prevTransition.current,
+    });
+    prevTransition.current = transition ? { type: transition.type, side: transition.side } : null;
+    return transition?.headline ?? marketPulse(book).headline;
+  }, [change, deckWin, ethUsd]);
 
   // Escape closes the Case File — a disclosure, so it dismisses like one.
   useEffect(() => {
@@ -548,8 +570,6 @@ export function MarketDeck({
         {/* The controls. The analysis rail now lives inside the Total Market
           instrument above, so the dock is only the order surface. */}
         <div className="overflow-hidden rounded-[16px]" style={{ background: "var(--surface)" }}>
-
-
           {held && sellPct != null ? (
             <OrderTicket
               mode="sell"
@@ -847,7 +867,6 @@ function ExamineCta({
         </span>
       </button>
     </div>
-
   );
 }
 
