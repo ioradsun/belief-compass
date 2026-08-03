@@ -417,92 +417,146 @@ function StepLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * Media affordance: one picker for every supported file (the OS dialog does the
- * filtering). No type menu — it was unusable on mobile and the type list is now
- * just a tooltip.
- */
-function AddMedia({ onPick }: { onPick: () => void }) {
-  const [hint, setHint] = useState(false);
-
+/** Opens the link composer. Uploads are disabled — evidence is always a link. */
+function AddMedia({ onPick, active }: { onPick: () => void; active: boolean }) {
   return (
-    <div className="relative flex items-center gap-3">
-      <button
-        type="button"
-        onClick={onPick}
-        title={SUPPORTED_MEDIA_HINT}
-        className="flex items-center gap-1 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-      >
-        <span aria-hidden>＋</span> Add media
-      </button>
-
-      <button
-        type="button"
-        aria-label="Supported file types"
-        onClick={() => setHint((v) => !v)}
-        onBlur={() => setHint(false)}
-        className="grid size-4 place-items-center rounded-full border text-[9px] text-[var(--text-muted)]"
-        style={{ borderColor: "var(--border)" }}
-      >
-        ?
-      </button>
-      {hint && (
-        <div
-          className="absolute bottom-6 left-0 z-20 w-[min(280px,calc(100vw-64px))] rounded-[10px] bg-[var(--surface)] p-2 text-[11px] leading-relaxed text-[var(--text-secondary)] shadow-lg"
-          style={{ border: "1px solid var(--border)" }}
-        >
-          {SUPPORTED_MEDIA_HINT}
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={onPick}
+      title={EMBED_HINT}
+      className={`flex items-center gap-1 text-[11px] font-medium transition-colors hover:text-[var(--text)] ${
+        active ? "text-[var(--text)]" : "text-[var(--text-muted)]"
+      }`}
+    >
+      <span aria-hidden>＋</span> Add media
+    </button>
   );
 }
 
 /**
- * A compact attachment chip that stays out of the way. Images show a real
- * thumbnail; everything else shows a glyph. Clicking expands a constrained
- * preview so the media never dominates the composer.
+ * Paste a link → the platform is recognised locally (instantly, with a poster
+ * thumbnail and a warmed connection), metadata is filled in from the server a
+ * moment later, and OK confirms it. No platform selector, no upload controls.
  */
-function MediaChip({ attachment, onRemove }: { attachment: Attachment; onRemove: () => void }) {
-  const [open, setOpen] = useState(false);
-  const glyph =
-    attachment.kind === "image"
-      ? "🖼"
-      : attachment.kind === "video"
-        ? "🎬"
-        : attachment.kind === "audio"
-          ? "🎧"
-          : "🔗";
-  const label =
-    attachment.kind === "link" ? attachment.url.replace(/^https?:\/\//, "") : attachment.file.name;
+function EmbedPicker({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: (media: EmbedMedia) => void;
+  onCancel: () => void;
+}) {
+  const [raw, setRaw] = useState("");
+  const [media, setMedia] = useState<EmbedMedia | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const seq = useRef(0);
+
+  // Local parse is synchronous: the frame + poster can render on the keystroke
+  // that completes the URL, long before oEmbed answers.
+  useEffect(() => {
+    const value = raw.trim();
+    const id = ++seq.current;
+    if (!value) {
+      setMedia(null);
+      setError(null);
+      setPending(false);
+      return;
+    }
+    const parsed = parseEmbed(value);
+    if (parsed) {
+      preconnectEmbed(parsed.platform);
+      setMedia({ kind: "embed", ...parsed, title: null, author: null, thumbnail: instantThumbnail(parsed) });
+      setError(null);
+    }
+    setPending(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await resolveEmbed({ data: { url: value } });
+        if (seq.current !== id) return;
+        if (res.media) {
+          setMedia(res.media);
+          setError(null);
+        } else if (!parsed) {
+          setMedia(null);
+          setError(res.error);
+        }
+      } catch {
+        if (seq.current === id && !parsed) setError("Couldn't read that link.");
+      } finally {
+        if (seq.current === id) setPending(false);
+      }
+    }, parsed ? 250 : 500);
+    return () => clearTimeout(t);
+  }, [raw]);
 
   return (
-    <div className="border-b px-2.5 pt-2.5" style={{ borderColor: "var(--border)" }}>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => attachment.kind !== "link" && setOpen((v) => !v)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-        >
-          <span
-            className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[8px] text-[14px]"
-            style={{ border: "1px solid var(--border)" }}
+    <div className="mt-2 space-y-2 rounded-[14px] p-3" style={{ border: "1px solid var(--border)" }}>
+      <input
+        value={raw}
+        autoFocus
+        inputMode="url"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
+        onChange={(e) => setRaw(e.target.value)}
+        placeholder="Paste a YouTube, Instagram, TikTok, X or Spotify link"
+        className="w-full rounded-[10px] bg-[var(--surface)] px-3 py-2 text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
+        style={{ border: "1px solid var(--border)" }}
+      />
+      {media && <MediaEmbed media={media} />}
+      {error && <p className="text-[12px] text-[var(--no)]">{error}</p>}
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-[var(--text-muted)]">
+          {media ? PLATFORM_LABEL[media.platform] : pending ? "Checking link…" : EMBED_HINT}
+        </span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
           >
-            {attachment.kind === "image" ? (
-              <img src={attachment.previewUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <span aria-hidden>{glyph}</span>
-            )}
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!media}
+            onClick={() => media && onConfirm(media)}
+            className="rounded-[8px] px-3 py-1 text-[12px] font-semibold text-[var(--text)] disabled:opacity-40"
+            style={{ border: "1px solid var(--border-strong)" }}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The confirmed embed, shown compactly above the conviction statement. */
+function MediaChip({ attachment, onRemove }: { attachment: Attachment; onRemove: () => void }) {
+  const m = attachment.media;
+  return (
+    <div className="border-b px-2.5 py-2.5" style={{ borderColor: "var(--border)" }}>
+      <div className="flex items-center gap-2">
+        <span
+          className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[8px] text-[14px]"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          {m.thumbnail ? (
+            <img src={m.thumbnail} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span aria-hidden>🔗</span>
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12px] font-medium text-[var(--text)]">
+            {m.title ?? m.url.replace(/^https?:\/\//, "")}
           </span>
-          <span className="min-w-0">
-            <span className="block truncate text-[12px] font-medium text-[var(--text)]">
-              {label}
-            </span>
-            <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-              {attachment.kind}
-            </span>
+          <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+            {PLATFORM_LABEL[m.platform]}
+            {m.author ? ` · ${m.author}` : ""}
           </span>
-        </button>
+        </span>
         <button
           type="button"
           onClick={onRemove}
@@ -511,43 +565,9 @@ function MediaChip({ attachment, onRemove }: { attachment: Attachment; onRemove:
           Remove
         </button>
       </div>
-      {open && attachment.kind !== "link" && (
-        <div className="pb-2 pt-2">
-          {attachment.kind === "image" && (
-            <img
-              src={attachment.previewUrl}
-              alt=""
-              className="max-h-[160px] w-full rounded-[8px] object-contain"
-            />
-          )}
-          {attachment.kind === "video" && (
-            <video
-              src={attachment.previewUrl}
-              controls
-              className="max-h-[160px] w-full rounded-[8px]"
-            />
-          )}
-          {attachment.kind === "audio" && (
-            <audio src={attachment.previewUrl} controls className="w-full" />
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
-
-
-
-/** Read a clip's duration from the browser before we ever upload it. */
-function probeDuration(url: string, kind: "audio" | "video"): Promise<number | null> {
-  return new Promise((resolve) => {
-    const el = document.createElement(kind === "video" ? "video" : "audio");
-    el.preload = "metadata";
-    el.onloadedmetadata = () => resolve(Number.isFinite(el.duration) ? el.duration : null);
-    el.onerror = () => resolve(null);
-    el.src = url;
-  });
-}
 
 export { kindForMime };
