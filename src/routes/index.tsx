@@ -88,7 +88,9 @@ const OPP_FILTERS: { key: OppFilter; emoji: string; label: string; question: str
 const CreateMarket = lazyRetry(() =>
   import("@/components/CreateMarket").then((m) => ({ default: m.CreateMarket })),
 );
-const MyWorld = lazyRetry(() => import("@/components/MyWorld").then((m) => ({ default: m.MyWorld })));
+const MyWorld = lazyRetry(() =>
+  import("@/components/MyWorld").then((m) => ({ default: m.MyWorld })),
+);
 import { OmniHeader } from "@/components/OmniHeader";
 import { ProfileMenu } from "@/components/ProfileMenu";
 
@@ -608,9 +610,6 @@ function Feed() {
   // the center rather than the desktop three-column split.
   const mobileCaseActive = !isDesktop && caseEligible;
 
-
-
-
   return (
     <div className="flex h-[100svh] w-full flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)] supports-[height:100dvh]:h-[100dvh]">
       <LandingPanel
@@ -635,18 +634,42 @@ function Feed() {
               </button>
             }
           />
-
         }
         profile={
-          wallet ? (
-            <ProfileMenu
-              wallet={wallet}
-              onViewProfile={selectPerson}
-              onOpenTerms={openTerms}
-              onOpenDashboard={openDashboard}
-              ethUsd={data?.ethUsd ?? 0}
-            />
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {/* Always-on help: the guided "How it works" story, one tap from anywhere. */}
+            <a
+              href="/how"
+              aria-label="How Conviction Company works"
+              title="How Conviction Company works"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--border)] text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
+            >
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path
+                  d="M9.6 9.2a2.4 2.4 0 1 1 3.3 2.2c-.7.3-1.1.9-1.1 1.6v.4"
+                  strokeLinecap="round"
+                />
+                <circle cx="11.8" cy="16.6" r="0.05" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </a>
+            {wallet ? (
+              <ProfileMenu
+                wallet={wallet}
+                onViewProfile={selectPerson}
+                onOpenTerms={openTerms}
+                onOpenDashboard={openDashboard}
+                ethUsd={data?.ethUsd ?? 0}
+              />
+            ) : null}
+          </div>
         }
       />
 
@@ -754,7 +777,6 @@ function Feed() {
                   />
                 </Suspense>
               </PanelBoundary>
-
             ) : selectedPerson ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <Suspense fallback={<DeckSkeleton />}>
