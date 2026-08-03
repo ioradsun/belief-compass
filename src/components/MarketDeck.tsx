@@ -187,6 +187,16 @@ export function MarketDeck({
     return t.length ? marketPulse(marketBook(t, Date.now(), deckWin)).headline : null;
   }, [change, deckWin]);
 
+  // Escape closes the Case File — a disclosure, so it dismisses like one.
+  useEffect(() => {
+    if (!caseOpen || !onToggleCase) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onToggleCase();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [caseOpen, onToggleCase]);
+
   // Creator/age for the identity row's freshness token (deduped with the byline).
   const { data: cm } = useQuery({
     queryKey: ["conviction-market", marketId],
