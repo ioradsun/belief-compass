@@ -99,9 +99,9 @@ function HowItWorks() {
           </span>
           <a
             href="/"
-            className="ml-auto rounded-full bg-[var(--text)] px-4 py-1.5 text-[12px] font-semibold text-[var(--bg)] transition-opacity hover:opacity-90"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[var(--text)] px-4 py-1.5 text-[12px] font-semibold text-[var(--bg)] transition-opacity hover:opacity-90"
           >
-            Explore markets
+            <span aria-hidden>✕</span> Close
           </a>
         </div>
 
