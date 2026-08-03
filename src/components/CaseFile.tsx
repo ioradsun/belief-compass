@@ -138,6 +138,12 @@ export function CaseColumn({
     );
     return (w: string) => m.get(w.toLowerCase()) ?? aliasFor(w);
   }, [evidence]);
+  const avatarOf = useMemo(() => {
+    const m = new Map(
+      (evidence?.believers ?? []).map((b) => [b.wallet.toLowerCase(), b.avatarUrl] as const),
+    );
+    return (w: string) => m.get(w.toLowerCase()) ?? null;
+  }, [evidence]);
   const recent = useMemo(() => {
     if (!tape?.length) return [];
     return tape
@@ -147,12 +153,15 @@ export function CaseColumn({
       .slice(0, 5)
       .map((t, i) => ({
         id: `${t.w}-${t.t}-${t.seq ?? i}`,
+        wallet: t.w,
         name: nameOf(t.w),
+        avatarUrl: avatarOf(t.w),
         eth: t.eth,
         action: t.action,
         t: t.t,
       }));
-  }, [tape, side, nameOf]);
+  }, [tape, side, nameOf, avatarOf]);
+
 
 
   // Headline Believers + Capital come from the CANONICAL reducer (the same one the
