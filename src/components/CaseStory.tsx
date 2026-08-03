@@ -191,13 +191,8 @@ export function CaseStory({
 
         {/* Who is sustaining it — the same roster, one relationship badge each. */}
         <section className="mt-4">
-          <CaseRoster
-            side={side}
-            believers={believers}
-            people={net?.people}
-            priceUsd={priceUsd}
-            total={summary?.believers ?? null}
-          />
+          <CaseRoster side={side} believers={believers} people={net?.people} priceUsd={priceUsd} />
+
 
         </section>
       </div>
