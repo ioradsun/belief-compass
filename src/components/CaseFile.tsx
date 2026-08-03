@@ -361,13 +361,8 @@ export function CaseColumn({
         </div>
 
         {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}
-        <CaseRoster
-          side={side}
-          believers={believers}
-          people={net?.people}
-          priceUsd={priceUsd}
-          total={belChange != null ? authBelievers : believersTotal}
-        />
+        <CaseRoster side={side} believers={believers} people={net?.people} priceUsd={priceUsd} />
+
 
       </div>
 
