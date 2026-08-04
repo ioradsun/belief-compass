@@ -122,10 +122,17 @@ function ConvictionCard({
   });
   const sharesLabel = p.shares.toLocaleString("en-US", { maximumFractionDigits: 2 });
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(p.id)}
-      className="block w-full rounded-[14px] p-3.5 text-left transition-colors hover:bg-[var(--surface-2)]"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(p.id);
+        }
+      }}
+      className="block w-full cursor-pointer rounded-[14px] p-3.5 text-left transition-colors hover:bg-[var(--surface-2)]"
       style={{ background: "var(--surface)" }}
     >
       {/* 1 — What do I believe? (largest). pr-9 reserves the corner for the
@@ -241,7 +248,8 @@ function ConvictionCard({
       {story.body && (
         <div className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">{story.body}</div>
       )}
-    </button>
+    </div>
+
   );
 }
 
