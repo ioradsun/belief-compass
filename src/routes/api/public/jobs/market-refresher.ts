@@ -8,7 +8,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.server";
 import { refreshDirtyBatch } from "@/lib/market-state/refresh-market.server";
-import { emitMarketTransitions } from "@/lib/market-transition-emit.server";
+import { emitStoryEvents } from "@/lib/story-event-emit.server";
 
 export const Route = createFileRoute("/api/public/jobs/market-refresher")({
   server: {
@@ -42,7 +42,7 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
         let transitionsEmitted = 0;
         try {
           const ids = out.results.filter((r) => r.ok).map((r) => r.market);
-          transitionsEmitted = await emitMarketTransitions(sb, ids);
+          transitionsEmitted = await emitStoryEvents(sb, ids);
         } catch {
           /* transitions are non-critical; skip this cycle on error */
         }
