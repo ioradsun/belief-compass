@@ -66,11 +66,66 @@ export function MyWorld({
     }
   };
 
+  // Counts must be on the tab strip whether or not that tab has ever been opened,
+  // so the strip reads the same cached queries the panels use (React Query dedupes)
+  // and only defers to a mounted panel's own, richer count when it has reported one.
+  const { data: netData } = useQuery({
+    queryKey: ["network", wallet ?? null, "all", "relevant", ""],
+    queryFn: () =>
+      getNetwork({
+        data: { wallet, relationship: "all", sort: "relevant", query: "", limit: 60 },
+      }),
+    enabled: !!wallet,
+    placeholderData: (prev) => prev,
+    refetchInterval: 60_000,
+  });
+  const netCounts = useMemo(() => {
+    let tribe = 0;
+    let rivals = 0;
+    for (const p of netData?.people ?? []) {
+      const g = presentRelationship({
+        agreement: p.agreement,
+        sharedConvictions: p.sharedBeliefs,
+        together: p.together,
+        apart: p.apart,
+        topicCount: p.topicCount,
+        strongestAlignedTopic: p.strongestAlignedDomain?.name ?? null,
+        strongestOpposedTopic: p.strongestOpposedDomain?.name ?? null,
+      }).group;
+      if (g === "tribe") tribe += 1;
+      else if (g === "rival") rivals += 1;
+    }
+    return { tribe, rivals };
+  }, [netData]);
+
+  const { data: walletData } = useQuery({
+    queryKey: ["my-convictions", wallet ?? null, win ?? "24h"],
+    queryFn: async () =>
+      await getWallet({ data: { wallet: wallet as string, window: win ?? "24h" } }),
+    enabled: !!wallet,
+    placeholderData: (prev) => prev,
+    refetchInterval: 30_000,
+  });
+  const positionCount = useMemo(
+    () =>
+      (walletData?.positions ?? []).filter((p) => {
+        const side = p.stance_side === "YES" || p.stance_side === "NO" ? p.stance_side : null;
+        if (!side) return false;
+        const shares = Number((side === "YES" ? p.yes_shares : p.no_shares) ?? 0);
+        return shares > 0;
+      }).length,
+    [walletData],
+  );
+
   const tabName = (t: Tab): string =>
     t === "positions" ? "Convictions" : t === "tribe" ? "Tribe" : "Rivals";
 
-  const tabCount = (t: Tab): number | null | undefined =>
-    t === "positions" ? convictionCount : t === "tribe" ? counts?.tribe : counts?.rivals;
+  const tabCount = (t: Tab): number =>
+    t === "positions"
+      ? (convictionCount ?? positionCount)
+      : t === "tribe"
+        ? (counts?.tribe ?? netCounts.tribe)
+        : (counts?.rivals ?? netCounts.rivals);
 
   const exploreMarkets = () => {
     const first = rows[0];
