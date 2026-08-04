@@ -7,6 +7,8 @@
  * reads identically everywhere. No card, no tab: a hairline does the separating.
  */
 import { useEffect, useRef, useState } from "react";
+import { HouseRead } from "@/components/HouseRead";
+import type { HouseReadState } from "@/domain/house-read";
 
 /**
  * The split-panel mark: two halves that part to reveal what sits behind them.
@@ -68,7 +70,7 @@ export function ExamineCta({
   open,
   onToggle,
   teaser,
-  houseLine = null,
+  houseRead = null,
   openLabel = "See both sides",
   closeLabel = "Close Case File",
   compact = false,
@@ -78,12 +80,11 @@ export function ExamineCta({
   /** The momentum/pulse read, shown as the market signal. */
   teaser?: string | null;
   /**
-   * The House's call for the viewer, shown as a quiet second line UNDER the
-   * signal — but only when the House has an earned read (a named call or a
-   * post-decision beat). Cold-start CTAs ("connect…", "still learning") pass
-   * null so the read stays one honest line and never repeats a connect prompt.
+   * The House Read — the House's attempt to call the viewer's next move, shown
+   * directly beneath the market signal. The SAME state drives desktop and
+   * mobile; null only when there is no viewer to read at all.
    */
-  houseLine?: string | null;
+  houseRead?: HouseReadState | null;
   openLabel?: string;
   closeLabel?: string;
   /** Phone dock: tighter padding, same anatomy. */
@@ -122,12 +123,7 @@ export function ExamineCta({
           <SignalSpark hot={hot} />
           <span className="min-w-0 truncate">{signal}</span>
         </div>
-        {houseLine && (
-          <div className="mt-1 flex min-w-0 items-center gap-2 text-[12px] leading-snug text-[var(--text-secondary)]">
-            <span aria-hidden>🏠</span>
-            <span className="min-w-0 truncate">{houseLine}</span>
-          </div>
-        )}
+        {houseRead && <HouseRead state={houseRead} className="mt-1" />}
       </div>
       <div className="border-t border-[var(--hairline)]" aria-hidden />
       {/* Case File disclosure — says plainly what opening it reveals. */}

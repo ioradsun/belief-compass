@@ -54,10 +54,13 @@ export function houseMode(band: string | null): HouseMode {
 
 /* ── The voice. Deterministic pick by seed so a market's line is stable. ────── */
 
+// Low intensity is always about the HOUSE still learning — never about the
+// reader being difficult. "You're hard to read" put the fault on them; the
+// system is the thing that hasn't learned the tells yet.
 const BEFORE_LOW = [
   "Still learning you.",
   "I'm not sure about this one yet.",
-  "You're hard to read here.",
+  "Still learning your tells.",
   "This one could go either way.",
   "I'm watching.",
 ];
