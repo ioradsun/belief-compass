@@ -396,6 +396,25 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         } satisfies LiveFace;
       }
 
+      // The crowd behind a burst, named. Ordered by what they committed (the
+      // grouping already did that), with the viewer's own people pulled to the
+      // front so a familiar face is the first one they see.
+      const stakes = burstStakes.get(r.id);
+      if (stakes && !r.people) {
+        const named = stakes.map((s) => {
+          const prof = profiles.get(s.wallet);
+          return {
+            wallet: s.wallet,
+            name: prof?.displayName ?? aliasFor(s.wallet),
+            avatarUrl: prof?.pfpUrl ?? null,
+            relationship: labelByWallet.get(s.wallet) ?? null,
+          };
+        });
+        r.people = orderForViewer(named);
+      }
+
+
+
       // A CONVICTION COHORT — the people still holding. The event stored PEOPLE,
       // not prose, precisely so the sentence can be written for where it is
       // being read: this request knows whether it is the app-wide tape or one
