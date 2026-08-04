@@ -19,11 +19,12 @@
  * highlight. Clicking a row selects that market; clicking a face opens that
  * person.
  */
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PersonStack } from "@/components/PersonStack";
 import { listLiveEvents } from "@/lib/live.functions";
 import { useStickyRows } from "@/hooks/useSticky";
+import { useScheduledRows } from "@/hooks/useScheduledRows";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { mergeLiveRows, LIVE_DELTA_OVERLAP_MS, type LiveRow } from "@/lib/live-tape";
@@ -157,17 +158,25 @@ export function LiveTape({
     return visible.filter((r) => keep.has(r.id));
   }, [visible]);
 
-  // ARRIVAL. A live feed should feel like it is being written, so a row that
-  // was not here on the last render slides in. Tracked by id rather than by
-  // index, so a poll that only re-sorts animates nothing, and the very first
-  // paint animates nothing either — that would be a wall of motion, not life.
-  const seen = useRef<Set<string>>(new Set());
-  const painted = useRef(false);
-  const isNew = (id: string) => painted.current && !seen.current.has(id);
-  useEffect(() => {
-    for (const r of rows) seen.current.add(r.id);
-    painted.current = true;
-  }, [rows]);
+  // ARRIVAL. A live feed should feel like it is being written, so rows are
+  // released one at a time by the presentation scheduler rather than rendered
+  // as whatever the last poll returned — eight events landing in one frame is a
+  // page refresh with a transition on it. The scheduler also decides WHICH row
+  // goes next, so coordinated selling never waits behind four dust trades.
+  const { rows: released, entranceWeight } = useScheduledRows(rows, JSON.stringify(key));
+
+  // Motion by rarity: the same tier that decided whether the row was worth
+  // showing at all now decides how much it is allowed to move. A Tier 1 row
+  // gets a deliberate entrance and a beat alone; texture just appears. Motion
+  // that is identical everywhere tells a reader nothing.
+  const entranceClass = (id: string): string | undefined => {
+    const w = entranceWeight(id);
+    if (w == null) return undefined;
+    if (w <= 1) return "tape-enter-major";
+    if (w === 2) return "tape-flash";
+    if (w === 3) return "tape-enter";
+    return undefined;
+  };
 
   return (
     <div
@@ -177,17 +186,17 @@ export function LiveTape({
           : ""
       }
     >
-      {isLoading && rows.length === 0 ? (
+      {isLoading && released.length === 0 ? (
         <ul className="space-y-2" aria-hidden>
           {Array.from({ length: skeletonRows }).map((_, i) => (
             <li key={i} className="h-8 animate-pulse rounded bg-[var(--surface-2)]" />
           ))}
         </ul>
-      ) : rows.length === 0 ? (
+      ) : released.length === 0 ? (
         <p className="text-xs text-[var(--text-muted)]">{emptyText}</p>
       ) : (
         <ul className="space-y-3">
-          {rows.map((r) => {
+          {released.map((r) => {
             const s = r.story;
             const personal = s.personal;
             // A discovery moment is about a PERSON, not a market — it has no
@@ -204,7 +213,7 @@ export function LiveTape({
               s.category !== "fresh_market" &&
               norm(r.marketTitle) !== norm(s.body);
             return (
-              <li key={r.id} className={isNew(r.id) ? "tape-enter" : undefined}>
+              <li key={r.id} className={entranceClass(r.id)}>
                 <div
                   role={navigable ? "button" : undefined}
                   tabIndex={navigable ? 0 : undefined}

@@ -38,6 +38,7 @@ import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
 import { discoveryValue, markSeen, type DiscoverySubject } from "@/domain/discovery";
 import { firstBackedIsFloor } from "@/domain/tenure";
+import { classifyPace } from "@/domain/feed-scheduler";
 import {
   findDiscoveryMoments,
   tellDiscoveryMoment,
@@ -557,10 +558,16 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     );
 
     const derived = new Map<string, number>();
+    // The tier the admission gate computes and used to discard. It is exactly
+    // "how much of the reader's attention is this owed", already calculated —
+    // without carrying it forward every row arrived at the client looking
+    // equally important, whatever it was.
+    const tierById = new Map<string, number>();
     const material = scored
       .filter(({ candidate }) => admitToFeed(candidate, floor))
       .map(({ r, candidate, fullExit, daysHeld }) => {
         derived.set(r.id, scoreLiveAction(candidate, { daysHeld, fullExit }).score);
+        tierById.set(r.id, scoreFeedEvent(candidate).tier);
         return r;
       });
 
@@ -707,6 +714,24 @@ export const listLiveEvents = createServerFn({ method: "GET" })
             : [],
         motif: `${r.kind}:${r.side ?? "market"}:${r.story.headline}`,
       } satisfies MixCandidate;
+    }
+
+    // PACING INPUTS. How urgent (from what the row is) and how heavy (from the
+    // tier the gate already computed). Every row gets these, including the
+    // synthesized discovery moments, so the client never has to guess — a row
+    // with no pace would be scheduled as ordinary, which for a NEW TWIN is the
+    // one outcome that would make the whole thing pointless.
+    for (const r of material) {
+      r.pace = {
+        perishability: classifyPace({
+          kind: r.kind,
+          action: actionById.get(r.id) ?? null,
+          isViewer: viewer != null && r.wallet?.toLowerCase() === viewer,
+        }),
+        // A discovery moment is the rarest row the product has; nothing about
+        // it should ever be scheduled as texture.
+        weight: r.kind === "discovery_moment" ? 1 : (tierById.get(r.id) ?? 3),
+      };
     }
 
     // Telemetry: how much of this feed is still guessing? A new LIVE_KIND that

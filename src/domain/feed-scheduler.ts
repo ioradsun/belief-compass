@@ -107,6 +107,52 @@ export const SCHEDULE = {
   memory: 400,
 } as const;
 
+/**
+ * How urgent a row is, from what it IS. Kept here so the one rule lives with
+ * the thing that obeys it, and so it can be tested without a database.
+ *
+ * The judgement in each case is "does waiting forty seconds make this worse?"
+ *
+ *   · A coordinated move, a market opening, the reader's own trade — yes,
+ *     badly. These are the moments where a feed either feels live or does not.
+ *   · An ordinary trade — a little. Enough to be paced, not enough to interrupt.
+ *   · Someone has held a belief for 43 days — not at all. It is not news that
+ *     is aging; it is a fact that is standing.
+ *
+ * A DISCOVERY MOMENT IS DELIBERATELY NOT "now". It is the most important row
+ * the product can show and among the least perishable — finding out you have a
+ * Twin is equally true a minute later. Its weight (Tier 1) already puts it
+ * ahead of every ordinary trade; giving it urgency as well would let it shove
+ * aside the coordinated selling it has no claim to outrank.
+ */
+export function classifyPace(input: {
+  kind: string;
+  /** The conviction grammar's action, when the row has one. */
+  action?: string | null;
+  /** True when the reader is the actor. Nothing is more urgent than your own move. */
+  isViewer?: boolean;
+}): Perishability {
+  if (input.isViewer) return "now";
+  switch (input.kind) {
+    // Standing facts: true today, true tomorrow, no "when" of their own.
+    case "conviction_cohort":
+    case "believer_milestone":
+    case "tribe_doubled":
+      return "standing";
+    // A market opening is the one piece of news that is only news once.
+    case "market_created":
+      return "now";
+    // A structural change in where the capital or the believers sit.
+    case "market_transition":
+      return "now";
+    default:
+      // One wallet moving across many markets at once is coordination, and
+      // coordination is the thing a reader most wants to catch while it is
+      // happening rather than read about afterwards.
+      return input.action === "sweep_in" || input.action === "sweep_out" ? "now" : "soon";
+  }
+}
+
 export interface PendingRow {
   /** Stable identity — the event's id or source_key. Dedup keys on this. */
   id: string;

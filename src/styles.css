@@ -276,8 +276,50 @@
 .tape-enter {
   animation: tape-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* MOTION BY RARITY. No game gives a common drop and a legendary drop the same
+   feedback, and a feed where every row moves identically tells a reader nothing
+   about which one mattered. The tier that decided whether a row was worth
+   showing at all now decides how much it is allowed to move — and the scheduler
+   holds the floor for the length of the heavier entrances, so a Tier 1 row
+   genuinely gets its beat alone rather than competing with the next arrival. */
+@keyframes tape-enter-major {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tape-enter-major {
+  animation: tape-enter-major 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* A wash for the tier below: the relationship colour swells and drains once.
+   Painted as an inset shadow rather than a background so it cannot fight the
+   inline "this is about you" tint a personal row already carries. */
+@keyframes tape-flash {
+  from {
+    box-shadow: inset 0 0 0 9999px color-mix(in oklab, var(--rel, #9b87f5) 16%, transparent);
+  }
+  to {
+    box-shadow: inset 0 0 0 9999px transparent;
+  }
+}
+.tape-flash {
+  animation-name: tape-enter, tape-flash;
+  animation-duration: 220ms, 900ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1), ease-out;
+  animation-fill-mode: both, both;
+  border-radius: 10px;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .tape-enter {
+  .tape-enter,
+  .tape-enter-major,
+  .tape-flash {
     animation: none;
   }
 }

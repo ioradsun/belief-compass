@@ -13,6 +13,7 @@ import type { LiveStory } from "@/domain/story";
 import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
 import type { StackPerson } from "@/domain/conviction-cohort";
 import type { MixCandidate } from "@/domain/feed-cadence";
+import type { Perishability } from "@/domain/feed-scheduler";
 
 export interface LiveEventInput {
   source_key: string;
@@ -73,6 +74,14 @@ export interface LiveRow {
    * ordering decided earlier.
    */
   mix?: MixCandidate;
+  /**
+   * What the presentation scheduler needs: how urgent this row is, and how much
+   * of the reader's attention it is owed. Both are decided server-side, where
+   * the tier and the conviction action already exist — `scoreFeedEvent` was
+   * computing the tier to admit the row and then throwing it away, so every row
+   * arrived looking equally important no matter what it was.
+   */
+  pace?: { perishability: Perishability; weight: number };
   payload: Record<string, JsonValue>;
 }
 

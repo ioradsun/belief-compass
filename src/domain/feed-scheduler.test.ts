@@ -5,6 +5,7 @@ import {
   tick,
   modeFor,
   priorityOf,
+  classifyPace,
   SCHEDULE,
   type PendingRow,
   type ScheduleState,
@@ -323,5 +324,71 @@ describe("the cadence follows the day", () => {
     const released = drain(enqueue(createScheduleState(T0), rows), T0, T0 + 60_000);
     const gaps = released.slice(1).map((r, i) => r.at - released[i].at);
     expect(new Set(gaps).size).toBeGreaterThan(1);
+  });
+});
+
+/**
+ * Urgency comes from what a row IS. The judgement in each case is "does waiting
+ * forty seconds make this worse?"
+ */
+describe("classifyPace", () => {
+  it("treats coordination as the thing you want to catch happening", () => {
+    expect(classifyPace({ kind: "trade", action: "sweep_in" })).toBe("now");
+    expect(classifyPace({ kind: "trade", action: "sweep_out" })).toBe("now");
+  });
+
+  it("treats a market opening and a structural shift as news that ages", () => {
+    expect(classifyPace({ kind: "market_created" })).toBe("now");
+    expect(classifyPace({ kind: "market_transition" })).toBe("now");
+  });
+
+  it("puts the reader's own move ahead of everything", () => {
+    expect(classifyPace({ kind: "trade", action: "enter", isViewer: true })).toBe("now");
+  });
+
+  it("paces an ordinary trade", () => {
+    expect(classifyPace({ kind: "trade", action: "enter" })).toBe("soon");
+    expect(classifyPace({ kind: "position_changed_side" })).toBe("soon");
+  });
+
+  it("treats duration facts as standing, because they have no when", () => {
+    expect(classifyPace({ kind: "conviction_cohort" })).toBe("standing");
+    expect(classifyPace({ kind: "believer_milestone" })).toBe("standing");
+    expect(classifyPace({ kind: "tribe_doubled" })).toBe("standing");
+  });
+
+  /**
+   * The deliberate one. A discovery moment is the most important row the
+   * product can show and among the least perishable — finding out you have a
+   * Twin is equally true a minute later. Its WEIGHT already puts it ahead of
+   * every ordinary trade; giving it urgency too would let it shove aside the
+   * coordinated selling it has no claim to outrank.
+   */
+  it("makes a discovery moment important without making it urgent", () => {
+    expect(classifyPace({ kind: "discovery_moment" })).toBe("soon");
+    const discovery = {
+      id: "d",
+      perishability: "soon" as const,
+      weight: 1,
+      occurredAt: 0,
+      enqueuedAt: 0,
+    };
+    const sweep = {
+      id: "s",
+      perishability: "now" as const,
+      weight: 2,
+      occurredAt: 0,
+      enqueuedAt: 0,
+    };
+    // Coordination still goes first — but a discovery outranks any dust.
+    expect(priorityOf(sweep)).toBeLessThan(priorityOf(discovery));
+    const dust = {
+      id: "x",
+      perishability: "now" as const,
+      weight: 4,
+      occurredAt: 0,
+      enqueuedAt: 0,
+    };
+    expect(priorityOf(discovery)).toBeLessThanOrEqual(priorityOf(dust));
   });
 });
