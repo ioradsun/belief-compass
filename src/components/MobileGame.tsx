@@ -68,7 +68,6 @@ export function MobileGame({
   const marketId = Number(row.onchain_id);
   const title = row.markets?.title ?? `Market #${marketId}`;
   const category = row.markets?.category ?? null;
-  const { format } = useMoney();
 
   const [phase, setPhase] = useState<Phase>("question");
   const [side, setSide] = useState<OrderSide | null>(null);
@@ -532,32 +531,3 @@ function Rule() {
   return <div className="border-t border-[var(--border)]" aria-hidden />;
 }
 
-function BigButton({
-  label,
-  tone,
-  onClick,
-  disabled,
-}: {
-  label: string;
-  tone: "yes" | "no" | "neutral";
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  const style =
-    tone === "yes"
-      ? { border: "1px solid var(--yes)", color: "var(--yes)" }
-      : tone === "no"
-        ? { border: "1px solid var(--no)", color: "var(--no)" }
-        : { border: "1px solid var(--border)", color: "var(--text-secondary)" };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="h-[60px] flex-1 rounded-[16px] text-[18px] font-semibold transition-opacity disabled:opacity-40"
-      style={style}
-    >
-      {label}
-    </button>
-  );
-}
