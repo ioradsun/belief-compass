@@ -285,25 +285,32 @@ export function MobileGame({
 
   const marketBody = (
     <>
-      {/* Momentum — believers + capital side by side, in the one on-screen
-        timeframe. Same numbers the desktop deck shows, phone-tight. */}
+      {/* Timeframe control for every figure below. */}
       <div className="flex items-center justify-end">
         <WindowFilter win={deckWin} onWin={setDeckWindow} />
       </div>
 
-      <MarketMomentum dense tape={change?.tape} ethUsd={ethUsd} win={deckWin} />
-
-      {/* The story — House + this market's activity. Takes whatever height is
-        left; it is the only thing that may scroll, never the screen. */}
+      {/* ONE market instrument: believers row, capital row, then this market's
+        insight (House + activity) inside the same container — no second card. */}
       <div className="min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch]">
-        <CurrentMarketActivity
-          marketId={marketId}
-          wallet={viewerWallet}
-          onSelect={() => undefined}
+        <MarketMomentum
+          dense
+          tape={change?.tape}
+          ethUsd={ethUsd}
+          win={deckWin}
+          footer={
+            <CurrentMarketActivity
+              embedded
+              marketId={marketId}
+              wallet={viewerWallet}
+              onSelect={() => undefined}
+            />
+          }
         />
       </div>
     </>
   );
+
 
   return (
     <Screen>
