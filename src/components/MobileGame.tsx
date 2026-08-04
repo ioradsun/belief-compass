@@ -32,7 +32,6 @@ import { marketAgeCopy } from "@/domain/market-freshness";
 import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
 import { StandOnIt } from "@/components/StandOnIt";
 import { ShareImpact } from "@/components/ShareImpact";
-import { MovementLine } from "@/components/MovementLine";
 import { getHouseRead } from "@/lib/house.functions";
 import { houseKey } from "@/lib/house-round";
 import { expressBelief } from "@/lib/beliefs.functions";
@@ -323,7 +322,6 @@ export function MobileGame({
     </>
   );
 
-
   return (
     <Screen>
       {stageMedia ? (
@@ -388,15 +386,6 @@ export function MobileGame({
             onDone={onNext}
           />
         </div>
-        {/* Once a side is chosen, the movement it belongs to (believers only). */}
-        {side && (
-          <div className="mt-2">
-            <MovementLine
-              believers={Number(side === "YES" ? row.believers_yes : row.believers_no) || 0}
-              side={side}
-            />
-          </div>
-        )}
         {/* What your link has brought into this market — only once it's real. */}
         <div className="mt-2">
           <ShareImpact marketId={marketId} wallet={viewerWallet} />
@@ -549,7 +538,6 @@ function Dock({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
 
 function Rule() {
   return <div className="border-t border-[var(--border)]" aria-hidden />;
