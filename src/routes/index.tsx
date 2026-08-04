@@ -25,9 +25,16 @@ import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
 // MobileGame is a phone-only experience, the Case File only exists once the user
 // opens the case, and Terms is a rarely visited legal page. Keeping them out of
 // the initial chunk is the single biggest first-load win.
-const MobileGame = lazyRetry(() =>
-  import("@/components/MobileGame").then((m) => ({ default: m.MobileGame })),
-);
+const importMobileGame = () =>
+  import("@/components/MobileGame").then((m) => ({ default: m.MobileGame }));
+const MobileGame = lazyRetry(importMobileGame);
+// On a phone the first paint is the desktop deck (SSR can't know the viewport),
+// so kick the phone chunk off immediately — it's already in flight by the time
+// the layout corrects, and the swap is seamless.
+if (typeof window !== "undefined" && window.innerWidth < 1024) {
+  void importMobileGame().catch(() => {});
+}
+
 const CaseColumn = lazyRetry(() =>
   import("@/components/CaseFile").then((m) => ({ default: m.CaseColumn })),
 );
