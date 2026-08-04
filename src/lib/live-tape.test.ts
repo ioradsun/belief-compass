@@ -398,3 +398,98 @@ describe("the same story is never told twice", () => {
     expect(times).toEqual([...times].sort((a, b) => b - a));
   });
 });
+
+/**
+ * CHURN. Fixtures taken from six hours of production, where three wallets
+ * produced over half of all trades as perfect alternating ladders.
+ */
+describe("a wallet that went nowhere has nothing to say", () => {
+  const T = Date.UTC(2026, 7, 4, 12);
+  const at = (m: number) => new Date(T - m * 60_000).toISOString();
+  /** One leg of the observed ladder: SELL x, BUY x, SELL y, BUY y, … */
+  const leg = (
+    i: number,
+    action: "BUY" | "SELL",
+    eth: number,
+    wallet = "0xaf705ec3",
+    market = "2749",
+  ): LiveEventInput => ({
+    source_key: `c:${wallet}:${market}:${i}`,
+    kind: "trade",
+    market_id: market,
+    market_title: "Q?",
+    occurred_at: at(i * 6),
+    block_number: i,
+    log_index: i,
+    side: "YES",
+    action,
+    amount_eth: eth,
+    wallet,
+    payload: null,
+  });
+
+  /** The exact sizes from mkt2749, spanning 101 minutes — past the 15m pair window. */
+  const LADDER = [0.036091, 0.038493, 0.048122, 0.028914, 0.031326, 0.038476, 0.04328, 0.052913];
+  const ladder = (wallet?: string, market?: string) =>
+    LADDER.flatMap((eth, i) => [
+      leg(i * 2, "SELL", eth, wallet, market),
+      leg(i * 2 + 1, "BUY", eth, wallet, market),
+    ]);
+
+  it("drops a churner entirely — it is volume, not conviction", () => {
+    expect(groupLiveRows(ladder(), 3500)).toHaveLength(0);
+  });
+
+  it("catches it even when the pairs are too far apart to match one another", () => {
+    // 16 legs six minutes apart span 90+ minutes, well past ROUND_TRIP_WINDOW_MS.
+    // Pairwise matching alone would let most of these through.
+    const rows = groupLiveRows(ladder(), 3500);
+    expect(rows.filter((r) => r.kind === "wallet_sweep")).toHaveLength(0);
+    expect(rows.filter((r) => r.kind === "trade_burst")).toHaveLength(0);
+  });
+
+  it("cannot be evaded by jittering the sizes", () => {
+    const jittered = ladder().map((e, i) => ({ ...e, amount_eth: e.amount_eth * (1 + i * 0.004) }));
+    expect(groupLiveRows(jittered, 3500)).toHaveLength(0);
+  });
+
+  it("never sweeps a churner across markets — the loudest row we have", () => {
+    const across = ["2749", "2750", "2747"].flatMap((m) => ladder("0xbot", m));
+    expect(groupLiveRows(across, 3500).filter((r) => r.kind === "wallet_sweep")).toHaveLength(0);
+  });
+
+  it("leaves someone who actually took a position alone", () => {
+    // Six buys, no sells: they are holding something. That is a believer.
+    const buys = LADDER.slice(0, 6).map((eth, i) => leg(i, "BUY", eth));
+    const rows = groupLiveRows(buys, 3500);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.kind !== "round_trip")).toBe(true);
+  });
+
+  it("leaves someone who trimmed a position alone — that is a real move", () => {
+    // Bought six, sold one back: 6 trades, but nowhere near balanced.
+    const legs = [...LADDER.slice(0, 5).map((eth, i) => leg(i, "BUY", eth)), leg(9, "SELL", 0.004)];
+    expect(groupLiveRows(legs, 3500).length).toBeGreaterThan(0);
+  });
+
+  it("does not punish a short burst — that is trading, not a pattern", () => {
+    const four = [
+      leg(0, "SELL", 0.05),
+      leg(1, "BUY", 0.05),
+      leg(2, "SELL", 0.06),
+      leg(3, "BUY", 0.06),
+    ];
+    // Below minTrades, so the pairwise round-trip rule handles it as before.
+    expect(groupLiveRows(four, 3500).every((r) => r.kind === "round_trip")).toBe(true);
+  });
+
+  it("does not merge two different wallets into one churner", () => {
+    // Four legs each: eight trades between them, but nobody individually
+    // reaches the bar, so churn must not pool them. They fall to the pairwise
+    // round-trip rule instead.
+    const legs = [...ladder("0xa").slice(0, 4), ...ladder("0xb").slice(0, 4)];
+    const rows = groupLiveRows(legs, 3500);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.kind === "round_trip")).toBe(true);
+  });
+});

@@ -158,6 +158,69 @@ const ROUND_TRIP_WINDOW_MS = 15 * 60_000;
 const ROUND_TRIP_TOLERANCE = 0.02; // 2% size difference still counts as a wash
 
 /**
+ * CHURN — a wallet cycling in and out of the same belief, over and over.
+ *
+ * The pairwise round-trip rule above catches ONE buy matched to ONE sell. It is
+ * not enough. Measured over six hours of production: 136 trades, of which the
+ * top six sequences alone were 73, every one of them a perfect alternating
+ * ladder by a single wallet on a single side —
+ *
+ *   SELL 0.036091  BUY 0.036091  SELL 0.038493  BUY 0.038493  … ×8
+ *
+ * Three wallets produced over half of all platform "activity" that way. Pairwise
+ * matching does eventually reject each pair, but it depends on every pair
+ * landing inside a 15-minute window at under 2% size difference — so a churner
+ * who widens either dimension slightly walks straight into the feed, and would
+ * arrive as an aggregated "sweep", which is the loudest row we have.
+ *
+ * So the pattern is judged, not the pair: a wallet with enough trades on one
+ * (market, side) whose buying and selling BALANCE has taken no position and
+ * expressed no belief. Balance is the honest test — it cannot be evaded by
+ * jittering sizes or spacing, only by taking real directional risk, which is
+ * precisely the thing this feed is about.
+ */
+const CHURN = {
+  /** Below this it is trading, not a pattern. Six is three full cycles. */
+  minTrades: 6,
+  /** How closely buy and sell volume must match to read as "went nowhere". */
+  balanceTolerance: 0.1,
+  windowMs: 2 * 60 * 60_000,
+} as const;
+
+/**
+ * Wallets that went nowhere, loudly. Returns the source_keys to drop entirely —
+ * they are volume, not conviction, and the feed reports conviction.
+ */
+function findChurn(events: LiveEventInput[]): Set<string> {
+  const byActor = new Map<string, LiveEventInput[]>();
+  for (const e of events) {
+    if (e.kind !== "trade" || !e.wallet || !e.action) continue;
+    const k = `${e.wallet.toLowerCase()}:${e.market_id}:${e.side}`;
+    const list = byActor.get(k) ?? [];
+    list.push(e);
+    byActor.set(k, list);
+  }
+  const drop = new Set<string>();
+  for (const list of byActor.values()) {
+    if (list.length < CHURN.minTrades) continue;
+    const newest = Date.parse(list[0].occurred_at);
+    const near = list.filter((e) => newest - Date.parse(e.occurred_at) <= CHURN.windowMs);
+    if (near.length < CHURN.minTrades) continue;
+    let bought = 0;
+    let sold = 0;
+    for (const e of near) {
+      if (e.action === "BUY") bought += e.amount_eth;
+      else sold += e.amount_eth;
+    }
+    const base = Math.max(bought, sold, Number.EPSILON);
+    // Balanced both ways: they ended where they started.
+    if (Math.abs(bought - sold) / base <= CHURN.balanceTolerance)
+      for (const e of near) drop.add(e.source_key);
+  }
+  return drop;
+}
+
+/**
  * A wallet that buys and sells the same size on the same market+side within a
  * few minutes is one round-trip, not two stories. Drop the exit event and mark
  * the entry so the tape shows a single honest row instead of a mirrored pair.
@@ -247,7 +310,9 @@ function findSweeps(trades: LiveEventInput[]): Map<string, LiveEventInput[]> {
  * Collapse canonical events (in reverse-chronological order) into Live rows.
  * Deterministic, and ordered newest-first on the way out.
  *
- * THREE GROUPINGS, in priority order:
+ * FOUR GROUPINGS, in priority order:
+ *   0. CHURN   — a wallet whose buying and selling balance over one side took no
+ *                position at all. Dropped outright: volume, not conviction.
  *   1. WASHES  — a buy and matching sell minutes apart is one round trip.
  *   2. SWEEPS  — one wallet acting across 3+ markets in an hour is one story.
  *   3. BURSTS  — trades on the same market + side + action inside 10 minutes.
@@ -263,7 +328,12 @@ function findSweeps(trades: LiveEventInput[]): Map<string, LiveEventInput[]> {
  * and silently deletes the entire feed.
  */
 export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[] {
-  const { kept: events, roundTrip } = collapseRoundTrips(input);
+  // Churn first: a wallet that went nowhere has nothing to say, and leaving its
+  // trades in would let them pair, burst or sweep their way onto the tape.
+  const churn = findChurn(input);
+  const { kept: events, roundTrip } = collapseRoundTrips(
+    churn.size ? input.filter((e) => !churn.has(e.source_key)) : input,
+  );
   const rows: LiveRow[] = [];
   const usd = (eth: number) => (ethUsd > 0 ? eth * ethUsd : null);
 

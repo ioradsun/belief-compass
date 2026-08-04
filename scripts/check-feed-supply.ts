@@ -206,7 +206,10 @@ async function main() {
     .in("kind", LIVE_KINDS)
     .gte("occurred_at", new Date(Date.now() - LIVE_WINDOW_MS).toISOString())
     .order("occurred_at", { ascending: false })
-    .limit(ROWS * 3);
+    // Match what listLiveEvents fetches (limit * 3). Grouping decisions —
+    // churn especially — need the whole window to see a pattern; a short fetch
+    // makes the tape look worse than it is.
+    .limit(Math.max(360, ROWS * 3));
 
   const events: LiveEventInput[] = ((raw ?? []) as Record<string, unknown>[]).map((r) => ({
     source_key: String(r.source_key),
