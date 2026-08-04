@@ -56,7 +56,9 @@ import { houseReadState } from "@/domain/house-read";
 import { emitMarketTransition, type TransitionType, type Side } from "@/domain/market-transition";
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
-import { OrderTicket } from "@/components/order/OrderTicket";
+import { OrderTicket, OwnedLine, SideButton } from "@/components/order/OrderTicket";
+import { ownedPositions, sellStep, heldSide } from "@/domain/order-actions";
+import { useMoney } from "@/lib/display-unit";
 import { ExamineCta } from "@/components/order/ExamineRail";
 import { StandOnIt } from "@/components/StandOnIt";
 import { ShareImpact } from "@/components/ShareImpact";
@@ -132,15 +134,17 @@ export function MarketDeck({
 
   const [amount, setAmount] = useState(1);
   const [side, setSide] = useState<OrderSide | null>(null);
-  // Sell is a separate, deliberate mode — a percentage of the held side. Null
-  // means "not selling"; the buy dock owns the surface. Buying the opposite side
-  // never sells (they're separate token balances), so a flip can't silently exit.
+  // Sell is a separate, deliberate mode — a percentage of ONE explicitly chosen
+  // side. Buying the opposite side never sells (separate token balances), so a
+  // flip can't silently exit.
+  const [sellSide, setSellSide] = useState<OrderSide | null>(null);
   const [sellPct, setSellPct] = useState<number | null>(null);
-  // State 2 (owned): the viewer chose "Buy more" from the position summary and is
-  // now in the shared buy OrderTicket. false → resting on the summary + Sell /
-  // Buy More. (Sell is driven by sellPct, below.)
-  const [buyMore, setBuyMore] = useState(false);
+  // Which selector step the dock is showing when the viewer already owns
+  // something: null = the stable Buy · Sell · Pass row, "buy"/"sell" = the
+  // morphed side-picker in the SAME three-button footprint.
+  const [action, setAction] = useState<"buy" | "sell" | null>(null);
 
+  const { format: money } = useMoney();
   const { switchChain } = useSwitchChain();
   const ready = useTradeReady();
   const trade = useTrade();
@@ -320,8 +324,9 @@ export function MarketDeck({
   // Reset every flow when the market changes.
   useEffect(() => {
     setSide(null);
+    setSellSide(null);
     setSellPct(null);
-    setBuyMore(false);
+    setAction(null);
     betRevealed.current = false;
     trade.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -355,13 +360,6 @@ export function MarketDeck({
 
   const relationshipBeat = row.story?.beats.find((b) => b.kind === "relationship")?.text ?? null;
   const eventBeat = row.story?.beats.find((b) => b.kind === "event")?.text ?? null;
-  const held =
-    bal.yes > 0n
-      ? { side: "YES" as const, tokens: bal.yes }
-      : bal.no > 0n
-        ? { side: "NO" as const, tokens: bal.no }
-        : null;
-
   // The viewer's honest ownership numbers on THIS market (cost basis + worth).
   // Off the reducer/POV read model — never inferred from a price percentage.
   const { data: posSummary } = useQuery({
@@ -372,32 +370,69 @@ export function MarketDeck({
     refetchInterval: 20_000,
     placeholderData: (prev) => prev,
   });
-  const heldSideData = held ? posSummary?.[held.side === "YES" ? "yes" : "no"] : null;
 
-  // Sell quote (only while the sell panel is open on a held side).
-  const sellShares = held && sellPct != null ? sharesForPct(held.tokens, sellPct) : 0n;
+  // Ownership is CONTEXT, not the controls. BOTH sides are kept — collapsing to
+  // one made a second holding invisible AND unsellable (see domain/order-actions).
+  const owned = ownedPositions({
+    yesTokens: bal.yes,
+    noTokens: bal.no,
+    yesWorthUsd: posSummary?.yes?.worth ?? null,
+    noWorthUsd: posSummary?.no?.worth ?? null,
+  });
+  // The holding being sold — chosen explicitly, never inferred.
+  const sellHeld = sellSide ? heldSide(owned, sellSide) : null;
+  const heldSideData = sellSide ? posSummary?.[sellSide === "YES" ? "yes" : "no"] : null;
+
+  // Sell quote (only while the sell panel is open on the chosen side).
+  const sellShares = sellHeld && sellPct != null ? sharesForPct(sellHeld.tokens, sellPct) : 0n;
   const { proceeds, isLoading: sellQuoting } = useSellQuote(
     marketId,
-    held?.side === "YES",
+    sellSide === "YES",
     sellShares,
   );
 
+  /** A held side's marked value, for the "You own" context line. */
+  const ownedText = (s: OrderSide): string | null => {
+    const h = heldSide(owned, s);
+    if (!h) return null;
+    return h.worthUsd != null && h.worthUsd > 0 ? money(h.worthUsd, "USD") : "held";
+  };
+
+  /** Tapping SELL: one side owned goes straight there; both asks which. */
   const openSell = () => {
     setSide(null);
-    setBuyMore(false);
     trade.reset();
+    const step = sellStep(owned);
+    if (step.kind === "direct") {
+      setSellSide(step.side);
+      setSellPct(100);
+      setAction(null);
+    } else if (step.kind === "choose") {
+      setAction("sell");
+    }
+  };
+  const chooseSellSide = (s: OrderSide) => {
+    setSellSide(s);
     setSellPct(100);
+    setAction(null);
   };
   const closeSell = () => {
     setSellPct(null);
+    setSellSide(null);
+    setAction(null);
     trade.reset();
   };
   const onSellConfirm = async () => {
     if (!ready.connected) return requestConnect();
     if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
-    if (held && proceeds != null && sellShares > 0n && !(trade.isSubmitting || trade.isMining)) {
+    if (
+      sellSide &&
+      proceeds != null &&
+      sellShares > 0n &&
+      !(trade.isSubmitting || trade.isMining)
+    ) {
       try {
-        await trade.sell(marketId, held.side === "YES", sellShares, proceeds);
+        await trade.sell(marketId, sellSide === "YES", sellShares, proceeds);
       } catch {
         /* surfaced via trade.error */
       }
@@ -554,7 +589,7 @@ export function MarketDeck({
             className="-mr-1.5 mt-0.5"
             marketId={marketId}
             title={title}
-            side={held?.side ?? side ?? null}
+            side={side ?? sellSide ?? owned.only}
             hasMedia={!!stageMedia}
           />
         </div>
@@ -605,10 +640,10 @@ export function MarketDeck({
         {/* The controls. The analysis rail now lives inside the Total Market
           instrument above, so the dock is only the order surface. */}
         <div className="overflow-hidden rounded-[16px]" style={{ background: "var(--surface)" }}>
-          {held && sellPct != null ? (
+          {sellHeld && sellPct != null ? (
             <OrderTicket
               mode="sell"
-              held={held}
+              held={{ side: sellHeld.side, tokens: sellHeld.tokens }}
               pct={sellPct}
               setPct={setSellPct}
               proceeds={proceeds}
@@ -624,21 +659,95 @@ export function MarketDeck({
                 closeSell();
               }}
             />
-          ) : held && !buyMore ? (
-            /* State 2 — you own this market: manage the position. The first choice
-            is only Sell or Buy More; each hands off to the same OrderTicket. */
-            <PositionActions
-              side={held.side}
-              onSell={openSell}
-              onBuyMore={() => {
-                trade.reset();
-                setBuyMore(true);
-                setSide(held.side); // preselect the side you already own
-              }}
-            />
+          ) : owned.any && side == null ? (
+            /* You own something: ownership is CONTEXT above ONE stable selector.
+            The system never guesses whether you meant to add, flip or exit — the
+            side is chosen explicitly in the SAME three-button footprint. */
+            <div className="p-3.5">
+              <OwnedLine yes={ownedText("YES")} no={ownedText("NO")} />
+              {action === "buy" ? (
+                <div className="flex gap-2">
+                  <SideButton
+                    label="Back NO"
+                    tone="no"
+                    onClick={() => {
+                      trade.reset();
+                      setAction(null);
+                      chooseSide("NO");
+                    }}
+                    className="h-[52px] flex-1"
+                  />
+                  <SideButton
+                    label="Back YES"
+                    tone="yes"
+                    onClick={() => {
+                      trade.reset();
+                      setAction(null);
+                      chooseSide("YES");
+                    }}
+                    className="h-[52px] flex-1"
+                  />
+                  <SideButton
+                    label="Cancel"
+                    tone="pass"
+                    onClick={() => setAction(null)}
+                    className="h-[52px] flex-1"
+                  />
+                </div>
+              ) : action === "sell" ? (
+                /* Both sides held — the one case that genuinely needs a choice. */
+                <div className="flex gap-2">
+                  <SideButton
+                    label="Sell NO"
+                    sub={ownedText("NO") ? `${ownedText("NO")} owned` : null}
+                    tone="no"
+                    onClick={() => chooseSellSide("NO")}
+                    className="h-[52px] flex-1"
+                  />
+                  <SideButton
+                    label="Sell YES"
+                    sub={ownedText("YES") ? `${ownedText("YES")} owned` : null}
+                    tone="yes"
+                    onClick={() => chooseSellSide("YES")}
+                    className="h-[52px] flex-1"
+                  />
+                  <SideButton
+                    label="Cancel"
+                    tone="pass"
+                    onClick={() => setAction(null)}
+                    className="h-[52px] flex-1"
+                  />
+                </div>
+              ) : (
+                /* The stable default — identical whether you hold one side or both. */
+                <div className="flex gap-2">
+                  <SideButton
+                    label="Buy"
+                    tone="yes"
+                    onClick={() => {
+                      trade.reset();
+                      setAction("buy");
+                    }}
+                    className="h-[52px] flex-1"
+                  />
+                  <SideButton
+                    label="Sell"
+                    tone="no"
+                    onClick={openSell}
+                    className="h-[52px] flex-1"
+                  />
+                  <SideButton
+                    label="Pass"
+                    tone="pass"
+                    onClick={() => choosePass()}
+                    className="h-[52px] flex-1"
+                  />
+                </div>
+              )}
+            </div>
           ) : (
-            /* State 1 — discovery buy (NO / PASS / YES), OR Buy More with your side
-            preselected. Same OrderTicket either way; only the initial state differs. */
+            /* Discovery buy (Back NO · Back YES · Pass), or the amount + confirm
+            form once a side is chosen — the SAME ticket in both cases. */
             <OrderTicket
               mode="buy"
               side={side}
@@ -650,7 +759,7 @@ export function MarketDeck({
               }}
               onCancel={() => {
                 setSide(null);
-                if (held) setBuyMore(false); // back to the position summary
+                setAction(null); // back to the stable selector when you own something
               }}
               onPass={() => choosePass()}
               quote={quote}
@@ -782,42 +891,4 @@ function MarketByline({
 /** A quiet hairline between the center's sections — the reading path, not a card. */
 function Hairline() {
   return <div className="border-t border-[var(--hairline)]" aria-hidden />;
-}
-
-/**
- * Owned-market resting state (State 2): a compact position summary and the two
- * decisions — Sell or Buy More — that hand off to the SAME <OrderTicket>. No new
- * order surface; the first question is only "what do you want to do?".
- */
-function PositionActions({
-  side,
-  onSell,
-  onBuyMore,
-}: {
-  side: OrderSide;
-  onSell: () => void;
-  onBuyMore: () => void;
-}) {
-  // No summary card — "Buy more YES" already says what you hold; the worth/P&L
-  // lives in Positions. The market page's job here is only the two choices.
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={onSell}
-        className="h-[52px] flex-1 rounded-[12px] text-[14px] font-semibold text-[var(--text-secondary)]"
-        style={{ border: "1px solid var(--border)" }}
-      >
-        Sell
-      </button>
-      <button
-        type="button"
-        onClick={onBuyMore}
-        className="h-[52px] flex-[1.4] rounded-[12px] text-[15px] font-semibold"
-        style={{ background: "var(--text)", color: "var(--bg)" }}
-      >
-        Buy more {side}
-      </button>
-    </div>
-  );
 }
