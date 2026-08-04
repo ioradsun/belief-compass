@@ -1,12 +1,24 @@
 /**
- * LiveTape — the right column: the living story of conviction. One chronological
- * stream of the server-grouped LiveRow DTO (canonical events, occurrence order);
- * it does NOT rank or reorder. Each row is read at a glance through a leading
- * glyph and a subtle class treatment (personal · community · market) from the
- * pure taxonomy — the user never picks a view. Personal rows (a Twin / someone in
- * your network) get a faint "about you" highlight but stay in time order. Text
- * wraps naturally with generous spacing; clicking a row selects that market.
+ * LiveTape — the right column: the living story of conviction.
+ *
+ * It renders the server-grouped LiveRow DTO and owns exactly ONE decision of its
+ * own: the ORDER. Everything upstream decides what is true, eligible, deduped
+ * and how significant it is; this applies the cadence mix (src/domain/feed-
+ * cadence) last, so no two adjacent rows repeat a family, a market or a person,
+ * nobody dominates, and genuinely big events still lead.
+ *
+ * The mix runs HERE rather than on the server because delta-sync merges a fresh
+ * head into the cached tail and re-sorts chronologically (mergeLiveRows) — an
+ * ordering decided earlier would be thrown away on every poll. The server sends
+ * the mixer's INPUTS on each row; this is where they are used.
+ *
+ * Each row is read at a glance: a headline, one sentence, and — for group
+ * stories — a stack of clickable faces, because the people are the way in.
+ * Personal rows (a Twin / someone in your network) get a faint "about you"
+ * highlight. Clicking a row selects that market; clicking a face opens that
+ * person.
  */
+import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PersonStack } from "@/components/PersonStack";
 import { listLiveEvents } from "@/lib/live.functions";
@@ -14,6 +26,7 @@ import { useStickyRows } from "@/hooks/useSticky";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { mergeLiveRows, LIVE_DELTA_OVERLAP_MS, type LiveRow } from "@/lib/live-tape";
+import { mixFeed } from "@/domain/feed-cadence";
 import type { BeatTone } from "@/domain/story";
 
 type LiveResult = { rows: LiveRow[]; error: string | null };
@@ -88,8 +101,37 @@ export function LiveTape({
   });
   // Sticky: the tape holds its rows until fresh ones arrive.
   const sticky = useStickyRows(data?.rows);
-  const rows =
+  const visible =
     excludeMarketId == null ? sticky : sticky.filter((r) => Number(r.marketId) !== excludeMarketId);
+
+  // THE EDITORIAL PASS, applied last. Everything upstream decided what is true
+  // and eligible; this decides the order a reader meets it in — no repeated
+  // family, market or person back to back, nobody dominating, and genuinely big
+  // events still first. It runs HERE, after delta-sync merge and the exclusion
+  // filter, because the merge re-sorts chronologically and an ordering decided
+  // earlier would be discarded on every poll.
+  //
+  // Deterministic and total: mixFeed returns every row exactly once, so a poll
+  // that changes no facts re-renders nothing and no row can move between pages.
+  // Rows without mixer inputs (an older cached payload) keep their position.
+  const rows = useMemo(() => {
+    if (visible.length <= 1 || !visible.some((r) => r.mix)) return visible;
+    const byId = new Map(visible.map((r) => [r.id, r]));
+    const ordered = mixFeed(
+      visible.map(
+        (r) =>
+          r.mix ?? {
+            id: r.id,
+            family: "live_action" as const,
+            significance: 0.5,
+            occurredAt: r.occurredAt,
+            marketId: String(r.marketId),
+            side: r.side,
+          },
+      ),
+    );
+    return ordered.map((m) => byId.get(m.id)).filter((r): r is LiveRow => !!r);
+  }, [visible]);
 
   return (
     <div className="h-full min-h-0 flex-1 touch-pan-y overflow-y-scroll overscroll-contain [-webkit-overflow-scrolling:touch]">

@@ -12,6 +12,7 @@ import type { JsonValue } from "@/lib/events";
 import type { LiveStory } from "@/domain/story";
 import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
 import type { CohortHolder } from "@/domain/conviction-cohort";
+import type { MixCandidate } from "@/domain/feed-cadence";
 
 export interface LiveEventInput {
   source_key: string;
@@ -64,6 +65,14 @@ export interface LiveRow {
   story: LiveStory;
   /** Flat fallback ("HEADLINE — body") for any non-structured consumer. */
   text: string;
+  /**
+   * What the cadence mixer needs to order this row: family, significance
+   * (including the viewer's bounded relationship bump), and the identities it
+   * should avoid repeating. Computed server-side where that data lives; APPLIED
+   * after delta-sync merge, because the merge re-sorts and would discard any
+   * ordering decided earlier.
+   */
+  mix?: MixCandidate;
   payload: Record<string, JsonValue>;
 }
 
