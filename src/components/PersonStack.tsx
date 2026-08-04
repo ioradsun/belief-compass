@@ -36,7 +36,7 @@ export function PersonStack({
   const shown = expanded ? people : faces;
 
   return (
-    <div className={`flex flex-wrap items-center gap-y-1 ${className}`}>
+    <div className={`flex shrink-0 items-center ${className}`}>
       {/* Negative margin overlaps the faces; each keeps its own full hit area. */}
       <div className="flex -space-x-1.5">
         {shown.map((p) => (
