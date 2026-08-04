@@ -236,6 +236,23 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       ...new Set(live.map((r) => r.wallet?.toLowerCase()).filter((w): w is string => !!w)),
     ];
 
+    /**
+     * THE CROWD HAS FACES TOO. A burst row carries the wallets behind it (see
+     * live-tape) with what each committed, so "6 people backed YES" can be six
+     * clickable people instead of a number.
+     */
+    type BurstStake = { wallet: string; usd: number | null };
+    const burstStakes = new Map<string, BurstStake[]>();
+    for (const r of live) {
+      const raw = (r.payload as { wallets?: BurstStake[] }).wallets;
+      if (!Array.isArray(raw) || raw.length === 0) continue;
+      const list = raw
+        .filter((s) => s && typeof s.wallet === "string")
+        .map((s) => ({ wallet: s.wallet.toLowerCase(), usd: s.usd ?? null }));
+      if (list.length > 0) burstStakes.set(r.id, list);
+    }
+
+
     const labelByWallet = new Map<string, NetLabel>();
     /**
      * The viewer's relationships in full, not just their names. Discovery asks
