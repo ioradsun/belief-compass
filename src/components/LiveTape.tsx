@@ -38,7 +38,7 @@ export function LiveTape({
   excludeMarketId,
   limit,
   showTitles = true,
-  emptyText = "No recent activity yet.",
+  emptyText = "Nothing yet.",
   skeletonRows = 8,
 }: {
   wallet?: string;

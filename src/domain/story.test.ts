@@ -52,7 +52,7 @@ describe("momentum beat", () => {
       base({ classification: "hot", momentum: { moneyYesPct: 70, newBackers1h: 31 } }),
     );
     const m = s.beats.find((b) => b.kind === "momentum")!;
-    expect(m.text).toContain("31 backed in the last hour");
+    expect(m.text).toContain("31 backed it in the last hour");
     expect(m.emoji).toBe("🔥");
     expect(m.tone).toBe("hot");
   });
@@ -60,7 +60,7 @@ describe("momentum beat", () => {
     const s = composeMarketStory(
       base({ classification: "early", momentum: { newBackers24h: 12, moneyYesPct: 40 } }),
     );
-    expect(s.beats.find((b) => b.kind === "momentum")!.text).toContain("12 new backers today");
+    expect(s.beats.find((b) => b.kind === "momentum")!.text).toContain("12 new believers today");
   });
   it("surfaces people-vs-money divergence with no classification", () => {
     const s = composeMarketStory(base({ momentum: { peopleYesPct: 78, moneyYesPct: 45 } }));
@@ -138,31 +138,52 @@ const liveBase = (o: Partial<LiveStoryInput> = {}): LiveStoryInput => ({
   ...o,
 });
 
-describe("composeLiveStory — market as protagonist", () => {
-  it("a buy leads with the market growing, names the actor last", () => {
+describe("composeLiveStory — people are the story", () => {
+  it("names the person first on a buy; scale is the supporting line", () => {
     const s = composeLiveStory(liveBase({ market: { believersYes: 9 } }));
     expect(s.category).toBe("growing");
     expect(s.headline).toBe("YES IS GROWING");
-    expect(s.body).toBe("9 believers now back YES.");
-    expect(s.attribution).toBe("John joined.");
+    expect(s.body).toBe("John joined YES.");
+    expect(s.attribution).toBe("9 believers now.");
   });
 
-  it("a sell reads as the side losing a believer", () => {
+  it("names the person first on a sell", () => {
     const s = composeLiveStory(
       liveBase({ action: "SELL", side: "NO", market: { believersNo: 8 } }),
     );
-    expect(s.headline).toBe("NO LOST A BELIEVER");
-    expect(s.body).toBe("8 still back NO.");
-    expect(s.attribution).toBe("John exited.");
+    expect(s.headline).toBe("NO IS SHRINKING");
+    expect(s.body).toBe("John left NO.");
+    expect(s.attribution).toBe("8 believers now.");
   });
 
-  it("large capital is a money story", () => {
+  it("counts people when no one can be named", () => {
+    const s = composeLiveStory(liveBase({ actor: null, walletCount: 4 }));
+    expect(s.body).toBe("4 people joined YES.");
+  });
+
+  it("money is what a person acted WITH, never the subject", () => {
     const s = composeLiveStory(liveBase({ kind: "large_trade", amountUsd: 420, side: "NO" }));
     expect(s.category).toBe("capital_in");
-    expect(s.body).toBe("$420 moved into NO.");
+    expect(s.body).toBe("John backed NO with $420.");
+    // The amount may never open the sentence.
+    expect(s.body.startsWith("$")).toBe(false);
   });
 
-  it("a fresh market makes the question the hero", () => {
+  it("an exit is a person leaving, not capital moving", () => {
+    const s = composeLiveStory(
+      liveBase({ kind: "large_trade", action: "SELL", amountUsd: 860, side: "YES" }),
+    );
+    expect(s.body).toBe("John pulled $860 out of YES.");
+    expect(s.body.startsWith("$")).toBe(false);
+  });
+
+  it("a switch names who changed their mind", () => {
+    const s = composeLiveStory(liveBase({ kind: "side_shift", side: "NO" }));
+    expect(s.headline).toBe("SWITCHED SIDES");
+    expect(s.body).toBe("John switched to NO.");
+  });
+
+  it("a new market makes the question the hero and drops the redundant 'just opened'", () => {
     const s = composeLiveStory({
       kind: "market_created",
       side: null,
@@ -171,13 +192,61 @@ describe("composeLiveStory — market as protagonist", () => {
     });
     expect(s.category).toBe("fresh_market");
     expect(s.body).toBe("Is working actually slavery?");
-    expect(s.attribution).toBe("@dana opened this market.");
+    expect(s.attribution).toBe("@dana opened it.");
   });
 
-  it("a milestone celebrates the market", () => {
+  it("says nothing rather than repeating the timestamp", () => {
+    const s = composeLiveStory({ kind: "market_created", side: null, question: "Will it rain?" });
+    expect(s.attribution).toBeNull();
+  });
+
+  it("a milestone states the number plainly", () => {
     const s = composeLiveStory({ kind: "believer_milestone", side: "YES", threshold: 50 });
     expect(s.headline).toBe("MILESTONE");
-    expect(s.body).toBe("YES just reached 50 believers.");
+    expect(s.body).toBe("YES reached 50 believers.");
+  });
+});
+
+describe("composeLiveStory — no line repeats another", () => {
+  const inputs: LiveStoryInput[] = [
+    liveBase({ market: { believersYes: 9 } }),
+    liveBase({ action: "SELL", side: "NO", market: { believersNo: 8 } }),
+    liveBase({ kind: "large_trade", amountUsd: 420, side: "NO" }),
+    liveBase({ kind: "large_trade", action: "SELL", amountUsd: 860, side: "YES" }),
+    liveBase({ kind: "side_shift", side: "YES" }),
+    liveBase({ kind: "round_trip", side: "YES" }),
+    liveBase({ actor: { name: "Maya", relationship: "twin" } }),
+    { kind: "believer_milestone", side: "YES", threshold: 50 },
+    { kind: "tribe_doubled", side: "YES" },
+    {
+      kind: "market_created",
+      side: null,
+      question: "Will it rain?",
+      actor: { name: "D", relationship: null },
+    },
+  ];
+
+  it("the headline is a kicker, never a sentence", () => {
+    for (const i of inputs) {
+      const h = composeLiveStory(i).headline;
+      expect(h).not.toMatch(/\.$/);
+      expect(h.split(/\s+/).length).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("the attribution never restates the body", () => {
+    for (const i of inputs) {
+      const s = composeLiveStory(i);
+      if (!s.attribution) continue;
+      const core = (t: string) =>
+        t
+          .toLowerCase()
+          .replace(/[^a-z0-9 ]/g, "")
+          .trim();
+      expect(core(s.attribution)).not.toBe(core(s.body));
+      // "John joined." next to "John joined YES." was the old shape.
+      expect(s.body.includes(s.attribution.replace(/\.$/, ""))).toBe(false);
+    }
   });
 });
 

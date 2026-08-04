@@ -148,16 +148,15 @@ export function lensStory(
  * meaningless flat line. Returns the copy to show, or null when the chart is real.
  */
 export function lensColdStart(metric: LensMetric, series: SeriesPoint[]): string | null {
+  // One line, one fact. These used to run to two sentences, the second of which
+  // ("Conviction is just beginning to form.") is the Pulse's line for a new
+  // market — the same meaning told twice, in two places, on one screen.
   if (metric === "price") {
     const priced = series.filter((p) => p.price != null);
-    if (priced.length < 2)
-      return "Not enough price history yet.\nConviction is just beginning to form.";
-    return null;
+    return priced.length < 2 ? "Too new to chart." : null;
   }
   if (series.length < 2) {
-    return metric === "believers"
-      ? "Waiting for more believers.\nHistory will appear as this side grows."
-      : "Not enough history yet.\nConviction is just beginning to form.";
+    return metric === "believers" ? "Waiting for more believers." : "Too new to chart.";
   }
   return null;
 }

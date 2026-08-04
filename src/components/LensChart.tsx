@@ -104,8 +104,7 @@ function Plot({
     .map((p) => ({ t: p.t, v: lensValue(p, metric) }))
     .filter((p): p is { t: number; v: number } => p.v != null);
 
-  if (pts.length < 2)
-    return <ColdStart text={"Not enough history yet.\nConviction is just beginning to form."} />;
+  if (pts.length < 2) return <ColdStart text="Too new to chart." />;
 
   const t0 = pts[0].t;
   const t1 = pts[pts.length - 1].t;
