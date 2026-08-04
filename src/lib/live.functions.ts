@@ -6,7 +6,12 @@
  *   "John joined the YES tribe for $25 — YES is heating up, 12 joined this hour"
  * The actor is named from pov.co (alias fallback); the momentum clause comes from
  * market_state; the relationship tag ("(Twin)") is added when signed in. Multi-
- * wallet bursts read as the crowd. Live answers "what just happened?" — never ranked.
+ * wallet bursts read as the crowd.
+ *
+ * WHAT GETS IN is decided here in two passes: every row is scored, then the bar
+ * is set from the distribution of that batch (src/domain/feed-density) so a
+ * quiet window says something true instead of nothing at all. WHAT ORDER is
+ * decided at the render boundary, because delta-sync re-sorts (see LiveTape).
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -20,7 +25,8 @@ import {
   type LiveRow,
 } from "@/lib/live-tape";
 import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
-import { includeInFeed, type NetTag } from "@/domain/feed-event";
+import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
+import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
 import {
   scoreLiveAction,
   scoreDiscoveryMoment,
@@ -47,6 +53,18 @@ import {
 } from "@/domain/conviction-cohort";
 
 type NetLabel = "twin" | "tribe" | "opp" | "inverse";
+
+/** The conviction actions the importance engine understands. */
+const BELIEF_ACTIONS = new Set(["enter", "add", "reduce", "exit", "flip", "round_trip"]);
+
+/**
+ * Narrow the grammar's action to the subset the scorer weighs. `open_market`,
+ * `milestone` and `surge` are not things a PERSON did to a belief, so they carry
+ * no tenure meaning and are scored on their own structural terms.
+ */
+function beliefAction(a: ConvictionAction | undefined) {
+  return a && BELIEF_ACTIONS.has(a) ? (a as "enter" | "add" | "reduce" | "exit" | "flip") : null;
+}
 
 const LIVE_KINDS = [
   "trade",
@@ -279,6 +297,12 @@ export const listLiveEvents = createServerFn({ method: "GET" })
 
     /** Cohort members with their tenure kept — the face stack only needs names. */
     const cohortPeople = new Map<string, CohortHolder[]>();
+    /**
+     * What each row did to a BELIEF, as the grammar below already worked it out.
+     * Recorded rather than re-derived, so the sentence a reader sees and the
+     * score that let it through can never disagree about what happened.
+     */
+    const actionById = new Map<string, ConvictionAction>();
 
     for (const r of live) {
       const w = r.wallet?.toLowerCase();
@@ -392,6 +416,8 @@ export const listLiveEvents = createServerFn({ method: "GET" })
                       ? "add"
                       : "enter";
 
+      actionById.set(r.id, action);
+
       const sideBelievers =
         r.side === "YES" ? market?.believersYes : r.side === "NO" ? market?.believersNo : null;
 
@@ -428,10 +454,25 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     // away, leaving the mixer to rank most of the feed on recency alone. The
     // same candidate now feeds both the gate and the score. No migration, no
     // second scoring system, nothing viewer-relative.
-    const derived = new Map<string, number>();
-    const material = live.filter((r) => {
+    // ONE CANDIDATE PER ROW, built once and used three times: to decide whether
+    // the row belongs in the feed at all, to score its significance, and to set
+    // the bar the whole batch is judged against.
+    //
+    // The candidate now carries WHAT THE MOVE DID TO A BELIEF — added, reduced,
+    // exited, flipped, and how long it had been held — not just how much it
+    // cost. Judged on dollars alone this feed reported capital and missed the
+    // only thing it is about: a $12 exit after three months is a story, and a
+    // $200 entry by someone who arrived this morning often is not.
+    const scored = live.map((r) => {
       const m = momentumById.get(Number(r.marketId));
       const marketBelievers = m ? (m.believersYes ?? 0) + (m.believersNo ?? 0) : null;
+      const b = r.wallet
+        ? beliefByKey.get(`${r.wallet.toLowerCase()}:${Number(r.marketId)}`)
+        : null;
+      const heldSide = r.side === "YES" ? b?.yesShares : b?.noShares;
+      const sell = (r.payload as { action?: string }).action === "SELL";
+      const fullExit = sell && heldSide != null && heldSide <= 0;
+      const conviction = beliefAction(actionById.get(r.id));
       const candidate = {
         kind: r.kind,
         side: r.side,
@@ -441,25 +482,29 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         windowMs: Number((r.payload as { window_ms?: number }).window_ms ?? 0) || null,
         relationship: (r.face?.relationship as NetTag | null) ?? null,
         marketBelievers,
+        conviction,
+        daysHeld: b?.daysHeld ?? null,
       };
-      if (!includeInFeed(candidate)) return false;
-      const b = r.wallet
-        ? beliefByKey.get(`${r.wallet.toLowerCase()}:${Number(r.marketId)}`)
-        : null;
-      const heldSide = r.side === "YES" ? b?.yesShares : b?.noShares;
-      derived.set(
-        r.id,
-        scoreLiveAction(candidate, {
-          daysHeld: b?.daysHeld ?? null,
-          // Nothing of theirs left on this side → they are out, not trimming.
-          fullExit:
-            (r.payload as { action?: string }).action === "SELL" &&
-            heldSide != null &&
-            heldSide <= 0,
-        }).score,
-      );
-      return true;
+      return { r, candidate, fullExit, daysHeld: b?.daysHeld ?? null };
     });
+
+    // ADAPTIVE DENSITY. The gate above is absolute — "is this big?" — and on a
+    // quiet chain the honest answer is no for everything, which is how a live
+    // market renders as two rows. The editorial question is "is this the biggest
+    // thing that happened today?", so the bar comes from the distribution of
+    // what actually exists. On a busy day this changes nothing; on a quiet one
+    // the small true things get to speak. Washes and dust never return.
+    const { floor, relaxed } = adaptiveFloor(
+      scored.map(({ candidate }) => scoreFeedEvent(candidate).score),
+    );
+
+    const derived = new Map<string, number>();
+    const material = scored
+      .filter(({ candidate }) => admitToFeed(candidate, floor))
+      .map(({ r, candidate, fullExit, daysHeld }) => {
+        derived.set(r.id, scoreLiveAction(candidate, { daysHeld, fullExit }).score);
+        return r;
+      });
 
     // ── DISCOVERY: "is there someone here I should meet?" ────────────────────
     // The second ranking dimension, and the one the product is actually for.
@@ -609,6 +654,10 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     // Telemetry: how much of this feed is still guessing? A new LIVE_KIND that
     // ships without a scorer shows up here instead of silently ranking at 0.5.
     if (import.meta.env.DEV) {
+      if (relaxed)
+        console.info(
+          `[feed] quiet window: bar relaxed to ${floor} (standard 25) — ${material.length}/${scored.length} rows admitted.`,
+        );
       const uncovered = [...new Set(material.map((r) => r.kind).filter((k) => !isCovered(k)))];
       if (uncovered.length)
         console.warn(

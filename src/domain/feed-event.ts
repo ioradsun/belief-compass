@@ -94,6 +94,13 @@ export interface FeedCandidate {
   /** Directional believers on the whole market (yes+no) — the market-size proxy
    *  that makes magnitude relative. Null → treated as a small/new market. */
   marketBelievers?: number | null;
+  /**
+   * What this move did to the person's BELIEF, not to their tokens
+   * (src/domain/conviction-event). Optional; absent scores exactly as before.
+   */
+  conviction?: "enter" | "add" | "reduce" | "exit" | "flip" | "round_trip" | null;
+  /** How long they had held the belief this move changed. */
+  daysHeld?: number | null;
 }
 
 export interface FeedImportance {
@@ -102,6 +109,35 @@ export interface FeedImportance {
   tier: FeedTier;
   /** The dimension that carries the event — drives which story angle to tell. */
   dimension: FeedDimension;
+}
+
+/**
+ * MEANING A DOLLAR AMOUNT CANNOT EXPRESS. Ending a belief you held for three
+ * months is a bigger event than opening one you may abandon tomorrow, whatever
+ * the two cost. Judged on size alone the feed reports capital and misses the
+ * only thing it is actually about — so a long-held exit, a doubling-down and a
+ * change of mind carry weight of their own.
+ *
+ * Optional in every case: a candidate with no conviction context scores exactly
+ * as it did before this existed.
+ */
+function meaningOf(c: FeedCandidate): number {
+  const days = c.daysHeld ?? 0;
+  switch (c.conviction) {
+    // Changing your mind in public is the strongest thing one person can do.
+    case "flip":
+      return 0.7;
+    case "exit":
+      // A ramp, not a step: a belief ending is worth more the longer it lasted.
+      return days >= 7 ? clamp01(0.25 + 0.45 * sat(days, 90)) : 0.15;
+    case "reduce":
+      return days >= 7 ? clamp01(0.15 + 0.3 * sat(days, 90)) : 0.1;
+    // Backing something you already believe, again.
+    case "add":
+      return 0.35;
+    default:
+      return 0;
+  }
 }
 
 /** Market-relative magnitude: amount vs the market's own normal scale, plus a
@@ -119,7 +155,11 @@ function magnitudeOf(c: FeedCandidate): number {
   const relative = clamp01(c.amountUsd / ref);
   // A light absolute floor so a genuinely large move still registers somewhat.
   const absolute = sat(c.amountUsd, ABS_USD_CAP);
-  return clamp01(0.6 * relative + 0.15 * absolute + 0.25 * people);
+  const money = clamp01(0.6 * relative + 0.15 * absolute + 0.25 * people);
+  // Meaning closes some of the distance to a full-magnitude move — it can lift a
+  // small sum a long way and can never overshoot, so a $12 exit after 90 days
+  // outranks a $200 entry by someone who arrived this morning.
+  return clamp01(money + (1 - money) * meaningOf(c));
 }
 
 /** Speed: how concentrated the activity is — a burst of many trades fast is loud.
