@@ -12,10 +12,9 @@ import { useQuery } from "@tanstack/react-query";
 import { MyConvictions } from "@/components/MyConvictions";
 import { NetworkPanel } from "@/components/NetworkPanel";
 import { getNetwork } from "@/lib/dna.functions";
-import { getWallet } from "@/lib/conviction-trades.functions";
 import { presentRelationship } from "@/domain/relationship";
 import { type MarketRow } from "@/components/MarketCard";
-import { type VolumeWindow } from "@/lib/markets.functions";
+import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
 
 type Tab = "positions" | "tribe" | "rivals";
 const KEY = "conviction:you-tab";
