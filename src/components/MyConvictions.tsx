@@ -484,40 +484,49 @@ export function MyConvictions({
 
   return (
     <div>
-      {/* Summary — one financial story, money only. */}
-      <div className="pb-4">
-        <div className="mt-2.5 text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-          Marked value
-        </div>
-        <div className="num text-[24px] leading-none text-[var(--text)]">{money(total)}</div>
-        {trueGain != null && Math.abs(trueGain) >= 0.005 ? (
-          <div
-            className="num mt-1.5 text-[12px] font-semibold"
-            style={{ color: trueGain > 0 ? "var(--yes)" : "var(--no)" }}
-          >
-            {signedMoney(trueGain)}
-            {(() => {
-              // Aggregate return on the pooled cost basis (total − gain), paired to
-              // the dollar P&L just like each card.
-              const invested = total - trueGain;
-              const pct =
-                invested > 0 ? formatPct((trueGain / invested) * 100, { precise: true }) : null;
-              return pct ? <span> · {pct}</span> : null;
-            })()}{" "}
-            <span className="font-normal text-[var(--text-muted)]">since you started</span>
+      {/* Summary — one financial story: the value leads, the % is the big right-hand
+          figure (same rhythm as the market instrument), the exact move sits beneath. */}
+      {(() => {
+        const lifetimeMove = trueGain != null && Math.abs(trueGain) >= 0.005;
+        const periodMove = !lifetimeMove && Math.abs(periodUsd) >= 0.01;
+        const move = lifetimeMove ? (trueGain as number) : periodMove ? periodUsd : 0;
+        const basis = total - move;
+        const pct = move !== 0 && basis > 0 ? formatPct((move / basis) * 100, { precise: true }) : null;
+        const tone =
+          move > 0 ? "var(--yes)" : move < 0 ? "var(--no)" : "var(--text-muted)";
+        const arrow = move > 0 ? "▲" : move < 0 ? "▼" : "";
+        return (
+          <div className="pb-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="num min-w-0 truncate text-[24px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
+                {money(total)}
+              </span>
+              <span
+                className="num shrink-0 text-[20px] font-semibold leading-none tabular-nums"
+                style={{ color: tone }}
+              >
+                {pct ?? (move === 0 ? "0%" : "")}
+                {arrow && pct ? <span className="ml-1.5 align-middle text-[0.6em]">{arrow}</span> : null}
+              </span>
+            </div>
+            <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+              Marked value
+            </div>
+            <div className="num mt-0.5 text-[12px]" style={{ color: tone }}>
+              {move === 0 ? (
+                <span className="text-[var(--text-muted)]">No change</span>
+              ) : (
+                <>
+                  {signedMoney(move)}{" "}
+                  <span className="font-normal text-[var(--text-muted)]">
+                    {lifetimeMove ? "since you started" : winLabel.toLowerCase()}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
-        ) : Math.abs(periodUsd) >= 0.01 ? (
-          <div
-            className="num mt-1.5 text-[12px] font-semibold"
-            style={{ color: periodUsd > 0 ? "var(--yes)" : "var(--no)" }}
-          >
-            {signedMoney(periodUsd)}{" "}
-            <span className="font-normal text-[var(--text-muted)]">{winLabel.toLowerCase()}</span>
-          </div>
-        ) : (
-          <div className="mt-1.5 text-[11px] font-normal text-[var(--text-muted)]">No change</div>
-        )}
-      </div>
+        );
+      })()}
 
       <div style={{ borderTop: "1px solid var(--hairline)" }} />
 
