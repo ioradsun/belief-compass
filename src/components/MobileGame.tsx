@@ -308,43 +308,39 @@ export function MobileGame({
         </div>
       )}
 
-      {/* One dock, transforming in place: the decision, then the order controls —
-        never a screen swap. The House pick + celebration wait for a placed order. */}
+      {/* One dock, transforming in place — the SAME order surface the desktop
+        deck uses, with the analysis rail (market signal + see both sides)
+        attached to its top. */}
       <Dock>
-        {/* Desktop's utility row, phone-sized: one quiet line above the buttons. */}
-        <button
-          type="button"
-          onClick={() => setPhase("sides")}
-          className="mb-2 block w-full border-t border-[var(--border)] pt-2 text-left text-[13px] font-medium text-[var(--text-secondary)]"
-        >
-          See both sides →
-        </button>
-
-        {side == null ? (
-          <div className="flex gap-2.5">
-            <BigButton label="NO" tone="no" onClick={() => choose("NO")} />
-            <BigButton label="PASS" tone="neutral" onClick={pass} />
-            <BigButton label="YES" tone="yes" onClick={() => choose("YES")} />
-          </div>
-        ) : (
-          <AmountPanel
+        <div className="overflow-hidden rounded-[16px]" style={{ background: "var(--surface)" }}>
+          <ExamineCta
+            compact
+            open={false}
+            onToggle={() => setPhase("sides")}
+            teaser={teaser}
+            openLabel="See both sides · YES vs NO"
+          />
+          <div className="border-t border-[var(--hairline)]" aria-hidden />
+          <OrderTicket
+            mode="buy"
+            side={side}
             amount={amount}
             setAmount={setAmount}
-            side={side}
-            busy={trade.isSubmitting || trade.isMining}
-            success={trade.isSuccess}
-            error={trade.isError ? (trade.error?.message?.slice(0, 90) ?? "Failed") : null}
-            label={
-              !ready.connected
-                ? "Connect wallet"
-                : !ready.onBase
-                  ? "Switch to Base"
-                  : `Confirm ${format(amount, "USD")}`
-            }
+            onSelect={(s) => {
+              trade.reset();
+              choose(s);
+            }}
             onCancel={() => {
               setBacking(false);
               setSide(null);
             }}
+            onPass={pass}
+            quote={quote ?? null}
+            quoting={quoting}
+            ethWei={ethWei}
+            ethUsd={ethUsd}
+            ready={ready}
+            trade={trade}
             onConfirm={async () => {
               if (!ready.connected) return requestConnect();
               if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
@@ -356,9 +352,9 @@ export function MobileGame({
                 }
               }
             }}
-            onNext={onNext}
+            onDone={onNext}
           />
-        )}
+        </div>
         {/* Once a side is chosen, the movement it belongs to (believers only). */}
         {side && (
           <div className="mt-2">
@@ -373,6 +369,7 @@ export function MobileGame({
           <ShareImpact marketId={marketId} wallet={viewerWallet} />
         </div>
       </Dock>
+
     </Screen>
   );
 }
