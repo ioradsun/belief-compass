@@ -107,10 +107,12 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
-  // Cloudflare made `nodejs_compat` the default on 2026-08-04 and now REJECTS
-  // workers that still declare it ("…does not need to be specified anymore"),
-  // which made every deployed request 502. Stop emitting the flag.
-  nitro: { cloudflare: { nodeCompat: false, deployConfig: true } },
+  // Node compat MUST stay on. Turning it off dropped both the `nodejs_compat`
+  // worker flag and unenv's Node polyfills, which removes AsyncLocalStorage —
+  // TanStack Start stores its request context there, so every server function in
+  // production failed with "No Start context found in AsyncLocalStorage" (500)
+  // and the feed sat on the loading skeleton forever.
+  nitro: { cloudflare: { nodeCompat: true, deployConfig: true } },
   vite: {
     define: {
       "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
