@@ -11,7 +11,7 @@
  * (so opening the Case File adds no requests) and derives the totals, deltas and
  * roster ordering from the pure src/domain/case-file engine.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { setDeckLens, useDeckLens } from "@/lib/deck-lens";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
