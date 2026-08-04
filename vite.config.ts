@@ -107,6 +107,10 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Cloudflare made `nodejs_compat` the default on 2026-08-04 and now REJECTS
+  // workers that still declare it ("…does not need to be specified anymore"),
+  // which made every deployed request 502. Stop emitting the flag.
+  nitro: { cloudflare: { nodeCompat: false, deployConfig: true } },
   vite: {
     define: {
       "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
