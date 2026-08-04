@@ -240,7 +240,6 @@ export function MobileGame({
       />
     );
 
-
   // ---- The Question — ONE screen. The dock transforms decision → order in place;
   // the House pick + celebration only arrive after the order is placed (above). ----
   // The question block — fixed above the stage when there's evidence, part of
@@ -384,89 +383,9 @@ export function MobileGame({
           <ShareImpact marketId={marketId} wallet={viewerWallet} />
         </div>
       </Dock>
-
     </Screen>
   );
 }
-
-/** How much conviction? Asked only after a side is chosen — never before. */
-function AmountPanel({
-  amount,
-  setAmount,
-  side,
-  busy,
-  success,
-  error,
-  label,
-  onCancel,
-  onConfirm,
-  onNext,
-}: {
-  amount: number;
-  setAmount: (n: number) => void;
-  side: OrderSide;
-  busy: boolean;
-  success: boolean;
-  error: string | null;
-  label: string;
-  onCancel: () => void;
-  onConfirm: () => void;
-  onNext: () => void;
-}) {
-  const { format } = useMoney();
-  if (success)
-    return (
-      <div className="space-y-3">
-        <p className="text-center text-[16px] text-[var(--text-secondary)]">
-          You backed {side} with {format(amount, "USD")}.
-        </p>
-        <BigButton label="Next question" tone="neutral" onClick={onNext} />
-      </div>
-    );
-
-  // Desktop's order-bar economy on a phone: amount and the single primary
-  // action share one row; "Not now" is a quiet link, not a second big button.
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <span
-          className="flex h-[52px] w-[112px] shrink-0 items-center gap-1 rounded-[14px] px-3"
-          style={{ border: "1px solid var(--border)" }}
-        >
-          <span className="num text-[18px] text-[var(--text-muted)]">$</span>
-          <input
-            autoFocus
-            inputMode="decimal"
-            value={amount ? String(amount) : ""}
-            onChange={(e) => {
-              const raw = e.target.value.replace(/[^0-9.]/g, "");
-              const n = parseFloat(raw);
-              setAmount(Number.isNaN(n) ? 0 : Math.min(n, 1_000_000));
-            }}
-            aria-label="Amount in dollars"
-            className="num w-full bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
-            placeholder="0"
-          />
-        </span>
-        <BigButton
-          label={busy ? "Confirming…" : label}
-          tone={side === "YES" ? "yes" : "no"}
-          onClick={onConfirm}
-          disabled={busy || amount <= 0}
-        />
-      </div>
-      {error && <div className="text-[12px] text-[var(--no)]">{error}</div>}
-      <button
-        type="button"
-        onClick={onCancel}
-        className="block w-full text-center text-[12px] text-[var(--text-muted)]"
-      >
-        Not now
-      </button>
-    </div>
-  );
-}
-
 
 /** Screen 3 — See Both Sides. Totals first; one tap opens a side's case. */
 function BothSides({

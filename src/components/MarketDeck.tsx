@@ -776,7 +776,6 @@ function MarketByline({
 /* The analysis rail (market signal + Case File disclosure) now lives in
    src/components/order/ExamineRail.tsx — shared with the phone dock. */
 
-
 /** A quiet hairline between the center's sections — the reading path, not a card. */
 function Hairline() {
   return <div className="border-t border-[var(--hairline)]" aria-hidden />;
