@@ -21,6 +21,8 @@ import {
 } from "@/lib/live-tape";
 import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
 import { includeInFeed, type NetTag } from "@/domain/feed-event";
+import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
+import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
 import {
   renderCohort,
   type CohortHolder,
@@ -178,6 +180,8 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     ];
 
     const labelByWallet = new Map<string, NetLabel>();
+    /** Read-time, viewer-relative score bump per row. Never persisted. */
+    const viewerBoost = new Map<string, number>();
     if (viewer && actorWallets.length > 0) {
       const { serviceClient } = await import("@/lib/supabase-clients");
       const { data: cache } = await serviceClient()
@@ -269,6 +273,12 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           fingerprint: `cohort:${p.side}:${p.kind}:${p.rung}`,
           significance: p.significance ?? 0,
         };
+        // VIEWER LENS, applied here and nowhere else. The stored event is
+        // universal; this labels the people against THIS reader's DNA cache and
+        // leads the stack with the ones they know. Identity is untouched — same
+        // row, same fingerprint, same members, same overflow count.
+        const mine = enrichPeople(cohort.people, labelByWallet);
+        cohort.people = orderForViewer(mine);
         const surface = scoped ? "panel" : "app";
         const story = renderCohort(cohort, surface, r.marketTitle);
         r.story = {
@@ -281,6 +291,8 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         };
         r.people = cohort.people;
         r.text = flattenStory(r.story);
+        // Bounded, and only ever a nudge — see viewer-relationship.
+        viewerBoost.set(r.id, relationshipBoost(cohort.people));
         continue;
       }
 
@@ -376,6 +388,35 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         marketBelievers,
       });
     });
+
+    // MIXER INPUTS, not the mix itself. The server is where significance, the
+    // viewer's relationships and the event families live, so it computes them —
+    // but it must NOT reorder here. Delta-sync merges the fresh head into the
+    // client's cached tail and re-sorts chronologically (mergeLiveRows), which
+    // would throw a server-side ordering away on every poll. So the ordering is
+    // applied once, after the merge, at the render boundary. One mixer, one
+    // implementation, applied where the final order actually lives.
+    for (const r of material) {
+      r.mix = {
+        id: r.id,
+        family: familyOf({ kind: r.kind, personal: r.story.personal }),
+        significance: Math.min(
+          1,
+          (typeof (r.payload as { significance?: number }).significance === "number"
+            ? (r.payload as { significance: number }).significance
+            : 0.5) + (viewerBoost.get(r.id) ?? 0),
+        ),
+        occurredAt: r.occurredAt,
+        marketId: String(r.marketId),
+        side: r.side,
+        subjects: r.people?.length
+          ? r.people.map((x) => x.wallet)
+          : r.wallet
+            ? [r.wallet.toLowerCase()]
+            : [],
+        motif: `${r.kind}:${r.side ?? "market"}:${r.story.headline}`,
+      } satisfies MixCandidate;
+    }
 
     return { rows: material, error: null };
   });
