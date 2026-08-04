@@ -7,7 +7,7 @@
  * the House: playful, competitive, a little mysterious, never a lecture.
  *
  * Four states, one sentence each:
- *   learning   → "Still learning your tells…" (or "3 more picks and we'll call…")
+ *   learning   → "Learning your tells. Soon, we'll call your move."
  *   predicted  → "We think you'll back YES"
  *   correct    → "The House called it."
  *   incorrect  → "You beat the House."
