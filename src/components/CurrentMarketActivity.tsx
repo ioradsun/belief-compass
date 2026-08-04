@@ -28,10 +28,13 @@ export function CurrentMarketActivity({
   marketId,
   wallet,
   onSelect,
+  embedded,
 }: {
   marketId: number;
   wallet?: string;
   onSelect: (id: number) => void;
+  /** Rendered inside another instrument: drop the card chrome and outer margin. */
+  embedded?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -77,11 +80,15 @@ export function CurrentMarketActivity({
 
   return (
     <div
-      className="mb-3 shrink-0 overflow-hidden rounded-[12px]"
-      style={{
-        borderLeft: `2px solid ${RAIL}`,
-        background: `color-mix(in oklab, ${RAIL} 7%, transparent)`,
-      }}
+      className={embedded ? "shrink-0 overflow-hidden" : "mb-3 shrink-0 overflow-hidden rounded-[12px]"}
+      style={
+        embedded
+          ? undefined
+          : {
+              borderLeft: `2px solid ${RAIL}`,
+              background: `color-mix(in oklab, ${RAIL} 7%, transparent)`,
+            }
+      }
     >
       <button
         type="button"
