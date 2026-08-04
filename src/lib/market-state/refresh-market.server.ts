@@ -84,15 +84,23 @@ export async function refreshMarket(
     const state = (ms.data ?? {}) as Record<string, unknown>;
 
     // Participation
-    const believersYes = num(p.believers_yes);
-    const believersNo = num(p.believers_no);
+    const capHeldYes = num(p.capital_held_yes);
+    const capHeldNo = num(p.capital_held_no);
+    // A side holding capital always has at least one believer behind it — the
+    // market's initial investment isn't an indexed position.
+    const believersYes = seededBelievers(
+      num(p.believers_yes),
+      num(state.yes_capital_usd) || capHeldYes,
+    );
+    const believersNo = seededBelievers(
+      num(p.believers_no),
+      num(state.no_capital_usd) || capHeldNo,
+    );
     const mixed = num(p.mixed_wallets);
     const directional = believersYes + believersNo;
     const pYes = peopleYesPct(believersYes, believersNo);
     const pNo = peopleNoPct(believersYes, believersNo);
     const moneyYes = numOrNull(state.money_yes_pct);
-    const capHeldYes = num(p.capital_held_yes);
-    const capHeldNo = num(p.capital_held_no);
 
     // Activity windows (events)
     const volEth = {
