@@ -38,6 +38,9 @@ import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
 import { discoveryValue, markSeen, type DiscoverySubject } from "@/domain/discovery";
 import { firstBackedIsFloor } from "@/domain/tenure";
+import { classifyPace } from "@/domain/feed-scheduler";
+import { buildStandingFacts } from "@/lib/standing-facts.server";
+import { tellStandingFact } from "@/domain/standing-fact";
 import {
   findDiscoveryMoments,
   tellDiscoveryMoment,
@@ -111,7 +114,12 @@ type Momentum = {
   moneyYesPct: number | null;
   peopleYesPct: number | null;
   opportunityType: string | null;
+  /** Days since the market opened — lets a standing fact claim "since the start". */
+  marketAgeDays: number | null;
 };
+
+/** How many standing facts one full fetch puts in reserve. */
+const STANDING_RESERVE = 6;
 
 export const listLiveEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof input>) => input.parse(d ?? {}))
@@ -146,7 +154,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       .order("block_number", { ascending: false, nullsFirst: false })
       .order("log_index", { ascending: false, nullsFirst: false })
       .limit(limit * 3); // over-read so grouping still yields ~limit rows
-    if (error) return { rows: [] as LiveRow[], error: error.message };
+    if (error) return { rows: [] as LiveRow[], standing: [] as LiveRow[], error: error.message };
 
     const marketIds = [...new Set((rows ?? []).map((r) => Number(r.market_id)))];
     const titleById = new Map<number, string>();
@@ -157,7 +165,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         sb
           .from("market_state")
           .select(
-            "onchain_id, believers_yes, believers_no, new_believers_1h, money_yes_pct, people_yes_pct, opportunity_type",
+            "onchain_id, believers_yes, believers_no, new_believers_1h, money_yes_pct, people_yes_pct, opportunity_type, market_age_days",
           )
           .in("onchain_id", marketIds),
       ]);
@@ -171,6 +179,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           moneyYesPct: (r.money_yes_pct as number | null) ?? null,
           peopleYesPct: (r.people_yes_pct as number | null) ?? null,
           opportunityType: (r.opportunity_type as string | null) ?? null,
+          marketAgeDays: (r.market_age_days as number | null) ?? null,
         });
       }
     }
@@ -679,10 +688,16 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     );
 
     const derived = new Map<string, number>();
+    // The tier the admission gate computes and used to discard. It is exactly
+    // "how much of the reader's attention is this owed", already calculated —
+    // without carrying it forward every row arrived at the client looking
+    // equally important, whatever it was.
+    const tierById = new Map<string, number>();
     const material = scored
       .filter(({ candidate }) => admitToFeed(candidate, floor))
       .map(({ r, candidate, fullExit, daysHeld }) => {
         derived.set(r.id, scoreLiveAction(candidate, { daysHeld, fullExit }).score);
+        tierById.set(r.id, scoreFeedEvent(candidate).tier);
         return r;
       });
 
@@ -831,6 +846,24 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       } satisfies MixCandidate;
     }
 
+    // PACING INPUTS. How urgent (from what the row is) and how heavy (from the
+    // tier the gate already computed). Every row gets these, including the
+    // synthesized discovery moments, so the client never has to guess — a row
+    // with no pace would be scheduled as ordinary, which for a NEW TWIN is the
+    // one outcome that would make the whole thing pointless.
+    for (const r of material) {
+      r.pace = {
+        perishability: classifyPace({
+          kind: r.kind,
+          action: actionById.get(r.id) ?? null,
+          isViewer: viewer != null && r.wallet?.toLowerCase() === viewer,
+        }),
+        // A discovery moment is the rarest row the product has; nothing about
+        // it should ever be scheduled as texture.
+        weight: r.kind === "discovery_moment" ? 1 : (tierById.get(r.id) ?? 3),
+      };
+    }
+
     // Telemetry: how much of this feed is still guessing? A new LIVE_KIND that
     // ships without a scorer shows up here instead of silently ranking at 0.5.
     if (import.meta.env.DEV) {
@@ -858,5 +891,64 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         );
     }
 
-    return { rows: material, error: null };
+    // ── STANDING FACTS ───────────────────────────────────────────────────────
+    // Not timeline rows, and returned separately for that reason. Every other
+    // row answers "what changed"; these answer "who is still here", which is
+    // the only honest thing a feed has to say when nothing changed at all. The
+    // client holds them in reserve and the scheduler draws one during genuine
+    // silence — see src/domain/standing-fact for why they never expire.
+    //
+    // Built only on a FULL fetch: a delta poll merges into a cached tail that
+    // already carries the reserve, and continuity does not change in 30 seconds.
+    const standing: LiveRow[] = [];
+    if (data?.since == null && marketIds.length > 0) {
+      const facts = await buildStandingFacts({
+        marketIds,
+        labelByWallet,
+        crossingsByWallet: new Map([...relByWallet].map(([w, r]) => [w, r.sharedBeliefs ?? 0])),
+        titleById,
+        ageByMarket: new Map([...momentumById].map(([id, m]) => [id, m.marketAgeDays])),
+        now: Date.now(),
+        limit: STANDING_RESERVE,
+      }).catch(() => []);
+      for (const f of facts) {
+        const story = tellStandingFact(f);
+        standing.push({
+          id: `standing:${f.key}`,
+          kind: "standing_fact",
+          marketId: String(f.marketId),
+          marketTitle: f.marketTitle,
+          // A standing fact has no "when". The reserve is ordered by strength,
+          // not by time, and `timeless` stops the renderer printing an age that
+          // would read as "this just happened".
+          occurredAt: new Date(0).toISOString(),
+          startedAt: new Date(0).toISOString(),
+          timeless: true,
+          side: f.side,
+          walletCount: f.people.length,
+          tradeCount: null,
+          amountEth: null,
+          amountUsd: null,
+          wallet: null,
+          people: f.people.map((p) => ({
+            wallet: p.wallet,
+            name: p.name,
+            avatarUrl: p.avatarUrl,
+          })),
+          story: {
+            category: "conviction",
+            headline: story.headline,
+            body: story.body,
+            attribution: null,
+            tone: "neutral",
+            personal: f.side == null,
+          },
+          text: `${story.headline} — ${story.body}`,
+          pace: { perishability: "standing", weight: f.strength >= 0.65 ? 2 : 3 },
+          payload: { significance: f.strength },
+        });
+      }
+    }
+
+    return { rows: material, standing, error: null };
   });

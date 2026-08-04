@@ -19,18 +19,29 @@
  * highlight. Clicking a row selects that market; clicking a face opens that
  * person.
  */
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PersonStack } from "@/components/PersonStack";
 import { listLiveEvents } from "@/lib/live.functions";
 import { useStickyRows } from "@/hooks/useSticky";
+import { useScheduledRows } from "@/hooks/useScheduledRows";
+import { useStandingMemory } from "@/hooks/useStandingMemory";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { mergeLiveRows, LIVE_DELTA_OVERLAP_MS, type LiveRow } from "@/lib/live-tape";
 import { mixFeed } from "@/domain/feed-cadence";
 import type { BeatTone } from "@/domain/story";
 
-type LiveResult = { rows: LiveRow[]; error: string | null };
+type LiveResult = {
+  rows: LiveRow[];
+  /**
+   * Standing facts — who is still here. Not timeline rows: they are held in
+   * reserve and the scheduler draws one only during genuine silence. Built on a
+   * full fetch only, so a delta poll carries the previous reserve forward.
+   */
+  standing?: LiveRow[];
+  error: string | null;
+};
 
 /** Beyond this gap since our newest cached event, a delta would be large — just
  *  do a full fetch (the persisted cache already gave the instant paint). */
@@ -106,7 +117,9 @@ export function LiveTape({
       // newest cached event and merge onto the immutable tail — moving a few rows
       // instead of the whole list every 6s. Falls back to a full fetch for the
       // scoped tapes, a cold cache, or a long absence.
-      const prev = qc.getQueryData<LiveResult>(key)?.rows ?? [];
+      const cached = qc.getQueryData<LiveResult>(key);
+      const prev = cached?.rows ?? [];
+      const prevStanding = cached?.standing ?? [];
       const newestMs = prev.length ? Date.parse(prev[0].occurredAt) : 0;
       const canDelta =
         scopeKey === null &&
@@ -118,8 +131,14 @@ export function LiveTape({
         const res = (await listLiveEvents({
           data: { wallet, limit, since: sinceIso },
         })) as LiveResult;
-        if (res.error) return { rows: prev, error: res.error };
-        return { rows: mergeLiveRows(prev, res.rows, sinceIso, limit ?? 120), error: null };
+        if (res.error) return { rows: prev, standing: prevStanding, error: res.error };
+        return {
+          rows: mergeLiveRows(prev, res.rows, sinceIso, limit ?? 120),
+          // Continuity does not change in thirty seconds, and re-deriving it on
+          // every delta would put a wallet_beliefs read on the fast path.
+          standing: prevStanding,
+          error: null,
+        };
       }
       return (await listLiveEvents({
         data: { wallet, marketIds: scopeKey ?? undefined, side, limit },
@@ -168,17 +187,41 @@ export function LiveTape({
     return visible.filter((r) => keep.has(r.id));
   }, [visible]);
 
-  // ARRIVAL. A live feed should feel like it is being written, so a row that
-  // was not here on the last render slides in. Tracked by id rather than by
-  // index, so a poll that only re-sorts animates nothing, and the very first
-  // paint animates nothing either — that would be a wall of motion, not life.
-  const seen = useRef<Set<string>>(new Set());
-  const painted = useRef(false);
-  const isNew = (id: string) => painted.current && !seen.current.has(id);
+  // ARRIVAL. A live feed should feel like it is being written, so rows are
+  // released one at a time by the presentation scheduler rather than rendered
+  // as whatever the last poll returned — eight events landing in one frame is a
+  // page refresh with a transition on it. The scheduler also decides WHICH row
+  // goes next, so coordinated selling never waits behind four dust trades.
+  // Standing facts bypass the mixer entirely — they are not timeline rows and
+  // must never be selected against events for a place in the window.
+  // A fact this reader was told recently is dropped before it ever reaches the
+  // scheduler — the cooldown is what stops a small pool reading as a loop.
+  const { fresh, remember } = useStandingMemory();
+  const standing = useMemo(
+    () => (data?.standing ?? []).filter((r) => fresh(r.id)),
+    [data?.standing, fresh],
+  );
+  const { rows: released, entranceWeight } = useScheduledRows(rows, JSON.stringify(key), standing);
+
+  // Once a standing fact has actually been shown, it goes on cooldown. Recorded
+  // on RELEASE rather than on fetch, so a fact that was held and never drawn is
+  // still available next time.
   useEffect(() => {
-    for (const r of rows) seen.current.add(r.id);
-    painted.current = true;
-  }, [rows]);
+    for (const r of released) if (r.timeless) remember(r.id);
+  }, [released, remember]);
+
+  // Motion by rarity: the same tier that decided whether the row was worth
+  // showing at all now decides how much it is allowed to move. A Tier 1 row
+  // gets a deliberate entrance and a beat alone; texture just appears. Motion
+  // that is identical everywhere tells a reader nothing.
+  const entranceClass = (id: string): string | undefined => {
+    const w = entranceWeight(id);
+    if (w == null) return undefined;
+    if (w <= 1) return "tape-enter-major";
+    if (w === 2) return "tape-flash";
+    if (w === 3) return "tape-enter";
+    return undefined;
+  };
 
   return (
     <div
@@ -188,17 +231,17 @@ export function LiveTape({
           : ""
       }
     >
-      {isLoading && rows.length === 0 ? (
+      {isLoading && released.length === 0 ? (
         <ul className="space-y-2" aria-hidden>
           {Array.from({ length: skeletonRows }).map((_, i) => (
             <li key={i} className="h-8 animate-pulse rounded bg-[var(--surface-2)]" />
           ))}
         </ul>
-      ) : rows.length === 0 ? (
+      ) : released.length === 0 ? (
         <p className="text-xs text-[var(--text-muted)]">{emptyText}</p>
       ) : (
         <ul className="space-y-3">
-          {rows.map((r) => {
+          {released.map((r) => {
             const s = r.story;
             const personal = s.personal;
             // A discovery moment is about a PERSON, not a market — it has no
@@ -215,7 +258,7 @@ export function LiveTape({
               s.category !== "fresh_market" &&
               norm(r.marketTitle) !== norm(s.body);
             return (
-              <li key={r.id} className={isNew(r.id) ? "tape-enter" : undefined}>
+              <li key={r.id} className={entranceClass(r.id)}>
                 <div
                   role={navigable ? "button" : undefined}
                   tabIndex={navigable ? 0 : undefined}
@@ -241,9 +284,14 @@ export function LiveTape({
                 >
                   {/* WHEN → WHAT → WHY → WHO. Time first, headline loud, then the
                     one-sentence change, then a small muted attribution last. */}
-                  <div className="text-[10px] font-medium tabular-nums text-[var(--text-muted)]">
-                    {ago(r.occurredAt)}
-                  </div>
+                  {/* A standing fact has no "when" — printing an age beside it
+                    would read as "this just happened", which is the one thing
+                    it does not mean. */}
+                  {!r.timeless && (
+                    <div className="text-[10px] font-medium tabular-nums text-[var(--text-muted)]">
+                      {ago(r.occurredAt)}
+                    </div>
+                  )}
                   <div className="mt-0.5 text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--text)]">
                     <SideText text={s.headline} tone={s.tone} />
                   </div>
