@@ -12,9 +12,16 @@
  *      a rung. A market full of long-term holders emits nothing on a normal day.
  *   2. Only the single most significant cohort per (market, side) is written, so
  *      a market can never fill the feed with its own history.
- *   3. `source_key` carries the fingerprint (side · kind · rung), so the same
- *      cohort is unwritable twice — the upsert drops it. That is the same
- *      idempotence the transition emitter relies on, not a new mechanism.
+ *   3. `source_key` carries the fingerprint (side · kind · rung · CROSSING DATE),
+ *      so the same cohort is unwritable twice — the upsert drops it. That is the
+ *      same idempotence the transition emitter relies on, not a new mechanism.
+ *
+ * THE CROSSING DATE IS PART OF THE IDENTITY. Without it, a market's YES side
+ * could report a 30-day cohort exactly once in its entire life: a second wave of
+ * believers crossing the same rung months later collided with the same key and
+ * was dropped forever. Two different groups reaching thirty days are two facts,
+ * not one — and suppressing the later ones is precisely how a feed goes quiet in
+ * the markets that have been alive longest.
  *
  * The event stores the PEOPLE, not a rendered sentence, because the sentence
  * depends on where it is read: the app-wide feed names the market and the side,
@@ -37,8 +44,17 @@ const num = (v: unknown): number => (v == null || !Number.isFinite(Number(v)) ? 
  */
 const WINDOW_DAYS = 1;
 
-/** Only the strongest cohorts are worth a row; the rest are true but not news. */
-const MIN_SIGNIFICANCE = 0.35;
+/**
+ * Only the strongest cohorts are worth a row; the rest are true but not news.
+ *
+ * Calibrated against the viewer-independent score, where a group crossing 30
+ * days scores ~0.33 and a 7-day group needs a real share of its side. Set too
+ * high, this gate silences exactly the early rungs that carry a quiet market —
+ * which is the opposite of what cohorts are for. The anti-spam work is done by
+ * the crossing window, one-row-per-(market, side), the dust floor, the solo rung
+ * bar and the source key; this is a quality floor, not a sixth lock.
+ */
+const MIN_SIGNIFICANCE = 0.25;
 
 export async function emitConvictionCohorts(marketIds: number[], db: Db = serviceClient()) {
   if (marketIds.length === 0) return 0;
@@ -94,6 +110,9 @@ export async function emitConvictionCohorts(marketIds: number[], db: Db = servic
       marketAgeDays: ageByMarket.get(marketId) ?? null,
       sideBelievers: holders.length,
       windowDays: WINDOW_DAYS,
+      // The same clock `daysHeld` was measured against, so the crossing date in
+      // the fingerprint is identical on every run of this job.
+      nowMs: now,
     });
     const best = cohorts.find((c) => c.significance >= MIN_SIGNIFICANCE);
     if (best) chosen.push({ marketId, cohort: best });
@@ -107,7 +126,8 @@ export async function emitConvictionCohorts(marketIds: number[], db: Db = servic
 
   const nowIso = new Date().toISOString();
   const events = chosen.map(({ marketId, cohort }) => ({
-    // The fingerprint (side · kind · rung) makes this unwritable twice.
+    // The fingerprint (side · kind · rung · crossing date) makes THIS cohort
+    // unwritable twice, while leaving a later wave free to earn its own row.
     source_key: `cohort:${marketId}:${cohort.fingerprint}`,
     source: "system",
     kind: "conviction_cohort",
@@ -118,6 +138,7 @@ export async function emitConvictionCohorts(marketIds: number[], db: Db = servic
       kind: cohort.kind,
       side: cohort.side,
       rung: cohort.rung,
+      crossedOn: cohort.crossedOn,
       significance: cohort.significance,
       // People, not prose: the sentence is written where it is read.
       people: cohort.people.map((p) => {

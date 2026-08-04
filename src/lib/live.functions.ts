@@ -38,6 +38,7 @@ import {
 } from "@/domain/discovery-moment";
 import type { CachedRelationship } from "@/lib/dna/viewer-dna-cache.server";
 import {
+  cohortKindForViewer,
   renderCohort,
   type CohortHolder,
   type CohortKind,
@@ -303,6 +304,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           side: "YES" | "NO";
           rung: HoldingRung;
           significance: number;
+          crossedOn?: string;
           people: CohortHolder[];
         };
         const cohort: ConvictionCohort = {
@@ -310,7 +312,8 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           side: p.side,
           rung: p.rung,
           people: p.people ?? [],
-          fingerprint: `cohort:${p.side}:${p.kind}:${p.rung}`,
+          fingerprint: `cohort:${p.side}:${p.kind}:${p.rung}:${p.crossedOn ?? ""}`,
+          crossedOn: p.crossedOn ?? "",
           significance: p.significance ?? 0,
         };
         // VIEWER LENS, applied here and nowhere else. The stored event is
@@ -320,15 +323,19 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         const mine = enrichPeople(cohort.people, labelByWallet);
         cohort.people = orderForViewer(mine);
         cohortPeople.set(r.id, cohort.people);
+        // "YOUR PEOPLE ARE HERE" is a claim about the READER, so it is decided
+        // here rather than stored. The emitter has no viewer and could never
+        // reach this kind — which is why the headline was unreachable until now.
+        cohort.kind = cohortKindForViewer(cohort);
         const surface = scoped ? "panel" : "app";
         const story = renderCohort(cohort, surface, r.marketTitle);
         r.story = {
-          category: p.kind === "tribe_holding" ? "tribe" : "growing",
+          category: cohort.kind === "tribe_holding" ? "tribe" : "growing",
           headline: story.headline,
           body: story.body,
           attribution: null,
           tone: p.side === "YES" ? "yes" : "no",
-          personal: p.kind === "tribe_holding",
+          personal: cohort.kind === "tribe_holding",
         };
         r.people = cohort.people;
         r.text = flattenStory(r.story);
