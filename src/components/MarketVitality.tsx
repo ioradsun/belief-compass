@@ -69,7 +69,7 @@ function MomentumMetric({
   // Only a trusted (headline) % earns the big right-hand figure. A small-base %
   // is demoted to a quiet suffix on the absolute line so it never overstates the
   // move; with no % at all the headline space stays empty.
-  const headlinePct = copy.pct && !copy.pctQuiet ? copy.pct : copy.direction === "flat" ? "0%" : "";
+  const headlinePct = copy.pct ?? (copy.direction === "flat" ? "0%" : "");
   return (
     <div className={dense ? "px-4 py-2" : "px-4 py-3 sm:px-5"}>
       <div className="flex items-baseline justify-between gap-4">
