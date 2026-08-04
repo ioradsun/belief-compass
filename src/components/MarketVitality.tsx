@@ -94,12 +94,9 @@ function MomentumMetric({
         {label}
       </div>
       <div className={`num mt-0.5 ${dense ? "text-[11px]" : "text-[12px]"}`} style={{ color: tone }}>
-
         {copy.absolute}
-        {copy.pct && copy.pctQuiet && (
-          <span className="ml-1.5 text-[var(--text-muted)]">· {copy.pct}</span>
-        )}
       </div>
+
     </div>
   );
 }
