@@ -13,7 +13,7 @@
  * desktop deck uses (marketBook / marketPulse / evidence / house read), so the
  * two experiences can never disagree.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSwitchChain } from "wagmi";
 
