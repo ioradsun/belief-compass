@@ -8,6 +8,7 @@
  * wraps naturally with generous spacing; clicking a row selects that market.
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { PersonStack } from "@/components/PersonStack";
 import { listLiveEvents } from "@/lib/live.functions";
 import { useStickyRows } from "@/hooks/useSticky";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
@@ -146,6 +147,12 @@ export function LiveTape({
                     <div className="mt-1 text-[11px] leading-snug text-[var(--text-muted)]">
                       {r.marketTitle}
                     </div>
+                  )}
+                  {/* THE PEOPLE. A group story ends with faces, not a full stop:
+                    each one opens that profile, which is where what-else-they-
+                    believe lives. This is the row's real call to action. */}
+                  {r.people && r.people.length > 0 && (
+                    <PersonStack people={r.people} className="mt-1.5" />
                   )}
                   {s.attribution && (
                     <div className="mt-1 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
