@@ -245,6 +245,69 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       ...new Set(live.map((r) => r.wallet?.toLowerCase()).filter((w): w is string => !!w)),
     ];
 
+    /**
+     * THE CROWD HAS FACES TOO. A burst row carries the wallets behind it (see
+     * live-tape) with what each committed, so "6 people backed YES" can be six
+     * clickable people instead of a number.
+     */
+    type BurstStake = { wallet: string; usd: number | null };
+    const burstStakes = new Map<string, BurstStake[]>();
+    for (const r of live) {
+      const raw = (r.payload as { wallets?: BurstStake[] }).wallets;
+      if (!Array.isArray(raw) || raw.length === 0) continue;
+      const list = raw
+        .filter((s) => s && typeof s.wallet === "string")
+        .map((s) => ({ wallet: s.wallet.toLowerCase(), usd: s.usd ?? null }));
+      if (list.length > 0) burstStakes.set(r.id, list);
+    }
+
+    /**
+     * A MARKET SIGNAL HAS PEOPLE TOO. "Believers in YES doubled" is a statement
+     * about a crowd, but the crowd was invisible: these rows carry no wallet and
+     * no burst payload, so they were the only rows in the feed with nothing to
+     * tap. The believers ARE the story, so we borrow the market's largest
+     * current holders (a few faces, not a directory) and let the reader in.
+     */
+    const signalMarkets = [
+      ...new Set(
+        live
+          .filter((r) => !r.wallet && !burstStakes.has(r.id) && Number.isFinite(Number(r.marketId)))
+          .map((r) => Number(r.marketId)),
+      ),
+    ];
+    /** marketId → believer wallets, biggest position first. */
+    const believersByMarket = new Map<number, string[]>();
+    if (signalMarkets.length > 0) {
+      const { serviceClientOrNull } = await import("@/lib/supabase-clients");
+      const svc = serviceClientOrNull();
+      const { data: holders } = svc
+        ? await svc
+            .from("wallet_beliefs")
+            .select("wallet, onchain_id, yes_shares, no_shares")
+            .in("onchain_id", signalMarkets)
+            .limit(600)
+        : { data: null };
+      const byMarket = new Map<number, Array<{ wallet: string; size: number }>>();
+      for (const h of (holders ?? []) as Array<Record<string, unknown>>) {
+        const size = Number(h.yes_shares ?? 0) + Number(h.no_shares ?? 0);
+        if (!(size > 0)) continue;
+        const id = Number(h.onchain_id);
+        const list = byMarket.get(id) ?? [];
+        list.push({ wallet: String(h.wallet).toLowerCase(), size });
+        byMarket.set(id, list);
+      }
+      for (const [id, list] of byMarket) {
+        believersByMarket.set(
+          id,
+          list
+            .sort((a, b) => b.size - a.size)
+            .slice(0, 6)
+            .map((x) => x.wallet),
+        );
+      }
+    }
+
+
     const labelByWallet = new Map<string, NetLabel>();
     /**
      * The viewer's relationships in full, not just their names. Discovery asks
@@ -288,8 +351,15 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     }
 
     const profileWallets = [
-      ...new Set([...actorWallets, ...moments.flatMap((m) => m.people.map((p) => p.wallet))]),
+      ...new Set([
+        ...actorWallets,
+        ...moments.flatMap((m) => m.people.map((p) => p.wallet)),
+        ...[...burstStakes.values()].flatMap((l) => l.map((s) => s.wallet)),
+        ...[...believersByMarket.values()].flat(),
+
+      ]),
     ];
+
     const profiles =
       profileWallets.length > 0
         ? await import("@/lib/profiles.server").then((m) => m.resolveProfiles(profileWallets, 15))
@@ -382,6 +452,58 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           relationship,
         } satisfies LiveFace;
       }
+
+      // The crowd behind a burst, named. Ordered by what they committed (the
+      // grouping already did that), with the viewer's own people pulled to the
+      // front so a familiar face is the first one they see.
+      //
+      // ONE PERSON, ONE FACE. When the row already has an actor (`r.face`), that
+      // wallet is dropped from the stack — the row was showing the same person
+      // twice, once as the subject of the sentence and again as "the crowd".
+      const stakes = burstStakes.get(r.id);
+      if (stakes && !r.people) {
+        const seen = new Set<string>(w ? [w] : []);
+        const named = stakes
+          .filter((s) => !seen.has(s.wallet) && (seen.add(s.wallet), true))
+          .map((s) => {
+            const prof = profiles.get(s.wallet);
+            return {
+              wallet: s.wallet,
+              name: prof?.displayName ?? aliasFor(s.wallet),
+              avatarUrl: prof?.pfpUrl ?? null,
+              relationship: labelByWallet.get(s.wallet) ?? null,
+            };
+          });
+        // Stable partition, not a re-sort: known people lead, everyone else
+        // keeps the commitment order the grouping gave them.
+        if (named.length > 0)
+          r.people = [
+            ...named.filter((p) => p.relationship),
+            ...named.filter((p) => !p.relationship),
+          ];
+      } else if (!r.face && !r.people) {
+        // A market signal: no actor, no burst — the believers it is about.
+        const believers = believersByMarket.get(Number(r.marketId)) ?? [];
+        if (believers.length > 0) {
+          const named = believers.map((wallet) => {
+            const prof = profiles.get(wallet);
+            return {
+              wallet,
+              name: prof?.displayName ?? aliasFor(wallet),
+              avatarUrl: prof?.pfpUrl ?? null,
+              relationship: labelByWallet.get(wallet) ?? null,
+            };
+          });
+          r.people = [
+            ...named.filter((p) => p.relationship),
+            ...named.filter((p) => !p.relationship),
+          ];
+        }
+      }
+
+
+
+
 
       // A CONVICTION COHORT — the people still holding. The event stored PEOPLE,
       // not prose, precisely so the sentence can be written for where it is
