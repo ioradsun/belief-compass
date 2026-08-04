@@ -164,7 +164,18 @@ export function MobileGame({
   const ready = useTradeReady();
   const trade = useTrade();
   const ethWei = usdToWei(amount, ethUsd);
-  const { quote } = useBuyQuote(marketId, side === "YES", side && backing ? ethWei : 0n);
+  const { quote, isLoading: quoting } = useBuyQuote(
+    marketId,
+    side === "YES",
+    side && backing ? ethWei : 0n,
+  );
+  // The market signal shown on the rail above the order form — same read the
+  // desktop bar carries, from the same book/pulse domain modules.
+  const teaser = useMemo(() => {
+    const t = change?.tape ?? [];
+    if (!t.length) return null;
+    return marketPulse(marketBook(t, Date.now(), deckWin)).headline;
+  }, [change, deckWin]);
   const [revealed, setRevealed] = useState(false);
   useEffect(() => {
     if (trade.isSuccess && trade.hash && side && !revealed) {
