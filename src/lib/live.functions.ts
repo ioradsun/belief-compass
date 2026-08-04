@@ -2,7 +2,7 @@
  * Live tape — server loader. Reads canonical `events` in reverse-chronological
  * order (occurred_at DESC, block DESC, log DESC — never ingested_at), excludes
  * reorg-orphaned events (is_canonical), groups bursts via the pure live-tape
- * module, then turns each row into a FOMO-shaped story via composeLiveStory:
+ * module, then turns each row into a human event via the conviction grammar:
  *   "John joined the YES tribe for $25 — YES is heating up, 12 joined this hour"
  * The actor is named from pov.co (alias fallback); the momentum clause comes from
  * market_state; the relationship tag ("(Twin)") is added when signed in. Multi-
@@ -19,7 +19,7 @@ import {
   type LiveFace,
   type LiveRow,
 } from "@/lib/live-tape";
-import { composeLiveStory } from "@/domain/story";
+import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
 import { includeInFeed, type NetTag } from "@/domain/feed-event";
 
 type NetLabel = "twin" | "tribe" | "opp" | "inverse";
@@ -191,6 +191,39 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         ? await import("@/lib/profiles.server").then((m) => m.resolveProfiles(actorWallets, 15))
         : new Map();
 
+    /**
+     * WHAT MAKES A MOVE MEAN SOMETHING. A sale is just a sale until you know the
+     * person had believed it for 43 days, or that nothing of theirs is left. One
+     * batched read over the (wallet, market) pairs already on screen turns the
+     * feed from transactions into stories. Rows we can't resolve simply lose the
+     * extra clause — the grammar degrades to the plain sentence, never invents.
+     */
+    const beliefByKey = new Map<
+      string,
+      { daysHeld: number | null; enteredBefore: boolean; yesShares: number; noShares: number }
+    >();
+    if (actorWallets.length > 0 && marketIds.length > 0) {
+      const { data: beliefs } = await sb
+        .from("wallet_beliefs")
+        .select("wallet, onchain_id, yes_shares, no_shares, first_backed_at")
+        .in("wallet", actorWallets)
+        .in("onchain_id", marketIds)
+        .limit(500);
+      const now = Date.now();
+      for (const b of (beliefs ?? []) as Array<Record<string, unknown>>) {
+        const first = b.first_backed_at ? Date.parse(String(b.first_backed_at)) : NaN;
+        const days = Number.isFinite(first) ? (now - first) / 86_400_000 : null;
+        beliefByKey.set(`${String(b.wallet).toLowerCase()}:${Number(b.onchain_id)}`, {
+          // Sub-day tenure is not a story; don't dress one up as "a day".
+          daysHeld: days != null && days >= 1 ? days : null,
+          // They were in this market before today's move.
+          enteredBefore: Number.isFinite(first) && now - first > 86_400_000,
+          yesShares: Number(b.yes_shares ?? 0),
+          noShares: Number(b.no_shares ?? 0),
+        });
+      }
+    }
+
     for (const r of live) {
       const w = r.wallet?.toLowerCase();
       // Name the actor / creator when we have one; tag the network relationship.
@@ -224,20 +257,54 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       if (r.kind === "believer_milestone" || r.kind === "tribe_doubled") continue;
 
       const market = momentumById.get(Number(r.marketId)) ?? null;
-      const action = (r.payload as { action?: "BUY" | "SELL" }).action ?? null;
+      const buySell = (r.payload as { action?: "BUY" | "SELL" }).action ?? null;
       const actor = r.face ? { name: r.face.name, relationship: r.face.relationship } : null;
+      const belief = w ? beliefByKey.get(`${w}:${Number(r.marketId)}`) : undefined;
 
-      r.story = composeLiveStory({
-        kind: r.kind,
-        side: r.side,
+      // WHAT THEY DID TO THEIR BELIEF, not which way the tokens went. A buy on
+      // top of an existing position is an ADD (doubling down); a sell that
+      // leaves nothing is an EXIT, one that leaves something is a REDUCE. The
+      // read model is the state AFTER the trade, so shares==0 means they're out.
+      const heldSide = r.side === "YES" ? belief?.yesShares : belief?.noShares;
+      const action: ConvictionAction =
+        r.kind === "market_created"
+          ? "open_market"
+          : r.kind === "believer_milestone"
+            ? "milestone"
+            : r.kind === "tribe_doubled"
+              ? "surge"
+              : r.kind === "side_shift"
+                ? "flip"
+                : r.kind === "round_trip"
+                  ? "round_trip"
+                  : buySell === "SELL"
+                    ? heldSide != null && heldSide > 0
+                      ? "reduce"
+                      : "exit"
+                    : belief?.enteredBefore
+                      ? "add"
+                      : "enter";
+
+      const sideBelievers =
+        r.side === "YES" ? market?.believersYes : r.side === "NO" ? market?.believersNo : null;
+
+      r.story = tellConvictionStory({
         action,
-        amountUsd: r.amountUsd,
-        walletCount: r.walletCount,
+        side: r.side,
         actor,
-        question: r.kind === "market_created" ? r.marketTitle : null,
-        market: market
-          ? { believersYes: market.believersYes, believersNo: market.believersNo }
-          : null,
+        context: {
+          amountUsd: r.amountUsd,
+          // Only claim a tenure when this row has ONE actor we actually looked up.
+          daysHeld: belief?.daysHeld ?? null,
+          heldBefore: belief?.enteredBefore ?? null,
+          sideBelieversAfter: sideBelievers ?? null,
+          peopleCount: r.walletCount,
+          question: r.kind === "market_created" ? r.marketTitle : null,
+          threshold:
+            r.kind === "believer_milestone"
+              ? Number((r.payload as { threshold?: number }).threshold ?? 0)
+              : null,
+        },
       });
       r.text = flattenStory(r.story);
     }

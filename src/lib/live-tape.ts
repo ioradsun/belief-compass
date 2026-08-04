@@ -9,7 +9,8 @@
  * (market_created, side shifts, milestones) are NEVER grouped away.
  */
 import type { JsonValue } from "@/lib/events";
-import { composeLiveStory, type LiveStory } from "@/domain/story";
+import type { LiveStory } from "@/domain/story";
+import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
 
 export interface LiveEventInput {
   source_key: string;
@@ -99,14 +100,34 @@ export const flattenStory = (s: LiveStory): string =>
  * market with the richer inputs it resolves; system rows are final here.
  */
 export function liveRowStory(r: Omit<LiveRow, "text" | "story">): LiveStory {
-  return composeLiveStory({
-    kind: r.kind,
+  // The SAME grammar the server uses, with only what this row knows about
+  // itself: no identity, no tenure, no position state. The sentence comes out
+  // plainer, never wrong — which is the whole point of every context field
+  // being optional (see src/domain/conviction-event).
+  const buySell = (r.payload.action as "BUY" | "SELL" | undefined) ?? null;
+  const action: ConvictionAction =
+    r.kind === "market_created"
+      ? "open_market"
+      : r.kind === "believer_milestone"
+        ? "milestone"
+        : r.kind === "tribe_doubled"
+          ? "surge"
+          : r.kind === "side_shift"
+            ? "flip"
+            : r.kind === "round_trip"
+              ? "round_trip"
+              : buySell === "SELL"
+                ? "exit"
+                : "enter";
+  return tellConvictionStory({
+    action,
     side: r.side,
-    action: (r.payload.action as "BUY" | "SELL" | undefined) ?? null,
-    amountUsd: r.amountUsd,
-    walletCount: r.walletCount,
-    question: r.kind === "market_created" ? r.marketTitle : null,
-    threshold: r.kind === "believer_milestone" ? Number(r.payload.threshold ?? 0) : null,
+    context: {
+      amountUsd: r.amountUsd,
+      peopleCount: r.walletCount,
+      question: r.kind === "market_created" ? r.marketTitle : null,
+      threshold: r.kind === "believer_milestone" ? Number(r.payload.threshold ?? 0) : null,
+    },
   });
 }
 
