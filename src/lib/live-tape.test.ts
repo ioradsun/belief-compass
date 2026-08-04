@@ -43,7 +43,7 @@ describe("trade burst grouping", () => {
     expect(rows[0].walletCount).toBe(3);
     expect(rows[0].tradeCount).toBe(3);
     expect(rows[0].occurredAt).toBe(t); // latest
-    expect(rows[0].story.headline).toBe("YES IS GROWING");
+    expect(rows[0].story.headline).toBe("NEW BELIEVER");
     expect(rows[0].story.category).toBe("growing");
   });
 
@@ -141,10 +141,10 @@ describe("factual copy only", () => {
     ...o,
   });
 
-  it("liveRowStory: a reduce burst reads as people leaving, counted", () => {
+  it("liveRowStory: a burst of exits reads as people leaving, counted", () => {
     const s = liveRowStory(rowBase());
     expect(s.category).toBe("shrinking");
-    expect(s.headline).toBe("NO IS SHRINKING");
+    expect(s.headline).toBe("BELIEVER LEFT");
     expect(s.body).toBe("4 people left NO.");
   });
   it("liveRowStory: a milestone shows its threshold", () => {
@@ -169,8 +169,8 @@ describe("factual copy only", () => {
 describe("mergeLiveRows (delta sync)", () => {
   const story: LiveStory = {
     category: "growing",
-    headline: "YES IS GROWING",
-    body: "Another believer joined YES.",
+    headline: "NEW BELIEVER",
+    body: "Someone joined YES.",
     attribution: null,
     tone: "yes",
     personal: false,
