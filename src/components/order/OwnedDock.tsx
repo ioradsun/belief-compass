@@ -21,7 +21,7 @@ import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getPositionSummary } from "@/lib/markets.functions";
 import { useSellQuote, type useTrade, type useTradeReady } from "@/lib/chain-trade";
-import { sharesForPct, type OrderSide } from "@/domain/order";
+import { fmtShares, sharesForPct, weiToEth, type OrderSide } from "@/domain/order";
 import {
   ownedPositions,
   sellStep,
@@ -62,6 +62,7 @@ export function useOwnedDock({
   viewerWallet,
   yesTokens,
   noTokens,
+  ethUsd,
   ready,
   trade,
   onRequestConnect,
@@ -71,6 +72,8 @@ export function useOwnedDock({
   viewerWallet?: string;
   yesTokens: bigint;
   noTokens: bigint;
+  /** The live rate — turns on-chain proceeds into a value the field can size. */
+  ethUsd: number;
   ready: ReadyApi;
   trade: TradeApi;
   onRequestConnect: () => void;
@@ -90,17 +93,27 @@ export function useOwnedDock({
     placeholderData: (prev) => prev,
   });
 
+  // What each whole side would actually fetch right now, straight from the
+  // contract. This is the LAST RESORT for a side's value — the read model's
+  // marked value is preferred so the dock agrees with Positions everywhere else
+  // — but it means an owned side always has a real number instead of the word
+  // "held", and the sell field always has a basis to size a partial against.
+  const { proceeds: yesFullWei } = useSellQuote(marketId, true, yesTokens);
+  const { proceeds: noFullWei } = useSellQuote(marketId, false, noTokens);
+  const liveUsd = (wei: bigint | null): number | null =>
+    wei != null && wei > 0n && ethUsd > 0 ? weiToEth(wei) * ethUsd : null;
+  /** A marked value only counts when it is a real, positive number. */
+  const marked = (v: number | null | undefined): number | null => (v != null && v > 0 ? v : null);
+
   const owned = ownedPositions({
     yesTokens,
     noTokens,
-    yesWorthUsd: posSummary?.yes?.worth ?? null,
-    noWorthUsd: posSummary?.no?.worth ?? null,
+    yesWorthUsd: marked(posSummary?.yes?.worth) ?? liveUsd(yesFullWei),
+    noWorthUsd: marked(posSummary?.no?.worth) ?? liveUsd(noFullWei),
   });
 
   const sellHeld = sellSide ? heldSide(owned, sellSide) : null;
-  const worthUsd = sellSide
-    ? (posSummary?.[sellSide === "YES" ? "yes" : "no"]?.worth ?? null)
-    : null;
+  const worthUsd = sellHeld?.worthUsd ?? null;
   const sellTokens = sellHeld?.tokens ?? 0n;
   const sellShares = sellHeld && sellPct != null ? sharesForPct(sellHeld.tokens, sellPct) : 0n;
   const { proceeds, isLoading: sellQuoting } = useSellQuote(
@@ -215,10 +228,15 @@ export function OwnedDock({
   const { owned } = api;
   const surface = dockSurface({ owned, selling: api.isSelling, buySide });
 
+  // What a held side is worth, in the viewer's own currency. Shares are the
+  // fallback only while the value is still being read — never the word "held",
+  // which told the viewer nothing they didn't already know.
   const ownedText = (s: OrderSide): string | null => {
     const h = heldSide(owned, s);
     if (!h) return null;
-    return h.worthUsd != null && h.worthUsd > 0 ? format(h.worthUsd, "USD") : "held";
+    return h.worthUsd != null && h.worthUsd > 0
+      ? format(h.worthUsd, "USD")
+      : `${fmtShares(h.tokens)} shares`;
   };
 
   if (surface === "sell" && api.sellSide && api.sellPct != null) {

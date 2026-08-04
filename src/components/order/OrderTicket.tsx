@@ -213,6 +213,10 @@ export function ActionRow({ children }: { children: ReactNode }) {
 /**
  * "You own" — ownership as CONTEXT above the controls, never as the thing that
  * decides them. Shows every side actually held, so holding both is visible.
+ *
+ * The VALUE leads, the side follows — "You own $234 YES" — because what a
+ * position is worth in your own currency is the fact you read first; which side
+ * it is on you already know. `yes`/`no` are pre-formatted money strings.
  */
 export function OwnedLine({ yes, no }: { yes?: string | null; no?: string | null }) {
   if (!yes && !no) return null;
@@ -223,12 +227,12 @@ export function OwnedLine({ yes, no }: { yes?: string | null; no?: string | null
       </span>
       {yes && (
         <span className="num text-[12px] font-semibold" style={{ color: "var(--yes)" }}>
-          YES {yes}
+          {yes} YES
         </span>
       )}
       {no && (
         <span className="num text-[12px] font-semibold" style={{ color: "var(--no)" }}>
-          NO {no}
+          {no} NO
         </span>
       )}
     </div>
@@ -682,6 +686,16 @@ function SellTicket({
       ? "—"
       : formatMoney(weiToEth(proceeds), { from: "ETH", to: unit, ethUsd, signed });
   const busy = trade.isSubmitting || trade.isMining;
+  const [details, setDetails] = useState(false);
+
+  // Escape dismisses the sell form, exactly as it dismisses the buy form.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
 
   // Receipt — same card footprint + full-width action as the form, so leaving a
   // sell never resizes the surface.
@@ -718,7 +732,9 @@ function SellTicket({
 
   const shares = sharesForPct(held.tokens, pct);
   // The whole ticket is denominated in money, exactly like the buy form: you type
-  // how much you want to take out, not a percentage of something invisible.
+  // how much you want to take out, not a percentage of something invisible. The
+  // field opens at the WHOLE position, so leaving entirely is still one tap —
+  // typing a smaller number is how you take part of it off the table.
   const priced = worthUsd != null && worthUsd > 0;
   const amountUsd = priced ? (worthUsd! * pct) / 100 : 0;
   const setAmountUsd = (usd: number) => {
@@ -728,81 +744,123 @@ function SellTicket({
     setPct(usd >= worthUsd! ? 100 : Math.round(p * 100) / 100);
   };
   const money = (usd: number) => unitAmount(usd, unit, ethUsd);
+  const positionUnit = priced ? money(worthUsd!) : `${fmtShares(held.tokens)} shares`;
   const remainingUsd = priced ? worthUsd! - amountUsd : null;
 
   const confirmLabel = !ready.connected
     ? "Connect wallet"
     : !ready.onBase
       ? "Switch to Base"
-      : priced
-        ? `Sell ${money(amountUsd)}`
-        : `Sell all ${held.side}`;
+      : busy
+        ? "Selling…"
+        : priced && amountUsd <= 0
+          ? "Enter an amount"
+          : priced
+            ? `Sell ${money(amountUsd)}`
+            : `Sell all ${held.side}`;
   const disabled = ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n);
 
+  // The SAME form as Back — title + close, the big editable amount, the size
+  // line beneath it, one summary row with Details, one full-width action.
   return (
-    <div className={CARD} style={CARD_STYLE}>
-      <div className="mb-2 flex items-baseline gap-2 px-0.5">
-        <span className="text-[13px] font-semibold text-[var(--text)]">
+    <div className="rounded-[16px] p-5 sm:p-[22px]" style={CARD_STYLE}>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-[15px] font-semibold text-[var(--text)]">
           Sell{" "}
           <span style={{ color: held.side === "YES" ? "var(--yes)" : "var(--no)" }}>
             {held.side}
           </span>
-        </span>
-        <span className="num ml-auto text-[11px] text-[var(--text-muted)]">
-          Position {priced ? money(worthUsd!) : `${fmtShares(held.tokens)} shares`}
-        </span>
-        {priced && (
-          <button
-            type="button"
-            onClick={() => setPct(100)}
-            className="text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text)]"
-          >
-            Max
-          </button>
-        )}
-      </div>
-
-      {priced && (
-        <div className="mb-3 px-0.5">
-          <BigAmount amount={amountUsd} setAmount={setAmountUsd} unit={unit} ethUsd={ethUsd} />
-        </div>
-      )}
-
-      <div className="mb-3.5 space-y-1.5 px-0.5">
-        <QuoteRow
-          k="Estimated proceeds"
-          v={quoting ? "…" : proceeds != null ? `≈ ${proceedsStr()}` : "—"}
-        />
-        <QuoteRow k="Shares sold" v={`${fmtShares(shares)} of ${fmtShares(held.tokens)}`} />
-        {remainingUsd != null && pct < 100 && (
-          <QuoteRow k="Position remaining" v={`≈ ${money(remainingUsd)}`} />
-        )}
-        <QuoteRow k="Network" v="Base" />
-        {trade.isError && (
-          <div className="text-[11px] text-[var(--no)]">
-            {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
-          </div>
-        )}
-      </div>
-      <div className="flex items-center gap-2">
+        </h3>
         <button
           type="button"
           onClick={onCancel}
-          className={`${CTRL} flex-1 text-[14px] font-medium text-[var(--text-secondary)]`}
-          style={GHOST_STYLE}
+          aria-label="Close order"
+          className="-mr-1 grid h-7 w-7 place-items-center rounded-[8px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--text)]"
         >
-          Cancel
-        </button>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={onConfirm}
-          className={`${CTRL} flex-[2] text-[15px] font-semibold disabled:opacity-40`}
-          style={PRIMARY_STYLE}
-        >
-          {busy ? "Selling…" : confirmLabel}
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+            <path
+              d="M2 2l10 10M12 2L2 12"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
         </button>
       </div>
+
+      <div className="mt-4">
+        {priced ? (
+          <BigAmount amount={amountUsd} setAmount={setAmountUsd} unit={unit} ethUsd={ethUsd} />
+        ) : (
+          /* No value read yet — the whole position is the only honest offer. */
+          <div
+            className="num pb-2 text-[30px] font-semibold leading-none text-[var(--text)]"
+            style={{ borderBottom: "1px solid var(--border)" }}
+          >
+            {fmtShares(held.tokens)}
+          </div>
+        )}
+        <div className="mt-1.5 flex items-baseline justify-between gap-3 text-[12px] text-[var(--text-muted)]">
+          <span className="num min-w-0 truncate">Position {positionUnit}</span>
+          {priced && pct < 100 && (
+            <button
+              type="button"
+              onClick={() => setPct(100)}
+              className="shrink-0 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--text)]"
+            >
+              Sell all
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-5 flex items-baseline justify-between gap-3 text-[12px]">
+        <span className="num min-w-0 truncate text-[var(--text-secondary)]">
+          {quoting || proceeds == null
+            ? "Calculating…"
+            : `≈ ${fmtShares(shares)} shares · ${proceedsStr()} back`}
+        </span>
+        <button
+          type="button"
+          onClick={() => setDetails((d) => !d)}
+          aria-expanded={details}
+          aria-controls="sell-details"
+          className="shrink-0 text-[12px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--text)]"
+        >
+          Details
+        </button>
+      </div>
+
+      {details && (
+        <div id="sell-details" className="mt-3 space-y-1.5">
+          <QuoteRow k="Estimated proceeds" v={proceeds != null ? `≈ ${proceedsStr()}` : "—"} />
+          <QuoteRow k="Shares sold" v={`${fmtShares(shares)} of ${fmtShares(held.tokens)}`} />
+          {remainingUsd != null && (
+            <QuoteRow
+              k="Position remaining"
+              v={pct >= 100 ? money(0) : `≈ ${money(remainingUsd)}`}
+            />
+          )}
+          <QuoteRow k="Network" v="Base" />
+        </div>
+      )}
+
+      {trade.isError && (
+        <div className="mt-2 text-[11px]" role="alert" style={{ color: "var(--no)" }}>
+          {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
+        </div>
+      )}
+
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onConfirm}
+        aria-live="polite"
+        className={`${CTRL} mt-4 w-full text-[15px] font-semibold disabled:opacity-40`}
+        style={PRIMARY_STYLE}
+      >
+        {confirmLabel}
+      </button>
     </div>
   );
 }
