@@ -114,8 +114,8 @@ const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
 const feedQO = (wallet: string | undefined, window: VolumeWindow = "24h", lens = "all") =>
   queryOptions({
     queryKey: ["opp-feed", wallet ?? null, window, lens],
-    queryFn: async () =>
-      await getOpportunityFeed({
+    queryFn: async () => {
+      const request = getOpportunityFeed({
         data: {
           wallet: wallet ?? null,
           sessionToken: wallet ? readSessionToken(wallet) : null,
@@ -123,7 +123,21 @@ const feedQO = (wallet: string | undefined, window: VolumeWindow = "24h", lens =
           lens,
           ...feedSession(),
         },
-      }),
+      });
+      try {
+        // Personalization is an enhancement, never a gate to seeing markets. If
+        // a wallet-specific overlay stalls, fall back to the same chain-backed
+        // anonymous feed the server renders instead of holding a skeleton.
+        return await Promise.race([
+          request,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("personalized feed timed out")), 4_000),
+          ),
+        ]);
+      } catch {
+        return await getOpportunityFeed({ data: { window, lens } });
+      }
+    },
     // The realtime coordinator (startRealtime) now moves each card's canonical
     // market_state fields in place over one socket, so this poll no longer owns
     // "the cards move." It is a slow STRUCTURAL reconcile: it catches what the
@@ -487,13 +501,15 @@ function Feed() {
   // a wallet, window or lens falls through to a normal client fetch.
   const loaderData = Route.useLoaderData();
   const initialFeed =
-    !wallet && win === "24h" && lens === "all" ? (loaderData?.feed ?? undefined) : undefined;
+    win === "24h" && lens === "all" ? (loaderData?.feed ?? undefined) : undefined;
   const { data } = useQuery({
     ...feedQO(wallet, win, lens),
     // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
     // React Query ages it against staleTime instead of refetching on hydration.
     ...(initialFeed
-      ? { initialData: initialFeed, initialDataUpdatedAt: loaderData?.fetchedAt ?? Date.now() }
+      ? wallet
+        ? { placeholderData: initialFeed }
+        : { initialData: initialFeed, initialDataUpdatedAt: loaderData?.fetchedAt ?? Date.now() }
       : {}),
   });
 
