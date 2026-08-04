@@ -252,6 +252,52 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       if (list.length > 0) burstStakes.set(r.id, list);
     }
 
+    /**
+     * A MARKET SIGNAL HAS PEOPLE TOO. "Believers in YES doubled" is a statement
+     * about a crowd, but the crowd was invisible: these rows carry no wallet and
+     * no burst payload, so they were the only rows in the feed with nothing to
+     * tap. The believers ARE the story, so we borrow the market's largest
+     * current holders (a few faces, not a directory) and let the reader in.
+     */
+    const signalMarkets = [
+      ...new Set(
+        live
+          .filter((r) => !r.wallet && !burstStakes.has(r.id) && Number.isFinite(Number(r.marketId)))
+          .map((r) => Number(r.marketId)),
+      ),
+    ];
+    /** marketId → believer wallets, biggest position first. */
+    const believersByMarket = new Map<number, string[]>();
+    if (signalMarkets.length > 0) {
+      const { serviceClientOrNull } = await import("@/lib/supabase-clients");
+      const svc = serviceClientOrNull();
+      const { data: holders } = svc
+        ? await svc
+            .from("wallet_beliefs")
+            .select("wallet, onchain_id, yes_shares, no_shares")
+            .in("onchain_id", signalMarkets)
+            .limit(600)
+        : { data: null };
+      const byMarket = new Map<number, Array<{ wallet: string; size: number }>>();
+      for (const h of (holders ?? []) as Array<Record<string, unknown>>) {
+        const size = Number(h.yes_shares ?? 0) + Number(h.no_shares ?? 0);
+        if (!(size > 0)) continue;
+        const id = Number(h.onchain_id);
+        const list = byMarket.get(id) ?? [];
+        list.push({ wallet: String(h.wallet).toLowerCase(), size });
+        byMarket.set(id, list);
+      }
+      for (const [id, list] of byMarket) {
+        believersByMarket.set(
+          id,
+          list
+            .sort((a, b) => b.size - a.size)
+            .slice(0, 6)
+            .map((x) => x.wallet),
+        );
+      }
+    }
+
 
     const labelByWallet = new Map<string, NetLabel>();
     /**
