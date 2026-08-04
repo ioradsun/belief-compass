@@ -90,7 +90,9 @@ export function useOwnedDock({
     enabled: !!viewerWallet,
     staleTime: 15_000,
     refetchInterval: 20_000,
-    placeholderData: (prev) => prev,
+    // NOT bridged across markets: this key carries the market id, so keeping the
+    // previous result would show the last market's holding under this market's
+    // controls — "You own $234 YES" on a market you have never touched.
   });
 
   // What each whole side would actually fetch right now, straight from the

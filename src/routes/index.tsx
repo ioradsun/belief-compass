@@ -4,7 +4,12 @@ import { lazyRetry } from "@/lib/lazy-retry";
 
 import { queryOptions, useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
-import { listMarketPulses, getMarketRow, type VolumeWindow } from "@/lib/markets.functions";
+import {
+  listMarketPulses,
+  getMarketRow,
+  getMarketChange,
+  type VolumeWindow,
+} from "@/lib/markets.functions";
 import { getOpportunityFeed } from "@/lib/opportunity-feed.functions";
 import { feedSession, resetFeedSession } from "@/lib/feed-session";
 import { readSessionToken } from "@/lib/wallet-session";
@@ -16,6 +21,7 @@ import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
 import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
 import { MobileGame } from "@/components/MobileGame";
+import { MarketScene } from "@/components/MarketScene";
 
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { PanelBoundary } from "@/components/PanelBoundary";
@@ -99,6 +105,14 @@ import { LandingPanel } from "@/components/LandingPanel";
 import { useLandingPanelState } from "@/hooks/useLandingPanelState";
 import { useDeckWindow } from "@/lib/deck-window";
 import { useCaptureShareVisit } from "@/lib/use-share-attribution";
+
+/**
+ * How long the scene will hold the previous market waiting for the next one's
+ * core payload before showing it anyway. Long enough that a normal (warm or
+ * cold) fetch wins the race; short enough that a stalled request is never
+ * mistaken for a frozen interface.
+ */
+const PROMOTE_TIMEOUT_MS = 1_200;
 
 const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
   { key: "1h", label: "1H" },
@@ -503,8 +517,7 @@ function Feed() {
   // round-trip. Only the anon 24h "all" query matches what the loader fetched —
   // a wallet, window or lens falls through to a normal client fetch.
   const loaderData = Route.useLoaderData();
-  const initialFeed =
-    win === "24h" && lens === "all" ? (loaderData?.feed ?? undefined) : undefined;
+  const initialFeed = win === "24h" && lens === "all" ? (loaderData?.feed ?? undefined) : undefined;
   const { data } = useQuery({
     ...feedQO(wallet, win, lens),
     // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
@@ -600,23 +613,68 @@ function Feed() {
     queryFn: () => getMarketRow({ data: { id: activeMarket as number } }),
     enabled: missing,
     staleTime: 15_000,
-    placeholderData: (prev) => prev,
+    // No placeholderData: this key CHANGES per market, so carrying the previous
+    // result forward would hand back a different market's row. The scene keeps
+    // the last complete market on screen instead (see shownRow below) — the same
+    // protection, without ever mislabelling one market's data as another's.
+  });
+
+  // The core payload every figure in the deck is derived from. Mounted here with
+  // the EXACT key the deck uses, so React Query serves both from one request —
+  // this is a readiness probe, not a second fetch.
+  const { data: nextCore } = useQuery({
+    queryKey: ["market-change", activeMarket],
+    queryFn: () => getMarketChange({ data: { id: activeMarket as number } }),
+    enabled: activeMarket != null,
+    staleTime: 10_000,
   });
   const liveRow: MarketRow | null =
     foundIdx >= 0
       ? marketRows[currentIdx]
       : ((soloRow?.row as unknown as MarketRow | null) ?? null);
-  // Keep the current market on screen through the moment it leaves the feed (a
-  // decision filters it out) so the deck never remounts and the celebration /
-  // passed screen survives. The cache only holds the row for the active id.
-  const rowCache = useRef<MarketRow | null>(null);
-  if (liveRow && Number(liveRow.onchain_id) === activeMarket) rowCache.current = liveRow;
-  const currentRow: MarketRow | null =
-    liveRow && Number(liveRow.onchain_id) === activeMarket
-      ? liveRow
-      : rowCache.current && Number(rowCache.current.onchain_id) === activeMarket
-        ? rowCache.current
-        : liveRow;
+
+  // THE SCENE NEVER BLANKS.
+  //
+  // The center displays exactly one market, and it is only ever replaced by
+  // another COMPLETE market. Until the newly selected id's row is actually in
+  // hand, the previous market stays fully on screen — same title, same numbers,
+  // same controls, same everything. It used to fall through to null here, which
+  // is why selecting a market that wasn't in the loaded feed (a search result, a
+  // Live row, a position, a shared link) emptied the center until the row
+  // arrived. Holding the WHOLE previous row also guarantees the scene is always
+  // internally consistent: there is no frame with the new title above the old
+  // market's figures, because every panel reads the same row object.
+  //
+  // AND IT SWAPS IN ONE COMMIT. The row alone is not enough to draw a market —
+  // believers, capital and price all come from the trade tape — so promoting on
+  // the row would paint the new title above the previous market's figures for
+  // however long that tape took. The new market is promoted only once BOTH are
+  // in hand, so every panel changes on the same frame.
+  //
+  // Two exemptions keep that rule from ever becoming a worse experience:
+  //   • first paint — there is no old market to protect, so a real market beats
+  //     holding a skeleton;
+  //   • a stalled fetch — after PROMOTE_TIMEOUT_MS the row is promoted anyway,
+  //     so a slow tape can't strand the viewer on the market they just left.
+  const [promoteAnyway, setPromoteAnyway] = useState<number | null>(null);
+  useEffect(() => {
+    if (activeMarket == null) return;
+    setPromoteAnyway(null);
+    const t = setTimeout(() => setPromoteAnyway(activeMarket), PROMOTE_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [activeMarket]);
+
+  const shownRow = useRef<MarketRow | null>(null);
+  const coreReady = nextCore != null || promoteAnyway === activeMarket;
+  if (
+    liveRow &&
+    Number(liveRow.onchain_id) === activeMarket &&
+    (shownRow.current == null || coreReady)
+  ) {
+    shownRow.current = liveRow;
+  }
+  const currentRow: MarketRow | null = shownRow.current;
+  const shownId = currentRow ? Number(currentRow.onchain_id) : null;
 
   // "The House has an idea" — the SERVER decided whether an idea belongs in
   // this sequence and at which slot. The hook only owns the funnel calls.
@@ -848,27 +906,6 @@ function Feed() {
                 onConvictions={() => setTab("mine")}
                 onCreate={openCreate}
               />
-            ) : rows.length === 0 ? (
-              // While the feed is still loading (first paint), show a live-market
-              // skeleton, not a "nothing here" card. Only show the real empty
-              // message once data has actually arrived empty.
-              stableFeed === undefined ? (
-                <div className="flex min-h-0 flex-1 flex-col">
-                  <DeckSkeleton />
-                </div>
-              ) : wallet ? (
-                // Connected + the filtered feed is empty = decided on everything.
-                <CaughtUp
-                  onRefresh={refreshFeed}
-                  onConvictions={() => setTab("mine")}
-                  onCreate={openCreate}
-                />
-              ) : (
-                <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
-                  No markets yet. The POV poller runs on a schedule — data will appear once the
-                  first cycle completes.
-                </div>
-              )
             ) : ideaDue && houseIdea.suggestion ? (
               /* A first-class feed card, in the exact slot a market would take. */
               <div className="flex min-h-0 flex-1 flex-col">
@@ -883,39 +920,64 @@ function Feed() {
                   }}
                 />
               </div>
+            ) : currentRow ? (
+              /* A MARKET ON SCREEN OUTRANKS EVERY EMPTY STATE.
+                This branch used to sit BELOW the `rows.length === 0` check, so
+                selecting a market while the feed happened to be empty rendered
+                "No markets yet" over a perfectly loadable market — the deck
+                never mounted at all. A row in hand is a market to show. */
+              <MarketScene marketId={shownId}>
+                {!isDesktop ? (
+                  /* MOBILE — The Conviction Game. Its own experience: the
+                    question first, the crowd only after the decision.
+                    Deliberately NOT keyed on the market id: a key here remounts
+                    the entire phone scene on every change (new DOM, refetch from
+                    scratch, a blank frame). It resets its own per-market state
+                    internally instead. */
+                  <MobileGame
+                    row={currentRow}
+                    ethUsd={stableFeed?.ethUsd ?? 0}
+                    viewerWallet={wallet}
+                    onNext={nextMarket}
+                    onSelectPerson={selectPerson}
+                  />
+                ) : (
+                  <MarketDeck
+                    row={currentRow}
+                    ethUsd={stableFeed?.ethUsd ?? 0}
+                    onSkip={nextMarket}
+                    viewerWallet={wallet}
+                    lens={lens}
+                    lenses={OPP_FILTERS}
+                    onLens={setLens}
+                    caseOpen={caseActive}
+                    mobileCaseOpen={mobileCaseActive}
+                    onToggleCase={toggleCase}
+                    storySide={caseActive ? storySide : null}
+                    onCloseStory={() => setStorySide(null)}
+                    onSelectPerson={selectPerson}
+                  />
+                )}
+              </MarketScene>
+            ) : activeMarket != null || stableFeed === undefined ? (
+              // A market is selected (or the feed is still arriving) but nothing
+              // has ever been rendered here — the ONLY time a skeleton is right.
+              // Once a market has been shown, the branch above holds it instead.
+              <div className="flex min-h-0 flex-1 flex-col">
+                <DeckSkeleton />
+              </div>
+            ) : wallet ? (
+              // Connected + the filtered feed is empty = decided on everything.
+              <CaughtUp
+                onRefresh={refreshFeed}
+                onConvictions={() => setTab("mine")}
+                onCreate={openCreate}
+              />
             ) : (
-              currentRow && (
-                <div className="flex min-h-0 flex-1 flex-col">
-                  {!isDesktop ? (
-                    /* MOBILE — The Conviction Game. Its own experience: the
-                      question first, the crowd only after the decision. */
-                    <MobileGame
-                      key={Number(currentRow.onchain_id)}
-                      row={currentRow}
-                      ethUsd={stableFeed?.ethUsd ?? 0}
-                      viewerWallet={wallet}
-                      onNext={nextMarket}
-                      onSelectPerson={selectPerson}
-                    />
-                  ) : (
-                    <MarketDeck
-                      row={currentRow}
-                      ethUsd={stableFeed?.ethUsd ?? 0}
-                      onSkip={nextMarket}
-                      viewerWallet={wallet}
-                      lens={lens}
-                      lenses={OPP_FILTERS}
-                      onLens={setLens}
-                      caseOpen={caseActive}
-                      mobileCaseOpen={mobileCaseActive}
-                      onToggleCase={toggleCase}
-                      storySide={caseActive ? storySide : null}
-                      onCloseStory={() => setStorySide(null)}
-                      onSelectPerson={selectPerson}
-                    />
-                  )}
-                </div>
-              )
+              <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
+                No markets yet. The POV poller runs on a schedule — data will appear once the first
+                cycle completes.
+              </div>
             )}
           </div>
         </main>
@@ -950,12 +1012,8 @@ function Feed() {
               {/* THIS MARKET — the pinned scope of the feed: the current market's
                 story (House + activity), collapsible. Excluded from the global feed
                 below so nothing is shown twice. Same LiveTape, two scopes. */}
-              {activeMarket != null && (
-                <CurrentMarketActivity
-                  marketId={activeMarket}
-                  wallet={wallet}
-                  onSelect={selectMarket}
-                />
+              {shownId != null && (
+                <CurrentMarketActivity marketId={shownId} wallet={wallet} onSelect={selectMarket} />
               )}
               <div className="mb-4 shrink-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 Live
@@ -964,7 +1022,7 @@ function Feed() {
                 <LiveTape
                   wallet={wallet}
                   onSelect={selectMarket}
-                  excludeMarketId={activeMarket ?? undefined}
+                  excludeMarketId={shownId ?? undefined}
                 />
               </div>
             </>

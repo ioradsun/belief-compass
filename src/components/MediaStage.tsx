@@ -74,7 +74,6 @@ export function stageMediaFrom(
   };
 }
 
-
 /** How far a horizontal drag must travel (px) before the page flips. */
 const FLIP = 56;
 
@@ -83,7 +82,14 @@ export function MediaStage({
   children,
   className = "",
 }: {
-  media: StageMedia;
+  /**
+   * Null when this market carries no evidence. The stage still renders — as a
+   * plain single-page scroller — so that moving between a market WITH media and
+   * one WITHOUT never changes the element at this position in the tree. React
+   * would otherwise unmount the whole market body and rebuild it, which is
+   * visible as the panel blinking on exactly those transitions.
+   */
+  media: StageMedia | null;
   /** The existing market panel — rendered untouched as page 1. */
   children: ReactNode;
   className?: string;
@@ -92,6 +98,15 @@ export function MediaStage({
   // one drag (or one hint tap) to the left.
   const [page, setPage] = useState<0 | 1>(1);
   const [dx, setDx] = useState(0);
+  // A new market's evidence is a new stage: open on it again. Keyed on the URL
+  // so switching markets can't strand you on the previous one's page.
+  const mediaKey = media?.url ?? null;
+  const lastMedia = useRef<string | null>(mediaKey);
+  if (lastMedia.current !== mediaKey) {
+    lastMedia.current = mediaKey;
+    if (page !== 1) setPage(1);
+    if (dx !== 0) setDx(0);
+  }
   const drag = useRef<{ x: number; y: number; axis: "" | "x" | "y" } | null>(null);
   const width = useRef(1);
 
@@ -121,7 +136,13 @@ export function MediaStage({
     setDx(0);
   };
 
-  const label = media.embed ? PLATFORM_LABEL[media.embed.platform] : KIND_LABEL[media.kind];
+  const label = !media
+    ? null
+    : media.embed
+      ? PLATFORM_LABEL[media.embed.platform]
+      : KIND_LABEL[media.kind];
+  // With no evidence there is only one page, and it must not be offset.
+  const offset = media ? page * -100 : 0;
 
   return (
     <div
@@ -132,27 +153,40 @@ export function MediaStage({
       onPointerCancel={onUp}
     >
       <div
-        className="flex h-full min-h-0 touch-pan-y will-change-transform"
+        className="flex h-full min-h-0 touch-pan-y"
         style={{
-          transform: `translate3d(calc(${page * -100}% + ${dx}px), 0, 0)`,
-          transition: drag.current ? "none" : "transform 260ms cubic-bezier(.22,.61,.36,1)",
+          transform: `translate3d(calc(${offset}% + ${dx}px), 0, 0)`,
+          transition:
+            drag.current || !media ? "none" : "transform 260ms cubic-bezier(.22,.61,.36,1)",
         }}
       >
-        {/* Page 1 — the market, exactly as it was. */}
-        <div className="flex h-full w-full min-w-full shrink-0 flex-col gap-3 overflow-y-auto overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
-          <Hint side="right" onClick={() => setPage(1)}>
-            {label} →
-          </Hint>
+        {/* Page 1 — the market, exactly as it was. `overflow-y-scroll` (not auto)
+          keeps the scrollbar gutter reserved, so a market whose body happens to
+          fit cannot widen the column relative to one that doesn't. */}
+        <div className="flex h-full w-full min-w-full shrink-0 flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
+          {/* The hint's row is reserved whether or not this market has evidence,
+            so the body below it starts at the same y on every market. */}
+          <div className="min-h-[17px] shrink-0">
+            {media && (
+              <Hint side="right" onClick={() => setPage(1)}>
+                {label} →
+              </Hint>
+            )}
+          </div>
           {children}
         </div>
 
-        {/* Page 2 — the evidence. */}
-        <div className="flex h-full w-full min-w-full shrink-0 flex-col gap-3 overflow-y-auto overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
-          <Hint side="left" onClick={() => setPage(0)}>
-            ← Market
-          </Hint>
-          <Evidence media={media} />
-        </div>
+        {/* Page 2 — the evidence. Only exists when there is evidence. */}
+        {media && (
+          <div className="flex h-full w-full min-w-full shrink-0 flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
+            <div className="min-h-[17px] shrink-0">
+              <Hint side="left" onClick={() => setPage(0)}>
+                ← Market
+              </Hint>
+            </div>
+            <Evidence media={media} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -184,7 +218,6 @@ function Evidence({ media }: { media: StageMedia }) {
   if (media.kind === "embed" && media.embed) return <MediaEmbed media={media.embed} />;
   const url = media.url as string;
   if (media.kind === "image") {
-
     return (
       <img
         src={url}

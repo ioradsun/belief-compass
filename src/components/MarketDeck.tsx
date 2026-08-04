@@ -181,8 +181,9 @@ export function MarketDeck({
     queryFn: () => getMarketChange({ data: { id: marketId } }),
     staleTime: 10_000,
     refetchInterval: 15_000,
-    // Hold the last tape while the next poll (or a market switch) is in flight.
-    placeholderData: (prev) => prev,
+    // Per-market key: carrying the previous result across a market change would
+    // paint another market's data under this one's title. The scene holds the
+    // whole previous market instead, so there is nothing to bridge here.
   });
 
   // The one on-screen timeframe — the center owns it, both cases follow it.
@@ -205,7 +206,7 @@ export function MarketDeck({
     queryKey: ["conviction-market", marketId],
     queryFn: () => getConvictionMarket({ data: { onchainId: marketId } }),
     staleTime: 5 * 60_000,
-    placeholderData: (prev) => prev,
+    // Per-market key — see above: never bridge across markets.
   });
   // Evidence, when the creator attached any. Null keeps the layout untouched.
   const stageMedia = useMemo(() => stageMediaFrom(cm), [cm]);
@@ -222,7 +223,7 @@ export function MarketDeck({
     queryFn: () => getMarketEvidence({ data: { marketId } }),
     refetchInterval: 60_000,
     staleTime: 30_000,
-    placeholderData: (prev) => prev,
+    // Per-market key — see above: never bridge across markets.
   });
   const holders = evidence?.believers ?? [];
 
@@ -239,7 +240,8 @@ export function MarketDeck({
     queryKey: houseKey(viewer, marketId),
     queryFn: () => getHouseRead({ data: { wallet: viewer ?? null, marketId } }),
     staleTime: 30_000,
-    placeholderData: (prev) => prev,
+    // Per-market key — see above: the House's read on the LAST market is not a
+    // placeholder for this one, it is a wrong answer.
   });
 
   // The center's ONE interpretation. The state-transition emitter reads YES and NO
@@ -473,7 +475,12 @@ export function MarketDeck({
       {/* Identity — pinned to the top of the column. In mobile Case mode the
         question moves into the carousel header, so this collapses. */}
       <div className={`shrink-0 ${mobileCaseOpen ? "hidden" : ""}`}>
-        <div className="mb-1 flex items-center gap-2">
+        {/* Meta row — its height is RESERVED. Category, age, the exclusivity
+          note and the lens chip all arrive asynchronously and are individually
+          optional; without a floor here a market that has none of them sits the
+          title (and therefore the whole body and the dock) 26px higher than a
+          market that has all of them. */}
+        <div className="mb-1 flex min-h-[26px] items-center gap-2">
           {(category || freshToken) && (
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
               {[category, freshToken].filter(Boolean).join(" · ")}
@@ -522,7 +529,16 @@ export function MarketDeck({
         </div>
 
         <div className="flex items-start gap-1.5">
-          <h1 className="min-w-0 flex-1 text-[clamp(20px,2.4vw,30px)] font-semibold leading-tight tracking-tight text-[var(--text)]">
+          {/* A DELIBERATE TITLE RULE: exactly two lines of space, always.
+            One-line and three-line questions occupy the same box, so nothing
+            below the question — the market body, the dock, the controls — ever
+            moves because one market asks a longer question than the last.
+            `2.4em` is two lines at this element's own 1.2 line-height, in `em`
+            so it tracks the clamped font size across viewports. */}
+          <h1
+            className="line-clamp-2 min-h-[2.4em] min-w-0 flex-1 text-[clamp(20px,2.4vw,30px)] font-semibold leading-[1.2] tracking-tight text-[var(--text)]"
+            title={title}
+          >
             {title}
           </h1>
           <StandOnIt
@@ -563,21 +579,26 @@ export function MarketDeck({
         >
           {marketInner}
         </MobileCaseView>
-      ) : stageMedia ? (
-        /* Markets WITH evidence: same panel, now one of two stage states. */
+      ) : (
+        /* ONE stage for every market, with or without evidence. This used to be
+          two different elements chosen by `stageMedia`, which meant moving
+          between a market that has media and one that doesn't unmounted and
+          rebuilt the entire market body — visible as the panel blinking on
+          exactly those transitions, and a wasted round of mounts. MediaStage
+          now takes `null` and renders a plain single-page scroller. */
         <MediaStage media={stageMedia} className="flex min-h-0 flex-1 touch-pan-y flex-col">
           {marketInner}
         </MediaStage>
-      ) : (
-        <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
-          {marketInner}
-        </div>
       )}
 
       {/* Decision dock — buy by default; sell takes over when opened on a holding.
         Reaching the dock is the strongest signal a wallet is about to be needed,
         so hover/touch/focus here starts the wallet chunks before the click. */}
-      <div className="shrink-0 space-y-3 pb-[env(safe-area-inset-bottom)]" {...walletIntent}>
+      <div
+        data-probe="dock"
+        className="shrink-0 space-y-3 pb-[env(safe-area-inset-bottom)]"
+        {...walletIntent}
+      >
         {/* The controls. The analysis rail now lives inside the Total Market
           instrument above, so the dock is only the order surface. */}
         <div className="overflow-hidden rounded-[16px]" style={{ background: "var(--surface)" }}>

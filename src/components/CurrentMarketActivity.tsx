@@ -40,7 +40,9 @@ export function CurrentMarketActivity({
     queryKey: ["live-tape", wallet ?? null, [marketId], 200],
     queryFn: () => listLiveEvents({ data: { wallet, marketIds: [marketId], limit: 200 } }),
     refetchInterval: 30_000,
-    placeholderData: (prev) => prev,
+    // Per-market key: the previous market's activity is not a placeholder for
+    // this one's. `count === 0` collapses the section, and it is positioned
+    // above the feed where nothing below it depends on its height.
   });
   const rows = live?.rows ?? [];
   const count = rows.length;
@@ -65,7 +67,9 @@ export function CurrentMarketActivity({
 
   return (
     <div
-      className={embedded ? "shrink-0 overflow-hidden" : "mb-3 shrink-0 overflow-hidden rounded-[12px]"}
+      className={
+        embedded ? "shrink-0 overflow-hidden" : "mb-3 shrink-0 overflow-hidden rounded-[12px]"
+      }
       style={
         embedded
           ? undefined
