@@ -236,6 +236,23 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       ...new Set(live.map((r) => r.wallet?.toLowerCase()).filter((w): w is string => !!w)),
     ];
 
+    /**
+     * THE CROWD HAS FACES TOO. A burst row carries the wallets behind it (see
+     * live-tape) with what each committed, so "6 people backed YES" can be six
+     * clickable people instead of a number.
+     */
+    type BurstStake = { wallet: string; usd: number | null };
+    const burstStakes = new Map<string, BurstStake[]>();
+    for (const r of live) {
+      const raw = (r.payload as { wallets?: BurstStake[] }).wallets;
+      if (!Array.isArray(raw) || raw.length === 0) continue;
+      const list = raw
+        .filter((s) => s && typeof s.wallet === "string")
+        .map((s) => ({ wallet: s.wallet.toLowerCase(), usd: s.usd ?? null }));
+      if (list.length > 0) burstStakes.set(r.id, list);
+    }
+
+
     const labelByWallet = new Map<string, NetLabel>();
     /**
      * The viewer's relationships in full, not just their names. Discovery asks
@@ -279,8 +296,13 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     }
 
     const profileWallets = [
-      ...new Set([...actorWallets, ...moments.flatMap((m) => m.people.map((p) => p.wallet))]),
+      ...new Set([
+        ...actorWallets,
+        ...moments.flatMap((m) => m.people.map((p) => p.wallet)),
+        ...[...burstStakes.values()].flatMap((l) => l.map((s) => s.wallet)),
+      ]),
     ];
+
     const profiles =
       profileWallets.length > 0
         ? await import("@/lib/profiles.server").then((m) => m.resolveProfiles(profileWallets, 15))
@@ -373,6 +395,28 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           relationship,
         } satisfies LiveFace;
       }
+
+      // The crowd behind a burst, named. Ordered by what they committed (the
+      // grouping already did that), with the viewer's own people pulled to the
+      // front so a familiar face is the first one they see.
+      const stakes = burstStakes.get(r.id);
+      if (stakes && !r.people) {
+        const named = stakes.map((s) => {
+          const prof = profiles.get(s.wallet);
+          return {
+            wallet: s.wallet,
+            name: prof?.displayName ?? aliasFor(s.wallet),
+            avatarUrl: prof?.pfpUrl ?? null,
+            relationship: labelByWallet.get(s.wallet) ?? null,
+          };
+        });
+        // Stable partition, not a re-sort: known people lead, everyone else
+        // keeps the commitment order the grouping gave them.
+        r.people = [...named.filter((p) => p.relationship), ...named.filter((p) => !p.relationship)];
+
+      }
+
+
 
       // A CONVICTION COHORT — the people still holding. The event stored PEOPLE,
       // not prose, precisely so the sentence can be written for where it is
