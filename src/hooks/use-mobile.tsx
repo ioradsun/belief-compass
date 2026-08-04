@@ -1,4 +1,5 @@
 import * as React from "react";
+import { startTransition } from "react";
 
 const MOBILE_BREAKPOINT = 768;
 /** Matches the `lg` breakpoint where the layout becomes three side-by-side columns. */
@@ -30,11 +31,18 @@ export function useIsDesktop() {
 
   React.useEffect(() => {
     const mql = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`);
-    const onChange = () => setIsDesktop(window.innerWidth >= DESKTOP_BREAKPOINT);
+    // startTransition: flipping to the phone experience swaps in a lazily loaded
+    // surface. Without a transition React tears down the painted deck and shows
+    // the Suspense skeleton while that chunk loads — the content appears for a
+    // beat, then blinks back to loading. In a transition React keeps the current
+    // UI on screen until the new one is ready.
+    const onChange = () =>
+      startTransition(() => setIsDesktop(window.innerWidth >= DESKTOP_BREAKPOINT));
     mql.addEventListener("change", onChange);
     onChange();
     return () => mql.removeEventListener("change", onChange);
   }, []);
+
 
   return isDesktop;
 }
