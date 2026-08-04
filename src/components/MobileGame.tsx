@@ -530,4 +530,3 @@ function Dock({ children }: { children: React.ReactNode }) {
 function Rule() {
   return <div className="border-t border-[var(--border)]" aria-hidden />;
 }
-
