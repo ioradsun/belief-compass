@@ -93,31 +93,60 @@ export function CurrentMarketActivity({
         </span>
       </button>
 
-      {open ? (
-        <div className="flex flex-col px-1 pb-1">
-          <div className="h-[300px] min-h-0">
-            <LiveTape
-              wallet={wallet}
-              onSelect={onSelect}
-              marketIds={[marketId]}
-              showTitles={false}
-              limit={200}
-              skeletonRows={4}
-              emptyText="Quiet for three days."
-            />
+      <button type="button" onClick={toggle} className="block w-full px-3 pb-2 pt-0.5 text-left">
+        {/* The latest beat leads; the count trails, quiet. */}
+        <span className="block truncate text-[13px] leading-snug text-[var(--text-secondary)]">
+          {latest}
+        </span>
+        <span className="num mt-1 block text-right text-[12px] font-semibold text-[var(--text-muted)]">
+          {unread > 0 ? `+${unread} new` : `${count} update${count === 1 ? "" : "s"}`} ›
+        </span>
+      </button>
+
+      {/* EXPANDED = a layer, not a squeeze. A bounded panel inside an already
+        tight column can only ever show three beats and pushes the order bar
+        around; reading "what just happened" is a whole-attention task, so it
+        takes the whole screen and gives it straight back on dismiss. */}
+      {open && (
+        <div className="fixed inset-0 z-[100] flex flex-col" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            aria-label="Close live activity"
+            onClick={toggle}
+            className="absolute inset-0 bg-[color-mix(in_oklab,var(--background)_82%,transparent)] backdrop-blur-sm"
+          />
+          <div className="relative mt-auto flex max-h-[85svh] min-h-0 flex-col rounded-t-[16px] border-t border-[var(--border)] bg-[var(--surface-1,var(--background))] shadow-2xl">
+            <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-3">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+                Live activity
+              </span>
+              <button
+                type="button"
+                onClick={toggle}
+                aria-label="Close"
+                className="ml-auto text-[13px] text-[var(--text-muted)]"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 px-3 pb-[max(env(safe-area-inset-bottom),12px)]">
+              <LiveTape
+                wallet={wallet}
+                onSelect={(id) => {
+                  setOpen(false);
+                  onSelect(id);
+                }}
+                marketIds={[marketId]}
+                showTitles={false}
+                limit={200}
+                skeletonRows={4}
+                emptyText="Quiet for three days."
+              />
+            </div>
           </div>
         </div>
-      ) : (
-        <button type="button" onClick={toggle} className="block w-full px-3 pb-2 pt-0.5 text-left">
-          {/* The latest beat leads; the count trails, quiet. */}
-          <span className="block truncate text-[13px] leading-snug text-[var(--text-secondary)]">
-            {latest}
-          </span>
-          <span className="num mt-1 block text-right text-[12px] font-semibold text-[var(--text-muted)]">
-            {unread > 0 ? `+${unread} new` : `${count} update${count === 1 ? "" : "s"}`} ›
-          </span>
-        </button>
       )}
+
     </div>
   );
 }
