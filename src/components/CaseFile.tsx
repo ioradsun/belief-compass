@@ -19,6 +19,7 @@ import { getNetwork } from "@/lib/dna.functions";
 import { getMarketChange, getMarketBaselines, type VolumeWindow } from "@/lib/markets.functions";
 import { windowChange } from "@/domain/window-change";
 import { priceMove } from "@/domain/metric-display";
+import { LiveTape } from "@/components/LiveTape";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useMoney } from "@/lib/display-unit";
@@ -209,7 +210,7 @@ export function CaseColumn({
     }
     return m;
   }, [net]);
-  const feed = useMemo(
+  const sideBeats = useMemo(
     () =>
       tape?.length
         ? sideFeed({
@@ -228,6 +229,8 @@ export function CaseColumn({
         : [],
     [tape, side, win, ethUsd, book, network, believersTotal, capitalMetric, money],
   );
+  /** One line of summary. The stream below carries the rest. */
+  const lead = sideBeats[0] ?? null;
 
   // Prefer the AUTHORITATIVE current (market_state row) + the snapshot baseline for
   // the selected window: correct even on a >1000-trade market where the tape can't
@@ -339,42 +342,43 @@ export function CaseColumn({
           </p>
         </div>
 
-        {/* ACT 3 — WHAT'S HAPPENING TO {side}: the anatomy of this side as gated,
-          consolidated momentum beats (people, capital, social) — not a raw trade
-          log. What changed leads; the current state trails once per dimension.
-          Raw trades live in the ledger, not here. */}
+        {/* ACT 3 — WHAT'S HAPPENING TO {side}: the living stream of this belief.
+          This used to be a list of aggregated momentum beats — true, but it read
+          as a summary of a place rather than a place where things happen, and it
+          spent most of its life saying "Nothing significant yet".
+          Now the strongest beat leads as ONE line (that is what a summary is for)
+          and beneath it runs the same tape the app-wide feed runs, scoped to this
+          side: the people entering and leaving, what they did to their belief,
+          how long they had held it, and the conviction cohorts still standing.
+          Same engine, same grammar, same cadence — the column already says YES,
+          so the sentences do not repeat it (surface: "panel"). */}
         <div className="space-y-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
             What&rsquo;s happening to {side}
           </span>
-          {feed.length === 0 ? (
-            <p className="px-0.5 text-[11px] text-[var(--text-muted)]">Nothing significant yet.</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {feed.map((e) => (
-                <li key={e.id} className="flex items-baseline gap-2 text-[12px]">
-                  <span aria-hidden className="shrink-0">
-                    {e.emoji}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span
-                      className={`leading-snug ${e.tier === 1 ? "font-semibold" : ""}`}
-                      style={{
-                        color: e.tone === "down" ? "var(--text-muted)" : color,
-                      }}
-                    >
-                      {e.headline}
-                    </span>
-                    {e.current && (
-                      <span className="mt-0.5 block text-[10px] text-[var(--text-muted)]">
-                        {e.current}
-                      </span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          {lead && (
+            <p className="flex items-baseline gap-2 px-0.5 text-[12px]">
+              <span aria-hidden className="shrink-0">
+                {lead.emoji}
+              </span>
+              <span
+                className={`min-w-0 flex-1 leading-snug ${lead.tier === 1 ? "font-semibold" : ""}`}
+                style={{ color: lead.tone === "down" ? "var(--text-muted)" : color }}
+              >
+                {lead.headline}
+              </span>
+            </p>
           )}
+          <LiveTape
+            marketIds={[marketId]}
+            side={side}
+            wallet={viewerWallet}
+            scroll={false}
+            showTitles={false}
+            limit={24}
+            skeletonRows={3}
+            emptyText="No moves on this side yet."
+          />
         </div>
 
         {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}

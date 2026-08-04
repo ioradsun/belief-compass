@@ -53,6 +53,8 @@ export function LiveTape({
   wallet,
   onSelect,
   marketIds,
+  scroll = true,
+  side,
   excludeMarketId,
   limit,
   showTitles = true,
@@ -60,9 +62,21 @@ export function LiveTape({
   skeletonRows = 8,
 }: {
   wallet?: string;
-  onSelect: (marketId: number) => void;
+  /**
+   * Select the market a row happened in. Omit inside a market's own panel —
+   * a row that looks clickable and goes nowhere is worse than a plain one.
+   */
+  onSelect?: (marketId: number) => void;
   /** Scope the tape to one market (center deck) or a set (positions). */
   marketIds?: number[];
+  /** Scope to one side of that market — the YES/NO rails. */
+  side?: "YES" | "NO";
+  /**
+   * Own the scroll (the standalone column) or flow inline (embedded in a panel
+   * that already scrolls). A scroller inside a scroller traps the gesture and
+   * collapses the height, so an embedded tape must never bring its own.
+   */
+  scroll?: boolean;
   /** Drop this market's rows — the global feed hides what the pinned block shows. */
   excludeMarketId?: number;
   limit?: number;
@@ -73,7 +87,7 @@ export function LiveTape({
 }) {
   const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
   const qc = useQueryClient();
-  const key = ["live-tape", wallet ?? null, scopeKey, limit ?? null];
+  const key = ["live-tape", wallet ?? null, scopeKey, side ?? null, limit ?? null];
   const { data, isLoading } = useQuery({
     queryKey: key,
     queryFn: async (): Promise<LiveResult> => {
@@ -84,7 +98,10 @@ export function LiveTape({
       const prev = qc.getQueryData<LiveResult>(key)?.rows ?? [];
       const newestMs = prev.length ? Date.parse(prev[0].occurredAt) : 0;
       const canDelta =
-        scopeKey === null && prev.length > 0 && Date.now() - newestMs <= MAX_DELTA_SPAN_MS;
+        scopeKey === null &&
+        side == null &&
+        prev.length > 0 &&
+        Date.now() - newestMs <= MAX_DELTA_SPAN_MS;
       if (canDelta) {
         const sinceIso = new Date(newestMs - LIVE_DELTA_OVERLAP_MS).toISOString();
         const res = (await listLiveEvents({
@@ -94,7 +111,7 @@ export function LiveTape({
         return { rows: mergeLiveRows(prev, res.rows, sinceIso, limit ?? 120), error: null };
       }
       return (await listLiveEvents({
-        data: { wallet, marketIds: scopeKey ?? undefined, limit },
+        data: { wallet, marketIds: scopeKey ?? undefined, side, limit },
       })) as LiveResult;
     },
     // The realtime coordinator refetches this tape the instant a trade lands
@@ -153,7 +170,13 @@ export function LiveTape({
   }, [rows]);
 
   return (
-    <div className="h-full min-h-0 flex-1 touch-pan-y overflow-y-scroll overscroll-contain [-webkit-overflow-scrolling:touch]">
+    <div
+      className={
+        scroll
+          ? "h-full min-h-0 flex-1 touch-pan-y overflow-y-scroll overscroll-contain [-webkit-overflow-scrolling:touch]"
+          : ""
+      }
+    >
       {isLoading && rows.length === 0 ? (
         <ul className="space-y-2" aria-hidden>
           {Array.from({ length: skeletonRows }).map((_, i) => (
@@ -171,7 +194,7 @@ export function LiveTape({
             // destination of its own, and the faces are deliberately the only
             // way in. Everything else selects the market it happened in.
             const target = Number(r.marketId);
-            const navigable = Number.isFinite(target) && target > 0;
+            const navigable = !!onSelect && Number.isFinite(target) && target > 0;
             // The title tells you WHICH market. Never show it when the body already
             // is the question (a fresh market), so the row never repeats itself.
             const norm = (x: string) => x.trim().replace(/\s+/g, " ").toLowerCase();
@@ -185,13 +208,13 @@ export function LiveTape({
                 <div
                   role={navigable ? "button" : undefined}
                   tabIndex={navigable ? 0 : undefined}
-                  onClick={navigable ? () => onSelect(target) : undefined}
+                  onClick={navigable ? () => onSelect?.(target) : undefined}
                   onKeyDown={
                     navigable
                       ? (event) => {
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
-                            onSelect(target);
+                            onSelect?.(target);
                           }
                         }
                       : undefined
