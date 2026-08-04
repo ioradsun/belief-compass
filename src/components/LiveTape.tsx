@@ -112,9 +112,16 @@ export function LiveTape({
               showTitles && s.category !== "fresh_market" && norm(r.marketTitle) !== norm(s.body);
             return (
               <li key={r.id}>
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onSelect(Number(r.marketId))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelect(Number(r.marketId));
+                    }
+                  }}
                   className="block w-full rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
                   // Personal (network) rows carry a faint "this is about you" wash —
                   // the only rows with a background, so belonging quietly stands out.
@@ -146,7 +153,7 @@ export function LiveTape({
                       <span className="truncate">{s.attribution}</span>
                     </div>
                   )}
-                </button>
+                </div>
               </li>
             );
           })}

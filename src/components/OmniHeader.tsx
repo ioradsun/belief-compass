@@ -328,6 +328,7 @@ export function OmniHeader({
                 : "border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text)]"
             }`}
           >
+            {/* Stacked cards — one market after another, distinct from the menu bars. */}
             <svg
               aria-hidden
               viewBox="0 0 24 24"
@@ -336,8 +337,10 @@ export function OmniHeader({
               stroke="currentColor"
               strokeWidth="1.8"
             >
-              <path d="M4 6h16M4 12h16M4 18h10" strokeLinecap="round" />
+              <rect x="3" y="8" width="18" height="12" rx="2.5" />
+              <path d="M6 5h12M8 2.5h8" strokeLinecap="round" />
             </svg>
+
             <span className="hidden lg:inline">Feed</span>
           </button>
         )}

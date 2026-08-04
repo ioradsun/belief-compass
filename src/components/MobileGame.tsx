@@ -297,25 +297,32 @@ export function MobileGame({
 
   const marketBody = (
     <>
-      {/* Momentum — believers + capital side by side, in the one on-screen
-        timeframe. Same numbers the desktop deck shows, phone-tight. */}
+      {/* Timeframe control for every figure below. */}
       <div className="flex items-center justify-end">
         <WindowFilter win={deckWin} onWin={setDeckWindow} />
       </div>
 
-      <MarketMomentum dense tape={change?.tape} ethUsd={ethUsd} win={deckWin} />
-
-      {/* The story — House + this market's activity. Takes whatever height is
-        left; it is the only thing that may scroll, never the screen. */}
+      {/* ONE market instrument: believers row, capital row, then this market's
+        insight (House + activity) inside the same container — no second card. */}
       <div className="min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch]">
-        <CurrentMarketActivity
-          marketId={marketId}
-          wallet={viewerWallet}
-          onSelect={() => undefined}
+        <MarketMomentum
+          dense
+          tape={change?.tape}
+          ethUsd={ethUsd}
+          win={deckWin}
+          footer={
+            <CurrentMarketActivity
+              embedded
+              marketId={marketId}
+              wallet={viewerWallet}
+              onSelect={() => undefined}
+            />
+          }
         />
       </div>
     </>
   );
+
 
   return (
     <Screen>
@@ -344,7 +351,7 @@ export function MobileGame({
             onToggle={() => setPhase("sides")}
             teaser={teaser}
             houseLine={houseLine}
-            openLabel="See both sides · YES vs NO"
+            openLabel="See both sides"
           />
           <div className="border-t border-[var(--hairline)]" aria-hidden />
           <OrderTicket
@@ -532,13 +539,17 @@ function Screen({ children }: { children: React.ReactNode }) {
 function Dock({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="shrink-0 pt-2"
-      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 8px)" }}
+      className="sticky bottom-0 z-20 mt-auto shrink-0 pt-2"
+      style={{
+        paddingBottom: "max(env(safe-area-inset-bottom), 8px)",
+        background: "var(--bg)",
+      }}
     >
       {children}
     </div>
   );
 }
+
 
 function Rule() {
   return <div className="border-t border-[var(--border)]" aria-hidden />;
