@@ -1,22 +1,21 @@
 /**
- * Universal-feed transition emitter — the persistence + dedup path.
+ * STORY EVENT EMITTER — persists what the Story Engine noticed.
  *
- * Runs in the market-refresher cron, right after the just-dirtied markets are
- * rebuilt. For each, it composes the MARKET-WIDE (viewer-agnostic) transition from
- * the freshly-written market_state — per-side 24h believer deltas, price move, and
- * the canonical acceleration baseline — reusing the SAME emitMarketTransition
- * engine the center uses (no capital deltas here: those need the tape, so
- * capital-divergence stays a center-only read). It then runs the pure
- * decideTransitionEmit gate against the per-market dedup store and writes a
- * kind='market_transition' event ONLY when the state is new, persistent and not a
- * restatement. Emitted rows are ordinary idempotent events, so the live tape
- * renders them with no new read path.
+ * Runs in the market-refresher cron. For each market it reads the snapshot, asks
+ * src/domain/story-event what the single most informative thing to say is, and
+ * writes a canonical event ONLY when that state is new, persistent and not a
+ * restatement (src/domain/transition-emit owns those rules).
  *
- * Two batched reads (state + store), then upserts — no per-market tape fetch.
- * Best-effort: the caller guards it so a failure never blocks the refresh.
+ * ON THE NAMES: the code says "story event" because the engine now emits
+ * structural, community, momentum, tension and social stories — not only price
+ * transitions. The DATABASE still says `market_transition` (the event kind and
+ * the `market_transition_state` dedup table) because those names are already on
+ * disk, in events rows that have shipped. Renaming them buys nothing and would
+ * need a migration plus a rewrite of live history, so the boundary between the
+ * two vocabularies is exactly here, and it is deliberate.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { emitMarketTransition, type Side, type TransitionType } from "@/domain/market-transition";
+import { emitStoryEvent, type Side, type StoryEventType } from "@/domain/story-event";
 import { decideTransitionEmit, type TransitionStore } from "@/domain/transition-emit";
 import { accelerationFrom } from "@/domain/feed/score";
 
@@ -25,11 +24,11 @@ const numOrNull = (v: unknown): number | null =>
   v == null || !Number.isFinite(Number(v)) ? null : Number(v);
 
 /** Recover the emitter's hysteresis hint from a stored "type:side" fingerprint. */
-function parsePrev(fp: string): { type: TransitionType; side?: Side } | null {
+function parsePrev(fp: string): { type: StoryEventType; side?: Side } | null {
   const [type, side] = fp.split(":");
   if (!type) return null;
   return {
-    type: type as TransitionType,
+    type: type as StoryEventType,
     side: side === "YES" || side === "NO" ? (side as Side) : undefined,
   };
 }
@@ -50,7 +49,7 @@ interface Query {
   delete: () => { in: (col: string, vals: number[]) => Promise<unknown> };
 }
 
-export async function emitMarketTransitions(
+export async function emitStoryEvents(
   sb: SupabaseClient,
   marketIds: number[],
   nowMs: number = Date.now(),
@@ -109,7 +108,7 @@ export async function emitMarketTransitions(
     const yesCapNow = num(r.yes_capital_usd);
     const noCapNow = num(r.no_capital_usd);
 
-    const transition = emitMarketTransition({
+    const transition = emitStoryEvent({
       timeframeShort: "24H",
       yes: {
         believerDelta: dYes,

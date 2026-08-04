@@ -53,7 +53,7 @@ import {
 import { marketBook } from "@/domain/market-book";
 import { marketPulse } from "@/domain/market-pulse";
 import { houseReadState } from "@/domain/house-read";
-import { emitMarketTransition, type TransitionType, type Side } from "@/domain/market-transition";
+import { emitStoryEvent, type StoryEventType, type Side } from "@/domain/story-event";
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { OrderTicket } from "@/components/order/OrderTicket";
@@ -189,7 +189,7 @@ export function MarketDeck({
   // The one on-screen timeframe — the center owns it, both cases follow it.
   const deckWin = useDeckWindow();
 
-  const prevTransition = useRef<{ type: TransitionType; side?: Side } | null>(null);
+  const prevTransition = useRef<{ type: StoryEventType; side?: Side } | null>(null);
 
   // Escape closes the Case File — a disclosure, so it dismisses like one.
   useEffect(() => {
@@ -278,7 +278,7 @@ export function MarketDeck({
       capitalBaseUsd: cap.base * ethUsd,
       pricePct: null,
     });
-    const transition = emitMarketTransition({
+    const transition = emitStoryEvent({
       timeframeShort: book.window.short,
       yes: toWin(book.believers.yes, book.capitalEth.yes),
       no: toWin(book.believers.no, book.capitalEth.no),

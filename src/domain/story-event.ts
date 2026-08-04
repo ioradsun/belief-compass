@@ -1,34 +1,38 @@
 /**
- * MARKET TRANSITION — the interpretation layer over already-computed facts.
+ * STORY ENGINE — the one interpreter of what a market's numbers MEAN.
  *
- * The side feed explains the FACTS of one side ("4 believers joined YES"). This
- * reads YES and NO together and names the MEANING for the whole market — the one
- * high-value state a neutral observer would call out:
+ * Everything interesting that happens to a market becomes a Story Event here.
+ * Not a trade engine, a conviction engine and a transition engine — three
+ * systems that would drift apart within a release. One engine, one vocabulary,
+ * one set of disciplines, and a growing list of things it knows how to notice.
  *
- *     More believers. Less capital.
- *     Capital is concentrating on YES.
- *     Price moved, but conviction did not.
- *     Participation is broadening.
- *     The market is becoming divided.
- *     NO is losing believers.
- *     YES is accelerating.
+ * The side feed reports the FACTS of one side ("4 believers joined YES"). This
+ * reads YES and NO together and names the single most informative thing a
+ * neutral observer would say about the whole market:
  *
- * It is NOT another scoring system. It reuses the feed-event trigger thresholds
- * (capitalTrigger, FEED_TRIGGERS) and the metric-display rules, and interprets a
- * normalized snapshot of the per-side windows the rest of the app already builds.
+ *   STRUCTURAL  NO overtook YES · the market is evenly split
+ *   COMMUNITY   YES believers doubled · YES passed 100 believers
+ *   MOMENTUM    YES is accelerating · participation is broadening
+ *   TENSION     more believers, less capital · price moved, conviction did not
+ *   SOCIAL      a Tribe is forming around YES
+ *   DECLINE     NO is losing believers
  *
- * Two disciplines keep it calm:
- *   • PRIORITY — when several states are true, the most informative one wins:
- *     people/capital divergence → capital concentration → price/conviction
- *     divergence → market dividing → (social) → acceleration → simple momentum
- *     (broadening) → directional decline. A contradiction carries more
- *     information than a plain gain, so it is named first.
+ * Adding a new kind of story is adding one STORYTELLER to the list at the
+ * bottom — a pure function that either sees its state or returns null. It
+ * inherits the whole apparatus for free:
+ *
+ *   • PRIORITY — the list is strict priority order. A contradiction carries more
+ *     information than a plain gain, so it is named first, and exactly one story
+ *     is emitted per read. The market never says two things at once.
  *   • HYSTERESIS — a state has a strong ENTER bar and a looser EXIT bar (via the
- *     caller-supplied `prev`), so an interpretation doesn't flap on every trade.
+ *     caller-supplied `prev`), so a reading doesn't flap on every trade.
+ *   • FINGERPRINT — a stable id (type + side) so callers dedupe and never repeat
+ *     the same insight (see src/domain/transition-emit).
+ *   • NO NEW THRESHOLDS — it reuses the feed's own triggers (capitalTrigger,
+ *     FEED_TRIGGERS) and the metric-display rules.
  *
- * A `fingerprint` identifies the state (type + side) so callers can dedupe and
- * avoid repeating the same insight. Baseline-dependent claims ("4× normal") are
- * only made when a trustworthy baseline is supplied — never faked.
+ * Claims that need a baseline ("4× normal") are only made when a trustworthy
+ * baseline is supplied. Never faked.
  *
  * ZERO IO, pure, fully testable.
  */
@@ -37,14 +41,24 @@ import { formatPct } from "./metric-display";
 
 export type Side = "YES" | "NO";
 
-export type TransitionType =
+export type StoryEventType =
+  // STRUCTURAL — the market's own answer changed.
+  | "majority_flipped"
+  | "market_balanced"
+  // COMMUNITY — the crowd itself changed shape.
+  | "side_doubled"
+  | "believer_milestone"
   | "market_dividing"
+  // TENSION — two signals disagree, which is always worth saying.
   | "people_capital_divergence"
   | "concentration_rising"
   | "price_conviction_divergence"
-  | "participation_broadening"
-  | "tribe_forming"
+  // MOMENTUM
   | "accelerating"
+  | "participation_broadening"
+  // SOCIAL
+  | "tribe_forming"
+  // DECLINE
   | "losing_conviction";
 
 /** One side's already-computed window, normalized. Money is USD. */
@@ -75,7 +89,7 @@ export interface MarketSocial {
   tribeJoinedNo: number;
 }
 
-export interface MarketTransitionInput {
+export interface StoryEventInput {
   /** Short label of the active timeframe, for copy ("1D", "1H"). */
   timeframeShort: string;
   yes: SideWindow;
@@ -83,7 +97,7 @@ export interface MarketTransitionInput {
   baseline?: MarketBaseline | null;
   social?: MarketSocial | null;
   /** The previously-emitted transition, for hysteresis. */
-  prev?: { type: TransitionType; side?: Side } | null;
+  prev?: { type: StoryEventType; side?: Side } | null;
   /** USD → the viewer's display unit, for evidence/detail. Optional. */
   money?: (usd: number) => string;
 }
@@ -93,8 +107,8 @@ export interface MetricEvidence {
   value: string;
 }
 
-export interface MarketTransition {
-  type: TransitionType;
+export interface StoryEvent {
+  type: StoryEventType;
   side?: Side;
   tier: 1 | 2 | 3;
   headline: string;
@@ -104,7 +118,11 @@ export interface MarketTransition {
   fingerprint: string;
 }
 
-const TIER: Record<TransitionType, 1 | 2 | 3> = {
+const TIER: Record<StoryEventType, 1 | 2 | 3> = {
+  majority_flipped: 1,
+  side_doubled: 1,
+  believer_milestone: 2,
+  market_balanced: 2,
   market_dividing: 1,
   people_capital_divergence: 1,
   tribe_forming: 1,
@@ -124,16 +142,25 @@ const ACCEL_EXIT = 2; // 2×
 const BEL = FEED_TRIGGERS.believers.minAbs;
 /** A Tribe cluster this size on one side reads as a movement forming. */
 const TRIBE_FORMING_MIN = 3;
+/** Believer counts worth announcing when a side crosses them. */
+export const BELIEVER_MILESTONES = [10, 50, 100, 500, 1_000, 5_000] as const;
+/**
+ * A market is "balanced" when neither side holds more than this share of
+ * believers. Wide enough that one arrival can't toggle it on and off.
+ */
+const BALANCED_MAX_SHARE = 0.55;
+/** Below this the sides are too small for "majority" to mean anything. */
+const STRUCTURAL_MIN_BELIEVERS = 6;
 
-const money = (fn: MarketTransitionInput["money"], usd: number): string =>
+const money = (fn: StoryEventInput["money"], usd: number): string =>
   fn ? fn(Math.abs(usd)) : `$${Math.abs(usd).toFixed(2)}`;
 
-const fp = (type: TransitionType, side?: Side): string => `${type}:${side ?? "market"}`;
-const held = (prev: MarketTransitionInput["prev"], type: TransitionType, side?: Side): boolean =>
+const fp = (type: StoryEventType, side?: Side): string => `${type}:${side ?? "market"}`;
+const held = (prev: StoryEventInput["prev"], type: StoryEventType, side?: Side): boolean =>
   !!prev && prev.type === type && prev.side === side;
 
 /** The side carrying the most capital action — for a deterministic tie-break. */
-function dominantSide(input: MarketTransitionInput): Side {
+function dominantSide(input: StoryEventInput): Side {
   return Math.abs(input.no.capitalDeltaUsd) > Math.abs(input.yes.capitalDeltaUsd) ? "NO" : "YES";
 }
 
@@ -142,7 +169,7 @@ function dominantSide(input: MarketTransitionInput): Side {
  * when nothing rises above noise. Deterministic: candidates are tried in strict
  * priority order and the first that clears its (hysteresis-aware) bar wins.
  */
-export function emitMarketTransition(input: MarketTransitionInput): MarketTransition | null {
+export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
   const { yes, no, baseline, social, prev, money: fmt } = input;
 
   // Sides in a deterministic order — the one with the most capital action first.
@@ -156,7 +183,7 @@ export function emitMarketTransition(input: MarketTransitionInput): MarketTransi
           ["NO", no],
           ["YES", yes],
         ];
-  const firstOf = (fn: (side: Side, s: SideWindow) => MarketTransition | null) => {
+  const firstOf = (fn: (side: Side, s: SideWindow) => StoryEvent | null) => {
     for (const [side, s] of sides) {
       const r = fn(side, s);
       if (r) return r;
@@ -170,8 +197,101 @@ export function emitMarketTransition(input: MarketTransitionInput): MarketTransi
   const capitalMoved = (s: SideWindow): boolean =>
     capitalTrigger({ deltaUsd: s.capitalDeltaUsd, priorUsd: s.capitalBaseUsd });
 
+  // Where each side stood before this window, and where it stands now. Both are
+  // already in the snapshot — believerBase is the count at the window's open —
+  // so structural and community stories need no new data, only the arithmetic.
+  const yesNow = yes.believerBase + yes.believerDelta;
+  const noNow = no.believerBase + no.believerDelta;
+  const totalNow = yesNow + noNow;
+  const bigEnough = totalNow >= STRUCTURAL_MIN_BELIEVERS;
+
+  // 0 — MAJORITY FLIPPED. The market's own answer changed inside this window.
+  // Nothing else it could say is bigger than this.
+  const majorityFlipped = (): StoryEvent | null => {
+    if (!bigEnough) return null;
+    const wasYes = yes.believerBase > no.believerBase;
+    const isYes = yesNow > noNow;
+    if (wasYes === isYes) return null;
+    if (yes.believerBase === no.believerBase || yesNow === noNow) return null;
+    const side: Side = isYes ? "YES" : "NO";
+    const from: Side = isYes ? "NO" : "YES";
+    return {
+      type: "majority_flipped",
+      side,
+      tier: TIER.majority_flipped,
+      headline: `${side} overtook ${from}.`,
+      detail: `${side} now has more believers than ${from} for the first time this ${input.timeframeShort}.`,
+      evidence: [
+        { label: "YES believers", value: `${yesNow}` },
+        { label: "NO believers", value: `${noNow}` },
+      ],
+      fingerprint: fp("majority_flipped", side),
+    };
+  };
+
+  // COMMUNITY — a side's crowd doubled inside the window.
+  const sideDoubled = (side: Side, sw: SideWindow): StoryEvent | null => {
+    const now = sw.believerBase + sw.believerDelta;
+    const enter = sw.believerBase >= BEL && sw.believerDelta >= sw.believerBase;
+    // Once said, it holds while the side is still at least half again as big.
+    const hold =
+      held(prev, "side_doubled", side) && now >= sw.believerBase * 1.5 && sw.believerDelta > 0;
+    if (!enter && !hold) return null;
+    return {
+      type: "side_doubled",
+      side,
+      tier: TIER.side_doubled,
+      headline: `Believers in ${side} doubled.`,
+      detail: `${side} went from ${sw.believerBase} to ${now} believers this ${input.timeframeShort}.`,
+      evidence: [{ label: "Believers", value: `${sw.believerBase} → ${now}` }],
+      fingerprint: fp("side_doubled", side),
+    };
+  };
+
+  // COMMUNITY — a side crossed a round number of believers inside the window.
+  const milestone = (side: Side, sw: SideWindow): StoryEvent | null => {
+    if (sw.believerDelta <= 0) return null;
+    const now = sw.believerBase + sw.believerDelta;
+    const crossed = [...BELIEVER_MILESTONES].reverse().find((m) => sw.believerBase < m && now >= m);
+    if (crossed == null) return null;
+    return {
+      type: "believer_milestone",
+      side,
+      tier: TIER.believer_milestone,
+      headline: `${side} passed ${crossed.toLocaleString("en-US")} believers.`,
+      detail: `${now.toLocaleString("en-US")} people now back ${side}.`,
+      evidence: [{ label: "Believers", value: now.toLocaleString("en-US") }],
+      // The threshold is part of the identity: crossing 100 and later 500 are
+      // two different stories, and neither should silence the other.
+      fingerprint: `${fp("believer_milestone", side)}:${crossed}`,
+    };
+  };
+
+  // STRUCTURAL — the market arrived at genuine disagreement.
+  const balanced = (): StoryEvent | null => {
+    if (!bigEnough || totalNow === 0) return null;
+    const share = Math.max(yesNow, noNow) / totalNow;
+    const wasTotal = yes.believerBase + no.believerBase;
+    const wasShare = wasTotal > 0 ? Math.max(yes.believerBase, no.believerBase) / wasTotal : 1;
+    // Only worth saying when it BECAME balanced; holding is looser so it doesn't flap.
+    const bar = held(prev, "market_balanced") ? 0.6 : BALANCED_MAX_SHARE;
+    if (!(share <= bar)) return null;
+    if (!held(prev, "market_balanced") && wasShare <= BALANCED_MAX_SHARE) return null;
+    return {
+      type: "market_balanced",
+      tier: TIER.market_balanced,
+      headline: "The market is evenly split.",
+      detail: `${yesNow} back YES, ${noNow} back NO.`,
+      evidence: [
+        { label: "YES believers", value: `${yesNow}` },
+        { label: "NO believers", value: `${noNow}` },
+      ],
+      fingerprint: fp("market_balanced"),
+    };
+  };
+
   // 1 — PEOPLE / CAPITAL DIVERGENCE (the most information: people in, money out).
-  const peopleCapital = (side: Side, s: SideWindow): MarketTransition | null => {
+  const peopleCapital = (side: Side, s: SideWindow): StoryEvent | null => {
     const active = s.believerDelta >= BEL && s.capitalDeltaUsd < 0 && capitalMoved(s);
     const hold =
       held(prev, "people_capital_divergence", side) &&
@@ -195,7 +315,7 @@ export function emitMarketTransition(input: MarketTransitionInput): MarketTransi
   };
 
   // 2 — CAPITAL CONCENTRATION (money in, but no broader participation).
-  const concentration = (side: Side, s: SideWindow): MarketTransition | null => {
+  const concentration = (side: Side, s: SideWindow): StoryEvent | null => {
     const active = s.capitalDeltaUsd > 0 && s.believerDelta <= 0 && capitalMoved(s);
     const hold =
       held(prev, "concentration_rising", side) &&
@@ -219,7 +339,7 @@ export function emitMarketTransition(input: MarketTransitionInput): MarketTransi
   };
 
   // 3 — PRICE / CONVICTION DIVERGENCE (price re-rated with no one behind it).
-  const priceDivergence = (side: Side, s: SideWindow): MarketTransition | null => {
+  const priceDivergence = (side: Side, s: SideWindow): StoryEvent | null => {
     const p = s.pricePct ?? 0;
     const active = p >= FEED_TRIGGERS.price.minPct && s.believerDelta <= 0;
     const hold =
@@ -240,7 +360,7 @@ export function emitMarketTransition(input: MarketTransitionInput): MarketTransi
   };
 
   // 4 — MARKET DIVIDING (both sides gaining believers, comparably).
-  const marketDividing = (): MarketTransition | null => {
+  const marketDividing = (): StoryEvent | null => {
     const enter = yes.believerDelta >= BEL && no.believerDelta >= BEL;
     const hold = yes.believerDelta >= 1 && no.believerDelta >= 1;
     if (!(held(prev, "market_dividing") ? hold : enter)) return null;
@@ -261,7 +381,7 @@ export function emitMarketTransition(input: MarketTransitionInput): MarketTransi
   };
 
   // SOCIAL — a Tribe cluster forming (viewer-specific; only when social is passed).
-  const tribeForming = (): MarketTransition | null => {
+  const tribeForming = (): StoryEvent | null => {
     if (!social) return null;
     const forming: Side | null =
       social.tribeJoinedYes >= TRIBE_FORMING_MIN && social.tribeJoinedYes >= social.tribeJoinedNo
@@ -284,8 +404,8 @@ export function emitMarketTransition(input: MarketTransitionInput): MarketTransi
 
   // 5 — ACCELERATION — from the canonical ranker multiple (preferred), else raw
   // capital velocity. Attributed to the side drawing capital; never faked.
-  const acceleration = (): MarketTransition | null => {
-    const accelSide = (multiple: number): MarketTransition | null => {
+  const acceleration = (): StoryEvent | null => {
+    const accelSide = (multiple: number): StoryEvent | null => {
       const side: Side = yes.capitalDeltaUsd >= no.capitalDeltaUsd ? "YES" : "NO";
       const gaining = Math.max(yes.capitalDeltaUsd, no.capitalDeltaUsd) > 0;
       const bar = held(prev, "accelerating", side) ? ACCEL_EXIT : ACCEL_ENTER;
@@ -327,7 +447,7 @@ export function emitMarketTransition(input: MarketTransitionInput): MarketTransi
   };
 
   // 6 — SIMPLE MOMENTUM: participation broadening (people AND money rising together).
-  const broadening = (side: Side, s: SideWindow): MarketTransition | null => {
+  const broadening = (side: Side, s: SideWindow): StoryEvent | null => {
     const active = s.believerDelta >= BEL && s.capitalDeltaUsd > 0 && capitalMoved(s);
     const hold =
       held(prev, "participation_broadening", side) &&
@@ -350,7 +470,7 @@ export function emitMarketTransition(input: MarketTransitionInput): MarketTransi
   };
 
   // …and directional decline as the last resort.
-  const losing = (): MarketTransition | null => {
+  const losing = (): StoryEvent | null => {
     const side: Side | null =
       yes.believerDelta <= -BEL && yes.believerDelta <= no.believerDelta
         ? "YES"
@@ -370,15 +490,32 @@ export function emitMarketTransition(input: MarketTransitionInput): MarketTransi
     };
   };
 
-  // Strict priority — a contradiction outranks a plain gain or acceleration.
-  return (
-    firstOf(peopleCapital) ??
-    firstOf(concentration) ??
-    firstOf(priceDivergence) ??
-    marketDividing() ??
-    tribeForming() ??
-    acceleration() ??
-    firstOf(broadening) ??
-    losing()
-  );
+  /**
+   * THE STORYTELLERS, in strict priority order. Adding a new kind of story is
+   * adding a line here; everything above it keeps working unchanged.
+   *
+   * The ordering is a claim about information, not about excitement: the market
+   * changing its own answer outranks a contradiction, a contradiction outranks a
+   * plain gain, and a plain gain outranks a decline that any chart already shows.
+   */
+  const tellers: Array<() => StoryEvent | null> = [
+    majorityFlipped, //          the answer itself changed
+    () => firstOf(peopleCapital), //  people in, money out
+    () => firstOf(concentration), //  money in, nobody new
+    () => firstOf(priceDivergence), // price moved, conviction didn't
+    () => firstOf(sideDoubled), //    a crowd doubled
+    marketDividing, //           both sides gaining
+    () => firstOf(milestone), //      a round number crossed
+    tribeForming, //             your people are clustering
+    acceleration, //             faster than this market's own normal
+    balanced, //                 genuine, settled disagreement
+    () => firstOf(broadening), //     people and money rising together
+    losing, //                   the last resort
+  ];
+
+  for (const tell of tellers) {
+    const story = tell();
+    if (story) return story;
+  }
+  return null;
 }
