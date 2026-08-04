@@ -32,3 +32,22 @@ export function serviceClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
+
+/**
+ * The same client, but null instead of an exception when the service key is
+ * absent. For READ paths that merely lose detail without it.
+ *
+ * `createClient` throws "supabaseKey is required" synchronously on a missing
+ * key, so calling `serviceClient()` on a public request path couples that whole
+ * path to a secret. The live tape does exactly one privileged read — how long
+ * each actor had held the belief they just changed — and it is enrichment: the
+ * grammar already degrades to the plain sentence without it. Before this, a
+ * rotated or unset key turned "the feed loses tenure" into "the feed 500s for
+ * everyone", which is not a trade anyone would choose.
+ *
+ * Use this wherever the answer to "what if the key is missing?" is "show less",
+ * and `serviceClient()` where it is "this job cannot run".
+ */
+export function serviceClientOrNull() {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY ? serviceClient() : null;
+}

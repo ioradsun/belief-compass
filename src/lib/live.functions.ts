@@ -309,13 +309,20 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       { daysHeld: number | null; enteredBefore: boolean; yesShares: number; noShares: number }
     >();
     if (actorWallets.length > 0 && marketIds.length > 0) {
-      const { serviceClient } = await import("@/lib/supabase-clients");
-      const { data: beliefs, error: beliefErr } = await serviceClient()
-        .from("wallet_beliefs")
-        .select("wallet, onchain_id, yes_shares, no_shares, first_backed_at")
-        .in("wallet", actorWallets)
-        .in("onchain_id", marketIds)
-        .limit(500);
+      const { serviceClientOrNull } = await import("@/lib/supabase-clients");
+      const svc = serviceClientOrNull();
+      if (!svc)
+        console.warn(
+          "[feed] no service key — rows lose their tenure, so no story can say how long anyone believed it.",
+        );
+      const { data: beliefs, error: beliefErr } = svc
+        ? await svc
+            .from("wallet_beliefs")
+            .select("wallet, onchain_id, yes_shares, no_shares, first_backed_at")
+            .in("wallet", actorWallets)
+            .in("onchain_id", marketIds)
+            .limit(500)
+        : { data: null, error: null };
       if (beliefErr)
         console.warn(
           `[feed] wallet_beliefs unreadable (${beliefErr.message}) — rows lose their tenure, so no story can say how long anyone believed it.`,
