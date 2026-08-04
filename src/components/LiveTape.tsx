@@ -39,6 +39,17 @@ const MAX_DELTA_SPAN_MS = 30 * 60_000;
 /** How many rows the tape shows. The mixer picks which; time orders them. */
 const VISIBLE_ROWS = 40;
 
+/**
+ * The money, at a glance. Two significant-ish figures is all a feed row can
+ * carry — "$1.2k" reads instantly, "$1,238.44" makes the eye stop and parse.
+ */
+function usdShort(usd: number): string {
+  if (usd >= 1_000_000) return `$${(usd / 1_000_000).toFixed(1)}m`;
+  if (usd >= 1_000) return `$${(usd / 1_000).toFixed(1)}k`;
+  if (usd >= 10) return `$${Math.round(usd)}`;
+  return `$${usd.toFixed(2)}`;
+}
+
 function ago(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
   if (s < 60) return `${s}s`;
@@ -292,7 +303,7 @@ function AttributionFace({ r }: { r: LiveRow }) {
       wallet={r.wallet ?? r.id}
       name={r.face.name}
       avatarUrl={r.face.avatarUrl}
-      size={16}
+      size={24}
     />
   );
 }
