@@ -20,6 +20,7 @@ import {
   inactiveForSeconds,
   selectLiveLine,
   believerMilestoneAtOrBelow,
+  seededBelievers,
   type LiveLineInput,
 } from "@/lib/market-state/read-model";
 import { evaluateOpportunity, type OpportunityType } from "@/domain/opportunity";
