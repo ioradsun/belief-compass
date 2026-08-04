@@ -146,36 +146,20 @@ export function MarketMomentum({
           Total market
         </div>
       )}
-      {dense ? (
-        <div className="grid grid-cols-2 divide-x divide-[var(--hairline)]">
-          <MomentumMetric
-            dense
-            total={b.current.toLocaleString("en-US")}
-            label="Believers"
-            copy={believerCopy(b, book.window)}
-          />
-          <MomentumMetric
-            dense
-            total={money(c.current)}
-            label="Market cap"
-            copy={capitalCopy(c, book.window, usd, money)}
-          />
-        </div>
-      ) : (
-        <>
-          <MomentumMetric
-            total={b.current.toLocaleString("en-US")}
-            label="Believers"
-            copy={believerCopy(b, book.window)}
-          />
-          <div className="border-t border-[var(--hairline)]" aria-hidden />
-          <MomentumMetric
-            total={money(c.current)}
-            label="Total market cap"
-            copy={capitalCopy(c, book.window, usd, money)}
-          />
-        </>
-      )}
+      <MomentumMetric
+        dense={dense}
+        total={b.current.toLocaleString("en-US")}
+        label="Believers"
+        copy={believerCopy(b, book.window)}
+      />
+      <div className="border-t border-[var(--hairline)]" aria-hidden />
+      <MomentumMetric
+        dense={dense}
+        total={money(c.current)}
+        label={dense ? "Market cap" : "Total market cap"}
+        copy={capitalCopy(c, book.window, usd, money)}
+      />
+
 
       {footer && (
         <>
