@@ -244,24 +244,36 @@ export function LiveTape({
                       {r.marketTitle}
                     </div>
                   )}
-                  {/* THE PEOPLE. A group story ends with faces, not a full stop:
-                    each one opens that profile, which is where what-else-they-
-                    believe lives. This is the row's real call to action. */}
-                  {r.people && r.people.length > 0 && (
-                    // A discovery row IS the person — its faces are the only way
-                    // in, so they get the room to be recognised.
-                    <PersonStack
-                      people={r.people}
-                      size={r.kind === "discovery_moment" ? 34 : 26}
-                      className="mt-1.5"
-                    />
-                  )}
-                  {s.attribution && (
-                    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
-                      {r.face && <AttributionFace r={r} />}
-                      <span className="truncate">{s.attribution}</span>
+                  {/* WHO + HOW MUCH. Every row that has people ends with their
+                    faces, and every row that has money ends with the money.
+                    Faces left, amount right, one line — the stack is the way
+                    into the profiles, the amount is the proof of conviction. */}
+                  {(r.people?.length || r.face || r.amountUsd != null) && (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        {r.people && r.people.length > 0 ? (
+                          // A discovery row IS the person — bigger faces there.
+                          <PersonStack
+                            people={r.people}
+                            size={r.kind === "discovery_moment" ? 34 : 24}
+                          />
+                        ) : (
+                          r.face && <AttributionFace r={r} />
+                        )}
+                        {s.attribution && (
+                          <span className="truncate text-[11px] text-[var(--text-muted)]">
+                            {s.attribution}
+                          </span>
+                        )}
+                      </div>
+                      {r.amountUsd != null && r.amountUsd > 0 && (
+                        <span className="num ml-auto shrink-0 text-[11px] font-semibold text-[var(--text-secondary)]">
+                          {usdShort(r.amountUsd)}
+                        </span>
+                      )}
                     </div>
                   )}
+
                 </div>
               </li>
             );
