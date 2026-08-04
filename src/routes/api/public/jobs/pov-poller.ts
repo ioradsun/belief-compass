@@ -174,30 +174,57 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
             eventRows.length = 0;
           }
 
-          // Compute share-price performance from snapshots. This used to swallow
-          // failures, which made stalled percentage changes look like a UI bug.
-          const { error: chgErr } = await sb.rpc("recompute_price_changes");
-          if (chgErr) throw chgErr;
+          // ── MAINTENANCE TAIL ──────────────────────────────────────────────
+          // Four independent steps. They used to run as a chain: the first one
+          // threw on failure, so a bad `recompute_price_changes` silently
+          // cancelled the three steps after it, and `snapshot_market_state` only
+          // console.error'd — invisible from outside the worker.
+          //
+          // That is how `market_state_snapshots` stayed at ZERO rows while this
+          // job reported `ok: true` every two minutes, and an empty snapshot
+          // table is why `yes_capital_delta_24h` / `no_capital_delta_24h` were
+          // null on every market: refresh-market computes them against the
+          // ~24h-old snapshot baseline, and there was never a baseline. Two of
+          // the Story Engine's inputs were dead for want of one log line.
+          //
+          // So each step now runs on its own and reports its own outcome in the
+          // response body. Failures stay LOUD (`ok` goes false, and the cron
+          // sees it) without one step's failure deciding another's fate.
+          const cutoff30d = new Date(Date.now() - 30 * 86_400_000).toISOString();
+          const maintenance: Record<string, unknown> = {};
 
-          // Prune snapshots >30d
-          await sb
+          const chg = await sb.rpc("recompute_price_changes");
+          maintenance.price_changes_error = chg.error?.message ?? null;
+
+          const prunePrices = await sb
             .from("price_snapshots")
             .delete()
-            .lt("captured_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
+            .lt("captured_at", cutoff30d);
+          maintenance.price_snapshot_prune_error = prunePrices.error?.message ?? null;
 
           // Snapshot the authoritative believers/capital totals so the deck can
           // read a true window-open baseline even when a busy market's trade tape
-          // is truncated (see market_window_baselines). Best-effort: a missing RPC
-          // (deploy landing before the migration) must never fail the poll.
-          const { error: snapErr } = await sb.rpc("snapshot_market_state");
-          if (snapErr) console.error("snapshot_market_state failed:", snapErr.message);
-          await sb
+          // is truncated (see market_window_baselines). The RPC returns the row
+          // count it wrote, which is the number that matters: "ran but wrote 0"
+          // and "wrote 2,700" are different worlds and an error field alone
+          // cannot tell them apart.
+          const snap = await sb.rpc("snapshot_market_state");
+          maintenance.state_snapshot_error = snap.error?.message ?? null;
+          maintenance.state_snapshot_rows = snap.error ? null : Number(snap.data ?? 0);
+          if (snap.error) console.error("snapshot_market_state failed:", snap.error.message);
+
+          const pruneStates = await sb
             .from("market_state_snapshots")
             .delete()
-            .lt("captured_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
+            .lt("captured_at", cutoff30d);
+          maintenance.state_snapshot_prune_error = pruneStates.error?.message ?? null;
+
+          const maintenanceOk = !Object.keys(maintenance).some(
+            (k) => k.endsWith("_error") && maintenance[k] != null,
+          );
 
           return Response.json({
-            ok: true,
+            ok: maintenanceOk,
             degraded: crawlError != null,
             pov_error: crawlError,
             chain_fallback: fallback,
@@ -206,6 +233,7 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
             upserted,
             market_created_events_inserted: createdEvents,
             market_created_skipped_no_source_time: createdEventsSkippedNoTime,
+            ...maintenance,
             ms: Date.now() - started,
           });
         } catch (e: unknown) {

@@ -49,6 +49,14 @@ interface Requirement {
   migration: string;
   /** True when the app reads this with the ANON key and a 401 is fatal. */
   anonMustRead?: boolean;
+  /**
+   * What to say when the table EXISTS and is readable but holds no rows. For
+   * most requirements that means RLS-with-no-policy and the migration is the
+   * fix. For a table a background job fills, it means the WRITER is not writing
+   * — a different problem with a different fix, and naming the migration there
+   * would send whoever reads the failure to the wrong place.
+   */
+  emptyMeans?: string;
 }
 
 const REQUIRED: Requirement[] = [
@@ -79,6 +87,22 @@ const REQUIRED: Requirement[] = [
     columns: ["yes_capital_delta_24h", "no_capital_delta_24h"],
     migration: "20260822000000_market_state_capital_deltas.sql",
     anonMustRead: true,
+  },
+  {
+    feature: "Story Engine — the 24h baseline those deltas are measured against",
+    table: "market_state_snapshots",
+    columns: ["onchain_id", "captured_at", "yes_capital_usd", "no_capital_usd"],
+    migration: "20260818000000_market_state_snapshots.sql",
+    // Readable by anon by design, and a row per market every poll — so zero rows
+    // is never "quiet", it is "nobody wrote".
+    anonMustRead: true,
+    emptyMeans:
+      "the table exists but NOTHING HAS WRITTEN TO IT.\n" +
+      "      snapshot_market_state() is called by the pov-poller's maintenance tail.\n" +
+      "      POST the poller and read state_snapshot_rows / state_snapshot_error in\n" +
+      "      the response. Until this table has ~24h of history, every market's\n" +
+      "      yes_capital_delta_24h / no_capital_delta_24h stays null and the Story\n" +
+      "      Engine loses one of its two inputs.",
   },
   {
     feature: "Story Engine — transition persistence and dedup",
@@ -131,6 +155,10 @@ async function probe(r: Requirement): Promise<{ verdict: Verdict; detail: string
 async function main() {
   console.log("\n═══ SCHEMA (as the public client) ═══\n");
   const broken: Requirement[] = [];
+  // Unmet requirements whose fix is NOT a migration — the shape is right and a
+  // job is failing to fill it. Listing these under "apply these migrations"
+  // would be actively misleading.
+  const stalled: Requirement[] = [];
   for (const r of REQUIRED) {
     const { verdict, detail } = await probe(r);
     // A restricted table the app only reads server-side is fine — the check is
@@ -141,24 +169,37 @@ async function main() {
       verdict === "error" ||
       (verdict === "empty" && !!r.anonMustRead) ||
       (verdict === "blocked" && !!r.anonMustRead);
-    if (fatal) broken.push(r);
+    const stall = fatal && verdict === "empty" && !!r.emptyMeans;
+    if (fatal) (stall ? stalled : broken).push(r);
     const mark = fatal ? "✗" : verdict === "ok" ? "✓" : "·";
     console.log(`  ${mark} ${r.table.padEnd(24)} ${verdict.padEnd(15)} ${detail}`);
     console.log(`      ${r.feature}`);
-    if (fatal) console.log(`      NOT APPLIED → supabase/migrations/${r.migration}`);
+    if (!fatal) continue;
+    // An empty table with a known writer is a stalled JOB, not a missing
+    // migration. Send the reader to the thing that is actually broken.
+    if (verdict === "empty" && r.emptyMeans) console.log(`      ${r.emptyMeans}`);
+    else console.log(`      NOT APPLIED → supabase/migrations/${r.migration}`);
   }
 
-  if (broken.length === 0) {
+  if (broken.length === 0 && stalled.length === 0) {
     console.log("\n✓ the database matches what the code expects.\n");
     process.exit(0);
   }
-  console.error(`\n✗ ${broken.length} requirement(s) unmet. Apply, in order:\n`);
-  for (const m of [...new Set(broken.map((b) => b.migration))].sort())
-    console.error(`    supabase/migrations/${m}`);
-  console.error(
-    "\n  Until then the features above produce NOTHING, silently — which is exactly\n" +
-      "  how a written-but-unapplied migration hides.\n",
-  );
+  if (broken.length > 0) {
+    console.error(`\n✗ ${broken.length} requirement(s) unmet. Apply, in order:\n`);
+    for (const m of [...new Set(broken.map((b) => b.migration))].sort())
+      console.error(`    supabase/migrations/${m}`);
+    console.error(
+      "\n  Until then the features above produce NOTHING, silently — which is exactly\n" +
+        "  how a written-but-unapplied migration hides.\n",
+    );
+  }
+  if (stalled.length > 0) {
+    console.error(
+      `\n✗ ${stalled.length} table(s) exist and are correctly shaped but EMPTY.\n` +
+        "  Nothing to migrate — a background job is not writing. See the note above each.\n",
+    );
+  }
   process.exit(1);
 }
 
