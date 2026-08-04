@@ -174,7 +174,15 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       .select("value")
       .eq("key", "eth_usd")
       .maybeSingle();
+    // `eth_usd_calibration()` returns NULL when no market has volume_total_usd>0,
+    // and the refresher stores that NULL — so this legitimately reads back as 0.
+    // A zero rate is NOT a price: it is the absence of one, and pretending
+    // otherwise prices every trade at $0 and empties the tape (see live-tape).
     const ethUsd = Number((cal as { value?: number } | null)?.value ?? 0) || 0;
+    if (!(ethUsd > 0))
+      console.warn(
+        "[feed] calc_cache.eth_usd is missing, null or zero — every trade will be reported WITHOUT an amount. Check refresh_eth_usd_calibration() and market_state.volume_total_usd.",
+      );
 
     const events: LiveEventInput[] = (rows ?? []).map((r) => ({
       source_key: r.source_key as string,

@@ -7,6 +7,8 @@ import {
   type LiveRow,
 } from "./live-tape";
 import type { LiveStory } from "@/domain/story";
+import { scoreFeedEvent } from "@/domain/feed-event";
+import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
 
 const ev = (o: Partial<LiveEventInput> = {}): LiveEventInput => ({
   source_key: Math.random().toString(36),
@@ -219,5 +221,65 @@ describe("mergeLiveRows (delta sync)", () => {
     const prev = [lr("c", t(10)), lr("b", t(5)), lr("a", t(1))];
     const fresh = [lr("e", t(30)), lr("d", t(20))];
     expect(mergeLiveRows(prev, fresh, t(15), 3).map((r) => r.id)).toEqual(["e", "d", "c"]);
+  });
+});
+
+/**
+ * THE DEAD-TAPE REGRESSION. `eth_usd_calibration()` returns NULL when no market
+ * has volume_total_usd > 0; the refresher stores that NULL; `Number(null) || 0`
+ * reads back as 0. Pricing every trade at $0 made each one score 14/100, land in
+ * Tier 4, and be discarded as dust — leaving only the structural rows that carry
+ * no amount. That is a two-row tape on top of thousands of real trades.
+ */
+describe("an unknown ETH price is never a price of zero", () => {
+  const trade = (i: number, eth: number): LiveEventInput => ({
+    source_key: `t${i}`,
+    kind: "trade",
+    market_id: String(i + 1),
+    market_title: "Q?",
+    occurred_at: new Date(Date.UTC(2026, 7, 4, 12) - i * 60_000).toISOString(),
+    block_number: i,
+    log_index: i,
+    side: "YES",
+    action: "BUY",
+    amount_eth: eth,
+    wallet: `0xw${i}`,
+    payload: null,
+  });
+
+  it("reports the amount as UNKNOWN, not as $0", () => {
+    const rows = groupLiveRows([trade(0, 0.02)], 0);
+    expect(rows[0].amountUsd).toBeNull();
+    // The ETH figure is still true — only the conversion is missing.
+    expect(rows[0].amountEth).toBeCloseTo(0.02);
+  });
+
+  it("keeps every trade in the feed when the rate is broken", () => {
+    const rows = groupLiveRows([trade(0, 0.02), trade(1, 0.018), trade(2, 0.0155)], 0);
+    const cands = rows.map((r) => ({
+      kind: r.kind,
+      side: r.side,
+      amountUsd: r.amountUsd,
+      walletCount: r.walletCount,
+      tradeCount: r.tradeCount,
+      marketBelievers: 100,
+    }));
+    const { floor } = adaptiveFloor(cands.map((c) => scoreFeedEvent(c).score));
+    expect(cands.filter((c) => admitToFeed(c, floor))).toHaveLength(3);
+  });
+
+  it("never calls an unpriced trade 'large' — that would be a claim we cannot make", () => {
+    const huge = groupLiveRows([trade(0, 1000)], 0);
+    expect(huge[0].kind).toBe("trade_burst");
+    expect(groupLiveRows([trade(0, 1000)], 3500)[0].kind).toBe("large_trade");
+  });
+
+  it("says nothing about money rather than saying zero", () => {
+    const [row] = groupLiveRows([trade(0, 0.02)], 0);
+    expect(row.text).not.toMatch(/\$0\b/);
+  });
+
+  it("prices normally the moment a real rate exists", () => {
+    expect(groupLiveRows([trade(0, 0.02)], 3500)[0].amountUsd).toBeCloseTo(70);
   });
 });
