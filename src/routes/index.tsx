@@ -143,7 +143,10 @@ const feedQO = (wallet: string | undefined, window: VolumeWindow = "24h", lens =
     // "the cards move." It is a slow STRUCTURAL reconcile: it catches what the
     // stream can't patch — feed ordering, a newly created market entering, the
     // house idea, and tribe faces — and re-syncs after a dropped socket.
-    refetchInterval: 20_000,
+    // Contract data is streamed separately; this request only reconciles the
+    // optional ranking/personalisation layer. Slow polling prevents a flaky
+    // enrichment service from repeatedly disturbing the primary market view.
+    refetchInterval: 60_000,
     // The SSR loader hands this query a real, server-fetched payload. Without a
     // staleTime that data is stale the instant it lands, so hydration fires an
     // immediate duplicate request for bytes we already shipped in the HTML.
@@ -513,11 +516,21 @@ function Feed() {
       : {}),
   });
 
+  // First principle: once a valid contract-backed market snapshot reaches the
+  // browser, it is durable for this page lifetime. Query retries, wallet
+  // reconnection, POV outages and empty enrichment responses may update it, but
+  // can never replace it with undefined/empty and put the user back on a loader.
+  const stableFeedRef = useRef<typeof data>(initialFeed);
+  if (data && Object.keys(data.rows ?? {}).length > 0 && data.items?.length > 0) {
+    stableFeedRef.current = data;
+  }
+  const stableFeed = stableFeedRef.current ?? data;
+
   // The server returned a finished sequence: market / market_idea items in
   // order, plus the read-model row behind each market item. The client's only
   // job is to project that order into rows — no scoring, sorting or filtering.
-  const items = data?.items ?? [];
-  const rowsById = data?.rows ?? {};
+  const items = stableFeed?.items ?? [];
+  const rowsById = stableFeed?.rows ?? {};
   const orderedRows = items.flatMap((it) =>
     it.kind === "market" && rowsById[it.onchainId] ? [rowsById[it.onchainId]!] : [],
   );
@@ -609,7 +622,7 @@ function Feed() {
   // this sequence and at which slot. The hook only owns the funnel calls.
   const ideaItem = items.find((it) => it.kind === "market_idea") ?? null;
   const houseIdea = useHouseIdea(
-    ideaItem ? ((data?.idea as ReadySuggestion | null) ?? null) : null,
+    ideaItem ? ((stableFeed?.idea as ReadySuggestion | null) ?? null) : null,
   );
   // The idea takes its own slot: it shows once the viewer has advanced to it.
   const ideaDue = !!ideaItem && currentIdx >= ideaItem.position;
@@ -701,7 +714,7 @@ function Feed() {
                 onViewProfile={selectPerson}
                 onOpenTerms={openTerms}
                 onOpenDashboard={openDashboard}
-                ethUsd={data?.ethUsd ?? 0}
+                ethUsd={stableFeed?.ethUsd ?? 0}
               />
             ) : null}
           </div>
@@ -727,7 +740,7 @@ function Feed() {
                 marketId={Number(currentRow.onchain_id)}
                 row={currentRow}
                 viewerWallet={wallet}
-                ethUsd={data?.ethUsd ?? 0}
+                ethUsd={stableFeed?.ethUsd ?? 0}
                 investigating={storySide === "YES"}
                 onInvestigate={toggleStory}
               />
@@ -753,7 +766,7 @@ function Feed() {
                 rows={rows as unknown as MarketRow[]}
                 window={win}
                 winLabel={winLabel}
-                ethUsd={data?.ethUsd ?? 0}
+                ethUsd={stableFeed?.ethUsd ?? 0}
                 onSelectMarket={selectMarket}
                 selectedPerson={selectedPerson}
                 onSelectPerson={selectPerson}
@@ -805,7 +818,7 @@ function Feed() {
               <PanelBoundary label="Create market" onDismiss={closeCreate}>
                 <Suspense fallback={<DeckSkeleton />}>
                   <CreateMarket
-                    ethUsd={data?.ethUsd ?? 0}
+                    ethUsd={stableFeed?.ethUsd ?? 0}
                     onCreated={(marketId) => selectMarket(marketId)}
                     onCancel={closeCreate}
                     onOpenTerms={openTerms}
@@ -839,7 +852,7 @@ function Feed() {
               // While the feed is still loading (first paint), show a live-market
               // skeleton, not a "nothing here" card. Only show the real empty
               // message once data has actually arrived empty.
-              data === undefined ? (
+              stableFeed === undefined ? (
                 <div className="flex min-h-0 flex-1 flex-col">
                   <DeckSkeleton />
                 </div>
@@ -879,7 +892,7 @@ function Feed() {
                     <MobileGame
                       key={Number(currentRow.onchain_id)}
                       row={currentRow}
-                      ethUsd={data?.ethUsd ?? 0}
+                      ethUsd={stableFeed?.ethUsd ?? 0}
                       viewerWallet={wallet}
                       onNext={nextMarket}
                       onSelectPerson={selectPerson}
@@ -887,7 +900,7 @@ function Feed() {
                   ) : (
                     <MarketDeck
                       row={currentRow}
-                      ethUsd={data?.ethUsd ?? 0}
+                      ethUsd={stableFeed?.ethUsd ?? 0}
                       onSkip={nextMarket}
                       viewerWallet={wallet}
                       lens={lens}
@@ -922,7 +935,7 @@ function Feed() {
                 marketId={Number(currentRow.onchain_id)}
                 row={currentRow}
                 viewerWallet={wallet}
-                ethUsd={data?.ethUsd ?? 0}
+                ethUsd={stableFeed?.ethUsd ?? 0}
                 investigating={storySide === "NO"}
                 onInvestigate={toggleStory}
               />
