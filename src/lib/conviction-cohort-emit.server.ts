@@ -112,7 +112,7 @@ function crossingWindows(nowMs: number, windowDays: number) {
 }
 
 const BELIEF_COLUMNS =
-  "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, yes_cost, no_cost, first_backed_at";
+  "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, value_updated_at, yes_cost, no_cost, first_backed_at";
 
 /** One page of a paginated read. */
 const PAGE_SIZE = 1000;
@@ -231,6 +231,7 @@ async function cohortsFrom(
       // every holder look like dust and this emitter publish nothing, ever.
       const { usd: positionUsd } = positionValueUsd({
         valueUsd: side === "YES" ? b.yes_value_usd : b.no_value_usd,
+        valueUpdatedAt: b.value_updated_at as string | null,
         costEth: side === "YES" ? b.yes_cost : b.no_cost,
         ethUsd,
       });

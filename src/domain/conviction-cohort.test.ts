@@ -495,3 +495,74 @@ describe("selectCohortsForRun — a mass crossing drains, it does not dump", () 
     expect(selectCohortsForRun([candidate(1, 0.9)], 0)).toHaveLength(0);
   });
 });
+
+/**
+ * REGRESSION 5 — RE-RUNNING CATCH-UP MUST NOT DOUBLE-TELL ANYTHING.
+ *
+ * The sweep already walked every market once and emitted nothing, because every
+ * holder was valued at $0 by a column with no writer. Resetting the cursor
+ * re-walks that same ground with real numbers — so the safety property that
+ * matters is that ground it has ALREADY covered produces no second row.
+ *
+ * The guarantee is the fingerprint: (side · kind · rung · CROSSING DATE), where
+ * the crossing date is derived from `firstBackedAt + rung` and is therefore a
+ * property of the FACT, not of the run that found it. Two sweeps, a daily pass
+ * and a catch-up pass, a run before midnight and one after — all four derive
+ * the identical key, and `source_key` + ignoreDuplicates does the rest.
+ */
+describe("re-running the catch-up sweep is idempotent", () => {
+  const holder = (wallet: string, daysHeld: number): CohortHolder => ({
+    wallet,
+    name: null,
+    avatarUrl: null,
+    daysHeld,
+    positionUsd: 100,
+  });
+  const T = Date.UTC(2026, 7, 4, 12);
+  const sweep = (nowMs: number, drift: number) =>
+    findCohorts({
+      side: "YES",
+      holders: [holder("0xa", 11 + drift), holder("0xb", 11.4 + drift)],
+      scan: "standing",
+      nowMs,
+    });
+
+  it("derives the same fingerprint on a second sweep hours later", () => {
+    const first = sweep(T, 0);
+    // Six hours on: daysHeld has grown by exactly the same amount as the clock,
+    // so the crossing instant — and the key — cannot move.
+    const second = sweep(T + 6 * 3_600_000, 0.25);
+    expect(first).toHaveLength(1);
+    expect(second[0].fingerprint).toBe(first[0].fingerprint);
+    expect(second[0].crossedOn).toBe(first[0].crossedOn);
+  });
+
+  it("derives the same fingerprint across a midnight boundary", () => {
+    const before = sweep(Date.UTC(2026, 7, 4, 23, 50), 0);
+    const after = sweep(Date.UTC(2026, 7, 5, 0, 10), 20 / 1440);
+    expect(after[0].fingerprint).toBe(before[0].fingerprint);
+  });
+
+  it("agrees with whatever the daily pass would have published", () => {
+    // A recovered crossing and the one that should have been emitted on the day
+    // are the same fact, so they must be the same row.
+    const now = Date.UTC(2026, 7, 4, 12);
+    const holders = [holder("0xa", 7.2), holder("0xb", 7.1)];
+    const daily = findCohorts({ side: "YES", holders, windowDays: 1, nowMs: now });
+    const catchUp = findCohorts({ side: "YES", holders, scan: "standing", nowMs: now });
+    expect(catchUp[0].fingerprint).toBe(daily[0].fingerprint);
+  });
+
+  it("keeps a genuinely later wave distinguishable from the recovered one", () => {
+    // Idempotence must not become suppression: a second group reaching the same
+    // rung months later is a different fact and has to keep its own key.
+    const recovered = sweep(T, 0);
+    const laterWave = findCohorts({
+      side: "YES",
+      holders: [holder("0xc", 7.2), holder("0xd", 7.1)],
+      scan: "standing",
+      nowMs: T + 120 * 86_400_000,
+    });
+    expect(laterWave[0].fingerprint).not.toBe(recovered[0].fingerprint);
+  });
+});

@@ -118,6 +118,7 @@ export async function buildConvictionDashboard(
     yes_cost: unknown;
     no_cost: unknown;
     yes_value_usd: unknown;
+    value_updated_at: unknown;
     no_value_usd: unknown;
     first_backed_at: string | null;
   }>;
@@ -152,8 +153,19 @@ export async function buildConvictionDashboard(
     // `*_value_usd` is a column nothing writes. Reading it alone made `w` zero
     // for everyone, so `heldCount` never incremented and the dashboard told
     // every reader they held nothing. Fall back to what they committed.
-    const yes = positionValueUsd({ valueUsd: b.yes_value_usd, costEth: b.yes_cost, ethUsd });
-    const no = positionValueUsd({ valueUsd: b.no_value_usd, costEth: b.no_cost, ethUsd });
+    const at = b.value_updated_at as string | null;
+    const yes = positionValueUsd({
+      valueUsd: b.yes_value_usd,
+      valueUpdatedAt: at,
+      costEth: b.yes_cost,
+      ethUsd,
+    });
+    const no = positionValueUsd({
+      valueUsd: b.no_value_usd,
+      valueUpdatedAt: at,
+      costEth: b.no_cost,
+      ethUsd,
+    });
     const w = yes.usd + no.usd;
     const c = costUsd(b.yes_cost, ethUsd) + costUsd(b.no_cost, ethUsd);
     // A GAIN needs a real valuation on both sides of the subtraction. Where the

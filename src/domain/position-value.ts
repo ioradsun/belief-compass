@@ -38,10 +38,32 @@
 /** Where a USD figure came from. `unknown` means we genuinely cannot say. */
 export type ValueSource = "marked" | "cost" | "unknown";
 
+/**
+ * How much a reader should trust the figure, in the four states that actually
+ * differ:
+ *
+ *   · current  — marked from live prices, recently.
+ *   · stale    — marked, but the writer has not run in a while. Still a real
+ *                measurement; just an old one, and worth saying so.
+ *   · fallback — no valuation at all; this is what they COMMITTED.
+ *   · unknown  — we have nothing. The number is zero and means nothing.
+ */
+export type ValueFreshness = "current" | "stale" | "fallback" | "unknown";
+
+export const VALUE = {
+  /**
+   * How old a marked value may be before it is called stale. `belief-rollup`
+   * re-evaluates every couple of minutes, so half an hour of silence means the
+   * writer is down rather than the market being quiet.
+   */
+  staleAfterMs: 30 * 60_000,
+} as const;
+
 export interface PositionValue {
   /** USD. Zero when unknown — always check `source` before claiming anything. */
   usd: number;
   source: ValueSource;
+  freshness: ValueFreshness;
 }
 
 const finite = (v: unknown): number | null => {
@@ -52,25 +74,41 @@ const finite = (v: unknown): number | null => {
 /**
  * Value one side of a belief.
  *
- * @param valueUsd A marked USD valuation, if one exists.
- * @param costEth  Remaining acquisition cost, in ETH.
- * @param ethUsd   Current ETH→USD rate. Zero or missing disables the fallback
- *                 rather than pricing everything at nothing.
+ * @param valueUsd       A marked USD valuation, if one exists.
+ * @param valueUpdatedAt When that valuation was written. Absent → assumed stale,
+ *                       because an unknown age is not a fresh one.
+ * @param costEth        Remaining acquisition cost, in ETH.
+ * @param ethUsd         Current ETH→USD rate. Zero or missing disables the
+ *                       fallback rather than pricing everything at nothing.
  */
 export function positionValueUsd(input: {
   valueUsd?: unknown;
+  valueUpdatedAt?: string | number | null;
   costEth?: unknown;
   ethUsd?: number | null;
+  nowMs?: number;
 }): PositionValue {
   const marked = finite(input.valueUsd);
-  if (marked != null && marked > 0) return { usd: marked, source: "marked" };
+  if (marked != null && marked > 0) {
+    const at =
+      typeof input.valueUpdatedAt === "number"
+        ? input.valueUpdatedAt
+        : input.valueUpdatedAt
+          ? Date.parse(input.valueUpdatedAt)
+          : NaN;
+    const now = input.nowMs ?? Date.now();
+    // No timestamp means we cannot show it is fresh, and "cannot show" is not
+    // "is" — the same rule this whole module exists to enforce.
+    const fresh = Number.isFinite(at) && now - at <= VALUE.staleAfterMs;
+    return { usd: marked, source: "marked", freshness: fresh ? "current" : "stale" };
+  }
 
   const cost = finite(input.costEth);
   const rate = finite(input.ethUsd);
   if (cost != null && cost > 0 && rate != null && rate > 0) {
-    return { usd: cost * rate, source: "cost" };
+    return { usd: cost * rate, source: "cost", freshness: "fallback" };
   }
-  return { usd: 0, source: "unknown" };
+  return { usd: 0, source: "unknown", freshness: "unknown" };
 }
 
 /**

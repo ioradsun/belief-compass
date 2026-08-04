@@ -78,7 +78,7 @@ export async function buildStandingFacts(input: StandingFactsInput): Promise<Sta
   const { data, error } = await svc
     .from("wallet_beliefs")
     .select(
-      "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, yes_cost, no_cost, first_backed_at",
+      "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, value_updated_at, yes_cost, no_cost, first_backed_at",
     )
     .in("onchain_id", ids)
     // Oldest belief first: if the ceiling ever bites it drops the shortest
@@ -102,6 +102,7 @@ export async function buildStandingFacts(input: StandingFactsInput): Promise<Sta
       // column alone made every position dust and this pool always empty.
       const { usd: positionUsd } = positionValueUsd({
         valueUsd: side === "YES" ? b.yes_value_usd : b.no_value_usd,
+        valueUpdatedAt: b.value_updated_at as string | null,
         costEth: side === "YES" ? b.yes_cost : b.no_cost,
         ethUsd,
       });

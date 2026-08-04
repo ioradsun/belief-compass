@@ -92,7 +92,7 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
       sb
         .from("wallet_beliefs")
         .select(
-          "wallet, stance_side, expressed_side, yes_shares, no_shares, yes_value_usd, no_value_usd, yes_cost, no_cost, conviction, days_held",
+          "wallet, stance_side, expressed_side, yes_shares, no_shares, yes_value_usd, no_value_usd, value_updated_at, yes_cost, no_cost, conviction, days_held",
         )
         .eq("onchain_id", id)
         .in("stance_side", ["YES", "NO"])
@@ -111,6 +111,7 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
       yes_value_usd: number | null;
       yes_cost: number | null;
       no_cost: number | null;
+      value_updated_at: string | null;
       no_value_usd: number | null;
       conviction: number | null;
       days_held: number | null;
@@ -133,6 +134,7 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
         0,
         positionValueUsd({
           valueUsd: side === "YES" ? r.yes_value_usd : r.no_value_usd,
+          valueUpdatedAt: r.value_updated_at,
           costEth: side === "YES" ? r.yes_cost : r.no_cost,
           ethUsd,
         }).usd,
