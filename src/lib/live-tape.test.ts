@@ -92,9 +92,13 @@ describe("structured transitions are never grouped away", () => {
       ],
       1000,
     );
-    // trade | market_created | trade — the transition splits the bursts.
-    expect(rows.map((r) => r.kind)).toEqual(["trade_burst", "market_created", "trade_burst"]);
-    expect(rows[1].story.category).toBe("fresh_market");
+    // The transition keeps its own row — that is what "never grouped away" means.
+    expect(rows.filter((r) => r.kind === "market_created")).toHaveLength(1);
+    expect(rows.find((r) => r.kind === "market_created")!.story.category).toBe("fresh_market");
+    // The two trades are ONE burst. They share a market, a side, an action and
+    // two minutes; an unrelated event landing between them in the array is a
+    // property of the query, not of what happened, and used to split them.
+    expect(rows.filter((r) => r.kind === "trade_burst")).toHaveLength(1);
   });
 });
 
@@ -281,5 +285,116 @@ describe("an unknown ETH price is never a price of zero", () => {
 
   it("prices normally the moment a real rate exists", () => {
     expect(groupLiveRows([trade(0, 0.02)], 3500)[0].amountUsd).toBeCloseTo(70);
+  });
+});
+
+describe("one person acting everywhere is one story", () => {
+  const T = Date.UTC(2026, 7, 4, 12);
+  const at = (m: number) => new Date(T - m * 60_000).toISOString();
+  const sell = (market: string, m: number, wallet = "0xml"): LiveEventInput => ({
+    source_key: `s:${market}:${m}:${wallet}`,
+    kind: "trade",
+    market_id: market,
+    market_title: `Q${market}`,
+    occurred_at: at(m),
+    block_number: m,
+    log_index: m,
+    side: "YES",
+    action: "SELL",
+    amount_eth: 0.01,
+    wallet,
+    payload: null,
+  });
+
+  it("collapses a wallet clearing out of many markets into ONE row", () => {
+    const rows = groupLiveRows(
+      ["1", "2", "3", "4", "5"].map((m, i) => sell(m, i)),
+      3500,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].kind).toBe("wallet_sweep");
+    expect(rows[0].payload.markets).toBe(5);
+    expect(rows[0].tradeCount).toBe(5);
+  });
+
+  it("leaves two markets alone — that is not a sweep, it is two moves", () => {
+    const rows = groupLiveRows([sell("1", 0), sell("2", 1)], 3500);
+    expect(rows.every((r) => r.kind !== "wallet_sweep")).toBe(true);
+    expect(rows).toHaveLength(2);
+  });
+
+  it("does not merge different people into one sweep", () => {
+    const rows = groupLiveRows(
+      [sell("1", 0), sell("2", 1), sell("3", 2), sell("4", 3, "0xother")],
+      3500,
+    );
+    const sweeps = rows.filter((r) => r.kind === "wallet_sweep");
+    expect(sweeps).toHaveLength(1);
+    expect(sweeps[0].wallet).toBe("0xml");
+    expect(rows.filter((r) => r.kind === "trade_burst")).toHaveLength(1);
+  });
+
+  it("does not merge buying and selling into the same sweep", () => {
+    const buys = ["1", "2", "3"].map((m, i) => ({
+      ...sell(m, i),
+      action: "BUY" as const,
+      source_key: `b${m}`,
+    }));
+    const sells = ["4", "5", "6"].map((m, i) => sell(m, i + 3));
+    const sweeps = groupLiveRows([...buys, ...sells], 3500).filter(
+      (r) => r.kind === "wallet_sweep",
+    );
+    expect(sweeps).toHaveLength(2);
+    expect(new Set(sweeps.map((s) => s.payload.action))).toEqual(new Set(["BUY", "SELL"]));
+  });
+
+  it("is a person, not a market — it carries no destination", () => {
+    const rows = groupLiveRows(
+      ["1", "2", "3"].map((m, i) => sell(m, i)),
+      3500,
+    );
+    expect(Number(rows[0].marketId)).toBe(0);
+  });
+});
+
+describe("the same story is never told twice", () => {
+  const T = Date.UTC(2026, 7, 4, 12);
+  const at = (m: number) => new Date(T - m * 60_000).toISOString();
+  const t = (market: string, wallet: string, m: number): LiveEventInput => ({
+    source_key: `t:${market}:${wallet}:${m}`,
+    kind: "trade",
+    market_id: market,
+    market_title: `Q${market}`,
+    occurred_at: at(m),
+    block_number: m,
+    log_index: m,
+    side: "YES",
+    action: "SELL",
+    amount_eth: 0.01,
+    wallet,
+    payload: null,
+  });
+
+  it("groups a market's trades even when other markets are interleaved", () => {
+    // Production shipped the same sentence three times over because grouping
+    // required the events to be ADJACENT in the query result.
+    const rows = groupLiveRows(
+      [t("1", "0xa", 0), t("9", "0xb", 1), t("1", "0xa", 2), t("9", "0xb", 3), t("1", "0xa", 4)],
+      3500,
+    );
+    const m1 = rows.filter((r) => r.marketId === "1");
+    expect(m1).toHaveLength(1);
+    expect(m1[0].tradeCount).toBe(3);
+  });
+
+  it("still separates clusters that are genuinely hours apart", () => {
+    const rows = groupLiveRows([t("1", "0xa", 0), t("1", "0xa", 240)], 3500);
+    expect(rows.filter((r) => r.marketId === "1")).toHaveLength(2);
+  });
+
+  it("returns rows newest-first, so the tape reads like a live stream", () => {
+    const rows = groupLiveRows([t("1", "0xa", 30), t("2", "0xb", 5), t("3", "0xc", 90)], 3500);
+    const times = rows.map((r) => Date.parse(r.occurredAt));
+    expect(times).toEqual([...times].sort((a, b) => b - a));
   });
 });

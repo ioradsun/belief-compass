@@ -265,6 +265,7 @@ export const SIGNIFICANCE_COVERAGE = {
   round_trip: "derived",
   position_changed_side: "derived",
   side_shift: "derived",
+  wallet_sweep: "derived",
   market_created: "derived",
   /** Our own emitters: persisted into the payload at emission. */
   conviction_cohort: "emitted",

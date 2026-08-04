@@ -124,25 +124,30 @@ export function liveRowStory(r: Omit<LiveRow, "text" | "story">): LiveStory {
   // being optional (see src/domain/conviction-event).
   const buySell = (r.payload.action as "BUY" | "SELL" | undefined) ?? null;
   const action: ConvictionAction =
-    r.kind === "market_created"
-      ? "open_market"
-      : r.kind === "believer_milestone"
-        ? "milestone"
-        : r.kind === "tribe_doubled"
-          ? "surge"
-          : r.kind === "side_shift"
-            ? "flip"
-            : r.kind === "round_trip"
-              ? "round_trip"
-              : buySell === "SELL"
-                ? "exit"
-                : "enter";
+    r.kind === "wallet_sweep"
+      ? buySell === "SELL"
+        ? "sweep_out"
+        : "sweep_in"
+      : r.kind === "market_created"
+        ? "open_market"
+        : r.kind === "believer_milestone"
+          ? "milestone"
+          : r.kind === "tribe_doubled"
+            ? "surge"
+            : r.kind === "side_shift"
+              ? "flip"
+              : r.kind === "round_trip"
+                ? "round_trip"
+                : buySell === "SELL"
+                  ? "exit"
+                  : "enter";
   return tellConvictionStory({
     action,
     side: r.side,
     context: {
       amountUsd: r.amountUsd,
       peopleCount: r.walletCount,
+      marketCount: Number(r.payload.markets ?? 0) || null,
       question: r.kind === "market_created" ? r.marketTitle : null,
       threshold: r.kind === "believer_milestone" ? Number(r.payload.threshold ?? 0) : null,
     },
@@ -204,105 +209,199 @@ const LARGE_TRADE_USD = 1000;
  * will not invent a price, because a fabricated $0 reads downstream as "dust"
  * and silently deletes the entire feed.
  */
+/**
+ * A wallet doing the same thing across MANY markets at once is one story, not
+ * fifteen. This is the grouping dimension the tape was missing: burst grouping
+ * only ever looked WITHIN a market, so one person clearing out their whole book
+ * produced a wall of near-identical rows — and the cadence mixer was left trying
+ * to hide with penalties what should never have been fifteen rows.
+ *
+ * It is also the better story. "ML pulled out of 15 markets" is someone
+ * liquidating a worldview; "ML left YES" fifteen times is a log file.
+ */
+const SWEEP_WINDOW_MS = 60 * 60_000;
+const SWEEP_MIN_MARKETS = 3;
+
+/** Trades keyed to one wallet+direction, newest first. */
+function findSweeps(trades: LiveEventInput[]): Map<string, LiveEventInput[]> {
+  const byActor = new Map<string, LiveEventInput[]>();
+  for (const e of trades) {
+    if (!e.wallet || !e.action) continue;
+    const k = `${e.wallet.toLowerCase()}:${e.action}`;
+    const list = byActor.get(k) ?? [];
+    list.push(e);
+    byActor.set(k, list);
+  }
+  const sweeps = new Map<string, LiveEventInput[]>();
+  for (const [k, list] of byActor) {
+    // Anchored on the newest move, so a sweep is a burst of activity rather
+    // than "everything this wallet did in the window we happened to load".
+    const newest = Date.parse(list[0].occurred_at);
+    const near = list.filter((e) => newest - Date.parse(e.occurred_at) <= SWEEP_WINDOW_MS);
+    if (new Set(near.map((e) => e.market_id)).size >= SWEEP_MIN_MARKETS) sweeps.set(k, near);
+  }
+  return sweeps;
+}
+
+/**
+ * Collapse canonical events (in reverse-chronological order) into Live rows.
+ * Deterministic, and ordered newest-first on the way out.
+ *
+ * THREE GROUPINGS, in priority order:
+ *   1. WASHES  — a buy and matching sell minutes apart is one round trip.
+ *   2. SWEEPS  — one wallet acting across 3+ markets in an hour is one story.
+ *   3. BURSTS  — trades on the same market + side + action inside 10 minutes.
+ *
+ * Bursts group by KEY, not by adjacency. They used to require the events to be
+ * consecutive in the array, so three sells on the same market interleaved with
+ * another wallet's activity produced three identical rows — visible in
+ * production as the same sentence repeated verbatim down the tape.
+ *
+ * `ethUsd` converts ETH amounts to USD. Pass 0 (or anything non-positive) when
+ * the rate is genuinely unknown and every amount comes back NULL — this module
+ * will not invent a price, because a fabricated $0 reads downstream as "dust"
+ * and silently deletes the entire feed.
+ */
 export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[] {
   const { kept: events, roundTrip } = collapseRoundTrips(input);
   const rows: LiveRow[] = [];
-  let i = 0;
-  while (i < events.length) {
-    const e = events[i];
+  const usd = (eth: number) => (ethUsd > 0 ? eth * ethUsd : null);
 
-    // Non-trade structured events pass through as their own rows (never grouped).
-    if (e.kind !== "trade") {
-      const kind =
-        e.kind === "market_created"
-          ? "market_created"
-          : e.kind === "position_changed_side"
-            ? "side_shift"
-            : e.kind;
+  // ── 1. Non-trade structured events pass through untouched. ────────────────
+  for (const e of events) {
+    if (e.kind === "trade") continue;
+    const kind =
+      e.kind === "market_created"
+        ? "market_created"
+        : e.kind === "position_changed_side"
+          ? "side_shift"
+          : e.kind;
+    const base: Omit<LiveRow, "text" | "story"> = {
+      id: e.source_key,
+      kind,
+      marketId: e.market_id,
+      marketTitle: e.market_title ?? `Market #${e.market_id}`,
+      occurredAt: e.occurred_at,
+      startedAt: e.occurred_at,
+      side: e.side,
+      walletCount: null,
+      tradeCount: null,
+      amountEth: null,
+      amountUsd: null,
+      wallet: e.wallet,
+      payload: { ...(e.payload ?? {}) } as Record<string, JsonValue>,
+    };
+    const story = liveRowStory(base);
+    rows.push({ ...base, story, text: flattenStory(story) });
+  }
+
+  // ── 2. Sweeps. A round-trip entry is never swept up — its story is its own.
+  const trades = events.filter((e) => e.kind === "trade" && !roundTrip.has(e.source_key));
+  const sweeps = findSweeps(trades);
+  const swept = new Set<string>();
+  for (const [key, list] of sweeps) {
+    for (const e of list) swept.add(e.source_key);
+    const markets = new Set(list.map((e) => e.market_id));
+    const amountEth = list.reduce((n, e) => n + e.amount_eth, 0);
+    const [wallet, action] = key.split(":");
+    const base: Omit<LiveRow, "text" | "story"> = {
+      // Stable across polls: the same wallet + direction + newest move.
+      id: `sweep:${key}:${list[0].source_key}`,
+      kind: "wallet_sweep",
+      // A sweep is about a PERSON, not a market — the renderer treats a
+      // non-positive id as "no destination" and lets the face be the way in.
+      marketId: "0",
+      marketTitle: "",
+      occurredAt: list[0].occurred_at,
+      startedAt: list[list.length - 1].occurred_at,
+      side: null,
+      walletCount: 1,
+      tradeCount: list.length,
+      amountEth,
+      amountUsd: usd(amountEth),
+      wallet,
+      payload: { action, markets: markets.size } as Record<string, JsonValue>,
+    };
+    const story = liveRowStory(base);
+    rows.push({ ...base, story, text: flattenStory(story) });
+  }
+
+  // ── 3. Bursts, keyed rather than positional. ──────────────────────────────
+  const byKey = new Map<string, LiveEventInput[]>();
+  for (const e of trades) {
+    if (swept.has(e.source_key)) continue;
+    const k = `${e.market_id}:${e.side}:${e.action}`;
+    const list = byKey.get(k) ?? [];
+    list.push(e);
+    byKey.set(k, list);
+  }
+  for (const list of byKey.values()) {
+    // `list` is newest-first; start a new group whenever the gap exceeds the
+    // window, so a market with activity all day yields one row per cluster.
+    let group: LiveEventInput[] = [];
+    const flush = () => {
+      if (group.length === 0) return;
+      const head = group[0];
+      const wallets = new Set(group.map((e) => e.wallet).filter((w): w is string => !!w));
+      const amountEth = group.reduce((n, e) => n + e.amount_eth, 0);
+      const amountUsd = usd(amountEth);
+      const isLargeSingle = group.length === 1 && amountUsd != null && amountUsd >= LARGE_TRADE_USD;
       const base: Omit<LiveRow, "text" | "story"> = {
-        id: e.source_key,
-        kind,
-        marketId: e.market_id,
-        marketTitle: e.market_title ?? `Market #${e.market_id}`,
-        occurredAt: e.occurred_at,
-        startedAt: e.occurred_at,
-        side: e.side,
-        walletCount: null,
-        tradeCount: null,
-        amountEth: null,
-        amountUsd: null,
-        wallet: e.wallet,
-        payload: { ...(e.payload ?? {}) } as Record<string, JsonValue>,
+        id: head.source_key,
+        kind: isLargeSingle ? "large_trade" : "trade_burst",
+        marketId: head.market_id,
+        marketTitle: head.market_title ?? `Market #${head.market_id}`,
+        occurredAt: head.occurred_at,
+        startedAt: group[group.length - 1].occurred_at,
+        side: head.side,
+        walletCount: wallets.size || group.length,
+        tradeCount: group.length,
+        amountEth,
+        amountUsd,
+        // Sole actor when the row is one wallet — lets the server tag your network.
+        wallet: wallets.size === 1 ? [...wallets][0] : null,
+        payload: { action: head.action, window_ms: GROUP_WINDOW_MS },
       };
       const story = liveRowStory(base);
       rows.push({ ...base, story, text: flattenStory(story) });
-      i += 1;
-      continue;
+      group = [];
+    };
+    for (const e of list) {
+      if (
+        group.length > 0 &&
+        Date.parse(group[0].occurred_at) - Date.parse(e.occurred_at) > GROUP_WINDOW_MS
+      )
+        flush();
+      group.push(e);
     }
+    flush();
+  }
 
-    // Trade burst: consecutive trades, same market + side + action, within window.
-    // A round-trip entry always stands alone so its story stays honest.
-    const isRoundTrip = roundTrip.has(e.source_key);
-    const wallets = new Set<string>();
-    let trades = 0;
-    let amountEth = 0;
-    const latest = e.occurred_at;
-    let earliest = e.occurred_at;
-    let j = i;
-    while (
-      j < events.length &&
-      events[j].kind === "trade" &&
-      events[j].market_id === e.market_id &&
-      events[j].side === e.side &&
-      events[j].action === e.action &&
-      !(j > i && (isRoundTrip || roundTrip.has(events[j].source_key))) &&
-      new Date(latest).getTime() - new Date(events[j].occurred_at).getTime() <= GROUP_WINDOW_MS
-    ) {
-      const ev = events[j];
-      if (ev.wallet) wallets.add(ev.wallet);
-      trades += 1;
-      amountEth += ev.amount_eth;
-      earliest = ev.occurred_at;
-      j += 1;
-    }
-    // AN UNKNOWN RATE MEANS AN UNKNOWN AMOUNT, NEVER ZERO.
-    //
-    // This one line was the whole dead feed. `eth_usd_calibration()` returns
-    // NULL whenever no market has `volume_total_usd > 0`, the refresher writes
-    // that NULL into calc_cache, and `Number(null) || 0` reads back as 0 — so
-    // every trade was priced at $0. At $0 a lone trade scores 14/100, lands in
-    // Tier 4, and is discarded as dust: measured, 0 of 5 real trades admitted
-    // against 4 of 5 with a working rate. The only rows left standing were the
-    // structural ones that carry no amount at all, which is exactly the
-    // two-row tape we shipped.
-    //
-    // Null is the honest value. Downstream already treats a missing amount as
-    // "a real change we cannot size" (magnitudeOf), so the feed degrades to
-    // un-priced stories instead of silently deleting every trade — and the
-    // copy drops the money clause rather than claiming "$0" (see clause()).
-    const amountUsd = ethUsd > 0 ? amountEth * ethUsd : null;
-    const isLargeSingle =
-      !isRoundTrip && trades === 1 && amountUsd != null && amountUsd >= LARGE_TRADE_USD;
+  // ── 4. Round trips stand alone, always. ───────────────────────────────────
+  for (const e of events) {
+    if (e.kind !== "trade" || !roundTrip.has(e.source_key)) continue;
+    const amountUsd = usd(e.amount_eth);
     const base: Omit<LiveRow, "text" | "story"> = {
       id: e.source_key,
-      kind: isRoundTrip ? "round_trip" : isLargeSingle ? "large_trade" : "trade_burst",
+      kind: "round_trip",
       marketId: e.market_id,
       marketTitle: e.market_title ?? `Market #${e.market_id}`,
-
-      occurredAt: latest,
-      startedAt: earliest,
+      occurredAt: e.occurred_at,
+      startedAt: e.occurred_at,
       side: e.side,
-      walletCount: wallets.size || trades,
-      tradeCount: trades,
-      amountEth,
+      walletCount: 1,
+      tradeCount: 1,
+      amountEth: e.amount_eth,
       amountUsd,
-      // Sole actor when the row is one wallet — lets the server tag your network.
-      wallet: wallets.size === 1 ? [...wallets][0] : trades === 1 ? (e.wallet ?? null) : null,
+      wallet: e.wallet,
       payload: { action: e.action, window_ms: GROUP_WINDOW_MS },
     };
     const story = liveRowStory(base);
     rows.push({ ...base, story, text: flattenStory(story) });
-    i = j;
   }
-  return rows;
+
+  // Newest first. A live tape reads in time order; curation happens elsewhere.
+  return rows.sort((a, b) =>
+    a.occurredAt < b.occurredAt ? 1 : a.occurredAt > b.occurredAt ? -1 : a.id < b.id ? 1 : -1,
+  );
 }
