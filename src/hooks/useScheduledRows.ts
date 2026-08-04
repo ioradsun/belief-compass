@@ -47,6 +47,9 @@ export interface ScheduledView<T> {
 /** Ids whose entrance has already played. Bounded so a long session cannot grow. */
 const ENTRANCE_MEMORY = 200;
 
+/** Stable identity for the default, so it never re-triggers the reserve effect. */
+const EMPTY: never[] = [];
+
 /**
  * @param resetKey Identifies WHICH tape this is. Changing it starts over: a
  *   reader switching market is not watching a stream arrive, they are opening a
@@ -56,6 +59,7 @@ const ENTRANCE_MEMORY = 200;
 export function useScheduledRows<T extends SchedulableRow>(
   all: T[],
   resetKey?: string,
+  reserve: T[] = EMPTY,
 ): ScheduledView<T> {
   const [shown, setShown] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [pending, setPending] = useState(0);
@@ -150,6 +154,33 @@ export function useScheduledRows<T extends SchedulableRow>(
     pump();
   }, [all, pump]);
 
+  // THE RESERVE. Standing facts are never shown on first paint and never
+  // compete with the timeline: they go straight into the scheduler's queue, and
+  // it draws one only once the silence is real. Enqueued even before the first
+  // paint, so a tape that opens quiet has something to say when it stays quiet.
+  useEffect(() => {
+    const fresh = reserve.filter((r) => !known.current.has(r.id));
+    if (fresh.length === 0) return;
+    const now = Date.now();
+    for (const r of fresh) known.current.add(r.id);
+    state.current = enqueue(
+      state.current,
+      fresh.map(
+        (r): PendingRow => ({
+          id: r.id,
+          perishability: "standing",
+          weight: r.pace?.weight ?? 3,
+          // A standing fact has no "when"; this only orders it within its own
+          // lane and is never rendered.
+          occurredAt: Date.parse(r.occurredAt) || 0,
+          enqueuedAt: now,
+          collapseKey: null,
+        }),
+      ),
+    );
+    pump();
+  }, [reserve, pump]);
+
   useEffect(
     () => () => {
       if (timer.current != null) clearTimeout(timer.current);
@@ -158,7 +189,9 @@ export function useScheduledRows<T extends SchedulableRow>(
   );
 
   return {
-    rows: all.filter((r) => shown.has(r.id)),
+    // A released standing fact renders at the top: it has no time of its own,
+    // and the moment it was drawn is the only ordering it can honestly have.
+    rows: [...reserve.filter((r) => shown.has(r.id)), ...all.filter((r) => shown.has(r.id))],
     entranceWeight: (id: string) => entrances.current.get(id) ?? null,
     pending,
   };

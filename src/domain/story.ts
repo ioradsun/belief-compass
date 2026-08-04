@@ -282,6 +282,13 @@ export type LiveCategory =
   | "capital_out"
   | "milestone"
   | "momentum"
+  /**
+   * A CONTINUITY rather than a change — someone is still holding a belief they
+   * have held for a long time (src/domain/standing-fact). It gets its own name
+   * because every other category answers "what happened", and folding this into
+   * one of them would label a fact that has no "when" as though it did.
+   */
+  | "conviction"
   | "twin"
   | "tribe"
   | "opp"

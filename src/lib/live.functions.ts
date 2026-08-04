@@ -39,6 +39,8 @@ import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer
 import { discoveryValue, markSeen, type DiscoverySubject } from "@/domain/discovery";
 import { firstBackedIsFloor } from "@/domain/tenure";
 import { classifyPace } from "@/domain/feed-scheduler";
+import { buildStandingFacts } from "@/lib/standing-facts.server";
+import { tellStandingFact } from "@/domain/standing-fact";
 import {
   findDiscoveryMoments,
   tellDiscoveryMoment,
@@ -112,7 +114,12 @@ type Momentum = {
   moneyYesPct: number | null;
   peopleYesPct: number | null;
   opportunityType: string | null;
+  /** Days since the market opened — lets a standing fact claim "since the start". */
+  marketAgeDays: number | null;
 };
+
+/** How many standing facts one full fetch puts in reserve. */
+const STANDING_RESERVE = 6;
 
 export const listLiveEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof input>) => input.parse(d ?? {}))
@@ -147,7 +154,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       .order("block_number", { ascending: false, nullsFirst: false })
       .order("log_index", { ascending: false, nullsFirst: false })
       .limit(limit * 3); // over-read so grouping still yields ~limit rows
-    if (error) return { rows: [] as LiveRow[], error: error.message };
+    if (error) return { rows: [] as LiveRow[], standing: [] as LiveRow[], error: error.message };
 
     const marketIds = [...new Set((rows ?? []).map((r) => Number(r.market_id)))];
     const titleById = new Map<number, string>();
@@ -158,7 +165,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         sb
           .from("market_state")
           .select(
-            "onchain_id, believers_yes, believers_no, new_believers_1h, money_yes_pct, people_yes_pct, opportunity_type",
+            "onchain_id, believers_yes, believers_no, new_believers_1h, money_yes_pct, people_yes_pct, opportunity_type, market_age_days",
           )
           .in("onchain_id", marketIds),
       ]);
@@ -172,6 +179,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           moneyYesPct: (r.money_yes_pct as number | null) ?? null,
           peopleYesPct: (r.people_yes_pct as number | null) ?? null,
           opportunityType: (r.opportunity_type as string | null) ?? null,
+          marketAgeDays: (r.market_age_days as number | null) ?? null,
         });
       }
     }
@@ -761,5 +769,64 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         );
     }
 
-    return { rows: material, error: null };
+    // ── STANDING FACTS ───────────────────────────────────────────────────────
+    // Not timeline rows, and returned separately for that reason. Every other
+    // row answers "what changed"; these answer "who is still here", which is
+    // the only honest thing a feed has to say when nothing changed at all. The
+    // client holds them in reserve and the scheduler draws one during genuine
+    // silence — see src/domain/standing-fact for why they never expire.
+    //
+    // Built only on a FULL fetch: a delta poll merges into a cached tail that
+    // already carries the reserve, and continuity does not change in 30 seconds.
+    const standing: LiveRow[] = [];
+    if (data?.since == null && marketIds.length > 0) {
+      const facts = await buildStandingFacts({
+        marketIds,
+        labelByWallet,
+        crossingsByWallet: new Map([...relByWallet].map(([w, r]) => [w, r.sharedBeliefs ?? 0])),
+        titleById,
+        ageByMarket: new Map([...momentumById].map(([id, m]) => [id, m.marketAgeDays])),
+        now: Date.now(),
+        limit: STANDING_RESERVE,
+      }).catch(() => []);
+      for (const f of facts) {
+        const story = tellStandingFact(f);
+        standing.push({
+          id: `standing:${f.key}`,
+          kind: "standing_fact",
+          marketId: String(f.marketId),
+          marketTitle: f.marketTitle,
+          // A standing fact has no "when". The reserve is ordered by strength,
+          // not by time, and `timeless` stops the renderer printing an age that
+          // would read as "this just happened".
+          occurredAt: new Date(0).toISOString(),
+          startedAt: new Date(0).toISOString(),
+          timeless: true,
+          side: f.side,
+          walletCount: f.people.length,
+          tradeCount: null,
+          amountEth: null,
+          amountUsd: null,
+          wallet: null,
+          people: f.people.map((p) => ({
+            wallet: p.wallet,
+            name: p.name,
+            avatarUrl: p.avatarUrl,
+          })),
+          story: {
+            category: "conviction",
+            headline: story.headline,
+            body: story.body,
+            attribution: null,
+            tone: "neutral",
+            personal: f.side == null,
+          },
+          text: `${story.headline} — ${story.body}`,
+          pace: { perishability: "standing", weight: f.strength >= 0.65 ? 2 : 3 },
+          payload: { significance: f.strength },
+        });
+      }
+    }
+
+    return { rows: material, standing, error: null };
   });

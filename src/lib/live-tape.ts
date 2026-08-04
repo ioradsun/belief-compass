@@ -82,6 +82,12 @@ export interface LiveRow {
    * arrived looking equally important no matter what it was.
    */
   pace?: { perishability: Perishability; weight: number };
+  /**
+   * This row has no "when". A standing fact ("Kate has backed YES for 11+ days")
+   * is a continuity, not an event — printing an age beside it would read as
+   * "this just happened", which is the one thing it does not mean.
+   */
+  timeless?: boolean;
   payload: Record<string, JsonValue>;
 }
 
