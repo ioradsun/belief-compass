@@ -296,8 +296,13 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     }
 
     const profileWallets = [
-      ...new Set([...actorWallets, ...moments.flatMap((m) => m.people.map((p) => p.wallet))]),
+      ...new Set([
+        ...actorWallets,
+        ...moments.flatMap((m) => m.people.map((p) => p.wallet)),
+        ...[...burstStakes.values()].flatMap((l) => l.map((s) => s.wallet)),
+      ]),
     ];
+
     const profiles =
       profileWallets.length > 0
         ? await import("@/lib/profiles.server").then((m) => m.resolveProfiles(profileWallets, 15))
