@@ -132,29 +132,29 @@ export function WelcomePrompt({
     mutationFn: async () => {
       const chosen = people.filter((p) => selected.has(keyOf(p)));
       if (chosen.length === 0) return { welcomed: 0 };
-      // Saying hi is free — never prompt the wallet to sign for it.
-      return bestEffort(async () => {
-        const session = await ensureSession({ interactive: false });
-        const res = await sendWelcomes({
-          data: {
-            wallet: wallet as string,
-            session,
-            recipients: chosen.map((p) => ({
-              recipientWallet: p.wallet,
-              marketId: p.marketId,
-              side: p.side,
-            })),
-          },
-        });
-        await markRoomSeen({ data: { wallet: wallet as string, session } });
-        return res;
+      // Explicit tap: it's fine to ask for a signature if there's no session yet.
+      const session = await ensureSession();
+      const res = await sendWelcomes({
+        data: {
+          wallet: wallet as string,
+          session,
+          recipients: chosen.map((p) => ({
+            recipientWallet: p.wallet,
+            marketId: p.marketId,
+            side: p.side,
+          })),
+        },
       });
+      await markRoomSeen({ data: { wallet: wallet as string, session } });
+      return res;
     },
     onSuccess: () => {
       setOpen(false);
       void qc.invalidateQueries({ queryKey: ["welcomable", wallet ?? null] });
+      void qc.invalidateQueries({ queryKey: ["welcomes-received"] });
     },
   });
+
 
   /** "Seen it" without saying hi — the room resets, the people stay. */
   const seen = useMutation({
@@ -169,6 +169,17 @@ export function WelcomePrompt({
   if (!wallet || count === 0) return null;
   const selectedCount = selected.size;
   const headline = data?.headline ?? "";
+
+  /** "Say Hi to Amber Fox" / "Say Hi to Amber Fox +3" — the room has faces, so does the button. */
+  const hiLabel = (names: string[]) => {
+    if (names.length === 0) return "Say Hi";
+    const [first, ...rest] = names;
+    return rest.length === 0 ? `Say Hi to ${first}` : `Say Hi to ${first} +${rest.length}`;
+  };
+  const cardLabel = hiLabel(ordered.map((p) => p.name));
+  const selectedNames = people.filter((p) => selected.has(keyOf(p))).map((p) => p.name);
+  const sheetLabel = hiLabel([...new Set(selectedNames)]);
+
 
   return (
     <>
@@ -242,11 +253,12 @@ export function WelcomePrompt({
           <button
             type="button"
             onClick={openSheet}
-            className="shrink-0 rounded-[10px] px-3.5 py-2 text-[12.5px] font-semibold"
+            className="max-w-[190px] shrink-0 truncate rounded-[10px] px-3.5 py-2 text-[12.5px] font-semibold"
             style={{ background: "var(--text)", color: "var(--bg)" }}
           >
-            Say Hi
+            {cardLabel}
           </button>
+
         </div>
 
         {/* One face at a time: why they're here, then what you already share. */}
@@ -293,11 +305,21 @@ export function WelcomePrompt({
             className="relative z-10 flex max-h-[80vh] w-full max-w-[420px] flex-col rounded-t-[18px] sm:rounded-[18px]"
             style={{ background: "var(--panel,var(--bg))", boxShadow: "0 -12px 40px rgba(0,0,0,.35)" }}
           >
-            <div className="px-4 pb-2 pt-4">
-              <div className="text-[15px] font-semibold text-[var(--text)]">Today's room</div>
-              <div className="mt-0.5 text-[12px] break-words text-[var(--text-muted)]">
-                {headline}
+            <div className="flex items-start gap-2 px-4 pb-2 pt-4">
+              <div className="min-w-0 flex-1">
+                <div className="text-[15px] font-semibold text-[var(--text)]">Today's room</div>
+                <div className="mt-0.5 text-[12px] break-words text-[var(--text-muted)]">
+                  {headline}
+                </div>
               </div>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setOpen(false)}
+                className="-mr-1 shrink-0 rounded-full px-2 py-1 text-[15px] leading-none text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+              >
+                ✕
+              </button>
             </div>
 
             <ul className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
@@ -305,9 +327,12 @@ export function WelcomePrompt({
                 const k = keyOf(p);
                 const on = selected.has(k);
                 return (
-                  <li key={k} className="flex items-center gap-1">
+                  <li key={k} className="flex items-center gap-1.5 px-2">
                     <button
                       type="button"
+                      role="checkbox"
+                      aria-checked={on}
+                      aria-label={`Say hi to ${p.name}`}
                       onClick={() =>
                         setSelected((prev) => {
                           const next = new Set(prev);
@@ -316,19 +341,26 @@ export function WelcomePrompt({
                           return next;
                         })
                       }
-                      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
+                      className="grid h-4 w-4 shrink-0 place-items-center rounded-[5px] text-[10px] font-bold"
+                      style={
+                        on
+                          ? { background: "var(--text)", color: "var(--bg)" }
+                          : { border: "1.5px solid var(--border)" }
+                      }
                     >
-                      <span
-                        className="grid h-4 w-4 shrink-0 place-items-center rounded-[5px] text-[10px] font-bold"
-                        style={
-                          on
-                            ? { background: "var(--text)", color: "var(--bg)" }
-                            : { border: "1.5px solid var(--border)" }
-                        }
-                        aria-hidden
-                      >
-                        {on ? "✓" : ""}
-                      </span>
+                      {on ? "✓" : ""}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!onSelectPerson) return;
+                        setOpen(false);
+                        onSelectPerson(p.wallet);
+                      }}
+                      aria-label={`Open ${p.name}'s profile`}
+                      disabled={!onSelectPerson}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)] disabled:cursor-default"
+                    >
                       <span
                         className="block shrink-0 rounded-full p-[2px]"
                         style={{ background: p.side === "YES" ? "var(--yes)" : "var(--no)" }}
@@ -339,54 +371,44 @@ export function WelcomePrompt({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <span className="break-words text-[12.5px] text-[var(--text)]">
-                            {roomReason(p).why}
+                          <span className="break-words text-[12.5px] font-semibold text-[var(--text)]">
+                            {p.name}
                           </span>
                           <RelChip relationship={p.relationship} />
+                        </span>
+                        <span className="block break-words text-[11.5px] text-[var(--text-secondary)]">
+                          {roomReason(p).why}
                         </span>
                         <span className="block break-words text-[11px] text-[var(--text-muted)]">
                           {roomReason(p).history}
                         </span>
                       </span>
                     </button>
-                    {onSelectPerson && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOpen(false);
-                          onSelectPerson(p.wallet);
-                        }}
-                        className="shrink-0 rounded-[8px] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] underline"
-                      >
-                        Reveal
-                      </button>
-                    )}
                   </li>
                 );
               })}
             </ul>
 
             <div
-              className="flex items-center gap-2 px-4 py-3"
+              className="px-4 py-3"
               style={{ borderTop: "1px solid var(--hairline)" }}
             >
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="rounded-[12px] px-3 py-2.5 text-[13px] font-medium text-[var(--text-secondary)]"
-              >
-                Not now
-              </button>
+              {send.isError && (
+                <div className="mb-2 text-[11.5px] text-[var(--no,#e5484d)]">
+                  Couldn't say hi just now. Try again.
+                </div>
+              )}
               <button
                 type="button"
                 disabled={selectedCount === 0 || send.isPending}
                 onClick={() => send.mutate()}
-                className="flex-1 rounded-[12px] py-2.5 text-[14px] font-semibold disabled:opacity-40"
+                className="w-full truncate rounded-[12px] py-2.5 text-[14px] font-semibold disabled:opacity-40"
                 style={{ background: "var(--text)", color: "var(--bg)" }}
               >
-                {send.isPending ? "Saying hi…" : `Say Hi (${selectedCount})`}
+                {send.isPending ? "Saying hi…" : sheetLabel}
               </button>
             </div>
+
           </div>
         </div>
       )}
