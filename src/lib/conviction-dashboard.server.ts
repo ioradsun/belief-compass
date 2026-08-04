@@ -8,6 +8,7 @@
  * read on-chain by the client; everything here is indexed read-only.
  */
 import { serviceClient } from "@/lib/supabase-clients";
+import { positionValueUsd } from "@/domain/position-value";
 import { readWalletTradesAscending } from "@/lib/conviction-dashboard.trades.server";
 import { decodeBuyCreatorFeeWei, decodeBuyTotalFeeWei } from "@/chain/decoder";
 import {
@@ -126,7 +127,10 @@ export async function buildConvictionDashboard(
   const heldTitle = new Map<number, string>();
   if (heldIds.length) {
     const [{ data: st }, { data: mk }] = await Promise.all([
-      sb.from("market_state").select("onchain_id, chg_24h_yes, chg_24h_no").in("onchain_id", heldIds),
+      sb
+        .from("market_state")
+        .select("onchain_id, chg_24h_yes, chg_24h_no")
+        .in("onchain_id", heldIds),
       sb.from("markets").select("onchain_id, title").in("onchain_id", heldIds),
     ]);
     for (const s of st ?? [])
@@ -145,18 +149,29 @@ export async function buildConvictionDashboard(
   const now = Date.now();
   for (const b of beliefs) {
     const id = Number(b.onchain_id);
-    const yesWorth = num(b.yes_value_usd);
-    const noWorth = num(b.no_value_usd);
-    const w = yesWorth + noWorth;
+    // `*_value_usd` is a column nothing writes. Reading it alone made `w` zero
+    // for everyone, so `heldCount` never incremented and the dashboard told
+    // every reader they held nothing. Fall back to what they committed.
+    const yes = positionValueUsd({ valueUsd: b.yes_value_usd, costEth: b.yes_cost, ethUsd });
+    const no = positionValueUsd({ valueUsd: b.no_value_usd, costEth: b.no_cost, ethUsd });
+    const w = yes.usd + no.usd;
     const c = costUsd(b.yes_cost, ethUsd) + costUsd(b.no_cost, ethUsd);
+    // A GAIN needs a real valuation on both sides of the subtraction. Where the
+    // worth fell back to the cost basis, "worth − cost" is a guaranteed zero
+    // wearing the costume of a measurement, so no gain is claimed at all.
+    const marked = yes.source === "marked" || no.source === "marked";
     if (w > 0) heldCount++;
     worthUsd += w;
     holdCostUsd += c;
     // Per-position gain (only when a real cost basis exists — never invented).
-    if (w > 0 && c > 0) {
+    if (marked && w > 0 && c > 0) {
       const gain = w - c;
       if (gain > 0) anyHeldProfit = true;
-      heldGains.push({ onchainId: id, title: heldTitle.get(id) ?? "Untitled market", gainUsd: gain });
+      heldGains.push({
+        onchainId: id,
+        title: heldTitle.get(id) ?? "Untitled market",
+        gainUsd: gain,
+      });
     }
     if (w > 0 && b.first_backed_at) {
       const days = (now - Date.parse(b.first_backed_at)) / 86_400_000;
@@ -165,8 +180,8 @@ export async function buildConvictionDashboard(
     const chg = chgById.get(id);
     if (chg) {
       // A side worth W that moved p% over 24h contributed ~ W * p/(100+p) today.
-      portfolioTodayUsd += yesWorth * (chg.yes / (100 + chg.yes));
-      portfolioTodayUsd += noWorth * (chg.no / (100 + chg.no));
+      portfolioTodayUsd += yes.usd * (chg.yes / (100 + chg.yes));
+      portfolioTodayUsd += no.usd * (chg.no / (100 + chg.no));
     }
   }
   const heldBest = heldGains.sort((a, b) => b.gainUsd - a.gainUsd).slice(0, 6);
@@ -175,7 +190,9 @@ export async function buildConvictionDashboard(
   const trades = await readWalletTradesAscending(sb, wallet);
   const asDash = (rows: typeof trades): DashTrade[] =>
     rows
-      .filter((t) => (t.side === "YES" || t.side === "NO") && (t.action === "BUY" || t.action === "SELL"))
+      .filter(
+        (t) => (t.side === "YES" || t.side === "NO") && (t.action === "BUY" || t.action === "SELL"),
+      )
       .map((t) => ({
         market: t.market_id ?? "",
         side: t.side as "YES" | "NO",
@@ -255,7 +272,10 @@ export async function buildConvictionDashboard(
       .eq("is_canonical", true)
       .eq("kind", "trade")
       .eq("action", "BUY")
-      .in("market_id", createdIds.map((id) => String(id)))
+      .in(
+        "market_id",
+        createdIds.map((id) => String(id)),
+      )
       .gte("occurred_at", since)
       .limit(8000);
 
@@ -284,7 +304,10 @@ export async function buildConvictionDashboard(
       .select("wallet, occurred_at")
       .eq("is_canonical", true)
       .eq("kind", "trade")
-      .in("market_id", createdIds.map((id) => String(id)))
+      .in(
+        "market_id",
+        createdIds.map((id) => String(id)),
+      )
       .order("occurred_at", { ascending: false })
       .limit(20_000);
     const everyone = new Set<string>();
