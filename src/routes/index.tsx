@@ -15,25 +15,12 @@ import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
 import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
+import { MobileGame } from "@/components/MobileGame";
 
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { PanelBoundary } from "@/components/PanelBoundary";
 
 import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
-
-// Split off the surfaces that never render for the SSR/desktop first paint.
-// MobileGame is a phone-only experience, the Case File only exists once the user
-// opens the case, and Terms is a rarely visited legal page. Keeping them out of
-// the initial chunk is the single biggest first-load win.
-const importMobileGame = () =>
-  import("@/components/MobileGame").then((m) => ({ default: m.MobileGame }));
-const MobileGame = lazyRetry(importMobileGame);
-// On a phone the first paint is the desktop deck (SSR can't know the viewport),
-// so kick the phone chunk off immediately — it's already in flight by the time
-// the layout corrects, and the swap is seamless.
-if (typeof window !== "undefined" && window.innerWidth < 1024) {
-  void importMobileGame().catch(() => {});
-}
 
 const CaseColumn = lazyRetry(() =>
   import("@/components/CaseFile").then((m) => ({ default: m.CaseColumn })),
@@ -291,15 +278,11 @@ function Feed() {
   // phone is for action, so it never exposes Case File (button, columns, or the
   // ?case flag). Desktop is >= lg, where the three columns actually sit together.
   const isDesktop = useIsDesktop();
-  // Intent-based prefetch: pull the split chunk this viewport is about to need
-  // while the shell is already interactive, so the swap never shows a skeleton.
-  // Phones need the game immediately; desktop only needs the Case File once the
-  // user opens a case, so warm it when the browser is idle.
+  // Desktop only needs the Case File once the user opens a case, so warm that
+  // split chunk when the browser is idle. MobileGame is kept in the route bundle:
+  // it is the primary phone surface and must never be stranded behind a chunk.
   useEffect(() => {
-    if (!isDesktop) {
-      void import("@/components/MobileGame");
-      return;
-    }
+    if (!isDesktop) return;
     const idle = (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
       .requestIdleCallback;
     const warm = () => void import("@/components/CaseFile");
@@ -877,16 +860,14 @@ function Feed() {
                   {!isDesktop ? (
                     /* MOBILE — The Conviction Game. Its own experience: the
                       question first, the crowd only after the decision. */
-                    <Suspense fallback={<DeckSkeleton />}>
-                      <MobileGame
-                        key={Number(currentRow.onchain_id)}
-                        row={currentRow}
-                        ethUsd={data?.ethUsd ?? 0}
-                        viewerWallet={wallet}
-                        onNext={nextMarket}
-                        onSelectPerson={selectPerson}
-                      />
-                    </Suspense>
+                    <MobileGame
+                      key={Number(currentRow.onchain_id)}
+                      row={currentRow}
+                      ethUsd={data?.ethUsd ?? 0}
+                      viewerWallet={wallet}
+                      onNext={nextMarket}
+                      onSelectPerson={selectPerson}
+                    />
                   ) : (
                     <MarketDeck
                       row={currentRow}
