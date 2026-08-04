@@ -172,6 +172,7 @@ export function MobileGame({
     viewerWallet,
     yesTokens: bal.yes,
     noTokens: bal.no,
+    ethUsd,
     ready,
     trade,
     onRequestConnect: requestConnect,

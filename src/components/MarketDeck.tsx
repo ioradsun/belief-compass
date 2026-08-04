@@ -146,6 +146,7 @@ export function MarketDeck({
     viewerWallet,
     yesTokens: bal.yes,
     noTokens: bal.no,
+    ethUsd,
     ready,
     trade,
     onRequestConnect: requestConnect,
