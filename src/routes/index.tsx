@@ -792,8 +792,10 @@ function Feed() {
             // YES Case — the existing YES-supporting intelligence, reorganized.
             // Keyed on the market so switching resets the column scroll to top.
             <Suspense fallback={<DeckSkeleton />}>
+              {/* No key: the column resets its own scroll on a market change
+                (see CaseFile), so switching markets updates it in place instead
+                of tearing down both rails and every query observer on them. */}
               <CaseColumn
-                key={Number(currentRow.onchain_id)}
                 side="YES"
                 marketId={Number(currentRow.onchain_id)}
                 row={currentRow}
@@ -991,8 +993,10 @@ function Feed() {
             // NO Case replaces the Live feed while investigating. Closing Case File
             // restores the Live feed (LiveTape remounts, polling resumes).
             <Suspense fallback={<DeckSkeleton />}>
+              {/* No key: the column resets its own scroll on a market change
+                (see CaseFile), so switching markets updates it in place instead
+                of tearing down both rails and every query observer on them. */}
               <CaseColumn
-                key={Number(currentRow.onchain_id)}
                 side="NO"
                 marketId={Number(currentRow.onchain_id)}
                 row={currentRow}
