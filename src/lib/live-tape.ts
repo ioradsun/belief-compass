@@ -264,6 +264,14 @@ function collapseRoundTrips(events: LiveEventInput[]): {
 const LARGE_TRADE_USD = 1000;
 
 /**
+ * How many of a burst's participants travel with the row. Instagram shows a few
+ * faces and a count, never the whole list: the stack is an invitation, and a cap
+ * keeps the payload (and the row) from turning into a directory.
+ */
+const BURST_WALLET_CAP = 8;
+
+
+/**
  * Collapse canonical events (in reverse-chronological order) into Live rows.
  * Grouping is deterministic.
  *
