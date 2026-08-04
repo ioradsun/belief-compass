@@ -323,3 +323,108 @@
     animation: none;
   }
 }
+
+/*
+ * INTERACTIVE AFFORDANCE — one global feedback language.
+ *
+ * Every clickable thing must answer two questions without being read: "can I
+ * press this?" (hover, desktop) and "did it take?" (press, everywhere).
+ * Rather than decorate each component, this states the rule once:
+ *   hover  → a small lift in luminance (works on light and dark tokens)
+ *   press  → a 1.5% inward scale, fast, so the finger feels contact
+ *   focus  → a visible ring for keyboard users
+ * Mobile gets the press half (there is no hover), plus the OS tap flash muted
+ * so our own feedback is the only one seen.
+ */
+@layer base {
+  button,
+  [role="button"],
+  a[href],
+  summary,
+  label[for],
+  select,
+  [role="tab"],
+  [role="option"],
+  [role="menuitem"],
+  [role="switch"],
+  [role="checkbox"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition:
+      filter 140ms ease,
+      opacity 140ms ease,
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease,
+      transform 90ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  button:not(:disabled):not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  summary,
+  label[for],
+  select,
+  [role="tab"],
+  [role="option"],
+  [role="menuitem"],
+  [role="switch"],
+  [role="checkbox"] {
+    cursor: pointer;
+  }
+
+  /* Hover only where a real pointer exists — never sticky on touch. */
+  @media (hover: hover) and (pointer: fine) {
+    button:not(:disabled):not([aria-disabled="true"]):hover,
+    [role="button"]:not([aria-disabled="true"]):hover,
+    summary:hover,
+    label[for]:hover,
+    select:hover,
+    [role="tab"]:hover,
+    [role="option"]:hover,
+    [role="menuitem"]:hover,
+    [role="switch"]:hover,
+    [role="checkbox"]:hover {
+      filter: brightness(1.14);
+    }
+  }
+
+  /* Press: felt, not seen. Same on desktop and touch. */
+  button:not(:disabled):not([aria-disabled="true"]):active,
+  [role="button"]:not([aria-disabled="true"]):active,
+  summary:active,
+  label[for]:active,
+  [role="tab"]:active,
+  [role="option"]:active,
+  [role="menuitem"]:active,
+  [role="switch"]:active,
+  [role="checkbox"]:active {
+    transform: scale(0.985);
+    filter: brightness(0.94);
+  }
+
+  a[href]:active {
+    filter: brightness(0.94);
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  /* Keyboard users get an unmistakable ring; mouse users are not shouted at. */
+  :focus-visible {
+    outline: 2px solid var(--border-strong);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:active,
+  [role="button"]:active,
+  summary:active,
+  [role="tab"]:active,
+  [role="menuitem"]:active {
+    transform: none;
+  }
+}
