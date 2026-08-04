@@ -82,7 +82,7 @@ export function LandingPanel({
                   e.stopPropagation();
                   onExpand();
                 }}
-                className="-ml-1 flex shrink-0 items-center rounded-full p-1 text-[var(--text)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)]"
+                className="-ml-1 hidden shrink-0 items-center rounded-full p-1 text-[var(--text)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] lg:flex"
               >
                 <BrandMark size={22} className="shrink-0" />
               </button>
