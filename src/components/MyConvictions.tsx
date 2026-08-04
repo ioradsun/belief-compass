@@ -28,7 +28,6 @@ import {
 
 type Position = {
   onchain_id: number;
-  stance_side: string | null;
   yes_shares: number | null;
   no_shares: number | null;
   yes_cost?: number | null;
@@ -70,8 +69,12 @@ const toneColor = (t: PulseTone): string =>
         : "var(--text-muted)";
 
 type Built = {
+  /** `${marketId}-${side}` — a market held on both sides is TWO positions. */
+  key: string;
   id: number;
   side: Side;
+  /** The other side of this market is held too — so two cards is not a duplicate. */
+  paired: boolean;
   value: number;
   gainUsd: number | null;
   /** Return on remaining cost basis (gain / invested × 100), null when no basis. */
@@ -141,14 +144,20 @@ function ConvictionCard({
         {p.title}
       </div>
 
-      {/* 2 — What side am I on? */}
-      <div className="mt-2">
+      {/* 2 — What side am I on? When the other side is held too, say so: this
+        question appears twice on purpose, once per position. */}
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span
           className="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide"
           style={{ color: sideColor, background: "var(--surface-2)" }}
         >
           {p.side}
         </span>
+        {p.paired && (
+          <span className="text-[10px] text-[var(--text-muted)]">
+            you hold {p.side === "YES" ? "NO" : "YES"} here too
+          </span>
+        )}
       </div>
 
       {/* 3 — How am I doing? Position value leads, then P&L · return% (the answer),
@@ -249,7 +258,6 @@ function ConvictionCard({
         <div className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">{story.body}</div>
       )}
     </div>
-
   );
 }
 
@@ -298,15 +306,21 @@ export function MyConvictions({
   const byId = new Map<number, MarketRow>();
   for (const r of rows) byId.set(Number(r.onchain_id), r);
 
-  // First pass: the honest ownership facts per held side (no story yet).
+  // First pass: the honest ownership facts, ONE ENTRY PER HELD SIDE.
+  //
+  // This used to read the single `stance_side` label and drop anything else, which
+  // hid real money two ways: a balanced both-sides holding classifies as MIXED, so
+  // the market vanished from the panel entirely; a lopsided one classified as its
+  // bigger side, so the smaller holding's value, cost and P&L appeared nowhere —
+  // while the dashboard totals counted both. `stance_side` is a stance signal (it
+  // belongs in DNA and the House); it is not a holdings filter. Ownership is
+  // decided by what you HOLD, exactly as the order dock decides it.
   const facts = ((data?.positions ?? []) as Position[])
-    .map((p) => {
+    .flatMap((p) => (["YES", "NO"] as Side[]).map((side) => ({ p, side })))
+    .map(({ p, side }) => {
       const id = Number(p.onchain_id);
       const m = byId.get(id);
       const st = p.state ?? null;
-      const side: Side | null =
-        p.stance_side === "NO" ? "NO" : p.stance_side === "YES" ? "YES" : null;
-      if (!side) return null;
       const shares = Number((side === "YES" ? p.yes_shares : p.no_shares) ?? 0);
       const price = Number(
         (side === "YES" ? m?.yes_price_usd : m?.no_price_usd) ??
@@ -344,6 +358,9 @@ export function MyConvictions({
       // null unless we can quote it honestly. Current price is the live per-share mark.
       const entryPrice = pnl.investedUsd != null && shares > 0 ? pnl.investedUsd / shares : null;
       return {
+        // A market can appear twice — once per side held — so identity is the
+        // market AND the side, never the market alone.
+        key: `${id}-${side}`,
         id,
         side,
         value,
@@ -361,6 +378,7 @@ export function MyConvictions({
       };
     })
     .filter(Boolean) as {
+    key: string;
     id: number;
     side: Side;
     value: number;
@@ -379,7 +397,8 @@ export function MyConvictions({
 
   // Per-market network signal: pass the wallet so the tape tags Twin/Tribe/Opp and
   // milestones, side-blind. These lift a card to the top when your people arrive.
-  const tapeIds = facts.slice(0, 40).map((f) => f.id);
+  // One tape per MARKET — holding both sides must not fetch it twice.
+  const tapeIds = Array.from(new Set(facts.slice(0, 80).map((f) => f.id))).slice(0, 40);
   const { data: tape } = useQuery({
     queryKey: ["positions-tape", wallet ?? null, [...tapeIds].sort((a, b) => a - b)],
     queryFn: () => listLiveEvents({ data: { wallet, marketIds: tapeIds, limit: 120 } }),
@@ -420,6 +439,11 @@ export function MyConvictions({
     return value - value / f;
   };
 
+  // Markets where BOTH sides survived the ownership test — those cards get a
+  // note, so two rows under one question read as deliberate, not as a bug.
+  const sidesPerMarket = new Map<number, number>();
+  for (const f of facts) sidesPerMarket.set(f.id, (sidesPerMarket.get(f.id) ?? 0) + 1);
+
   // Second pass: attach the story + pulse, then rank by urgency.
   const built: Built[] = facts.map((f) => {
     const net = netByMarket.get(f.id);
@@ -436,8 +460,10 @@ export function MyConvictions({
       (n) => money(n),
     );
     return {
+      key: f.key,
       id: f.id,
       side: f.side,
+      paired: (sidesPerMarket.get(f.id) ?? 0) > 1,
       value: f.value,
       gainUsd: f.gainUsd,
       gainPct: f.gainPct,
@@ -463,7 +489,23 @@ export function MyConvictions({
       (b.believers ?? 0) - (a.believers ?? 0) ||
       b.value - a.value,
   );
-  const positions = built.slice(0, 40);
+  // Both sides of one market read as one belief with two positions, so the
+  // second side follows its partner instead of landing somewhere far down the
+  // list under the same question. The market's rank is its strongest side's.
+  const grouped: Built[] = [];
+  const placed = new Set<string>();
+  for (const p of built) {
+    if (placed.has(p.key)) continue;
+    grouped.push(p);
+    placed.add(p.key);
+    for (const q of built) {
+      if (q.id === p.id && !placed.has(q.key)) {
+        grouped.push(q);
+        placed.add(q.key);
+      }
+    }
+  }
+  const positions = grouped.slice(0, 40);
 
   const total = built.reduce((s, p) => s + p.value, 0);
 
@@ -525,7 +567,7 @@ export function MyConvictions({
         {positions.map((p) => (
           // The share control is a sibling of the card button (never nested — a
           // button inside a button is invalid), pinned to the corner.
-          <div key={p.id} className="relative">
+          <div key={p.key} className="relative">
             <ConvictionCard p={p} onSelect={onSelect} money={money} signedMoney={signedMoney} />
             <div className="absolute right-2.5 top-3">
               <StandOnIt variant="card" marketId={p.id} title={p.title} side={p.side} />
