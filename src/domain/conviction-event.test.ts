@@ -194,6 +194,55 @@ describe("heldFor", () => {
     expect(heldFor(90)).toBe("3 months");
     expect(heldFor(400)).toBe("over a year");
   });
+
+  /**
+   * A belief that was already there when the index opened has no knowable
+   * start (src/domain/tenure). Stating "43 days" for it is the actual lie —
+   * the honest claim is smaller, and smaller is what we say.
+   */
+  it("states a floor when the tenure predates what we can see", () => {
+    expect(heldFor(43, true)).toBe("43+ days");
+    expect(heldFor(90, true)).toBe("3+ months");
+    expect(heldFor(1, true)).toBe("at least a day");
+    expect(heldFor(400, true)).toBe("at least a year");
+  });
+});
+
+describe("an unknowable tenure never reads as a precise one", () => {
+  it("marks the clause on an exit that carries its tenure", () => {
+    const exact = tellConvictionStory({
+      action: "exit",
+      side: "YES",
+      context: { daysHeld: 43 },
+    });
+    const floored = tellConvictionStory({
+      action: "exit",
+      side: "YES",
+      context: { daysHeld: 43, tenureIsFloor: true },
+    });
+    expect(exact.body).toContain("43 days");
+    expect(floored.body).toContain("43+ days");
+  });
+
+  it("marks it for a network member leaving, where tenure is the whole point", () => {
+    const floored = tellConvictionStory({
+      action: "exit",
+      side: "YES",
+      actor: { name: "Kate", relationship: "tribe" },
+      context: { daysHeld: 60, tenureIsFloor: true },
+    });
+    expect(floored.body).toContain("2+ months");
+  });
+
+  it("says nothing different when the tenure IS knowable", () => {
+    const a = tellConvictionStory({ action: "exit", side: "NO", context: { daysHeld: 43 } });
+    const b = tellConvictionStory({
+      action: "exit",
+      side: "NO",
+      context: { daysHeld: 43, tenureIsFloor: false },
+    });
+    expect(b.body).toBe(a.body);
+  });
 });
 
 describe("thresholds are centralized", () => {

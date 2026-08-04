@@ -8,7 +8,10 @@ import {
   nameList,
   faceSplit,
   COHORT,
+  selectCohortsForRun,
+  type CohortCandidate,
   type CohortHolder,
+  type ConvictionCohort,
 } from "./conviction-cohort";
 
 const h = (o: Partial<CohortHolder> & { wallet: string }): CohortHolder => ({
@@ -401,5 +404,94 @@ describe("a second wave is a second story", () => {
     // Crossed 30 days half a day ago → the crossing date is when they passed it.
     const c = wave(30.5, Date.UTC(2026, 5, 10, 12));
     expect(c.crossedOn).toBe("2026-06-10");
+  });
+});
+
+/**
+ * A rung can only be crossed on ONE day. If nothing is watching that day, the
+ * moment is gone — no later window finds it. This platform lost every 7-day
+ * crossing exactly that way, all on the same date, because the emitter was
+ * scoped to markets that had recently traded and never ran for the quiet ones.
+ */
+describe("standing scan — catching up on crossings nobody was watching for", () => {
+  const holder = (wallet: string, daysHeld: number): CohortHolder => ({
+    wallet,
+    name: null,
+    avatarUrl: null,
+    daysHeld,
+    positionUsd: 100,
+  });
+
+  it("finds a rung crossed long ago, which the crossing scan will not", () => {
+    const holders = [holder("0xa", 45), holder("0xb", 47)];
+    expect(findCohorts({ side: "YES", holders, windowDays: 1 })).toHaveLength(0);
+    const standing = findCohorts({ side: "YES", holders, scan: "standing" });
+    expect(standing).toHaveLength(1);
+    expect(standing[0].rung).toBe(30);
+  });
+
+  it("counts a holder at their HIGHEST rung only, never at every rung below", () => {
+    // Otherwise catch-up republishes one person's history four times over.
+    const holders = [holder("0xa", 200), holder("0xb", 210)];
+    const rungs = findCohorts({ side: "YES", holders, scan: "standing" }).map((c) => c.rung);
+    expect(rungs).toEqual([180]);
+  });
+
+  it("agrees with the crossing scan on the fingerprint of the same fact", () => {
+    // This is what makes catch-up safe to run: a caught-up emission and the
+    // daily one that should have happened collapse onto the same source_key.
+    const now = Date.UTC(2026, 5, 10, 12);
+    const holders = [holder("0xa", 30.5), holder("0xb", 30.4)];
+    const crossing = findCohorts({ side: "YES", holders, windowDays: 1, nowMs: now });
+    const standing = findCohorts({ side: "YES", holders, scan: "standing", nowMs: now });
+    expect(standing[0].fingerprint).toBe(crossing[0].fingerprint);
+  });
+});
+
+/**
+ * Cohorts are paced by the CALENDAR, not by trading, so markets whose believers
+ * arrived together reach every rung together. With one index epoch behind the
+ * whole platform, ~681 markets cross the 30-day rung on the same day.
+ */
+describe("selectCohortsForRun — a mass crossing drains, it does not dump", () => {
+  const candidate = (marketId: number, significance: number, rung = 30): CohortCandidate => ({
+    marketId,
+    cohort: {
+      kind: "holding",
+      side: "YES",
+      rung: rung as ConvictionCohort["rung"],
+      people: [],
+      fingerprint: `cohort:YES:holding:${rung}:2026-08-23`,
+      crossedOn: "2026-08-23",
+      significance,
+    },
+  });
+
+  it("publishes the strongest, up to the cap", () => {
+    const many = Array.from({ length: 50 }, (_, i) => candidate(i, i / 100));
+    const picked = selectCohortsForRun(many, 5);
+    expect(picked).toHaveLength(5);
+    expect(picked.map((p) => p.marketId)).toEqual([49, 48, 47, 46, 45]);
+  });
+
+  it("is total and deterministic, so successive runs reach what is behind", () => {
+    // Identical significance must still produce a stable order, or the same few
+    // markets win every run and the rest starve.
+    const tied = [candidate(9, 0.5), candidate(3, 0.5), candidate(7, 0.5)];
+    expect(selectCohortsForRun(tied, 3).map((p) => p.marketId)).toEqual([3, 7, 9]);
+    expect(selectCohortsForRun([...tied].reverse(), 3).map((p) => p.marketId)).toEqual([3, 7, 9]);
+  });
+
+  it("defers rather than discards — everything survives to the next run", () => {
+    const many = Array.from({ length: 20 }, (_, i) => candidate(i, i / 100));
+    const first = selectCohortsForRun(many, 5).map((p) => p.marketId);
+    const rest = many.filter((c) => !first.includes(c.marketId));
+    expect(rest).toHaveLength(15);
+    expect(selectCohortsForRun(rest, 5).map((p) => p.marketId)).toEqual([14, 13, 12, 11, 10]);
+  });
+
+  it("never returns more than exists, or anything at all with no room", () => {
+    expect(selectCohortsForRun([candidate(1, 0.9)], 10)).toHaveLength(1);
+    expect(selectCohortsForRun([candidate(1, 0.9)], 0)).toHaveLength(0);
   });
 });
