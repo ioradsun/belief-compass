@@ -410,7 +410,10 @@ export const listLiveEvents = createServerFn({ method: "GET" })
             relationship: labelByWallet.get(s.wallet) ?? null,
           };
         });
-        r.people = orderForViewer(named);
+        // Stable partition, not a re-sort: known people lead, everyone else
+        // keeps the commitment order the grouping gave them.
+        r.people = [...named.filter((p) => p.relationship), ...named.filter((p) => !p.relationship)];
+
       }
 
 
