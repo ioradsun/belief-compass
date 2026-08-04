@@ -26,14 +26,12 @@ const dirTone = (d: "up" | "down" | "flat"): string =>
 /** Formats an ETH-native capital amount in the viewer's chosen unit. */
 type CapFmt = (eth: number, signed?: boolean) => string;
 
-
 // Believers and capital are turned into their two copy lines by the ONE shared
 // metric-display rule (src/domain/metric-display): the count/money leads, the %
 // is paired, and a % off a tiny base is kept quiet or dropped. These adapters just
 // feed the canonical book metric into that rule.
 const believerCopy = (m: BookMetric, w: BookWindow): MetricMove =>
   believerMove(m.current, m.base, w.since);
-
 
 // Materiality (direction, the percentage floor) is judged in USD so a display in
 // ETH never changes what counts as a real move; only the shown figure converts.
@@ -44,7 +42,6 @@ const capitalCopy = (
   money: CapFmt,
 ): MetricMove =>
   capitalMove({ currentEth: m.current, baseEth: m.base, since: w.since, usd, money });
-
 
 /**
  * One full-width metric row inside the Total Market instrument: the current
@@ -93,14 +90,15 @@ function MomentumMetric({
       >
         {label}
       </div>
-      <div className={`num mt-0.5 ${dense ? "text-[11px]" : "text-[12px]"}`} style={{ color: tone }}>
+      <div
+        className={`num mt-0.5 ${dense ? "text-[11px]" : "text-[12px]"}`}
+        style={{ color: tone }}
+      >
         {copy.absolute}
       </div>
-
     </div>
   );
 }
-
 
 export function MarketMomentum({
   tape,
@@ -141,17 +139,16 @@ export function MarketMomentum({
       <MomentumMetric
         dense={dense}
         total={b.current.toLocaleString("en-US")}
-        label="Total participants"
+        label="Believers"
         copy={believerCopy(b, book.window)}
       />
       <div className="border-t border-[var(--hairline)]" aria-hidden />
       <MomentumMetric
         dense={dense}
         total={money(c.current)}
-        label="Total capital"
+        label="Capital"
         copy={capitalCopy(c, book.window, usd, money)}
       />
-
 
       {footer && (
         <>
@@ -162,4 +159,3 @@ export function MarketMomentum({
     </section>
   );
 }
-

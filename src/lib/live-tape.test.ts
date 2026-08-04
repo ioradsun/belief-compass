@@ -122,7 +122,9 @@ describe("factual copy only", () => {
       }
     }
   });
-  const rowBase = (o: Partial<Omit<LiveRow, "text" | "story">> = {}): Omit<LiveRow, "text" | "story"> => ({
+  const rowBase = (
+    o: Partial<Omit<LiveRow, "text" | "story">> = {},
+  ): Omit<LiveRow, "text" | "story"> => ({
     id: "x",
     kind: "trade_burst",
     marketId: "1",
@@ -139,17 +141,23 @@ describe("factual copy only", () => {
     ...o,
   });
 
-  it("liveRowStory: a reduce burst reads as the side losing believers", () => {
+  it("liveRowStory: a reduce burst reads as people leaving, counted", () => {
     const s = liveRowStory(rowBase());
     expect(s.category).toBe("shrinking");
-    expect(s.headline).toBe("NO LOST 4 BELIEVERS");
+    expect(s.headline).toBe("NO IS SHRINKING");
+    expect(s.body).toBe("4 people left NO.");
   });
   it("liveRowStory: a milestone shows its threshold", () => {
     const s = liveRowStory(
-      rowBase({ kind: "believer_milestone", side: "YES", amountUsd: null, payload: { threshold: 500 } }),
+      rowBase({
+        kind: "believer_milestone",
+        side: "YES",
+        amountUsd: null,
+        payload: { threshold: 500 },
+      }),
     );
     expect(s.category).toBe("milestone");
-    expect(s.body).toBe("YES just reached 500 believers.");
+    expect(s.body).toBe("YES reached 500 believers.");
   });
   it("liveRowStory: a doubling surges, and never calls the side a 'tribe'", () => {
     const s = liveRowStory(rowBase({ kind: "tribe_doubled", side: "NO", payload: {} }));

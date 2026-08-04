@@ -344,7 +344,7 @@ export function CaseColumn({
             What&rsquo;s happening to {side}
           </span>
           {feed.length === 0 ? (
-            <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No meaningful moves yet.</p>
+            <p className="px-0.5 text-[11px] text-[var(--text-muted)]">Nothing significant yet.</p>
           ) : (
             <ul className="space-y-1.5">
               {feed.map((e) => (
@@ -381,7 +381,6 @@ export function CaseColumn({
           priceUsd={priceUsd}
           variant={compactRoster ? "compact" : "list"}
         />
-
       </div>
 
       {/* Optional deep-dive into the full center timeline (desktop investigation). */}
@@ -689,4 +688,3 @@ function RosterSheet({
     </div>
   );
 }
-

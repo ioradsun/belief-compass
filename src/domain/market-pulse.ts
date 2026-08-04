@@ -23,7 +23,6 @@ export type PulseLabel =
 export interface Pulse {
   label: PulseLabel;
   /** One calm, observant sentence. Never a side, never price, never a number. */
-  meaning: string;
   /**
    * The same read, compressed to a headline for the collapsed Market Signal
    * strip ("More believers. Less capital."). The full sentence lives inside the
@@ -87,39 +86,7 @@ export function pulseLabel(i: PulseInput): PulseLabel {
   return "Growing"; // people rising, capital flat
 }
 
-/** The sentence that matches the label AND the exact directions. */
-function pulseMeaning(label: PulseLabel, i: PulseInput): string {
-  const capMove = Math.max(CAP_ABS, Math.abs(i.capitalBaseEth) * CAP_REL);
-  const cUp = i.capitalDeltaEth > capMove;
-  switch (label) {
-    case "New":
-      return "Conviction is just beginning to form.";
-    case "Quiet":
-      return "The market has held steady, with little moving either way.";
-    case "Growing":
-      return "More people are arriving, and commitment is holding.";
-    case "Accelerating":
-      return "More people are joining, and capital is following.";
-    case "Deepening":
-      return "The same believers are leaning in harder.";
-    case "Broadening":
-      return "Interest is spreading faster than the money behind it.";
-    case "Mixed Momentum":
-      return i.believerDelta > 0
-        ? "More people are entering, but committed capital is getting lighter."
-        : "Interest is holding, but committed capital is beginning to fade.";
-    case "Narrowing":
-      return cUp
-        ? "Fewer people remain, but those still here are leaning in harder."
-        : "Fewer people remain, though the committed capital is holding.";
-    case "Cooling":
-      return "Interest and committed capital are cooling together.";
-    case "Capital-led":
-      return "A small group is quietly increasing its commitment.";
-  }
-}
-
-/** The compressed, headline-style version of the same read. */
+/** The read, in the app's voice: what the numbers mean, in one short line. */
 function pulseHeadline(label: PulseLabel, i: PulseInput): string {
   const capMove = Math.max(CAP_ABS, Math.abs(i.capitalBaseEth) * CAP_REL);
   const cUp = i.capitalDeltaEth > capMove;
@@ -151,7 +118,7 @@ function pulseHeadline(label: PulseLabel, i: PulseInput): string {
 
 export function pulse(i: PulseInput): Pulse {
   const label = pulseLabel(i);
-  return { label, meaning: pulseMeaning(label, i), headline: pulseHeadline(label, i) };
+  return { label, headline: pulseHeadline(label, i) };
 }
 
 /** Read the pulse straight off the canonical book (the center's source). */

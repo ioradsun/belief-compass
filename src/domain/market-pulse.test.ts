@@ -57,22 +57,27 @@ describe("pulseLabel", () => {
 
   it("is Broadening when believers outpace capital", () => {
     expect(
-      pulseLabel(base({ believerBase: 10, believers: 20, believerDelta: 10, capitalDeltaEth: 0.05 })),
+      pulseLabel(
+        base({ believerBase: 10, believers: 20, believerDelta: 10, capitalDeltaEth: 0.05 }),
+      ),
     ).toBe("Broadening");
   });
 });
 
+// The read is now told ONCE, in `headline`. The long-form `meaning` said the
+// same thing in more words and nothing rendered it. These guardrails move to
+// the surviving line — the copy must never contradict the numbers behind it.
 describe("pulse conflict-prevention", () => {
-  it("never claims people are joining when believers are flat or negative", () => {
+  it("never claims believers rose when they are flat or falling", () => {
     for (const bd of [0, -2]) {
       const p = pulse(base({ believerDelta: bd, capitalDeltaEth: 1, capitalBaseEth: 10 }));
-      expect(p.meaning.toLowerCase()).not.toContain("more people are joining");
+      expect(p.headline.toLowerCase()).not.toContain("more believers");
     }
   });
 
-  it("never says capital is following unless both rose", () => {
+  it("never claims capital rose when it fell", () => {
     const p = pulse(base({ believerDelta: 4, capitalDeltaEth: -0.5 }));
-    expect(p.meaning.toLowerCase()).not.toContain("capital is following");
+    expect(p.headline.toLowerCase()).not.toContain("more capital");
   });
 
   it("never mentions a side or price", () => {
@@ -82,7 +87,7 @@ describe("pulse conflict-prevention", () => {
       base({ believerDelta: -3, capitalDeltaEth: -0.5 }),
     ];
     for (const i of labels) {
-      expect(pulse(i).meaning).not.toMatch(/\bYES\b|\bNO\b|price|\$/);
+      expect(pulse(i).headline).not.toMatch(/\bYES\b|\bNO\b|price|\$/);
     }
   });
 });

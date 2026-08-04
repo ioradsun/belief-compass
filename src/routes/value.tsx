@@ -233,7 +233,7 @@ function ValuePage() {
             </Section>
 
             {/* CREATOR ECONOMY */}
-            <Section title="Creator Economy" note="What connected traders' volume earns the markets they back">
+            <Section title="Creator Economy" note="What believers' volume earns the markets they back">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Panel>
                   <Kpi label="Total Creator Earnings" value={creatorEarningsUsd == null ? "—" : fmtUsd(creatorEarningsUsd)} />

@@ -103,7 +103,7 @@ export function CurrentMarketActivity({
               showTitles={false}
               limit={200}
               skeletonRows={4}
-              emptyText="No activity in the last 72 hours."
+              emptyText="Quiet for three days."
             />
           </div>
         </div>

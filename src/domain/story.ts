@@ -103,11 +103,11 @@ function momentumBeat(input: StoryInput): StoryBeat | null {
     case "hot":
       text =
         n1h > 0
-          ? `Money's moving to ${side} — ${n1h} backed in the last hour`
+          ? `Money's moving to ${side} — ${n1h} backed it in the last hour`
           : `Heating up — ${active} active today`;
       break;
     case "early":
-      text = n24h > 0 ? `Quietly growing — ${n24h} new backers today` : "Small but growing";
+      text = n24h > 0 ? `Quietly growing — ${n24h} new believers today` : "Small but growing";
       break;
     case "hidden":
       text = `More going on here than the size shows — ${active} active today`;
@@ -216,14 +216,26 @@ export function composeMarketStory(input: StoryInput): MarketStory {
 }
 
 // ============================================================================
-// Live-event story — one Live-feed row, told as conviction, not a transaction.
+// Live-event story — one Live-feed row.
 //
-// Every row answers three questions, in this order:
-//   1. WHAT changed?  → the HEADLINE ("YES IS GROWING")
-//   2. WHY it matters? → the BODY    ("9 believers now back YES.")
-//   3. WHO caused it?  → the ATTRIBUTION ("Bob joined." — small, last)
+// THE FEED IS ABOUT PEOPLE. Money is how a belief becomes visible, never the
+// subject of the sentence. "Someone backed NO with $8,400" — not "$8,400 moved
+// into NO". The reader should finish a row knowing what a person did.
 //
-// The market is the protagonist; people create the story. Two hard rules:
+// Three lines, three DIFFERENT jobs. No line may repeat another:
+//   1. HEADLINE     — what changed, as a 2–3 word kicker. Not a sentence.
+//   2. BODY         — who did what. One sentence, person first, money as a
+//                     supporting clause.
+//   3. ATTRIBUTION  — only what the sentence could not carry: how big the side
+//                     is now, how long they had held. Null when there is
+//                     nothing left to add, which is most of the time.
+//
+// The old shape said the same thing three ways —
+//   CONVICTION SHIFTED / "A believer switched." / "duckfacts.eth switched sides."
+// — three lines, one fact, and the person arrived last and smallest. Now:
+//   SWITCHED SIDES / "duckfacts.eth switched to NO."
+//
+// Two hard rules, both enforced by tests:
 //   • Terminology: never wallet / address / transaction / position / holder / the
 //     "YES tribe" (a Tribe belongs to the USER and is cross-market; YES/NO are
 //     market SIDES — you back / join / enter a side, you don't join its tribe).
@@ -247,11 +259,11 @@ export type LiveCategory =
 
 export interface LiveStory {
   category: LiveCategory;
-  /** "YES IS GROWING" — describes the MARKET, never a person. */
+  /** A 2–3 word kicker naming the change. Never a sentence. */
   headline: string;
-  /** One sentence explaining the change. */
+  /** The behaviour, person first: "Ana backed YES with $420." */
   body: string;
-  /** Small, muted, last — "Bob joined." Null when there's no single actor. */
+  /** Only what the body could not carry (scale, tenure). Usually null. */
   attribution: string | null;
   tone: BeatTone;
   /** True for network-relative rows (get the "about you" wash). */
@@ -293,26 +305,30 @@ const REL_HEADLINE: Record<NetworkLabel, string> = {
   inverse: "YOUR OPP",
 };
 
-/** The side-blind body for a network member's move — never names their side. */
-function personalBody(rel: NetworkLabel, action: "BUY" | "SELL" | null | undefined): string {
-  const left = action === "SELL";
-  switch (rel) {
-    case "twin":
-      return left
-        ? "Your closest match stepped back."
-        : "Your closest match just entered this market.";
-    case "tribe":
-      return left
-        ? "Someone from your Tribe stepped back."
-        : "Someone from your Tribe just entered.";
-    case "opp":
-      return left ? "Your rival stepped back." : "Your strongest rival just entered this market.";
-    case "inverse":
-      return left
-        ? "Someone who mirrors you stepped back."
-        : "Someone who mirrors you just entered.";
-  }
+/**
+ * The side-blind body for a network member's move — never names their side.
+ *
+ * The headline already says WHO they are to you ("YOUR TWIN"), so the sentence
+ * says what they DID and nothing else. It used to re-describe the relationship
+ * here too ("Your closest match just entered this market") and then a third
+ * time in the attribution ("· in your network").
+ */
+function personalBody(
+  name: string | null,
+  rel: NetworkLabel,
+  action: "BUY" | "SELL" | null | undefined,
+): string {
+  const who = name ?? FALLBACK_WHO[rel];
+  return action === "SELL" ? `${who} stepped back.` : `${who} entered.`;
 }
+
+/** How to refer to a network member whose identity we don't have. */
+const FALLBACK_WHO: Record<NetworkLabel, string> = {
+  twin: "Your closest match",
+  tribe: "Someone in your Tribe",
+  opp: "Your strongest rival",
+  inverse: "Someone who mirrors you",
+};
 
 /**
  * Compose one Live-feed row. Network members get a side-blind belonging row; the
@@ -322,81 +338,57 @@ function personalBody(rel: NetworkLabel, action: "BUY" | "SELL" | null | undefin
 export function composeLiveStory(input: LiveStoryInput): LiveStory {
   const side = input.side;
   const sideStr = side ?? "";
-  const actorName = input.actor?.name ?? null;
+  const who = input.actor?.name ?? null;
 
-  // ── Fresh market — the question is the hero. ──
+  // ── A new question. The question is the hero; the timestamp already says
+  //    "just" — so the old "Just opened." attribution is deleted, not moved. ──
   if (input.kind === "market_created") {
     return {
       category: "fresh_market",
-      headline: "FRESH MARKET",
-      body: input.question?.trim() || "A new question just opened.",
-      attribution: actorName ? `${actorName} opened this market.` : "Just opened.",
+      headline: "NEW MARKET",
+      body: input.question?.trim() || "A new question opened.",
+      attribution: who ? `${who} opened it.` : null,
       tone: "neutral",
       personal: false,
     };
   }
 
-  // ── Milestone — celebrate the market growing. ──
+  // ── A round number of people now believe the same thing. ──
   if (input.kind === "believer_milestone") {
-    const n = num(input.threshold);
+    const n = num(input.threshold).toLocaleString("en-US");
     return {
       category: "milestone",
       headline: "MILESTONE",
-      body: side
-        ? `${sideStr} just reached ${n.toLocaleString("en-US")} believers.`
-        : `${n.toLocaleString("en-US")} believers now back this question.`,
+      body: side ? `${sideStr} reached ${n} believers.` : `${n} people back this question.`,
       attribution: null,
       tone: sideTone(side),
       personal: false,
     };
   }
 
-  // ── Surge — a side's believers doubled in a day. ──
+  // ── A side's believers doubled in a day. ──
   if (input.kind === "tribe_doubled") {
     return {
       category: "momentum",
-      headline: side ? `${sideStr} IS SURGING` : "MOMENTUM SHIFTED",
-      body: side ? `The number backing ${sideStr} doubled today.` : "Believers doubled in a day.",
+      headline: "SURGING",
+      body: side ? `Believers in ${sideStr} doubled today.` : "Believers doubled today.",
       attribution: null,
       tone: sideTone(side),
       personal: false,
     };
   }
 
-  // ── Network member — a side-blind belonging signal. ──
+  // ── Someone in your network moved. The headline is the relationship, so the
+  //    sentence is only what they did — and their SIDE is never revealed. ──
   const rel = input.actor?.relationship ?? null;
   if (rel) {
     return {
       category: rel,
       headline: REL_HEADLINE[rel],
-      body: personalBody(rel, input.action),
-      attribution: actorName ? `${actorName} · in your network` : null,
+      body: personalBody(who, rel, input.action),
+      attribution: null,
       tone: "neutral", // never leak the side
       personal: true,
-    };
-  }
-
-  // ── Side switch — conviction moved. ──
-  if (input.kind === "side_shift") {
-    return {
-      category: "momentum",
-      headline: "CONVICTION SHIFTED",
-      body: `A believer switched to ${sideStr}.`.replace(" to .", "."),
-      attribution: actorName ? `${actorName} switched sides.` : null,
-      tone: sideTone(side),
-      personal: false,
-    };
-  }
-
-  // ── A wash — nets to zero, quiet. ──
-  if (input.kind === "round_trip") {
-    return {
-      category: "momentum",
-      headline: "A QUICK ROUND TRIP",
-      body: `A believer backed ${sideStr} and exited the same day.`,
-      attribution: actorName ? `${actorName} came and went.` : null,
-      tone: "neutral",
-      personal: false,
     };
   }
 
@@ -405,38 +397,70 @@ export function composeLiveStory(input: LiveStoryInput): LiveStory {
   const n = num(input.walletCount) || 1;
   const sideBelievers = side === "YES" ? input.market?.believersYes : input.market?.believersNo;
   const remaining = sideBelievers == null ? null : num(sideBelievers);
+  /** How big the side is now — the one thing a behaviour sentence can't carry. */
+  const scale =
+    remaining == null
+      ? null
+      : `${remaining.toLocaleString("en-US")} believer${remaining === 1 ? "" : "s"} now.`;
 
-  // ── Large capital — money is the story. ──
+  // ── Someone changed their mind. The rarest and most interesting move. ──
+  if (input.kind === "side_shift") {
+    return {
+      category: "momentum",
+      headline: "SWITCHED SIDES",
+      body: side
+        ? `${who ?? "A believer"} switched to ${sideStr}.`
+        : `${who ?? "A believer"} switched sides.`,
+      attribution: null,
+      tone: sideTone(side),
+      personal: false,
+    };
+  }
+
+  // ── In and out inside a day — conviction that didn't hold. ──
+  if (input.kind === "round_trip") {
+    return {
+      category: "momentum",
+      headline: "IN AND OUT",
+      body: `${who ?? "A believer"} backed ${sideStr} and left the same day.`,
+      attribution: null,
+      tone: "neutral",
+      personal: false,
+    };
+  }
+
+  // ── Serious money. The PERSON acts; the amount is what they acted with. ──
   if (input.kind === "large_trade") {
     return sell
       ? {
           category: "capital_out",
-          headline: "CAPITAL PULLED BACK",
-          body: `${usd(amt)} left ${sideStr}.`,
-          attribution: actorName ? `${actorName} exited.` : null,
+          headline: "BIG EXIT",
+          body: `${who ?? "Someone"} pulled ${usd(amt)} out of ${sideStr}.`,
+          attribution: scale,
           tone: sideTone(side, true),
           personal: false,
         }
       : {
           category: "capital_in",
-          headline: "CAPITAL IS SHIFTING",
-          body: `${usd(amt)} moved into ${sideStr}.`,
-          attribution: actorName ? `${actorName} entered.` : null,
+          headline: "BIG BACKING",
+          body: `${who ?? "Someone"} backed ${sideStr} with ${usd(amt)}.`,
+          attribution: scale,
           tone: sideTone(side),
           personal: false,
         };
   }
 
-  // ── The everyday heartbeat: believers arriving or stepping back. ──
+  // ── The everyday heartbeat: people arriving, people stepping back. ──
   if (sell) {
     return {
       category: "shrinking",
-      headline: n > 1 ? `${sideStr} LOST ${n} BELIEVERS` : `${sideStr} LOST A BELIEVER`,
-      body:
-        remaining != null
-          ? `${remaining} still back ${sideStr}.`
-          : `Conviction in ${sideStr} weakened.`,
-      attribution: actorName ? `${actorName} exited.` : `${n} stepped back.`,
+      headline: `${sideStr} IS SHRINKING`,
+      body: who
+        ? `${who} left ${sideStr}.`
+        : n > 1
+          ? `${n} people left ${sideStr}.`
+          : `Someone left ${sideStr}.`,
+      attribution: scale,
       tone: sideTone(side, true),
       personal: false,
     };
@@ -444,13 +468,12 @@ export function composeLiveStory(input: LiveStoryInput): LiveStory {
   return {
     category: "growing",
     headline: `${sideStr} IS GROWING`,
-    body:
-      remaining != null
-        ? `${remaining} believer${remaining === 1 ? "" : "s"} now back ${sideStr}.`
-        : n > 1
-          ? `${n} more people joined ${sideStr}.`
-          : `Another believer joined ${sideStr}.`,
-    attribution: actorName ? `${actorName} joined.` : `${n} joined.`,
+    body: who
+      ? `${who} joined ${sideStr}.`
+      : n > 1
+        ? `${n} people joined ${sideStr}.`
+        : `Someone joined ${sideStr}.`,
+    attribution: scale,
     tone: sideTone(side),
     personal: false,
   };

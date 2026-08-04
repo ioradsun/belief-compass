@@ -121,11 +121,11 @@ describe("lensStory — price", () => {
 describe("lensColdStart", () => {
   it("explains a one-point series instead of drawing a flat line", () => {
     expect(lensColdStart("believers", [pt({})])).toMatch(/Waiting for more believers/);
-    expect(lensColdStart("capital", [pt({})])).toMatch(/Not enough history/);
+    expect(lensColdStart("capital", [pt({})])).toMatch(/Too new to chart/);
   });
   it("price needs two real prices, not just two points", () => {
     expect(lensColdStart("price", [pt({ believers: 1 }), pt({ believers: 2 })])).toMatch(
-      /price history/,
+      /Too new to chart/,
     );
     expect(lensColdStart("price", [pt({ price: 0.4 }), pt({ price: 0.5 })])).toBeNull();
   });

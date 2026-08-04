@@ -227,7 +227,7 @@ function ConvictionCard({
             <span className="num text-[13px] font-semibold text-[var(--text)]">
               {p.believers.toLocaleString("en-US")}
             </span>
-            <span className="text-[11px] text-[var(--text-muted)]">Market Believers</span>
+            <span className="text-[11px] text-[var(--text-muted)]">Believers</span>
             {p.newInWindow != null && p.newInWindow > 0 && (
               <span className="num ml-auto text-[11px] font-semibold text-[var(--yes)]">
                 +{p.newInWindow.toLocaleString("en-US")}
@@ -533,9 +533,9 @@ export function MyConvictions({
         const periodMove = !lifetimeMove && Math.abs(periodUsd) >= 0.01;
         const move = lifetimeMove ? (trueGain as number) : periodMove ? periodUsd : 0;
         const basis = total - move;
-        const pct = move !== 0 && basis > 0 ? formatPct((move / basis) * 100, { precise: true }) : null;
-        const tone =
-          move > 0 ? "var(--yes)" : move < 0 ? "var(--no)" : "var(--text-muted)";
+        const pct =
+          move !== 0 && basis > 0 ? formatPct((move / basis) * 100, { precise: true }) : null;
+        const tone = move > 0 ? "var(--yes)" : move < 0 ? "var(--no)" : "var(--text-muted)";
         const arrow = move > 0 ? "▲" : move < 0 ? "▼" : "";
         return (
           <div className="pb-4">
@@ -548,7 +548,9 @@ export function MyConvictions({
                 style={{ color: tone }}
               >
                 {pct ?? (move === 0 ? "0%" : "")}
-                {arrow && pct ? <span className="ml-1.5 align-middle text-[0.6em]">{arrow}</span> : null}
+                {arrow && pct ? (
+                  <span className="ml-1.5 align-middle text-[0.6em]">{arrow}</span>
+                ) : null}
               </span>
             </div>
             <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
