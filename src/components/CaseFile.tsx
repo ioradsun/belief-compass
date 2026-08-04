@@ -64,6 +64,7 @@ export function CaseColumn({
   ethUsd = 0,
   onInvestigate,
   investigating = false,
+  compactRoster = false,
 }: {
   side: Side;
   marketId: number;
@@ -74,6 +75,8 @@ export function CaseColumn({
   /** Optional deep-dive into the center timeline (desktop). */
   onInvestigate?: (s: Side) => void;
   investigating?: boolean;
+  /** Mobile: collapse the roster into an Instagram-style face pile. */
+  compactRoster?: boolean;
 }) {
   const color = side === "YES" ? "var(--yes)" : "var(--no)";
   // The shared timeframe: YES and NO always quote the same period so they compare.
