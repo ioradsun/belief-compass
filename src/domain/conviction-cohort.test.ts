@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   findCohorts,
+  cohortKindForViewer,
   renderCohort,
   rungFor,
   rungText,
@@ -138,7 +139,9 @@ describe("claims are only made when evidenced", () => {
     expect(c[0].kind).toBe("founding");
   });
 
-  it("recognises your own people when enough of them are here", () => {
+  it("never claims YOUR people at emission — there is no reader there", () => {
+    // The emitter has no viewer, so a stored cohort can only ever be
+    // holding/founding. Deciding otherwise would give one event two identities.
     const c = findCohorts({
       side: "YES",
       holders: [
@@ -147,7 +150,26 @@ describe("claims are only made when evidenced", () => {
         h({ wallet: "c" }),
       ],
     });
-    expect(c[0].kind).toBe("tribe_holding");
+    expect(c[0].kind).toBe("holding");
+  });
+
+  it("upgrades to YOUR people at read time, once the reader is known", () => {
+    const c = findCohorts({
+      side: "YES",
+      holders: [
+        h({ wallet: "a", relationship: "tribe" }),
+        h({ wallet: "b", relationship: "twin" }),
+        h({ wallet: "c" }),
+      ],
+    });
+    expect(cohortKindForViewer(c[0])).toBe("tribe_holding");
+    // The identity never moves with the reader.
+    expect(c[0].fingerprint).toContain(":holding:");
+  });
+
+  it("leaves a stranger's cohort alone", () => {
+    const c = findCohorts({ side: "YES", holders: [h({ wallet: "a" }), h({ wallet: "b" })] });
+    expect(cohortKindForViewer(c[0])).toBe("holding");
   });
 });
 
@@ -166,13 +188,30 @@ describe("significance ranks meaning, not chronology", () => {
     expect(c[0].significance).toBeGreaterThan(c[1].significance);
   });
 
-  it("people you know raise a story's value", () => {
+  it("is identical for every reader — who they are to you is applied later", () => {
+    // This used to spend 30% of the score on a relationship term that is
+    // structurally zero at emission, deflating every real cohort below the
+    // publish threshold. The reader's own view is a read-time boost instead.
     const plain = findCohorts({ side: "YES", holders: [h({ wallet: "a" }), h({ wallet: "b" })] });
     const known = findCohorts({
       side: "YES",
       holders: [h({ wallet: "a", relationship: "twin" }), h({ wallet: "b" })],
     });
-    expect(known[0].significance).toBeGreaterThan(plain[0].significance);
+    expect(known[0].significance).toBe(plain[0].significance);
+  });
+
+  it("a bigger share of the side is a bigger story", () => {
+    const few = findCohorts({
+      side: "YES",
+      holders: [h({ wallet: "a" }), h({ wallet: "b" })],
+      sideBelievers: 40,
+    });
+    const many = findCohorts({
+      side: "YES",
+      holders: [h({ wallet: "a" }), h({ wallet: "b" })],
+      sideBelievers: 4,
+    });
+    expect(many[0].significance).toBeGreaterThan(few[0].significance);
   });
 });
 
@@ -288,5 +327,79 @@ describe("celebration without coercion", () => {
       expect(s.headline.split(/\s+/).length).toBeLessThanOrEqual(4);
       expect(s.body.split(".").filter((x) => x.trim()).length).toBe(1);
     }
+  });
+});
+
+/**
+ * The publish gate lives in the emitter, but the numbers it compares against are
+ * produced here — so the calibration is pinned where the formula is.
+ */
+describe("a quiet market still has something true to say", () => {
+  const PUBLISH = 0.25; // conviction-cohort-emit.server MIN_SIGNIFICANCE
+
+  const cohortAt = (rung: number, people: number, sideBelievers: number) =>
+    findCohorts({
+      side: "YES",
+      sideBelievers,
+      holders: Array.from({ length: people }, (_, i) =>
+        h({ wallet: `w${i}`, daysHeld: rung + 0.5 }),
+      ),
+    })[0];
+
+  it("a small group reaching 30 days is publishable — that is the slow-day story", () => {
+    expect(cohortAt(30, 2, 20).significance).toBeGreaterThanOrEqual(PUBLISH);
+  });
+
+  it("a week-old group publishes only when it is a real part of its side", () => {
+    expect(cohortAt(7, 2, 40).significance).toBeLessThan(PUBLISH);
+    expect(cohortAt(7, 6, 12).significance).toBeGreaterThanOrEqual(PUBLISH);
+  });
+
+  it("one long-held believer counts in a small market, not in a crowd", () => {
+    expect(cohortAt(90, 1, 6).significance).toBeGreaterThanOrEqual(PUBLISH);
+    expect(cohortAt(30, 1, 200).significance).toBeLessThan(PUBLISH);
+  });
+
+  it("rarer rungs clear the bar more easily, as they should", () => {
+    const ladder = [7, 30, 60, 90, 180, 365].map((r) => cohortAt(r, 2, 20).significance);
+    expect(ladder).toEqual([...ladder].sort((a, b) => a - b));
+  });
+});
+
+describe("a second wave is a second story", () => {
+  const wave = (daysHeld: number, nowMs: number) =>
+    findCohorts({
+      side: "YES",
+      nowMs,
+      holders: [h({ wallet: "a", daysHeld }), h({ wallet: "b", daysHeld })],
+    })[0];
+
+  const T0 = Date.UTC(2026, 5, 1, 12);
+
+  it("gives a later group crossing the same rung its own identity", () => {
+    const first = wave(30.5, T0);
+    const later = wave(30.5, T0 + 90 * 86_400_000);
+    expect(first.rung).toBe(later.rung);
+    expect(first.fingerprint).not.toBe(later.fingerprint);
+  });
+
+  it("still collapses the same crossing seen twice in one day", () => {
+    // The refresher runs several times a day; daysHeld grows with the clock, so
+    // both terms move together and the crossing date must not.
+    const morning = wave(30.2, T0);
+    const evening = wave(30.2 + 8 / 24, T0 + 8 * 3_600_000);
+    expect(evening.fingerprint).toBe(morning.fingerprint);
+  });
+
+  it("holds across midnight, where a naive `today` bucket would split", () => {
+    const before = wave(30.4, Date.UTC(2026, 5, 1, 23, 50));
+    const after = wave(30.4 + 20 / 1440, Date.UTC(2026, 5, 2, 0, 10));
+    expect(after.crossedOn).toBe(before.crossedOn);
+  });
+
+  it("dates the crossing, not the run", () => {
+    // Crossed 30 days half a day ago → the crossing date is when they passed it.
+    const c = wave(30.5, Date.UTC(2026, 5, 10, 12));
+    expect(c.crossedOn).toBe("2026-06-10");
   });
 });

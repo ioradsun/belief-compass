@@ -24,9 +24,12 @@
  *   2. THE GROUP OUTRANKS THE INDIVIDUAL. Three people crossing 30 days is one
  *      story, never three. A solo milestone is emitted only when nobody else
  *      crossed with them.
- *   3. ONE FACT, ONE FINGERPRINT. The identity is (market, side, rung) — so the
- *      same cohort can never be told twice by two surfaces, and dedup upstream
- *      (src/domain/transition-emit) works on it unchanged.
+ *   3. ONE FACT, ONE FINGERPRINT. The identity is (market, side, rung, CROSSING
+ *      DATE) — so the same cohort can never be told twice by two surfaces, and
+ *      dedup upstream (src/domain/transition-emit) works on it unchanged. The
+ *      date matters: without it a market could report a 30-day cohort exactly
+ *      once ever, and every later wave of believers reaching thirty days
+ *      collided with the same key and vanished. Two groups, two stories.
  *   4. RECOGNITION IS EARNED. Dust positions don't buy a face. A holder must
  *      clear a real position floor to be counted, which is also what stops
  *      milestone farming with a spray of tiny wallets.
@@ -97,6 +100,14 @@ export interface CohortInput {
   /** How long the reporting window is (days). A rung counts as CROSSED when
    *  the holder passed it inside this window — that is what stops daily repeats. */
   windowDays?: number;
+  /**
+   * The clock `daysHeld` was measured against. Supplied so the CROSSING INSTANT
+   * can be recovered: `crossedAt = nowMs − (daysHeld − rung) days` is really
+   * `firstBackedAt + rung days`, because the same `nowMs` that produced
+   * `daysHeld` cancels out. That cancellation is what makes the crossing date
+   * stable across cron runs — including runs either side of midnight.
+   */
+  nowMs?: number;
 }
 
 export type CohortKind = "holding" | "founding" | "tribe_holding";
@@ -107,9 +118,17 @@ export interface ConvictionCohort {
   rung: HoldingRung;
   /** Everyone in the cohort, most notable first. */
   people: CohortHolder[];
-  /** Stable identity — (side, kind, rung). Dedup and cooldowns key on this. */
+  /** Stable identity — (side, kind, rung, crossing date). Dedup keys on this. */
   fingerprint: string;
-  /** 0..1. Rarity of the rung × how much of the side it is × who they are to you. */
+  /**
+   * The UTC date this group crossed the rung (YYYY-MM-DD). Part of the stored
+   * identity, and the reason a SECOND wave can be told: a market's YES side
+   * crossing 30 days in March and again in June are two different facts about
+   * two different groups, and keying on (side, kind, rung) alone silenced the
+   * second one forever.
+   */
+  crossedOn: string;
+  /** 0..1. Rarity of the rung × how much of the side it is. Viewer-independent. */
   significance: number;
 }
 
@@ -161,6 +180,7 @@ function rank(a: CohortHolder, b: CohortHolder): number {
  */
 export function findCohorts(input: CohortInput): ConvictionCohort[] {
   const windowDays = input.windowDays ?? 1;
+  const nowMs = input.nowMs ?? Date.now();
   const eligible = input.holders.filter(
     (h) => h.positionUsd >= COHORT.minPositionUsd && Number.isFinite(h.daysHeld) && h.daysHeld > 0,
   );
@@ -182,32 +202,58 @@ export function findCohorts(input: CohortInput): ConvictionCohort[] {
       age > rung &&
       people.every((h) => h.daysHeld >= age * 0.9) &&
       people.length > 1;
-    const tribe = people.filter((h) => h.relationship === "tribe" || h.relationship === "twin");
-    const kind: CohortKind =
-      tribe.length >= COHORT.groupMin ? "tribe_holding" : founding ? "founding" : "holding";
+    // `tribe_holding` is NOT decided here. It depends on who the reader is, and
+    // there is no reader at emission — see cohortKindForViewer.
+    const kind: CohortKind = founding ? "founding" : "holding";
 
     const share =
       input.sideBelievers && input.sideBelievers > 0
         ? clamp01(people.length / input.sideBelievers)
         : 0;
-    const relBoost = people.reduce(
-      (m, h) => Math.max(m, h.relationship ? REL_WEIGHT[h.relationship] : 0),
-      0,
-    );
+    // VIEWER-INDEPENDENT, because this is computed once and stored once. An
+    // earlier version spent 30% of the score on "who they are to you" — a term
+    // that is structurally ZERO at emission, since the emitter has no viewer and
+    // never sets a relationship. That silently deflated every cohort below the
+    // publish threshold, which is why quiet markets went quiet twice over. The
+    // reader's own relationships are applied where they belong: at read time,
+    // as a bounded boost (src/domain/viewer-relationship).
     const significance = clamp01(
-      0.45 * rungWeight(rung) + 0.25 * share + 0.3 * relBoost + (people.length > 1 ? 0.1 : 0),
+      0.6 * rungWeight(rung) + 0.3 * share + (people.length > 1 ? 0.1 : 0),
     );
+
+    // When this group passed the rung. `nowMs` cancels against the same clock
+    // that produced `daysHeld`, so two cron runs hours apart — or either side of
+    // midnight — derive the identical date.
+    const crossedAt = Math.min(...people.map((h) => nowMs - (h.daysHeld - rung) * 86_400_000));
+    const crossedOn = new Date(crossedAt).toISOString().slice(0, 10);
 
     out.push({
       kind,
       side: input.side,
       rung,
       people,
-      fingerprint: `cohort:${input.side}:${kind}:${rung}`,
+      fingerprint: `cohort:${input.side}:${kind}:${rung}:${crossedOn}`,
+      crossedOn,
       significance,
     });
   }
   return out.sort((a, b) => b.significance - a.significance);
+}
+
+/**
+ * Is this the READER's own tribe holding? Decided here, at read time, because
+ * the answer is different for every reader and identical events must not have
+ * different identities. The stored kind is `holding` or `founding`; this can
+ * only ever upgrade the SENTENCE, never the fingerprint.
+ *
+ * Call it after the people have been labelled against the viewer's DNA
+ * (src/domain/viewer-relationship#enrichPeople) and nowhere else.
+ */
+export function cohortKindForViewer(cohort: ConvictionCohort): CohortKind {
+  const known = cohort.people.filter(
+    (h) => h.relationship === "tribe" || h.relationship === "twin",
+  );
+  return known.length >= COHORT.groupMin ? "tribe_holding" : cohort.kind;
 }
 
 /** Where a story is being read. Deeper surfaces already supply their own context. */
