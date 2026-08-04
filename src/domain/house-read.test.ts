@@ -111,16 +111,16 @@ describe("houseReadCopy — the voice", () => {
   it("writes the default learning line", () => {
     const c = houseReadCopy({ status: "learning" });
     expect(c.label).toBe(HOUSE_READ_LABEL);
-    expect(c.body).toBe("Still learning your tells. Make more picks and we’ll call your next move.");
+    expect(c.body).toBe("Learning your tells. Soon, we’ll call your move.");
     expect(c.side).toBeNull();
   });
 
   it("writes the specific learning line when picks are known", () => {
     expect(houseReadCopy({ status: "learning", remainingPicks: 3 }).body).toBe(
-      "3 more picks and we’ll call your next move.",
+      "3 more picks and we’ll call your move.",
     );
     expect(houseReadCopy({ status: "learning", remainingPicks: 1 }).body).toBe(
-      "1 more pick and we’ll call your next move.",
+      "1 more pick and we’ll call your move.",
     );
   });
 
