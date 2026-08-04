@@ -16,6 +16,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emitStoryEvent, type Side, type StoryEventType } from "@/domain/story-event";
+import { scoreMarketTransition } from "@/domain/significance";
 import { decideTransitionEmit, type TransitionStore } from "@/domain/transition-emit";
 import { accelerationFrom } from "@/domain/feed/score";
 
@@ -169,6 +170,14 @@ export async function emitStoryEvents(
           headline: transition.headline,
           detail: transition.detail ?? null,
           side: transition.side ?? null,
+          // Universal significance, persisted at emission so the mixer compares
+          // this against every other family on the one shared scale. Nothing
+          // viewer-relative belongs here — that is a read-time boost.
+          significance: scoreMarketTransition({
+            type: transition.type,
+            tier: transition.tier,
+            observations: decision.state.seenCount,
+          }).score,
         },
       });
     }
