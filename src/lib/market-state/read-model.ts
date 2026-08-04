@@ -26,6 +26,16 @@ export function peopleNoPct(believersYes: number, believersNo: number): number |
 export function directionalBelievers(believersYes: number, believersNo: number): number {
   return believersYes + believersNo;
 }
+/**
+ * Money on a side always means at least one person put it there — the market's
+ * seed/initial investment isn't a tracked position, so a side can show capital
+ * with zero indexed holders. "$13 committed by 0 believers" is impossible; floor
+ * the count at 1 whenever that side holds capital.
+ */
+export function seededBelievers(believers: number, capital: number | null | undefined): number {
+  if (believers > 0) return believers;
+  return (capital ?? 0) > 0 ? 1 : 0;
+}
 
 // ── Movement / disagreement ──────────────────────────────────────────────────
 /**
