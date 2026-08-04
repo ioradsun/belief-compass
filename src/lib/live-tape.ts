@@ -11,7 +11,7 @@
 import type { JsonValue } from "@/lib/events";
 import type { LiveStory } from "@/domain/story";
 import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
-import type { CohortHolder } from "@/domain/conviction-cohort";
+import type { StackPerson } from "@/domain/conviction-cohort";
 import type { MixCandidate } from "@/domain/feed-cadence";
 
 export interface LiveEventInput {
@@ -60,7 +60,7 @@ export interface LiveRow {
    * a single actor (their face already sits on the attribution) and on rows
    * about the market itself.
    */
-  people?: CohortHolder[] | null;
+  people?: StackPerson[] | null;
   /** The structured story: headline (market) → body (change) → attribution (who). */
   story: LiveStory;
   /** Flat fallback ("HEADLINE — body") for any non-structured consumer. */

@@ -98,6 +98,91 @@ describe("significance outranks pacing", () => {
   });
 });
 
+describe("discovery is the other half of quality", () => {
+  it("a small event that introduces someone leads a bigger one that introduces nobody", () => {
+    // Same instant, so the comparison is purely about quality — recency is a
+    // real third term and is deliberately not being tested here.
+    const at = new Date(Date.UTC(2026, 0, 1, 12)).toISOString();
+    const rows = mixFeed([
+      c({ id: "WHALE", significance: 0.75, discovery: 0.05, marketId: "1", occurredAt: at }),
+      c({
+        id: "TWIN",
+        significance: 0.55,
+        discovery: 0.9,
+        marketId: "2",
+        subjects: ["0xtwin"],
+        occurredAt: at,
+      }),
+    ]);
+    expect(rows[0].id).toBe("TWIN");
+  });
+
+  it("but an anonymous market flip still leads everything", () => {
+    const rows = mixFeed([
+      c({ id: "TWIN", significance: 0.6, discovery: 1, marketId: "2", subjects: ["0xtwin"] }),
+      c({ id: "FLIP", family: "market_transition", significance: 0.95, marketId: "1" }),
+    ]);
+    expect(rows[0].id).toBe("FLIP");
+  });
+
+  it("discovery alone never reaches the breaking band — it competes, it does not interrupt", () => {
+    // Two rows that would each be held apart by adjacency; a perfect discovery
+    // score must not buy the queue-skipping that only significance grants.
+    const rows = mixFeed([
+      c({ id: "A", significance: 0.5, discovery: 1, marketId: "1", subjects: ["w"] }),
+      c({ id: "B", significance: 0.5, discovery: 1, marketId: "1", subjects: ["w"] }),
+      c({ id: "BREAK", significance: CADENCE.breakingAt + 0.05, marketId: "9" }),
+    ]);
+    expect(rows[0].id).toBe("BREAK");
+  });
+
+  it("changes nothing at all for a feed with no discovery data", () => {
+    const build = () => {
+      seq = 0;
+      return [
+        c({ significance: 0.6, marketId: "1" }),
+        c({ significance: 0.4, marketId: "2", family: "collective_story" }),
+        c({ significance: 0.7, marketId: "3", family: "market_transition" }),
+      ];
+    };
+    const plain = mixFeed(build()).map((r) => r.id);
+    const zeroed = mixFeed(build().map((r) => ({ ...r, discovery: 0 }))).map((r) => r.id);
+    expect(zeroed).toEqual(plain);
+  });
+
+  it("cannot overshoot, whatever the two dimensions are", () => {
+    const rows = mixFeed([
+      c({ significance: 1, discovery: 1 }),
+      c({ significance: 0.99, discovery: 5 }),
+    ]);
+    expect(rows).toHaveLength(2);
+  });
+});
+
+describe("every session should introduce someone new", () => {
+  it("prefers an unmet person over one already in the window, all else equal", () => {
+    const rows = mixFeed([
+      c({ id: "KNOWN1", significance: 0.6, subjects: ["0xa"], marketId: "1" }),
+      c({ id: "KNOWN2", significance: 0.6, subjects: ["0xa"], marketId: "2" }),
+      c({ id: "NEW", significance: 0.6, subjects: ["0xb"], marketId: "3" }),
+    ]);
+    // Whoever leads, the second row must not be the same person again.
+    expect(rows[1].subjects).not.toEqual(rows[0].subjects);
+  });
+
+  it("never promotes a weak row just because its person is new", () => {
+    const rows = mixFeed([
+      c({ id: "STRONG", significance: 0.8, subjects: ["0xa"], marketId: "1" }),
+      c({ id: "DUST", significance: 0.05, subjects: ["0xnew"], marketId: "2" }),
+    ]);
+    expect(rows[0].id).toBe("STRONG");
+  });
+
+  it("the bonus is bounded well below the significance range", () => {
+    expect(CADENCE.newPersonBonus).toBeLessThan(CADENCE.penalty.subject);
+  });
+});
+
 describe("nobody dominates", () => {
   it("one wallet cannot take over the visible window", () => {
     const hog = Array.from({ length: 6 }, () => c({ subjects: ["0xhog"], significance: 0.55 }));

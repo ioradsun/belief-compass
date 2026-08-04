@@ -94,9 +94,32 @@ or their next request; the feed/Network enqueue a bounded refresh on a miss.
 non-canonical wallets, or the retired `viewer_match_cache`/`wallet_matches` tables
 reappearing).
 
+## Discovery moments (relationship events in Live)
+
+Each cached relationship records `since` (when its CURRENT label was set) and
+`previous` (what it was before). Both live inside the existing `*_matches` jsonb
+columns, so there is no migration and no second table.
+
+That one timestamp is the whole mechanism behind "you found a Twin". A discovery
+moment is not an event anybody writes — it is a read-time projection over the
+cache (`src/domain/discovery-moment`), so:
+
+- no new pipeline, no cron, no `events` rows, no announced-ledger;
+- the same network state always yields the same rows, so a poll that changes
+  nothing re-renders nothing;
+- a moment expires by itself once `since` falls outside the window.
+
+A relationship seen for the FIRST time gets no timestamp on purpose. We do not
+know when it formed — the first computation covers all of a viewer's history —
+and dating it "now" would announce a Twin they have had all along.
+
+Ranking uses these through a second dimension, **discovery**
+(`src/domain/discovery`): how much an event introduces the reader to someone
+worth meeting, blended with significance by the cadence mixer. It is viewer-
+relative and never persisted, and it deliberately reads no dollar amount.
+
 ## Deferred to a follow-up (documented, not built in v1)
 
-- Real-time relationship **events** in Live (entered_twin, match_strengthened, …).
 - Active-viewer **registry** + reverse-index fan-out to mark other active viewers
   stale within seconds (v1 relies on version + TTL + on-request refresh).
 - Global person **on-demand lookup** UI entry point (the server path exists via

@@ -12,18 +12,28 @@
  * job. If the mixer is ever the thing preventing repetition, the aggregation
  * above it is broken.
  *
- * FOUR RULES, in priority order:
+ * FIVE RULES, in priority order:
  *
  *   1. SIGNIFICANCE FIRST. A genuinely big event is never held back to satisfy a
  *      pacing target. Above `breakingAt` an event ignores sequencing entirely.
- *   2. VARIETY SECOND. Adjacent rows should not repeat a family, a market, a
- *      side, a person or a motif. This is a penalty, never a filter: if the only
+ *   2. DISCOVERY IS THE OTHER HALF OF QUALITY. An event that introduces the
+ *      viewer to someone worth knowing outranks a bigger event that introduces
+ *      nobody. Discovery does not replace significance — it lifts a candidate's
+ *      QUALITY toward 1 in proportion to how much of an introduction it is, so a
+ *      Twin's small buy can lead a whale's large one while an anonymous market
+ *      flip still leads everything. `breakingAt` deliberately stays on
+ *      significance alone: structural news skips the queue, personalization
+ *      competes inside it.
+ *   3. VARIETY. Adjacent rows should not repeat a family, a market, a side, a
+ *      person or a motif, and a person not yet met in this window is worth a
+ *      small bonus — the network should feel broad, and every session should
+ *      introduce someone new. Penalties and bonuses, never filters: if the only
  *      candidates left are three holding milestones, you get three holding
  *      milestones rather than an empty feed.
- *   3. NOBODY DOMINATES. Soft caps per wallet and per market, applied as growing
+ *   4. NOBODY DOMINATES. Soft caps per wallet and per market, applied as growing
  *      penalties rather than hard cuts, so a busy market is quietened rather
  *      than silenced.
- *   4. TARGETS ARE GUIDANCE. Under-represented families get a nudge bounded well
+ *   5. TARGETS ARE GUIDANCE. Under-represented families get a nudge bounded well
  *      below the significance range, and an event under `minQuality` is never
  *      promoted by it. A quiet period yields a shorter, slower feed — never a
  *      padded one.
@@ -49,6 +59,13 @@ export interface MixCandidate {
   family: EventFamily;
   /** 0..1, from the upstream scorers. The mixer never recomputes it. */
   significance: number;
+  /**
+   * 0..1 — how much of an INTRODUCTION this is for the reader
+   * (src/domain/discovery). Absent means "we know nothing about who this is
+   * for", which is scored as zero, so an anonymous feed behaves exactly as it
+   * did before this dimension existed.
+   */
+  discovery?: number;
   /** ISO. Only used for recency and deterministic tie-breaks. */
   occurredAt: string;
   marketId: string;
@@ -83,6 +100,15 @@ export const CADENCE = {
   },
   /** The most a pacing target can ever be worth. Never enough to beat real news. */
   targetNudge: 0.12,
+  /**
+   * How much of the distance to a perfect score a full discovery can close.
+   * Sized so a Twin's ordinary buy (significance ≈0.55, discovery ≈0.9) lands
+   * above an anonymous whale trade (≈0.8, ≈0.2) without letting personalization
+   * reach the breaking band on its own — that stays significance's alone.
+   */
+  discoveryLift: 0.85,
+  /** A person not yet met in this window. Small, and never a reason on its own. */
+  newPersonBonus: 0.1,
 } as const;
 
 /**
@@ -119,6 +145,28 @@ function adjacencyPenalty(c: MixCandidate, recent: MixCandidate[]): number {
       p += CADENCE.penalty.subject * weight;
   });
   return p;
+}
+
+/**
+ * How good this candidate is, on both axes at once. Discovery closes some of the
+ * remaining distance to 1 — the same bounded composition significance itself uses
+ * — so it can lift a modest event a long way without any amount of it ever
+ * overshooting, and a feed with no discovery data scores exactly as before.
+ */
+function quality(c: MixCandidate): number {
+  const d = c.discovery ?? 0;
+  if (d <= 0) return c.significance;
+  return c.significance + (1 - c.significance) * CADENCE.discoveryLift * Math.min(1, d);
+}
+
+/**
+ * A face the reader has not met yet in this window. Bounded and small: broadening
+ * the network is worth a tie-break, never worth promoting a weak story.
+ */
+function noveltyBonus(c: MixCandidate, walletCount: Map<string, number>): number {
+  const subjects = c.subjects ?? [];
+  if (subjects.length === 0 || c.significance < CADENCE.minQuality) return 0;
+  return subjects.some((s) => !walletCount.has(s)) ? CADENCE.newPersonBonus : 0;
 }
 
 /** Growing cost for a wallet or market that is taking over the window. */
@@ -178,15 +226,19 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
 
     for (let i = 0; i < pool.length; i += 1) {
       const c = pool[i];
-      const base = 0.7 * c.significance + 0.3 * recencyScore(c.occurredAt, newest, oldest);
+      const base = 0.7 * quality(c) + 0.3 * recencyScore(c.occurredAt, newest, oldest);
       // Breaking news skips the queue: no adjacency, no dominance, no pacing.
+      // The test is SIGNIFICANCE, not quality — a market changing its own answer
+      // interrupts everyone, while an introduction has to earn its place in the
+      // sequence like every other row.
       const score =
         c.significance >= CADENCE.breakingAt
           ? base + 1
           : base -
             adjacencyPenalty(c, recent) -
             dominancePenalty(c, walletCount, marketCount) +
-            targetBonus(c, picked, available);
+            targetBonus(c, picked, available) +
+            noveltyBonus(c, walletCount);
 
       // Deterministic tie-break: newer first, then id. No randomness, ever.
       if (score > bestScore + 1e-9) {

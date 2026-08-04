@@ -18,14 +18,14 @@
  */
 import { useState } from "react";
 import { PersonAvatar } from "@/components/PersonAvatar";
-import { faceSplit, type CohortHolder } from "@/domain/conviction-cohort";
+import { faceSplit, type StackPerson } from "@/domain/conviction-cohort";
 
 export function PersonStack({
   people,
   size = 26,
   className = "",
 }: {
-  people: CohortHolder[];
+  people: StackPerson[];
   size?: number;
   className?: string;
 }) {

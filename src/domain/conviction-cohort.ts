@@ -42,7 +42,7 @@
  *
  * ZERO IO, pure, fully testable.
  */
-import type { NetworkLabel, Side } from "@/domain/story";
+import { NETWORK_STRENGTH, type NetworkLabel, type Side } from "@/domain/story";
 
 /** Durations people actually think in. Anything between rungs is not a story. */
 export const HOLDING_RUNGS = [7, 30, 60, 90, 180, 365] as const;
@@ -62,17 +62,26 @@ export const COHORT = {
   soloMinRung: 30,
 } as const;
 
-/** One person still backing a side, with what we know about them. */
-export interface CohortHolder {
+/**
+ * The minimum needed to show someone as a face and open their profile. Any
+ * group story — a holding cohort, a discovery moment, an aggregated burst — can
+ * be rendered from this, so the face stack never asks a caller to fabricate a
+ * position size it does not have.
+ */
+export interface StackPerson {
   wallet: string;
   name: string | null;
   avatarUrl: string | null;
+  /** Their relationship to the VIEWER, when there is one. */
+  relationship?: NetworkLabel | null;
+}
+
+/** One person still backing a side, with what we know about them. */
+export interface CohortHolder extends StackPerson {
   /** How long they have continuously backed this side. */
   daysHeld: number;
   /** Current value of the position, in USD. Gates dust; never displayed raw. */
   positionUsd: number;
-  /** Their relationship to the VIEWER, when there is one. */
-  relationship?: NetworkLabel | null;
 }
 
 export interface CohortInput {
@@ -128,12 +137,8 @@ function rungWeight(rung: HoldingRung): number {
   return (i + 1) / HOLDING_RUNGS.length;
 }
 
-const REL_WEIGHT: Record<NetworkLabel, number> = {
-  twin: 1,
-  tribe: 0.8,
-  opp: 0.7,
-  inverse: 0.6,
-};
+/** The app's one relationship strength scale — never a local copy of it. */
+const REL_WEIGHT = NETWORK_STRENGTH;
 
 /**
  * Who leads the stack. People the viewer has a relationship with come first —
@@ -294,7 +299,7 @@ export function renderCohort(
  * How many faces to show, and how many are left over. Kept here rather than in
  * the component so the rule is testable and identical on every surface.
  */
-export function faceSplit(people: CohortHolder[]): { faces: CohortHolder[]; overflow: number } {
+export function faceSplit<T>(people: T[]): { faces: T[]; overflow: number } {
   const faces = people.slice(0, COHORT.maxFaces);
   return { faces, overflow: Math.max(0, people.length - faces.length) };
 }

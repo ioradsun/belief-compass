@@ -28,23 +28,23 @@
  *
  * ZERO IO, pure, fully testable.
  */
-import type { NetworkLabel } from "@/domain/story";
+import { NETWORK_STRENGTH, type NetworkLabel } from "@/domain/story";
 import type { CohortHolder } from "@/domain/conviction-cohort";
 
 /** The viewer's relationship map: wallet (lowercased) → label. */
 export type RelationshipMap = ReadonlyMap<string, NetworkLabel>;
 
 /**
- * How much each relationship is worth. Bounded on purpose: the maximum boost is
+ * How much each relationship is worth — the app's ONE strength scale, not a
+ * local copy of it (src/domain/story). Bounded on purpose: the maximum boost is
  * smaller than the gap between a routine event and a major one, so a Twin's
  * ordinary buy can never outrank the biggest believer walking away.
+ *
+ * The larger reordering — a Twin's small buy leading a whale's big one — is the
+ * DISCOVERY layer's job (src/domain/discovery), which is a separate ranking
+ * dimension rather than a bounded nudge to this one.
  */
-export const RELATIONSHIP_WEIGHT: Record<NetworkLabel, number> = {
-  twin: 1,
-  tribe: 0.75,
-  opp: 0.7,
-  inverse: 0.5,
-};
+export const RELATIONSHIP_WEIGHT = NETWORK_STRENGTH;
 
 /** The most personalization can ever add to a score. */
 export const MAX_RELATIONSHIP_BOOST = 0.15;
