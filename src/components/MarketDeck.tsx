@@ -52,6 +52,7 @@ import {
 } from "@/domain/order";
 import { marketBook } from "@/domain/market-book";
 import { marketPulse } from "@/domain/market-pulse";
+import { houseNote } from "@/domain/house-note";
 import { emitMarketTransition, type TransitionType, type Side } from "@/domain/market-transition";
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
@@ -282,6 +283,17 @@ export function MarketDeck({
     return transition?.headline ?? marketPulse(book).headline;
   }, [change, deckWin, ethUsd, social]);
 
+  // The House's call, folded into the one docked read on the order bar — but only
+  // once the House has an earned read (past cold-start). Cold states pass null so
+  // the read stays one honest line and never repeats a connect prompt.
+  const houseLine = useMemo(
+    () =>
+      viewerWallet && houseRead && !houseRead.foundation
+        ? houseNote(viewerWallet, houseRead, marketId).text
+        : null,
+    [viewerWallet, houseRead, marketId],
+  );
+
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(marketId, side === "YES", side ? ethWei : 0n);
 
@@ -462,7 +474,12 @@ export function MarketDeck({
         win={deckWin}
         footer={
           onToggleCase && !storySide && !mobileCaseOpen ? (
-            <ExamineCta open={caseOpen} onToggle={onToggleCase} teaser={caseTeaser} />
+            <ExamineCta
+              open={caseOpen}
+              onToggle={onToggleCase}
+              teaser={caseTeaser}
+              houseLine={houseLine}
+            />
           ) : null
         }
       />
