@@ -253,11 +253,12 @@ export function WelcomePrompt({
           <button
             type="button"
             onClick={openSheet}
-            className="shrink-0 rounded-[10px] px-3.5 py-2 text-[12.5px] font-semibold"
+            className="max-w-[190px] shrink-0 truncate rounded-[10px] px-3.5 py-2 text-[12.5px] font-semibold"
             style={{ background: "var(--text)", color: "var(--bg)" }}
           >
-            Say Hi
+            {cardLabel}
           </button>
+
         </div>
 
         {/* One face at a time: why they're here, then what you already share. */}
