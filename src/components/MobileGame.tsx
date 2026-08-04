@@ -13,7 +13,7 @@
  * desktop deck uses (marketBook / marketPulse / evidence / house read), so the
  * two experiences can never disagree.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSwitchChain } from "wagmi";
 
@@ -42,6 +42,10 @@ import { CHAIN_ID } from "@/chain/decoder";
 import { useBuyQuote, useTrade, useTradeReady } from "@/lib/chain-trade";
 import { usdToWei, type OrderSide } from "@/domain/order";
 import { useMoney } from "@/lib/display-unit";
+import { OrderTicket } from "@/components/order/OrderTicket";
+import { ExamineCta } from "@/components/order/ExamineRail";
+import { marketBook } from "@/domain/market-book";
+import { marketPulse } from "@/domain/market-pulse";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
@@ -64,7 +68,6 @@ export function MobileGame({
   const marketId = Number(row.onchain_id);
   const title = row.markets?.title ?? `Market #${marketId}`;
   const category = row.markets?.category ?? null;
-  const { format } = useMoney();
 
   const [phase, setPhase] = useState<Phase>("question");
   const [side, setSide] = useState<OrderSide | null>(null);
@@ -160,7 +163,18 @@ export function MobileGame({
   const ready = useTradeReady();
   const trade = useTrade();
   const ethWei = usdToWei(amount, ethUsd);
-  const { quote } = useBuyQuote(marketId, side === "YES", side && backing ? ethWei : 0n);
+  const { quote, isLoading: quoting } = useBuyQuote(
+    marketId,
+    side === "YES",
+    side && backing ? ethWei : 0n,
+  );
+  // The market signal shown on the rail above the order form — same read the
+  // desktop bar carries, from the same book/pulse domain modules.
+  const teaser = useMemo(() => {
+    const t = change?.tape ?? [];
+    if (!t.length) return null;
+    return marketPulse(marketBook(t, Date.now(), deckWin)).headline;
+  }, [change, deckWin]);
   const [revealed, setRevealed] = useState(false);
   useEffect(() => {
     if (trade.isSuccess && trade.hash && side && !revealed) {
@@ -224,7 +238,6 @@ export function MobileGame({
         onBack={() => setPhase("question")}
       />
     );
-
 
   // ---- The Question — ONE screen. The dock transforms decision → order in place;
   // the House pick + celebration only arrive after the order is placed (above). ----
@@ -308,43 +321,39 @@ export function MobileGame({
         </div>
       )}
 
-      {/* One dock, transforming in place: the decision, then the order controls —
-        never a screen swap. The House pick + celebration wait for a placed order. */}
+      {/* One dock, transforming in place — the SAME order surface the desktop
+        deck uses, with the analysis rail (market signal + see both sides)
+        attached to its top. */}
       <Dock>
-        {/* Desktop's utility row, phone-sized: one quiet line above the buttons. */}
-        <button
-          type="button"
-          onClick={() => setPhase("sides")}
-          className="mb-2 block w-full border-t border-[var(--border)] pt-2 text-left text-[13px] font-medium text-[var(--text-secondary)]"
-        >
-          See both sides →
-        </button>
-
-        {side == null ? (
-          <div className="flex gap-2.5">
-            <BigButton label="NO" tone="no" onClick={() => choose("NO")} />
-            <BigButton label="PASS" tone="neutral" onClick={pass} />
-            <BigButton label="YES" tone="yes" onClick={() => choose("YES")} />
-          </div>
-        ) : (
-          <AmountPanel
+        <div className="overflow-hidden rounded-[16px]" style={{ background: "var(--surface)" }}>
+          <ExamineCta
+            compact
+            open={false}
+            onToggle={() => setPhase("sides")}
+            teaser={teaser}
+            openLabel="See both sides · YES vs NO"
+          />
+          <div className="border-t border-[var(--hairline)]" aria-hidden />
+          <OrderTicket
+            mode="buy"
+            side={side}
             amount={amount}
             setAmount={setAmount}
-            side={side}
-            busy={trade.isSubmitting || trade.isMining}
-            success={trade.isSuccess}
-            error={trade.isError ? (trade.error?.message?.slice(0, 90) ?? "Failed") : null}
-            label={
-              !ready.connected
-                ? "Connect wallet"
-                : !ready.onBase
-                  ? "Switch to Base"
-                  : `Confirm ${format(amount, "USD")}`
-            }
+            onSelect={(s) => {
+              trade.reset();
+              choose(s);
+            }}
             onCancel={() => {
               setBacking(false);
               setSide(null);
             }}
+            onPass={pass}
+            quote={quote ?? null}
+            quoting={quoting}
+            ethWei={ethWei}
+            ethUsd={ethUsd}
+            ready={ready}
+            trade={trade}
             onConfirm={async () => {
               if (!ready.connected) return requestConnect();
               if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
@@ -356,9 +365,9 @@ export function MobileGame({
                 }
               }
             }}
-            onNext={onNext}
+            onDone={onNext}
           />
-        )}
+        </div>
         {/* Once a side is chosen, the movement it belongs to (believers only). */}
         {side && (
           <div className="mt-2">
@@ -376,85 +385,6 @@ export function MobileGame({
     </Screen>
   );
 }
-
-/** How much conviction? Asked only after a side is chosen — never before. */
-function AmountPanel({
-  amount,
-  setAmount,
-  side,
-  busy,
-  success,
-  error,
-  label,
-  onCancel,
-  onConfirm,
-  onNext,
-}: {
-  amount: number;
-  setAmount: (n: number) => void;
-  side: OrderSide;
-  busy: boolean;
-  success: boolean;
-  error: string | null;
-  label: string;
-  onCancel: () => void;
-  onConfirm: () => void;
-  onNext: () => void;
-}) {
-  const { format } = useMoney();
-  if (success)
-    return (
-      <div className="space-y-3">
-        <p className="text-center text-[16px] text-[var(--text-secondary)]">
-          You backed {side} with {format(amount, "USD")}.
-        </p>
-        <BigButton label="Next question" tone="neutral" onClick={onNext} />
-      </div>
-    );
-
-  // Desktop's order-bar economy on a phone: amount and the single primary
-  // action share one row; "Not now" is a quiet link, not a second big button.
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <span
-          className="flex h-[52px] w-[112px] shrink-0 items-center gap-1 rounded-[14px] px-3"
-          style={{ border: "1px solid var(--border)" }}
-        >
-          <span className="num text-[18px] text-[var(--text-muted)]">$</span>
-          <input
-            autoFocus
-            inputMode="decimal"
-            value={amount ? String(amount) : ""}
-            onChange={(e) => {
-              const raw = e.target.value.replace(/[^0-9.]/g, "");
-              const n = parseFloat(raw);
-              setAmount(Number.isNaN(n) ? 0 : Math.min(n, 1_000_000));
-            }}
-            aria-label="Amount in dollars"
-            className="num w-full bg-transparent text-[18px] font-semibold text-[var(--text)] outline-none"
-            placeholder="0"
-          />
-        </span>
-        <BigButton
-          label={busy ? "Confirming…" : label}
-          tone={side === "YES" ? "yes" : "no"}
-          onClick={onConfirm}
-          disabled={busy || amount <= 0}
-        />
-      </div>
-      {error && <div className="text-[12px] text-[var(--no)]">{error}</div>}
-      <button
-        type="button"
-        onClick={onCancel}
-        className="block w-full text-center text-[12px] text-[var(--text-muted)]"
-      >
-        Not now
-      </button>
-    </div>
-  );
-}
-
 
 /** Screen 3 — See Both Sides. Totals first; one tap opens a side's case. */
 function BothSides({
@@ -599,34 +529,4 @@ function Dock({ children }: { children: React.ReactNode }) {
 
 function Rule() {
   return <div className="border-t border-[var(--border)]" aria-hidden />;
-}
-
-function BigButton({
-  label,
-  tone,
-  onClick,
-  disabled,
-}: {
-  label: string;
-  tone: "yes" | "no" | "neutral";
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  const style =
-    tone === "yes"
-      ? { border: "1px solid var(--yes)", color: "var(--yes)" }
-      : tone === "no"
-        ? { border: "1px solid var(--no)", color: "var(--no)" }
-        : { border: "1px solid var(--border)", color: "var(--text-secondary)" };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="h-[60px] flex-1 rounded-[16px] text-[18px] font-semibold transition-opacity disabled:opacity-40"
-      style={style}
-    >
-      {label}
-    </button>
-  );
 }
