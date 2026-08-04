@@ -80,6 +80,13 @@ export interface ConvictionContext {
   amountUsd?: number | null;
   /** How long they had held this side before this move. */
   daysHeld?: number | null;
+  /**
+   * True when `daysHeld` is a LOWER BOUND rather than a measurement — the
+   * belief predates the index, so its real start is unknown. Set from the
+   * timestamp itself (src/domain/tenure#firstBackedIsFloor) by whoever reads
+   * `first_backed_at`; the sentence then claims "43+ days" instead of "43".
+   */
+  tenureIsFloor?: boolean | null;
   /** They already held this side before this move (so a buy is an ADD). */
   heldBefore?: boolean | null;
   /** Believers left on this side AFTER the move. 0 → the side just emptied. */
@@ -227,13 +234,21 @@ const money = (v: number): string =>
     ? v.toLocaleString("en-US", { maximumFractionDigits: 0 })
     : v.toLocaleString("en-US", { maximumFractionDigits: v < 10 ? 2 : 0 }));
 
-/** "43 days" / "a day" / "3 months" — how long they believed it. */
-export function heldFor(days: number): string {
+/**
+ * "43 days" / "a day" / "3 months" — how long they believed it.
+ *
+ * `floor` marks a tenure the index cannot fully evidence (src/domain/tenure):
+ * the belief was already there when we started looking, so the number is a
+ * lower bound and the sentence says so. "43+ days" is a smaller claim than
+ * "43 days", and the smaller claim is the true one.
+ */
+export function heldFor(days: number, floor = false): string {
   const d = Math.round(days);
-  if (d <= 1) return "a day";
-  if (d < 60) return `${d} days`;
+  if (d <= 1) return floor ? "at least a day" : "a day";
+  if (d < 60) return `${d}${floor ? "+" : ""} days`;
   const months = Math.round(d / 30);
-  return months < 12 ? `${months} months` : "over a year";
+  if (months >= 12) return floor ? "at least a year" : "over a year";
+  return `${months}${floor ? "+" : ""} months`;
 }
 
 const toneFor = (side: Side | null, negative: boolean): BeatTone =>
@@ -246,12 +261,13 @@ const toneFor = (side: Side | null, negative: boolean): BeatTone =>
  */
 function clause(type: ConvictionEventType, c: ConvictionContext): string {
   const days = n(c.daysHeld);
+  const floor = c.tenureIsFloor === true;
   const amt = n(c.amountUsd);
   switch (type) {
     case "long_held_exit":
     case "changed_mind":
       // Tenure IS the story here — the kicker already implies it, the sentence proves it.
-      return days >= 1 ? ` after ${heldFor(days)}` : "";
+      return days >= 1 ? ` after ${heldFor(days, floor)}` : "";
     case "doubled_down":
     case "big_backing":
     case "big_exit":
@@ -260,7 +276,7 @@ function clause(type: ConvictionEventType, c: ConvictionContext): string {
     default:
       // Everyday moves earn a clause only when the number is genuinely notable.
       if (amt >= CONVICTION_EVENT.bigUsd) return ` with ${money(amt)}`;
-      if (days >= CONVICTION_EVENT.longHeldDays) return ` after ${heldFor(days)}`;
+      if (days >= CONVICTION_EVENT.longHeldDays) return ` after ${heldFor(days, floor)}`;
       return "";
   }
 }
@@ -321,7 +337,10 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
     const days = n(c.daysHeld);
     const leaving = type === "network_left";
     // Tenure is safe to state — it reveals commitment, not direction.
-    const tail = leaving && days >= CONVICTION_EVENT.longHeldDays ? ` after ${heldFor(days)}` : "";
+    const tail =
+      leaving && days >= CONVICTION_EVENT.longHeldDays
+        ? ` after ${heldFor(days, c.tenureIsFloor === true)}`
+        : "";
     return {
       category: rel,
       headline: REL_KICKER[rel],

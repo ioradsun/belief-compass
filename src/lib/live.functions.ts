@@ -37,6 +37,7 @@ import {
 import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
 import { discoveryValue, markSeen, type DiscoverySubject } from "@/domain/discovery";
+import { firstBackedIsFloor } from "@/domain/tenure";
 import {
   findDiscoveryMoments,
   tellDiscoveryMoment,
@@ -306,7 +307,13 @@ export const listLiveEvents = createServerFn({ method: "GET" })
      */
     const beliefByKey = new Map<
       string,
-      { daysHeld: number | null; enteredBefore: boolean; yesShares: number; noShares: number }
+      {
+        daysHeld: number | null;
+        tenureIsFloor: boolean;
+        enteredBefore: boolean;
+        yesShares: number;
+        noShares: number;
+      }
     >();
     if (actorWallets.length > 0 && marketIds.length > 0) {
       const { serviceClientOrNull } = await import("@/lib/supabase-clients");
@@ -334,6 +341,9 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         beliefByKey.set(`${String(b.wallet).toLowerCase()}:${Number(b.onchain_id)}`, {
           // Sub-day tenure is not a story; don't dress one up as "a day".
           daysHeld: days != null && days >= 1 ? days : null,
+          // A belief that was already there when the index opened has no
+          // knowable start. The sentence says "43+ days", not "43 days".
+          tenureIsFloor: firstBackedIsFloor(first),
           // They were in this market before today's move.
           enteredBefore: Number.isFinite(first) && now - first > 86_400_000,
           yesShares: Number(b.yes_shares ?? 0),
@@ -476,6 +486,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           amountUsd: r.amountUsd,
           // Only claim a tenure when this row has ONE actor we actually looked up.
           daysHeld: belief?.daysHeld ?? null,
+          tenureIsFloor: belief?.tenureIsFloor ?? null,
           heldBefore: belief?.enteredBefore ?? null,
           sideBelieversAfter: sideBelievers ?? null,
           peopleCount: r.walletCount,

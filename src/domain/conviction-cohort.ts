@@ -63,6 +63,22 @@ export const COHORT = {
    * person hitting the first rung is not news, one person at 90 days is.
    */
   soloMinRung: 30,
+  /**
+   * The most cohorts one emitter run may publish, best first.
+   *
+   * A duration milestone is driven by the clock, so markets that started
+   * together cross together. This platform's index begins at a single instant
+   * (see src/domain/tenure), which means ~681 markets share one `first_backed_at`
+   * and will cross the 30-day rung on the SAME DAY. Without a cap, that day
+   * publishes hundreds of cohort events at once and the feature built to fill
+   * quiet markets becomes the loudest thing that ever happened.
+   *
+   * The cap makes the emitter publish the strongest ones and come back for the
+   * rest next run, so a mass crossing drains over hours instead of landing in
+   * one batch. It is a PACING rule, not a quality bar — nothing is discarded,
+   * only deferred.
+   */
+  maxPerRun: 12,
 } as const;
 
 /**
@@ -108,7 +124,30 @@ export interface CohortInput {
    * stable across cron runs — including runs either side of midnight.
    */
   nowMs?: number;
+  /** Which holders count at each rung. See `CohortScan`. Defaults to "crossing". */
+  scan?: CohortScan;
 }
+
+/**
+ * Which holders a rung is allowed to claim.
+ *
+ *   · "crossing" — only those who passed the rung inside `windowDays`. This is
+ *     the daily rule and the entire anti-repeat mechanism: a market with plenty
+ *     of long-term holders says nothing on an ordinary day.
+ *
+ *   · "standing" — those sitting AT their highest rung, whenever they crossed
+ *     it. For one-time catch-up over history the emitter never saw. A rung can
+ *     only ever be crossed on one specific day, so if nothing was running that
+ *     day the moment is lost — and this platform lost every 7-day crossing
+ *     exactly that way, all on 2026-07-31, while the emitter was still scoped
+ *     to markets that had recently traded.
+ *
+ * Both derive the SAME crossing date from the same arithmetic, so both produce
+ * the same fingerprint for the same fact. A catch-up emission and the daily
+ * emission that should have happened are indistinguishable, which is what makes
+ * running catch-up safe: the upsert collapses them.
+ */
+export type CohortScan = "crossing" | "standing";
 
 export type CohortKind = "holding" | "founding" | "tribe_holding";
 
@@ -186,9 +225,17 @@ export function findCohorts(input: CohortInput): ConvictionCohort[] {
   );
   if (eligible.length === 0) return [];
 
+  const scan = input.scan ?? "crossing";
   const out: ConvictionCohort[] = [];
   for (const rung of HOLDING_RUNGS) {
-    const crossed = eligible.filter((h) => crossedInWindow(h.daysHeld, rung, windowDays));
+    // In "standing" mode a holder belongs to their HIGHEST rung only — a
+    // 45-day believer is a 30-day story, never also a 7-day one, or catch-up
+    // would publish the same person's history four times over.
+    const crossed = eligible.filter((h) =>
+      scan === "standing"
+        ? rungFor(h.daysHeld) === rung
+        : crossedInWindow(h.daysHeld, rung, windowDays),
+    );
     if (crossed.length === 0) continue;
     // A lone believer needs a longer belief to earn a row by themselves.
     if (crossed.length < COHORT.groupMin && rung < COHORT.soloMinRung) continue;
@@ -238,6 +285,48 @@ export function findCohorts(input: CohortInput): ConvictionCohort[] {
     });
   }
   return out.sort((a, b) => b.significance - a.significance);
+}
+
+/** A cohort with the market it belongs to — what an emitter run publishes. */
+export interface CohortCandidate {
+  marketId: number;
+  cohort: ConvictionCohort;
+}
+
+/**
+ * Which cohorts this run publishes: the strongest `cap`, and nothing else.
+ *
+ * WHY A CAP AT ALL. Everything else in the feed is paced by trading, which
+ * arrives spread out. Cohorts are paced by the CALENDAR, so markets whose
+ * believers arrived together reach every rung together — and when a whole
+ * platform's history starts on one day (src/domain/tenure), "together" means
+ * hundreds of markets in one batch.
+ *
+ * WHY THIS ISN'T A QUALITY GATE. Nothing here is rejected, only deferred: the
+ * ordering is total and deterministic, so the run after this one sees the same
+ * list minus what was just written and publishes the next best. A mass crossing
+ * therefore drains over successive runs, strongest first, instead of arriving
+ * as one wall.
+ *
+ * The caller MUST exclude already-published fingerprints before calling, or the
+ * deterministic ordering will hand back the same winners forever and everything
+ * behind them starves. That exclusion is the emitter's job because only it can
+ * see what has been written.
+ */
+export function selectCohortsForRun(
+  candidates: CohortCandidate[],
+  cap: number = COHORT.maxPerRun,
+): CohortCandidate[] {
+  return [...candidates]
+    .sort(
+      (a, b) =>
+        b.cohort.significance - a.cohort.significance ||
+        b.cohort.rung - a.cohort.rung ||
+        b.cohort.people.length - a.cohort.people.length ||
+        a.marketId - b.marketId ||
+        a.cohort.side.localeCompare(b.cohort.side),
+    )
+    .slice(0, Math.max(0, cap));
 }
 
 /**
