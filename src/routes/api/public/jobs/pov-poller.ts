@@ -8,6 +8,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.server";
 import { iterateAllMarkets } from "@/lib/pov.server";
 import { marketCreatedSourceKey } from "@/lib/events";
+import { applyChainMarketStateFallback } from "@/lib/market-state/chain-fallback.server";
+import { povHealth } from "@/lib/pov-health.server";
 
 export const Route = createFileRoute("/api/public/jobs/pov-poller")({
   server: {
@@ -32,7 +34,11 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
         let createdEvents = 0;
         let createdEventsSkippedNoTime = 0;
 
+        let crawlError: string | null = null;
+        let fallback: Awaited<ReturnType<typeof applyChainMarketStateFallback>> | null = null;
+
         try {
+          try {
           for await (const m of iterateAllMarkets()) {
             if (!m.onChainMarketId) continue;
             seen++;
@@ -108,6 +114,15 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
             }
           }
           await flush();
+          } catch (e: unknown) {
+            // POV is an external provider. When it is unreachable we do NOT fail
+            // the job: nearly everything the app shows is derived from Base
+            // contract events, so we substitute chain-derived money figures for
+            // the stale POV-owned ones and still run the maintenance steps below.
+            crawlError = e instanceof Error ? e.message : String(e);
+            console.error("[pov-poller] POV crawl failed, degrading to chain data:", crawlError);
+            fallback = await applyChainMarketStateFallback(sb);
+          }
 
           // POV can return the same market twice inside one page window; Postgres
           // rejects an upsert batch that touches the same key twice, so collapse
@@ -183,6 +198,10 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
 
           return Response.json({
             ok: true,
+            degraded: crawlError != null,
+            pov_error: crawlError,
+            chain_fallback: fallback,
+            pov_health: povHealth(),
             seen,
             upserted,
             market_created_events_inserted: createdEvents,

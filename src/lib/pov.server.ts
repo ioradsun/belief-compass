@@ -1,6 +1,12 @@
 /**
  * POV API client — server only. Never import into client code.
  */
+import {
+  assertPovAvailable,
+  recordPovFailure,
+  recordPovSuccess,
+} from "@/lib/pov-health.server";
+
 export interface PovMarket {
   onChainMarketId: number | string;
   id?: string;
@@ -32,10 +38,37 @@ export interface PovMarketsPage {
 
 const BASE = () => process.env.POV_API_BASE || "https://core.pov.co/api";
 
+/**
+ * Every POV request goes through here so a provider outage is detected once and
+ * then short-circuited (see pov-health.server.ts) instead of costing every
+ * caller a full timeout. 404 is a normal answer, not a failure.
+ */
+async function povFetch(url: string | URL, timeoutMs = 8000): Promise<Response> {
+  assertPovAvailable();
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (e) {
+    recordPovFailure(e);
+    throw e;
+  }
+  if (res.status >= 500 || res.status === 429) {
+    const body = await res.text().catch(() => "");
+    const err = new Error(`POV ${res.status}: ${body.slice(0, 200)}`);
+    recordPovFailure(err);
+    throw err;
+  }
+  recordPovSuccess();
+  return res;
+}
+
 export async function fetchMarketsPage(cursor?: string): Promise<PovMarketsPage> {
   const u = new URL(`${BASE()}/markets`);
   if (cursor) u.searchParams.set("cursor", cursor);
-  const res = await fetch(u, { headers: { accept: "application/json" } });
+  const res = await povFetch(u, 15_000);
   if (!res.ok) throw new Error(`POV /markets ${res.status}: ${await res.text()}`);
   return res.json();
 }
@@ -91,10 +124,7 @@ export async function fetchPovPositions(wallet: string, timeoutMs = 8000): Promi
     offset += POV_POSITIONS_PAGE, page++
   ) {
     const u = `${BASE()}/users/${encodeURIComponent(wallet)}/positions?limit=${POV_POSITIONS_PAGE}&offset=${offset}`;
-    const res = await fetch(u, {
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    const res = await povFetch(u, timeoutMs);
     if (res.status === 404) break;
     if (!res.ok) throw new Error(`POV /positions ${res.status}: ${await res.text()}`);
     const body = (await res.json()) as PovPositionsPage;
@@ -126,10 +156,7 @@ export async function fetchPovPositions(wallet: string, timeoutMs = 8000): Promi
  */
 export async function fetchPovUser(wallet: string, timeoutMs = 8000): Promise<PovUser | null> {
   const u = `${BASE()}/users/${encodeURIComponent(wallet)}`;
-  const res = await fetch(u, {
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const res = await povFetch(u, timeoutMs);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`POV /users ${res.status}: ${await res.text()}`);
   return res.json();
