@@ -41,6 +41,9 @@ export type ConvictionAction =
   | "exit"
   | "flip"
   | "round_trip"
+  /** One wallet acting across many markets at once, in one direction. */
+  | "sweep_in"
+  | "sweep_out"
   | "open_market"
   | "milestone"
   | "surge";
@@ -48,6 +51,8 @@ export type ConvictionAction =
 /** The human event — what the feed is actually reporting. */
 export type ConvictionEventType =
   // Commitment
+  | "swept_out"
+  | "swept_in"
   | "first_believer"
   | "doubled_down"
   | "big_backing"
@@ -83,6 +88,8 @@ export interface ConvictionContext {
   rank?: number | null;
   /** How many distinct people this row represents. */
   peopleCount?: number | null;
+  /** Distinct markets one person moved in at once — the sweep's whole story. */
+  marketCount?: number | null;
   /** The question, for a market that just opened. */
   question?: string | null;
   /** The believer count a milestone crossed. */
@@ -131,6 +138,8 @@ export function classifyConvictionEvent(e: ConvictionEvent): ConvictionEventType
   const rel = e.actor?.relationship ?? null;
   if (rel) return e.action === "exit" || e.action === "reduce" ? "network_left" : "network_entered";
 
+  if (e.action === "sweep_out") return "swept_out";
+  if (e.action === "sweep_in") return "swept_in";
   if (e.action === "flip") return "changed_mind";
 
   if (e.action === "exit") {
@@ -154,6 +163,8 @@ export function classifyConvictionEvent(e: ConvictionEvent): ConvictionEventType
 
 /** The kicker for each event — 2–3 words, never a sentence. */
 const KICKER: Record<ConvictionEventType, string> = {
+  swept_out: "CLEARING OUT",
+  swept_in: "GOING BROAD",
   first_believer: "FIRST BELIEVER",
   doubled_down: "DOUBLED DOWN",
   big_backing: "BIG BACKING",
@@ -189,6 +200,8 @@ const REL_WHO: Record<NetworkLabel, string> = {
 };
 
 const CATEGORY: Record<ConvictionEventType, LiveCategory> = {
+  swept_out: "capital_out",
+  swept_in: "capital_in",
   first_believer: "growing",
   doubled_down: "capital_in",
   big_backing: "capital_in",
@@ -342,8 +355,18 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
    * the sentence a detail, never its grammar.
    */
   const tail = clause(type, c);
+  const markets = n(c.marketCount);
   let body: string;
   switch (type) {
+    // A SWEEP is about a person and a direction, across markets — it has no
+    // side, and the market count IS the story. One person clearing out their
+    // whole book is drama; the same fact as fifteen rows is a log file.
+    case "swept_out":
+      body = `${who} pulled out of ${markets} markets${tail}.`;
+      break;
+    case "swept_in":
+      body = `${who} backed ${markets} markets at once${tail}.`;
+      break;
     case "changed_mind":
       body = side ? `${who} flipped to ${s}${tail}.` : `${who} changed their mind${tail}.`;
       break;

@@ -2,17 +2,16 @@
  * LiveTape — the right column: the living story of conviction.
  *
  * It renders the server-grouped LiveRow DTO and owns exactly ONE decision of its
- * own: the ORDER. Everything upstream decides what is true, eligible, deduped,
- * how significant it is and how much of an INTRODUCTION it is; this applies the
- * cadence mix (src/domain/feed-cadence) last, so no two adjacent rows repeat a
- * family, a market or a person, nobody dominates, genuinely big events still
- * lead — and a row that introduces someone worth meeting outranks a larger row
- * that introduces nobody.
+ * own: WHICH rows fit in the window. Time decides the order — a live tape that
+ * re-sorts itself reads as broken, not curated, and "what just happened, in
+ * order" is the whole contract it has with a reader.
  *
- * The mix runs HERE rather than on the server because delta-sync merges a fresh
- * head into the cached tail and re-sorts chronologically (mergeLiveRows) — an
- * ordering decided earlier would be thrown away on every poll. The server sends
- * the mixer's INPUTS on each row; this is where they are used.
+ * The selection runs HERE rather than on the server because delta-sync merges a
+ * fresh head into the cached tail (mergeLiveRows), so the full set only exists
+ * at this point. The server sends the mixer's INPUTS on each row.
+ *
+ * New rows animate in. That is the difference between a list that updates and a
+ * feed that feels alive.
  *
  * Each row is read at a glance: a headline, one sentence, and — for group
  * stories — a stack of clickable faces, because the people are the way in.
@@ -20,7 +19,7 @@
  * highlight. Clicking a row selects that market; clicking a face opens that
  * person.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PersonStack } from "@/components/PersonStack";
 import { listLiveEvents } from "@/lib/live.functions";
@@ -36,6 +35,9 @@ type LiveResult = { rows: LiveRow[]; error: string | null };
 /** Beyond this gap since our newest cached event, a delta would be large — just
  *  do a full fetch (the persisted cache already gave the instant paint). */
 const MAX_DELTA_SPAN_MS = 30 * 60_000;
+
+/** How many rows the tape shows. The mixer picks which; time orders them. */
+const VISIBLE_ROWS = 40;
 
 function ago(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -106,34 +108,49 @@ export function LiveTape({
   const visible =
     excludeMarketId == null ? sticky : sticky.filter((r) => Number(r.marketId) !== excludeMarketId);
 
-  // THE EDITORIAL PASS, applied last. Everything upstream decided what is true
-  // and eligible; this decides the order a reader meets it in — no repeated
-  // family, market or person back to back, nobody dominating, and genuinely big
-  // events still first. It runs HERE, after delta-sync merge and the exclusion
-  // filter, because the merge re-sorts chronologically and an ordering decided
-  // earlier would be discarded on every poll.
+  // THE EDITORIAL PASS — and note what it does NOT do any more.
   //
-  // Deterministic and total: mixFeed returns every row exactly once, so a poll
-  // that changes no facts re-renders nothing and no row can move between pages.
-  // Rows without mixer inputs (an older cached payload) keep their position.
+  // A live tape's contract with the reader is "this is what just happened, in
+  // order". Re-ordering it broke that: the column read 3h, 41m, 1h, 2h and felt
+  // broken rather than curated. So the mixer now SELECTS (dominance caps, family
+  // variety, significance and discovery decide which rows survive the window)
+  // and time still ORDERS. Repetition is handled where feed-cadence always said
+  // it belonged — in aggregation upstream, which now collapses a wallet's sweep
+  // across markets into one row instead of leaving the mixer to hide fifteen.
   const rows = useMemo(() => {
-    if (visible.length <= 1 || !visible.some((r) => r.mix)) return visible;
-    const byId = new Map(visible.map((r) => [r.id, r]));
-    const ordered = mixFeed(
-      visible.map(
-        (r) =>
-          r.mix ?? {
-            id: r.id,
-            family: "live_action" as const,
-            significance: 0.5,
-            occurredAt: r.occurredAt,
-            marketId: String(r.marketId),
-            side: r.side,
-          },
-      ),
+    if (visible.length <= VISIBLE_ROWS || !visible.some((r) => r.mix)) return visible;
+    const keep = new Set(
+      mixFeed(
+        visible.map(
+          (r) =>
+            r.mix ?? {
+              id: r.id,
+              family: "live_action" as const,
+              significance: 0.5,
+              occurredAt: r.occurredAt,
+              marketId: String(r.marketId),
+              side: r.side,
+            },
+        ),
+      )
+        .slice(0, VISIBLE_ROWS)
+        .map((m) => m.id),
     );
-    return ordered.map((m) => byId.get(m.id)).filter((r): r is LiveRow => !!r);
+    // `visible` is already newest-first, so filtering preserves live order.
+    return visible.filter((r) => keep.has(r.id));
   }, [visible]);
+
+  // ARRIVAL. A live feed should feel like it is being written, so a row that
+  // was not here on the last render slides in. Tracked by id rather than by
+  // index, so a poll that only re-sorts animates nothing, and the very first
+  // paint animates nothing either — that would be a wall of motion, not life.
+  const seen = useRef<Set<string>>(new Set());
+  const painted = useRef(false);
+  const isNew = (id: string) => painted.current && !seen.current.has(id);
+  useEffect(() => {
+    for (const r of rows) seen.current.add(r.id);
+    painted.current = true;
+  }, [rows]);
 
   return (
     <div className="h-full min-h-0 flex-1 touch-pan-y overflow-y-scroll overscroll-contain [-webkit-overflow-scrolling:touch]">
@@ -164,7 +181,7 @@ export function LiveTape({
               s.category !== "fresh_market" &&
               norm(r.marketTitle) !== norm(s.body);
             return (
-              <li key={r.id}>
+              <li key={r.id} className={isNew(r.id) ? "tape-enter" : undefined}>
                 <div
                   role={navigable ? "button" : undefined}
                   tabIndex={navigable ? 0 : undefined}

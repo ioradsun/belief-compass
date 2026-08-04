@@ -64,6 +64,8 @@ const NOVELTY: Record<string, number> = {
   tribe_doubled: 0.9,
   believer_milestone: 0.85,
   side_shift: 0.8,
+  // One person moving across many markets at once is a real signal about them.
+  wallet_sweep: 0.85,
   large_trade: 0.5,
   trade_burst: 0.25,
   round_trip: 0,
