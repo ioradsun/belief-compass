@@ -346,6 +346,8 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         ...actorWallets,
         ...moments.flatMap((m) => m.people.map((p) => p.wallet)),
         ...[...burstStakes.values()].flatMap((l) => l.map((s) => s.wallet)),
+        ...[...believersByMarket.values()].flat(),
+
       ]),
     ];
 
