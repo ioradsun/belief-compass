@@ -36,7 +36,7 @@ export function PersonStack({
   const shown = expanded ? people : faces;
 
   return (
-    <div className={`flex flex-wrap items-center gap-y-1 ${className}`}>
+    <div className={`flex shrink-0 items-center ${className}`}>
       {/* Negative margin overlaps the faces; each keeps its own full hit area. */}
       <div className="flex -space-x-1.5">
         {shown.map((p) => (
@@ -60,7 +60,7 @@ export function PersonStack({
           }}
           // The count is the affordance — hover is never required to discover it.
           aria-label={`Show all ${people.length} people`}
-          className="ml-1.5 grid shrink-0 place-items-center rounded-full px-2 text-[11px] font-semibold text-[var(--text-secondary)] transition-colors hover:text-[var(--text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--text-muted)]"
+          className="ml-1.5 grid shrink-0 shrink-0 place-items-center rounded-full px-2 text-[11px] font-semibold text-[var(--text-secondary)] transition-colors hover:text-[var(--text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--text-muted)]"
           style={{ height: `${size}px`, minWidth: `${size}px`, border: "1px solid var(--border)" }}
         >
           +{overflow}
