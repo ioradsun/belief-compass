@@ -69,7 +69,7 @@ function MomentumMetric({
   // Only a trusted (headline) % earns the big right-hand figure. A small-base %
   // is demoted to a quiet suffix on the absolute line so it never overstates the
   // move; with no % at all the headline space stays empty.
-  const headlinePct = copy.pct && !copy.pctQuiet ? copy.pct : copy.direction === "flat" ? "0%" : "";
+  const headlinePct = copy.pct ?? (copy.direction === "flat" ? "0%" : "");
   return (
     <div className={dense ? "px-4 py-2" : "px-4 py-3 sm:px-5"}>
       <div className="flex items-baseline justify-between gap-4">
@@ -94,12 +94,9 @@ function MomentumMetric({
         {label}
       </div>
       <div className={`num mt-0.5 ${dense ? "text-[11px]" : "text-[12px]"}`} style={{ color: tone }}>
-
         {copy.absolute}
-        {copy.pct && copy.pctQuiet && (
-          <span className="ml-1.5 text-[var(--text-muted)]">· {copy.pct}</span>
-        )}
       </div>
+
     </div>
   );
 }
@@ -141,22 +138,17 @@ export function MarketMomentum({
       className="shrink-0 overflow-hidden rounded-[16px]"
       style={{ background: "var(--surface)", border: "1px solid var(--hairline)" }}
     >
-      {!dense && (
-        <div className="px-4 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] sm:px-5">
-          Total market
-        </div>
-      )}
       <MomentumMetric
         dense={dense}
         total={b.current.toLocaleString("en-US")}
-        label="Believers"
+        label="Total participants"
         copy={believerCopy(b, book.window)}
       />
       <div className="border-t border-[var(--hairline)]" aria-hidden />
       <MomentumMetric
         dense={dense}
         total={money(c.current)}
-        label={dense ? "Market cap" : "Total market cap"}
+        label="Total capital"
         copy={capitalCopy(c, book.window, usd, money)}
       />
 
