@@ -21,6 +21,7 @@ import {
 } from "@/lib/live-tape";
 import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
 import { includeInFeed, type NetTag } from "@/domain/feed-event";
+import { scoreLiveAction, SIGNIFICANCE, isCovered, fallbackRate } from "@/domain/significance";
 import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
 import {
@@ -374,10 +375,17 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     // and a movement in a tiny one), keeping structural transitions and personal
     // (network) actions and dropping lone dust + washes (Tier 4). Order is left
     // untouched — the live tape stays chronological so delta-sync merging holds.
+    // SIGNIFICANCE, DERIVED WHERE IT CANNOT BE EMITTED. A chain trade is written
+    // by the indexer, which knows nothing about meaning — but the materiality
+    // gate below ALREADY scores every one of them and was throwing the number
+    // away, leaving the mixer to rank most of the feed on recency alone. The
+    // same candidate now feeds both the gate and the score. No migration, no
+    // second scoring system, nothing viewer-relative.
+    const derived = new Map<string, number>();
     const material = live.filter((r) => {
       const m = momentumById.get(Number(r.marketId));
       const marketBelievers = m ? (m.believersYes ?? 0) + (m.believersNo ?? 0) : null;
-      return includeInFeed({
+      const candidate = {
         kind: r.kind,
         side: r.side,
         amountUsd: r.amountUsd,
@@ -386,7 +394,24 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         windowMs: Number((r.payload as { window_ms?: number }).window_ms ?? 0) || null,
         relationship: (r.face?.relationship as NetTag | null) ?? null,
         marketBelievers,
-      });
+      };
+      if (!includeInFeed(candidate)) return false;
+      const b = r.wallet
+        ? beliefByKey.get(`${r.wallet.toLowerCase()}:${Number(r.marketId)}`)
+        : null;
+      const heldSide = r.side === "YES" ? b?.yesShares : b?.noShares;
+      derived.set(
+        r.id,
+        scoreLiveAction(candidate, {
+          daysHeld: b?.daysHeld ?? null,
+          // Nothing of theirs left on this side → they are out, not trimming.
+          fullExit:
+            (r.payload as { action?: string }).action === "SELL" &&
+            heldSide != null &&
+            heldSide <= 0,
+        }).score,
+      );
+      return true;
     });
 
     // MIXER INPUTS, not the mix itself. The server is where significance, the
@@ -400,11 +425,13 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       r.mix = {
         id: r.id,
         family: familyOf({ kind: r.kind, personal: r.story.personal }),
+        // Emitted (our own emitters persist it) → derived (scored just above)
+        // → fallback, which is now only reachable by a legacy or unknown kind.
         significance: Math.min(
           1,
           (typeof (r.payload as { significance?: number }).significance === "number"
             ? (r.payload as { significance: number }).significance
-            : 0.5) + (viewerBoost.get(r.id) ?? 0),
+            : (derived.get(r.id) ?? SIGNIFICANCE.fallback)) + (viewerBoost.get(r.id) ?? 0),
         ),
         occurredAt: r.occurredAt,
         marketId: String(r.marketId),
@@ -416,6 +443,29 @@ export const listLiveEvents = createServerFn({ method: "GET" })
             : [],
         motif: `${r.kind}:${r.side ?? "market"}:${r.story.headline}`,
       } satisfies MixCandidate;
+    }
+
+    // Telemetry: how much of this feed is still guessing? A new LIVE_KIND that
+    // ships without a scorer shows up here instead of silently ranking at 0.5.
+    if (import.meta.env.DEV) {
+      const uncovered = [...new Set(material.map((r) => r.kind).filter((k) => !isCovered(k)))];
+      if (uncovered.length)
+        console.warn(
+          `[feed] kind(s) with no entry in SIGNIFICANCE_COVERAGE: ${uncovered.join(", ")} — add a scorer or they rank at the fallback forever.`,
+        );
+      const t = fallbackRate(
+        material.map((r) => ({
+          kind: r.kind,
+          significance:
+            typeof (r.payload as { significance?: number }).significance === "number"
+              ? (r.payload as { significance: number }).significance
+              : (derived.get(r.id) ?? null),
+        })),
+      );
+      if (t.fallback > 0)
+        console.warn(
+          `[feed] ${t.fallback}/${t.total} rows (${Math.round(t.rate * 100)}%) fell back to a default significance. Unscored kinds: ${t.kinds.join(", ")}`,
+        );
     }
 
     return { rows: material, error: null };
