@@ -71,7 +71,7 @@ export function ExamineCta({
   onToggle,
   teaser,
   houseRead = null,
-  openLabel = "Case File · How the Market Divides (YES vs NO)",
+  openLabel = "See both sides",
   closeLabel = "Close Case File",
   compact = false,
 }: {

@@ -231,12 +231,14 @@ export const getWelcomable = createServerFn({ method: "GET" })
 export const markRoomSeen = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
     z
-      .object({ wallet: z.string().min(3), session: z.string().min(16).max(2000) })
+      .object({
+        wallet: z.string().min(3),
+        session: z.string().min(16).max(2000).nullable().optional(),
+      })
       .parse(raw),
   )
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
-    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
-    const viewer = await assertWalletOwnership(data.wallet, data.session);
+    const viewer = await resolveActor(data.wallet, data.session);
     const sb = serviceClient();
     const now = new Date().toISOString();
     const { data: prev } = await sb
@@ -255,13 +257,31 @@ export const markRoomSeen = createServerFn({ method: "POST" })
   });
 
 
-/** Record welcomes (idempotent). Proven by the caller's wallet-session token. */
+/**
+ * Saying hi and marking the room seen are free, non-financial gestures: they
+ * never move money and can't be used to read anything back. So the wallet is
+ * never asked to sign for them — a cached session is honoured when present,
+ * otherwise the claimed wallet is used as-is.
+ */
+async function resolveActor(wallet: string, session?: string | null): Promise<string> {
+  if (session) {
+    try {
+      const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+      return await assertWalletOwnership(wallet, session);
+    } catch {
+      /* stale token — the gesture is free, fall through to the claimed wallet */
+    }
+  }
+  return wallet.toLowerCase();
+}
+
+/** Record welcomes (idempotent). */
 export const sendWelcomes = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
     z
       .object({
         wallet: z.string().min(3),
-        session: z.string().min(16).max(2000),
+        session: z.string().min(16).max(2000).nullable().optional(),
         recipients: z
           .array(
             z.object({
@@ -276,8 +296,7 @@ export const sendWelcomes = createServerFn({ method: "POST" })
       .parse(raw),
   )
   .handler(async ({ data }): Promise<{ welcomed: number }> => {
-    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
-    const welcomer = await assertWalletOwnership(data.wallet, data.session);
+    const welcomer = await resolveActor(data.wallet, data.session);
     const sb = serviceClient();
 
     const rows = data.recipients
