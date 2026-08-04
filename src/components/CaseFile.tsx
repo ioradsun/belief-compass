@@ -364,7 +364,14 @@ export function CaseColumn({
         </div>
 
         {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}
-        <CaseRoster side={side} believers={believers} people={net?.people} priceUsd={priceUsd} />
+        <CaseRoster
+          side={side}
+          believers={believers}
+          people={net?.people}
+          priceUsd={priceUsd}
+          variant={compactRoster ? "compact" : "list"}
+        />
+
       </div>
 
       {/* Optional deep-dive into the full center timeline (desktop investigation). */}
