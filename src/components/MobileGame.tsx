@@ -526,13 +526,17 @@ function Screen({ children }: { children: React.ReactNode }) {
 function Dock({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="shrink-0 pt-2"
-      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 8px)" }}
+      className="sticky bottom-0 z-20 mt-auto shrink-0 pt-2"
+      style={{
+        paddingBottom: "max(env(safe-area-inset-bottom), 8px)",
+        background: "var(--bg)",
+      }}
     >
       {children}
     </div>
   );
 }
+
 
 function Rule() {
   return <div className="border-t border-[var(--border)]" aria-hidden />;
