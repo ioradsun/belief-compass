@@ -41,7 +41,10 @@ interface Row {
 }
 interface Query {
   select: (cols: string) => {
-    in: (col: string, vals: number[]) => Promise<{ data: Row[] | null }>;
+    in: (
+      col: string,
+      vals: number[],
+    ) => Promise<{ data: Row[] | null; error?: { message: string } | null }>;
   };
   upsert: (
     rows: Row[],
@@ -59,18 +62,33 @@ export async function emitStoryEvents(
   const db = sb as unknown as { from: (t: string) => Query };
   const nowIso = new Date(nowMs).toISOString();
 
-  const [{ data: states }, { data: storedRows }] = await Promise.all([
-    db
-      .from("market_state")
-      .select(
-        "onchain_id, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, chg_24h_yes, chg_24h_no, trade_count_1h, trade_count_24h, velocity_5m, yes_capital_usd, no_capital_usd, yes_capital_delta_24h, no_capital_delta_24h",
-      )
-      .in("onchain_id", marketIds),
-    db
-      .from("market_transition_state")
-      .select("onchain_id, fingerprint, first_seen_at, last_seen_at, last_emitted_at, seen_count")
-      .in("onchain_id", marketIds),
-  ]);
+  // SURFACE THE ERROR. Discarding it here is how this emitter produced zero rows
+  // in production for weeks: two of its migrations were never applied, so the
+  // select 400'd ("column market_state.yes_capital_delta_24h does not exist"),
+  // `states` came back null, the loop ran zero times and the function returned 0.
+  // An unapplied migration must scream, not look like a quiet day.
+  const [{ data: states, error: stateErr }, { data: storedRows, error: storeErr }] =
+    await Promise.all([
+      db
+        .from("market_state")
+        .select(
+          "onchain_id, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, chg_24h_yes, chg_24h_no, trade_count_1h, trade_count_24h, velocity_5m, yes_capital_usd, no_capital_usd, yes_capital_delta_24h, no_capital_delta_24h",
+        )
+        .in("onchain_id", marketIds),
+      db
+        .from("market_transition_state")
+        .select("onchain_id, fingerprint, first_seen_at, last_seen_at, last_emitted_at, seen_count")
+        .in("onchain_id", marketIds),
+    ]);
+
+  if (stateErr)
+    throw new Error(
+      `story events: market_state read failed (${stateErr.message}). A missing column usually means a migration has not been applied.`,
+    );
+  if (storeErr)
+    throw new Error(
+      `story events: market_transition_state read failed (${storeErr.message}). A missing table usually means a migration has not been applied.`,
+    );
 
   const storedById = new Map<number, TransitionStore>();
   for (const s of storedRows ?? []) {

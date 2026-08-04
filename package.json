@@ -18,6 +18,7 @@
     "check:opportunities": "tsx scripts/check-opportunities.ts",
     "check:dna": "tsx scripts/check-dna.ts",
     "check:feed-supply": "tsx scripts/check-feed-supply.ts",
+    "check:schema": "tsx scripts/check-schema.ts",
     "check:ownership": "tsx scripts/check-ownership.ts"
   },
   "dependencies": {
