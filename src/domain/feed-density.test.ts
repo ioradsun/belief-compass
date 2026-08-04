@@ -38,14 +38,27 @@ describe("the day pov was alive and we were not", () => {
   it("now admits the real ones, and still refuses the dust", () => {
     const { admitted, relaxed } = run(POV_WINDOW, 100);
     expect(relaxed).toBe(true);
-    // The $0.20 and $3.84 stay out; the $54–$78 trades are the day's story.
-    expect(admitted).toBe(5);
+    // Only the $0.20 is dust now. $3.84 squeaks in on a quiet day, which is the
+    // rule working as intended: the bar comes from the day, and a real if small
+    // stake is a better row than an empty column. See DENSITY.dustUsd for why
+    // that floor moved from $5 — measured trade sizes here are cents, not tens.
+    expect(admitted).toBe(6);
   });
 
   it("keeps dust out at ANY density", () => {
-    for (const usd of [0.2, 3.84, DENSITY.dustUsd - 0.01])
+    // Sizes measured in production: two cents cannot be a position at any price.
+    for (const usd of [0.02, 0.04, 0.2, DENSITY.dustUsd - 0.01])
       expect(admitToFeed(trade({ amountUsd: usd, marketBelievers: 100 }), DENSITY.hardFloor)).toBe(
         false,
+      );
+  });
+
+  it("lets a real if small stake through — the platform trades in cents", () => {
+    // $0.72 and $2.46 are ordinary here. A $5 floor rejected both, which was the
+    // empty feed all over again, one layer down.
+    for (const usd of [0.72, 2.46])
+      expect(admitToFeed(trade({ amountUsd: usd, marketBelievers: 6 }), DENSITY.hardFloor)).toBe(
+        true,
       );
   });
 

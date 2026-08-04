@@ -58,12 +58,21 @@ export const DENSITY = {
    */
   hardFloor: 15,
   /**
-   * Money so small it says nothing about anyone's belief. Absolute on purpose —
-   * the rest of this engine is market-relative, but "under five dollars is not a
-   * story anywhere" is a claim that holds in every market, and it is the same
-   * floor a holder must clear to earn a face in a cohort.
+   * Money so small it says nothing about anyone's belief.
+   *
+   * This was $5, set when the only priced trades I could see were another
+   * product's ($54–$78) and I asserted that "under five dollars is not a story
+   * anywhere". Once conviction.company's own ETH price came back, that turned
+   * out to be false HERE: measured over six hours, real trades ran $0.02, $0.04,
+   * $0.72, $2.46 — so a $5 floor was silently rejecting most genuine activity
+   * and re-creating the empty feed the adaptive floor exists to prevent.
+   *
+   * Absolute still, but calibrated to the platform: at ~$1,870/ETH, two cents is
+   * a rounding error and cannot be a position. Anything a person would notice
+   * spending is left to the market-relative scoring above, which is the part
+   * that adapts.
    */
-  dustUsd: 5,
+  dustUsd: 0.5,
 } as const;
 
 /** A wash: bought and sold the same size in minutes. Volume, not conviction. */
