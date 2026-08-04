@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { positionValueUsd, costBasisUsd } from "./position-value";
+import { positionValueUsd, costBasisUsd, VALUE } from "./position-value";
 
 const RATE = 1868.52;
 
@@ -21,6 +21,7 @@ describe("a missing valuation is not a zero valuation", () => {
     expect(positionValueUsd({ valueUsd: null, costEth: null, ethUsd: RATE })).toEqual({
       usd: 0,
       source: "unknown",
+      freshness: "unknown",
     });
   });
 
@@ -48,8 +49,13 @@ describe("a missing valuation is not a zero valuation", () => {
 
 describe("a real valuation always wins", () => {
   it("prefers the marked value over the cost basis", () => {
-    const v = positionValueUsd({ valueUsd: 120, costEth: 0.036, ethUsd: RATE });
-    expect(v).toEqual({ usd: 120, source: "marked" });
+    const v = positionValueUsd({
+      valueUsd: 120,
+      valueUpdatedAt: Date.now(),
+      costEth: 0.036,
+      ethUsd: RATE,
+    });
+    expect(v).toEqual({ usd: 120, source: "marked", freshness: "current" });
   });
 
   it("uses the marked value even with no rate available", () => {
@@ -79,5 +85,92 @@ describe("costBasisUsd returns null, never a misleading zero", () => {
     expect(costBasisUsd(0, RATE)).toBeNull();
     expect(costBasisUsd(0.5, 0)).toBeNull();
     expect(costBasisUsd("nonsense", RATE)).toBeNull();
+  });
+});
+
+/**
+ * REGRESSION 1. The exact shape that emptied conviction cohorts, the standing
+ * -fact pool, whale detection and the dashboard: a real holder whose marked
+ * value is missing must still clear the dust gate on what they committed.
+ */
+describe("regression — a holder with no marked value still clears the dust gate", () => {
+  const DUST_FLOOR = 5;
+
+  it("passes on cost basis alone", () => {
+    // 0.036 ETH ≈ $67 — comfortably real money, and previously read as $0.
+    const v = positionValueUsd({ valueUsd: null, costEth: 0.036, ethUsd: RATE });
+    expect(v.usd).toBeGreaterThan(DUST_FLOOR);
+    expect(v.freshness).toBe("fallback");
+  });
+
+  it("still rejects something that is genuinely dust", () => {
+    const v = positionValueUsd({ valueUsd: null, costEth: 0.0001, ethUsd: RATE });
+    expect(v.usd).toBeLessThan(DUST_FLOOR);
+  });
+});
+
+/**
+ * REGRESSION 3. Worth minus cost, where worth FELL BACK to cost, is identically
+ * zero — a guaranteed non-result wearing the costume of a measurement. The
+ * source is what lets a caller refuse to publish it.
+ */
+describe("regression — a fallback valuation never produces a fake gain or loss", () => {
+  it("cannot yield a non-zero gain against its own cost basis", () => {
+    const cost = 0.036;
+    const worth = positionValueUsd({ valueUsd: null, costEth: cost, ethUsd: RATE });
+    const gain = worth.usd - costBasisUsd(cost, RATE)!;
+    expect(gain).toBe(0);
+    // And the caller is told not to claim one at all.
+    expect(worth.source).not.toBe("marked");
+  });
+
+  it("marks the one condition a gain may be computed under", () => {
+    const fallback = positionValueUsd({ valueUsd: null, costEth: 0.036, ethUsd: RATE });
+    const unknown = positionValueUsd({ valueUsd: null, costEth: null, ethUsd: RATE });
+    const real = positionValueUsd({
+      valueUsd: 120,
+      valueUpdatedAt: Date.now(),
+      costEth: 0.036,
+      ethUsd: RATE,
+    });
+    const mayClaimGain = (v: typeof real) => v.source === "marked";
+    expect(mayClaimGain(fallback)).toBe(false);
+    expect(mayClaimGain(unknown)).toBe(false);
+    expect(mayClaimGain(real)).toBe(true);
+  });
+});
+
+/**
+ * REGRESSION 4. Once the writer runs, the fallback must get out of the way —
+ * otherwise the stopgap quietly becomes the valuation system.
+ */
+describe("regression — a marked valuation replaces the fallback once available", () => {
+  const NOW = 1_800_000_000_000;
+
+  it("switches from cost basis to the marked value", () => {
+    const before = positionValueUsd({ valueUsd: null, costEth: 0.036, ethUsd: RATE, nowMs: NOW });
+    expect(before.source).toBe("cost");
+    const after = positionValueUsd({
+      valueUsd: 120,
+      valueUpdatedAt: NOW - 60_000,
+      costEth: 0.036,
+      ethUsd: RATE,
+      nowMs: NOW,
+    });
+    expect(after).toEqual({ usd: 120, source: "marked", freshness: "current" });
+  });
+
+  it("reports the four freshness states a reader has to tell apart", () => {
+    const f = (o: Parameters<typeof positionValueUsd>[0]) =>
+      positionValueUsd({ ...o, nowMs: NOW }).freshness;
+    expect(f({ valueUsd: 120, valueUpdatedAt: NOW - 60_000 })).toBe("current");
+    expect(f({ valueUsd: 120, valueUpdatedAt: NOW - VALUE.staleAfterMs - 1 })).toBe("stale");
+    expect(f({ valueUsd: null, costEth: 0.1, ethUsd: RATE })).toBe("fallback");
+    expect(f({ valueUsd: null, costEth: null })).toBe("unknown");
+  });
+
+  it("treats a marked value with no timestamp as stale, not current", () => {
+    // An unknown age is not a fresh one — the same rule the module exists for.
+    expect(positionValueUsd({ valueUsd: 120, nowMs: NOW }).freshness).toBe("stale");
   });
 });
