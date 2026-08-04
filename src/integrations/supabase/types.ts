@@ -600,6 +600,7 @@ export type Database = {
           new_believers_7d: number
           new_believers_no_24h: number
           new_believers_yes_24h: number
+          no_capital_delta_24h: number | null
           no_capital_usd: number | null
           no_price_usd: number | null
           onchain_id: number
@@ -645,6 +646,7 @@ export type Database = {
           volume_eth_24h: number
           volume_eth_7d: number
           volume_total_usd: number | null
+          yes_capital_delta_24h: number | null
           yes_capital_usd: number | null
           yes_price_change_1h: number | null
           yes_price_change_24h: number | null
@@ -696,6 +698,7 @@ export type Database = {
           new_believers_7d?: number
           new_believers_no_24h?: number
           new_believers_yes_24h?: number
+          no_capital_delta_24h?: number | null
           no_capital_usd?: number | null
           no_price_usd?: number | null
           onchain_id: number
@@ -741,6 +744,7 @@ export type Database = {
           volume_eth_24h?: number
           volume_eth_7d?: number
           volume_total_usd?: number | null
+          yes_capital_delta_24h?: number | null
           yes_capital_usd?: number | null
           yes_price_change_1h?: number | null
           yes_price_change_24h?: number | null
@@ -792,6 +796,7 @@ export type Database = {
           new_believers_7d?: number
           new_believers_no_24h?: number
           new_believers_yes_24h?: number
+          no_capital_delta_24h?: number | null
           no_capital_usd?: number | null
           no_price_usd?: number | null
           onchain_id?: number
@@ -837,6 +842,7 @@ export type Database = {
           volume_eth_24h?: number
           volume_eth_7d?: number
           volume_total_usd?: number | null
+          yes_capital_delta_24h?: number | null
           yes_capital_usd?: number | null
           yes_price_change_1h?: number | null
           yes_price_change_24h?: number | null
@@ -852,6 +858,39 @@ export type Database = {
             referencedColumns: ["onchain_id"]
           },
         ]
+      }
+      market_state_snapshots: {
+        Row: {
+          believers_no: number | null
+          believers_yes: number | null
+          captured_at: string
+          no_capital_usd: number | null
+          no_price_usd: number | null
+          onchain_id: number
+          yes_capital_usd: number | null
+          yes_price_usd: number | null
+        }
+        Insert: {
+          believers_no?: number | null
+          believers_yes?: number | null
+          captured_at?: string
+          no_capital_usd?: number | null
+          no_price_usd?: number | null
+          onchain_id: number
+          yes_capital_usd?: number | null
+          yes_price_usd?: number | null
+        }
+        Update: {
+          believers_no?: number | null
+          believers_yes?: number | null
+          captured_at?: string
+          no_capital_usd?: number | null
+          no_price_usd?: number | null
+          onchain_id?: number
+          yes_capital_usd?: number | null
+          yes_price_usd?: number | null
+        }
+        Relationships: []
       }
       market_suggestion_events: {
         Row: {
@@ -945,6 +984,36 @@ export type Database = {
           topics?: string[]
           updated_at?: string
           wallet?: string
+        }
+        Relationships: []
+      }
+      market_transition_state: {
+        Row: {
+          fingerprint: string
+          first_seen_at: string
+          last_emitted_at: string | null
+          last_seen_at: string
+          onchain_id: number
+          seen_count: number
+          updated_at: string
+        }
+        Insert: {
+          fingerprint: string
+          first_seen_at?: string
+          last_emitted_at?: string | null
+          last_seen_at?: string
+          onchain_id: number
+          seen_count?: number
+          updated_at?: string
+        }
+        Update: {
+          fingerprint?: string
+          first_seen_at?: string
+          last_emitted_at?: string | null
+          last_seen_at?: string
+          onchain_id?: number
+          seen_count?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1663,6 +1732,18 @@ export type Database = {
           trade_count: number
         }[]
       }
+      market_window_baselines: {
+        Args: { p_id: number }
+        Returns: {
+          believers_no: number
+          believers_yes: number
+          no_capital_usd: number
+          no_price_usd: number
+          window_key: string
+          yes_capital_usd: number
+          yes_price_usd: number
+        }[]
+      }
       price_series_daily: {
         Args: { p_days: number; p_ids: number[] }
         Returns: {
@@ -1694,6 +1775,7 @@ export type Database = {
         Args: { p_wallet: string }
         Returns: undefined
       }
+      snapshot_market_state: { Args: never; Returns: number }
     }
     Enums: {
       [_ in never]: never
