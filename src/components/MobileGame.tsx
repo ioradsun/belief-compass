@@ -338,7 +338,7 @@ export function MobileGame({
             open={false}
             onToggle={() => setPhase("sides")}
             teaser={teaser}
-            openLabel="See both sides · YES vs NO"
+            openLabel="See both sides"
           />
           <div className="border-t border-[var(--hairline)]" aria-hidden />
           <OrderTicket
