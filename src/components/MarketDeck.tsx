@@ -56,9 +56,8 @@ import { houseReadState } from "@/domain/house-read";
 import { emitMarketTransition, type TransitionType, type Side } from "@/domain/market-transition";
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
-import { OrderTicket, OwnedLine, SideButton } from "@/components/order/OrderTicket";
-import { ownedPositions, sellStep, heldSide } from "@/domain/order-actions";
-import { useMoney } from "@/lib/display-unit";
+import { OrderTicket } from "@/components/order/OrderTicket";
+import { useOwnedDock, OwnedDock, ownedDockShown } from "@/components/order/OwnedDock";
 import { ExamineCta } from "@/components/order/ExamineRail";
 import { StandOnIt } from "@/components/StandOnIt";
 import { ShareImpact } from "@/components/ShareImpact";
@@ -134,22 +133,24 @@ export function MarketDeck({
 
   const [amount, setAmount] = useState(1);
   const [side, setSide] = useState<OrderSide | null>(null);
-  // Sell is a separate, deliberate mode — a percentage of ONE explicitly chosen
-  // side. Buying the opposite side never sells (separate token balances), so a
-  // flip can't silently exit.
-  const [sellSide, setSellSide] = useState<OrderSide | null>(null);
-  const [sellPct, setSellPct] = useState<number | null>(null);
-  // Which selector step the dock is showing when the viewer already owns
-  // something: null = the stable Buy · Sell · Pass row, "buy"/"sell" = the
-  // morphed side-picker in the SAME three-button footprint.
-  const [action, setAction] = useState<"buy" | "sell" | null>(null);
 
-  const { format: money } = useMoney();
   const { switchChain } = useSwitchChain();
   const ready = useTradeReady();
   const trade = useTrade();
   const bal = useUserBalance(marketId);
   const house = useHouseFinalize(marketId, viewerWallet);
+  // The owned-position flow — the SAME hook the phone game mounts, so the
+  // ownership model, the sell path and the selector can never drift apart.
+  const dock = useOwnedDock({
+    marketId,
+    viewerWallet,
+    yesTokens: bal.yes,
+    noTokens: bal.no,
+    ready,
+    trade,
+    onRequestConnect: requestConnect,
+    onRequestChain: () => switchChain({ chainId: CHAIN_ID }),
+  });
 
   // A belief tap records a FREE expressed belief (no money) that feeds DNA /
   // Network / House. Refreshes the viewer's readiness so calibration progresses.
@@ -324,9 +325,7 @@ export function MarketDeck({
   // Reset every flow when the market changes.
   useEffect(() => {
     setSide(null);
-    setSellSide(null);
-    setSellPct(null);
-    setAction(null);
+    dock.reset();
     betRevealed.current = false;
     trade.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -358,90 +357,31 @@ export function MarketDeck({
     return () => window.removeEventListener("keydown", onKey);
   }, [chooseSide, choosePass]);
 
-  const relationshipBeat = row.story?.beats.find((b) => b.kind === "relationship")?.text ?? null;
-  const eventBeat = row.story?.beats.find((b) => b.kind === "event")?.text ?? null;
-  // The viewer's honest ownership numbers on THIS market (cost basis + worth).
-  // Off the reducer/POV read model — never inferred from a price percentage.
-  const { data: posSummary } = useQuery({
-    queryKey: ["position-summary", viewerWallet ?? null, marketId],
-    queryFn: () => getPositionSummary({ data: { wallet: viewerWallet as string, marketId } }),
-    enabled: !!viewerWallet,
-    staleTime: 15_000,
-    refetchInterval: 20_000,
-    placeholderData: (prev) => prev,
-  });
-
-  // Ownership is CONTEXT, not the controls. BOTH sides are kept — collapsing to
-  // one made a second holding invisible AND unsellable (see domain/order-actions).
-  const owned = ownedPositions({
-    yesTokens: bal.yes,
-    noTokens: bal.no,
-    yesWorthUsd: posSummary?.yes?.worth ?? null,
-    noWorthUsd: posSummary?.no?.worth ?? null,
-  });
-  // The holding being sold — chosen explicitly, never inferred.
-  const sellHeld = sellSide ? heldSide(owned, sellSide) : null;
-  const heldSideData = sellSide ? posSummary?.[sellSide === "YES" ? "yes" : "no"] : null;
-
-  // Sell quote (only while the sell panel is open on the chosen side).
-  const sellShares = sellHeld && sellPct != null ? sharesForPct(sellHeld.tokens, sellPct) : 0n;
-  const { proceeds, isLoading: sellQuoting } = useSellQuote(
-    marketId,
-    sellSide === "YES",
-    sellShares,
+  // The shared owned-position surface: ownership + the stable Buy · Sell · Pass
+  // selector, or the sell ticket. `ownedDockShown` decides which surface has the
+  // dock — ownership never hijacks a buy the viewer has already started.
+  const dockOwns = ownedDockShown(dock, side);
+  const dockNode = (
+    <OwnedDock
+      api={dock}
+      buySide={side}
+      ethUsd={ethUsd}
+      ready={ready}
+      trade={trade}
+      onBuySide={(s) => chooseSide(s)}
+      onPass={() => choosePass()}
+      onSold={() => {
+        void bal.refetch();
+        dock.closeSell();
+      }}
+    />
   );
 
-  /** A held side's marked value, for the "You own" context line. */
-  const ownedText = (s: OrderSide): string | null => {
-    const h = heldSide(owned, s);
-    if (!h) return null;
-    return h.worthUsd != null && h.worthUsd > 0 ? money(h.worthUsd, "USD") : "held";
-  };
-
-  /** Tapping SELL: one side owned goes straight there; both asks which. */
-  const openSell = () => {
-    setSide(null);
-    trade.reset();
-    const step = sellStep(owned);
-    if (step.kind === "direct") {
-      setSellSide(step.side);
-      setSellPct(100);
-      setAction(null);
-    } else if (step.kind === "choose") {
-      setAction("sell");
-    }
-  };
-  const chooseSellSide = (s: OrderSide) => {
-    setSellSide(s);
-    setSellPct(100);
-    setAction(null);
-  };
-  const closeSell = () => {
-    setSellPct(null);
-    setSellSide(null);
-    setAction(null);
-    trade.reset();
-  };
-  const onSellConfirm = async () => {
-    if (!ready.connected) return requestConnect();
-    if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
-    if (
-      sellSide &&
-      proceeds != null &&
-      sellShares > 0n &&
-      !(trade.isSubmitting || trade.isMining)
-    ) {
-      try {
-        await trade.sell(marketId, sellSide === "YES", sellShares, proceeds);
-      } catch {
-        /* surfaced via trade.error */
-      }
-    }
-  };
-
+  const relationshipBeat = row.story?.beats.find((b) => b.kind === "relationship")?.text ?? null;
+  const eventBeat = row.story?.beats.find((b) => b.kind === "event")?.text ?? null;
   // A completed BUY takes over the whole center: the Conviction Reveal — the same
   // story engine + component the mobile game uses. The trade was only the unlock.
-  if (trade.isSuccess && side != null && sellPct == null) {
+  if (trade.isSuccess && side != null && !dock.isSelling) {
     const reveal = getConvictionReveal(
       assembleRevealInput({
         side,
@@ -589,7 +529,7 @@ export function MarketDeck({
             className="-mr-1.5 mt-0.5"
             marketId={marketId}
             title={title}
-            side={side ?? sellSide ?? owned.only}
+            side={side ?? dock.sellSide ?? dock.owned.only}
             hasMedia={!!stageMedia}
           />
         </div>
@@ -640,114 +580,13 @@ export function MarketDeck({
         {/* The controls. The analysis rail now lives inside the Total Market
           instrument above, so the dock is only the order surface. */}
         <div className="overflow-hidden rounded-[16px]" style={{ background: "var(--surface)" }}>
-          {sellHeld && sellPct != null ? (
-            <OrderTicket
-              mode="sell"
-              held={{ side: sellHeld.side, tokens: sellHeld.tokens }}
-              pct={sellPct}
-              setPct={setSellPct}
-              proceeds={proceeds}
-              quoting={sellQuoting}
-              ethUsd={ethUsd}
-              worthUsd={heldSideData?.worth ?? null}
-              ready={ready}
-              trade={trade}
-              onConfirm={onSellConfirm}
-              onCancel={closeSell}
-              onDone={() => {
-                void bal.refetch();
-                closeSell();
-              }}
-            />
-          ) : owned.any && side == null ? (
-            /* You own something: ownership is CONTEXT above ONE stable selector.
-            The system never guesses whether you meant to add, flip or exit — the
-            side is chosen explicitly in the SAME three-button footprint. */
-            <div className="p-3.5">
-              <OwnedLine yes={ownedText("YES")} no={ownedText("NO")} />
-              {action === "buy" ? (
-                <div className="flex gap-2">
-                  <SideButton
-                    label="Back NO"
-                    tone="no"
-                    onClick={() => {
-                      trade.reset();
-                      setAction(null);
-                      chooseSide("NO");
-                    }}
-                    className="h-[52px] flex-1"
-                  />
-                  <SideButton
-                    label="Back YES"
-                    tone="yes"
-                    onClick={() => {
-                      trade.reset();
-                      setAction(null);
-                      chooseSide("YES");
-                    }}
-                    className="h-[52px] flex-1"
-                  />
-                  <SideButton
-                    label="Cancel"
-                    tone="pass"
-                    onClick={() => setAction(null)}
-                    className="h-[52px] flex-1"
-                  />
-                </div>
-              ) : action === "sell" ? (
-                /* Both sides held — the one case that genuinely needs a choice. */
-                <div className="flex gap-2">
-                  <SideButton
-                    label="Sell NO"
-                    sub={ownedText("NO") ? `${ownedText("NO")} owned` : null}
-                    tone="no"
-                    onClick={() => chooseSellSide("NO")}
-                    className="h-[52px] flex-1"
-                  />
-                  <SideButton
-                    label="Sell YES"
-                    sub={ownedText("YES") ? `${ownedText("YES")} owned` : null}
-                    tone="yes"
-                    onClick={() => chooseSellSide("YES")}
-                    className="h-[52px] flex-1"
-                  />
-                  <SideButton
-                    label="Cancel"
-                    tone="pass"
-                    onClick={() => setAction(null)}
-                    className="h-[52px] flex-1"
-                  />
-                </div>
-              ) : (
-                /* The stable default — identical whether you hold one side or both. */
-                <div className="flex gap-2">
-                  <SideButton
-                    label="Buy"
-                    tone="yes"
-                    onClick={() => {
-                      trade.reset();
-                      setAction("buy");
-                    }}
-                    className="h-[52px] flex-1"
-                  />
-                  <SideButton
-                    label="Sell"
-                    tone="no"
-                    onClick={openSell}
-                    className="h-[52px] flex-1"
-                  />
-                  <SideButton
-                    label="Pass"
-                    tone="pass"
-                    onClick={() => choosePass()}
-                    className="h-[52px] flex-1"
-                  />
-                </div>
-              )}
-            </div>
+          {/* Owned and undecided? The SHARED dock renders ownership + the stable
+            selector (or the sell ticket). Otherwise the buy ticket takes over —
+            discovery (Back NO · Back YES · Pass), or the amount + confirm form
+            once a side is chosen. The SAME ticket in both cases. */}
+          {dockOwns ? (
+            dockNode
           ) : (
-            /* Discovery buy (Back NO · Back YES · Pass), or the amount + confirm
-            form once a side is chosen — the SAME ticket in both cases. */
             <OrderTicket
               mode="buy"
               side={side}
@@ -759,7 +598,7 @@ export function MarketDeck({
               }}
               onCancel={() => {
                 setSide(null);
-                setAction(null); // back to the stable selector when you own something
+                dock.setAction(null); // back to the stable selector when you own something
               }}
               onPass={() => choosePass()}
               quote={quote}

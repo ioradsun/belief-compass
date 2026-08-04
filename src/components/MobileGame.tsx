@@ -38,10 +38,11 @@ import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { requestConnect } from "@/lib/connect-bridge";
 import { CHAIN_ID } from "@/chain/decoder";
-import { useBuyQuote, useTrade, useTradeReady } from "@/lib/chain-trade";
+import { useBuyQuote, useTrade, useTradeReady, useUserBalance } from "@/lib/chain-trade";
 import { usdToWei, type OrderSide } from "@/domain/order";
 import { useMoney } from "@/lib/display-unit";
 import { OrderTicket } from "@/components/order/OrderTicket";
+import { useOwnedDock, OwnedDock, ownedDockShown } from "@/components/order/OwnedDock";
 import { ExamineCta } from "@/components/order/ExamineRail";
 import { marketBook } from "@/domain/market-book";
 import { marketPulse } from "@/domain/market-pulse";
@@ -80,6 +81,7 @@ export function MobileGame({
     setSide(null);
     setBacking(false);
     setAmount(1);
+    dock.reset();
     trade.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketId]);
@@ -162,6 +164,19 @@ export function MobileGame({
   const { switchChain } = useSwitchChain();
   const ready = useTradeReady();
   const trade = useTrade();
+  const bal = useUserBalance(marketId);
+  // The SAME owned-position hook the desktop deck mounts — the phone previously
+  // had no sell path at all, so owning shares here was a one-way door.
+  const dock = useOwnedDock({
+    marketId,
+    viewerWallet,
+    yesTokens: bal.yes,
+    noTokens: bal.no,
+    ready,
+    trade,
+    onRequestConnect: requestConnect,
+    onRequestChain: () => switchChain({ chainId: CHAIN_ID }),
+  });
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(
     marketId,
@@ -202,7 +217,7 @@ export function MobileGame({
 
   // A completed buy takes over the screen with the Conviction Reveal — the same
   // engine + component desktop uses. The trade was only the unlock.
-  if (trade.isSuccess && side) {
+  if (trade.isSuccess && side && !dock.isSelling) {
     const reveal = getConvictionReveal(
       assembleRevealInput({
         side,
@@ -348,39 +363,65 @@ export function MobileGame({
             openLabel="See both sides"
           />
           <div className="border-t border-[var(--hairline)]" aria-hidden />
-          <OrderTicket
-            mode="buy"
-            side={side}
-            amount={amount}
-            setAmount={setAmount}
-            onSelect={(s) => {
-              trade.reset();
-              choose(s);
-            }}
-            onCancel={() => {
-              setBacking(false);
-              setSide(null);
-            }}
-            onPass={pass}
-            quote={quote ?? null}
-            quoting={quoting}
-            ethWei={ethWei}
-            ethUsd={ethUsd}
-            ready={ready}
-            trade={trade}
-            onConfirm={async () => {
-              if (!ready.connected) return requestConnect();
-              if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
-              if (quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
-                try {
-                  await trade.buy(marketId, side === "YES", ethWei, quote.tokens);
-                } catch {
-                  /* surfaced via trade.error */
+          {/* Owned and undecided? The SHARED dock — the identical ownership line,
+            selector and sell ticket the desktop deck renders. Otherwise the buy
+            ticket takes over, exactly as before. */}
+          {ownedDockShown(dock, side) ? (
+            <OwnedDock
+              api={dock}
+              buySide={side}
+              ethUsd={ethUsd}
+              ready={ready}
+              trade={trade}
+              onBuySide={(s) => {
+                trade.reset();
+                choose(s);
+              }}
+              onPass={pass}
+              onSold={() => {
+                void bal.refetch();
+                dock.closeSell();
+              }}
+            />
+          ) : (
+            <OrderTicket
+              mode="buy"
+              side={side}
+              amount={amount}
+              setAmount={setAmount}
+              onSelect={(s) => {
+                trade.reset();
+                choose(s);
+              }}
+              onCancel={() => {
+                setBacking(false);
+                setSide(null);
+                dock.setAction(null); // back to the stable selector when you own something
+              }}
+              onPass={pass}
+              quote={quote ?? null}
+              quoting={quoting}
+              ethWei={ethWei}
+              ethUsd={ethUsd}
+              ready={ready}
+              trade={trade}
+              onConfirm={async () => {
+                if (!ready.connected) return requestConnect();
+                if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
+                if (quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
+                  try {
+                    await trade.buy(marketId, side === "YES", ethWei, quote.tokens);
+                  } catch {
+                    /* surfaced via trade.error */
+                  }
                 }
-              }
-            }}
-            onDone={onNext}
-          />
+              }}
+              onDone={() => {
+                void bal.refetch();
+                onNext();
+              }}
+            />
+          )}
         </div>
         {/* What your link has brought into this market — only once it's real. */}
         <div className="mt-2">

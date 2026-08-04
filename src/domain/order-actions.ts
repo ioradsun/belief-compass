@@ -86,3 +86,31 @@ export function sellStep(owned: Owned): SellStep {
 export function heldSide(owned: Owned, side: Side): OwnedSide | null {
   return side === "YES" ? owned.yes : owned.no;
 }
+
+/**
+ * WHICH SURFACE THE DOCK SHOWS. One rule, shared by the desktop deck and the
+ * phone game, so the two can never disagree about what a viewer is looking at:
+ *
+ *   "sell"  — a sell is in flight; it owns the dock until it settles or cancels.
+ *   "owned" — you hold something and haven't declared intent: ownership as
+ *             context above the stable Buy · Sell · Pass selector.
+ *   "buy"   — a side is chosen (so: the amount + confirm form), or you hold
+ *             nothing at all (so: plain discovery). Same ticket either way.
+ *
+ * The order matters: an in-flight sell outranks a chosen buy side left over
+ * from a previous market, and a chosen buy side outranks ownership — otherwise
+ * picking "Back YES" while holding shares would bounce you back to the selector.
+ */
+export type DockSurface = "sell" | "owned" | "buy";
+
+export function dockSurface(input: {
+  owned: Owned;
+  /** A sell ticket is open. */
+  selling: boolean;
+  /** The side the viewer has chosen to back, if any. */
+  buySide: Side | null;
+}): DockSurface {
+  if (input.selling) return "sell";
+  if (input.buySide != null) return "buy";
+  return input.owned.any ? "owned" : "buy";
+}

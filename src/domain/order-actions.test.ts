@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ownedPositions, sellStep, heldSide } from "./order-actions";
+import { ownedPositions, sellStep, heldSide, dockSurface } from "./order-actions";
 
 const own = (yes: bigint, no: bigint, yesW?: number | null, noW?: number | null) =>
   ownedPositions({ yesTokens: yes, noTokens: no, yesWorthUsd: yesW, noWorthUsd: noW });
@@ -76,5 +76,29 @@ describe("heldSide", () => {
 
   it("returns null for a side not held", () => {
     expect(heldSide(own(5n, 0n), "NO")).toBeNull();
+  });
+});
+
+describe("dockSurface — desktop and phone agree on what you're looking at", () => {
+  it("shows the plain buy ticket when nothing is owned", () => {
+    expect(dockSurface({ owned: own(0n, 0n), selling: false, buySide: null })).toBe("buy");
+  });
+
+  it("shows ownership + the stable selector when you hold something", () => {
+    expect(dockSurface({ owned: own(5n, 0n), selling: false, buySide: null })).toBe("owned");
+    expect(dockSurface({ owned: own(0n, 5n), selling: false, buySide: null })).toBe("owned");
+    expect(dockSurface({ owned: own(5n, 7n), selling: false, buySide: null })).toBe("owned");
+  });
+
+  it("hands the dock to the buy ticket once a side is chosen, even while holding", () => {
+    // The regression this rule exists to prevent: tapping Back YES while you
+    // already own shares must open the amount form, not bounce to the selector.
+    expect(dockSurface({ owned: own(5n, 7n), selling: false, buySide: "YES" })).toBe("buy");
+    expect(dockSurface({ owned: own(0n, 0n), selling: false, buySide: "NO" })).toBe("buy");
+  });
+
+  it("lets an in-flight sell outrank everything", () => {
+    expect(dockSurface({ owned: own(5n, 0n), selling: true, buySide: null })).toBe("sell");
+    expect(dockSurface({ owned: own(5n, 0n), selling: true, buySide: "YES" })).toBe("sell");
   });
 });
