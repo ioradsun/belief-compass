@@ -37,6 +37,7 @@ import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT } from "@/domain/market-flow";
 export { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow } from "@/lib/deck-window";
 import { marketBook, type BookMetric } from "@/domain/market-book";
+import { seededBelievers } from "@/lib/market-state/read-model";
 import { rankBelievers, sideCaseSummary, type CaseRelationship } from "@/domain/case-file";
 
 /** Window-relative % for a book metric, or null when the base is too small. */
@@ -145,12 +146,15 @@ export function CaseColumn({
   // Fall back to the market row before the tape has loaded, so the panel never
   // opens blank. The row totals are period-less; the deltas need the tape.
   const rr = row as Record<string, unknown>;
-  const believersTotal =
+  const rawBelievers =
     believerMetric?.current ?? num(side === "YES" ? rr.believers_yes : rr.believers_no) ?? 0;
   const capitalUsd =
     capitalMetric != null
       ? capitalMetric.current * (ethUsd || 0)
       : num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
+  // Capital on this side means someone stands behind it — the market's initial
+  // investment isn't an indexed position, so never show "0 believers, $13".
+  const believersTotal = seededBelievers(rawBelievers, capitalUsd);
   const priceUsd =
     summary?.priceEth != null
       ? summary.priceEth * (ethUsd || 0)
