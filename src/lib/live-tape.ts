@@ -416,6 +416,23 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
       const amountEth = group.reduce((n, e) => n + e.amount_eth, 0);
       const amountUsd = usd(amountEth);
       const isLargeSingle = group.length === 1 && amountUsd != null && amountUsd >= LARGE_TRADE_USD;
+      /**
+       * WHO IS IN THIS BURST, and what each of them put behind it. A crowd row
+       * used to keep only a COUNT, so "6 people backed YES" could never become
+       * six faces. The wallets ride along on the payload (biggest commitment
+       * first, capped — a stack is a way in, not a directory) and the server
+       * turns them into names and pictures.
+       */
+      const byWallet = new Map<string, number>();
+      for (const e of group) {
+        if (!e.wallet) continue;
+        const w = e.wallet.toLowerCase();
+        byWallet.set(w, (byWallet.get(w) ?? 0) + e.amount_eth);
+      }
+      const walletStakes = [...byWallet.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, BURST_WALLET_CAP)
+        .map(([w, eth]) => ({ wallet: w, usd: usd(eth) }));
       const base: Omit<LiveRow, "text" | "story"> = {
         id: head.source_key,
         kind: isLargeSingle ? "large_trade" : "trade_burst",
@@ -430,8 +447,9 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
         amountUsd,
         // Sole actor when the row is one wallet — lets the server tag your network.
         wallet: wallets.size === 1 ? [...wallets][0] : null,
-        payload: { action: head.action, window_ms: GROUP_WINDOW_MS },
+        payload: { action: head.action, window_ms: GROUP_WINDOW_MS, wallets: walletStakes },
       };
+
       const story = liveRowStory(base);
       rows.push({ ...base, story, text: flattenStory(story) });
       group = [];
