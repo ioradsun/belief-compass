@@ -62,7 +62,6 @@ function ethText(eth: number, dp = 6): string {
   return s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
 }
 
-
 /**
  * The amount input. `amount` is ALWAYS the USD value — the trade-sizing pipeline
  * (usdToWei) is unchanged — but when the viewer's display unit is ETH the field
@@ -150,12 +149,15 @@ export function AmountField({
  */
 export function SideButton({
   label,
+  sub,
   tone,
   selected,
   onClick,
   className = "h-[52px] flex-1",
 }: {
   label: string;
+  /** A quiet second line inside the button, e.g. "$24.10 owned" on Sell. */
+  sub?: string | null;
   tone: "yes" | "no" | "pass";
   /** Omit for the momentary market-dock look; set for a persistent toggle. */
   selected?: boolean;
@@ -185,11 +187,51 @@ export function SideButton({
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`${className} rounded-[12px] text-[14px] font-semibold transition-colors`}
+      className={`${className} flex flex-col items-center justify-center rounded-[12px] px-2 text-[14px] font-semibold leading-tight transition-colors`}
       style={style}
     >
-      {label}
+      <span className="min-w-0 truncate">{label}</span>
+      {sub && <span className="num mt-0.5 text-[10px] font-medium opacity-70">{sub}</span>}
     </button>
+  );
+}
+
+/**
+ * THE one action row. Every selector in the dock — the neutral decision, the
+ * owned Buy/Sell/Pass bar, and both morphed side-pickers — renders through this,
+ * so the footprint, height and spacing never change between states. Three equal
+ * columns: the layout is spatially stable, whatever you own.
+ */
+export function ActionRow({ children }: { children: ReactNode }) {
+  return (
+    <div className={`${CARD} flex gap-2`} style={CARD_STYLE}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * "You own" — ownership as CONTEXT above the controls, never as the thing that
+ * decides them. Shows every side actually held, so holding both is visible.
+ */
+export function OwnedLine({ yes, no }: { yes?: string | null; no?: string | null }) {
+  if (!yes && !no) return null;
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-1 pb-2">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+        You own
+      </span>
+      {yes && (
+        <span className="num text-[12px] font-semibold" style={{ color: "var(--yes)" }}>
+          YES {yes}
+        </span>
+      )}
+      {no && (
+        <span className="num text-[12px] font-semibold" style={{ color: "var(--no)" }}>
+          NO {no}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -485,28 +527,29 @@ function BuyTicket({
   }
 
   // Neutral: the decision only — one tap on an action opens the order form.
+  // NO left, YES right, Pass last: the same three equal columns every other
+  // selector uses, so nothing shifts as the dock morphs.
   if (!side) {
     return (
-      <div className={`${CARD} flex gap-2`} style={CARD_STYLE}>
+      <ActionRow>
         <SideButton
-          label="← NO"
+          label="Back NO"
           tone="no"
           onClick={() => onSelect("NO")}
           className={`${CTRL} flex-1`}
         />
-        <SideButton label="Pass" tone="pass" onClick={onPass} className={`${CTRL} w-[92px]`} />
         <SideButton
-          label="YES →"
+          label="Back YES"
           tone="yes"
           onClick={() => onSelect("YES")}
           className={`${CTRL} flex-1`}
         />
-      </div>
+        <SideButton label="Pass" tone="pass" onClick={onPass} className={`${CTRL} flex-1`} />
+      </ActionRow>
     );
   }
 
-  const availUnit =
-    availEth == null ? null : unitAmountFromEth(availEth, unit, ethUsd);
+  const availUnit = availEth == null ? null : unitAmountFromEth(availEth, unit, ethUsd);
   const overBalance = availEth != null && ethUsd > 0 && amount > availEth * ethUsd + 1e-9;
   const amountError = amount <= 0 ? null : overBalance ? "Insufficient balance" : null;
 
@@ -557,7 +600,9 @@ function BuyTicket({
         />
         <div className="mt-1.5 text-[12px] text-[var(--text-muted)]">
           {amountError ? (
-            <span style={{ color: "var(--no)" }}>{amountError} · Available {availUnit ?? "—"}</span>
+            <span style={{ color: "var(--no)" }}>
+              {amountError} · Available {availUnit ?? "—"}
+            </span>
           ) : (
             <>Available {availUnit ?? "—"}</>
           )}
@@ -614,7 +659,6 @@ function BuyTicket({
     </div>
   );
 }
-
 
 function SellTicket({
   held,
@@ -762,4 +806,3 @@ function SellTicket({
     </div>
   );
 }
-
