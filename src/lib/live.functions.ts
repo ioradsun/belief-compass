@@ -86,6 +86,13 @@ const input = z
     /** Scope the tape to specific markets (center deck, position rows). */
     marketIds: z.array(z.number().int()).min(1).max(60).optional(),
     /**
+     * Scope to ONE side of a market — the YES/NO rails. A side panel is asking
+     * "what is happening to this belief", so market-wide rows (a market opening,
+     * a transition about both sides) are deliberately excluded: the column
+     * already sits inside that context and repeating it is noise.
+     */
+    side: z.enum(["YES", "NO"]).optional(),
+    /**
      * Delta sync: only events at/after this ISO time. The client passes its
      * newest event minus an OVERLAP that exceeds every grouping window, so the
      * server re-groups the boundary exactly as a full fetch would — the client
@@ -127,6 +134,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       .eq("is_canonical", true)
       .in("kind", LIVE_KINDS);
     if (scope) q = q.in("market_id", scope);
+    if (data?.side) q = q.eq("side", data.side);
     // The live feed is a 72-hour window: anything older is history, not "live".
     q = q.gte("occurred_at", new Date(Date.now() - LIVE_WINDOW_MS).toISOString());
     // Delta: bound by the overlap window instead of over-reading the full list.
