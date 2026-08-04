@@ -550,11 +550,17 @@ export function MarketDeck({
             hasMedia={!!stageMedia}
           />
         </div>
-        <MarketByline
-          onchainId={Number(row.onchain_id)}
-          viewerWallet={viewer}
-          onSelectPerson={onSelectPerson}
-        />
+        {/* The byline renders nothing until the creator lookup lands, and
+          nothing at all for a market with no creator on record. Reserving its
+          row means the market body below starts at the same y either way,
+          instead of jumping up 32px and back down as the lookup resolves. */}
+        <div className="min-h-[32px]">
+          <MarketByline
+            onchainId={Number(row.onchain_id)}
+            viewerWallet={viewer}
+            onSelectPerson={onSelectPerson}
+          />
+        </div>
       </div>
 
       {/* Investigation Mode: one side's story replaces the comparison, while the

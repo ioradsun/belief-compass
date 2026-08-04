@@ -149,6 +149,26 @@ async function measureViewport(browser, name, viewport, reducedMotion) {
     await page.waitForTimeout(400);
   }
 
+  // SKELETON HANDOVER — the loading state must occupy the loaded state's
+  // geometry, or every first paint ends with the column rearranging. Measured
+  // exactly like a market change: swap skeleton -> deck and watch the anchors.
+  const handover = [];
+  for (const on of [true, false, true, false]) {
+    await page.evaluate(() => window.__reset());
+    const watching = page.evaluate(() => window.__watch(500));
+    await page.evaluate((v) => window.__scene?.setSkeleton(v), on);
+    const frames = await watching;
+    const shifts = await page.evaluate(() => window.__p.shifts);
+    const dockYs = uniq(frames.map((f) => f.dockY));
+    handover.push({
+      to: on ? "skeleton" : "deck",
+      cls: Number(sum(shifts.map((x) => x.v)).toFixed(5)),
+      dockMovedPx: dockYs.length > 1 ? Math.max(...dockYs) - Math.min(...dockYs) : 0,
+      dockY: dockYs,
+    });
+    await page.waitForTimeout(250);
+  }
+
   // Rapid navigation — eight changes as fast as the UI accepts them.
   await page.evaluate(() => window.__reset());
   const rapidWatch = page.evaluate(() => window.__watch(2600));
@@ -168,7 +188,7 @@ async function measureViewport(browser, name, viewport, reducedMotion) {
   };
 
   await ctx.close();
-  return { viewport, transitions, rapid };
+  return { viewport, transitions, handover, rapid };
 }
 
 async function main() {
@@ -207,7 +227,8 @@ async function main() {
       `titleH=${uniq(t.flatMap((x) => x.titleHeights)).join("/")} ` +
       `blank=${sum(t.map((x) => x.blankFrames))} remounts=${t.filter((x) => x.remounted).length} ` +
       `req/txn=${avg((x) => x.requests)} longTasks=${sum(t.map((x) => x.longTasks))} ` +
-      `| rapid CLS=${r.rapid.cls} blank=${r.rapid.blankFrames}/${r.rapid.totalFrames} dockMove=${r.rapid.dockMovedPx}px`
+      `| rapid CLS=${r.rapid.cls} blank=${r.rapid.blankFrames}/${r.rapid.totalFrames} dockMove=${r.rapid.dockMovedPx}px ` +
+      `| skeleton<->deck CLS=${Math.max(...(r.handover ?? [{ cls: 0 }]).map((h) => h.cls)).toFixed(4)} dockMove=${Math.max(...(r.handover ?? [{ dockMovedPx: 0 }]).map((h) => h.dockMovedPx))}px`
     );
   };
 

@@ -11,7 +11,7 @@
  * (so opening the Case File adds no requests) and derives the totals, deltas and
  * roster ordering from the pure src/domain/case-file engine.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { setDeckLens, useDeckLens } from "@/lib/deck-lens";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
@@ -80,13 +80,23 @@ export function CaseColumn({
   const win = useDeckWindow();
   const { format } = useMoney();
 
+  // A different market's case starts at the top — but WITHOUT a remount. The
+  // route used to force one with `key={onchain_id}` purely to reset this
+  // scroll, which threw away both rails' DOM and every query observer on every
+  // market change just to set one number back to zero. Setting it directly is
+  // the whole job.
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (scroller.current) scroller.current.scrollTop = 0;
+  }, [marketId]);
+
   // Same query keys the deck already runs → React Query dedupes, no new requests.
   const { data: evidence } = useQuery({
     queryKey: ["evidence", marketId],
     queryFn: () => getMarketEvidence({ data: { marketId } }),
     refetchInterval: 60_000,
     staleTime: 30_000,
-    placeholderData: (prev) => prev,
+    // Per-market key: never bridge the previous market's believers into this one.
   });
   const { data: net } = useQuery({
     queryKey: ["network", viewerWallet ?? null, "all", "relevant", ""],
@@ -107,7 +117,7 @@ export function CaseColumn({
     queryFn: () => getMarketBaselines({ data: { id: marketId } }),
     staleTime: 30_000,
     refetchInterval: 60_000,
-    placeholderData: (prev) => prev,
+    // Per-market key: see above.
   });
 
   const tape = change?.tape;
@@ -280,7 +290,7 @@ export function CaseColumn({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-0.5">
+      <div ref={scroller} className="min-h-0 flex-1 space-y-4 overflow-y-scroll pr-0.5">
         {/* ACT 1 — THE LENSES: pick what to investigate. The three metrics ARE the
           navigation — no tabs, no segmented control. Believers → Capital → Price
           mirrors how conviction forms: people, then money, then price. */}

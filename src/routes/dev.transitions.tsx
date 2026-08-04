@@ -23,6 +23,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { MarketDeck } from "@/components/MarketDeck";
+import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { MarketScene } from "@/components/MarketScene";
 import type { MarketRow } from "@/components/MarketCard";
 
@@ -98,12 +99,18 @@ declare global {
       next: () => void;
       prev: () => void;
       kind: () => string;
+      /** Swap the deck for the loading skeleton, to measure the handover. */
+      setSkeleton: (on: boolean) => void;
     };
   }
 }
 
 function TransitionHarness() {
   const [i, setI] = useState(0);
+  // The skeleton and the loaded deck must occupy identical geometry, so the
+  // harness can show either one in the same slot and the probe can measure the
+  // handover between them the same way it measures a market change.
+  const [skeleton, setSkeleton] = useState(false);
   const n = FIXTURES.length;
 
   const goto = useCallback((next: number) => setI(((next % n) + n) % n), [n]);
@@ -116,6 +123,7 @@ function TransitionHarness() {
       next: () => goto(i + 1),
       prev: () => goto(i - 1),
       kind: () => FIXTURES[i].kind,
+      setSkeleton,
     };
   }, [i, n, goto]);
 
@@ -139,8 +147,12 @@ function TransitionHarness() {
     // The SAME shell geometry the real route uses, so measurements taken here
     // describe the real centre column and not a test-only layout.
     <div className="flex h-[100svh] w-full flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)]">
+      {/* The harness's own toolbar is FIXED HEIGHT and never wraps. At 390px a
+        wrapping toolbar reflows when the label text changes length, and that
+        shift lands in the measurement as if the app had moved. The test rig
+        must not be the thing being measured. */}
       <div
-        className="flex shrink-0 items-center gap-3 px-4 py-2 text-[11px] text-[var(--text-muted)]"
+        className="flex h-9 shrink-0 items-center gap-3 overflow-hidden whitespace-nowrap px-4 text-[11px] text-[var(--text-muted)]"
         style={{ borderBottom: "1px solid var(--hairline)" }}
       >
         <button
@@ -161,14 +173,37 @@ function TransitionHarness() {
         >
           Next
         </button>
+        <button
+          type="button"
+          data-probe="skeleton"
+          onClick={() => setSkeleton((v) => !v)}
+          className="rounded px-2 py-1"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          {skeleton ? "Show deck" : "Show skeleton"}
+        </button>
         <span data-probe="kind">
           {i + 1}/{n} · {f.kind}
+          {skeleton ? " · skeleton" : ""}
         </span>
       </div>
       <main className="flex h-full min-h-0 flex-1 flex-col overflow-hidden px-4 py-5 lg:px-8 lg:py-6">
         <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col">
           <MarketScene marketId={Number(f.row.onchain_id)}>
-            <MarketDeck row={f.row} ethUsd={3000} onSkip={() => goto(i + 1)} />
+            {skeleton ? (
+              <div className="flex min-h-0 flex-1 flex-col">
+                <DeckSkeleton />
+              </div>
+            ) : (
+              <MarketDeck
+                row={f.row}
+                ethUsd={3000}
+                onSkip={() => goto(i + 1)}
+                // Passed so the deck renders its docked read, which is part of
+                // the instrument the skeleton has to match.
+                onToggleCase={() => undefined}
+              />
+            )}
           </MarketScene>
         </div>
       </main>
