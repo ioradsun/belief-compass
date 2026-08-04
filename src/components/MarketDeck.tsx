@@ -60,7 +60,6 @@ import { OrderTicket } from "@/components/order/OrderTicket";
 import { ExamineCta } from "@/components/order/ExamineRail";
 import { StandOnIt } from "@/components/StandOnIt";
 import { ShareImpact } from "@/components/ShareImpact";
-import { MovementLine } from "@/components/MovementLine";
 
 import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
 import { getConvictionMarket } from "@/lib/market-create.functions";
@@ -681,16 +680,6 @@ export function MarketDeck({
             />
           )}
         </div>
-
-        {/* Once you've backed a side, the movement it belongs to — and how close
-          it is to its next stage. Believers only; a whale can't fake a crowd. */}
-        {held && (
-          <MovementLine
-            believers={Number(held.side === "YES" ? rr.believers_yes : rr.believers_no) || 0}
-            side={held.side}
-            className="mt-2"
-          />
-        )}
 
         {/* The payoff for standing on it: what your link has brought in. Only
           renders once it's real (a believer, not just an open). */}
