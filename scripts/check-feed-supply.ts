@@ -20,8 +20,16 @@
  * covered by unit tests, and everything that has actually gone wrong in
  * production went wrong before that point.
  *
+ * RUNS AS THE APP DOES. It authenticates with the PUBLISHABLE (anon) key, not
+ * the service role, because every table it touches is one the live tape reads
+ * through `publicClient()` — and privilege is itself a failure mode. A
+ * service-role diagnostic reported `eth_usd = 3500 ✓ healthy` while the feed saw
+ * nothing at all, because `calc_cache` had RLS enabled and no anon policy: the
+ * read returns HTTP 200 with zero rows, silently. A checker with more access
+ * than the thing it checks will certify a broken system.
+ *
  * Run:  npx tsx scripts/check-feed-supply.ts [--hours 2] [--rows 25]
- * Env:  SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  (required)
+ * Env:  SUPABASE_URL + SUPABASE_PUBLISHABLE_KEY (or SUPABASE_ANON_KEY)
  */
 import { createClient } from "@supabase/supabase-js";
 import { groupLiveRows, type LiveEventInput } from "../src/lib/live-tape";
@@ -29,9 +37,12 @@ import { scoreFeedEvent } from "../src/domain/feed-event";
 import { adaptiveFloor, admitToFeed, DENSITY } from "../src/domain/feed-density";
 
 const url = process.env.SUPABASE_URL;
-const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const key =
+  process.env.SUPABASE_PUBLISHABLE_KEY ??
+  process.env.SUPABASE_ANON_KEY ??
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 if (!url || !key) {
-  console.error("Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY");
+  console.error("Missing SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY");
   process.exit(2);
 }
 const sb = createClient(url, key, { auth: { persistSession: false } });
@@ -86,12 +97,15 @@ async function main() {
   console.log(`  calc_cache.eth_usd = ${cal ? JSON.stringify(cal.value) : "(row missing)"}`);
   console.log(`  refreshed           ${age((cal as { updated_at?: string } | null)?.updated_at)}`);
   if (!(ethUsd > 0)) {
-    fail(
-      "eth_usd is missing, null or zero. eth_usd_calibration() returns NULL when no market has volume_total_usd > 0. " +
-        "Every trade is then reported WITHOUT an amount — the tape survives, but nothing shows a size.",
-    );
+    fail("the feed cannot read an ETH price, so every trade is reported WITHOUT an amount.");
     console.error(
-      "    fix: SELECT public.refresh_eth_usd_calibration();  and check market_state.volume_total_usd",
+      cal == null
+        ? "    cause: the row is INVISIBLE to the anon role — calc_cache has RLS on and no SELECT policy.\n" +
+            "           Refreshing the value will not help; the feed reads it with the public client.\n" +
+            "           fix: GRANT SELECT ON public.calc_cache TO anon, authenticated; + a permissive policy."
+        : "    cause: the stored value is null or zero — eth_usd_calibration() returns NULL when no\n" +
+            "           market has volume_total_usd > 0.\n" +
+            "           fix: SELECT public.refresh_eth_usd_calibration();",
     );
   }
 
@@ -117,9 +131,14 @@ async function main() {
   console.log(`  events by kind:`);
   for (const [k, n] of [...byKind].sort((a, b) => b[1] - a[1]))
     console.log(`    ${LIVE_KINDS.includes(k) ? "live " : "SKIP "} ${k.padEnd(24)} ${n}`);
-  for (const k of byKind.keys())
-    if (!LIVE_KINDS.includes(k))
-      console.log(`    note: '${k}' is not in LIVE_KINDS and can never reach the tape.`);
+  // Not every kind SHOULD reach the tape. position_* rows mirror what a trade
+  // already says with more detail (who, how much, what it did to their belief),
+  // so listing them here is information, not an accusation.
+  const unlisted = [...byKind.keys()].filter((k) => !LIVE_KINDS.includes(k));
+  if (unlisted.length)
+    console.log(
+      `    not live-eligible: ${unlisted.join(", ")} — expected for position_* mirrors of trades.`,
+    );
 
   // ── 3. Freshness. Where exactly does the gap open? ────────────────────────
   console.log(`\n═══ FRESHNESS ═══`);
