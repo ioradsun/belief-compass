@@ -334,43 +334,55 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
       ? null
       : `${remaining.toLocaleString("en-US")} believer${remaining === 1 ? "" : "s"} now.`;
 
+  /**
+   * SIDE-FREE ALTERNATES. This module's own rule is that a sentence degrades
+   * honestly when a field is missing — but every behaviour line below used to
+   * interpolate the side unconditionally, so an event stored without one
+   * rendered as "Lamello flipped to ." in production. A missing side now costs
+   * the sentence a detail, never its grammar.
+   */
+  const tail = clause(type, c);
   let body: string;
   switch (type) {
     case "changed_mind":
-      body = `${who} flipped to ${s}${clause(type, c)}.`;
+      body = side ? `${who} flipped to ${s}${tail}.` : `${who} changed their mind${tail}.`;
       break;
     case "round_trip":
-      body = `${who} backed ${s} and left the same day.`;
+      body = side
+        ? `${who} backed ${s} and left the same day.`
+        : `${who} came and went the same day.`;
       break;
     case "first_believer":
-      body = `${who} is the first to back ${s}.`;
+      body = side ? `${who} is the first to back ${s}.` : `${who} is the first one here.`;
       break;
     case "doubled_down":
-      body = `${who} added to ${s}${clause(type, c)}.`;
+      body = side ? `${who} added to ${s}${tail}.` : `${who} doubled down${tail}.`;
       break;
     case "big_backing":
-      body = `${who} backed ${s}${clause(type, c)}.`;
+      body = side ? `${who} backed ${s}${tail}.` : `${who} took a side${tail}.`;
       break;
     case "trimmed":
-      body = `${who} took some off ${s}${clause(type, c)}.`;
+      body = side ? `${who} took some off ${s}${tail}.` : `${who} took some off${tail}.`;
       break;
     case "long_held_exit":
-      body = `${who} gave up on ${s}${clause(type, c)}.`;
+      body = side ? `${who} gave up on ${s}${tail}.` : `${who} gave up${tail}.`;
       break;
     case "biggest_believer_left":
-      body = `The biggest believer in ${s} walked${clause(type, c)}.`;
+      body = side
+        ? `The biggest believer in ${s} walked${tail}.`
+        : `The biggest believer walked${tail}.`;
       break;
     case "last_believer_left":
-      body = `${who} was the last one backing ${s}.`;
+      body = side ? `${who} was the last one backing ${s}.` : `${who} was the last one left.`;
       break;
     case "big_exit":
-      body = `${who} pulled out of ${s}${clause(type, c)}.`;
+      body = side ? `${who} pulled out of ${s}${tail}.` : `${who} pulled out${tail}.`;
       break;
     case "left":
-      body = `${who} left ${s}${clause(type, c)}.`;
+      body = side ? `${who} left ${s}${tail}.` : `${who} left${tail}.`;
       break;
     default:
-      body = `${who} joined ${s}${clause(type, c)}.`;
+      body = side ? `${who} joined ${s}${tail}.` : `${who} took a side${tail}.`;
   }
 
   return {
