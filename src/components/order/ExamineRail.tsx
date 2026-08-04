@@ -68,6 +68,7 @@ export function ExamineCta({
   open,
   onToggle,
   teaser,
+  houseLine = null,
   openLabel = "Case File · How the Market Divides (YES vs NO)",
   closeLabel = "Close Case File",
   compact = false,
@@ -76,6 +77,13 @@ export function ExamineCta({
   onToggle: () => void;
   /** The momentum/pulse read, shown as the market signal. */
   teaser?: string | null;
+  /**
+   * The House's call for the viewer, shown as a quiet second line UNDER the
+   * signal — but only when the House has an earned read (a named call or a
+   * post-decision beat). Cold-start CTAs ("connect…", "still learning") pass
+   * null so the read stays one honest line and never repeats a connect prompt.
+   */
+  houseLine?: string | null;
   openLabel?: string;
   closeLabel?: string;
   /** Phone dock: tighter padding, same anatomy. */
@@ -100,17 +108,26 @@ export function ExamineCta({
 
   return (
     <div>
-      {/* The concise market insight — a row of the instrument, not a card. */}
+      {/* The ONE market read: the momentum signal, and — only when the House has
+          earned a call — its personal line beneath. No competing card elsewhere. */}
       <div
-        className={`flex min-w-0 items-center gap-2 text-[13px] leading-snug text-[var(--text)] transition-[background-color] duration-200 ${
+        className={`transition-[background-color] duration-200 ${
           compact ? "px-3.5 py-2" : "px-4 py-3 sm:px-5"
         }`}
         style={{
           background: hot ? "color-mix(in oklab,#d99a2b 9%,transparent)" : "transparent",
         }}
       >
-        <SignalSpark hot={hot} />
-        <span className="min-w-0 truncate">{signal}</span>
+        <div className="flex min-w-0 items-center gap-2 text-[13px] leading-snug text-[var(--text)]">
+          <SignalSpark hot={hot} />
+          <span className="min-w-0 truncate">{signal}</span>
+        </div>
+        {houseLine && (
+          <div className="mt-1 flex min-w-0 items-center gap-2 text-[12px] leading-snug text-[var(--text-secondary)]">
+            <span aria-hidden>🏠</span>
+            <span className="min-w-0 truncate">{houseLine}</span>
+          </div>
+        )}
       </div>
       <div className="border-t border-[var(--hairline)]" aria-hidden />
       {/* Case File disclosure — says plainly what opening it reveals. */}

@@ -46,6 +46,7 @@ import { OrderTicket } from "@/components/order/OrderTicket";
 import { ExamineCta } from "@/components/order/ExamineRail";
 import { marketBook } from "@/domain/market-book";
 import { marketPulse } from "@/domain/market-pulse";
+import { houseNote } from "@/domain/house-note";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
@@ -175,6 +176,17 @@ export function MobileGame({
     if (!t.length) return null;
     return marketPulse(marketBook(t, Date.now(), deckWin)).headline;
   }, [change, deckWin]);
+  // The House's call, folded into the one docked read — but ONLY once the House
+  // has an earned read (past cold-start). Not connected / still learning / cold
+  // foundation → null, so the read stays one honest line and never repeats a
+  // connect prompt.
+  const houseLine = useMemo(
+    () =>
+      viewerWallet && houseRead && !houseRead.foundation
+        ? houseNote(viewerWallet, houseRead, marketId).text
+        : null,
+    [viewerWallet, houseRead, marketId],
+  );
   const [revealed, setRevealed] = useState(false);
   useEffect(() => {
     if (trade.isSuccess && trade.hash && side && !revealed) {
@@ -338,6 +350,7 @@ export function MobileGame({
             open={false}
             onToggle={() => setPhase("sides")}
             teaser={teaser}
+            houseLine={houseLine}
             openLabel="See both sides"
           />
           <div className="border-t border-[var(--hairline)]" aria-hidden />
