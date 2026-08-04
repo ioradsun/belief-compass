@@ -41,22 +41,34 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
         // deduped so only genuinely-new, persistent Tier 1-2 states reach the feed.
         // Best-effort: a failure here must never block the refresh loop.
         let transitionsEmitted = 0;
+        let transitionsError: string | null = null;
         try {
           const ids = out.results.filter((r) => r.ok).map((r) => r.market);
           transitionsEmitted = await emitStoryEvents(sb, ids);
-        } catch {
-          /* transitions are non-critical; skip this cycle on error */
+        } catch (e) {
+          // NEVER SILENTLY. A bare `catch {}` here meant this could fail on
+          // every cycle for weeks while the job kept reporting ok:true — and it
+          // did: zero market_transition rows had ever been written. Emitting is
+          // still non-critical and must not block the refresh, but a failure now
+          // leaves a trace in the response and the logs.
+          transitionsError = e instanceof Error ? e.message : String(e);
+          console.error("[market-refresher] emitStoryEvents failed:", transitionsError);
         }
 
         // Who is still holding, told as one story per (market, side) when a group
         // crosses a duration rung. Same events table, same feed — this is what
         // keeps a quiet market inhabited without inventing any movement.
         let cohortsEmitted = 0;
+        let cohortsError: string | null = null;
         try {
-          const ids = out.results.filter((r) => r.ok).map((r) => r.market);
-          cohortsEmitted = await emitConvictionCohorts(ids, sb);
-        } catch {
-          /* cohorts are non-critical; skip this cycle on error */
+          // NO market filter. A duration milestone is driven by the CLOCK, not
+          // by trading: scoping this to the markets we just refreshed meant a
+          // quiet market's 30-day cohort could never be noticed, which is
+          // exactly backwards — cohorts exist to make quiet markets inhabited.
+          cohortsEmitted = await emitConvictionCohorts(null, sb);
+        } catch (e) {
+          cohortsError = e instanceof Error ? e.message : String(e);
+          console.error("[market-refresher] emitConvictionCohorts failed:", cohortsError);
         }
 
         const { count: remaining } = await sb
@@ -76,6 +88,8 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
           ok: true,
           markets_refreshed: out.ok,
           market_refresh_failures: out.failed,
+          transitions_error: transitionsError,
+          cohorts_error: cohortsError,
           milestones_emitted: milestonesEmitted,
           tribe_doublings_emitted: doublingsEmitted,
           transitions_emitted: transitionsEmitted,
