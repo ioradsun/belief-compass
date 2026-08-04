@@ -83,8 +83,43 @@ const fail = (msg: string) => {
   console.error(`  ✗ ${msg}`);
 };
 
+/**
+ * Every table the live tape reads with the PUBLIC client. A read that 401s (no
+ * grant) or silently returns zero rows (RLS with no policy) is the failure mode
+ * that hid a dead feed for months, and neither one throws in application code.
+ * `expectRows` marks tables that must not be empty in a live system, which is
+ * what separates "invisible" from "genuinely empty".
+ */
+const ANON_READS: Array<{ table: string; expectRows: boolean }> = [
+  { table: "events", expectRows: true },
+  { table: "markets", expectRows: true },
+  { table: "market_state", expectRows: true },
+  { table: "calc_cache", expectRows: true },
+];
+
+async function checkAccess() {
+  console.log(`\n═══ ACCESS (as the public client) ═══`);
+  for (const { table, expectRows } of ANON_READS) {
+    const { count, error } = await sb.from(table).select("*", { count: "exact", head: true });
+    if (error) {
+      fail(`${table}: ${error.message} — the app reads this with the anon key and cannot.`);
+      continue;
+    }
+    const n = count ?? 0;
+    if (expectRows && n === 0) {
+      fail(
+        `${table}: readable but EMPTY to anon. RLS with no SELECT policy returns 200 + zero rows, ` +
+          `so this looks identical to an empty table from inside the app.`,
+      );
+      continue;
+    }
+    console.log(`  ✓ ${table.padEnd(16)} ${n} rows visible`);
+  }
+}
+
 async function main() {
   const sinceIso = new Date(Date.now() - HOURS * 3_600_000).toISOString();
+  await checkAccess();
 
   // ── 1. The price. Everything downstream depends on it. ────────────────────
   console.log(`\n═══ ETH/USD ═══`);

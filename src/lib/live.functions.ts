@@ -291,18 +291,35 @@ export const listLiveEvents = createServerFn({ method: "GET" })
      * batched read over the (wallet, market) pairs already on screen turns the
      * feed from transactions into stories. Rows we can't resolve simply lose the
      * extra clause — the grammar degrades to the plain sentence, never invents.
+     *
+     * READ WITH THE SERVICE CLIENT, deliberately. This used the public client and
+     * `wallet_beliefs` returns 401 to anon — so the map was ALWAYS empty and the
+     * whole feature was silently dead: no tenure in any sentence, every sell an
+     * "exit" and never a "reduce", every buy an "enter" and never an "add", and
+     * the tenure terms in scoring and discovery permanently at zero. The
+     * degradation was so graceful that it looked like a design choice.
+     *
+     * The fix is NOT to open the table to anon. `wallet_beliefs` is every
+     * wallet's position book; the app publishes what it means (a sentence), not
+     * a bulk-queryable table of who holds what. Every other server path already
+     * reads it with the service role — this now matches them.
      */
     const beliefByKey = new Map<
       string,
       { daysHeld: number | null; enteredBefore: boolean; yesShares: number; noShares: number }
     >();
     if (actorWallets.length > 0 && marketIds.length > 0) {
-      const { data: beliefs } = await sb
+      const { serviceClient } = await import("@/lib/supabase-clients");
+      const { data: beliefs, error: beliefErr } = await serviceClient()
         .from("wallet_beliefs")
         .select("wallet, onchain_id, yes_shares, no_shares, first_backed_at")
         .in("wallet", actorWallets)
         .in("onchain_id", marketIds)
         .limit(500);
+      if (beliefErr)
+        console.warn(
+          `[feed] wallet_beliefs unreadable (${beliefErr.message}) — rows lose their tenure, so no story can say how long anyone believed it.`,
+        );
       const now = Date.now();
       for (const b of (beliefs ?? []) as Array<Record<string, unknown>>) {
         const first = b.first_backed_at ? Date.parse(String(b.first_backed_at)) : NaN;
