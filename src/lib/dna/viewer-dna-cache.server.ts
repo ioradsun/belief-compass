@@ -38,6 +38,19 @@ export interface CachedRelationship {
   confidence: number;
   evidenceLevel: EvidenceLevel;
   relationship: RelationshipLabel;
+  /**
+   * When the CURRENT label was established (ISO). This one field is what makes
+   * "you found a Twin" detectable without a second pipeline: a discovery moment
+   * is just a relationship whose label is younger than the discovery window
+   * (src/domain/discovery-moment).
+   *
+   * Absent in caches written before this field existed — and correctly so. We do
+   * not know when those relationships formed, so they announce nothing rather
+   * than all announcing themselves at once on the day this shipped.
+   */
+  since?: string;
+  /** The label held immediately before `since`. Absent when it never changed. */
+  previous?: RelationshipLabel | null;
   strongestAlignedDomain?: DomainSummary;
   strongestOpposedDomain?: DomainSummary;
 }

@@ -2,10 +2,12 @@
  * LiveTape — the right column: the living story of conviction.
  *
  * It renders the server-grouped LiveRow DTO and owns exactly ONE decision of its
- * own: the ORDER. Everything upstream decides what is true, eligible, deduped
- * and how significant it is; this applies the cadence mix (src/domain/feed-
- * cadence) last, so no two adjacent rows repeat a family, a market or a person,
- * nobody dominates, and genuinely big events still lead.
+ * own: the ORDER. Everything upstream decides what is true, eligible, deduped,
+ * how significant it is and how much of an INTRODUCTION it is; this applies the
+ * cadence mix (src/domain/feed-cadence) last, so no two adjacent rows repeat a
+ * family, a market or a person, nobody dominates, genuinely big events still
+ * lead — and a row that introduces someone worth meeting outranks a larger row
+ * that introduces nobody.
  *
  * The mix runs HERE rather than on the server because delta-sync merges a fresh
  * head into the cached tail and re-sorts chronologically (mergeLiveRows) — an
@@ -148,24 +150,36 @@ export function LiveTape({
           {rows.map((r) => {
             const s = r.story;
             const personal = s.personal;
+            // A discovery moment is about a PERSON, not a market — it has no
+            // destination of its own, and the faces are deliberately the only
+            // way in. Everything else selects the market it happened in.
+            const target = Number(r.marketId);
+            const navigable = Number.isFinite(target) && target > 0;
             // The title tells you WHICH market. Never show it when the body already
             // is the question (a fresh market), so the row never repeats itself.
             const norm = (x: string) => x.trim().replace(/\s+/g, " ").toLowerCase();
             const showTitle =
-              showTitles && s.category !== "fresh_market" && norm(r.marketTitle) !== norm(s.body);
+              showTitles &&
+              navigable &&
+              s.category !== "fresh_market" &&
+              norm(r.marketTitle) !== norm(s.body);
             return (
               <li key={r.id}>
                 <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onSelect(Number(r.marketId))}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      onSelect(Number(r.marketId));
-                    }
-                  }}
-                  className="block w-full rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
+                  role={navigable ? "button" : undefined}
+                  tabIndex={navigable ? 0 : undefined}
+                  onClick={navigable ? () => onSelect(target) : undefined}
+                  onKeyDown={
+                    navigable
+                      ? (event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            onSelect(target);
+                          }
+                        }
+                      : undefined
+                  }
+                  className={`block w-full rounded-[10px] px-2 py-2 text-left transition-colors ${navigable ? "hover:bg-[var(--surface-2)]" : ""}`}
                   // Personal (network) rows carry a faint "this is about you" wash —
                   // the only rows with a background, so belonging quietly stands out.
                   style={
@@ -194,7 +208,13 @@ export function LiveTape({
                     each one opens that profile, which is where what-else-they-
                     believe lives. This is the row's real call to action. */}
                   {r.people && r.people.length > 0 && (
-                    <PersonStack people={r.people} className="mt-1.5" />
+                    // A discovery row IS the person — its faces are the only way
+                    // in, so they get the room to be recognised.
+                    <PersonStack
+                      people={r.people}
+                      size={r.kind === "discovery_moment" ? 34 : 26}
+                      className="mt-1.5"
+                    />
                   )}
                   {s.attribution && (
                     <div className="mt-1 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">

@@ -93,13 +93,20 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
   const svc = serviceClient();
   const version = await getViewerDnaVersion(svc, viewer);
 
-  // Prior labels → hysteresis (a held relationship survives to its exit band).
+  // Prior rows → hysteresis (a held relationship survives to its exit band) AND
+  // the relationship's own history: when its label was set, and what it was
+  // before. That history is what lets the feed say "you found a Twin" without a
+  // second event pipeline (src/domain/discovery-moment).
   const prior = await readViewerDnaCache(svc, viewer);
-  const priorLabel = new Map<string, RelationshipLabel>();
+  const priorRow = new Map<string, CachedRelationship>();
   if (prior) {
     for (const group of [prior.twin, prior.tribe, prior.neutral, prior.opp, prior.inverse])
-      for (const r of group) priorLabel.set(r.wallet, r.relationship);
+      for (const r of group) priorRow.set(r.wallet, r);
   }
+  const priorLabel = new Map<string, RelationshipLabel>(
+    [...priorRow].map(([w, r]) => [w, r.relationship]),
+  );
+  const nowIso = new Date().toISOString();
 
   // 1. Viewer directional factors — on-chain positions ∪ free expressed beliefs
   //    (expressed at a low weight; an on-chain position always overrides).
@@ -211,6 +218,12 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
       const d = domainOf(f.marketId);
       if (d) topics.add(d);
     }
+    // Un-banded people read as "neutral", so compare against the same mapping
+    // the row stores — otherwise every neutral would look like it changed today.
+    const stored: RelationshipLabel = relationship === "insufficient" ? "neutral" : relationship;
+    const before = priorRow.get(wallet);
+    const changed = !!before && before.relationship !== stored;
+
     const row: CachedRelationship = {
       wallet,
       agreement: Math.round(s.agreement),
@@ -221,7 +234,17 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
       confidence: s.confidence,
       evidenceLevel: s.evidenceLevel,
       // Un-banded people read as "neutral" (some overlap, no strong signal yet).
-      relationship: relationship === "insufficient" ? "neutral" : relationship,
+      relationship: stored,
+      // A relationship we are meeting for the first time gets NO timestamp. We
+      // genuinely do not know when it formed — this may be the viewer's first
+      // ever computation, covering years of history — and dating it "now" would
+      // announce a Twin the reader has had all along. Only a label we WATCHED
+      // change is dated, which is exactly the set that deserves announcing.
+      ...(changed
+        ? { since: nowIso, previous: before?.relationship ?? null }
+        : before?.since
+          ? { since: before.since, previous: before.previous ?? null }
+          : {}),
       strongestAlignedDomain: aligned[0]
         ? { name: aligned[0].domain, agreement: aligned[0].agreement }
         : undefined,

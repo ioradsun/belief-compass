@@ -18,6 +18,42 @@
 export type Side = "YES" | "NO";
 export type NetworkLabel = "twin" | "tribe" | "opp" | "inverse";
 export type BeatKind = "event" | "momentum" | "relationship";
+
+/**
+ * THE ONE RELATIONSHIP VOCABULARY. Four labels, and the words for them.
+ *
+ * Read the stored names carefully, because they invert: the engine's `inverse`
+ * is the product's OPP — the strongest, hardest-earned opposite — and `opp` is
+ * the milder Rival tier. Twin↔Opp are the two earned badges; Tribe↔Rival are the
+ * two groups.
+ */
+export const NETWORK_LABEL_TEXT: Record<NetworkLabel, string> = {
+  twin: "Twin",
+  tribe: "Tribe",
+  opp: "Rival",
+  inverse: "Opp",
+};
+
+/**
+ * How strongly each label pulls, on ONE scale that the whole app shares: which
+ * face leads a stack, which relationship a sentence names, how much a row is
+ * worth to this reader.
+ *
+ * Opp sits level with Twin by design. Twin answers "who thinks like me?"; Opp
+ * answers "who consistently challenges me?" Both are people worth meeting, and
+ * ranking the strongest opposite BELOW the milder Rival — as four separate
+ * copies of this table used to — quietly built a product that only wanted you to
+ * meet people who agree with you.
+ */
+export const NETWORK_STRENGTH: Record<NetworkLabel, number> = {
+  twin: 1,
+  inverse: 0.95,
+  tribe: 0.75,
+  opp: 0.7,
+};
+
+/** Aligned labels — the ones that may honestly be called "your people". */
+export const isAlignedLabel = (l: NetworkLabel): boolean => l === "twin" || l === "tribe";
 export type BeatTone = "yes" | "no" | "neutral" | "hot";
 
 export interface StoryBeat {
@@ -141,16 +177,10 @@ function momentumBeat(input: StoryInput): StoryBeat | null {
 }
 
 // ── relationship beat ─────────────────────────────────────────────────────────
-const LABEL_TEXT: Record<NetworkLabel, string> = {
-  twin: "Twin",
-  tribe: "Tribe",
-  // One vocabulary: a mid-tier opposite is a Rival; the strongest is an Opp.
-  opp: "Rival",
-  inverse: "Opp",
-};
-const isAligned = (l: NetworkLabel) => l === "twin" || l === "tribe";
-// Prominence when picking the single lead face.
-const RANK: Record<NetworkLabel, number> = { twin: 4, opp: 3, tribe: 2, inverse: 1 };
+const LABEL_TEXT = NETWORK_LABEL_TEXT;
+const isAligned = isAlignedLabel;
+// Prominence when picking the single lead face — the shared scale, not a copy.
+const RANK = NETWORK_STRENGTH;
 
 function relationshipBeat(network: NetworkFace[]): StoryBeat | null {
   if (network.length === 0) return null;

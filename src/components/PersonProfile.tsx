@@ -16,11 +16,9 @@ import { ago } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import {
   presentRelationship,
-  relationshipInsight,
-  relationshipSupport,
   relationshipBreakdown,
   relationshipTopicLine,
-  relationshipLabel,
+  sharedDna,
 } from "@/domain/relationship";
 
 export function PersonProfile({
@@ -51,8 +49,12 @@ export function PersonProfile({
     strongestAlignedTopic: data.alignedDomains[0]?.domain ?? null,
     strongestOpposedTopic: data.opposedDomains[0]?.domain ?? null,
   });
-  const label = data.hasViewer ? relationshipLabel(rel) : null;
-  const insightColor = rel.group === "rival" ? "var(--no)" : "var(--yes)";
+  // THE RELATIONSHIP IS THE HEADLINE. The percentage supports it; the shared
+  // convictions validate it. A number about a person is a statistic; a person
+  // with a number behind them is a relationship.
+  const dna = data.hasViewer ? sharedDna(rel) : null;
+  const dnaColor =
+    dna?.tone === "opposed" ? "var(--no)" : dna?.tone === "aligned" ? "var(--yes)" : "var(--text)";
 
   return (
     <div className="space-y-6">
@@ -74,35 +76,27 @@ export function PersonProfile({
           </span>
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-lg font-semibold text-[var(--text)]">
-              {data.displayName}
-            </span>
-            {label && (
-              <span
-                className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
-                style={{
-                  color: label.tone === "opposed" ? "var(--no)" : "var(--yes)",
-                  background:
-                    label.kind === "provisional"
-                      ? "transparent"
-                      : `color-mix(in oklab, ${label.tone === "opposed" ? "var(--no)" : "var(--yes)"} 14%, transparent)`,
-                  border: label.kind === "provisional" ? "1px solid var(--border)" : undefined,
-                }}
-              >
-                {label.text}
-              </span>
-            )}
+          <div className="truncate text-lg font-semibold text-[var(--text)]">
+            {data.displayName}
           </div>
-          {data.hasViewer ? (
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="num text-[15px] font-semibold" style={{ color: insightColor }}>
-                {relationshipInsight(rel)}
-              </span>
-              <span className="text-[12px] text-[var(--text-muted)]">
-                · {relationshipSupport(rel)}
-              </span>
-            </div>
+          {dna ? (
+            <>
+              {/* LEAD — the relationship, in the largest type on the header. */}
+              <div
+                className="mt-0.5 text-[15px] font-semibold leading-tight"
+                style={{ color: dnaColor }}
+              >
+                {dna.lead}
+              </div>
+              {/* SCORE — supports the relationship; absent when unearned. */}
+              {dna.score && (
+                <div className="num mt-0.5 text-[13px] text-[var(--text-secondary)]">
+                  {dna.score}
+                </div>
+              )}
+              {/* EVIDENCE — what the claim rests on. Never omitted. */}
+              <div className="mt-0.5 text-[12px] text-[var(--text-muted)]">{dna.evidence}</div>
+            </>
           ) : (
             <div className="mt-0.5 text-[12px] text-[var(--text-muted)]">{data.summary}</div>
           )}

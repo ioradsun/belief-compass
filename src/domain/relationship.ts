@@ -277,6 +277,54 @@ export function relationshipLabel(
   };
 }
 
+/* ── Shared DNA: a relationship, not a statistic ──────────────────────────────
+ *
+ * "87% Match" is a number about a person. "Twin · 94% Shared DNA · 41 shared
+ * convictions" is a person, with a number that supports them and evidence that
+ * validates it. The hierarchy is the product:
+ *
+ *   LEAD       the relationship        — what they are to you
+ *   SCORE      the DNA percentage      — how strongly
+ *   EVIDENCE   the shared conviction   — on what basis
+ *              count and topic breadth
+ *
+ * The score is omitted rather than softened when the evidence cannot carry it —
+ * a percentage over four shared markets is false precision, and the relationship
+ * word plus the honest count says more than a decorated number would. */
+
+export interface SharedDnaDisplay {
+  /** The headline: what this person is to the viewer. */
+  lead: string;
+  kind: "earned" | "group" | "provisional" | "learning";
+  tone: "aligned" | "opposed" | "neutral";
+  /** The supporting percentage — null whenever the evidence cannot carry one. */
+  score: string | null;
+  /** What the claim rests on. Always present, even when it is "not much yet". */
+  evidence: string;
+}
+
+export function sharedDna(p: RelationshipPresentation): SharedDnaDisplay {
+  const evidence = p.sharedConvictions === 0 ? "No shared convictions yet" : formatEvidence(p);
+  const label = relationshipLabel(p);
+
+  // Not placed yet. "Still learning" is a real state, not a failure — and it is
+  // the honest one when two people have barely overlapped.
+  if (!label)
+    return { lead: "Still learning", kind: "learning", tone: "neutral", score: null, evidence };
+
+  const opposed = label.tone === "opposed";
+  return {
+    lead: label.text,
+    kind: label.kind,
+    tone: label.tone,
+    score:
+      p.tier === "mature"
+        ? `${opposed ? p.oppositionPct : p.alignmentPct}% ${opposed ? "Opposite" : "Shared"} DNA`
+        : null,
+    evidence,
+  };
+}
+
 /* ── Page-level DNA maturity (factual, not a fake identity %) ─────────────────
  * Uncertainty lives ONCE at the page, never repeated on every row. Stages are
  * qualitative; the raw counts stay visible. */

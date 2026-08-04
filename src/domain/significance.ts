@@ -14,7 +14,13 @@
  *   0.25–0.49  contextual   true, worth a line, not worth interrupting for
  *   0.50–0.69  notable      a real change a reader would want
  *   0.70–0.84  high         changes how the market reads
- *   0.85–1.00  exceptional  the market's own answer changed
+ *   0.85–1.00  exceptional  the thing this product exists for happened
+ *
+ * "Exceptional" is reserved for the two things this product is built to change: a
+ * MARKET's own answer flipping, and a READER meeting the person who thinks like
+ * them — or the one who never does. Markets are the evidence; people are the
+ * point, so a Twin or an Opp appearing sits alongside a majority flip. Nothing
+ * else reaches that band, and a single trade never can.
  *
  * TWO PATHS, ONE SCALE. Where a score comes from depends on who writes the row:
  *
@@ -133,11 +139,12 @@ export function scoreLiveAction(
   if (extra.rank === 1) parts.push({ weight: 0.4, value: 1, why: "largest position on the side" });
 
   const out = compose(floor, parts);
-  // ONE PERSON'S ACTION IS NEVER "EXCEPTIONAL". That band is reserved for the
-  // market changing its own answer. A dramatic individual move — a switch, the
-  // largest believer walking — belongs at the top of "high", so a structural
-  // story always outranks it. Without this a two-wallet switch tipped over 0.85
-  // and sat level with a majority flip, which is not what either of them means.
+  // ONE PERSON'S ACTION IS NEVER "EXCEPTIONAL". That band is reserved for a
+  // market changing its own answer or a reader meeting their Twin. A dramatic
+  // individual TRADE — a switch, the largest believer walking — belongs at the
+  // top of "high", so a structural story always outranks it. Without this a
+  // two-wallet switch tipped over 0.85 and sat level with a majority flip, which
+  // is not what either of them means.
   return out.score > SIGNIFICANCE.bands.high
     ? { score: SIGNIFICANCE.bands.high, reasons: [...out.reasons, "capped: individual action"] }
     : out;
@@ -201,6 +208,47 @@ export function scoreMilestone(input: {
   return compose(0.3, parts);
 }
 
+// ── DISCOVERY MOMENTS ────────────────────────────────────────────────────────
+
+/**
+ * Meeting someone. A discovery moment is a VIEWER-SCOPED event: its audience is
+ * exactly one person, where a market transition's audience is everyone. That
+ * does not bend the scale — significance asks "how important is this to the
+ * people it is for?", and finding your Twin is the most important thing that can
+ * happen to the one person it is for.
+ *
+ * The rarity of the KIND does nearly all the work (src/domain/discovery-moment
+ * owns that ladder); evidence only refines it, because a relationship named on
+ * thin history is a weaker claim however rare its label.
+ */
+export function scoreDiscoveryMoment(input: {
+  /** 0..1 from the moment ladder — a Twin appearing is 1, a Tribe arrival 0.5. */
+  rarity: number;
+  /** Shared convictions behind the relationship. */
+  sharedConvictions?: number | null;
+  /** How many people the moment introduces. */
+  people?: number | null;
+}): Significance {
+  const rarity = clamp01(input.rarity);
+  // Calibrated so a Twin or an Opp appearing reaches "exceptional" and leads the
+  // feed, while an ordinary new Tribe member lands in "high" and has to earn its
+  // place in the sequence like everything else. Discovery is the point; a
+  // discovery every day would stop being one.
+  const floor = 0.5 + 0.38 * rarity;
+  const parts: Array<{ weight: number; value: number; why?: string }> = [
+    { weight: 0.25, value: rarity, why: `discovery rarity ${rarity.toFixed(2)}` },
+  ];
+  if (input.sharedConvictions != null && input.sharedConvictions > 0)
+    parts.push({
+      weight: 0.2,
+      value: clamp01(input.sharedConvictions / 25),
+      why: `${input.sharedConvictions} shared convictions`,
+    });
+  if (input.people != null && input.people > 1)
+    parts.push({ weight: 0.1, value: clamp01(input.people / 5), why: `${input.people} people` });
+  return compose(floor, parts);
+}
+
 // ── COVERAGE REGISTRY ────────────────────────────────────────────────────────
 
 /**
@@ -223,6 +271,11 @@ export const SIGNIFICANCE_COVERAGE = {
   market_transition: "emitted",
   believer_milestone: "emitted",
   tribe_doubled: "emitted",
+  /**
+   * Viewer-scoped, synthesized at read time from the DNA cache. Never written to
+   * `events` — it exists for one reader — so it is scored where it is built.
+   */
+  discovery_moment: "derived",
 } as const satisfies Record<string, "derived" | "emitted">;
 
 export type ScoredKind = keyof typeof SIGNIFICANCE_COVERAGE;
