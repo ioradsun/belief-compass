@@ -197,7 +197,12 @@ const LARGE_TRADE_USD = 1000;
 
 /**
  * Collapse canonical events (in reverse-chronological order) into Live rows.
- * `ethUsd` converts ETH amounts to USD for the copy; grouping is deterministic.
+ * Grouping is deterministic.
+ *
+ * `ethUsd` converts ETH amounts to USD. Pass 0 (or anything non-positive) when
+ * the rate is genuinely unknown and every amount comes back NULL — this module
+ * will not invent a price, because a fabricated $0 reads downstream as "dust"
+ * and silently deletes the entire feed.
  */
 export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[] {
   const { kept: events, roundTrip } = collapseRoundTrips(input);
@@ -260,8 +265,24 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
       earliest = ev.occurred_at;
       j += 1;
     }
-    const amountUsd = amountEth * ethUsd;
-    const isLargeSingle = !isRoundTrip && trades === 1 && amountUsd >= LARGE_TRADE_USD;
+    // AN UNKNOWN RATE MEANS AN UNKNOWN AMOUNT, NEVER ZERO.
+    //
+    // This one line was the whole dead feed. `eth_usd_calibration()` returns
+    // NULL whenever no market has `volume_total_usd > 0`, the refresher writes
+    // that NULL into calc_cache, and `Number(null) || 0` reads back as 0 — so
+    // every trade was priced at $0. At $0 a lone trade scores 14/100, lands in
+    // Tier 4, and is discarded as dust: measured, 0 of 5 real trades admitted
+    // against 4 of 5 with a working rate. The only rows left standing were the
+    // structural ones that carry no amount at all, which is exactly the
+    // two-row tape we shipped.
+    //
+    // Null is the honest value. Downstream already treats a missing amount as
+    // "a real change we cannot size" (magnitudeOf), so the feed degrades to
+    // un-priced stories instead of silently deleting every trade — and the
+    // copy drops the money clause rather than claiming "$0" (see clause()).
+    const amountUsd = ethUsd > 0 ? amountEth * ethUsd : null;
+    const isLargeSingle =
+      !isRoundTrip && trades === 1 && amountUsd != null && amountUsd >= LARGE_TRADE_USD;
     const base: Omit<LiveRow, "text" | "story"> = {
       id: e.source_key,
       kind: isRoundTrip ? "round_trip" : isLargeSingle ? "large_trade" : "trade_burst",
