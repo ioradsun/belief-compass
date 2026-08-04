@@ -500,20 +500,64 @@ export function CaseRoster({
   believers,
   people,
   priceUsd,
+  variant = "list",
 }: {
   side: Side;
   believers: Believer[];
   people?: { wallet: string; relationship: string; agreement?: number; sharedBeliefs?: number }[];
   /** Live price per share on this side — used to value positions the indexer hasn't priced. */
   priceUsd?: number | null;
+  /** "compact" = Instagram-likers face pile (mobile); "list" = full roster. */
+  variant?: "compact" | "list";
 }) {
   const { format } = useMoney();
+  const [openAll, setOpenAll] = useState(false);
   const byWallet = useMemo(
     () => new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p])),
     [people],
   );
   const relOf = useMemo(() => (w: string) => byWallet.get(w)?.relationship ?? null, [byWallet]);
   const roster = useMemo(() => rankBelievers(believers, relOf), [believers, relOf]);
+
+  const rows = (
+    <ul className="space-y-0.5">
+      {roster.map(({ believer: b, relationship }) => {
+        const p = byWallet.get(b.wallet.toLowerCase());
+        // Only a real overlap earns a DNA line — no "unmapped", no filler.
+        const dna =
+          p && (p.sharedBeliefs ?? 0) > 0 && Number.isFinite(p.agreement)
+            ? `${Math.round(p.agreement as number)}% shared DNA`
+            : null;
+        // The indexed value can be missing (no valuation pass yet) — fall back
+        // to shares × the side's live price so an amount always shows.
+        const valueUsd =
+          b.valueUsd > 0 ? b.valueUsd : priceUsd != null && b.shares > 0 ? b.shares * priceUsd : 0;
+        const amount = valueUsd > 0 ? (valueUsd >= 1 ? format(valueUsd, "USD") : "<$1") : null;
+        return (
+          <li key={b.wallet} className="flex items-center gap-2 rounded-[8px] px-1 py-1">
+            <PersonAvatar wallet={b.wallet} name={b.name} avatarUrl={b.avatarUrl} size={28} />
+
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[12px] text-[var(--text)]">{b.name}</div>
+              {dna && (
+                <div
+                  className="num text-[10px] font-medium"
+                  style={{ color: REL_TONE[relationship] }}
+                >
+                  {dna}
+                </div>
+              )}
+            </div>
+            {amount && (
+              <span className="num shrink-0 text-[12px] font-semibold text-[var(--text)]">
+                {amount}
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
 
   return (
     <div className="space-y-1.5">
@@ -527,49 +571,112 @@ export function CaseRoster({
       </div>
       {roster.length === 0 ? (
         <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No one on this side yet.</p>
+      ) : variant === "compact" ? (
+        <>
+          <FacePile roster={roster} onOpenAll={() => setOpenAll(true)} />
+          {openAll && (
+            <RosterSheet side={side} count={roster.length} onClose={() => setOpenAll(false)}>
+              {rows}
+            </RosterSheet>
+          )}
+        </>
       ) : (
-        <ul className="space-y-0.5">
-          {roster.map(({ believer: b, relationship }) => {
-            const p = byWallet.get(b.wallet.toLowerCase());
-            // Only a real overlap earns a DNA line — no "unmapped", no filler.
-            const dna =
-              p && (p.sharedBeliefs ?? 0) > 0 && Number.isFinite(p.agreement)
-                ? `${Math.round(p.agreement as number)}% shared DNA`
-                : null;
-            // The indexed value can be missing (no valuation pass yet) — fall back
-            // to shares × the side's live price so an amount always shows.
-            const valueUsd =
-              b.valueUsd > 0
-                ? b.valueUsd
-                : priceUsd != null && b.shares > 0
-                  ? b.shares * priceUsd
-                  : 0;
-            const amount = valueUsd > 0 ? (valueUsd >= 1 ? format(valueUsd, "USD") : "<$1") : null;
-            return (
-              <li key={b.wallet} className="flex items-center gap-2 rounded-[8px] px-1 py-1">
-                <PersonAvatar wallet={b.wallet} name={b.name} avatarUrl={b.avatarUrl} size={28} />
-
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12px] text-[var(--text)]">{b.name}</div>
-                  {dna && (
-                    <div
-                      className="num text-[10px] font-medium"
-                      style={{ color: REL_TONE[relationship] }}
-                    >
-                      {dna}
-                    </div>
-                  )}
-                </div>
-                {amount && (
-                  <span className="num shrink-0 text-[12px] font-semibold text-[var(--text)]">
-                    {amount}
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        rows
       )}
     </div>
   );
 }
+
+/** Instagram-likers row: up to three faces, then a sentence that opens the full list. */
+function FacePile({
+  roster,
+  onOpenAll,
+}: {
+  roster: { believer: Believer }[];
+  onOpenAll: () => void;
+}) {
+  const faces = roster.slice(0, 3).map((r) => r.believer);
+  const total = roster.length;
+  const first = (n: string) => n.split(/\s+/)[0] || n;
+  const sentence =
+    total === 1
+      ? `Backed by ${first(faces[0].name)}`
+      : total === 2
+        ? `Backed by ${first(faces[0].name)} and ${first(faces[1].name)}`
+        : total === 3
+          ? `Backed by ${first(faces[0].name)}, ${first(faces[1].name)} and ${first(faces[2].name)}`
+          : `Backed by ${first(faces[0].name)}, ${first(faces[1].name)} and ${total - 2} others`;
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex shrink-0 -space-x-2">
+        {faces.map((b) => (
+          <PersonAvatar
+            key={b.wallet}
+            wallet={b.wallet}
+            name={b.name}
+            avatarUrl={b.avatarUrl}
+            size={24}
+            className="ring-2 ring-[var(--bg)]"
+          />
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={onOpenAll}
+        className="min-w-0 flex-1 truncate text-left text-[12px] text-[var(--text-secondary)] underline-offset-2 hover:underline"
+      >
+        {sentence}
+      </button>
+    </div>
+  );
+}
+
+/** Bottom sheet holding the complete roster — scrolls on its own, X to close. */
+function RosterSheet({
+  side,
+  count,
+  onClose,
+  children,
+}: {
+  side: Side;
+  count: number;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/50"
+      />
+      <div className="relative max-h-[75vh] w-full overflow-y-auto rounded-t-[16px] border-t border-[var(--border)] bg-[var(--bg)] px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[12px] font-semibold text-[var(--text)]">
+            Who backs {side} · <span className="num text-[var(--text-muted)]">{count}</span>
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="-mr-1 rounded-full px-2 py-1 text-[14px] text-[var(--text-muted)] hover:text-[var(--text)]"
+          >
+            ×
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
