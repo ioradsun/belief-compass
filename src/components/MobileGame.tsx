@@ -74,13 +74,23 @@ export function MobileGame({
   const [side, setSide] = useState<OrderSide | null>(null);
   const [backing, setBacking] = useState(false);
   const [amount, setAmount] = useState(1);
+  /** The House pick has been revealed for THIS market's settled bet. */
+  const [revealed, setRevealed] = useState(false);
 
   // A brand new question always starts from a blank slate.
+  //
+  // This is what makes the phone scene safe to keep MOUNTED across markets. The
+  // route used to force a fresh one with `key={onchain_id}`, which threw away
+  // the whole subtree — every DOM node, every query observer, every wallet hook
+  // — and rebuilt it, so a phone user saw the game blink on every question.
+  // Resetting the four pieces of per-market state here achieves the same clean
+  // slate for free, with no unmount.
   useEffect(() => {
     setPhase("question");
     setSide(null);
     setBacking(false);
     setAmount(1);
+    setRevealed(false);
     dock.reset();
     trade.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -198,7 +208,6 @@ export function MobileGame({
     () => (viewerWallet ? houseReadState(houseRead ?? null) : null),
     [viewerWallet, houseRead],
   );
-  const [revealed, setRevealed] = useState(false);
   useEffect(() => {
     if (trade.isSuccess && trade.hash && side && !revealed) {
       setRevealed(true);
@@ -269,7 +278,7 @@ export function MobileGame({
   const questionBlock = (
     <div>
       {(category || createdAt || cm?.market || byline) && (
-        <div className="flex flex-wrap items-baseline gap-x-2 text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+        <div className="flex min-h-[16px] flex-wrap items-baseline gap-x-2 text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
           <span>
             {[
               category,
@@ -291,7 +300,14 @@ export function MobileGame({
         </div>
       )}
       <div className="mt-1.5 flex items-start gap-1.5">
-        <h1 className="min-w-0 flex-1 text-[21px] font-semibold leading-[1.18] tracking-[-0.02em] text-[var(--text)]">
+        {/* Two lines of reserved space, the same rule the desktop deck uses, so
+          a longer question never pushes the stage or the dock down the screen —
+          which on a phone is the difference between the controls being under
+          your thumb and not. */}
+        <h1
+          className="line-clamp-2 min-h-[2.36em] min-w-0 flex-1 text-[21px] font-semibold leading-[1.18] tracking-[-0.02em] text-[var(--text)]"
+          title={title}
+        >
           {title}
         </h1>
         <StandOnIt
@@ -354,7 +370,11 @@ export function MobileGame({
         deck uses, with the analysis rail (market signal + see both sides)
         attached to its top. */}
       <Dock>
-        <div className="overflow-hidden rounded-[16px]" style={{ background: "var(--surface)" }}>
+        <div
+          data-probe="dock"
+          className="overflow-hidden rounded-[16px]"
+          style={{ background: "var(--surface)" }}
+        >
           <ExamineCta
             compact
             open={false}

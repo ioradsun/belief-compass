@@ -215,3 +215,47 @@
   font-feature-settings: "tnum";
 }
 
+/*
+ * MARKET SCENE TRANSITION.
+ *
+ * One coordinated arrival for the whole market, not per-element choreography:
+ * a short fade with 6px of travel, on transform + opacity only, so the browser
+ * composites it and never re-lays-out. ~190ms with a decelerating curve reads
+ * as "the information changed", not as an animation being performed.
+ */
+@keyframes scene-enter {
+  from {
+    opacity: 0.001;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.scene-enter {
+  animation: scene-enter 190ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/*
+ * Reduced motion: the layout-stability work stands on its own, so the honest
+ * answer here is an immediate swap rather than a slower version of the motion.
+ * Every other transition/animation in the app collapses to effectively nothing.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .scene-enter {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
