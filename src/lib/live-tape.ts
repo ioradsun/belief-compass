@@ -11,6 +11,7 @@
 import type { JsonValue } from "@/lib/events";
 import type { LiveStory } from "@/domain/story";
 import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
+import type { CohortHolder } from "@/domain/conviction-cohort";
 
 export interface LiveEventInput {
   source_key: string;
@@ -51,6 +52,14 @@ export interface LiveRow {
   wallet: string | null;
   /** Set by the server when the actor is in the viewer's network. */
   face?: LiveFace | null;
+  /**
+   * The people a GROUP story is about — a conviction cohort, an aggregated
+   * burst. Rendered as a stack of clickable faces so the row becomes a way into
+   * those profiles rather than just a statement about them. Absent on rows with
+   * a single actor (their face already sits on the attribution) and on rows
+   * about the market itself.
+   */
+  people?: CohortHolder[] | null;
   /** The structured story: headline (market) → body (change) → attribution (who). */
   story: LiveStory;
   /** Flat fallback ("HEADLINE — body") for any non-structured consumer. */

@@ -9,6 +9,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.server";
 import { refreshDirtyBatch } from "@/lib/market-state/refresh-market.server";
 import { emitStoryEvents } from "@/lib/story-event-emit.server";
+import { emitConvictionCohorts } from "@/lib/conviction-cohort-emit.server";
 
 export const Route = createFileRoute("/api/public/jobs/market-refresher")({
   server: {
@@ -47,6 +48,17 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
           /* transitions are non-critical; skip this cycle on error */
         }
 
+        // Who is still holding, told as one story per (market, side) when a group
+        // crosses a duration rung. Same events table, same feed — this is what
+        // keeps a quiet market inhabited without inventing any movement.
+        let cohortsEmitted = 0;
+        try {
+          const ids = out.results.filter((r) => r.ok).map((r) => r.market);
+          cohortsEmitted = await emitConvictionCohorts(ids, sb);
+        } catch {
+          /* cohorts are non-critical; skip this cycle on error */
+        }
+
         const { count: remaining } = await sb
           .from("market_refresh_queue")
           .select("*", { count: "exact", head: true });
@@ -67,6 +79,7 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
           milestones_emitted: milestonesEmitted,
           tribe_doublings_emitted: doublingsEmitted,
           transitions_emitted: transitionsEmitted,
+          cohortsEmitted,
           processed: out.processed,
           dirty_markets_remaining: remaining ?? 0,
           oldest_dirty_market_age_ms: oldestAgeMs,

@@ -21,6 +21,13 @@ import {
 } from "@/lib/live-tape";
 import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
 import { includeInFeed, type NetTag } from "@/domain/feed-event";
+import {
+  renderCohort,
+  type CohortHolder,
+  type CohortKind,
+  type ConvictionCohort,
+  type HoldingRung,
+} from "@/domain/conviction-cohort";
 
 type NetLabel = "twin" | "tribe" | "opp" | "inverse";
 
@@ -31,6 +38,7 @@ const LIVE_KINDS = [
   "believer_milestone",
   "tribe_doubled",
   "market_transition",
+  "conviction_cohort",
 ];
 
 /** The live feed only reports the last 72 hours. Older events are history. */
@@ -70,6 +78,9 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     const viewer = data?.wallet?.toLowerCase() ?? null;
 
     const scope = data?.marketIds?.map((n) => String(n)) ?? null;
+    // Scoped to specific markets == rendered inside a market panel, which already
+    // shows the question and the side. Unscoped == the app-wide tape, which does not.
+    const scoped = scope != null;
     let q = sb
       .from("events")
       // NOTE: the full `payload` (raw_log) is deliberately NOT selected — the raw
@@ -235,6 +246,42 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           avatarUrl: prof?.pfpUrl ?? null,
           relationship,
         } satisfies LiveFace;
+      }
+
+      // A CONVICTION COHORT — the people still holding. The event stored PEOPLE,
+      // not prose, precisely so the sentence can be written for where it is
+      // being read: this request knows whether it is the app-wide tape or one
+      // market's panel (`marketIds` is set only by the panel), so it strips the
+      // market title and the side exactly when the surrounding UI supplies them.
+      if (r.kind === "conviction_cohort") {
+        const p = r.payload as unknown as {
+          kind: CohortKind;
+          side: "YES" | "NO";
+          rung: HoldingRung;
+          significance: number;
+          people: CohortHolder[];
+        };
+        const cohort: ConvictionCohort = {
+          kind: p.kind,
+          side: p.side,
+          rung: p.rung,
+          people: p.people ?? [],
+          fingerprint: `cohort:${p.side}:${p.kind}:${p.rung}`,
+          significance: p.significance ?? 0,
+        };
+        const surface = scoped ? "panel" : "app";
+        const story = renderCohort(cohort, surface, r.marketTitle);
+        r.story = {
+          category: p.kind === "tribe_holding" ? "tribe" : "growing",
+          headline: story.headline,
+          body: story.body,
+          attribution: null,
+          tone: p.side === "YES" ? "yes" : "no",
+          personal: p.kind === "tribe_holding",
+        };
+        r.people = cohort.people;
+        r.text = flattenStory(r.story);
+        continue;
       }
 
       // Market-wide transitions carry their own composed copy in the payload
