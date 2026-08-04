@@ -131,6 +131,7 @@ export function MobileCaseView({
             row={row}
             viewerWallet={viewerWallet}
             ethUsd={ethUsd}
+            compactRoster
           />
           <SideAction side="NO" onBack={() => onBackSide("NO")} />
         </CasePage>
@@ -158,6 +159,7 @@ export function MobileCaseView({
             row={row}
             viewerWallet={viewerWallet}
             ethUsd={ethUsd}
+            compactRoster
           />
           <SideAction side="YES" onBack={() => onBackSide("YES")} />
         </CasePage>
