@@ -37,6 +37,7 @@ import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT } from "@/domain/market-flow";
 export { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow } from "@/lib/deck-window";
 import { marketBook, type BookMetric } from "@/domain/market-book";
+import { seededBelievers } from "@/lib/market-state/read-model";
 import { rankBelievers, sideCaseSummary, type CaseRelationship } from "@/domain/case-file";
 
 /** Window-relative % for a book metric, or null when the base is too small. */
