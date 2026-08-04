@@ -447,22 +447,52 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       // The crowd behind a burst, named. Ordered by what they committed (the
       // grouping already did that), with the viewer's own people pulled to the
       // front so a familiar face is the first one they see.
+      //
+      // ONE PERSON, ONE FACE. When the row already has an actor (`r.face`), that
+      // wallet is dropped from the stack — the row was showing the same person
+      // twice, once as the subject of the sentence and again as "the crowd".
       const stakes = burstStakes.get(r.id);
       if (stakes && !r.people) {
-        const named = stakes.map((s) => {
-          const prof = profiles.get(s.wallet);
-          return {
-            wallet: s.wallet,
-            name: prof?.displayName ?? aliasFor(s.wallet),
-            avatarUrl: prof?.pfpUrl ?? null,
-            relationship: labelByWallet.get(s.wallet) ?? null,
-          };
-        });
+        const seen = new Set<string>(w ? [w] : []);
+        const named = stakes
+          .filter((s) => !seen.has(s.wallet) && (seen.add(s.wallet), true))
+          .map((s) => {
+            const prof = profiles.get(s.wallet);
+            return {
+              wallet: s.wallet,
+              name: prof?.displayName ?? aliasFor(s.wallet),
+              avatarUrl: prof?.pfpUrl ?? null,
+              relationship: labelByWallet.get(s.wallet) ?? null,
+            };
+          });
         // Stable partition, not a re-sort: known people lead, everyone else
         // keeps the commitment order the grouping gave them.
-        r.people = [...named.filter((p) => p.relationship), ...named.filter((p) => !p.relationship)];
-
+        if (named.length > 0)
+          r.people = [
+            ...named.filter((p) => p.relationship),
+            ...named.filter((p) => !p.relationship),
+          ];
+      } else if (!r.face && !r.people) {
+        // A market signal: no actor, no burst — the believers it is about.
+        const believers = believersByMarket.get(Number(r.marketId)) ?? [];
+        if (believers.length > 0) {
+          const named = believers.map((wallet) => {
+            const prof = profiles.get(wallet);
+            return {
+              wallet,
+              name: prof?.displayName ?? aliasFor(wallet),
+              avatarUrl: prof?.pfpUrl ?? null,
+              relationship: labelByWallet.get(wallet) ?? null,
+            };
+          });
+          r.people = [
+            ...named.filter((p) => p.relationship),
+            ...named.filter((p) => !p.relationship),
+          ];
+        }
       }
+
+
 
 
 
