@@ -142,8 +142,8 @@ export function houseReadCopy(state: HouseReadState): HouseReadCopy {
       const n = state.status === "learning" ? state.remainingPicks : undefined;
       const body =
         n != null && n > 0
-          ? `${n} more pick${n === 1 ? "" : "s"} and we’ll call your next move.`
-          : "Still learning your tells. Make more picks and we’ll call your next move.";
+          ? `${n} more pick${n === 1 ? "" : "s"} and we’ll call your move.`
+          : "Learning your tells. Soon, we’ll call your move.";
       return { label: HOUSE_READ_LABEL, body, side: null, suffix: "", tone: "neutral" };
     }
   }
