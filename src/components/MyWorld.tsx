@@ -153,9 +153,7 @@ export function MyWorld({
             }`}
           >
             <span className="text-[12px] font-medium">{tabName(t)}</span>
-            <span className="text-[11px] tabular-nums opacity-70">
-              {tabCount(t) != null ? tabCount(t) : "\u00A0"}
-            </span>
+            <span className="text-[11px] tabular-nums opacity-70">{tabCount(t)}</span>
           </button>
         ))}
       </div>
