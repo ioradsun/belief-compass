@@ -56,6 +56,7 @@ import { emitMarketTransition, type TransitionType, type Side } from "@/domain/m
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { OrderTicket } from "@/components/order/OrderTicket";
+import { ExamineCta } from "@/components/order/ExamineRail";
 import { StandOnIt } from "@/components/StandOnIt";
 import { ShareImpact } from "@/components/ShareImpact";
 import { MovementLine } from "@/components/MovementLine";
