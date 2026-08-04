@@ -29,7 +29,7 @@
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
-import { findCohorts, COHORT, type CohortHolder } from "@/domain/conviction-cohort";
+import { findCohorts, COHORT, HOLDING_RUNGS, type CohortHolder } from "@/domain/conviction-cohort";
 
 type Row = Record<string, unknown>;
 type Db = ReturnType<typeof serviceClient>;
@@ -56,22 +56,77 @@ const WINDOW_DAYS = 1;
  */
 const MIN_SIGNIFICANCE = 0.25;
 
-export async function emitConvictionCohorts(marketIds: number[], db: Db = serviceClient()) {
-  if (marketIds.length === 0) return 0;
+/**
+ * The windows in which a rung is crossed TODAY, as `first_backed_at` ranges.
+ *
+ * A duration milestone is driven by the CLOCK, not by trading. The caller used
+ * to hand us the markets it had just refreshed — the dirty ones — which meant a
+ * market with long-held believers and no recent activity could never be looked
+ * at, and its cohort could never be found. That is exactly backwards: cohorts
+ * exist to make a QUIET market feel inhabited, and quiet markets were the ones
+ * structurally excluded. Measured: zero conviction_cohort events had ever been
+ * written in production.
+ *
+ * So the query is inverted. Instead of "which markets moved, do any of their
+ * holders have an anniversary", it asks "who has an anniversary today" and lets
+ * the markets follow. Small, precise, and independent of activity.
+ */
+function crossingWindows(nowMs: number, windowDays: number) {
+  const day = 86_400_000;
+  return HOLDING_RUNGS.map((rung: number) => ({
+    rung,
+    // Crossed rung R today ⇒ first_backed_at ∈ [now − R − window, now − R).
+    from: new Date(nowMs - (rung + windowDays) * day).toISOString(),
+    to: new Date(nowMs - rung * day).toISOString(),
+  }));
+}
 
-  const [{ data: beliefs }, { data: markets }] = await Promise.all([
+/**
+ * @param marketIds Optional NARROWING for a targeted run. Omit (or pass null)
+ *   for the normal clock-driven scan across every market at once.
+ */
+export async function emitConvictionCohorts(marketIds: number[] | null, db: Db = serviceClient()) {
+  const now = Date.now();
+  // Only holders whose belief has an anniversary inside the window. This is the
+  // whole candidate set, and it is tiny compared to every holder everywhere.
+  const ranges = crossingWindows(now, WINDOW_DAYS);
+  const orFilter = ranges
+    .map(
+      (r: { from: string; to: string }) =>
+        `and(first_backed_at.gte.${r.from},first_backed_at.lt.${r.to})`,
+    )
+    .join(",");
+
+  let bq = db
+    .from("wallet_beliefs")
+    .select(
+      "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, first_backed_at",
+    )
+    .or(orFilter)
+    .limit(4000);
+  if (marketIds && marketIds.length > 0) bq = bq.in("onchain_id", marketIds);
+  const { data: beliefs, error: beliefErr } = await bq;
+  if (beliefErr) throw new Error(`cohorts: wallet_beliefs read failed: ${beliefErr.message}`);
+  if (!beliefs || beliefs.length === 0) return 0;
+
+  const touched = [...new Set((beliefs as Row[]).map((b) => Number(b.onchain_id)))];
+  const [{ data: markets }, { data: states }] = await Promise.all([
+    db.from("markets").select("onchain_id, created_at").in("onchain_id", touched),
+    // The AUTHORITATIVE side size. We now fetch only the holders with an
+    // anniversary, so counting them would make every cohort look like the whole
+    // side — share would be 1.0 always and significance would be meaningless.
     db
-      .from("wallet_beliefs")
-      .select(
-        "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, first_backed_at",
-      )
-      .in("onchain_id", marketIds)
-      .limit(4000),
-    db.from("markets").select("onchain_id, created_at").in("onchain_id", marketIds),
+      .from("market_state")
+      .select("onchain_id, believers_yes, believers_no")
+      .in("onchain_id", touched),
   ]);
+  const sideSize = new Map<string, number>();
+  for (const st of (states ?? []) as Row[]) {
+    sideSize.set(`${Number(st.onchain_id)}:YES`, num(st.believers_yes));
+    sideSize.set(`${Number(st.onchain_id)}:NO`, num(st.believers_no));
+  }
 
   const ageByMarket = new Map<number, number | null>();
-  const now = Date.now();
   for (const m of (markets ?? []) as Row[]) {
     const t = m.created_at ? Date.parse(String(m.created_at)) : NaN;
     ageByMarket.set(Number(m.onchain_id), Number.isFinite(t) ? (now - t) / 86_400_000 : null);
@@ -108,7 +163,8 @@ export async function emitConvictionCohorts(marketIds: number[], db: Db = servic
       side: side as "YES" | "NO",
       holders,
       marketAgeDays: ageByMarket.get(marketId) ?? null,
-      sideBelievers: holders.length,
+      // Real believers on the side, not just the ones with an anniversary.
+      sideBelievers: sideSize.get(key) ?? holders.length,
       windowDays: WINDOW_DAYS,
       // The same clock `daysHeld` was measured against, so the crossing date in
       // the fingerprint is identical on every run of this job.
