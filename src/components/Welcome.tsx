@@ -132,8 +132,8 @@ export function WelcomePrompt({
     mutationFn: async () => {
       const chosen = people.filter((p) => selected.has(keyOf(p)));
       if (chosen.length === 0) return { welcomed: 0 };
-      // Explicit tap: it's fine to ask for a signature if there's no session yet.
-      const session = await ensureSession();
+      // Saying hi is free — reuse a session if one exists, never open the wallet.
+      const session = await bestEffort(() => ensureSession({ interactive: false }));
       const res = await sendWelcomes({
         data: {
           wallet: wallet as string,
@@ -155,16 +155,15 @@ export function WelcomePrompt({
     },
   });
 
-
   /** "Seen it" without saying hi — the room resets, the people stay. */
   const seen = useMutation({
-    mutationFn: async () =>
-      bestEffort(async () => {
-        const session = await ensureSession({ interactive: false });
-        return markRoomSeen({ data: { wallet: wallet as string, session } });
-      }),
+    mutationFn: async () => {
+      const session = await bestEffort(() => ensureSession({ interactive: false }));
+      return markRoomSeen({ data: { wallet: wallet as string, session } });
+    },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["welcomable", wallet ?? null] }),
   });
+
 
   if (!wallet || count === 0) return null;
   const selectedCount = selected.size;
