@@ -248,7 +248,8 @@ function ConvictionCard({
       {story.body && (
         <div className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">{story.body}</div>
       )}
-    </button>
+    </div>
+
   );
 }
 
