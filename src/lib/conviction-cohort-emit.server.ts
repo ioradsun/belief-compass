@@ -42,6 +42,7 @@
  * a YES panel does not. One event, two renderings, one meaning.
  */
 import { serviceClient } from "@/lib/supabase-clients";
+import { positionValueUsd } from "@/domain/position-value";
 import { aliasFor } from "@/lib/wallet-identity";
 import {
   findCohorts,
@@ -57,6 +58,13 @@ type Row = Record<string, unknown>;
 type Db = ReturnType<typeof serviceClient>;
 
 const num = (v: unknown): number => (v == null || !Number.isFinite(Number(v)) ? 0 : Number(v));
+
+/** The cron-refreshed ETH→USD rate. 0 when unknown, which disables the fallback
+ *  rather than pricing every position at nothing. */
+async function ethUsdRate(db: Db): Promise<number> {
+  const { data } = await db.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle();
+  return Number((data as { value?: number } | null)?.value ?? 0) || 0;
+}
 
 /**
  * How much of a day's crossings this run is responsible for. The refresher runs
@@ -104,7 +112,7 @@ function crossingWindows(nowMs: number, windowDays: number) {
 }
 
 const BELIEF_COLUMNS =
-  "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, first_backed_at";
+  "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, yes_cost, no_cost, first_backed_at";
 
 /** One page of a paginated read. */
 const PAGE_SIZE = 1000;
@@ -183,6 +191,7 @@ async function cohortsFrom(
   scan: CohortScan,
 ): Promise<CohortCandidate[]> {
   if (beliefs.length === 0) return [];
+  const ethUsd = await ethUsdRate(db);
   const touched = [...new Set(beliefs.map((b) => Number(b.onchain_id)))];
   const [{ data: markets }, { data: states }] = await Promise.all([
     db.from("markets").select("onchain_id, created_at").in("onchain_id", touched),
@@ -218,7 +227,13 @@ async function cohortsFrom(
     for (const side of ["YES", "NO"] as const) {
       const shares = num(side === "YES" ? b.yes_shares : b.no_shares);
       if (shares <= 0) continue;
-      const positionUsd = num(side === "YES" ? b.yes_value_usd : b.no_value_usd);
+      // `yes_value_usd` is a column nothing writes, so reading it alone made
+      // every holder look like dust and this emitter publish nothing, ever.
+      const { usd: positionUsd } = positionValueUsd({
+        valueUsd: side === "YES" ? b.yes_value_usd : b.no_value_usd,
+        costEth: side === "YES" ? b.yes_cost : b.no_cost,
+        ethUsd,
+      });
       if (positionUsd < COHORT.minPositionUsd) continue;
       const key = `${id}:${side}`;
       const list = byKey.get(key) ?? [];

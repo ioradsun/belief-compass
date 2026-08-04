@@ -6,6 +6,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { fetchPovPositions } from "@/lib/pov.server";
 import { publicClient, serviceClient } from "@/lib/supabase-clients";
+import { costBasisUsd } from "@/domain/position-value";
 import { aliasFor } from "@/lib/wallet-identity";
 import { readLatestTradesPerMarket, readLatestTradeEvents } from "@/lib/events.functions";
 import type { TapeTrade } from "@/domain/conviction-series";
@@ -777,11 +778,6 @@ export const getMarketOg = createServerFn({ method: "GET" })
  * prices ETH quantities. Null when the cost is unknown or we have no rate, so the
  * caller honestly shows "worth only" instead of an inflated gain.
  */
-function costBasisUsd(ethCost: unknown, ethUsd: number): number | null {
-  const eth = Number(ethCost);
-  if (!Number.isFinite(eth) || eth <= 0 || !(ethUsd > 0)) return null;
-  return eth * ethUsd;
-}
 
 export const getWallet = createServerFn({ method: "GET" })
   .inputValidator((d: { wallet: string; window?: VolumeWindow }) =>

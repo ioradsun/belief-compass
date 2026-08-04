@@ -20,6 +20,7 @@
 import { serviceClientOrNull } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { firstBackedIsFloor } from "@/domain/tenure";
+import { positionValueUsd } from "@/domain/position-value";
 import {
   findStandingFacts,
   STANDING,
@@ -67,10 +68,17 @@ export async function buildStandingFacts(input: StandingFactsInput): Promise<Sta
   const svc = serviceClientOrNull();
   if (!svc) return [];
 
+  const { data: rate } = await svc
+    .from("calc_cache")
+    .select("value")
+    .eq("key", "eth_usd")
+    .maybeSingle();
+  const ethUsd = Number((rate as { value?: number } | null)?.value ?? 0) || 0;
+
   const { data, error } = await svc
     .from("wallet_beliefs")
     .select(
-      "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, first_backed_at",
+      "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, yes_cost, no_cost, first_backed_at",
     )
     .in("onchain_id", ids)
     // Oldest belief first: if the ceiling ever bites it drops the shortest
@@ -90,7 +98,13 @@ export async function buildStandingFacts(input: StandingFactsInput): Promise<Sta
     const id = Number(b.onchain_id);
     for (const side of ["YES", "NO"] as const) {
       if (num(side === "YES" ? b.yes_shares : b.no_shares) <= 0) continue;
-      const positionUsd = num(side === "YES" ? b.yes_value_usd : b.no_value_usd);
+      // See src/domain/position-value: reading the unwritten `*_value_usd`
+      // column alone made every position dust and this pool always empty.
+      const { usd: positionUsd } = positionValueUsd({
+        valueUsd: side === "YES" ? b.yes_value_usd : b.no_value_usd,
+        costEth: side === "YES" ? b.yes_cost : b.no_cost,
+        ethUsd,
+      });
       if (positionUsd < STANDING.minPositionUsd) continue;
       const key = `${id}:${side}`;
       const list = byKey.get(key) ?? [];
