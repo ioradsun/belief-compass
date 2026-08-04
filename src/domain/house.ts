@@ -80,7 +80,11 @@ export function sampleConfidence(n: number, k = 4): number {
  * (A refused no-read is handled separately; bands describe a real prediction.)
  */
 export type HouseConfidenceBand =
-  "SHOT_IN_THE_DARK" | "FLYING_BLIND" | "HUNCH" | "READ" | "STRONG_READ";
+  | "SHOT_IN_THE_DARK"
+  | "FLYING_BLIND"
+  | "HUNCH"
+  | "READ"
+  | "STRONG_READ";
 
 /** Map a read's confidence (0..1) to its presentation band. */
 export function confidenceBand(confidence: number): HouseConfidenceBand {
@@ -215,7 +219,7 @@ export function predictHouse(s: HouseSignals): HouseRead {
   if (conflicting) {
     return noRead(
       "conflicting",
-      "You're hard to read here",
+      "Still learning your tells",
       "Your previous choices point in both directions. The House won't bluff.",
       [
         `Your own ${cat ?? "recent"} history leans ${personalLean > 0 ? "YES" : "NO"}.`,
