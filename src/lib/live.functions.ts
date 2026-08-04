@@ -182,14 +182,21 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       .select("value")
       .eq("key", "eth_usd")
       .maybeSingle();
-    // `eth_usd_calibration()` returns NULL when no market has volume_total_usd>0,
-    // and the refresher stores that NULL — so this legitimately reads back as 0.
     // A zero rate is NOT a price: it is the absence of one, and pretending
     // otherwise prices every trade at $0 and empties the tape (see live-tape).
+    //
+    // TWO WAYS THIS GOES WRONG, and they need different fixes — which is why the
+    // warning distinguishes them. `cal == null` means the row is INVISIBLE to
+    // this client, not absent: calc_cache shipped with RLS on and no anon
+    // policy, so the public read returned 200 with zero rows for months while
+    // the stored value was perfectly fine. A present-but-null value is the other
+    // case: the calibration itself returns NULL when no market has volume.
     const ethUsd = Number((cal as { value?: number } | null)?.value ?? 0) || 0;
     if (!(ethUsd > 0))
       console.warn(
-        "[feed] calc_cache.eth_usd is missing, null or zero — every trade will be reported WITHOUT an amount. Check refresh_eth_usd_calibration() and market_state.volume_total_usd.",
+        cal == null
+          ? "[feed] calc_cache.eth_usd is UNREADABLE by this client (RLS/grant), so every trade is reported WITHOUT an amount. Refreshing the value will not help — check SELECT access for anon."
+          : "[feed] calc_cache.eth_usd is null or zero, so every trade is reported WITHOUT an amount. Check refresh_eth_usd_calibration() and market_state.volume_total_usd.",
       );
 
     const events: LiveEventInput[] = (rows ?? []).map((r) => ({
