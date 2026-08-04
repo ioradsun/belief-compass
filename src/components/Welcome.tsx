@@ -132,29 +132,29 @@ export function WelcomePrompt({
     mutationFn: async () => {
       const chosen = people.filter((p) => selected.has(keyOf(p)));
       if (chosen.length === 0) return { welcomed: 0 };
-      // Saying hi is free — never prompt the wallet to sign for it.
-      return bestEffort(async () => {
-        const session = await ensureSession({ interactive: false });
-        const res = await sendWelcomes({
-          data: {
-            wallet: wallet as string,
-            session,
-            recipients: chosen.map((p) => ({
-              recipientWallet: p.wallet,
-              marketId: p.marketId,
-              side: p.side,
-            })),
-          },
-        });
-        await markRoomSeen({ data: { wallet: wallet as string, session } });
-        return res;
+      // Explicit tap: it's fine to ask for a signature if there's no session yet.
+      const session = await ensureSession();
+      const res = await sendWelcomes({
+        data: {
+          wallet: wallet as string,
+          session,
+          recipients: chosen.map((p) => ({
+            recipientWallet: p.wallet,
+            marketId: p.marketId,
+            side: p.side,
+          })),
+        },
       });
+      await markRoomSeen({ data: { wallet: wallet as string, session } });
+      return res;
     },
     onSuccess: () => {
       setOpen(false);
       void qc.invalidateQueries({ queryKey: ["welcomable", wallet ?? null] });
+      void qc.invalidateQueries({ queryKey: ["welcomes-received"] });
     },
   });
+
 
   /** "Seen it" without saying hi — the room resets, the people stay. */
   const seen = useMutation({
