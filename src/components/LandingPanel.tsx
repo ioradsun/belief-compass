@@ -156,12 +156,6 @@ export function LandingPanel({
                     Find your tribe.
                   </p>
 
-                  <p className="mt-3 text-[15px] leading-snug text-[var(--text-secondary)] sm:text-[17px]">
-                    Traders make money.
-                    <br />
-                    Conviction builds wealth.
-                  </p>
-
 
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <button
