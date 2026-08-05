@@ -589,7 +589,8 @@ function BothSides({
                   {open === s ? "Hide" : "Details"}
                 </span>
               </div>
-              <div className="mt-2 space-y-1.5">
+              <div className="mt-2 grid grid-cols-2 gap-2">
+
                 {rows(s).map((m) => (
                   <SideMetric
                     key={m.label}
