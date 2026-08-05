@@ -83,16 +83,18 @@ export function LandingExampleCard({
 
       <div className="mt-3 flex items-center gap-4 text-[12px] text-[var(--text-secondary)]">
         <span>
-          <span className="num text-[var(--yes)]">{example.yesPeople}</span> people back YES
+          <span className="num font-semibold text-[var(--yes)]">{example.yesPeople}</span> people
+          back <span className="font-semibold text-[var(--yes)]">YES</span>
         </span>
         <span>
-          <span className="num">{example.noPeople}</span> people back NO
+          <span className="num font-semibold text-[var(--no)]">{example.noPeople}</span> people
+          back <span className="font-semibold text-[var(--no)]">NO</span>
         </span>
       </div>
 
       <div className="mt-3.5 rounded-[10px] bg-[var(--surface)] px-3.5 py-3">
         <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-          You backed YES early
+          You backed <span className="text-[var(--yes)]">YES</span> early
         </div>
         <div className="mt-2 flex items-end justify-between gap-3">
           <div>
@@ -101,7 +103,7 @@ export function LandingExampleCard({
           </div>
           <div className="text-right">
             <div className="text-[11px] text-[var(--text-muted)]">Current position</div>
-            <div className="num text-[26px] font-semibold leading-none text-[var(--yes)]">
+            <div className="num text-[26px] font-semibold leading-none text-[var(--gain)]">
               {example.current}
             </div>
           </div>
@@ -110,7 +112,7 @@ export function LandingExampleCard({
 
       <div className="mt-3.5">
         <div className="text-[11px] font-medium text-[var(--text-secondary)]">
-          If more capital backs YES:
+          If more capital backs <span className="font-semibold text-[var(--yes)]">YES</span>:
         </div>
         <dl className="mt-1.5 space-y-1">
           {example.growth.map((g) => (
@@ -129,14 +131,16 @@ export function LandingExampleCard({
         <button
           type="button"
           onClick={onEnter}
-          className="h-10 rounded-full bg-[var(--yes)] text-[13px] font-semibold text-[#08130c] transition-opacity hover:opacity-90"
+          className="h-10 rounded-full text-[13px] font-semibold transition-opacity hover:opacity-90"
+          style={{ border: "1px solid var(--yes)", color: "var(--yes)" }}
         >
           Back YES
         </button>
         <button
           type="button"
           onClick={onEnter}
-          className="h-10 rounded-full bg-[var(--surface-2)] text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
+          className="h-10 rounded-full text-[13px] font-semibold transition-opacity hover:opacity-90"
+          style={{ border: "1px solid var(--no)", color: "var(--no)" }}
         >
           Back NO
         </button>

@@ -143,7 +143,6 @@ export function CaseStory({
         <div className="mt-4 space-y-3">
           <SignalOverTime
             side={side}
-            icon="👥"
             label="Believers"
             value={summary ? summary.believers.toLocaleString("en-US") : "—"}
             pct={summary?.believersPct ?? null}
@@ -152,7 +151,6 @@ export function CaseStory({
           />
           <SignalOverTime
             side={side}
-            icon="💰"
             label="Capital"
             value={capitalUsd != null ? format(capitalUsd, "USD") : "—"}
             pct={summary?.capitalPct ?? null}
@@ -161,7 +159,6 @@ export function CaseStory({
           />
           <SignalOverTime
             side={side}
-            icon="📈"
             label="Price"
             value={priceUsd != null ? format(priceUsd, "USD") : "—"}
             pct={summary?.pricePct ?? null}
@@ -203,7 +200,6 @@ export function CaseStory({
 /** One signal (believers / capital / price): its total, its move, its shape. */
 function SignalOverTime({
   side,
-  icon,
   label,
   value,
   pct,
@@ -211,7 +207,6 @@ function SignalOverTime({
   metric,
 }: {
   side: "YES" | "NO";
-  icon: string;
   label: string;
   value: string;
   pct: number | null;
@@ -220,7 +215,7 @@ function SignalOverTime({
 }) {
   return (
     <div className="rounded-[12px] bg-[var(--surface)] p-2.5">
-      <StatRow icon={icon} label={label} value={value} pct={pct} />
+      <StatRow label={label} value={value} pct={pct} />
       {points.length > 1 && (
         <div className="mt-1.5">
           <ConvictionSpark side={side} points={points} metric={metric} />

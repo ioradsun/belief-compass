@@ -21,7 +21,7 @@ import { useDisplayUnit } from "@/lib/display-unit";
 import { believerMove, capitalMove, type MetricMove } from "@/domain/metric-display";
 
 const dirTone = (d: "up" | "down" | "flat"): string =>
-  d === "up" ? "var(--yes)" : d === "down" ? "var(--no)" : "var(--text-muted)";
+  d === "up" ? "var(--gain)" : d === "down" ? "var(--loss)" : "var(--text-muted)";
 
 /** Formats an ETH-native capital amount in the viewer's chosen unit. */
 type CapFmt = (eth: number, signed?: boolean) => string;

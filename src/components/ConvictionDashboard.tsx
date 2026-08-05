@@ -336,14 +336,14 @@ export function ConvictionDashboard({
             <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span
                 className="text-[56px] font-semibold leading-none tracking-[-0.035em] tabular-nums"
-                style={{ color: journey.netProfitUsd >= 0 ? "var(--yes)" : "var(--no)" }}
+                style={{ color: journey.netProfitUsd >= 0 ? "var(--gain)" : "var(--loss)" }}
               >
                 {fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
               </span>
               {journey.roiPct != null && (
                 <span
                   className="text-[18px] font-semibold tabular-nums"
-                  style={{ color: journey.netProfitUsd >= 0 ? "var(--yes)" : "var(--no)" }}
+                  style={{ color: journey.netProfitUsd >= 0 ? "var(--gain)" : "var(--loss)" }}
                 >
                   ({fmtPct(journey.roiPct)})
                 </span>
@@ -470,7 +470,7 @@ export function ConvictionDashboard({
                     <span className="text-[13px] font-medium text-[var(--text)]">Net Profit</span>
                     <span
                       className="text-[18px] font-semibold tabular-nums"
-                      style={{ color: journey.netProfitUsd >= 0 ? "var(--yes)" : "var(--no)" }}
+                      style={{ color: journey.netProfitUsd >= 0 ? "var(--gain)" : "var(--loss)" }}
                     >
                       {fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
                     </span>

@@ -27,9 +27,9 @@ export function HouseRead({
   // without turning the row into a banner.
   const bodyColor =
     copy.tone === "correct"
-      ? "var(--yes)"
+      ? "var(--gain)"
       : copy.tone === "incorrect"
-        ? "var(--no)"
+        ? "var(--loss)"
         : "var(--text-secondary)";
 
   return (

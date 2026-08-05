@@ -843,7 +843,7 @@ function Ownership() {
       <div
         className="rounded-2xl px-5 py-4 text-[13px]"
         style={{
-          border: "1px solid color-mix(in oklab, var(--no) 35%, transparent)",
+          border: "1px solid var(--border-strong)",
           color: "var(--text-secondary)",
         }}
       >

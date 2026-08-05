@@ -353,7 +353,6 @@ export function CaseColumn({
           {metricRows.map((r) => (
             <MetricRow
               key={r.metric}
-              icon={LENS_META[r.metric].icon}
               label={r.label}
               value={r.value}
               pct={r.pct}
@@ -452,21 +451,16 @@ export function CaseColumn({
 
 /** One headline total with its window-relative % change. */
 export function StatRow({
-  icon,
   label,
   value,
   pct,
 }: {
-  icon: string;
   label: string;
   value: string;
   pct: number | null;
 }) {
   return (
     <div className="flex items-center gap-2.5">
-      <span className="text-[15px]" aria-hidden>
-        {icon}
-      </span>
       <div className="min-w-0 flex-1">
         <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
           {label}
@@ -485,7 +479,7 @@ export function StatRow({
 export function PctChip({ pct, muted = false }: { pct: number | null; muted?: boolean }) {
   if (pct == null) return <span className="num text-[11px] text-[var(--text-muted)]">—</span>;
   const flat = Math.abs(pct) < 0.05;
-  const color = flat ? "var(--text-muted)" : pct > 0 ? "var(--yes)" : "var(--no)";
+  const color = flat ? "var(--text-muted)" : pct > 0 ? "var(--gain)" : "var(--loss)";
   const arrow = flat ? "•" : pct > 0 ? "▲" : "▼";
   return (
     <span
@@ -505,7 +499,6 @@ export function PctChip({ pct, muted = false }: { pct: number | null; muted?: bo
  * brightens and gains an accent edge; the others stay muted but tappable.
  */
 function MetricRow({
-  icon,
   label,
   value,
   pct,
@@ -514,7 +507,6 @@ function MetricRow({
   color,
   onSelect,
 }: {
-  icon: string;
   label: string;
   value: string;
   pct: number | null;
@@ -525,7 +517,7 @@ function MetricRow({
   onSelect: () => void;
 }) {
   const flat = pct == null || Math.abs(pct) < 0.05;
-  const tone = flat ? "var(--text-muted)" : pct! > 0 ? "var(--yes)" : "var(--no)";
+  const tone = flat ? "var(--text-muted)" : pct! > 0 ? "var(--gain)" : "var(--loss)";
   const arrow = flat ? "" : pct! > 0 ? "▲" : "▼";
   const pctText =
     pct == null ? "" : `${Math.abs(pct).toFixed(!flat && Math.abs(pct) < 10 ? 1 : 0)}%`;
@@ -544,9 +536,6 @@ function MetricRow({
     >
       <div className="flex items-baseline justify-between gap-3">
         <span className="flex min-w-0 items-baseline gap-2">
-          <span className="shrink-0 text-[13px]" aria-hidden style={{ opacity: active ? 1 : 0.55 }}>
-            {icon}
-          </span>
           <span
             className={`num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] ${active ? "text-[22px]" : "text-[18px]"}`}
             style={{ color: active ? "var(--text)" : "var(--text-muted)" }}

@@ -60,7 +60,7 @@ function Admin() {
             placeholder="Password"
             className="mt-4 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[14px] outline-none focus:border-[var(--border-strong)]"
           />
-          {failed && <p className="mt-2 text-[12px] text-[var(--no)]">Incorrect password.</p>}
+          {failed && <p className="mt-2 text-[12px] text-[var(--loss)]">Incorrect password.</p>}
           <button
             type="submit"
             className="mt-4 w-full rounded-md bg-[var(--text)] px-3 py-2 text-[14px] font-medium text-[var(--bg)]"

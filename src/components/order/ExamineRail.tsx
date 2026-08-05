@@ -10,62 +10,6 @@ import { useEffect, useRef, useState } from "react";
 import { HouseRead } from "@/components/HouseRead";
 import type { HouseReadState } from "@/domain/house-read";
 
-/**
- * The split-panel mark: two halves that part to reveal what sits behind them.
- * Open state draws them closer together — the same gesture, reversed.
- */
-export function SplitPanelIcon({ open }: { open: boolean }) {
-  const gap = open ? 1.1 : 2.4;
-  return (
-    <svg
-      width="17"
-      height="17"
-      viewBox="0 0 18 18"
-      fill="none"
-      aria-hidden
-      className="shrink-0 transition-[transform] duration-200 motion-reduce:transition-none"
-    >
-      <rect
-        x={2.5 - gap / 2}
-        y="3.5"
-        width="5.5"
-        height="11"
-        rx="1.2"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
-      <rect
-        x={10 + gap / 2}
-        y="3.5"
-        width="5.5"
-        height="11"
-        rx="1.2"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
-    </svg>
-  );
-}
-
-/** The analytical spark — an amber four-point mark, decorative. */
-export function SignalSpark({ hot }: { hot: boolean }) {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 12 12"
-      aria-hidden
-      className="shrink-0 transition-opacity duration-500 motion-reduce:transition-none"
-      style={{ color: "var(--signal,#d99a2b)", opacity: hot ? 1 : 0.82 }}
-    >
-      <path
-        d="M6 0.6 L7.05 4.95 L11.4 6 L7.05 7.05 L6 11.4 L4.95 7.05 L0.6 6 L4.95 4.95 Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
 export function ExamineCta({
   open,
   onToggle,
@@ -120,7 +64,6 @@ export function ExamineCta({
         }}
       >
         <div className="flex min-w-0 items-center gap-2 text-[13px] leading-snug text-[var(--text)]">
-          <SignalSpark hot={hot} />
           <span className="min-w-0 truncate">{signal}</span>
         </div>
         {houseRead && <HouseRead state={houseRead} className="mt-1" />}
@@ -136,7 +79,6 @@ export function ExamineCta({
           compact ? "min-h-[40px] px-3.5 py-2" : "min-h-[48px] px-4 py-3 sm:px-5"
         }`}
       >
-        <SplitPanelIcon open={open} />
         <span className="min-w-0 truncate text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text)]">
           {open ? closeLabel : openLabel}
         </span>

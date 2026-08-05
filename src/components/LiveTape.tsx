@@ -293,7 +293,7 @@ export function LiveTape({
                     </div>
                   )}
                   <div className="mt-0.5 text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--text)]">
-                    <SideText text={s.headline} tone={s.tone} />
+                    <SideText text={s.headline} />
                   </div>
                   <div className="mt-0.5 text-[13px] leading-snug text-[var(--text-secondary)]">
                     <SideText text={s.body} />
@@ -358,14 +358,14 @@ function AttributionFace({ r }: { r: LiveRow }) {
 
 /**
  * Colour discipline: the only tinted glyphs in the tape are the words YES / NO
- * and signed percentages. Everything else stays neutral so the eye isn't asked
- * to decode a wall of red and green.
+ * (side colours) and signed percentages (gain green / loss red). Event labels
+ * such as BACKED, SOLD SOME and EXITED stay neutral.
  */
 function SideText({ text, tone }: { text?: string | null; tone?: BeatTone }) {
   // A toned headline (e.g. "CAPITAL PULLED BACK") carries its direction; body text
   // stays neutral except the YES / NO words and any percentage.
   const toneColor =
-    tone === "yes" || tone === "hot" ? "var(--yes)" : tone === "no" ? "var(--no)" : undefined;
+    tone === "yes" ? "var(--yes)" : tone === "no" ? "var(--no)" : undefined;
   // A beat can arrive with a missing headline/body (older cached payload, or a
   // narrator that produced no sentence). Render nothing rather than crash the feed.
   if (typeof text !== "string" || text.length === 0) return null;
@@ -389,7 +389,7 @@ function SideText({ text, tone }: { text?: string | null; tone?: BeatTone }) {
             <span
               key={i}
               className="num font-semibold"
-              style={{ color: p.startsWith("−") || p.startsWith("-") ? "var(--no)" : "var(--yes)" }}
+              style={{ color: p.startsWith("−") || p.startsWith("-") ? "var(--loss)" : "var(--gain)" }}
             >
               {p}
             </span>

@@ -424,7 +424,7 @@ function BigAmount({
     <div
       className="flex items-baseline gap-2 pb-2 transition-colors"
       style={{
-        borderBottom: `1px solid ${error ? "var(--no)" : focus ? "var(--text)" : "var(--border)"}`,
+        borderBottom: `1px solid ${error ? "var(--loss)" : focus ? "var(--text)" : "var(--border)"}`,
       }}
     >
       {!eth && <span className="num text-[26px] font-medium text-[var(--text-muted)]">$</span>}
@@ -604,7 +604,7 @@ function BuyTicket({
         />
         <div className="mt-1.5 text-[12px] text-[var(--text-muted)]">
           {amountError ? (
-            <span style={{ color: "var(--no)" }}>
+            <span style={{ color: "var(--loss)" }}>
               {amountError} · Available {availUnit ?? "—"}
             </span>
           ) : (
@@ -645,7 +645,7 @@ function BuyTicket({
       )}
 
       {trade.isError && (
-        <div className="mt-2 text-[11px]" role="alert" style={{ color: "var(--no)" }}>
+        <div className="mt-2 text-[11px]" role="alert" style={{ color: "var(--loss)" }}>
           {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
         </div>
       )}
@@ -846,7 +846,7 @@ function SellTicket({
       )}
 
       {trade.isError && (
-        <div className="mt-2 text-[11px]" role="alert" style={{ color: "var(--no)" }}>
+        <div className="mt-2 text-[11px]" role="alert" style={{ color: "var(--loss)" }}>
           {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
         </div>
       )}

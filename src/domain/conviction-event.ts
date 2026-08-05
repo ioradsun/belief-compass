@@ -174,9 +174,9 @@ const KICKER: Record<ConvictionEventType, string> = {
   swept_in: "GOING BROAD",
   first_believer: "FIRST BELIEVER",
   doubled_down: "DOUBLED DOWN",
-  big_backing: "BIG BACKING",
+  big_backing: "BACKED",
   joined: "NEW BELIEVER",
-  trimmed: "TOOK SOME OFF",
+  trimmed: "SOLD SOME",
   long_held_exit: "LOST CONVICTION",
   biggest_believer_left: "BIGGEST BELIEVER LEFT",
   last_believer_left: "LAST BELIEVER LEFT",
@@ -404,7 +404,7 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
       body = side ? `${who} backed ${s}${tail}.` : `${who} took a side${tail}.`;
       break;
     case "trimmed":
-      body = side ? `${who} took some off ${s}${tail}.` : `${who} took some off${tail}.`;
+      body = side ? `${who} sold some of ${s}${tail}.` : `${who} sold some${tail}.`;
       break;
     case "long_held_exit":
       body = side ? `${who} gave up on ${s}${tail}.` : `${who} gave up${tail}.`;
