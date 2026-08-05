@@ -544,15 +544,18 @@ export function MyConvictions({
       <div className="flex flex-col gap-2.5 pt-4">
         {positions.map((p) => (
           // The share control is a sibling of the card button (never nested — a
-          // button inside a button is invalid), pinned to the corner.
-          <div key={p.key} className="relative">
+          // button inside a button is invalid), pinned to the corner. It stays
+          // hidden until the card is hovered or the control itself is focused,
+          // so the list reads as beliefs, not toolbars.
+          <div key={p.key} className="group relative">
             <ConvictionCard p={p} onSelect={onSelect} money={money} signedMoney={signedMoney} />
-            <div className="absolute right-2.5 top-3">
+            <div className="absolute right-2.5 top-3 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
               <StandOnIt variant="card" marketId={p.id} title={p.title} side={p.side} />
             </div>
           </div>
         ))}
       </div>
+
     </div>
   );
 }
