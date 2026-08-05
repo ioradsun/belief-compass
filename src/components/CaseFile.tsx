@@ -24,8 +24,6 @@ import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useMoney } from "@/lib/display-unit";
 import { PersonAvatar } from "@/components/PersonAvatar";
-import { sideFeed } from "@/domain/side-feed";
-import type { NetTag } from "@/domain/feed-event";
 
 import {
   LENS_META,
@@ -40,6 +38,7 @@ import { useDeckWindow } from "@/lib/deck-window";
 import { marketBook, type BookMetric } from "@/domain/market-book";
 import { seededBelievers } from "@/lib/market-state/read-model";
 import { rankBelievers, sideCaseSummary, type CaseRelationship } from "@/domain/case-file";
+import { sideChangeLine, sideStateLine } from "@/domain/side-summary";
 
 /** Window-relative % for a book metric, or null when the base is too small. */
 const metricPct = (m: BookMetric): number | null => (m.base > 0 ? (m.delta / m.base) * 100 : null);
@@ -82,8 +81,6 @@ export function CaseColumn({
   row,
   viewerWallet,
   ethUsd = 0,
-  onInvestigate,
-  investigating = false,
   compactRoster = false,
 }: {
   side: Side;
@@ -92,9 +89,6 @@ export function CaseColumn({
   viewerWallet?: string;
   /** Live ETH/USD, so money reads in dollars like the rest of the app. */
   ethUsd?: number;
-  /** Optional deep-dive into the center timeline (desktop). */
-  onInvestigate?: (s: Side) => void;
-  investigating?: boolean;
   /** Mobile: collapse the roster into an Instagram-style face pile. */
   compactRoster?: boolean;
 }) {
@@ -216,39 +210,10 @@ export function CaseColumn({
     return `${side} ${verb} ${format(priceUsd, "USD")} · ${move.pct}${change}.`;
   }, [metric, priceUsd, summary?.pricePct, win, side, format]);
 
-  // The side feed — the anatomy of THIS side as gated, consolidated momentum
-  // beats (people, capital, social), newest first. The same importance engine as
-  // the universal tape decides what's meaningful; raw trades stay in the ledger.
-  const network = useMemo(() => {
-    const m = new Map<string, NetTag>();
-    for (const p of net?.people ?? []) {
-      const r = p.relationship;
-      if (r === "twin" || r === "tribe" || r === "opp" || r === "inverse")
-        m.set(p.wallet.toLowerCase(), r);
-    }
-    return m;
-  }, [net]);
-  const sideBeats = useMemo(
-    () =>
-      tape?.length
-        ? sideFeed({
-            trades: tape,
-            side,
-            win,
-            nowMs: Date.now(),
-            ethUsd,
-            marketBelievers: book?.believers.market.current ?? null,
-            network,
-            believersNow: believersTotal,
-            capitalEthNow: capitalMetric?.current ?? 0,
-            money,
-            limit: 5,
-          })
-        : [],
-    [tape, side, win, ethUsd, book, network, believersTotal, capitalMetric, money],
-  );
-  /** One line of summary. The stream below carries the rest. */
-  const lead = sideBeats[0] ?? null;
+  // The side's momentum beats used to lead this panel; the plain-language state
+  // + change sentences below say it faster, and Recent activity carries the rest.
+
+
 
   // Prefer the AUTHORITATIVE current (market_state row) + the snapshot baseline for
   // the selected window: correct even on a >1000-trade market where the tape can't
@@ -276,24 +241,32 @@ export function CaseColumn({
       ? priceUsd - priceUsd / (1 + summary.pricePct / 100)
       : null;
 
+  // Supporting copy only when something actually moved. "No change today" /
+  // "Flat today" is filler — whitespace says it better.
   const believerAbs =
-    belDelta == null
+    belDelta == null || belDelta === 0
       ? null
-      : belDelta === 0
-        ? `No change ${phrase}`
-        : `${belDelta > 0 ? "+" : "−"}${Math.abs(belDelta)} believer${Math.abs(belDelta) === 1 ? "" : "s"} ${phrase}`;
+      : `${belDelta > 0 ? "+" : "−"}${Math.abs(belDelta)} believer${Math.abs(belDelta) === 1 ? "" : "s"} ${phrase}`;
   const capitalAbs =
-    capDelta == null
+    capDelta == null || Math.abs(capDelta) < 0.005
       ? null
-      : Math.abs(capDelta) < 0.005
-        ? `No change ${phrase}`
-        : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "left"} ${phrase}`;
+      : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "left"} ${phrase}`;
   const priceAbs =
-    priceDelta == null
+    priceDelta == null || Math.abs(priceDelta) < 0.005
       ? null
-      : Math.abs(priceDelta) < 0.005
-        ? `Flat ${phrase}`
-        : `${format(priceDelta, "USD", { signed: true })} per share ${phrase}`;
+      : `${format(priceDelta, "USD", { signed: true })} per share ${phrase}`;
+
+  // The two sentences that lead the panel: what this side IS, and what changed.
+  const stateLine = sideStateLine(side, believersTotal);
+  const changeLine = sideChangeLine({
+    side,
+    belDelta,
+    capDelta,
+    priceDelta,
+    phrase,
+    money: (usd) => format(usd, "USD"),
+  });
+
 
   const metricRows: {
     metric: LensMetric;
@@ -359,10 +332,23 @@ export function CaseColumn({
         </div>
       </div>
 
-      <div ref={scroller} className="min-h-0 flex-1 space-y-4 overflow-y-scroll pr-0.5">
-        {/* ACT 1 — THE LENSES: pick what to investigate. The three metrics ARE the
-          navigation — no tabs, no segmented control. Believers → Capital → Price
-          mirrors how conviction forms: people, then money, then price. */}
+      <div ref={scroller} className="min-h-0 flex-1 space-y-5 overflow-y-scroll pr-0.5">
+        {/* 1 — CURRENT STATE: what this side IS, in plain language, before any
+          metric. When something moved in the window, one sentence says what. */}
+        <div className="space-y-1">
+          <p className="text-[15px] font-semibold leading-snug tracking-[-0.01em] text-[var(--text)]">
+            <SideWords text={stateLine} />
+          </p>
+          {changeLine && (
+            <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+              <SideWords text={changeLine} />
+            </p>
+          )}
+        </div>
+
+        {/* 2 — SNAPSHOT: the three essential metrics. They double as the chart's
+          lens selector — no tabs, no segmented control. Supporting copy appears
+          only when the metric actually moved. */}
         <div
           className="space-y-0.5"
           role="radiogroup"
@@ -375,7 +361,6 @@ export function CaseColumn({
               value={r.value}
               pct={r.pct}
               absolute={r.absolute}
-
               active={metric === r.metric}
               color={color}
               onSelect={() => setDeckLens(r.metric)}
@@ -383,8 +368,6 @@ export function CaseColumn({
           ))}
         </div>
 
-        {/* ACT 2 — THE ONE CHART: titled, single-metric, with a sentence that always
-          matches what's drawn. Switching lens crossfades inside LensChart. */}
         <div className="space-y-2">
           <LensChart
             side={side}
@@ -402,30 +385,21 @@ export function CaseColumn({
           </p>
         </div>
 
-        {/* ACT 3 — WHAT'S HAPPENING TO {side}: the living stream of this belief.
-          This used to be a list of aggregated momentum beats — true, but it read
-          as a summary of a place rather than a place where things happen, and it
-          spent most of its life saying "Nothing significant yet".
-          Now the strongest beat leads as ONE line (that is what a summary is for)
-          and beneath it runs the same tape the app-wide feed runs, scoped to this
-          side: the people entering and leaving, what they did to their belief,
-          how long they had held it, and the conviction cohorts still standing.
-          Same engine, same grammar, same cadence — the column already says YES,
-          so the sentences do not repeat it (surface: "panel"). */}
+        {/* 3 — BELIEVERS: the people currently backing this side. */}
+        <CaseRoster
+          side={side}
+          believers={believers}
+          people={net?.people}
+          priceUsd={priceUsd}
+          variant={compactRoster ? "compact" : "list"}
+        />
+
+        {/* 4 — RECENT ACTIVITY: the same tape the app-wide feed runs, scoped to
+          this side. The column already says YES, so sentences don't repeat it. */}
         <div className="space-y-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-            What&rsquo;s happening to {side}
+            Recent activity
           </span>
-          {lead && (
-            <p className="px-0.5 text-[12px]">
-              <span
-                className={`leading-snug text-[var(--text)] ${lead.tier === 1 ? "font-semibold" : ""}`}
-              >
-                <SideWords text={lead.headline} />
-              </span>
-            </p>
-          )}
-
           <LiveTape
             marketIds={[marketId]}
             side={side}
@@ -437,29 +411,8 @@ export function CaseColumn({
             emptyText="No moves on this side yet."
           />
         </div>
-
-        {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}
-        <CaseRoster
-          side={side}
-          believers={believers}
-          people={net?.people}
-          priceUsd={priceUsd}
-          variant={compactRoster ? "compact" : "list"}
-        />
       </div>
 
-      {/* Optional deep-dive into the full center timeline (desktop investigation). */}
-      {onInvestigate && (
-        <button
-          type="button"
-          onClick={() => onInvestigate(side)}
-          aria-pressed={investigating}
-          className="mt-2 shrink-0 text-left text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors"
-          style={{ color }}
-        >
-          {investigating ? "Reading the full timeline ↗" : "Open the full timeline ↗"}
-        </button>
-      )}
     </div>
   );
 }
@@ -587,6 +540,9 @@ function MetricRow({
 }
 
 
+/** How many believers the panel previews before "+N more". */
+const PREVIEW = 5;
+
 /** The people, as one ranked roster — name, amount, and shared DNA when there is any. */
 export function CaseRoster({
   side,
@@ -612,9 +568,9 @@ export function CaseRoster({
   const relOf = useMemo(() => (w: string) => byWallet.get(w)?.relationship ?? null, [byWallet]);
   const roster = useMemo(() => rankBelievers(believers, relOf), [believers, relOf]);
 
-  const rows = (
+  const renderRows = (list: typeof roster) => (
     <ul className="space-y-0.5">
-      {roster.map(({ believer: b, relationship }) => {
+      {list.map(({ believer: b, relationship }) => {
         const p = byWallet.get(b.wallet.toLowerCase());
         // Only a real overlap earns a DNA line — no "unmapped", no filler.
         const dna =
@@ -652,11 +608,15 @@ export function CaseRoster({
     </ul>
   );
 
+  // The list variant previews the strongest few; "+N more" opens the rest.
+  const allRows = renderRows(roster);
+  const rows = variant === "compact" ? allRows : renderRows(roster.slice(0, PREVIEW));
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          Who backs {side}
+          Believers
         </span>
         {roster.length > 0 && (
           <span className="num text-[10px] text-[var(--text-muted)]">{roster.length}</span>
@@ -674,7 +634,23 @@ export function CaseRoster({
           )}
         </>
       ) : (
-        rows
+        <>
+          {rows}
+          {roster.length > PREVIEW && (
+            <button
+              type="button"
+              onClick={() => setOpenAll(true)}
+              className="px-1 text-[12px] text-[var(--text-secondary)] underline-offset-2 hover:underline"
+            >
+              +{roster.length - PREVIEW} more
+            </button>
+          )}
+          {openAll && (
+            <RosterSheet side={side} count={roster.length} onClose={() => setOpenAll(false)}>
+              {allRows}
+            </RosterSheet>
+          )}
+        </>
       )}
     </div>
   );

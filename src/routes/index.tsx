@@ -325,8 +325,6 @@ function Feed() {
   // intelligence is shown, so it just flips the URL flag (preserved across switches).
   const toggleCase = () => {
     navigate({ search: (prev: Search) => ({ ...prev, case: prev.case ? undefined : true }) });
-    // Each Case File session opens in Discovery Mode — comparison before investigation.
-    setStorySide(null);
   };
   // Brand introduction layer. Intentional product interactions (opening a
   // market, a person, DNA) collapse it; nothing else does.
@@ -354,7 +352,6 @@ function Feed() {
       }),
     });
     setTab("belief");
-    setStorySide(null);
     enterProduct();
   };
   const selectPerson = (personWallet: string) => {
@@ -483,7 +480,6 @@ function Feed() {
   const openFeed = () => {
     navigate({ search: (prev: Search) => ({ wallet: prev.wallet, r: prev.r }) });
     setTab("belief");
-    setStorySide(null);
     setCaughtUp(false);
     enterProduct();
   };
@@ -502,11 +498,6 @@ function Feed() {
   const win = useDeckWindow() as VolumeWindow;
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
-  // Investigation Mode: which side's story has taken the center (null = Discovery,
-  // where both sides are compared side by side). Clicking a side card opens it;
-  // clicking the same card, Escape, or "Compare" returns to Discovery.
-  const [storySide, setStorySide] = useState<"YES" | "NO" | null>(null);
-  const toggleStory = (s: "YES" | "NO") => setStorySide((prev) => (prev === s ? null : s));
 
   // The active lens is a SERVER filter on the one global classification: it is
   // sent with the feed request, so the server still owns the whole sequence.
@@ -813,8 +804,6 @@ function Feed() {
                 row={currentRow}
                 viewerWallet={wallet}
                 ethUsd={stableFeed?.ethUsd ?? 0}
-                investigating={storySide === "YES"}
-                onInvestigate={toggleStory}
               />
             </Suspense>
           ) : walletResolving ? (
@@ -967,8 +956,6 @@ function Feed() {
                     caseOpen={caseActive}
                     mobileCaseOpen={mobileCaseActive}
                     onToggleCase={toggleCase}
-                    storySide={caseActive ? storySide : null}
-                    onCloseStory={() => setStorySide(null)}
                     onSelectPerson={selectPerson}
                   />
                 )}
@@ -1014,8 +1001,6 @@ function Feed() {
                 row={currentRow}
                 viewerWallet={wallet}
                 ethUsd={stableFeed?.ethUsd ?? 0}
-                investigating={storySide === "NO"}
-                onInvestigate={toggleStory}
               />
             </Suspense>
           ) : (
