@@ -123,6 +123,13 @@ export interface StartHere {
   title: string;
   /** Why this one, in terms of both people. Never generic, never empty. */
   why: string;
+  /**
+   * What kind of recommendation this is. Not rendered — it exists so a reviewer
+   * can classify the output at a glance, and so a caller could one day treat
+   * "challenging" differently from "discovering". There is no `weak` member on
+   * purpose: a weak candidate is not returned at all.
+   */
+  kind: StartKind;
 }
 
 /**
@@ -247,53 +254,114 @@ function tenure(days: number, floor: boolean): string {
 }
 
 /**
- * The sentence. Two clauses at most: what makes the market matter TO THEM, and
- * what makes it matter BETWEEN YOU. A third clause turns a reason into a pitch.
+ * THE SENTENCE — at least two signals, or nothing.
  *
- * Ordered so the clause a reader could not have guessed comes first.
+ * ONE SIGNAL PRODUCES METADATA. "You have not taken a side here yet" is a
+ * database fact about a stranger. "Their largest current position" is a label.
+ * Neither one tells a reader why opening this market would teach them anything
+ * about this person, and a section built out of them reads like a query result.
+ *
+ * TWO SIGNALS PRODUCE A STORY, because the second one supplies the reason the
+ * first one matters:
+ *
+ *   "You usually agree on culture, and this is the conviction they have held
+ *    longest — you have never taken a side here."
+ *
+ * That is the relationship, the defining behaviour and the discovery gap in one
+ * breath, and it is the shape this composer aims at whenever the data allows.
+ * Below two signals it returns null and the page shows no Start Here at all,
+ * which is the honest outcome: an empty slot costs a visitor nothing, and a
+ * generic recommendation costs them their trust in every other one.
+ *
+ * A signed-out reader has no relationship signals available, so their two come
+ * from the person alone — largest AND long-held, or a contrarian stand with the
+ * room behind it.
  */
-function explain(c: StartCandidate, name: string, hasViewer: boolean): string | null {
-  const them: string[] = [];
-  if (c.isLargest && n(c.valueUsd) > 0) them.push("their largest current position");
-  else if (c.isLongest && c.daysHeld >= START.minDaysForLongest)
-    them.push(`the conviction they have held longest, ${tenure(c.daysHeld, c.tenureIsFloor)}`);
-  else if (isContrarian(c))
-    them.push(`a market where they back ${c.personSide} and ${c.againstPct}% of the room does not`);
 
-  const between: string[] = [];
-  // NO VIEWER, NO RELATIONSHIP CLAUSE. "You have not taken a side here yet" is
-  // true of a signed-in visitor who skipped this market and misleading for a
-  // signed-out one who has no wallet at all — the engine cannot tell those
-  // apart from `viewerSide` alone, so the caller says which it is.
-  if (!hasViewer) {
-    /* nothing between two people when there is only one */
-  } else if (disagrees(c)) {
-    between.push(
-      c.topicUsuallyAligned && c.category
-        ? `you two usually agree on ${c.category}, and here you do not — you back ${c.viewerSide}, they back ${c.personSide}`
-        : `you back ${c.viewerSide} and they back ${c.personSide}`,
-    );
-  } else if (c.viewerSide == null && c.topicUsuallyAligned && c.category) {
-    between.push(
-      `${c.category} is a topic you keep meeting on, and you have not taken a side here`,
-    );
-  } else if (c.viewerSide == null && them.length > 0) {
-    // ONLY as a second clause. "You have not taken a side here yet" describes
-    // the ABSENCE of a fact, and on its own it is true of almost every market a
-    // reader has never opened — printed alone it turned the explore list into
-    // the same sentence four times, which is "Recommended" wearing other words.
-    // It qualifies a real claim about them; it never stands in for one.
-    between.push("you have not taken a side here yet");
+/** What kind of thing this recommendation is, for the caller and for review. */
+export type StartKind = "challenging" | "connecting" | "defining" | "discovering";
+
+/** Sentence-cased, with the trailing period. Clauses arrive pre-joined. */
+const sentence = (name: string, body: string): string =>
+  `${name} — ${body[0].toUpperCase()}${body.slice(1)}.`;
+
+function explain(
+  c: StartCandidate,
+  name: string,
+  hasViewer: boolean,
+): { why: string; kind: StartKind } | null {
+  // ── the signals, each either present with its phrase or absent ──────────────
+  const largest = c.isLargest && n(c.valueUsd) > 0 ? "their largest current position" : null;
+  const held = tenure(c.daysHeld, c.tenureIsFloor);
+  const longEnough = c.daysHeld >= START.minDaysForLongest;
+  // `longest` names a superlative AND its evidence, so it is worth two signals
+  // on its own — "the conviction they have held longest, 512+ days" is already
+  // a story rather than a label.
+  const longest =
+    c.isLongest && longEnough ? `the conviction they have held longest, ${held}` : null;
+  const contrarian = isContrarian(c)
+    ? `a market where they back ${c.personSide} while ${c.againstPct}% of the room does not`
+    : null;
+  // Duration as a SUPPORTING fact on a position that is not their longest. This
+  // is what gives a signed-out reader a second signal without inventing one.
+  const heldFor = !longest && longEnough ? `held for ${held}` : null;
+
+  const rel = hasViewer && c.topicUsuallyAligned && c.category ? c.category : null;
+  const clash = hasViewer && disagrees(c);
+  const gap = hasViewer && c.viewerSide == null;
+
+  const person = [largest, longest, contrarian, heldFor].filter((x): x is string => x !== null);
+  const weight =
+    (longest ? 1 : 0) + person.length + (rel ? 1 : 0) + (clash ? 1 : 0) + (gap ? 1 : 0);
+  if (weight < 2) return null;
+
+  // The strongest thing said about THEM, for the middle of a relationship
+  // sentence. `heldFor` never leads — "held for 40 days" is a fact in search of
+  // a claim.
+  const lead = largest ?? longest ?? contrarian;
+
+  if (clash) {
+    // CHALLENGING. The disagreement is the point; a shared topic is what makes
+    // it surprising rather than merely true.
+    const stand = `you back ${c.viewerSide} and they back ${c.personSide}`;
+    const body = rel
+      ? `you two usually agree on ${rel}, ${lead ? `but this is ${lead}` : "but here you do not"} — ${stand}`
+      : `${lead}, and ${stand}`;
+    return { why: sentence(name, body), kind: "challenging" };
   }
 
-  // Nothing true and specific to say — so this candidate does not get to be the
-  // recommendation, however well it scored. This is the refusal that keeps the
-  // page from padding: a market with no claim of its own is simply not offered.
-  if (them.length === 0 && between.length === 0) return null;
+  if (rel && gap) {
+    // CONNECTING — with a defining fact in the middle, the best sentence this
+    // composer can write: the relationship, the behaviour and the gap in one.
+    const body = lead
+      ? `you two usually agree on ${rel}, and this is ${lead} — you have never taken a side here`
+      : `${rel} is a topic you keep meeting on, and you have never taken a side here`;
+    return { why: sentence(name, body), kind: "connecting" };
+  }
 
-  const parts = [...them, ...between];
-  const sentence = parts.join(", and ");
-  return `${name} — ${sentence[0].toUpperCase()}${sentence.slice(1)}.`;
+  if (gap && lead) {
+    // DISCOVERING. Something specific about them, and a door you have not opened.
+    return {
+      why: sentence(name, `${lead}, and you have never taken a side here`),
+      kind: "discovering",
+    };
+  }
+
+  if (rel && lead) {
+    return {
+      why: sentence(name, `you two usually agree on ${rel}, and this is ${lead}`),
+      kind: "connecting",
+    };
+  }
+
+  // DEFINING. No relationship to draw on — so two facts about the person, which
+  // is the signed-out case and the one that most needs a second signal.
+  if (lead && person.length >= 2) {
+    const support = person.find((x) => x !== lead)!;
+    return { why: sentence(name, `${lead}, ${support}`), kind: "defining" };
+  }
+  if (longest) return { why: sentence(name, longest), kind: "defining" };
+  return null;
 }
 
 /**
@@ -331,10 +399,10 @@ export function rankStartCandidates(
   for (const { c } of ordered) {
     const clash = hasViewer && disagrees(c);
     if (clash && clashes >= START.maxDisagreements) continue;
-    const why = explain(c, name, hasViewer);
-    if (!why) continue;
+    const e = explain(c, name, hasViewer);
+    if (!e) continue;
     if (clash) clashes += 1;
-    out.push({ marketId: c.marketId, title: c.title, why });
+    out.push({ marketId: c.marketId, title: c.title, why: e.why, kind: e.kind });
   }
   return out;
 }

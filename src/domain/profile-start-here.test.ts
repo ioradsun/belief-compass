@@ -98,8 +98,9 @@ describe("the sentence explains itself, in terms of both people", () => {
       { personName: "Sarah" },
     );
     expect(r?.why).toBe(
-      "Sarah — You two usually agree on technology, and here you do not — you back NO, they back YES.",
+      "Sarah — You two usually agree on technology, but here you do not — you back NO and they back YES.",
     );
+    expect(r?.kind).toBe("challenging");
   });
 
   it("says what is unexplored when there is no disagreement", () => {
@@ -107,8 +108,9 @@ describe("the sentence explains itself, in terms of both people", () => {
       personName: "Sarah",
     });
     expect(r?.why).toBe(
-      "Sarah — Their largest current position, and you have not taken a side here yet.",
+      "Sarah — Their largest current position, and you have never taken a side here.",
     );
+    expect(r?.kind).toBe("discovering");
   });
 
   it("carries the tenure floor into the sentence", () => {
@@ -203,7 +205,10 @@ describe("with no viewer there is no relationship clause", () => {
       personName: "Sarah",
       hasViewer: false,
     });
-    expect(r?.why).toBe("Sarah — Their largest current position.");
+    // Two facts about the person, because a signed-out reader has no
+    // relationship signals to draw a second one from.
+    expect(r?.why).toBe("Sarah — Their largest current position, held for 30 days.");
+    expect(r?.kind).toBe("defining");
   });
 
   it("stays silent rather than recommending something it cannot explain", () => {
@@ -222,7 +227,8 @@ describe("with no viewer there is no relationship clause", () => {
     expect(r).toEqual({
       marketId: 2,
       title: "Market 2",
-      why: "Sarah — A market where they back YES and 91% of the room does not.",
+      kind: "defining",
+      why: "Sarah — A market where they back YES while 91% of the room does not, held for 30 days.",
     });
   });
 });
@@ -348,8 +354,9 @@ describe("an absence is not a reason", () => {
       personName: "Sarah",
     });
     expect(r?.why).toBe(
-      "Sarah — Their largest current position, and you have not taken a side here yet.",
+      "Sarah — Their largest current position, and you have never taken a side here.",
     );
+    expect(r?.kind).toBe("discovering");
   });
 
   it("keeps the topic version, which says something specific", () => {
@@ -357,8 +364,9 @@ describe("an absence is not a reason", () => {
       personName: "Sarah",
     });
     expect(r?.why).toBe(
-      "Sarah — Technology is a topic you keep meeting on, and you have not taken a side here.",
+      "Sarah — Technology is a topic you keep meeting on, and you have never taken a side here.",
     );
+    expect(r?.kind).toBe("connecting");
   });
 
   it("does not pad a long list of unremarkable markets", () => {
@@ -391,5 +399,92 @@ describe("a long conviction outweighs a small largest position", () => {
     const shortish = c({ marketId: 1, isLongest: true, daysHeld: 20, valueUsd: 1 });
     const big = c({ marketId: 2, isLargest: true, valueUsd: 500, participants: 37 });
     expect(startHere([shortish, big])?.marketId).toBe(2);
+  });
+});
+
+/**
+ * THE COPY RULE, enforced rather than reviewed.
+ *
+ * One signal produces metadata — "you have not taken a side here" is a database
+ * fact about a stranger, "their largest current position" is a label. Two
+ * signals produce a story, because the second supplies the reason the first
+ * matters. Below two the engine returns nothing and the section is omitted:
+ * an empty slot costs a visitor nothing, a generic one costs their trust in
+ * every other recommendation on the page.
+ */
+describe("every sentence carries at least two signals", () => {
+  /** Rough but honest: count the clauses the composer can emit. */
+  const signals = (why: string) =>
+    [
+      /largest current position/,
+      /held longest/,
+      /held for /,
+      /% of the room does not/,
+      /usually agree on/,
+      /is a topic you keep meeting on/,
+      /never taken a side here/,
+      /you back (YES|NO) and they back/,
+    ].filter((re) => re.test(why)).length;
+
+  const cases: [string, StartCandidate][] = [
+    ["largest + gap", c({ marketId: 1, isLargest: true, valueUsd: 40 })],
+    ["longest + gap", c({ marketId: 2, isLongest: true, daysHeld: 300 })],
+    [
+      "topic + largest + gap",
+      c({ marketId: 3, isLargest: true, valueUsd: 40, topicUsuallyAligned: true }),
+    ],
+    [
+      "clash + topic",
+      c({ marketId: 4, viewerSide: "NO", topicUsuallyAligned: true, participants: 9 }),
+    ],
+    ["clash + largest", c({ marketId: 5, viewerSide: "NO", isLargest: true, participants: 9 })],
+    ["contrarian + tenure", c({ marketId: 6, againstPct: 90, participants: 20, daysHeld: 80 })],
+    [
+      "agreement + topic + largest",
+      c({ marketId: 7, viewerSide: "YES", topicUsuallyAligned: true, isLargest: true }),
+    ],
+  ];
+
+  for (const [label, cand] of cases) {
+    it(`never prints one bare fact — ${label}`, () => {
+      const r = startHere([cand], { personName: "Sarah" });
+      expect(r, label).not.toBeNull();
+      expect(signals(r!.why), r!.why).toBeGreaterThanOrEqual(2);
+    });
+  }
+
+  it("holds for a signed-out reader too, from person facts alone", () => {
+    const r = startHere([c({ marketId: 1, isLargest: true, valueUsd: 40, daysHeld: 90 })], {
+      personName: "Sarah",
+      hasViewer: false,
+    });
+    expect(signals(r!.why), r!.why).toBeGreaterThanOrEqual(2);
+    expect(r!.why).not.toMatch(/you back|usually agree|never taken/);
+  });
+
+  it("shows nothing rather than one signal", () => {
+    // Not largest, not long enough to be a tenure claim, no crowd, no viewer.
+    const bare = c({ marketId: 1, daysHeld: 2, viewerSide: null });
+    expect(startHere([bare], { hasViewer: false })).toBeNull();
+  });
+});
+
+/**
+ * Every returned recommendation lands in one of the four useful classes. There
+ * is no `weak` member of `StartKind` by design — a weak candidate is not
+ * returned, so the section disappears instead of filling the space.
+ */
+describe("nothing weak is ever featured", () => {
+  it("classifies every result into a useful category", () => {
+    const list = [
+      c({ marketId: 1, isLargest: true, valueUsd: 40 }),
+      c({ marketId: 2, viewerSide: "NO", topicUsuallyAligned: true, participants: 9 }),
+      c({ marketId: 3, isLongest: true, daysHeld: 300, topicUsuallyAligned: true }),
+      c({ marketId: 4, viewerSide: "YES", isLargest: true, topicUsuallyAligned: true }),
+    ];
+    const kinds = rankStartCandidates(list).map((r) => r.kind);
+    expect(kinds.length).toBeGreaterThan(0);
+    for (const k of kinds)
+      expect(["challenging", "connecting", "defining", "discovering"]).toContain(k);
   });
 });

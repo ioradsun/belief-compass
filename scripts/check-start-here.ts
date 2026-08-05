@@ -185,14 +185,29 @@ for (const s of SCENARIOS) {
   console.log(`   candidates: ${s.candidates.length}   explainable: ${ranked.length}`);
   if (!lead) {
     missing += 1;
-    console.log("   START HERE: (none — nothing could explain itself)");
+    console.log("   START HERE: (none — no candidate carried two signals)");
   } else {
-    console.log(`   START HERE: ${lead.title}`);
+    console.log(`   START HERE: [${lead.kind.toUpperCase()}] ${lead.title}`);
     console.log(`   WHY:        ${lead.why}`);
   }
-  for (const r of ranked.slice(1, 4)) console.log(`   then:       ${r.title} — ${r.why}`);
+  for (const r of ranked.slice(1, 4))
+    console.log(`   then:       [${r.kind}] ${r.title} — ${r.why}`);
 }
 console.log(
-  `\n${SCENARIOS.length - missing}/${SCENARIOS.length} archetypes produced a recommendation.`,
+  `\n${SCENARIOS.length - missing}/${SCENARIOS.length} archetypes produced a recommendation; ` +
+    `${missing} correctly showed none.`,
 );
-console.log("Read each WHY and ask: is that the one market I would show first?\n");
+console.log(`
+Judge each WHY against four questions:
+  1. Does it explain why this market helps me understand the person?
+  2. Could it apply to almost any market? (if yes, it is too generic)
+  3. Does it create genuine curiosity?
+  4. Is every claim supported by the data?
+
+DEFINING     reveals something important about the person
+CONNECTING   relates their profile to mine
+CHALLENGING  exposes a useful disagreement
+DISCOVERING  introduces a market I am likely to care about
+WEAK         accurate but not worth featuring — must never appear; the engine
+             returns nothing instead, and the section is omitted.
+`);
