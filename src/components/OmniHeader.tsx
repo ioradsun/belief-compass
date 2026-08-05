@@ -456,13 +456,14 @@ export function OmniHeader({
       {/* Results */}
       {showResults && (
         <div className="absolute inset-x-0 top-11 z-50 max-h-[60vh] lg:right-auto lg:w-[720px] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl">
-          {/* One search, quick filters — the scope narrows results in place. */}
+          {/* Two filters, no "All": unselected is the everything state. */}
           <div className="flex items-center gap-1 px-2 pb-1 pt-1.5">
-            {(["all", "markets", "people"] as const).map((s) => (
+            {(["markets", "people"] as const).map((s) => (
               <button
                 key={s}
                 type="button"
-                onClick={() => setScope(s)}
+                aria-pressed={scope === s}
+                onClick={() => setScope(scope === s ? "all" : s)}
                 className="rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize transition-colors"
                 style={
                   scope === s
@@ -474,6 +475,7 @@ export function OmniHeader({
               </button>
             ))}
           </div>
+
 
           {/* Typing is not failure: while a query is in flight we say we're
               looking. "No matches" is a verdict, and a verdict only lands once
