@@ -34,13 +34,10 @@ export function HouseRead({
 
   return (
     <div
-      className={`flex min-w-0 items-start gap-2 text-[12px] leading-snug ${className}`}
+      className={`flex min-w-0 items-start text-[12px] leading-snug ${className}`}
       // The whole row is one sentence for a screen reader, side included.
       aria-label={`The House Read. ${copy.body}${copy.side ?? ""}${copy.suffix}`}
     >
-      <span aria-hidden className="shrink-0 leading-snug">
-        🏠
-      </span>
       {/* min-w-0 + normal wrapping: the sentence flows to a second line on a
           phone instead of being cut off. */}
       <p className="m-0 min-w-0 flex-1 break-words">
