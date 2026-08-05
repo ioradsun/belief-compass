@@ -71,20 +71,34 @@ export interface ViewerSignals {
   /** Wallets this viewer explicitly follows. */
   following: ReadonlySet<string>;
   /**
-   * Which followed people hold a position in each market.
+   * Which followed people are connected to each market, and which way they went.
    *
-   * Wallets rather than a count, so the caller can UNION them with a followed
+   * Keyed by wallet rather than a count, so the caller can UNION in a followed
    * creator without double-counting the common case: someone who created a
    * market and also backed it is one person connected to it, not two.
    *
-   * One set, not a creator set and a participant set. The product's rule is
+   * One map, not a creator map and a participant map. The product's rule is
    * that a person is a connection, not a role — whether they wrote the question
    * or took a side in it is a ranking detail the interface never distinguishes,
    * and splitting it here would put that distinction one careless render away
    * from being visible.
+   *
+   * The VALUE is the side they hold, or null when the only connection is
+   * authorship. This used to be a bare `Set<string>`: the query already filtered
+   * on `stance_side` and then dropped the column, so the feed knew which way
+   * every followed person had gone and could only say "is active here".
    */
-  followedInMarket: Map<number, Set<string>>;
+  followedInMarket: Map<number, Map<string, FollowedSide>>;
+  /**
+   * Display names for followed wallets, for the sentence that names one. Absent
+   * when a wallet has no POV identity — the copy then falls back to "someone you
+   * follow" rather than printing an address at a reader.
+   */
+  followedNames: ReadonlyMap<string, string>;
 }
+
+/** Which side a followed person took here. Null = connected as the creator only. */
+export type FollowedSide = "YES" | "NO" | null;
 
 export const EMPTY_SIGNALS: ViewerSignals = {
   states: new Map(),
@@ -92,6 +106,7 @@ export const EMPTY_SIGNALS: ViewerSignals = {
   held: new Set(),
   following: new Set(),
   followedInMarket: new Map(),
+  followedNames: new Map(),
 };
 
 type EventRow = { market_id: number; kind: string; count: number; last_at: string };
@@ -162,27 +177,53 @@ export async function loadViewerSignals(
   ]);
 
   /**
-   * Followed people with a position in the markets currently in play. One
-   * bounded query over (their wallets × these market ids) — the same shape the
-   * DNA overlay already uses for tribe/opp, and the reason a follow can say
-   * something specific ("4 people you follow are active here") instead of only
-   * nudging a score.
+   * Followed people with a position in the markets currently in play, AND WHICH
+   * SIDE. One bounded query over (their wallets × these market ids) — the same
+   * shape the DNA overlay already uses for tribe/opp, and the reason a follow can
+   * say something specific ("Reyhan is backing YES") instead of only nudging a
+   * score.
+   *
+   * `stance_side` was already in the filter and dropped from the select, so the
+   * side was computed by the database and thrown away on arrival.
    */
-  const followedInMarket = new Map<number, Set<string>>();
+  const followedInMarket = new Map<number, Map<string, FollowedSide>>();
+  const seenWallets = new Set<string>();
   if (following.size > 0 && marketIds.length > 0) {
     const { data: theirs } = await sb
       .from("wallet_beliefs")
-      .select("onchain_id, wallet")
+      .select("onchain_id, wallet, stance_side")
       .in("wallet", [...following])
       .in("onchain_id", marketIds)
       .in("stance_side", ["YES", "NO"]);
-    // A Set per market, so one wallet holding both sides is one person who is
-    // here rather than two.
-    for (const r of (theirs ?? []) as { onchain_id: number; wallet: string }[]) {
+    // A Map keyed by wallet, so one wallet holding both sides is one person who
+    // is here rather than two.
+    for (const r of (theirs ?? []) as {
+      onchain_id: number;
+      wallet: string;
+      stance_side: string | null;
+    }[]) {
       const id = Number(r.onchain_id);
-      const at = followedInMarket.get(id) ?? new Set<string>();
-      at.add(String(r.wallet).toLowerCase());
+      const w = String(r.wallet).toLowerCase();
+      const at = followedInMarket.get(id) ?? new Map<string, FollowedSide>();
+      at.set(w, r.stance_side === "YES" || r.stance_side === "NO" ? r.stance_side : null);
       followedInMarket.set(id, at);
+      seenWallets.add(w);
+    }
+  }
+
+  /**
+   * Names for the followed people who actually turned up, resolved ONCE for the
+   * whole feed. Bounded by who is present rather than by the follow list, and
+   * the lazy cap is deliberately small: a name is worth one cached lookup, never
+   * a stall on the feed's critical path.
+   */
+  const followedNames = new Map<string, string>();
+  if (seenWallets.size > 0) {
+    const profiles = await import("@/lib/profiles.server")
+      .then((m) => m.resolveProfiles([...seenWallets], 5))
+      .catch(() => new Map());
+    for (const [w, p] of profiles) {
+      if (p.displayName) followedNames.set(w, p.displayName);
     }
   }
 
@@ -265,6 +306,7 @@ export async function loadViewerSignals(
     held,
     following,
     followedInMarket,
+    followedNames,
     profile: {
       categoryAffinity: normalize(categories),
       topicAffinity: normalize(topics),

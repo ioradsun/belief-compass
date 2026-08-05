@@ -99,8 +99,13 @@ describe("relationship beat", () => {
   });
 });
 
-describe("privacy rule", () => {
-  it("crowd is a count on the money's side, never a name", () => {
+/**
+ * Not a privacy rule — every position is public on-chain. This module simply
+ * has no way to name someone it was not handed, and asserting that keeps a
+ * future edit from reaching for an address when a name is missing.
+ */
+describe("never invents a name it was not given", () => {
+  it("crowd is a count on the money's side, because names cost lookups", () => {
     const s = composeMarketStory(base({ momentum: { moneyYesPct: 62, newBackers24h: 42 } }));
     expect(s.crowd).toEqual({ side: "YES", count: 42 });
     expect(s.faces).toHaveLength(0); // no network → no named faces

@@ -62,6 +62,22 @@ export interface FeedMarketSignals {
    */
   followedHere: number;
   /**
+   * How those followed people split, and what one of them is called.
+   *
+   * `followedYes + followedNo` can be LESS than `followedHere`: a followed
+   * creator who never backed their own market is connected without holding a
+   * side. `followedNames` is capped and may be empty even when people are here —
+   * a wallet with no POV identity gets no name, and the copy degrades to
+   * "someone you follow" rather than printing an address at a reader.
+   *
+   * These describe people the viewer chose to follow, taking public on-chain
+   * sides. Nothing here is withheld: the reason a follow used to say only
+   * "active here" was a privacy rule over data that was never private.
+   */
+  followedYes: number;
+  followedNo: number;
+  followedNames: readonly string[];
+  /**
    * People who hold a side BOTH here and in the market the viewer arrived from
    * — the one they opened out of search, a Live row or a position, rather than
    * by walking the queue.

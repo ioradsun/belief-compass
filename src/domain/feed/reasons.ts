@@ -37,6 +37,50 @@ function freshText(ageHours: number | null): string | null {
   return null;
 }
 
+/**
+ * What the people this viewer follows are doing here.
+ *
+ * Most specific true sentence, in order: a named person with a side, then a
+ * count with a side, then the split, then bare presence. Each step down is a
+ * fact the data did not support, never a fact being held back — a followed
+ * creator who never backed their own market genuinely has no side, and a wallet
+ * with no POV identity genuinely has no name.
+ */
+function followsReason(s: FeedMarketSignals): FeedReason {
+  const y = Math.max(0, Math.round(s.followedYes));
+  const n = Math.max(0, Math.round(s.followedNo));
+  const withSide = y + n;
+  const name = s.followedNames[0] ?? null;
+
+  if (withSide > 0 && (y === 0 || n === 0)) {
+    const side = y > 0 ? "YES" : "NO";
+    // One person is a person: name them when we know the name, and never say
+    // "1 people".
+    if (withSide === 1)
+      return {
+        code: "follows",
+        text: name ? `${name} is backing ${side}` : `Someone you follow is backing ${side}`,
+      };
+    return { code: "follows", text: `${withSide} people you follow are backing ${side}` };
+  }
+  // Both sides represented — the disagreement IS the reason, and naming one of
+  // them would pick a winner out of a split.
+  if (y > 0 && n > 0)
+    return { code: "follows", text: `${withSide} people you follow are split here` };
+
+  // Connected without a side: they created it. The product does not distinguish
+  // creating from participating, so the sentence does not either.
+  return {
+    code: "follows",
+    text:
+      s.followedHere === 1
+        ? name
+          ? `${name} is active here`
+          : "Someone you follow is active here"
+        : `${s.followedHere} people you follow are active here`,
+  };
+}
+
 /** Pick the single most useful, most specific true sentence. */
 export function reasonFor(
   s: FeedMarketSignals,
@@ -50,20 +94,16 @@ export function reasonFor(
     };
   // A follow leads the copy even where it does not lead the SCORE (see
   // socialSignal — one follow ranks below a Tribe). Ranking and explaining are
-  // different jobs: "someone you follow is active here" is a fact the reader can
-  // check, where "your Tribe" asks them to trust an inference. Given both are
-  // true, say the checkable one.
+  // different jobs: "Reyhan is backing YES" is a fact the reader can check,
+  // where "your Tribe" asks them to trust an inference. Given both are true, say
+  // the checkable one.
   //
-  // "Active here", never a side: this is one count about people the viewer
-  // picked, not a readout of their positions.
-  if (s.followedHere > 0)
-    return {
-      code: "follows",
-      text:
-        s.followedHere === 1
-          ? "Someone you follow is active here"
-          : `${s.followedHere} people you follow are active here`,
-    };
+  // THE SIDE IS SAID. This sentence used to stop at "is active here" on privacy
+  // grounds, which withheld the single most useful word in it — and withheld
+  // nothing real, since every side is public on-chain and the viewer chose to
+  // follow this person. It also made the checkable reason the vaguest one on the
+  // card, so the inference ("your Tribe is backing YES") read as the better fact.
+  if (s.followedHere > 0) return followsReason(s);
   // The count sharpens the sentence; it never gates it. `tribeCount` is 0 for a
   // viewer whose DNA has not formed yet, and for the whole overlay's history it
   // was 0 for everyone because the feed only ever looked at one person — so

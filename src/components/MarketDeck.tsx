@@ -413,7 +413,8 @@ export function MarketDeck({
         }
       />
 
-      {/* SHARED CONVICTION — side-blind belonging: your Tribe/Twin/Opp are here. */}
+      {/* SHARED CONVICTION — belonging: your Tribe/Twin/Opp are here, and which
+          way they went. */}
       <SharedConviction
         marketId={marketId}
         viewerWallet={viewerWallet}

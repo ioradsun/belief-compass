@@ -343,8 +343,8 @@ export function MyConvictions({
     newInWindow: number | null;
   }[];
 
-  // Per-market network signal: pass the wallet so the tape tags Twin/Tribe/Opp and
-  // milestones, side-blind. These lift a card to the top when your people arrive.
+  // Per-market network signal: pass the wallet so the tape tags Twin/Tribe/Opp
+  // and milestones. These lift a card to the top when your people arrive.
   // One tape per MARKET — holding both sides must not fetch it twice.
   const tapeIds = Array.from(new Set(facts.slice(0, 80).map((f) => f.id))).slice(0, 40);
   const { data: tape } = useQuery({
