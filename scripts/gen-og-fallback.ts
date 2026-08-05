@@ -21,14 +21,14 @@ const H = 630;
 
 // Brand palette (mirrors src/styles.css).
 const BG = [0x10, 0x10, 0x0f];
-const YES = [0x36, 0xb7, 0x6a];
-const NO = [0xe4, 0x58, 0x58];
+const YES = [0x4c, 0x73, 0xff]; // Conviction Blue
+const NO = [0xf5, 0xa6, 0x23]; // Conviction Amber
 
 function mix(a: number[], b: number[], t: number): number[] {
   return [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * t));
 }
 
-/** One centered pill, split green (left) / red (red) — "pick a side". */
+/** One centered pill, split blue (YES) / amber (NO) — "pick a side". */
 function pixel(x: number, y: number): number[] {
   const cx = W / 2;
   const cy = H / 2;
