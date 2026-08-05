@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getNetwork } from "@/lib/dna.functions";
-import { searchMarkets } from "@/lib/markets.functions";
+import { searchMarkets, getMarketFaces, type MarketFace } from "@/lib/markets.functions";
 import { composeDiscoveryRow } from "@/domain/market-discovery";
 import {
   presentRelationship,
@@ -255,6 +255,16 @@ export function OmniHeader({
   });
   const peopleHits = net?.people ?? [];
 
+  // Social proof for the results on screen: who actually put money behind each
+  // question, viewer's own network first. Fetched for the visible page only.
+  const faceIds = marketHits.map((m) => m.onchain_id);
+  const { data: facesById = {} } = useQuery({
+    queryKey: ["omni-faces", wallet ?? null, faceIds.join(",")],
+    queryFn: async () => await getMarketFaces({ data: { ids: faceIds, wallet } }),
+    enabled: faceIds.length > 0,
+    staleTime: 60_000,
+  });
+
   const showResults = open && term.length >= 2;
   // Still typing (the debounced term trails the field) or still fetching: the
   // list is unresolved, not empty.
@@ -493,6 +503,9 @@ export function OmniHeader({
                 // What a searcher actually wants: the question, then whether
                 // anything is happening — a plain momentum sentence, supported by
                 // lifetime reach and the capital standing behind it right now.
+                const proof = facesById[m.onchain_id];
+                const faces = proof?.faces ?? [];
+                const social = socialLine(proof?.faces ?? [], proof?.knownCount ?? 0);
                 const row = composeDiscoveryRow({
                   participants: m.participants,
                   believers: m.believers,
@@ -531,12 +544,15 @@ export function OmniHeader({
                       <span className="block truncate whitespace-nowrap text-[13px] font-medium text-[var(--text)]">
                         {m.title}
                       </span>
-                      {/* Story and numbers read as one block — neutral, uncoloured. */}
+                      {/* Story and numbers read as one block — neutral, uncoloured.
+                          When real people the viewer relates to are in here, their
+                          names replace the interpretation: social proof beats mood. */}
                       <span className="mt-1 block truncate whitespace-nowrap text-[11px] text-[var(--text-muted)]">
-                        {row.story}
+                        {social ? social : row.story}
                       </span>
                       {row.metrics.length > 0 && (
                         <span className="num mt-0 flex items-center gap-1.5 truncate text-[11px]">
+                          {faces.length > 0 && <FaceStack faces={faces} />}
                           {row.metrics.map((mt, k) => (
                             <span key={mt.label} className="flex items-center gap-1.5">
                               {k > 0 && (
