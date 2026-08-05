@@ -40,6 +40,7 @@ import { useDeckWindow } from "@/lib/deck-window";
 import { marketBook, type BookMetric } from "@/domain/market-book";
 import { seededBelievers } from "@/lib/market-state/read-model";
 import { rankBelievers, sideCaseSummary, type CaseRelationship } from "@/domain/case-file";
+import { sideChangeLine, sideStateLine } from "@/domain/side-summary";
 
 /** Window-relative % for a book metric, or null when the base is too small. */
 const metricPct = (m: BookMetric): number | null => (m.base > 0 ? (m.delta / m.base) * 100 : null);
