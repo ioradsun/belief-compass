@@ -231,7 +231,13 @@ export function CaseColumn({
   const phrase = FLOW_WINDOW_PHRASE[win];
   const belDelta = belChange?.delta ?? believerMetric?.delta ?? null;
   const capDelta =
-    capChange?.delta ?? (capitalMetric != null ? capitalMetric.delta * (ethUsd || 0) : null);
+    capChange?.delta ??
+    (rowCapitalUsd != null
+      ? null
+      : capitalMetric != null
+        ? capitalMetric.delta * (ethUsd || 0)
+        : null);
+
   const pricePct =
     priceChange != null ? priceChange.pct : authPriceUsd != null ? null : (summary?.pricePct ?? null);
   const priceDelta =
