@@ -246,6 +246,16 @@ export function MarketDeck({
     return (Number.isFinite(y) ? y : 0) + (Number.isFinite(n) ? n : 0);
   }, [row]);
 
+  // Capital must come from the SAME holders row the sides quote — the tape replay
+  // leaves float residue after full exits, which showed money on an empty market.
+  const authCapitalUsd = useMemo(() => {
+    const r = row as Record<string, unknown>;
+    const y = Number(r["yes_capital_usd"]);
+    const n = Number(r["no_capital_usd"]);
+    if (!Number.isFinite(y) && !Number.isFinite(n)) return null;
+    return (Number.isFinite(y) ? y : 0) + (Number.isFinite(n) ? n : 0);
+  }, [row]);
+
   // THE HOUSE READ — derived by the shared pure engine, so desktop and mobile
   // show the same state from the same data. Only a connected viewer has tells to
   // read; anonymous browsing shows no row at all.
@@ -403,6 +413,7 @@ export function MarketDeck({
         ethUsd={ethUsd}
         win={deckWin}
         believersTotal={authBelieversTotal}
+          capitalTotalUsd={authCapitalUsd}
         footer={
           onToggleCase && !mobileCaseOpen ? (
             <ExamineCta
