@@ -8,7 +8,7 @@
  *     YOU OWN  YES $24.10   NO $9.30
  *     [ Buy ]      [ Sell ]      [ Pass ]
  *
- *     Buy  → Back NO · Back YES · Cancel
+ *     Buy  → Back YES · Back NO · Cancel
  *     Sell → one side owned: straight to it
  *            both owned:     Sell NO · Sell YES · Cancel
  *
@@ -269,22 +269,22 @@ export function OwnedDock({
       {api.action === "buy" ? (
         <div className="flex gap-2">
           <SideButton
-            label="Back NO"
-            tone="no"
-            onClick={() => {
-              trade.reset();
-              api.setAction(null);
-              onBuySide("NO");
-            }}
-            className="h-[52px] flex-1"
-          />
-          <SideButton
             label="Back YES"
             tone="yes"
             onClick={() => {
               trade.reset();
               api.setAction(null);
               onBuySide("YES");
+            }}
+            className="h-[52px] flex-1"
+          />
+          <SideButton
+            label="Back NO"
+            tone="no"
+            onClick={() => {
+              trade.reset();
+              api.setAction(null);
+              onBuySide("NO");
             }}
             className="h-[52px] flex-1"
           />
