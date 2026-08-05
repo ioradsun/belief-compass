@@ -502,7 +502,7 @@ export function MyConvictions({
                 className="num shrink-0 text-[20px] font-semibold leading-none tabular-nums"
                 style={{ color: tone }}
               >
-                {pct ?? (move === 0 ? "0%" : "")}
+                {pct ?? "—"}
                 {arrow && pct ? (
                   <span className="ml-1.5 align-middle text-[0.6em]">{arrow}</span>
                 ) : null}
@@ -514,7 +514,7 @@ export function MyConvictions({
             <div className="mt-0.5 flex items-baseline justify-between gap-3">
               <div className="num text-[12px]" style={{ color: tone }}>
                 {move === 0 ? (
-                  <span className="text-[var(--text-muted)]">No change</span>
+                  <span className="text-[var(--text-muted)]">—</span>
                 ) : (
                   <>
                     {signedMoney(move)}{" "}
@@ -524,6 +524,7 @@ export function MyConvictions({
                   </>
                 )}
               </div>
+
               {onOpenDashboard && (
                 <button
                   type="button"
