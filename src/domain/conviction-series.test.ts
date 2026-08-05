@@ -169,7 +169,7 @@ describe("story copy edge cases", () => {
 
   it("never says 'they' when nobody joined", () => {
     const s = convictionStory("YES", pts({ believers: 2, capital: 1 }, { believers: 2, capital: 2 }))!;
-    expect(narrateStory(s, "YES", "today", money)).toContain("existing believers committed");
+    expect(narrateStory(s, "YES", "today", money)).toContain("Existing believers committed");
   });
 
   it("reports believers leaving instead of 'quiet'", () => {
