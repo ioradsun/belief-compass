@@ -432,7 +432,10 @@ async function searchIndex(): Promise<IndexRow[]> {
         onchain_id: id,
         title: r.markets?.title ?? "",
         category: r.markets?.category ?? null,
-        participants: r2?.participants ?? 0,
+        // Reach is counted from the indexed event tape; markets whose trades
+        // pre-date indexing fall back to their standing believers so a live
+        // market never reads as if nobody ever showed up.
+        participants: Math.max(r2?.participants ?? 0, believers),
         believers,
         capitalUsd,
         firstActivityAt: r2?.first ?? (r.market_created_at ? Date.parse(r.market_created_at) : null),
