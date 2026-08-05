@@ -20,7 +20,11 @@ import { scoreMarketTransition } from "@/domain/significance";
 import { decideTransitionEmit, type TransitionStore } from "@/domain/transition-emit";
 import { accelerationFrom } from "@/domain/feed/score";
 
+/** Real trades in the last hour before "× normal" means anything at all. */
+const MIN_RECENT_TRADES = 3;
+
 const num = (v: unknown): number => Number(v ?? 0) || 0;
+
 const numOrNull = (v: unknown): number | null =>
   v == null || !Number.isFinite(Number(v)) ? null : Number(v);
 
