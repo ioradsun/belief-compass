@@ -407,7 +407,12 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
   const acceleration = (): StoryEvent | null => {
     const accelSide = (multiple: number): StoryEvent | null => {
       const side: Side = yes.capitalDeltaUsd >= no.capitalDeltaUsd ? "YES" : "NO";
-      const gaining = Math.max(yes.capitalDeltaUsd, no.capitalDeltaUsd) > 0;
+      const s = side === "YES" ? yes : no;
+      // A multiple alone is not a story. "Accelerating" claims money is moving
+      // right now, so it must clear the SAME capital safeguard every other
+      // capital transition clears — otherwise a single dust trade against a
+      // near-zero baseline reads as 24× normal with nothing to see in the market.
+      const gaining = s.capitalDeltaUsd > 0 && capitalMoved(s);
       const bar = held(prev, "accelerating", side) ? ACCEL_EXIT : ACCEL_ENTER;
       if (!(gaining && multiple >= bar)) return null;
       return {
@@ -424,6 +429,7 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
       const r = accelSide(baseline.accelerationMultiple);
       if (r) return r;
     }
+
     if (baseline?.normalCapitalUsd != null && baseline.normalCapitalUsd > 0) {
       for (const [side, s] of sides) {
         const recent = s.recentCapitalUsd ?? s.capitalDeltaUsd;
