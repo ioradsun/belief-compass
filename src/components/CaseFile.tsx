@@ -22,6 +22,7 @@ import { priceMove } from "@/domain/metric-display";
 import { LiveTape } from "@/components/LiveTape";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
+import { useAnchorRect, anchorStyle, type AnchorBox } from "@/hooks/useAnchorRect";
 import { useMoney } from "@/lib/display-unit";
 import { PersonAvatar } from "@/components/PersonAvatar";
 
@@ -588,6 +589,7 @@ export function CaseRoster({
 }) {
   const { format } = useMoney();
   const [openAll, setOpenAll] = useState(false);
+  const { ref: anchorRef, box: anchorBox } = useAnchorRect<HTMLDivElement>(openAll);
   const byWallet = useMemo(
     () => new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p])),
     [people],
@@ -640,7 +642,7 @@ export function CaseRoster({
   const rows = variant === "compact" ? allRows : renderRows(roster.slice(0, PREVIEW));
 
   return (
-    <div className="space-y-1.5">
+    <div ref={anchorRef} className="space-y-1.5">
       <div className="flex items-baseline justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
           Believers
@@ -655,7 +657,7 @@ export function CaseRoster({
         <>
           <FacePile roster={roster} onOpenAll={() => setOpenAll(true)} />
           {openAll && (
-            <RosterSheet side={side} count={roster.length} onClose={() => setOpenAll(false)}>
+            <RosterSheet side={side} count={roster.length} onClose={() => setOpenAll(false)} anchor={anchorBox}>
               {rows}
             </RosterSheet>
           )}
@@ -673,7 +675,7 @@ export function CaseRoster({
             </button>
           )}
           {openAll && (
-            <RosterSheet side={side} count={roster.length} onClose={() => setOpenAll(false)}>
+            <RosterSheet side={side} count={roster.length} onClose={() => setOpenAll(false)} anchor={anchorBox}>
               {allRows}
             </RosterSheet>
           )}
@@ -733,11 +735,14 @@ function RosterSheet({
   side,
   count,
   onClose,
+  anchor,
   children,
 }: {
   side: Side;
   count: number;
   onClose: () => void;
+  /** Column the sheet opens over, so it never spans the whole viewport. */
+  anchor: AnchorBox | null;
   children: React.ReactNode;
 }) {
   useEffect(() => {
@@ -749,7 +754,12 @@ function RosterSheet({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end" role="dialog" aria-modal="true">
+    <div
+      className="fixed bottom-0 top-0 z-50 flex items-end"
+      style={anchorStyle(anchor)}
+      role="dialog"
+      aria-modal="true"
+    >
       <button
         type="button"
         aria-label="Close"
