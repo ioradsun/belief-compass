@@ -7,6 +7,7 @@ import {
   whyFollow,
   convictionMap,
   sharedCuriosity,
+  allConvictions,
   ELSEWHERE,
   PROFILE,
   type PersonPosition,
@@ -279,9 +280,11 @@ describe("tenure never overclaims", () => {
 describe("why follow them", () => {
   it("says what following surfaces, from where their convictions sit", () => {
     const r = whyFollow(enough({ category: "technology" }));
-    expect(r[0].text).toBe(
-      "Most of what they back is technology — following them surfaces those markets.",
-    );
+    expect(r[0]).toEqual({
+      kind: "topic",
+      headline: "Follow them for technology.",
+      evidence: "4 of their 4 current convictions sit there.",
+    });
   });
 
   it("describes breadth when nothing concentrates", () => {
@@ -291,13 +294,17 @@ describe("why follow them", () => {
       pos({ marketId: 3, category: "politics" }),
       pos({ marketId: 4, category: "culture" }),
     ];
-    expect(whyFollow(spread)[0].text).toMatch(/take sides across 4 different topics/);
+    expect(whyFollow(spread)[0]).toEqual({
+      kind: "broad",
+      headline: "Their curiosity ranges widely.",
+      evidence: "They hold convictions across 4 different topics.",
+    });
   });
 
   it("never claims returns, rank, profit or followers", () => {
     const rich = enough({ daysHeld: 200, crowdYesPct: 5, participants: 40, daysAfterOpen: 1 });
     const all = whyFollow(rich, { marketsCreated: 3 })
-      .map((r) => r.text)
+      .flatMap((r) => [r.headline, r.evidence])
       .join(" ");
     // Word boundaries, or "following" trips a bare /win/ and the assertion
     // starts failing on copy that is perfectly fine.
@@ -309,9 +316,8 @@ describe("why follow them", () => {
   it("carries the count behind every claim", () => {
     const patient = enough({ daysHeld: 200 });
     const line = whyFollow(patient).find((r) => r.kind === "patient");
-    expect(line?.text).toBe(
-      "4 of their positions have stood for more than three months — these are convictions, not trades.",
-    );
+    expect(line?.headline).toBe("Stays with their strongest convictions.");
+    expect(line?.evidence).toBe("4 positions have been held for more than three months.");
   });
 
   it("caps at three, so it reads as a person and not a pitch", () => {
@@ -334,9 +340,9 @@ describe("why follow them", () => {
     expect(whyFollow(unknowable).some((r) => r.kind === "early")).toBe(false);
 
     const known = enough({ daysAfterOpen: 2 });
-    expect(whyFollow(known).find((r) => r.kind === "early")?.text).toMatch(
-      /within a week of the market opening in 4 of 4/,
-    );
+    const early = whyFollow(known).find((r) => r.kind === "early");
+    expect(early?.headline).toBe("Often finds markets early.");
+    expect(early?.evidence).toBe("Joined 4 of 4 within a week of the market opening.");
   });
 
   it("claims nothing at all from too few positions", () => {
@@ -345,7 +351,13 @@ describe("why follow them", () => {
 
   it("but still credits an author with no positions to speak of", () => {
     const r = whyFollow([pos({ marketId: 1 })], { marketsCreated: 4 });
-    expect(r).toEqual([{ kind: "author", text: "Wrote 4 of the questions on Conviction." }]);
+    expect(r).toEqual([
+      {
+        kind: "author",
+        headline: "They write questions, not just answer them.",
+        evidence: "4 of the markets here are theirs.",
+      },
+    ]);
   });
 });
 
@@ -426,5 +438,48 @@ describe("markets you both care about", () => {
   it("caps the list rather than printing forty rows at equal weight", () => {
     const agreed = Array.from({ length: 30 }, (_, i) => m(i + 1, "YES", "YES"));
     expect(sharedCuriosity(agreed, [], 6)).toHaveLength(6);
+  });
+});
+
+/**
+ * The map interprets; this does not. A visitor who suspects the highlights were
+ * cherry picked has to be able to check, or the highlights are worth nothing.
+ */
+describe("all convictions", () => {
+  it("returns every position, filtering nothing", () => {
+    const list = [
+      pos({ marketId: 1, valueUsd: 0, daysHeld: 0, participants: 0 }),
+      pos({ marketId: 2, valueUsd: 900 }),
+      pos({ marketId: 3, category: null }),
+    ];
+    expect(allConvictions(list)).toHaveLength(3);
+  });
+
+  it("leads with the biggest commitment, then the longest held", () => {
+    const list = [
+      pos({ marketId: 1, valueUsd: 10, daysHeld: 5 }),
+      pos({ marketId: 2, valueUsd: 900 }),
+      pos({ marketId: 3, valueUsd: 10, daysHeld: 400 }),
+    ];
+    expect(allConvictions(list).map((p) => p.marketId)).toEqual([2, 3, 1]);
+  });
+
+  it("is stable when everything ties", () => {
+    const list = [pos({ marketId: 5 }), pos({ marketId: 2 }), pos({ marketId: 9 })];
+    expect(allConvictions(list).map((p) => p.marketId)).toEqual([2, 5, 9]);
+  });
+
+  /** The map is allowed to truncate only because this cannot. */
+  it("holds everything the map dropped", () => {
+    const many = Array.from({ length: 20 }, (_, i) => pos({ marketId: i + 1 }));
+    const inMap = new Set(convictionMap(many).flatMap((t) => t.positions.map((p) => p.marketId)));
+    const inAll = new Set(allConvictions(many).map((p) => p.marketId));
+    expect(inMap.size).toBeLessThan(many.length);
+    expect(inAll.size).toBe(many.length);
+    for (const id of inMap) expect(inAll.has(id)).toBe(true);
+  });
+
+  it("says nothing about someone holding nothing", () => {
+    expect(allConvictions([])).toEqual([]);
   });
 });

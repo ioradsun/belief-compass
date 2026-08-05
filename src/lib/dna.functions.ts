@@ -533,8 +533,15 @@ async function loadConvictionEvidence(
   personMedianDays: number | null;
   viewerMedianDays: number | null;
   marketsParticipated: number;
+  /**
+   * How many directional positions they hold in total. Counted rather than
+   * derived from `positions.length`, which stops at POSITION_CAP — a page that
+   * says "All convictions · 200" about someone holding 260 is lying in the one
+   * place that exists to be trusted.
+   */
+  positionsTotal: number;
 }> {
-  const [mine, theirs, flips] = await Promise.all([
+  const [mine, theirs, flips, totalRes] = await Promise.all([
     sb
       .from("wallet_beliefs")
       .select(
@@ -563,6 +570,11 @@ async function loadConvictionEvidence(
       .eq("is_canonical", true)
       .order("occurred_at", { ascending: false })
       .limit(5),
+    sb
+      .from("wallet_beliefs")
+      .select("onchain_id", { count: "exact", head: true })
+      .eq("wallet", target)
+      .in("stance_side", ["YES", "NO"]),
   ]);
 
   type BeliefRow = {
@@ -695,6 +707,7 @@ async function loadConvictionEvidence(
       ((theirs.data ?? []) as { days_held: number }[]).map((r) => num(r.days_held)),
     ),
     marketsParticipated: positions.length,
+    positionsTotal: Math.max(positions.length, Number(totalRes.count ?? 0)),
   };
 }
 
@@ -716,6 +729,16 @@ async function loadConvictionEvidence(
  * The JUDGEMENT — which of these connections is worth showing and how to say
  * it — lives in @/domain/person-network. This only counts.
  */
+/**
+ * Shared markets carried to the page, per direction.
+ *
+ * Generous on purpose: the profile now offers "all N shared markets", and a
+ * control that expands to a truncated list is worse than no control. Two
+ * hundred a side covers every real relationship in production while still
+ * bounding the payload.
+ */
+const SHARED_CAP = 200;
+
 const NETWORK_SCAN = {
   /** Owner markets examined. Their most recent convictions carry the signal. */
   maxMarkets: 60,
@@ -872,6 +895,12 @@ export type PersonProfile = {
   /** Questions they wrote. Authorship is participation, never a separate role. */
   marketsCreated: number;
   /**
+   * Directional positions they hold IN TOTAL — which can exceed
+   * `positions.length` when a very active wallet hits the read cap. The "All
+   * convictions" heading counts this, never the array it renders.
+   */
+  positionsTotal: number;
+  /**
    * Market ids the VIEWER has taken a side in. Lets the page tell "you have not
    * explored this" from "you two disagree here" — the difference between the
    * two best Start Here reasons. Empty for a signed-out visitor.
@@ -952,6 +981,7 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       viewerMedianDays: null,
       around,
       marketsCreated,
+      positionsTotal: evidence.positionsTotal,
       viewerMarketIds: [],
     };
     if (!viewer || viewerFactors.length === 0) return base;
@@ -1018,13 +1048,13 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       summary: personSummary(aligned, opposed),
       alignedDomains: aligned.map((d) => ({ domain: d.domain, agreement: d.agreement })),
       opposedDomains: opposed.map((d) => ({ domain: d.domain, agreement: d.agreement })),
-      sharedBoth: both.slice(0, 40).map((b) => ({
+      sharedBoth: both.slice(0, SHARED_CAP).map((b) => ({
         marketId: String(b.id),
         title: titles.get(b.id) ?? `Market #${b.id}`,
         viewerSide: b.side,
         personSide: b.side,
       })),
-      opposing: opp.slice(0, 40).map((o) => ({
+      opposing: opp.slice(0, SHARED_CAP).map((o) => ({
         marketId: String(o.id),
         title: titles.get(o.id) ?? `Market #${o.id}`,
         viewerSide: o.vSide,
@@ -1037,6 +1067,7 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       viewerMedianDays: evidence.viewerMedianDays,
       around,
       marketsCreated,
+      positionsTotal: evidence.positionsTotal,
       viewerMarketIds: viewerMarkets,
     };
   });

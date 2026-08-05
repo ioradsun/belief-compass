@@ -16,11 +16,23 @@
  *   2  WHY FOLLOW THEM       what arrives in your feed, not how well they did
  *   3  START HERE            ONE market, with the reason. The front door.
  *   4  CONVICTIONS           the positions that most reveal them
- *   5  CONVICTION MAP        everything they back, by theme — browsable
- *   6  BOTH CARE ABOUT       the relationship WITH its evidence under it
+ *   5  BOTH CARE ABOUT       the relationship WITH its evidence under it
+ *   6  CONVICTION MAP        everything they back, by theme — browsable
  *   7  EXPLORE               more markets, each explaining itself
  *   8  PEOPLE AROUND THEM    person → market → person
- *   9  SUPPORTING            evidence, last and quiet
+ *   9  ALL CONVICTIONS       the unabridged list, collapsed but never absent
+ *  10  SUPPORTING            evidence, last and quiet
+ *
+ * THE RELATIONSHIP COMES BEFORE THE BROWSE. 5 sits above 6 because the page is
+ * viewer-relative: "why does this person matter to me" has to be answered
+ * before a visitor is asked to walk through someone's whole history.
+ *
+ * INTERPRETATION AND COMPLETENESS ARE BOTH REQUIRED, and they are different
+ * jobs. Sections 4 and 6 pick, group and truncate — that is what builds
+ * curiosity. Section 9 does none of it, and that is what makes the rest
+ * trustworthy: a visitor who suspects the highlights were cherry picked has to
+ * be able to check. Every position they hold and every market the two of you
+ * share is reachable from this page, collapsed rather than hidden.
  *
  * WHAT IS DELIBERATELY ABSENT. A relationship percentage (it told a visitor
  * they were 68% compatible without naming one thing they would disagree about).
@@ -38,6 +50,7 @@
  * — including the refusals, which are most of it. This file only arranges what
  * those modules allow.
  */
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getPersonProfile } from "@/lib/dna.functions";
 import { ago } from "@/lib/dna-labels";
@@ -50,9 +63,11 @@ import {
   whyFollow,
   convictionMap,
   sharedCuriosity,
+  allConvictions,
   type DefiningConviction,
   type PersonPosition,
   type SharedRow,
+  tenureText,
   type ConvictionTheme,
 } from "@/domain/person-profile";
 import {
@@ -74,6 +89,11 @@ export function PersonProfile({
   /** Person → conviction → market → another person. Absent = no onward path. */
   onSelectPerson?: (wallet: string) => void;
 }) {
+  // Two expansions, both closed by default and neither ever absent. Breadth is
+  // what makes the interpretation above it trustworthy; hiding it behind a
+  // scroll is fine, hiding it behind nothing is not.
+  const [allShared, setAllShared] = useState(false);
+  const [allOpen, setAllOpen] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ["person", wallet.toLowerCase(), viewer ?? null],
     queryFn: () => getPersonProfile({ data: { wallet, viewer } }),
@@ -111,7 +131,9 @@ export function PersonProfile({
     viewerSide: m.viewerSide,
     personSide: m.personSide,
   }));
-  const shared = sharedCuriosity(agreed, opposed);
+  const sharedTotal = agreed.length + opposed.length;
+  const shared = sharedCuriosity(agreed, opposed, allShared ? sharedTotal : SHARED_PREVIEW);
+  const every = allConvictions(data.positions);
 
   // ONE ranking drives both the front door and the further reading, so the page
   // can never recommend a market for one reason at the top and a different
@@ -169,14 +191,18 @@ export function PersonProfile({
       {follow.length > 0 && (
         <section>
           <SectionTitle>Why follow them</SectionTitle>
-          <ul className="space-y-1.5">
+          {/* MEANING, then evidence. A bare count reads like a database row and
+              leaves the interpreting to the reader; a bare claim could be
+              printed about anybody. Neither ships without the other. */}
+          <ul className="space-y-2">
             {follow.map((r) => (
-              <li
-                key={r.kind}
-                className="flex gap-2 text-[13px] leading-relaxed text-[var(--text-secondary)]"
-              >
-                <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[var(--text-muted)]" />
-                <span>{r.text}</span>
+              <li key={r.kind}>
+                <span className="block text-[13px] leading-snug text-[var(--text)]">
+                  {r.headline}
+                </span>
+                <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">
+                  {r.evidence}
+                </span>
               </li>
             ))}
           </ul>
@@ -203,11 +229,54 @@ export function PersonProfile({
         </section>
       )}
 
-      {/* ── 5 · THEIR CONVICTION MAP ─────────────────────────────────────────
+      {/* ── 5 · MARKETS YOU BOTH CARE ABOUT ──────────────────────────────────
+          Ahead of their conviction map ON PURPOSE. The page is viewer-relative,
+          and "why does this person matter to me" has to be answered before a
+          visitor is asked to browse someone's whole history.
+
+          Shared curiosity, not a tally. The summary, and then — the part V1
+          never had — the markets themselves, each showing what the two of you
+          concluded side by side. Every shared market is reachable: the list
+          starts short and opens to all of them, because a relationship you can
+          only sample is a relationship you cannot check.
+
+          Signed-out visitors see none of it: with no viewer there is no
+          relationship, and an empty "what connects you" is worse than none. */}
+      {data.hasViewer && (
+        <section>
+          <SectionTitle>Markets you both care about</SectionTitle>
+          <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
+            {link.lines.join(" ")}
+          </p>
+          {shared.length > 0 && (
+            <>
+              <ul className="mt-2.5 space-y-0.5">
+                {shared.map((s) => (
+                  <li key={s.marketId}>
+                    <SharedMarketRow s={s} onSelect={onSelectMarket} />
+                  </li>
+                ))}
+              </ul>
+              {sharedTotal > shared.length && (
+                <MoreButton onClick={() => setAllShared(true)}>
+                  Show all {sharedTotal} shared markets
+                </MoreButton>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {/* ── 6 · THEIR CONVICTION MAP ─────────────────────────────────────────
           Everything they currently back, by theme. A flat list of forty
           positions is the same as no list — nothing in it is more important
           than anything else. Grouped, "what do they think about culture"
-          becomes a question the page can answer. */}
+          becomes a question the page can answer.
+
+          This INTERPRETS: it truncates each theme and leads with the one they
+          have said the most about. Section 9 is the unabridged version, and the
+          two exist together deliberately — interpretation builds curiosity, the
+          complete list is what makes it trustworthy. */}
       {themes.length > 0 && (
         <section>
           <SectionTitle>Their conviction map</SectionTitle>
@@ -216,30 +285,6 @@ export function PersonProfile({
               <ThemeGroup key={t.theme} theme={t} onSelect={onSelectMarket} />
             ))}
           </div>
-        </section>
-      )}
-
-      {/* ── 6 · MARKETS YOU BOTH CARE ABOUT ──────────────────────────────────
-          Shared curiosity, not a tally. The summary, and then — the part V1
-          never had — the markets themselves, each showing what the two of you
-          concluded side by side. Signed-out visitors see neither: with no
-          viewer there is no relationship, and an empty "what connects you" is
-          worse than none. */}
-      {data.hasViewer && (
-        <section>
-          <SectionTitle>Markets you both care about</SectionTitle>
-          <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
-            {link.lines.join(" ")}
-          </p>
-          {shared.length > 0 && (
-            <ul className="mt-2.5 space-y-0.5">
-              {shared.map((s) => (
-                <li key={s.marketId}>
-                  <SharedMarketRow s={s} onSelect={onSelectMarket} />
-                </li>
-              ))}
-            </ul>
-          )}
         </section>
       )}
 
@@ -283,7 +328,50 @@ export function PersonProfile({
         </section>
       )}
 
-      {/* ── 9 · SUPPORTING ───────────────────────────────────────────────────
+      {/* ── 9 · ALL CONVICTIONS ──────────────────────────────────────────────
+          The unabridged list, and the reason every section above is allowed to
+          be selective. Sections 4 and 6 interpret — they pick, group and
+          truncate — and a visitor who suspects the highlights were cherry
+          picked has to be able to check, or the highlights are worth nothing.
+
+          Collapsed by default, never absent, and the count is the TRUE total
+          rather than the length of what was loaded: a heading that says "All
+          convictions · 200" about someone holding 260 is lying in the one place
+          on the page that exists to be trusted. */}
+      {every.length > 0 && (
+        <section>
+          <button
+            type="button"
+            onClick={() => setAllOpen((v) => !v)}
+            aria-expanded={allOpen}
+            className="flex w-full items-center gap-1.5 text-[11px] font-semibold tracking-wide text-[var(--text-muted)] uppercase transition-colors hover:text-[var(--text)]"
+          >
+            <span aria-hidden className={allOpen ? "rotate-90" : ""}>
+              ›
+            </span>
+            All convictions
+            <span className="num normal-case">· {data.positionsTotal}</span>
+          </button>
+          {allOpen && (
+            <>
+              <ul className="mt-2 space-y-0.5">
+                {every.map((p) => (
+                  <li key={p.marketId}>
+                    <ConvictionRow p={p} onSelect={onSelectMarket} />
+                  </li>
+                ))}
+              </ul>
+              {data.positionsTotal > every.length && (
+                <p className="mt-1.5 px-2 text-[11px] text-[var(--text-muted)]">
+                  Showing their {every.length} most recent — {data.positionsTotal} in total.
+                </p>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {/* ── 10 · SUPPORTING ──────────────────────────────────────────────────
           Evidence, not identity, so it sits last and stays quiet. */}
       <section className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)]">
         <span>
@@ -371,6 +459,44 @@ function candidatesFrom(
       isLongest: p.marketId === longestId,
     };
   });
+}
+
+/** Shared markets shown before the reader asks for the rest. */
+const SHARED_PREVIEW = 6;
+
+/** The expansion affordance. Quiet, but a real control rather than a caption. */
+function MoreButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-1.5 px-2 text-[11px] font-medium text-[var(--text-secondary)] underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--text)]"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** One row of the unabridged list: side, question, and what it is worth. */
+function ConvictionRow({ p, onSelect }: { p: PersonPosition; onSelect: (id: number) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(p.marketId)}
+      className="flex w-full items-baseline gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-2)]"
+    >
+      <span
+        className="w-[26px] shrink-0 text-[10px] font-semibold"
+        style={{ color: p.side === "YES" ? "var(--yes)" : "var(--no)" }}
+      >
+        {p.side}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text)]">{p.title}</span>
+      <span className="num shrink-0 text-[11px] text-[var(--text-muted)]">
+        {tenureText(p.daysHeld, p.tenureIsFloor)}
+      </span>
+    </button>
+  );
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -476,9 +602,12 @@ function ThemeGroup({
           </li>
         ))}
       </ul>
+      {/* Not a dead caption. Every one of these is reachable in "All
+          convictions" below — the map is allowed to truncate precisely because
+          the unabridged list exists. */}
       {hidden > 0 && (
         <p className="mt-0.5 px-2 text-[11px] text-[var(--text-muted)]">
-          and {hidden} more in {theme.theme.toLowerCase()}
+          and {hidden} more in {theme.theme.toLowerCase()} — see all convictions below
         </p>
       )}
     </div>

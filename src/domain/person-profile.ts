@@ -313,25 +313,45 @@ export function introduction(
 export interface FollowReason {
   /** Which observation this is, for keys and ordering. Never rendered. */
   kind: "topic" | "early" | "contrarian" | "patient" | "broad" | "author";
-  text: string;
+  /**
+   * THE MEANING, in one short line. What a reader would actually say about this
+   * person — "Often finds markets early", not "Participated early in 7 markets".
+   */
+  headline: string;
+  /** THE EVIDENCE, underneath, carrying the count the headline is drawn from. */
+  evidence: string;
 }
 
+/**
+ * TWO PARTS, ALWAYS, and in this order.
+ *
+ * A bare count is accurate and sterile: "Participated early in 7 markets" reads
+ * like a row from a database, and a reader has to do the interpreting the page
+ * should have done. A bare claim is the opposite failure — "Often finds markets
+ * early" with nothing under it is the kind of sentence any profile could print
+ * about anybody.
+ *
+ * So the headline says what it means and the evidence proves it, and neither
+ * ships without the other.
+ */
 export function whyFollow(
   positions: readonly PersonPosition[],
   opts: { marketsCreated?: number } = {},
 ): FollowReason[] {
   const out: FollowReason[] = [];
   const created = Math.max(0, Math.floor(opts.marketsCreated ?? 0));
+  const total = positions.length;
 
   // Nothing is claimed from a handful of positions. A person with three markets
   // has not demonstrated a tendency, and inventing one here is exactly the
   // "generic recommendation" the whole page exists to avoid.
-  if (positions.length < PROFILE.minMarketsForPattern) {
+  if (total < PROFILE.minMarketsForPattern) {
     return created > 0
       ? [
           {
             kind: "author",
-            text: `Wrote ${created} of the questions on Conviction.`,
+            headline: "They write questions, not just answer them.",
+            evidence: `${created} of the markets here are theirs.`,
           },
         ]
       : [];
@@ -340,14 +360,20 @@ export function whyFollow(
   const cats = topCategories(positions);
   const lead = cats.filter((c) => c.share >= PROFILE.concentrationShare);
   if (lead.length > 0) {
+    const names = joinNames(lead.map((c) => c.name));
+    const inLead = positions.filter(
+      (p) => p.category && lead.some((l) => l.name === p.category),
+    ).length;
     out.push({
       kind: "topic",
-      text: `Most of what they back is ${joinNames(lead.map((c) => c.name))} — following them surfaces those markets.`,
+      headline: `Follow them for ${names}.`,
+      evidence: `${inLead} of their ${total} current convictions sit there.`,
     });
   } else if (cats.length >= 3) {
     out.push({
       kind: "broad",
-      text: `They take sides across ${cats.length} different topics, so their markets rarely repeat each other.`,
+      headline: "Their curiosity ranges widely.",
+      evidence: `They hold convictions across ${cats.length} different topics.`,
     });
   }
 
@@ -359,7 +385,8 @@ export function whyFollow(
   if (timed.length >= PROFILE.minMarketsForPattern && early.length >= 2) {
     out.push({
       kind: "early",
-      text: `They arrived within a week of the market opening in ${early.length} of ${timed.length} cases — often before a market is busy.`,
+      headline: "Often finds markets early.",
+      evidence: `Joined ${early.length} of ${timed.length} within a week of the market opening.`,
     });
   }
 
@@ -368,7 +395,8 @@ export function whyFollow(
   if (withCrowd.length >= PROFILE.minMarketsForPattern && against.length >= 2) {
     out.push({
       kind: "contrarian",
-      text: `In ${against.length} of ${withCrowd.length} lopsided markets they took the side the room did not.`,
+      headline: "Comfortable disagreeing with the room.",
+      evidence: `Took the less popular side in ${against.length} of ${withCrowd.length} lopsided markets.`,
     });
   }
 
@@ -376,14 +404,16 @@ export function whyFollow(
   if (longHolds.length >= 2) {
     out.push({
       kind: "patient",
-      text: `${longHolds.length} of their positions have stood for more than three months — these are convictions, not trades.`,
+      headline: "Stays with their strongest convictions.",
+      evidence: `${longHolds.length} positions have been held for more than three months.`,
     });
   }
 
   if (created > 0) {
     out.push({
       kind: "author",
-      text: `They wrote ${created} of the questions other people are backing.`,
+      headline: "They write questions, not just answer them.",
+      evidence: `${created} of the markets here are theirs.`,
     });
   }
 
@@ -413,6 +443,24 @@ export interface ConvictionTheme {
 }
 
 export const ELSEWHERE = "Elsewhere";
+
+/**
+ * EVERY position they currently hold, biggest commitment first.
+ *
+ * The map above INTERPRETS — it groups, it truncates, it leads with the theme
+ * they have said the most about. This does not interpret at all, and that is
+ * the point: the interpretation layer builds curiosity, and the full list is
+ * what makes it trustworthy. A visitor who suspects the highlights were cherry
+ * picked has to be able to check, or the highlights are worth nothing.
+ *
+ * Sorted, never filtered. Nothing here is below a threshold, because "every"
+ * has to mean every.
+ */
+export function allConvictions(positions: readonly PersonPosition[]): PersonPosition[] {
+  return [...positions].sort(
+    (a, b) => n(b.valueUsd) - n(a.valueUsd) || b.daysHeld - a.daysHeld || a.marketId - b.marketId,
+  );
+}
 
 export function convictionMap(positions: readonly PersonPosition[]): ConvictionTheme[] {
   const byTheme = new Map<string, PersonPosition[]>();

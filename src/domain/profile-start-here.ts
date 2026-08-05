@@ -62,10 +62,32 @@ export const START = {
    * coincidence, not a debate worth opening.
    */
   minParticipants: 4,
+  /**
+   * And a much bigger room before a disagreement gets the TOP weight.
+   *
+   * Without this the arithmetic went wrong in a specific, checkable way: a
+   * surprising clash in a four-person market scored 1.22 while their $50,000
+   * unexplored largest conviction with four hundred participants scored 0.97.
+   * The front door became "where do we disagree most" rather than "what best
+   * explains this person", which is a different and worse question.
+   */
+  minParticipantsForSurprise: 12,
   /** Below this the crowd cannot make anyone contrarian. */
   contrarianPct: 70,
   /** A hold shorter than this is not yet an endurance story. */
   minDaysForLongest: 14,
+  /** Room size at which the significance term is effectively saturated. */
+  roomSaturatesAt: 40,
+  /** Committed USD at which the significance term is effectively saturated. */
+  stakeSaturatesAt: 500,
+  /**
+   * Disagreements allowed in the whole ranked list.
+   *
+   * A profile that answers every question with "here is somewhere you two
+   * disagree" has stopped introducing a person and started picking fights. The
+   * front door may be one; the further reading gets at most one more.
+   */
+  maxDisagreements: 2,
 } as const;
 
 export interface StartHere {
@@ -105,6 +127,16 @@ const WEIGHT = {
   sharedTopic: 0.22,
   /** They already agree here — real, but the least new information available. */
   agreement: 0.08,
+  /**
+   * How much the MARKET ITSELF matters — its room and their commitment to it.
+   *
+   * Large enough to decide between two otherwise comparable candidates, which
+   * is the point: without it a trivial market could win on relationship alone,
+   * and "what best explains this person" would quietly become "where do we
+   * disagree". Never large enough to make this a size ranking either — a fully
+   * saturated significance is worth less than a surprising disagreement.
+   */
+  significance: 0.5,
 } as const;
 
 const n = (v: number | null | undefined): number =>
@@ -119,10 +151,32 @@ const isContrarian = (c: StartCandidate): boolean =>
 const disagrees = (c: StartCandidate): boolean =>
   c.viewerSide != null && c.viewerSide !== c.personSide && c.participants >= START.minParticipants;
 
+/** Log-saturating 0..1: the first few of anything count for most of the weight. */
+const soft = (v: number, at: number): number => Math.log1p(Math.max(0, v)) / Math.log1p(at);
+
+/**
+ * HOW MUCH THIS MARKET MATTERS, 0..1 — the room it drew and what they put into
+ * it, weighted equally.
+ *
+ * This is the safeguard against a trivial market winning on relationship alone.
+ * A four-person market where nobody committed anything is a low-information
+ * market whatever the two of you concluded in it, and a profile that opens with
+ * one has spent its single best slot on a coincidence.
+ */
+function significance(c: StartCandidate): number {
+  const room = soft(c.participants, START.roomSaturatesAt);
+  const stake = soft(n(c.valueUsd), START.stakeSaturatesAt);
+  return Math.min(1, 0.5 * room + 0.5 * stake);
+}
+
 function score(c: StartCandidate): number {
-  let s = 0;
+  let s = WEIGHT.significance * significance(c);
   if (disagrees(c)) {
-    s += c.topicUsuallyAligned ? WEIGHT.surprisingDisagreement : WEIGHT.disagreement;
+    // The TOP weight needs a real room, not merely a non-empty one. Below that
+    // bar a surprising clash is still a disagreement — just not the best thing
+    // the page has to offer.
+    const surprising = c.topicUsuallyAligned && c.participants >= START.minParticipantsForSurprise;
+    s += surprising ? WEIGHT.surprisingDisagreement : WEIGHT.disagreement;
   } else if (c.viewerSide == null) {
     s += WEIGHT.unexplored;
   } else {
@@ -204,14 +258,28 @@ export function rankStartCandidates(
   // Default true: a candidate list carrying a `viewerSide` came from somewhere,
   // and silently dropping the relationship clause would be the worse failure.
   const hasViewer = opts.hasViewer ?? true;
-  return [...candidates]
+  const ordered = [...candidates]
     .map((c) => ({ c, s: score(c) }))
-    .sort((a, b) => b.s - a.s || b.c.participants - a.c.participants || a.c.marketId - b.c.marketId)
-    .map(({ c }) => {
-      const why = explain(c, name, hasViewer);
-      return why ? { marketId: c.marketId, title: c.title, why } : null;
-    })
-    .filter((r): r is StartHere => r !== null);
+    .sort(
+      (a, b) => b.s - a.s || b.c.participants - a.c.participants || a.c.marketId - b.c.marketId,
+    );
+
+  // DIVERSITY. A profile that answers every question with "here is somewhere you
+  // two disagree" has stopped introducing a person and started picking fights,
+  // so past the cap a disagreement yields its slot to the next candidate that
+  // reveals something else. Dropped rather than reordered: a demoted clash would
+  // reappear lower down saying the same thing.
+  const out: StartHere[] = [];
+  let clashes = 0;
+  for (const { c } of ordered) {
+    const clash = hasViewer && disagrees(c);
+    if (clash && clashes >= START.maxDisagreements) continue;
+    const why = explain(c, name, hasViewer);
+    if (!why) continue;
+    if (clash) clashes += 1;
+    out.push({ marketId: c.marketId, title: c.title, why });
+  }
+  return out;
 }
 
 /** The one market to open, or null when nothing can explain itself. */
