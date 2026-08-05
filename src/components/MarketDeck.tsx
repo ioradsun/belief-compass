@@ -451,7 +451,6 @@ export function MarketDeck({
             <ExamineCta
               open={caseOpen}
               onToggle={onToggleCase}
-              teaser={caseTeaser}
               houseRead={houseReadState_}
             />
           ) : null
