@@ -196,6 +196,8 @@ export function OmniHeader({
   onOpenMenu,
   onFeed,
   feedActive,
+  onFeedList,
+  feedListOpen,
   right,
   center,
 }: {
@@ -207,6 +209,15 @@ export function OmniHeader({
   onFeed?: () => void;
   /** True when the feed itself is what's on screen. */
   feedActive?: boolean;
+  /**
+   * Show or hide the running order. Supplied by the caller ONLY while the centre
+   * holds a market — the feed itself or one opened from the list. Absent (and so
+   * the button reverts to "the way home") when the centre holds a person, DNA or
+   * a form, where a running order of markets has nothing to run alongside.
+   */
+  onFeedList?: () => void;
+  /** True while the running order holds the left rail. */
+  feedListOpen?: boolean;
   /** Top-right slot — the account affordance. */
   right?: ReactNode;
   /** Mobile-only center slot — the primary action (+ Conviction). */
@@ -314,18 +325,30 @@ export function OmniHeader({
           </span>
         </button>
 
-        {/* The way home. Always present, highlighted when the feed is what you're on. */}
+        {/* The way home — and, once you are home, the way into the running order.
+            One control with two states rather than two controls: "the feed" and
+            "the list of what the feed will show you next" are the same idea, and
+            a second button would have to explain how it differed from this one. */}
         {onFeed && (
           <button
             type="button"
-            onClick={onFeed}
-            aria-label="Back to the market feed"
+            onClick={onFeedList ?? onFeed}
+            aria-label={
+              onFeedList
+                ? feedListOpen
+                  ? "Hide what's coming up"
+                  : "Show what's coming up"
+                : "Back to the market feed"
+            }
             aria-current={feedActive ? "page" : undefined}
-            title="Market feed"
+            aria-expanded={onFeedList ? Boolean(feedListOpen) : undefined}
+            title={onFeedList ? "What's coming up" : "Market feed"}
             className={`${expanded ? "hidden" : "flex"} h-9 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-semibold transition-colors lg:px-3.5 ${
-              feedActive
-                ? "border-transparent bg-[var(--surface)] text-[var(--text)]"
-                : "border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text)]"
+              feedListOpen
+                ? "border-[var(--text)] bg-[var(--surface)] text-[var(--text)]"
+                : feedActive
+                  ? "border-transparent bg-[var(--surface)] text-[var(--text)]"
+                  : "border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text)]"
             }`}
           >
             {/* Stacked cards — one market after another, distinct from the menu bars. */}
@@ -344,8 +367,6 @@ export function OmniHeader({
             <span className="hidden lg:inline">Feed</span>
           </button>
         )}
-
-
 
         {/* Mobile: the primary action owns the middle of the bar. */}
         {center && (
