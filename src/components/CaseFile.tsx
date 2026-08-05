@@ -287,7 +287,7 @@ export function CaseColumn({
       ? null
       : Math.abs(capDelta) < 0.005
         ? `No change ${phrase}`
-        : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "withdrawn"} ${phrase}`;
+        : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "left"} ${phrase}`;
   const priceAbs =
     priceDelta == null
       ? null
