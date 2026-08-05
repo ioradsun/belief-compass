@@ -650,6 +650,61 @@ function BothSides({
 
 /* ---------- primitives ---------- */
 
+/**
+ * One side metric, read exactly like the Total Market instrument: the current
+ * total leads on the left, the window's % change is the big figure on the right
+ * with a trailing arrow, and the EXACT move states what actually happened.
+ */
+function SideMetric({
+  label,
+  value,
+  pct,
+  absolute,
+  color,
+}: {
+  label: string;
+  value: string;
+  pct: number | null;
+  absolute?: string | null;
+  color: string;
+}) {
+  const flat = pct == null || Math.abs(pct) < 0.05;
+  const tone = flat ? "var(--text-muted)" : pct! > 0 ? "var(--yes)" : "var(--no)";
+  const arrow = flat ? "" : pct! > 0 ? "▲" : "▼";
+  const pctText =
+    pct == null ? "" : `${Math.abs(pct).toFixed(!flat && Math.abs(pct) < 10 ? 1 : 0)}%`;
+  return (
+    <div
+      className="rounded-[10px] py-2 pl-2 pr-2.5"
+      style={{
+        borderLeft: `2px solid ${color}`,
+        background: `color-mix(in oklab, ${color} 7%, transparent)`,
+      }}
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="num min-w-0 truncate text-[20px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
+          {value}
+        </span>
+        <span
+          className="num shrink-0 text-[18px] font-semibold leading-none tabular-nums"
+          style={{ color: tone }}
+        >
+          {pctText}
+          {arrow && pctText ? <span className="ml-1 align-middle text-[0.6em]">{arrow}</span> : null}
+        </span>
+      </div>
+      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
+        {label}
+      </div>
+      {absolute && (
+        <div className="num mt-0.5 text-[11px]" style={{ color: tone }}>
+          {absolute}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Screen({ children }: { children: React.ReactNode }) {
   return <div className="flex h-full min-h-0 flex-col">{children}</div>;
 }
