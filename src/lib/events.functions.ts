@@ -16,7 +16,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { publicClient } from "@/lib/supabase-clients";
+import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { EVENT_READ_SELECT, type EventFact } from "@/lib/events";
 
 // Columns safe + sufficient for activity reads. Single-sourced in events.ts;
@@ -89,7 +89,7 @@ const baseInput = z.object({
 export const listLatestEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof baseInput> | undefined) => baseInput.parse(d ?? {}))
   .handler(async ({ data }) => {
-    const sb = publicClient();
+    const sb = serviceClient();
     const kinds = data.kinds ?? ["trade"];
     let q = sb.from("events").select(SELECT).eq("is_canonical", true).in("kind", kinds);
     if (data.sinceOccurredAt) q = q.gte("occurred_at", data.sinceOccurredAt);
@@ -105,7 +105,7 @@ const marketInput = baseInput.extend({ marketId: z.union([z.number().int(), z.st
 export const listMarketEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof marketInput>) => marketInput.parse(d))
   .handler(async ({ data }) => {
-    const sb = publicClient();
+    const sb = serviceClient();
     const kinds = data.kinds ?? ["trade"];
     let q = sb
       .from("events")
@@ -126,7 +126,7 @@ const walletInput = baseInput.extend({ wallet: z.string().min(3) });
 export const listWalletEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof walletInput>) => walletInput.parse(d))
   .handler(async ({ data }) => {
-    const sb = publicClient();
+    const sb = serviceClient();
     const kinds = data.kinds ?? ["trade"];
     let q = sb
       .from("events")

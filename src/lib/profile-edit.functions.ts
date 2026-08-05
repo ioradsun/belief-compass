@@ -12,8 +12,8 @@ const addr = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 export const getProfileOverride = createServerFn({ method: "GET" })
   .inputValidator((data) => z.object({ wallet: addr }).parse(data))
   .handler(async ({ data }) => {
-    const { publicClient } = await import("@/lib/supabase-clients");
-    const { data: row } = await publicClient()
+    const { serviceClient } = await import("@/lib/supabase-clients");
+    const { data: row } = await serviceClient()
       .from("profile_overrides")
       .select("display_name, avatar_url")
       .eq("wallet", data.wallet.toLowerCase())
