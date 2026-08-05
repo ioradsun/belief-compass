@@ -125,7 +125,7 @@
   --muted-foreground: var(--text-muted);
   --accent: var(--surface);
   --accent-foreground: var(--text);
-  --destructive: var(--no);
+  --destructive: var(--loss);
   --destructive-foreground: #10100f;
   --border: #282824;
   --input: #282824;
@@ -162,8 +162,12 @@
   --text: #0e1420;
   --text-secondary: #4a5262;
   --text-muted: #69707e;
-  --yes: #0f9d58;
-  --no: #d02b2b;
+  --yes: #3559e0;
+  --no: #b46a05;
+  --yes-contrast: #ffffff;
+  --no-contrast: #ffffff;
+  --gain: #12864a;
+  --loss: #c62828;
 
   --primary-foreground: #ffffff;
   --destructive-foreground: #ffffff;
@@ -192,6 +196,8 @@
   --color-text-muted: var(--text-muted);
   --color-yes: var(--yes);
   --color-no: var(--no);
+  --color-gain: var(--gain);
+  --color-loss: var(--loss);
   --font-sans:
     Inter, "Inter Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono:
