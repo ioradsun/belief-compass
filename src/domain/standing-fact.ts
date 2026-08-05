@@ -33,10 +33,12 @@
  *   2. NEVER OVERCLAIM TENURE. A belief that predates the index has no knowable
  *      start (src/domain/tenure), so it says "11+ days". The floor is carried
  *      in, never guessed here.
- *   3. NEVER OUT A NETWORK MEMBER'S SIDE. The feed's standing privacy rule: a
- *      person in the reader's network is shown moving, never shown taking a
- *      side. It applies with more force here, because a standing fact is about
- *      a position they are still holding rather than one moment of trading.
+ *   3. A NETWORK MEMBER'S SIDE IS SHOWN, like anyone else's. It used to be
+ *      withheld, which cost more here than anywhere: a standing fact is scoped
+ *      to one market AND SIDE already, so hiding it forced the reader's own
+ *      people out of the strongest tenure facts entirely — a Twin who had held
+ *      the longest could never be the one still holding. Every position is
+ *      public on-chain; the rule bought drama management, not privacy.
  *   4. RECOGNITION OVER SIZE. The ranking leads with the reader's own people.
  *      A stranger's $5,000 position is a bigger number; a Twin still holding is
  *      a better reason to feel accompanied.
@@ -174,22 +176,21 @@ export function findStandingFacts(input: StandingInput): StandingFact[] {
       kind: "crossed_paths",
       marketId: input.marketId,
       marketTitle: input.marketTitle,
-      // Side-blind: this is about a person in the reader's network.
-      side: null,
+      side: input.side,
       people: [h],
       key: `crossed:${h.wallet}:${h.crossings}`,
       strength: clamp01(0.5 + 0.3 * recognition([h]) + 0.2 * tenureWeight(h.daysHeld)),
     });
   }
 
-  // TRIBE PRESENT — who you know is here. Never says which way they went.
+  // TRIBE PRESENT — who you know is here, and which way they went.
   const known = people.filter(isNetwork);
   if (known.length > 0) {
     out.push({
       kind: "tribe_present",
       marketId: input.marketId,
       marketTitle: input.marketTitle,
-      side: null,
+      side: input.side,
       people: known.slice(0, STANDING.maxPeople),
       key: `tribe:${base}:${known.length}`,
       strength: clamp01(0.35 + 0.4 * recognition(known) + 0.1 * Math.min(1, known.length / 3)),
@@ -197,8 +198,11 @@ export function findStandingFacts(input: StandingInput): StandingFact[] {
   }
 
   // FOUNDING — here since the market opened. Only claimable when we were told
-  // how old the market is, and only about people whose side may be shown.
-  const open = people.filter((h) => !isNetwork(h));
+  // how old the market is. Network members are no longer held out of this and
+  // `still_holding`: they were excluded only to keep their side hidden, which
+  // also meant the reader's OWN people never earned the strongest tenure fact
+  // in a market they had held longest.
+  const open = people;
   const age = input.marketAgeDays ?? null;
   const founders =
     age != null && age >= STANDING.minDays

@@ -40,13 +40,31 @@ describe("positionPulse — personal state of the conviction", () => {
 });
 
 describe("positionStory — exactly one story, by priority", () => {
-  it("your Twin outranks everything and never reveals their side", () => {
+  it("your Twin outranks everything", () => {
     const s = positionStory(
       base({ net: { twin: true, tribe: true }, newToday: 9, milestone: 50 }),
       money,
     );
     expect(s.kind).toBe("twin");
-    expect(`${s.headline} ${s.body ?? ""}`).not.toMatch(/\bYES\b|\bNO\b/);
+  });
+
+  /**
+   * On a card about your OWN position, which way they went IS the news. These
+   * two used to print the same sentence, which threw away the only part a
+   * reader was looking for.
+   */
+  it("says which way they went when it knows", () => {
+    const withYou = positionStory(base({ side: "YES", net: { twin: "YES" } }), money);
+    const againstYou = positionStory(base({ side: "YES", net: { twin: "NO" } }), money);
+    expect(withYou.headline).toBe("Your Conviction Twin just backed YES.");
+    expect(againstYou.headline).toBe("Your Conviction Twin just backed NO.");
+    expect(withYou.body).toBeUndefined();
+    expect(againstYou.body).toBe("Your closest match is on the other side of you.");
+  });
+
+  it("still speaks when only the movement is known", () => {
+    const s = positionStory(base({ net: { twin: true } }), money);
+    expect(s.headline).toBe("Your Conviction Twin just entered this market.");
   });
   it("Tribe outranks Opp and a milestone", () => {
     expect(
@@ -92,7 +110,6 @@ describe("positionStory — exactly one story, by priority", () => {
     expect(positionStory(base({ believers: 200, gainUsd: 0 }), money).kind).toBe("quiet");
   });
 });
-
 
 describe("positionSignal — urgency ranks the list", () => {
   it("a Twin card ranks above a plain-gain card", () => {

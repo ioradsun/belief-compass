@@ -19,11 +19,7 @@ import { positionReturn, formatPct } from "@/domain/metric-display";
 import { formatMoney } from "@/domain/money";
 import { StandOnIt } from "@/components/StandOnIt";
 import { useDisplayUnit } from "@/lib/display-unit";
-import {
-  positionSignal,
-  type PositionSignal,
-  type Side,
-} from "@/domain/position-story";
+import { positionSignal, type PositionSignal, type Side } from "@/domain/position-story";
 
 type Position = {
   onchain_id: number;
@@ -176,10 +172,7 @@ function ConvictionCard({
       {/* 3 — Side, current value, and the return, each under its own label. */}
       <div className="mt-3 flex items-end gap-6">
         <div>
-          <div
-            className="text-[10px] font-semibold tracking-wide"
-            style={{ color: sideColor }}
-          >
+          <div className="text-[10px] font-semibold tracking-wide" style={{ color: sideColor }}>
             {p.side}
           </div>
           <div className="num mt-0.5 text-[18px] font-semibold leading-none text-[var(--text)]">
@@ -190,7 +183,10 @@ function ConvictionCard({
 
         {(ret || windowMove != null) && (
           <div className="ml-auto text-right">
-            <div className="num text-[14px] font-semibold leading-none" style={{ color: outcomeTone }}>
+            <div
+              className="num text-[14px] font-semibold leading-none"
+              style={{ color: outcomeTone }}
+            >
               {ret ? ret.pnl : signedMoney(windowMove as number)}
               {ret?.pct && <span className="ml-3">{ret.pct}</span>}
             </div>
@@ -208,12 +204,9 @@ function ConvictionCard({
           You also back {p.side === "YES" ? "NO" : "YES"} on this question.
         </div>
       )}
-
     </div>
   );
 }
-
-
 
 export function MyConvictions({
   wallet,
@@ -365,15 +358,23 @@ export function MyConvictions({
   });
   const netByMarket = new Map<
     number,
-    { twin?: boolean; tribe?: boolean; opp?: boolean; milestone?: number | null }
+    {
+      twin?: "YES" | "NO" | true;
+      tribe?: "YES" | "NO" | true;
+      opp?: "YES" | "NO" | true;
+      milestone?: number | null;
+    }
   >();
   for (const r of tape?.rows ?? []) {
     const id = Number(r.marketId);
     const cur = netByMarket.get(id) ?? {};
     const cat = r.story?.category;
-    if (cat === "twin") cur.twin = true;
-    else if (cat === "tribe") cur.tribe = true;
-    else if (cat === "opp") cur.opp = true;
+    // The side when the row carries one, `true` when it only says they moved.
+    // A grouped or non-trade row has no side, and the story still works without.
+    const which = r.side ?? true;
+    if (cat === "twin") cur.twin = which;
+    else if (cat === "tribe") cur.tribe = which;
+    else if (cat === "opp") cur.opp = which;
     if (r.kind === "believer_milestone") {
       const th = Number((r.payload as { threshold?: unknown } | null)?.threshold ?? 0);
       if (th > 0) cur.milestone = th;
@@ -535,7 +536,6 @@ export function MyConvictions({
                 </button>
               )}
             </div>
-
           </div>
         );
       })()}
@@ -556,7 +556,6 @@ export function MyConvictions({
           </div>
         ))}
       </div>
-
     </div>
   );
 }
