@@ -15,7 +15,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { publicClient } from "@/lib/supabase-clients";
+import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import {
   flattenStory,
@@ -124,7 +124,7 @@ const STANDING_RESERVE = 6;
 export const listLiveEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof input>) => input.parse(d ?? {}))
   .handler(async ({ data }) => {
-    const sb = publicClient();
+    const sb = serviceClient();
     const limit = data?.limit ?? 120;
     const viewer = data?.wallet?.toLowerCase() ?? null;
 

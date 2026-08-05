@@ -76,7 +76,7 @@ export async function resolveProfiles(
 /** Self-set names/pictures win over anything resolved from POV. */
 async function applyOverrides(map: Map<string, WalletProfile>, wallets: string[]) {
   try {
-    const { data } = await publicClient()
+    const { data } = await serviceClient()
       .from("profile_overrides")
       .select("wallet, display_name, avatar_url")
       .in("wallet", wallets);
