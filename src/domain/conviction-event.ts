@@ -406,7 +406,15 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
       body = side ? `${who} backed ${s}${tail}.` : `${who} took a side${tail}.`;
       break;
     case "trimmed":
-      body = side ? `${who} sold some of ${s}${tail}.` : `${who} sold some${tail}.`;
+      body =
+        n(c.amountUsd) >= 0.005
+          ? side
+            ? `${who} sold ${money(n(c.amountUsd))} of ${s}.`
+            : `${who} sold ${money(n(c.amountUsd))}.`
+          : side
+            ? `${who} sold some of ${s}${tail}.`
+            : `${who} sold some${tail}.`;
+
       break;
     case "long_held_exit":
       body = side ? `${who} gave up on ${s}${tail}.` : `${who} gave up${tail}.`;
