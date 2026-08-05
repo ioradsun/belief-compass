@@ -90,6 +90,8 @@ function signalsOf(r: Row, followedHere = 0): FeedMarketSignals {
     opportunityEligible: Boolean(r["opportunity_eligible"]),
     tribeSide: (r["tribe_side"] as "YES" | "NO" | null) ?? null,
     oppSide: (r["opp_side"] as "YES" | "NO" | null) ?? null,
+    tribeCount: num(r["tribe_count"]),
+    oppCount: num(r["opp_count"]),
     followedHere,
     hasMedia: Boolean(r["has_media"]),
   };

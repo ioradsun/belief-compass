@@ -86,7 +86,11 @@ export function eligibilityFor(input: EligibilityInput): Eligibility {
   const repeat = (s.passCount ?? 0) > 1;
   const pass = cooling(s.passedAt, repeat ? COOLDOWNS.PASS_REPEAT_MS : COOLDOWNS.PASS_MS, now);
   if (pass.active)
-    return { eligible: false, reason: repeat ? "passed_repeat" : "passed", availableAt: pass.until };
+    return {
+      eligible: false,
+      reason: repeat ? "passed_repeat" : "passed",
+      availableAt: pass.until,
+    };
 
   const sold = cooling(s.soldAt, COOLDOWNS.SOLD_MS, now);
   if (sold.active) return { eligible: false, reason: "sold_out", availableAt: sold.until };
@@ -96,7 +100,8 @@ export function eligibilityFor(input: EligibilityInput): Eligibility {
     return { eligible: false, reason: "recently_opened", availableAt: opened.until };
 
   const viewed = cooling(s.viewedAt, COOLDOWNS.VIEWED_MS, now);
-  if (viewed.active) return { eligible: false, reason: "recently_viewed", availableAt: viewed.until };
+  if (viewed.active)
+    return { eligible: false, reason: "recently_viewed", availableAt: viewed.until };
 
   if (input.sessionSeen.has(input.onchainId))
     return { eligible: false, reason: "seen_this_session", availableAt: null };
@@ -150,9 +155,15 @@ export function reentryFor(
       detail: `Your side has moved ${pct(move)} since you backed it.`,
     };
   if (sig.tribeEntered)
-    return { label: "Your Tribe is joining", detail: "Someone you match with has taken a side here." };
+    return {
+      label: "Your Tribe is joining",
+      detail: "Someone you match with has taken a side here.",
+    };
   if (sig.oppEntered)
-    return { label: "A Rival entered", detail: "Someone you consistently disagree with took a side." };
+    return {
+      label: "A Rival entered",
+      detail: "Someone you consistently disagree with took a side.",
+    };
   if (Number(sig.divergence ?? 0) >= REENTRY.MIN_DIVERGENCE)
     return {
       label: "Conviction is shifting",

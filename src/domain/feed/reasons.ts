@@ -64,8 +64,26 @@ export function reasonFor(
           ? "Someone you follow is active here"
           : `${s.followedHere} people you follow are active here`,
     };
-  if (s.tribeSide) return { code: "tribe", text: `Your Tribe is backing ${s.tribeSide}` };
-  if (s.oppSide) return { code: "rival", text: `A Rival is backing ${s.oppSide}` };
+  // The count sharpens the sentence; it never gates it. `tribeCount` is 0 for a
+  // viewer whose DNA has not formed yet, and for the whole overlay's history it
+  // was 0 for everyone because the feed only ever looked at one person — so
+  // "your Tribe is backing YES" has to keep working with nothing but a side.
+  if (s.tribeSide)
+    return {
+      code: "tribe",
+      text:
+        s.tribeCount > 1
+          ? `${s.tribeCount} people in your Tribe are backing ${s.tribeSide}`
+          : `Your Tribe is backing ${s.tribeSide}`,
+    };
+  if (s.oppSide)
+    return {
+      code: "rival",
+      text:
+        s.oppCount > 1
+          ? `${s.oppCount} of your Rivals are backing ${s.oppSide}`
+          : `A Rival is backing ${s.oppSide}`,
+    };
   if (scored.driver === "early" && scored.components.early > 0.25)
     return { code: "early", text: "Early — activity is accelerating" };
   if (Math.abs(s.divergence) >= 0.25)

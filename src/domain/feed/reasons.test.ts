@@ -24,6 +24,8 @@ const signals = (o: Partial<FeedMarketSignals> = {}): FeedMarketSignals => ({
   opportunityEligible: false,
   tribeSide: null,
   oppSide: null,
+  tribeCount: 0,
+  oppCount: 0,
   followedHere: 0,
   hasMedia: false,
   ...o,
@@ -83,6 +85,41 @@ describe("a follow is the reason the viewer can check", () => {
   it("never leaks a side — a follow is not a readout of their positions", () => {
     const r = reasonFor(signals({ followedHere: 2, tribeSide: "YES" }), scored());
     expect(r?.text).not.toMatch(/\bYES\b|\bNO\b/);
+  });
+});
+
+describe("counts sharpen the sentence, they never gate it", () => {
+  it("says how many of your Tribe are here when it knows", () => {
+    expect(reasonFor(signals({ tribeSide: "YES", tribeCount: 3 }), scored())?.text).toBe(
+      "3 people in your Tribe are backing YES",
+    );
+  });
+
+  it("counts your Rivals the same way", () => {
+    expect(reasonFor(signals({ oppSide: "NO", oppCount: 2 }), scored())?.text).toBe(
+      "2 of your Rivals are backing NO",
+    );
+  });
+
+  /**
+   * The case that matters most. The overlay read `cache[0]` for its entire
+   * history, so every stored row has a side and no count — and a viewer whose
+   * DNA has not formed yet still has none. If a count were required, the
+   * relationship sentence would vanish for everyone it used to work for.
+   */
+  it("still speaks with a side and no count at all", () => {
+    expect(reasonFor(signals({ tribeSide: "YES", tribeCount: 0 }), scored())?.text).toBe(
+      "Your Tribe is backing YES",
+    );
+    expect(reasonFor(signals({ oppSide: "NO", oppCount: 0 }), scored())?.text).toBe(
+      "A Rival is backing NO",
+    );
+  });
+
+  it("does not say '1 people' — one person is the singular sentence", () => {
+    expect(reasonFor(signals({ tribeSide: "YES", tribeCount: 1 }), scored())?.text).toBe(
+      "Your Tribe is backing YES",
+    );
   });
 });
 

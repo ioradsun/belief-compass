@@ -42,6 +42,15 @@ export interface FeedMarketSignals {
   tribeSide: "YES" | "NO" | null;
   oppSide: "YES" | "NO" | null;
   /**
+   * How many of the viewer's aligned / opposed people hold a side here.
+   *
+   * Zero when the viewer has no DNA yet, which is most viewers — so nothing
+   * that reads these may require them. They sharpen a sentence the side alone
+   * could already carry; they never gate it.
+   */
+  tribeCount: number;
+  oppCount: number;
+  /**
    * People the viewer explicitly follows who are connected to this market —
    * whether they created it or took a side in it.
    *
