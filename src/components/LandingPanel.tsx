@@ -182,11 +182,11 @@ export function LandingPanel({
                         setHowOpen(true);
                       }}
                       tabIndex={expanded ? 0 : -1}
-                      className="h-11 rounded-full px-5 text-[13px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
-                      style={{ border: "1px solid var(--hairline)" }}
+                      className="text-[13px] text-[var(--text-muted)] underline underline-offset-4 transition-colors hover:text-[var(--text)]"
                     >
-                      See how it works
+                      How it works
                     </button>
+
                   </div>
                 </div>
 
