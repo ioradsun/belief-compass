@@ -276,24 +276,32 @@ export function CaseColumn({
       ? priceUsd - priceUsd / (1 + summary.pricePct / 100)
       : null;
 
+  // Supporting copy only when something actually moved. "No change today" /
+  // "Flat today" is filler — whitespace says it better.
   const believerAbs =
-    belDelta == null
+    belDelta == null || belDelta === 0
       ? null
-      : belDelta === 0
-        ? `No change ${phrase}`
-        : `${belDelta > 0 ? "+" : "−"}${Math.abs(belDelta)} believer${Math.abs(belDelta) === 1 ? "" : "s"} ${phrase}`;
+      : `${belDelta > 0 ? "+" : "−"}${Math.abs(belDelta)} believer${Math.abs(belDelta) === 1 ? "" : "s"} ${phrase}`;
   const capitalAbs =
-    capDelta == null
+    capDelta == null || Math.abs(capDelta) < 0.005
       ? null
-      : Math.abs(capDelta) < 0.005
-        ? `No change ${phrase}`
-        : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "left"} ${phrase}`;
+      : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "left"} ${phrase}`;
   const priceAbs =
-    priceDelta == null
+    priceDelta == null || Math.abs(priceDelta) < 0.005
       ? null
-      : Math.abs(priceDelta) < 0.005
-        ? `Flat ${phrase}`
-        : `${format(priceDelta, "USD", { signed: true })} per share ${phrase}`;
+      : `${format(priceDelta, "USD", { signed: true })} per share ${phrase}`;
+
+  // The two sentences that lead the panel: what this side IS, and what changed.
+  const stateLine = sideStateLine(side, believersTotal);
+  const changeLine = sideChangeLine({
+    side,
+    belDelta,
+    capDelta,
+    priceDelta,
+    phrase,
+    money: (usd) => format(usd, "USD"),
+  });
+
 
   const metricRows: {
     metric: LensMetric;
