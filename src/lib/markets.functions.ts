@@ -481,6 +481,118 @@ export const searchMarkets = createServerFn({ method: "GET" })
 
 
 /**
+ * A face in a search result: a real person who put money behind this question.
+ * `known` means the viewer's own Conviction DNA already relates them — the
+ * single strongest reason to click a result.
+ */
+export interface MarketFace {
+  wallet: string;
+  name: string;
+  avatarUrl: string | null;
+  known: boolean;
+}
+
+export interface MarketFaces {
+  faces: MarketFace[];
+  /** Faces drawn from the viewer's network (subset of `faces`). */
+  knownCount: number;
+}
+
+/**
+ * Social proof for a page of search results.
+ *
+ * A colored status label decorates; a face persuades. For the handful of
+ * markets currently on screen we return up to three participants, ranked so
+ * people the viewer already relates to come first and, after them, the largest
+ * standing positions. Only people with a real POV identity are returned —
+ * generic placeholder avatars would be decoration, which is exactly what this
+ * replaces.
+ */
+export const getMarketFaces = createServerFn({ method: "GET" })
+  .inputValidator((d: { ids: number[]; wallet?: string }) =>
+    z
+      .object({
+        ids: z.array(z.number().int().nonnegative()).max(12),
+        wallet: z.string().min(3).optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }): Promise<Record<number, MarketFaces>> => {
+    const ids = [...new Set(data.ids)];
+    if (ids.length === 0) return {};
+    const sb = serviceClient();
+
+    const { data: rows } = await sb
+      .from("wallet_beliefs")
+      .select("wallet, onchain_id, yes_value_usd, no_value_usd")
+      .in("onchain_id", ids)
+      .in("stance_side", ["YES", "NO"])
+      .limit(1000);
+
+    // The viewer's own network — the only thing that makes a face meaningful
+    // rather than merely present.
+    const known = new Set<string>();
+    if (data.wallet) {
+      try {
+        const { readViewerDnaCache } = await import("@/lib/dna/viewer-dna-cache.server");
+        const cache = await readViewerDnaCache(sb, data.wallet.toLowerCase());
+        for (const bucket of [cache?.twin, cache?.tribe, cache?.closest, cache?.opp] as const)
+          for (const r of bucket ?? []) known.add(r.wallet.toLowerCase());
+      } catch {
+        /* no network yet — fall back to biggest positions */
+      }
+    }
+
+    const byMarket = new Map<number, Array<{ wallet: string; value: number; known: boolean }>>();
+    for (const r of (rows ?? []) as Array<Record<string, unknown>>) {
+      const id = Number(r.onchain_id);
+      const wallet = String(r.wallet).toLowerCase();
+      const value = Math.max(0, Number(r.yes_value_usd) || 0) + Math.max(0, Number(r.no_value_usd) || 0);
+      const list = byMarket.get(id) ?? [];
+      list.push({ wallet, value, known: known.has(wallet) });
+      byMarket.set(id, list);
+    }
+
+    // Shortlist first, resolve identities once: a search keystroke must not turn
+    // into hundreds of profile lookups.
+    const shortlist = new Map<number, Array<{ wallet: string; known: boolean }>>();
+    const wanted = new Set<string>();
+    for (const [id, list] of byMarket) {
+      list.sort((a, b) => (a.known === b.known ? b.value - a.value : a.known ? -1 : 1));
+      const top = list.slice(0, 5);
+      shortlist.set(
+        id,
+        top.map((t) => ({ wallet: t.wallet, known: t.known })),
+      );
+      for (const t of top) wanted.add(t.wallet);
+    }
+    if (wanted.size === 0) return {};
+
+    const { resolveProfiles } = await import("@/lib/profiles.server");
+    const profiles = await resolveProfiles([...wanted], 8);
+
+    const out: Record<number, MarketFaces> = {};
+    for (const [id, list] of shortlist) {
+      const faces: MarketFace[] = [];
+      for (const t of list) {
+        const p = profiles.get(t.wallet);
+        // No POV identity → no face. Anonymous circles are noise.
+        if (!p || (!p.displayName && !p.pfpUrl)) continue;
+        faces.push({
+          wallet: t.wallet,
+          name: p.displayName ?? aliasFor(t.wallet),
+          avatarUrl: p.pfpUrl ?? null,
+          known: t.known,
+        });
+        if (faces.length === 3) break;
+      }
+      if (faces.length > 0)
+        out[id] = { faces, knownCount: faces.filter((f) => f.known).length };
+    }
+    return out;
+  });
+
+/**
  * One market's read-model row, shaped like a feed row so the center deck can
  * render ANY market — including ones outside the loaded top-of-feed slice (e.g.
  * opened from search). Returns null when the market isn't in the read model yet.

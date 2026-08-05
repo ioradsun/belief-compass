@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getNetwork } from "@/lib/dna.functions";
-import { searchMarkets } from "@/lib/markets.functions";
+import { searchMarkets, getMarketFaces, type MarketFace } from "@/lib/markets.functions";
 import { composeDiscoveryRow } from "@/domain/market-discovery";
 import {
   presentRelationship,
@@ -255,6 +255,16 @@ export function OmniHeader({
   });
   const peopleHits = net?.people ?? [];
 
+  // Social proof for the results on screen: who actually put money behind each
+  // question, viewer's own network first. Fetched for the visible page only.
+  const faceIds = marketHits.map((m) => m.onchain_id);
+  const { data: facesById = {} } = useQuery({
+    queryKey: ["omni-faces", wallet ?? null, faceIds.join(",")],
+    queryFn: async () => await getMarketFaces({ data: { ids: faceIds, wallet } }),
+    enabled: faceIds.length > 0,
+    staleTime: 60_000,
+  });
+
   const showResults = open && term.length >= 2;
   // Still typing (the debounced term trails the field) or still fetching: the
   // list is unresolved, not empty.
@@ -493,6 +503,9 @@ export function OmniHeader({
                 // What a searcher actually wants: the question, then whether
                 // anything is happening — a plain momentum sentence, supported by
                 // lifetime reach and the capital standing behind it right now.
+                const proof = facesById[m.onchain_id];
+                const faces = proof?.faces ?? [];
+                const social = socialLine(proof?.faces ?? [], proof?.knownCount ?? 0);
                 const row = composeDiscoveryRow({
                   participants: m.participants,
                   believers: m.believers,
@@ -531,12 +544,15 @@ export function OmniHeader({
                       <span className="block truncate whitespace-nowrap text-[13px] font-medium text-[var(--text)]">
                         {m.title}
                       </span>
-                      {/* Story and numbers read as one block — neutral, uncoloured. */}
+                      {/* Story and numbers read as one block — neutral, uncoloured.
+                          When real people the viewer relates to are in here, their
+                          names replace the interpretation: social proof beats mood. */}
                       <span className="mt-1 block truncate whitespace-nowrap text-[11px] text-[var(--text-muted)]">
-                        {row.story}
+                        {social ? social : row.story}
                       </span>
                       {row.metrics.length > 0 && (
                         <span className="num mt-0 flex items-center gap-1.5 truncate text-[11px]">
+                          {faces.length > 0 && <FaceStack faces={faces} />}
                           {row.metrics.map((mt, k) => (
                             <span key={mt.label} className="flex items-center gap-1.5">
                               {k > 0 && (
@@ -630,4 +646,43 @@ export function OmniHeader({
       )}
     </div>
   );
+}
+
+/**
+ * Overlapping faces, small and quiet. Only people with a real identity get
+ * here (see getMarketFaces), so every circle carries information.
+ */
+function FaceStack({ faces }: { faces: MarketFace[] }) {
+  return (
+    <span className="mr-0.5 flex shrink-0 items-center">
+      {faces.map((f, i) => (
+        <span
+          key={f.wallet}
+          title={f.name}
+          className="inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full border border-[var(--panel)] bg-[var(--surface)] text-[8px] font-semibold uppercase text-[var(--text-muted)]"
+          style={{ marginLeft: i === 0 ? 0 : -5, zIndex: faces.length - i }}
+        >
+          {f.avatarUrl ? (
+            <img src={f.avatarUrl} alt="" width={16} height={16} className="h-full w-full object-cover" loading="lazy" />
+          ) : (
+            f.name.slice(0, 1)
+          )}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * "Sarah and Mike participated" beats "Believers are joining." — but only when
+ * the names mean something to this viewer. Without a shared network we let the
+ * momentum sentence stand.
+ */
+function socialLine(faces: MarketFace[], knownCount: number): string | null {
+  if (knownCount === 0) return null;
+  const names = faces.filter((f) => f.known).map((f) => f.name);
+  if (names.length === 0) return null;
+  if (names.length === 1) return `${names[0]} participated`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} participated`;
+  return `${names[0]}, ${names[1]} and ${names.length - 2} more you know participated`;
 }
