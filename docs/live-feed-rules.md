@@ -71,8 +71,14 @@ by hiding rows downstream.
 | `SWEEP_WINDOW_MS`        | 60 min | C   | Cross-market sweep                      |
 | `SWEEP_MIN_MARKETS`      | 3      | C   | Markets before it reads as coordination |
 
-> **Known gap.** `market_state.volume_total_usd`, trade counts and momentum metrics still include
-> wash and churn volume, so they overstate real activity. The feed excludes it; the metrics do not.
+**The metrics agree with the feed.** The verdict is recorded once on `events.is_wash` by a marker job
+(`src/lib/wash-marker.server.ts`) and read by both — the rule itself lives in
+`src/domain/wash-trading.ts` and is never re-implemented in SQL. A market whose volume spikes on the
+scoreboard while its tape stays silent makes a reader distrust both numbers, so `market_event_windows`
+excludes flagged trades from every count, volume and unique-wallet figure.
+
+> **Still outstanding.** `market_state.volume_total_usd` is POV-owned (an external figure we store,
+> not one we compute), so it remains unfiltered. Everything derived from our own event log is clean.
 
 ---
 
