@@ -10,7 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getNetwork } from "@/lib/dna.functions";
 import { searchMarkets } from "@/lib/markets.functions";
-import { composeMarketRow } from "@/domain/market-row";
+import { composeDiscoveryRow } from "@/domain/market-discovery";
 import {
   presentRelationship,
   relationshipInsight,
@@ -471,15 +471,18 @@ export function OmniHeader({
                 Markets
               </p>
               {visibleMarkets.map((m, i) => {
-                // What a searcher actually wants: who's ahead, and who's in — not
-                // the category. One honest current-state line, coloured by leader.
-                const state = composeMarketRow({ yesPct: m.yesPct, believers: m.believers });
-                const leadColor =
-                  state.leadSide === "YES"
-                    ? "var(--yes)"
-                    : state.leadSide === "NO"
-                      ? "var(--no)"
-                      : "var(--text-muted)";
+                // What a searcher actually wants: the question, then whether
+                // anything is happening — a plain momentum sentence, supported by
+                // lifetime reach and the capital standing behind it right now.
+                const row = composeDiscoveryRow({
+                  participants: m.participants,
+                  believers: m.believers,
+                  capitalUsd: m.capitalUsd,
+                  firstActivityAt: m.firstActivityAt,
+                  lastActivityAt: m.lastActivityAt,
+                  joined24h: m.joined24h,
+                  nowMs: Date.now(),
+                });
                 return (
                   <button
                     key={m.onchain_id}
@@ -493,28 +496,21 @@ export function OmniHeader({
                       <span className="block truncate text-[13px] text-[var(--text)]">
                         {m.title}
                       </span>
-                      <span className="mt-0.5 flex items-center gap-1.5 truncate text-[11px]">
-                        {state.stateText && (
-                          <span className="num font-semibold" style={{ color: leadColor }}>
-                            {state.stateText}
-                          </span>
-                        )}
-                        {state.stateText && state.crowdText && (
-                          <span className="text-[var(--text-muted)]" aria-hidden>
-                            ·
-                          </span>
-                        )}
-                        {state.crowdText && (
-                          <span className="num text-[var(--text-muted)]">{state.crowdText}</span>
-                        )}
-                        {state.emptyText && (
-                          <span className="text-[var(--text-muted)]">{state.emptyText}</span>
-                        )}
+                      <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]">
+                        {row.story}
                       </span>
+                      {(row.participantsText || row.capText) && (
+                        <span className="num mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-[var(--text-muted)]">
+                          {row.participantsText && <span>{row.participantsText}</span>}
+                          {row.participantsText && row.capText && <span aria-hidden>·</span>}
+                          {row.capText && <span>{row.capText}</span>}
+                        </span>
+                      )}
                     </span>
                   </button>
                 );
               })}
+
             </>
           )}
 
