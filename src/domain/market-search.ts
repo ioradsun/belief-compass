@@ -154,7 +154,12 @@ function wordScore(q: string, p: Prepared): number {
   if (p.words.includes(q)) return 10;
   if (p.stems.has(qs)) return 9;
   // Prefix / containment: "bitcoi" → "bitcoin", "influenc" → "influencer".
-  if (q.length >= 3 && p.words.some((w) => w.startsWith(q) || q.startsWith(w))) return 7;
+  // Both sides must be substantial — a stray "s" from "U.S." is not a prefix match.
+  if (
+    q.length >= 3 &&
+    p.words.some((w) => w.length >= 4 && (w.startsWith(q) || (q.length >= 4 && q.startsWith(w))))
+  )
+    return 7;
   if (q.length >= 4 && p.words.some((w) => w.includes(q))) return 6;
   const c = CONCEPT_OF.get(q) ?? CONCEPT_OF.get(qs);
   if (c != null && p.concepts.has(c)) return 5;
