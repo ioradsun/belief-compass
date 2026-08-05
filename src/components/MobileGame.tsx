@@ -557,17 +557,6 @@ function BothSides({
               ? "No change today"
               : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "left"} today`,
       },
-      {
-        label: "Per share",
-        value: priceUsd == null ? "—" : format(priceUsd, "USD"),
-        pct: pricePct,
-        absolute:
-          priceDelta == null
-            ? null
-            : Math.abs(priceDelta) < 0.005
-              ? "Flat today"
-              : `${format(priceDelta, "USD", { signed: true })} per share today`,
-      },
     ];
   };
 
@@ -600,7 +589,8 @@ function BothSides({
                   {open === s ? "Hide" : "Details"}
                 </span>
               </div>
-              <div className="mt-2 space-y-1.5">
+              <div className="mt-2 grid grid-cols-2 gap-2">
+
                 {rows(s).map((m) => (
                   <SideMetric
                     key={m.label}
@@ -707,12 +697,12 @@ function SideMetric({
         background: `color-mix(in oklab, ${color} 7%, transparent)`,
       }}
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="num min-w-0 truncate text-[20px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="num min-w-0 truncate text-[18px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
           {value}
         </span>
         <span
-          className="num shrink-0 text-[18px] font-semibold leading-none tabular-nums"
+          className="num shrink-0 text-[14px] font-semibold leading-none tabular-nums"
           style={{ color: tone }}
         >
           {pctText}
