@@ -356,7 +356,7 @@ export function ConvictionDashboard({
             {netToday !== 0 && (
               <div
                 className="mt-3 text-[13px] font-medium tabular-nums"
-                style={{ color: netToday >= 0 ? "var(--yes)" : "var(--no)" }}
+                style={{ color: netToday >= 0 ? "var(--gain)" : "var(--loss)" }}
               >
                 {netToday >= 0 ? "↑" : "↓"} Today {fmtUsd(netToday, true)}
               </div>
@@ -530,7 +530,7 @@ export function ConvictionDashboard({
                       <span className="text-[14px] font-medium text-[var(--text)]">{s.label}</span>
                       <span
                         className="ml-auto text-[15px] font-semibold tabular-nums"
-                        style={{ color: s.usd >= 0 ? "var(--yes)" : "var(--no)" }}
+                        style={{ color: s.usd >= 0 ? "var(--gain)" : "var(--loss)" }}
                       >
                         {fmtUsd(s.usd, true)}
                       </span>
@@ -566,7 +566,7 @@ export function ConvictionDashboard({
                     </span>
                     <span
                       className="shrink-0 text-[14px] font-semibold tabular-nums"
-                      style={{ color: "var(--yes)" }}
+                      style={{ color: "var(--gain)" }}
                     >
                       {fmtUsd(m.amountUsd, true)}
                     </span>
