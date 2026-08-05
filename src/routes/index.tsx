@@ -779,6 +779,18 @@ function Feed() {
         }
       />
 
+      {/* Scrim — while the landing panel is open the live app behind it is context,
+        not a target. Dimming it keeps the panel as the single focal surface. */}
+      <div
+        aria-hidden={landing.state !== "expanded"}
+        onClick={landing.collapse}
+        className={`absolute inset-0 z-20 bg-[var(--bg)]/75 backdrop-blur-[2px] transition-opacity duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+          landing.state === "expanded" ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+      />
+
+
+
       {/* One rail width for both sides in every mode — a single source of truth
         (no 264 vs 344 asymmetry). It also means the Case File's YES/NO columns get
         equal visual authority automatically, with no mode-specific grid. */}
