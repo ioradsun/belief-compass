@@ -507,7 +507,7 @@ export function MyConvictions({
               </span>
             </div>
             <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-              Marked value
+              Backing {count} belief{count === 1 ? "" : "s"}
             </div>
             <div className="num mt-0.5 text-[12px]" style={{ color: tone }}>
               {move === 0 ? (
