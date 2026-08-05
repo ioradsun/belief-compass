@@ -156,6 +156,11 @@ export function LandingPanel({
                     Find your tribe.
                   </p>
 
+                  <p className="mt-3 text-[15px] leading-snug text-[var(--text-secondary)] sm:text-[17px]">
+                    Traders make money.
+                    <br />
+                    Conviction builds wealth.
+                  </p>
 
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <button
@@ -169,19 +174,8 @@ export function LandingPanel({
                     >
                       Enter Conviction Market
                     </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setHowOpen(true);
-                      }}
-                      tabIndex={expanded ? 0 : -1}
-                      className="text-[13px] text-[var(--text-muted)] underline underline-offset-4 transition-colors hover:text-[var(--text)]"
-                    >
-                      How it works
-                    </button>
-
                   </div>
+
                 </div>
 
                 <div
@@ -223,7 +217,33 @@ export function LandingPanel({
                   />
                   Powered by POV and $degen
                 </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setHowOpen(true);
+                  }}
+                  tabIndex={expanded ? 0 : -1}
+                  className="ml-auto inline-flex items-center gap-2 text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    aria-hidden="true"
+                    className="shrink-0 opacity-80"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M9.6 9.2a2.5 2.5 0 1 1 3.2 2.4c-.6.2-.8.7-.8 1.3v.4" strokeLinecap="round" />
+                    <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none" />
+                  </svg>
+                  How it works
+                </button>
               </div>
+
 
             </div>
           </div>
