@@ -217,39 +217,10 @@ export function CaseColumn({
     return `${side} ${verb} ${format(priceUsd, "USD")} · ${move.pct}${change}.`;
   }, [metric, priceUsd, summary?.pricePct, win, side, format]);
 
-  // The side feed — the anatomy of THIS side as gated, consolidated momentum
-  // beats (people, capital, social), newest first. The same importance engine as
-  // the universal tape decides what's meaningful; raw trades stay in the ledger.
-  const network = useMemo(() => {
-    const m = new Map<string, NetTag>();
-    for (const p of net?.people ?? []) {
-      const r = p.relationship;
-      if (r === "twin" || r === "tribe" || r === "opp" || r === "inverse")
-        m.set(p.wallet.toLowerCase(), r);
-    }
-    return m;
-  }, [net]);
-  const sideBeats = useMemo(
-    () =>
-      tape?.length
-        ? sideFeed({
-            trades: tape,
-            side,
-            win,
-            nowMs: Date.now(),
-            ethUsd,
-            marketBelievers: book?.believers.market.current ?? null,
-            network,
-            believersNow: believersTotal,
-            capitalEthNow: capitalMetric?.current ?? 0,
-            money,
-            limit: 5,
-          })
-        : [],
-    [tape, side, win, ethUsd, book, network, believersTotal, capitalMetric, money],
-  );
-  /** One line of summary. The stream below carries the rest. */
-  const lead = sideBeats[0] ?? null;
+  // The side's momentum beats used to lead this panel; the plain-language state
+  // + change sentences below say it faster, and Recent activity carries the rest.
+
+
 
   // Prefer the AUTHORITATIVE current (market_state row) + the snapshot baseline for
   // the selected window: correct even on a >1000-trade market where the tape can't
