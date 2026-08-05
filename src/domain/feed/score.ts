@@ -150,12 +150,18 @@ export function ageHoursOf(createdAt: string | null, now: number): number | null
  * Recent rate ÷ its own baseline — acceleration, not size. This is the ONE
  * baseline definition (normal = the market's own 24h trade rate); every surface
  * that needs "× normal" must call this rather than re-deriving a second baseline.
+ *
+ * `velocity5m` extrapolates a five-minute tick into an hourly rate, and it goes
+ * stale: on a market with NO trades in the last hour it kept claiming 12/hr and
+ * so "24× normal" on a book where nothing had happened. Trades in the last hour
+ * are the ground truth — with none, acceleration is zero, whatever the tick says.
  */
 export function accelerationFrom(
   tradeCount1h: number,
   tradeCount24h: number,
   velocity5m: number,
 ): number {
+  if (tradeCount1h <= 0) return 0;
   const baseline = Math.max(0.5, tradeCount24h / 24);
   const recent = Math.max(tradeCount1h, velocity5m * 12);
   return Math.min(MOMENTUM_CAPS.ACCELERATION, recent / baseline);
