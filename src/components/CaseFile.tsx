@@ -168,10 +168,14 @@ export function CaseColumn({
   // Capital on this side means someone stands behind it — the market's initial
   // investment isn't an indexed position, so never show "0 believers, $13".
   const believersTotal = seededBelievers(rawBelievers, capitalUsd);
+  // PRICE IS AUTHORITATIVE, NOT TAPE-DERIVED. The tape carries each trade's
+  // post-trade `newPrice`, which spikes and collapses inside a single whale
+  // round-trip; reading it as "the price" makes a market that has been flat for
+  // hours report a huge fall. The market_state row (and its snapshots) is the
+  // price people actually see and trade at, so the panel reads that first.
+  const authPriceUsd = num(side === "YES" ? rr.yes_price_usd : rr.no_price_usd);
   const priceUsd =
-    summary?.priceEth != null
-      ? summary.priceEth * (ethUsd || 0)
-      : num(side === "YES" ? rr.yes_price_usd : rr.no_price_usd);
+    authPriceUsd ?? (summary?.priceEth != null ? summary.priceEth * (ethUsd || 0) : null);
 
   // ── The one chart, one lens ─────────────────────────────────────────────────
   // Believers is always the default lens — conviction.company is about people
