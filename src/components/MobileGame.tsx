@@ -194,6 +194,17 @@ export function MobileGame({
     side === "YES",
     side && backing ? ethWei : 0n,
   );
+  // The center's believer total must be the SAME source the YES and NO rails
+  // headline (market_state per-side counts), or the two sides will not add up to
+  // the total. Null when the row has no counts → the tape tally stands in.
+  const authBelieversTotal = useMemo(() => {
+    const r = row as Record<string, unknown>;
+    const y = Number(r["believers_yes"]);
+    const n = Number(r["believers_no"]);
+    if (!Number.isFinite(y) && !Number.isFinite(n)) return null;
+    return (Number.isFinite(y) ? y : 0) + (Number.isFinite(n) ? n : 0);
+  }, [row]);
+
   // THE HOUSE READ — the SAME shared engine and state the desktop deck uses, so
   // the phone shows the identical feature, data and copy. Never hidden, never a
   // mobile-only variant.
@@ -330,6 +341,7 @@ export function MobileGame({
           tape={change?.tape}
           ethUsd={ethUsd}
           win={deckWin}
+          believersTotal={authBelieversTotal}
           footer={
             <CurrentMarketActivity
               embedded

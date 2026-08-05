@@ -107,6 +107,7 @@ export function MarketMomentum({
   nowMs = Date.now(),
   footer,
   dense,
+  believersTotal,
 }: {
   tape: TapeTrade[] | undefined;
   ethUsd: number;
@@ -117,6 +118,14 @@ export function MarketMomentum({
   footer?: ReactNode;
   /** Phone: believers and capital sit side by side so the market fits one screen. */
   dense?: boolean;
+  /**
+   * The AUTHORITATIVE market-wide believer count (market_state: YES + NO) — the
+   * exact same source the YES and NO rails headline. The tape-derived tally can
+   * drift from the holder table on markets whose tape is capped or partially
+   * indexed, which is what made the center disagree with its own two sides.
+   * The window delta still comes from the tape, so the % stays consistent.
+   */
+  believersTotal?: number | null;
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs, win), [tape, nowMs, win]);
   const { unit } = useDisplayUnit();
@@ -125,7 +134,13 @@ export function MarketMomentum({
   const money: CapFmt = (eth, signed) =>
     formatMoney(eth, { from: "ETH", to: unit, ethUsd, signed });
 
-  const b = book.believers.market;
+  const raw = book.believers.market;
+  // Authoritative total when we have it; keep the tape's delta so the copy and
+  // percentage still describe the selected window.
+  const b: BookMetric =
+    believersTotal != null && Number.isFinite(believersTotal)
+      ? { ...raw, current: believersTotal, base: believersTotal - raw.delta }
+      : raw;
   const c = book.capitalEth.market;
 
   // ONE analytical container: heading → believers → cap → insight → Case File.
