@@ -57,16 +57,8 @@ type Position = {
 /** Formats a money amount, converting to the viewer's chosen unit (USD/ETH). */
 type MoneyFmt = (n: number) => string;
 
-/** The one accent colour a tone earns — green for strengthening, red for
- *  weakening, quiet otherwise. Typography carries the rest of the hierarchy. */
-const toneColor = (t: PulseTone): string =>
-  t === "up"
-    ? "var(--gain)"
-    : t === "down"
-      ? "var(--loss)"
-      : t === "neutral"
-        ? "var(--text-secondary)"
-        : "var(--text-muted)";
+/** The pulse is a state of the market, not a gain or a loss — it stays neutral.
+ *  Weight, not colour, carries its emphasis. */
 
 type Built = {
   /** `${marketId}-${side}` — a market held on both sides is TWO positions. */
@@ -246,9 +238,7 @@ function ConvictionCard({
         <span className="text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
           Pulse
         </span>
-        <span className="text-[12px] font-semibold" style={{ color: toneColor(pulseTone) }}>
-          {pulse}
-        </span>
+        <span className="text-[12px] font-semibold text-[var(--text)]">{pulse}</span>
       </div>
 
       {/* The one dynamic story — the reason to open this market today. */}
