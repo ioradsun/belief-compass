@@ -274,12 +274,14 @@ function clause(type: ConvictionEventType, c: ConvictionContext): string {
     case "biggest_believer_left":
       return amt > 0 ? ` with ${money(amt)}` : "";
     default:
-      // Everyday moves earn a clause only when the number is genuinely notable.
-      if (amt >= CONVICTION_EVENT.bigUsd) return ` with ${money(amt)}`;
+      // Never leave a number unlabelled elsewhere in the UI: if there is money
+      // in the move, the sentence says what the money IS.
+      if (amt >= 0.005) return ` with ${money(amt)}`;
       if (days >= CONVICTION_EVENT.longHeldDays) return ` after ${heldFor(days, floor)}`;
       return "";
   }
 }
+
 
 /**
  * Write the row. `headline` is the kicker, `body` is the human sentence, and
