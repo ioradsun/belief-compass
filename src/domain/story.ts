@@ -10,9 +10,12 @@
  * Two hard rules, both enforced by tests:
  *   • Voice: energetic and honest — concrete numbers, present tense, NO hype
  *     words (whale / smart money / pouring / exploding / moon / degen / loading up).
- *   • Privacy: only wallets in the VIEWER'S network are ever named. The crowd is
- *     always an anonymous count — this module never receives, and never invents,
- *     a name for a non-network wallet.
+ *   • Never invent a name. This module names only the faces it was HANDED, and
+ *     the caller hands it the viewer's network because those are the names worth
+ *     resolving — not because anyone else's is a secret. Every position is public
+ *     on-chain; the crowd is a count for cost and legibility (resolving hundreds
+ *     of identities per card would buy noise), and sides are printed freely
+ *     alongside the names that are here.
  */
 
 export type Side = "YES" | "NO";
@@ -64,7 +67,7 @@ export interface StoryBeat {
   emoji?: string;
 }
 
-/** A named person — ONLY ever someone in the viewer's network. */
+/** A named person. The caller resolves these; this module never invents one. */
 export interface NetworkFace {
   wallet: string;
   name: string;
@@ -95,7 +98,7 @@ export interface MarketStory {
   beats: StoryBeat[];
   /** Network faces for the pile (real identity). Capped. */
   faces: NetworkFace[];
-  /** The crowd behind the dominant side — a count, never names. */
+  /** The crowd behind the dominant side — a count, because names cost lookups. */
   crowd: { side: Side; count: number } | null;
 }
 

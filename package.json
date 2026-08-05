@@ -19,7 +19,8 @@
     "check:dna": "tsx scripts/check-dna.ts",
     "check:feed-supply": "tsx scripts/check-feed-supply.ts",
     "check:schema": "tsx scripts/check-schema.ts",
-    "check:ownership": "tsx scripts/check-ownership.ts"
+    "check:ownership": "tsx scripts/check-ownership.ts",
+    "check:start-here": "tsx scripts/check-start-here.ts"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.11",

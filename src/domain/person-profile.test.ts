@@ -3,8 +3,12 @@ import {
   definingConvictions,
   introduction,
   connection,
-  exploreThrough,
   tenureText,
+  whyFollow,
+  convictionMap,
+  sharedCuriosity,
+  allConvictions,
+  ELSEWHERE,
   PROFILE,
   type PersonPosition,
   type SideChange,
@@ -257,53 +261,6 @@ describe("what connects you is a pattern, not a percentage", () => {
   });
 });
 
-describe("every market offered explains itself", () => {
-  const defining = definingConvictions([
-    pos({ marketId: 1, valueUsd: 5000, title: "Biggest" }),
-    pos({ marketId: 2, valueUsd: 10, daysHeld: 400, title: "Oldest" }),
-  ]);
-
-  it("leads with disagreement — the most useful thing a person offers", () => {
-    const out = exploreThrough(defining, {
-      agreed: [{ marketId: 8, title: "Agreed" }],
-      opposed: [{ marketId: 9, title: "Split", personSide: "NO", viewerSide: "YES" }],
-    });
-    expect(out[0]).toMatchObject({
-      marketId: 9,
-      reason: "you_differ",
-      why: "You back YES here, they back NO.",
-    });
-  });
-
-  it("gives every row a reason in the person's terms", () => {
-    const out = exploreThrough(defining, { agreed: [], opposed: [] });
-    for (const s of out) expect(s.why.length).toBeGreaterThan(0);
-    expect(out.map((s) => s.why)).toContain("Their largest current position.");
-  });
-
-  it("never says 'recommended for you' or anything like it", () => {
-    const out = exploreThrough(defining, {
-      agreed: [{ marketId: 8, title: "Agreed" }],
-      opposed: [{ marketId: 9, title: "Split", personSide: "NO", viewerSide: "YES" }],
-    });
-    for (const s of out) {
-      expect(s.why).not.toMatch(/recommended|you may|similar market|trending for you/i);
-    }
-  });
-
-  it("shows one market once even when several reasons apply", () => {
-    const out = exploreThrough(defining, {
-      agreed: [{ marketId: 1, title: "Biggest" }],
-      opposed: [{ marketId: 1, title: "Biggest", personSide: "NO", viewerSide: "YES" }],
-    });
-    expect(out.filter((s) => s.marketId === 1)).toHaveLength(1);
-  });
-
-  it("returns fewer rows rather than padding with a vague one", () => {
-    expect(exploreThrough([], { agreed: [], opposed: [] })).toEqual([]);
-  });
-});
-
 describe("tenure never overclaims", () => {
   it("marks a floor", () => {
     expect(tenureText(512, true)).toBe("512+ days");
@@ -311,5 +268,218 @@ describe("tenure never overclaims", () => {
   });
   it("keeps the singular honest", () => {
     expect(tenureText(1, false)).toBe("1 day");
+  });
+});
+
+// ── V2 ───────────────────────────────────────────────────────────────────────
+
+/**
+ * The distinction the whole section rests on: a reason to follow describes what
+ * will arrive in your feed, never how well this person has done.
+ */
+describe("why follow them", () => {
+  it("says what following surfaces, from where their convictions sit", () => {
+    const r = whyFollow(enough({ category: "technology" }));
+    expect(r[0]).toEqual({
+      kind: "topic",
+      headline: "Follow them for technology.",
+      evidence: "4 of their 4 current convictions sit there.",
+    });
+  });
+
+  it("describes breadth when nothing concentrates", () => {
+    const spread = [
+      pos({ marketId: 1, category: "crypto" }),
+      pos({ marketId: 2, category: "sports" }),
+      pos({ marketId: 3, category: "politics" }),
+      pos({ marketId: 4, category: "culture" }),
+    ];
+    expect(whyFollow(spread)[0]).toEqual({
+      kind: "broad",
+      headline: "Their curiosity ranges widely.",
+      evidence: "They hold convictions across 4 different topics.",
+    });
+  });
+
+  it("never claims returns, rank, profit or followers", () => {
+    const rich = enough({ daysHeld: 200, crowdYesPct: 5, participants: 40, daysAfterOpen: 1 });
+    const all = whyFollow(rich, { marketsCreated: 3 })
+      .flatMap((r) => [r.headline, r.evidence])
+      .join(" ");
+    // Word boundaries, or "following" trips a bare /win/ and the assertion
+    // starts failing on copy that is perfectly fine.
+    expect(all).not.toMatch(
+      /\b(returns?|profit|ranked?|top|best|wins?|winning|followers?|success(ful)?)\b/i,
+    );
+  });
+
+  it("carries the count behind every claim", () => {
+    const patient = enough({ daysHeld: 200 });
+    const line = whyFollow(patient).find((r) => r.kind === "patient");
+    expect(line?.headline).toBe("Stays with their strongest convictions.");
+    expect(line?.evidence).toBe("4 positions have been held for more than three months.");
+  });
+
+  it("caps at three, so it reads as a person and not a pitch", () => {
+    const everything = enough({
+      daysHeld: 200,
+      crowdYesPct: 2,
+      participants: 40,
+      daysAfterOpen: 1,
+      category: "technology",
+    });
+    expect(whyFollow(everything, { marketsCreated: 9 })).toHaveLength(PROFILE.maxFollowReasons);
+  });
+
+  /**
+   * A belief that predates the index has no knowable start, so counting it as
+   * "arrived early" would turn "we cannot tell" into evidence.
+   */
+  it("only counts early entries where the timing is knowable", () => {
+    const unknowable = enough({ daysAfterOpen: null, tenureIsFloor: true });
+    expect(whyFollow(unknowable).some((r) => r.kind === "early")).toBe(false);
+
+    const known = enough({ daysAfterOpen: 2 });
+    const early = whyFollow(known).find((r) => r.kind === "early");
+    expect(early?.headline).toBe("Often finds markets early.");
+    expect(early?.evidence).toBe("Joined 4 of 4 within a week of the market opening.");
+  });
+
+  it("claims nothing at all from too few positions", () => {
+    expect(whyFollow([pos({ marketId: 1 }), pos({ marketId: 2 })])).toEqual([]);
+  });
+
+  it("but still credits an author with no positions to speak of", () => {
+    const r = whyFollow([pos({ marketId: 1 })], { marketsCreated: 4 });
+    expect(r).toEqual([
+      {
+        kind: "author",
+        headline: "They write questions, not just answer them.",
+        evidence: "4 of the markets here are theirs.",
+      },
+    ]);
+  });
+});
+
+describe("their conviction map", () => {
+  const map = (list: PersonPosition[]) => convictionMap(list).map((t) => t.theme);
+
+  it("groups by theme, biggest theme first", () => {
+    const list = [
+      pos({ marketId: 1, category: "culture" }),
+      pos({ marketId: 2, category: "culture" }),
+      pos({ marketId: 3, category: "culture" }),
+      pos({ marketId: 4, category: "crypto" }),
+      pos({ marketId: 5, category: "crypto" }),
+    ];
+    expect(map(list)).toEqual(["culture", "crypto"]);
+  });
+
+  /** Nine headings of one item is a list wearing a map's clothes. */
+  it("collects the long tail rather than making a heading per market", () => {
+    const list = [
+      pos({ marketId: 1, category: "crypto" }),
+      pos({ marketId: 2, category: "crypto" }),
+      pos({ marketId: 3, category: "sports" }),
+      pos({ marketId: 4, category: "politics" }),
+      pos({ marketId: 5, category: null }),
+    ];
+    const out = convictionMap(list);
+    expect(out.map((t) => t.theme)).toEqual(["crypto", ELSEWHERE]);
+    expect(out[1].total).toBe(3);
+  });
+
+  it("leads each theme with the biggest commitment", () => {
+    const list = [
+      pos({ marketId: 1, valueUsd: 10 }),
+      pos({ marketId: 2, valueUsd: 900 }),
+      pos({ marketId: 3, valueUsd: 50 }),
+    ];
+    expect(convictionMap(list)[0].positions.map((p) => p.marketId)).toEqual([2, 3, 1]);
+  });
+
+  it("keeps the true total when a theme is truncated", () => {
+    const many = Array.from({ length: 9 }, (_, i) => pos({ marketId: i + 1 }));
+    const [theme] = convictionMap(many);
+    expect(theme.positions).toHaveLength(PROFILE.maxPerTheme);
+    expect(theme.total).toBe(9);
+  });
+
+  it("says nothing about someone holding nothing", () => {
+    expect(convictionMap([])).toEqual([]);
+  });
+});
+
+describe("markets you both care about", () => {
+  const m = (id: number, v: "YES" | "NO", p: "YES" | "NO") => ({
+    marketId: id,
+    title: `Market ${id}`,
+    viewerSide: v,
+    personSide: p,
+  });
+
+  /** A page ordered by agreement teaches nobody anything they did not believe. */
+  it("leads with disagreement", () => {
+    const rows = sharedCuriosity([m(1, "YES", "YES")], [m(2, "YES", "NO")]);
+    expect(rows.map((r) => r.marketId)).toEqual([2, 1]);
+  });
+
+  it("carries both sides on every row, not a verdict", () => {
+    const [row] = sharedCuriosity([], [m(1, "NO", "YES")]);
+    expect(row).toEqual({
+      marketId: 1,
+      title: "Market 1",
+      viewerSide: "NO",
+      personSide: "YES",
+      agree: false,
+    });
+  });
+
+  it("caps the list rather than printing forty rows at equal weight", () => {
+    const agreed = Array.from({ length: 30 }, (_, i) => m(i + 1, "YES", "YES"));
+    expect(sharedCuriosity(agreed, [], 6)).toHaveLength(6);
+  });
+});
+
+/**
+ * The map interprets; this does not. A visitor who suspects the highlights were
+ * cherry picked has to be able to check, or the highlights are worth nothing.
+ */
+describe("all convictions", () => {
+  it("returns every position, filtering nothing", () => {
+    const list = [
+      pos({ marketId: 1, valueUsd: 0, daysHeld: 0, participants: 0 }),
+      pos({ marketId: 2, valueUsd: 900 }),
+      pos({ marketId: 3, category: null }),
+    ];
+    expect(allConvictions(list)).toHaveLength(3);
+  });
+
+  it("leads with the biggest commitment, then the longest held", () => {
+    const list = [
+      pos({ marketId: 1, valueUsd: 10, daysHeld: 5 }),
+      pos({ marketId: 2, valueUsd: 900 }),
+      pos({ marketId: 3, valueUsd: 10, daysHeld: 400 }),
+    ];
+    expect(allConvictions(list).map((p) => p.marketId)).toEqual([2, 3, 1]);
+  });
+
+  it("is stable when everything ties", () => {
+    const list = [pos({ marketId: 5 }), pos({ marketId: 2 }), pos({ marketId: 9 })];
+    expect(allConvictions(list).map((p) => p.marketId)).toEqual([2, 5, 9]);
+  });
+
+  /** The map is allowed to truncate only because this cannot. */
+  it("holds everything the map dropped", () => {
+    const many = Array.from({ length: 20 }, (_, i) => pos({ marketId: i + 1 }));
+    const inMap = new Set(convictionMap(many).flatMap((t) => t.positions.map((p) => p.marketId)));
+    const inAll = new Set(allConvictions(many).map((p) => p.marketId));
+    expect(inMap.size).toBeLessThan(many.length);
+    expect(inAll.size).toBe(many.length);
+    for (const id of inMap) expect(inAll.has(id)).toBe(true);
+  });
+
+  it("says nothing about someone holding nothing", () => {
+    expect(allConvictions([])).toEqual([]);
   });
 });

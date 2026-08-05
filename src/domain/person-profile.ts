@@ -52,6 +52,12 @@ export interface PersonPosition {
   /** Directional believers here — how much the crowd comparison is worth. */
   participants: number;
   category: string | null;
+  /**
+   * Days between the market opening and them taking a side, or null when that
+   * cannot be known — which includes every position whose `tenureIsFloor` is
+   * true, since a belief predating the index has no knowable start.
+   */
+  daysAfterOpen?: number | null;
 }
 
 /** A side they moved away from, established from the events log, not inferred. */
@@ -66,8 +72,15 @@ export interface SideChange {
 export const PROFILE = {
   /** Below this a "story" is a coincidence. Two markets is not a pattern. */
   minMarketsForPattern: 4,
-  /** A crowd smaller than this cannot make anyone contrarian. */
-  minParticipantsForCrowd: 8,
+  /**
+   * A crowd smaller than this cannot make anyone contrarian.
+   *
+   * Measured: of 789 markets with any participant, room sizes run p50 1 · p90 4
+   * · p95 5 · max 37. At 8 this reached 2.5% of live markets and "Against the
+   * crowd" was effectively dead copy. Four is p90 — rare enough to mean
+   * something, common enough to ever fire. Revisit as the platform grows.
+   */
+  minParticipantsForCrowd: 4,
   /** How lopsided the room must be before standing apart from it is notable. */
   contrarianMajorityPct: 70,
   /** A hold shorter than this is not yet an endurance story. */
@@ -76,6 +89,14 @@ export const PROFILE = {
   concentrationShare: 0.4,
   /** Featured convictions shown at once. More is a list, not a portrait. */
   maxDefining: 4,
+  /** Taking a side within this many days of the open counts as arriving early. */
+  earlyDays: 7,
+  /** Reasons to follow shown at once. Three claims is a person; six is a pitch. */
+  maxFollowReasons: 3,
+  /** A theme needs this many convictions before it is a theme. */
+  minPerTheme: 2,
+  /** Markets listed inside one theme before the rest collapse to a count. */
+  maxPerTheme: 6,
 } as const;
 
 export type DefiningKind = "largest" | "longest" | "contrarian" | "changed_mind";
@@ -284,6 +305,298 @@ export function introduction(
   return { provisional: false, lines };
 }
 
+/**
+ * WHY FOLLOW THEM — what a reader gets by following, not why the person is good.
+ *
+ * The distinction is the whole design. "Ranked #4 this month" is an achievement;
+ * "usually surfaces technology markets early" is a description of what will
+ * arrive in your feed. Only the second one helps anybody decide.
+ *
+ * So every line here is a claim about their BEHAVIOUR that a follower would
+ * experience, each carrying the count it was derived from. Nothing about
+ * returns, profit, rank or followers — those describe outcomes, and an outcome
+ * is not a reason to listen to someone.
+ */
+export interface FollowReason {
+  /** Which observation this is, for keys and ordering. Never rendered. */
+  kind: "topic" | "early" | "contrarian" | "patient" | "broad" | "author";
+  /**
+   * THE MEANING, in one short line. What a reader would actually say about this
+   * person — "Often finds markets early", not "Participated early in 7 markets".
+   */
+  headline: string;
+  /** THE EVIDENCE, underneath, carrying the count the headline is drawn from. */
+  evidence: string;
+}
+
+/**
+ * TWO PARTS, ALWAYS, and in this order.
+ *
+ * A bare count is accurate and sterile: "Participated early in 7 markets" reads
+ * like a row from a database, and a reader has to do the interpreting the page
+ * should have done. A bare claim is the opposite failure — "Often finds markets
+ * early" with nothing under it is the kind of sentence any profile could print
+ * about anybody.
+ *
+ * So the headline says what it means and the evidence proves it, and neither
+ * ships without the other.
+ */
+export function whyFollow(
+  positions: readonly PersonPosition[],
+  opts: { marketsCreated?: number } = {},
+): FollowReason[] {
+  const out: FollowReason[] = [];
+  const created = Math.max(0, Math.floor(opts.marketsCreated ?? 0));
+  const total = positions.length;
+
+  // Nothing is claimed from a handful of positions. A person with three markets
+  // has not demonstrated a tendency, and inventing one here is exactly the
+  // "generic recommendation" the whole page exists to avoid.
+  if (total < PROFILE.minMarketsForPattern) {
+    return created > 0
+      ? [
+          {
+            kind: "author",
+            headline: "They write questions, not just answer them.",
+            evidence: `${created} of the markets here are theirs.`,
+          },
+        ]
+      : [];
+  }
+
+  const cats = topCategories(positions);
+  const lead = cats.filter((c) => c.share >= PROFILE.concentrationShare);
+  if (lead.length > 0) {
+    const names = joinNames(lead.map((c) => c.name));
+    const inLead = positions.filter(
+      (p) => p.category && lead.some((l) => l.name === p.category),
+    ).length;
+    out.push({
+      kind: "topic",
+      headline: `Follow them for ${names}.`,
+      evidence: `${inLead} of their ${total} current convictions sit there.`,
+    });
+  } else if (cats.length >= 3) {
+    out.push({
+      kind: "broad",
+      headline: "Their curiosity ranges widely.",
+      evidence: `They hold convictions across ${cats.length} different topics.`,
+    });
+  }
+
+  // EARLY. Only over positions whose entry timing is knowable — a belief that
+  // predates the index has no start date, and counting it would quietly turn
+  // "we cannot tell" into evidence.
+  const timed = positions.filter((p) => p.daysAfterOpen != null && p.daysAfterOpen >= 0);
+  const early = timed.filter((p) => (p.daysAfterOpen ?? Infinity) <= PROFILE.earlyDays);
+  if (timed.length >= PROFILE.minMarketsForPattern && early.length >= 2) {
+    out.push({
+      kind: "early",
+      headline: "Often finds markets early.",
+      evidence: `Joined ${early.length} of ${timed.length} within a week of the market opening.`,
+    });
+  }
+
+  const withCrowd = positions.filter((p) => againstThem(p) != null);
+  const against = withCrowd.filter((p) => (againstThem(p) ?? 0) >= PROFILE.contrarianMajorityPct);
+  if (withCrowd.length >= PROFILE.minMarketsForPattern && against.length >= 2) {
+    out.push({
+      kind: "contrarian",
+      headline: "Comfortable disagreeing with the room.",
+      evidence: `Took the less popular side in ${against.length} of ${withCrowd.length} lopsided markets.`,
+    });
+  }
+
+  const longHolds = positions.filter((p) => p.daysHeld >= 90);
+  if (longHolds.length >= 2) {
+    out.push({
+      kind: "patient",
+      headline: "Stays with their strongest convictions.",
+      evidence: `${longHolds.length} positions have been held for more than three months.`,
+    });
+  }
+
+  if (created > 0) {
+    out.push({
+      kind: "author",
+      headline: "They write questions, not just answer them.",
+      evidence: `${created} of the markets here are theirs.`,
+    });
+  }
+
+  return out.slice(0, PROFILE.maxFollowReasons);
+}
+
+/**
+ * THEIR CONVICTION MAP — everything they currently back, arranged by theme.
+ *
+ * A flat chronological list of forty positions is the same as no list: nothing
+ * in it is more important than anything else, and a reader scrolls it once and
+ * leaves. Grouped by theme it becomes browsable — "what do they think about
+ * culture" is a question a visitor actually has.
+ *
+ * Themes are the market categories, which is the only topic model that exists
+ * (eight values in production). No finer grouping is invented here.
+ *
+ * Everything with too few positions to be a theme collapses into one "Elsewhere"
+ * group rather than producing a page of one-item headings.
+ */
+export interface ConvictionTheme {
+  /** The category, or "Elsewhere" for the collected remainder. */
+  theme: string;
+  positions: PersonPosition[];
+  /** How many the theme holds in total, when `positions` was truncated. */
+  total: number;
+}
+
+export const ELSEWHERE = "Elsewhere";
+
+/**
+ * REPETITION CONTROL — how many times one market may appear before the page
+ * starts feeling like it owns two markets and keeps showing them.
+ *
+ * Some repetition is correct: "Start Here" and "Largest conviction" and a
+ * shared-market row answer different questions about the same market, and
+ * suppressing all of it would leave a section wrong rather than tidy. The
+ * failure is a SPARSE profile, where three positions can fill five sections and
+ * the visitor sees the same question five times in one scroll.
+ *
+ * So the interpreting sections are ranked by how much each one adds when a
+ * market has already appeared, and past the budget the weakest one drops. The
+ * complete lists — the conviction map and All Convictions — are deliberately
+ * NOT in the budget: they are inventories, and an inventory with holes in it is
+ * a broken inventory, not a tidier page.
+ */
+export const REPEAT = {
+  /** Appearances allowed across the interpreting sections. */
+  maxAppearances: 2,
+} as const;
+
+/** The interpreting sections, strongest claim on a market first. */
+export type ProfileSlot = "start_here" | "defining" | "shared" | "explore";
+
+const SLOT_RANK: Record<ProfileSlot, number> = {
+  start_here: 0,
+  defining: 1,
+  shared: 2,
+  explore: 3,
+};
+
+/**
+ * Which (slot, market) pairs survive the repetition budget.
+ *
+ * Returns the set of slots each market keeps. The caller filters its sections
+ * against this rather than each section guessing about the others — the reason
+ * V1's duplication was invisible is that no single section could see the page.
+ */
+export function limitRepeats(
+  claims: readonly { slot: ProfileSlot; marketId: number }[],
+  max: number = REPEAT.maxAppearances,
+): Set<string> {
+  const seen = new Map<number, number>();
+  const keep = new Set<string>();
+  for (const c of [...claims].sort((a, b) => SLOT_RANK[a.slot] - SLOT_RANK[b.slot])) {
+    const n = seen.get(c.marketId) ?? 0;
+    if (n >= max) continue;
+    seen.set(c.marketId, n + 1);
+    keep.add(`${c.slot}:${c.marketId}`);
+  }
+  return keep;
+}
+
+/**
+ * EVERY position they currently hold, biggest commitment first.
+ *
+ * The map above INTERPRETS — it groups, it truncates, it leads with the theme
+ * they have said the most about. This does not interpret at all, and that is
+ * the point: the interpretation layer builds curiosity, and the full list is
+ * what makes it trustworthy. A visitor who suspects the highlights were cherry
+ * picked has to be able to check, or the highlights are worth nothing.
+ *
+ * Sorted, never filtered. Nothing here is below a threshold, because "every"
+ * has to mean every.
+ */
+export function allConvictions(positions: readonly PersonPosition[]): PersonPosition[] {
+  return [...positions].sort(
+    (a, b) => n(b.valueUsd) - n(a.valueUsd) || b.daysHeld - a.daysHeld || a.marketId - b.marketId,
+  );
+}
+
+export function convictionMap(positions: readonly PersonPosition[]): ConvictionTheme[] {
+  const byTheme = new Map<string, PersonPosition[]>();
+  for (const p of positions) {
+    const k = p.category ?? ELSEWHERE;
+    byTheme.set(k, [...(byTheme.get(k) ?? []), p]);
+  }
+
+  // Anything that never reached the threshold joins the remainder, so a
+  // long-tail explorer gets one honest group instead of nine headings of one.
+  const remainder: PersonPosition[] = [...(byTheme.get(ELSEWHERE) ?? [])];
+  byTheme.delete(ELSEWHERE);
+  for (const [k, list] of [...byTheme]) {
+    if (list.length < PROFILE.minPerTheme) {
+      remainder.push(...list);
+      byTheme.delete(k);
+    }
+  }
+
+  // Largest first: the theme they have said the most about is the one a visitor
+  // should meet first. Within a theme, biggest commitment then longest held.
+  const rank = (a: PersonPosition, b: PersonPosition) =>
+    n(b.valueUsd) - n(a.valueUsd) || b.daysHeld - a.daysHeld;
+
+  const out: ConvictionTheme[] = [...byTheme.entries()]
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+    .map(([theme, list]) => ({
+      theme,
+      positions: [...list].sort(rank).slice(0, PROFILE.maxPerTheme),
+      total: list.length,
+    }));
+
+  if (remainder.length > 0) {
+    out.push({
+      theme: ELSEWHERE,
+      positions: [...remainder].sort(rank).slice(0, PROFILE.maxPerTheme),
+      total: remainder.length,
+    });
+  }
+  return out;
+}
+
+/**
+ * MARKETS YOU BOTH CARE ABOUT — shared curiosity, not a tally of agreement.
+ *
+ * The point is not how many times you matched. It is that you both went looking
+ * at the same question, and each row shows what the two of you concluded, side
+ * by side, including when that is nothing alike.
+ *
+ * DISAGREEMENT LEADS. It is the more informative row, and the one a similarity
+ * score buries — a page ordered by agreement teaches a reader nothing they did
+ * not already believe.
+ */
+export interface SharedRow {
+  marketId: number;
+  title: string;
+  viewerSide: Side;
+  personSide: Side;
+  agree: boolean;
+}
+
+export function sharedCuriosity(
+  agreed: readonly { marketId: number; title: string; viewerSide: Side; personSide: Side }[],
+  opposed: readonly { marketId: number; title: string; viewerSide: Side; personSide: Side }[],
+  limit = 6,
+): SharedRow[] {
+  const row = (m: { marketId: number; title: string; viewerSide: Side; personSide: Side }) => ({
+    marketId: m.marketId,
+    title: m.title,
+    viewerSide: m.viewerSide,
+    personSide: m.personSide,
+    agree: m.viewerSide === m.personSide,
+  });
+  return [...opposed.map(row), ...agreed.map(row)].slice(0, Math.max(0, limit));
+}
+
 /** Everything the viewer↔person comparison needs to be described in words. */
 export interface ConnectionInput {
   sharedMarkets: number;
@@ -347,72 +660,4 @@ export function connection(i: ConnectionInput): Connection {
   }
 
   return { provisional: false, lines };
-}
-
-/** Why a market is worth exploring because of THIS person. */
-export type DiscoveryReason =
-  | "largest"
-  | "longest"
-  | "contrarian"
-  | "changed_mind"
-  | "you_differ"
-  | "you_agree";
-
-export interface DiscoverySuggestion {
-  marketId: number;
-  title: string;
-  reason: DiscoveryReason;
-  /** The sentence saying why it is here. Never "recommended for you". */
-  why: string;
-}
-
-/**
- * Markets to explore because of this person.
- *
- * Every entry states its reason in the person's terms. A suggestion that cannot
- * explain itself is not offered — which is why this returns fewer rows than it
- * could rather than padding with "similar market".
- */
-export function exploreThrough(
-  defining: readonly DefiningConviction[],
-  shared: {
-    agreed: readonly { marketId: number; title: string }[];
-    opposed: readonly { marketId: number; title: string; personSide: Side; viewerSide: Side }[];
-  },
-  limit = 4,
-): DiscoverySuggestion[] {
-  const out: DiscoverySuggestion[] = [];
-  const seen = new Set<number>();
-  const push = (s: DiscoverySuggestion) => {
-    if (seen.has(s.marketId) || out.length >= limit) return;
-    seen.add(s.marketId);
-    out.push(s);
-  };
-
-  // Disagreement leads. It is the most useful thing one person can offer
-  // another, and the row a similarity score would have buried.
-  for (const m of shared.opposed) {
-    push({
-      marketId: m.marketId,
-      title: m.title,
-      reason: "you_differ",
-      why: `You back ${m.viewerSide} here, they back ${m.personSide}.`,
-    });
-  }
-  const REASON: Record<DefiningKind, { reason: DiscoveryReason; why: string }> = {
-    largest: { reason: "largest", why: "Their largest current position." },
-    longest: { reason: "longest", why: "One of their longest-held convictions." },
-    contrarian: { reason: "contrarian", why: "They took the side the room did not." },
-    changed_mind: { reason: "changed_mind", why: "They changed their mind here." },
-  };
-  for (const d of defining) push({ marketId: d.marketId, title: d.title, ...REASON[d.kind] });
-  for (const m of shared.agreed) {
-    push({
-      marketId: m.marketId,
-      title: m.title,
-      reason: "you_agree",
-      why: "You have both taken the same side here.",
-    });
-  }
-  return out;
 }

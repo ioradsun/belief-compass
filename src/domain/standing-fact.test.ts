@@ -64,6 +64,22 @@ describe("a network member's side is stated, like anyone else's", () => {
     expect(f?.side).toBe("YES");
   });
 
+  /**
+   * The fact carried `side` all along and the sentence refused to read it, so
+   * the reader's own people were the only ones in the tape whose beliefs were
+   * unreadable. Computed, then discarded.
+   */
+  it("says the side out loud, not just stores it", () => {
+    const f = findStandingFacts(input({ holders: [twin] })).find((x) => x.kind === "tribe_present");
+    expect(tellStandingFact(f!).body).toBe("n0xa is on YES here, 40 days in.");
+  });
+
+  it("says it for a group too", () => {
+    const pair = [twin, h({ wallet: "0xb", relationship: "tribe" })];
+    const f = findStandingFacts(input({ holders: pair })).find((x) => x.kind === "tribe_present");
+    expect(tellStandingFact(f!).body).toBe("n0xa and n0xb are on YES here, from your network.");
+  });
+
   it("carries the side on a crossed-paths fact", () => {
     const recurring = h({ wallet: "0xa", relationship: "tribe", crossings: 5 });
     const f = findStandingFacts(input({ holders: [recurring] })).find(

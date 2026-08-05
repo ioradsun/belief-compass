@@ -82,14 +82,27 @@ const numOrNull = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+/** What the viewer's follows are doing here. Empty for an anonymous feed. */
+interface FollowedPresence {
+  here: number;
+  yes: number;
+  no: number;
+  names: string[];
+}
+const NO_FOLLOWS: FollowedPresence = { here: 0, yes: 0, no: 0, names: [] };
+
 /**
  * Read-model row → the bounded live signals the ranker is allowed to see.
  *
- * `followedHere` cannot come from the row — it is a fact about the VIEWER, not
- * the market — so it is passed in and defaults to zero. An anonymous feed then
+ * The follow facts cannot come from the row — they are about the VIEWER, not the
+ * market — so they are passed in and default to empty. An anonymous feed then
  * scores exactly as it always did.
  */
-function signalsOf(r: Row, followedHere = 0, connectedToOrigin = 0): FeedMarketSignals {
+function signalsOf(
+  r: Row,
+  followed: FollowedPresence = NO_FOLLOWS,
+  connectedToOrigin = 0,
+): FeedMarketSignals {
   const meta = (r["markets"] ?? null) as {
     category?: string | null;
     author_wallet?: string | null;
@@ -118,7 +131,10 @@ function signalsOf(r: Row, followedHere = 0, connectedToOrigin = 0): FeedMarketS
     oppSide: (r["opp_side"] as "YES" | "NO" | null) ?? null,
     tribeCount: num(r["tribe_count"]),
     oppCount: num(r["opp_count"]),
-    followedHere,
+    followedHere: followed.here,
+    followedYes: followed.yes,
+    followedNo: followed.no,
+    followedNames: followed.names,
     connectedToOrigin,
     hasMedia: Boolean(r["has_media"]),
   };
@@ -253,10 +269,28 @@ export async function buildOpportunityFeed(
     // is the one person they are.
     const creator = ((r["markets"] ?? null) as { author_wallet?: string | null } | null)
       ?.author_wallet;
-    const here = new Set(signals.followedInMarket.get(Number(r.onchain_id)) ?? []);
-    if (creator && signals.following.has(String(creator).toLowerCase()))
-      here.add(String(creator).toLowerCase());
-    const s = signalsOf(r, here.size, originOverlap.get(Number(r.onchain_id)) ?? 0);
+    const here = new Map(signals.followedInMarket.get(Number(r.onchain_id)) ?? []);
+    // A followed creator who never backed their own market is connected without
+    // a side — `set` only when absent, so authorship never overwrites a real one.
+    const cw = creator ? String(creator).toLowerCase() : null;
+    if (cw && signals.following.has(cw) && !here.has(cw)) here.set(cw, null);
+    // Names for the sides only. Naming someone whose sole connection is having
+    // written the question would put them in a sentence about backing.
+    const names: string[] = [];
+    let yes = 0;
+    let no = 0;
+    for (const [w, side] of here) {
+      if (side === "YES") yes += 1;
+      else if (side === "NO") no += 1;
+      else continue;
+      const n = signals.followedNames.get(w);
+      if (n) names.push(n);
+    }
+    const s = signalsOf(
+      r,
+      { here: here.size, yes, no, names },
+      originOverlap.get(Number(r.onchain_id)) ?? 0,
+    );
     const ai = aiOf(analyses.get(s.onchainId));
     const state: ViewerMarketState | undefined = signals.states.get(s.onchainId);
     const scored = scoreMarket({ signals: s, ai, viewer: signals.profile, now, epoch });

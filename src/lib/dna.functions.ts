@@ -533,8 +533,15 @@ async function loadConvictionEvidence(
   personMedianDays: number | null;
   viewerMedianDays: number | null;
   marketsParticipated: number;
+  /**
+   * How many directional positions they hold in total. Counted rather than
+   * derived from `positions.length`, which stops at POSITION_CAP — a page that
+   * says "All convictions · 200" about someone holding 260 is lying in the one
+   * place that exists to be trusted.
+   */
+  positionsTotal: number;
 }> {
-  const [mine, theirs, flips] = await Promise.all([
+  const [mine, theirs, flips, totalRes] = await Promise.all([
     sb
       .from("wallet_beliefs")
       .select(
@@ -563,6 +570,11 @@ async function loadConvictionEvidence(
       .eq("is_canonical", true)
       .order("occurred_at", { ascending: false })
       .limit(5),
+    sb
+      .from("wallet_beliefs")
+      .select("onchain_id", { count: "exact", head: true })
+      .eq("wallet", target)
+      .in("stance_side", ["YES", "NO"]),
   ]);
 
   type BeliefRow = {
@@ -587,8 +599,14 @@ async function loadConvictionEvidence(
   const [titles, meta, state] = await Promise.all([
     marketTitles(sb, allIds),
     allIds.length
-      ? sb.from("markets").select("onchain_id, category").in("onchain_id", allIds)
-      : Promise.resolve({ data: [] as { onchain_id: number; category: string | null }[] }),
+      ? sb.from("markets").select("onchain_id, category, created_at").in("onchain_id", allIds)
+      : Promise.resolve({
+          data: [] as {
+            onchain_id: number;
+            category: string | null;
+            created_at: string | null;
+          }[],
+        }),
     ids.length
       ? sb
           .from("market_state")
@@ -604,8 +622,16 @@ async function loadConvictionEvidence(
         }),
   ]);
   const categoryOf = new Map<number, string | null>();
-  for (const m of (meta.data ?? []) as { onchain_id: number; category: string | null }[])
+  const openedAt = new Map<number, number>();
+  for (const m of (meta.data ?? []) as {
+    onchain_id: number;
+    category: string | null;
+    created_at: string | null;
+  }[]) {
     categoryOf.set(Number(m.onchain_id), m.category);
+    const t = m.created_at ? Date.parse(m.created_at) : NaN;
+    if (Number.isFinite(t)) openedAt.set(Number(m.onchain_id), t);
+  }
   const crowdOf = new Map<number, { yesPct: number | null; participants: number }>();
   for (const m of (state.data ?? []) as {
     onchain_id: number;
@@ -627,16 +653,28 @@ async function loadConvictionEvidence(
     // The marked value of the side they actually hold; cost is not a fallback
     // here, because "committed" in the copy means what it is worth now.
     const valueUsd = r.stance_side === "YES" ? r.yes_value_usd : r.no_value_usd;
+    const backedMs = r.first_backed_at ? Date.parse(r.first_backed_at) : NaN;
+    const isFloor = Number.isFinite(backedMs) ? firstBackedIsFloor(backedMs) : false;
+    const opened = openedAt.get(id);
+    // HOW LONG AFTER THE MARKET OPENED they arrived — null whenever that cannot
+    // be known, which includes every belief that predates the index. A floored
+    // start would compute a confident number out of a guess, and "we cannot
+    // tell" must never render as evidence of arriving early.
+    const daysAfterOpen =
+      !isFloor && Number.isFinite(backedMs) && opened != null
+        ? Math.max(0, (backedMs - opened) / 86_400_000)
+        : null;
     return {
       marketId: id,
       title: titles.get(id) ?? `Market #${id}`,
       side: r.stance_side,
       valueUsd: valueUsd == null ? null : Number(valueUsd),
       daysHeld: days,
-      tenureIsFloor: r.first_backed_at ? firstBackedIsFloor(Date.parse(r.first_backed_at)) : false,
+      tenureIsFloor: isFloor,
       crowdYesPct: crowd?.yesPct ?? null,
       participants: crowd?.participants ?? 0,
       category: categoryOf.get(id) ?? null,
+      daysAfterOpen,
     };
   });
 
@@ -669,6 +707,7 @@ async function loadConvictionEvidence(
       ((theirs.data ?? []) as { days_held: number }[]).map((r) => num(r.days_held)),
     ),
     marketsParticipated: positions.length,
+    positionsTotal: Math.max(positions.length, Number(totalRes.count ?? 0)),
   };
 }
 
@@ -690,6 +729,16 @@ async function loadConvictionEvidence(
  * The JUDGEMENT — which of these connections is worth showing and how to say
  * it — lives in @/domain/person-network. This only counts.
  */
+/**
+ * Shared markets carried to the page, per direction.
+ *
+ * Generous on purpose: the profile now offers "all N shared markets", and a
+ * control that expands to a truncated list is worse than no control. Two
+ * hundred a side covers every real relationship in production while still
+ * bounding the payload.
+ */
+const SHARED_CAP = 200;
+
 const NETWORK_SCAN = {
   /** Owner markets examined. Their most recent convictions carry the signal. */
   maxMarkets: 60,
@@ -843,6 +892,20 @@ export type PersonProfile = {
   viewerMedianDays: number | null;
   /** People structurally connected to THIS person — never the viewer's network. */
   around: Overlap[];
+  /** Questions they wrote. Authorship is participation, never a separate role. */
+  marketsCreated: number;
+  /**
+   * Directional positions they hold IN TOTAL — which can exceed
+   * `positions.length` when a very active wallet hits the read cap. The "All
+   * convictions" heading counts this, never the array it renders.
+   */
+  positionsTotal: number;
+  /**
+   * Market ids the VIEWER has taken a side in. Lets the page tell "you have not
+   * explored this" from "you two disagree here" — the difference between the
+   * two best Start Here reasons. Empty for a signed-out visitor.
+   */
+  viewerMarketIds: number[];
 };
 
 function personSummary(aligned: { domain: string }[], opposed: { domain: string }[]): string {
@@ -882,10 +945,17 @@ export const getPersonProfile = createServerFn({ method: "GET" })
     // Both are about the PROFILE OWNER, so both run whether or not a viewer is
     // present — "who is this person and who is around them" is answerable
     // without knowing who is asking.
-    const [evidence, around] = await Promise.all([
+    const [evidence, around, authored] = await Promise.all([
       loadConvictionEvidence(sb, target, viewer),
       loadPeopleAround(sb, target),
+      // Authorship is participation, not a role — the count supports the "why
+      // follow" line and the metrics footer, and is never shown as a badge.
+      sb
+        .from("markets")
+        .select("onchain_id", { count: "exact", head: true })
+        .eq("author_wallet", target),
     ]);
+    const marketsCreated = Math.max(0, Number(authored.count ?? 0));
 
     const base: PersonProfile = {
       wallet: target,
@@ -910,6 +980,9 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       personMedianDays: evidence.personMedianDays,
       viewerMedianDays: null,
       around,
+      marketsCreated,
+      positionsTotal: evidence.positionsTotal,
+      viewerMarketIds: [],
     };
     if (!viewer || viewerFactors.length === 0) return base;
 
@@ -975,13 +1048,13 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       summary: personSummary(aligned, opposed),
       alignedDomains: aligned.map((d) => ({ domain: d.domain, agreement: d.agreement })),
       opposedDomains: opposed.map((d) => ({ domain: d.domain, agreement: d.agreement })),
-      sharedBoth: both.slice(0, 40).map((b) => ({
+      sharedBoth: both.slice(0, SHARED_CAP).map((b) => ({
         marketId: String(b.id),
         title: titles.get(b.id) ?? `Market #${b.id}`,
         viewerSide: b.side,
         personSide: b.side,
       })),
-      opposing: opp.slice(0, 40).map((o) => ({
+      opposing: opp.slice(0, SHARED_CAP).map((o) => ({
         marketId: String(o.id),
         title: titles.get(o.id) ?? `Market #${o.id}`,
         viewerSide: o.vSide,
@@ -993,6 +1066,9 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       personMedianDays: evidence.personMedianDays,
       viewerMedianDays: evidence.viewerMedianDays,
       around,
+      marketsCreated,
+      positionsTotal: evidence.positionsTotal,
+      viewerMarketIds: viewerMarkets,
     };
   });
 
@@ -1008,3 +1084,94 @@ async function priorRelationship(
     for (const r of group) if (r.wallet === target) return r.relationship;
   return undefined;
 }
+
+/**
+ * ONE PAGE of a person's convictions — what makes "All convictions" a complete
+ * browsing surface rather than a claim.
+ *
+ * `getPersonProfile` reads a capped slice because everything it composes from
+ * (the introduction, the defining cards, the map) is a JUDGEMENT over a sample,
+ * and sampling is fine there. The unabridged list is the one place sampling is
+ * not fine: a section headed "All convictions · 260" that stops at 200 is
+ * telling the visitor something untrue in the exact place the page exists to be
+ * checkable.
+ *
+ * Its own function rather than a bigger cap on the profile, because the profile
+ * payload is fetched on every person you look at and this is fetched only when
+ * somebody asks for the rest.
+ */
+export const listPersonConvictions = createServerFn({ method: "GET" })
+  .inputValidator((d: { wallet: string; offset?: number; limit?: number }) =>
+    z
+      .object({
+        wallet: z.string().min(3),
+        offset: z.number().int().min(0).max(10_000).optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }): Promise<{ positions: PersonPosition[]; total: number }> => {
+    const sb = serviceClient();
+    const target = data.wallet.toLowerCase();
+    const offset = data.offset ?? 0;
+    const limit = data.limit ?? 100;
+
+    const [page, totalRes] = await Promise.all([
+      sb
+        .from("wallet_beliefs")
+        .select("onchain_id, stance_side, yes_value_usd, no_value_usd, days_held, first_backed_at")
+        .eq("wallet", target)
+        .in("stance_side", ["YES", "NO"])
+        // Same order as the profile read, so paging continues the list a reader
+        // is already looking at instead of reshuffling it under them.
+        .order("days_held", { ascending: false })
+        .range(offset, offset + limit - 1),
+      sb
+        .from("wallet_beliefs")
+        .select("onchain_id", { count: "exact", head: true })
+        .eq("wallet", target)
+        .in("stance_side", ["YES", "NO"]),
+    ]);
+
+    type Row = {
+      onchain_id: number;
+      stance_side: "YES" | "NO";
+      yes_value_usd: number | null;
+      no_value_usd: number | null;
+      days_held: number | null;
+      first_backed_at: string | null;
+    };
+    const rows = (page.data ?? []) as unknown as Row[];
+    const ids = rows.map((r) => Number(r.onchain_id));
+    const [titles, meta] = await Promise.all([
+      marketTitles(sb, ids),
+      ids.length
+        ? sb.from("markets").select("onchain_id, category").in("onchain_id", ids)
+        : Promise.resolve({ data: [] as { onchain_id: number; category: string | null }[] }),
+    ]);
+    const categoryOf = new Map<number, string | null>();
+    for (const m of (meta.data ?? []) as { onchain_id: number; category: string | null }[])
+      categoryOf.set(Number(m.onchain_id), m.category);
+
+    // Crowd and entry timing are omitted on purpose: this list renders a side, a
+    // question and a duration, and loading two more tables to fill fields the
+    // row never shows would be work thrown away.
+    const positions: PersonPosition[] = rows.map((r) => {
+      const id = Number(r.onchain_id);
+      const backedMs = r.first_backed_at ? Date.parse(r.first_backed_at) : NaN;
+      const value = r.stance_side === "YES" ? r.yes_value_usd : r.no_value_usd;
+      return {
+        marketId: id,
+        title: titles.get(id) ?? `Market #${id}`,
+        side: r.stance_side,
+        valueUsd: value == null ? null : Number(value),
+        daysHeld: Number(r.days_held) || 0,
+        tenureIsFloor: Number.isFinite(backedMs) ? firstBackedIsFloor(backedMs) : false,
+        crowdYesPct: null,
+        participants: 0,
+        category: categoryOf.get(id) ?? null,
+        daysAfterOpen: null,
+      };
+    });
+    return { positions, total: Math.max(positions.length, Number(totalRes.count ?? 0)) };
+  });

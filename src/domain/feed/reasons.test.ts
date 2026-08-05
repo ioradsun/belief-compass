@@ -27,6 +27,9 @@ const signals = (o: Partial<FeedMarketSignals> = {}): FeedMarketSignals => ({
   tribeCount: 0,
   oppCount: 0,
   followedHere: 0,
+  followedYes: 0,
+  followedNo: 0,
+  followedNames: [],
   connectedToOrigin: 0,
   hasMedia: false,
   ...o,
@@ -51,14 +54,48 @@ const scored = (o: Partial<ScoredMarket> = {}): ScoredMarket => ({
 });
 
 describe("a follow is the reason the viewer can check", () => {
-  it("names the count without naming a side", () => {
-    const r = reasonFor(signals({ followedHere: 3 }), scored());
-    expect(r).toEqual({ code: "follows", text: "3 people you follow are active here" });
+  it("names the person and the side", () => {
+    const r = reasonFor(
+      signals({ followedHere: 1, followedYes: 1, followedNames: ["Reyhan"] }),
+      scored(),
+    );
+    expect(r).toEqual({ code: "follows", text: "Reyhan is backing YES" });
   });
 
-  it("says someone rather than 1 person", () => {
+  it("counts them when several went the same way", () => {
+    const r = reasonFor(signals({ followedHere: 3, followedNo: 3 }), scored());
+    expect(r).toEqual({ code: "follows", text: "3 people you follow are backing NO" });
+  });
+
+  it("says someone rather than 1 person, and rather than an address", () => {
+    expect(reasonFor(signals({ followedHere: 1, followedYes: 1 }), scored())?.text).toBe(
+      "Someone you follow is backing YES",
+    );
+  });
+
+  /**
+   * A split is the reason. Naming one of them would pick a winner out of a
+   * disagreement the reader is being shown precisely because it is unresolved.
+   */
+  it("reports a split rather than choosing a side of it", () => {
+    const r = reasonFor(
+      signals({ followedHere: 4, followedYes: 3, followedNo: 1, followedNames: ["Reyhan"] }),
+      scored(),
+    );
+    expect(r).toEqual({ code: "follows", text: "4 people you follow are split here" });
+  });
+
+  /**
+   * `followedHere` counts connections; `followedYes + followedNo` counts sides.
+   * A followed creator who never backed their own market is the gap between
+   * them, and has no side to report.
+   */
+  it("falls back to presence when the only connection is authorship", () => {
     expect(reasonFor(signals({ followedHere: 1 }), scored())?.text).toBe(
       "Someone you follow is active here",
+    );
+    expect(reasonFor(signals({ followedHere: 2 }), scored())?.text).toBe(
+      "2 people you follow are active here",
     );
   });
 
@@ -83,9 +120,15 @@ describe("a follow is the reason the viewer can check", () => {
     expect(reasonFor(signals({ tribeSide: "YES" }), scored())?.code).toBe("tribe");
   });
 
-  it("never leaks a side — a follow is not a readout of their positions", () => {
-    const r = reasonFor(signals({ followedHere: 2, tribeSide: "YES" }), scored());
-    expect(r?.text).not.toMatch(/\bYES\b|\bNO\b/);
+  /**
+   * The side used to be withheld here on privacy grounds, over positions that
+   * are public on-chain and held by people this viewer chose to follow. The
+   * effect was that the one reason a reader could verify was also the vaguest
+   * on the card.
+   */
+  it("reports the follows' own side, not the inferred Tribe's", () => {
+    const r = reasonFor(signals({ followedHere: 2, followedNo: 2, tribeSide: "YES" }), scored());
+    expect(r?.text).toBe("2 people you follow are backing NO");
   });
 });
 

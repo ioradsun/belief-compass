@@ -76,7 +76,7 @@ export type StandingFactKind =
   | "still_holding"
   /** They have been here since the market opened. */
   | "founding"
-  /** People from the reader's network hold a position here. Side-blind. */
+  /** People from the reader's network hold a position here. */
   | "tribe_present"
   /** The reader keeps encountering this person across markets. */
   | "crossed_paths";
@@ -107,10 +107,11 @@ export interface StandingFact {
   marketId: number;
   marketTitle: string;
   /**
-   * Null when the fact is about people in the reader's network — their side is
-   * never disclosed, so the fact cannot carry one either.
+   * The side these people hold. Every fact is scoped to one market AND side, so
+   * this is always known — it was once documented as nullable for network facts,
+   * back when their side was withheld, and the field was set anyway.
    */
-  side: Side | null;
+  side: Side;
   people: StandingHolder[];
   /**
    * Stable identity for the reader's cooldown. Includes the group size, so a
@@ -320,9 +321,14 @@ export function nameThem(people: StandingHolder[], total = people.length): strin
 }
 
 /**
- * Say it. Note what each sentence does NOT contain: a network fact never names
- * a side, and no sentence claims a quality ("loyal", "diamond hands") the data
- * cannot evidence. Duration is a fact; character is not.
+ * Say it. Note what a sentence still does NOT contain: no claim of a quality
+ * ("loyal", "diamond hands") the data cannot evidence. Duration is a fact;
+ * character is not.
+ *
+ * The one thing that used to be missing is now here — a network fact names its
+ * side. `tribe_present` said "Kate and Maya are here from your network" while
+ * holding a `side` field it refused to read, which made the reader's OWN people
+ * the only ones in the tape whose beliefs were unreadable.
  */
 export function tellStandingFact(fact: StandingFact): StandingStory {
   const who = nameThem(fact.people);
@@ -335,11 +341,10 @@ export function tellStandingFact(fact: StandingFact): StandingStory {
       body = `You and ${who} have backed the same ${lead?.crossings} markets.`;
       break;
     case "tribe_present":
-      // Side-blind on purpose: they are in this market, and that is all.
       body =
         fact.people.length === 1
-          ? `${who} is here, ${dur} in.`
-          : `${who} are here from your network.`;
+          ? `${who} is on ${fact.side} here, ${dur} in.`
+          : `${who} are on ${fact.side} here, from your network.`;
       break;
     case "founding":
       body = `${who} ${fact.people.length === 1 ? "has" : "have"} backed ${fact.side} since the market opened.`;
