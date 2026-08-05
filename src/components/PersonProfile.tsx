@@ -51,8 +51,8 @@
  * those modules allow.
  */
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { getPersonProfile } from "@/lib/dna.functions";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { getPersonProfile, listPersonConvictions } from "@/lib/dna.functions";
 import { ago } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { FollowButton } from "@/components/FollowButton";
@@ -64,11 +64,13 @@ import {
   convictionMap,
   sharedCuriosity,
   allConvictions,
+  limitRepeats,
   type DefiningConviction,
   type PersonPosition,
   type SharedRow,
   tenureText,
   type ConvictionTheme,
+  type ProfileSlot,
 } from "@/domain/person-profile";
 import {
   rankStartCandidates,
@@ -98,6 +100,24 @@ export function PersonProfile({
     queryKey: ["person", wallet.toLowerCase(), viewer ?? null],
     queryFn: () => getPersonProfile({ data: { wallet, viewer } }),
     refetchInterval: 60_000,
+  });
+
+  /**
+   * The unabridged list, paged, and fetched ONLY once somebody opens it — the
+   * profile payload is loaded for every person you look at, and most visitors
+   * never ask for all 260 rows. `getNextPageParam` returning undefined at the
+   * end is what makes the section genuinely complete rather than capped.
+   */
+  const all = useInfiniteQuery({
+    queryKey: ["person-convictions", wallet.toLowerCase()],
+    enabled: allOpen,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      listPersonConvictions({ data: { wallet, offset: pageParam as number, limit: ALL_PAGE } }),
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((n, p) => n + p.positions.length, 0);
+      return loaded < last.total ? loaded : undefined;
+    },
   });
 
   if (isLoading || !data) {
@@ -133,7 +153,12 @@ export function PersonProfile({
   }));
   const sharedTotal = agreed.length + opposed.length;
   const shared = sharedCuriosity(agreed, opposed, allShared ? sharedTotal : SHARED_PREVIEW);
+  // Before the section is opened the profile's own (capped) slice stands in, so
+  // the heading and the empty check work without a second request.
   const every = allConvictions(data.positions);
+  const everyLoaded = allConvictions(
+    all.data ? all.data.pages.flatMap((p) => p.positions) : data.positions,
+  );
 
   // ONE ranking drives both the front door and the further reading, so the page
   // can never recommend a market for one reason at the top and a different
@@ -143,15 +168,34 @@ export function PersonProfile({
     hasViewer: data.hasViewer,
   });
   const lead = ranked[0] ?? null;
-  // Nothing is offered twice. Everything above has already claimed its markets,
-  // so "explore" genuinely means somewhere else to go — and when that leaves
-  // nothing, the section is absent rather than padded.
-  const claimed = new Set<number>([
-    ...(lead ? [lead.marketId] : []),
-    ...defining.map((d) => d.marketId),
-    ...shared.map((s) => s.marketId),
+
+  /**
+   * REPETITION BUDGET across the interpreting sections.
+   *
+   * "Explore" already refuses anything offered above it. The remaining failure
+   * is a SPARSE profile, where three positions fill five sections and a visitor
+   * scrolls past the same question over and over. Some repetition is correct —
+   * Start Here and "Largest conviction" answer different questions — so this
+   * allows a market to appear twice and drops the weakest claim after that.
+   *
+   * The conviction map and All Convictions are deliberately outside the budget:
+   * they are inventories, and an inventory with holes is broken, not tidy.
+   */
+  const exploreRaw = ranked
+    .filter((r) => r.marketId !== lead?.marketId)
+    .filter((r) => !shared.some((s) => s.marketId === r.marketId))
+    .slice(0, 4);
+  const keep = limitRepeats([
+    ...(lead ? [{ slot: "start_here" as const, marketId: lead.marketId }] : []),
+    ...defining.map((d) => ({ slot: "defining" as const, marketId: d.marketId })),
+    ...shared.map((s) => ({ slot: "shared" as const, marketId: s.marketId })),
+    ...exploreRaw.map((r) => ({ slot: "explore" as const, marketId: r.marketId })),
   ]);
-  const explore = ranked.filter((r) => !claimed.has(r.marketId)).slice(0, 4);
+  const kept = (slot: ProfileSlot, id: number) => keep.has(`${slot}:${id}`);
+
+  const definingShown = defining.filter((d) => kept("defining", d.marketId));
+  const sharedShown = shared.filter((s) => kept("shared", s.marketId));
+  const explore = exploreRaw.filter((r) => kept("explore", r.marketId));
 
   return (
     <div className="space-y-7">
@@ -216,11 +260,11 @@ export function PersonProfile({
       {lead && <StartHereCard lead={lead} onSelect={onSelectMarket} />}
 
       {/* ── 4 · CONVICTIONS THAT DEFINE THEM ─────────────────────────────── */}
-      {defining.length > 0 && (
+      {definingShown.length > 0 && (
         <section>
           <SectionTitle>Convictions that define them</SectionTitle>
           <ul className="space-y-2">
-            {defining.map((d) => (
+            {definingShown.map((d) => (
               <li key={`${d.kind}:${d.marketId}`}>
                 <DefiningRow c={d} onSelect={onSelectMarket} />
               </li>
@@ -248,16 +292,16 @@ export function PersonProfile({
           <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
             {link.lines.join(" ")}
           </p>
-          {shared.length > 0 && (
+          {sharedShown.length > 0 && (
             <>
               <ul className="mt-2.5 space-y-0.5">
-                {shared.map((s) => (
+                {sharedShown.map((s) => (
                   <li key={s.marketId}>
                     <SharedMarketRow s={s} onSelect={onSelectMarket} />
                   </li>
                 ))}
               </ul>
-              {sharedTotal > shared.length && (
+              {sharedTotal > sharedShown.length && (
                 <MoreButton onClick={() => setAllShared(true)}>
                   Show all {sharedTotal} shared markets
                 </MoreButton>
@@ -355,16 +399,22 @@ export function PersonProfile({
           {allOpen && (
             <>
               <ul className="mt-2 space-y-0.5">
-                {every.map((p) => (
+                {everyLoaded.map((p) => (
                   <li key={p.marketId}>
                     <ConvictionRow p={p} onSelect={onSelectMarket} />
                   </li>
                 ))}
               </ul>
-              {data.positionsTotal > every.length && (
-                <p className="mt-1.5 px-2 text-[11px] text-[var(--text-muted)]">
-                  Showing their {every.length} most recent — {data.positionsTotal} in total.
-                </p>
+              {/* Reaches the end. The count says what is on screen against the
+                  true total, and the control keeps going until there is nothing
+                  left — a browsing surface that stops at a cap while calling
+                  itself complete is the one lie this section cannot afford. */}
+              {all.hasNextPage && (
+                <MoreButton onClick={() => void all.fetchNextPage()}>
+                  {all.isFetchingNextPage
+                    ? "Loading…"
+                    : `Show more — ${everyLoaded.length} of ${data.positionsTotal}`}
+                </MoreButton>
               )}
             </>
           )}
@@ -463,6 +513,8 @@ function candidatesFrom(
 
 /** Shared markets shown before the reader asks for the rest. */
 const SHARED_PREVIEW = 6;
+/** Convictions per page of the unabridged list. */
+const ALL_PAGE = 100;
 
 /** The expansion affordance. Quiet, but a real control rather than a caption. */
 function MoreButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {

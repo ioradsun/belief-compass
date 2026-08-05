@@ -1084,3 +1084,94 @@ async function priorRelationship(
     for (const r of group) if (r.wallet === target) return r.relationship;
   return undefined;
 }
+
+/**
+ * ONE PAGE of a person's convictions — what makes "All convictions" a complete
+ * browsing surface rather than a claim.
+ *
+ * `getPersonProfile` reads a capped slice because everything it composes from
+ * (the introduction, the defining cards, the map) is a JUDGEMENT over a sample,
+ * and sampling is fine there. The unabridged list is the one place sampling is
+ * not fine: a section headed "All convictions · 260" that stops at 200 is
+ * telling the visitor something untrue in the exact place the page exists to be
+ * checkable.
+ *
+ * Its own function rather than a bigger cap on the profile, because the profile
+ * payload is fetched on every person you look at and this is fetched only when
+ * somebody asks for the rest.
+ */
+export const listPersonConvictions = createServerFn({ method: "GET" })
+  .inputValidator((d: { wallet: string; offset?: number; limit?: number }) =>
+    z
+      .object({
+        wallet: z.string().min(3),
+        offset: z.number().int().min(0).max(10_000).optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }): Promise<{ positions: PersonPosition[]; total: number }> => {
+    const sb = serviceClient();
+    const target = data.wallet.toLowerCase();
+    const offset = data.offset ?? 0;
+    const limit = data.limit ?? 100;
+
+    const [page, totalRes] = await Promise.all([
+      sb
+        .from("wallet_beliefs")
+        .select("onchain_id, stance_side, yes_value_usd, no_value_usd, days_held, first_backed_at")
+        .eq("wallet", target)
+        .in("stance_side", ["YES", "NO"])
+        // Same order as the profile read, so paging continues the list a reader
+        // is already looking at instead of reshuffling it under them.
+        .order("days_held", { ascending: false })
+        .range(offset, offset + limit - 1),
+      sb
+        .from("wallet_beliefs")
+        .select("onchain_id", { count: "exact", head: true })
+        .eq("wallet", target)
+        .in("stance_side", ["YES", "NO"]),
+    ]);
+
+    type Row = {
+      onchain_id: number;
+      stance_side: "YES" | "NO";
+      yes_value_usd: number | null;
+      no_value_usd: number | null;
+      days_held: number | null;
+      first_backed_at: string | null;
+    };
+    const rows = (page.data ?? []) as unknown as Row[];
+    const ids = rows.map((r) => Number(r.onchain_id));
+    const [titles, meta] = await Promise.all([
+      marketTitles(sb, ids),
+      ids.length
+        ? sb.from("markets").select("onchain_id, category").in("onchain_id", ids)
+        : Promise.resolve({ data: [] as { onchain_id: number; category: string | null }[] }),
+    ]);
+    const categoryOf = new Map<number, string | null>();
+    for (const m of (meta.data ?? []) as { onchain_id: number; category: string | null }[])
+      categoryOf.set(Number(m.onchain_id), m.category);
+
+    // Crowd and entry timing are omitted on purpose: this list renders a side, a
+    // question and a duration, and loading two more tables to fill fields the
+    // row never shows would be work thrown away.
+    const positions: PersonPosition[] = rows.map((r) => {
+      const id = Number(r.onchain_id);
+      const backedMs = r.first_backed_at ? Date.parse(r.first_backed_at) : NaN;
+      const value = r.stance_side === "YES" ? r.yes_value_usd : r.no_value_usd;
+      return {
+        marketId: id,
+        title: titles.get(id) ?? `Market #${id}`,
+        side: r.stance_side,
+        valueUsd: value == null ? null : Number(value),
+        daysHeld: Number(r.days_held) || 0,
+        tenureIsFloor: Number.isFinite(backedMs) ? firstBackedIsFloor(backedMs) : false,
+        crowdYesPct: null,
+        participants: 0,
+        category: categoryOf.get(id) ?? null,
+        daysAfterOpen: null,
+      };
+    });
+    return { positions, total: Math.max(positions.length, Number(totalRes.count ?? 0)) };
+  });

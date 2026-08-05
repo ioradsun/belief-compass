@@ -55,31 +55,59 @@ export interface StartCandidate {
   isLongest: boolean;
 }
 
+/**
+ * CALIBRATED AGAINST PRODUCTION, not against an imagined platform.
+ *
+ * Measured over all 2,770 markets: 789 have any participant at all (28.5%), and
+ * among those the room sizes are p50 1 · p75 2 · p90 4 · p95 5 · MAX 37. Total
+ * capital per market is p50 $0.93 · p90 $7.68 · p95 $22.90 · max $503. Only 204
+ * markets have both sides held, which is the entire population in which a
+ * disagreement is even possible.
+ *
+ * The first draft of these numbers assumed a much bigger platform — a 12-person
+ * floor for a "real room", saturation at 40 participants and $500 — and against
+ * the real distribution that did not merely over-correct, it NULLIFIED what it
+ * was tuning. A 12-participant floor reaches 0.2% of markets, so the surprising
+ * disagreement weight was unreachable; saturation at 40 sat above the observed
+ * maximum, so the significance term was flat near zero for everything. The
+ * safeguard would have quietly switched the relationship signal off, which is
+ * the same failure as a lens that never matches anything.
+ *
+ * Every threshold below is now a percentile of markets that have participants.
+ * THEY MUST BE REVISITED as the platform grows — a fixed number tuned to a
+ * young market becomes wrong in the other direction later.
+ */
 export const START = {
   /**
-   * A market needs a real room before "you two disagree" is interesting rather
-   * than arithmetic. Two people holding opposite sides of an empty market is a
-   * coincidence, not a debate worth opening.
+   * A market needs a room before "you two disagree" is interesting rather than
+   * arithmetic. A shared market already contains both of them, so this really
+   * says: at least one other person is here too. ≈p85 of live markets.
    */
-  minParticipants: 4,
+  minParticipants: 3,
   /**
-   * And a much bigger room before a disagreement gets the TOP weight.
+   * And one of the busier rooms on the platform before a disagreement gets the
+   * TOP weight. ≈p95 of live markets — genuinely rare, still reachable.
    *
-   * Without this the arithmetic went wrong in a specific, checkable way: a
-   * surprising clash in a four-person market scored 1.22 while their $50,000
-   * unexplored largest conviction with four hundred participants scored 0.97.
-   * The front door became "where do we disagree most" rather than "what best
-   * explains this person", which is a different and worse question.
+   * The failure this prevents was checkable arithmetic: a surprising clash in a
+   * tiny market outscored a large, long-held, unexplored conviction, so the
+   * front door became "where do we disagree most" rather than "what best
+   * explains this person".
    */
-  minParticipantsForSurprise: 12,
+  minParticipantsForSurprise: 5,
   /** Below this the crowd cannot make anyone contrarian. */
   contrarianPct: 70,
   /** A hold shorter than this is not yet an endurance story. */
   minDaysForLongest: 14,
-  /** Room size at which the significance term is effectively saturated. */
-  roomSaturatesAt: 40,
-  /** Committed USD at which the significance term is effectively saturated. */
-  stakeSaturatesAt: 500,
+  /**
+   * Where the significance term saturates. Set inside the OBSERVED range, not
+   * above it — saturating at 40 when the busiest market has 37 people made the
+   * term flat near zero and therefore decorative.
+   */
+  roomSaturatesAt: 8,
+  /** Committed USD at saturation. ≈p95 of total market capital. */
+  stakeSaturatesAt: 20,
+  /** Days at which the tenure bonus saturates. A year is a long conviction. */
+  tenureSaturatesAt: 365,
   /**
    * Disagreements allowed in the whole ranked list.
    *
@@ -121,6 +149,15 @@ const WEIGHT = {
   /** It is the person's defining position by size or by tenure. */
   largest: 0.42,
   longest: 0.38,
+  /**
+   * How much LONGER-THAN-USUAL a hold adds on top, saturating around a year.
+   *
+   * Without it `largest` and `longest` sat close enough that capital decided
+   * between them, and a long-tenured account opened on an $8 position instead
+   * of a 512-day conviction — on a platform whose 95th-percentile market holds
+   * $23 in total. Duration is the scarcer signal here, so it scales.
+   */
+  tenureDepth: 0.3,
   /** They stood against a lopsided room. */
   contrarian: 0.34,
   /** The topic is one these two keep meeting on. */
@@ -151,8 +188,16 @@ const isContrarian = (c: StartCandidate): boolean =>
 const disagrees = (c: StartCandidate): boolean =>
   c.viewerSide != null && c.viewerSide !== c.personSide && c.participants >= START.minParticipants;
 
-/** Log-saturating 0..1: the first few of anything count for most of the weight. */
-const soft = (v: number, at: number): number => Math.log1p(Math.max(0, v)) / Math.log1p(at);
+/**
+ * Log-saturating, CLAMPED to 0..1: the first few of anything count for most of
+ * the weight, and nothing past saturation counts for more than saturation.
+ *
+ * The clamp is not cosmetic. Unclamped, `soft(37, 8)` returns 1.66, so a single
+ * busy market could contribute more than a full term was ever meant to be worth
+ * and quietly outrank things it should not.
+ */
+const soft = (v: number, at: number): number =>
+  Math.min(1, Math.log1p(Math.max(0, v)) / Math.log1p(at));
 
 /**
  * HOW MUCH THIS MARKET MATTERS, 0..1 — the room it drew and what they put into
@@ -183,7 +228,13 @@ function score(c: StartCandidate): number {
     s += WEIGHT.agreement;
   }
   if (c.isLargest) s += WEIGHT.largest;
-  if (c.isLongest && c.daysHeld >= START.minDaysForLongest) s += WEIGHT.longest;
+  if (c.isLongest && c.daysHeld >= START.minDaysForLongest) {
+    // Depth is measured BEYOND the floor, not from zero. A 20-day hold has only
+    // just qualified as "longest held"; counting all 20 days made it worth
+    // almost as much as a 500-day conviction.
+    const beyond = Math.max(0, c.daysHeld - START.minDaysForLongest);
+    s += WEIGHT.longest + WEIGHT.tenureDepth * soft(beyond, START.tenureSaturatesAt);
+  }
   if (isContrarian(c)) s += WEIGHT.contrarian;
   if (c.topicUsuallyAligned && c.category) s += WEIGHT.sharedTopic;
   return s;
@@ -222,16 +273,22 @@ function explain(c: StartCandidate, name: string, hasViewer: boolean): string | 
         ? `you two usually agree on ${c.category}, and here you do not — you back ${c.viewerSide}, they back ${c.personSide}`
         : `you back ${c.viewerSide} and they back ${c.personSide}`,
     );
-  } else if (c.viewerSide == null) {
+  } else if (c.viewerSide == null && c.topicUsuallyAligned && c.category) {
     between.push(
-      c.topicUsuallyAligned && c.category
-        ? `${c.category} is a topic you keep meeting on, and you have not taken a side here`
-        : "you have not taken a side here yet",
+      `${c.category} is a topic you keep meeting on, and you have not taken a side here`,
     );
+  } else if (c.viewerSide == null && them.length > 0) {
+    // ONLY as a second clause. "You have not taken a side here yet" describes
+    // the ABSENCE of a fact, and on its own it is true of almost every market a
+    // reader has never opened — printed alone it turned the explore list into
+    // the same sentence four times, which is "Recommended" wearing other words.
+    // It qualifies a real claim about them; it never stands in for one.
+    between.push("you have not taken a side here yet");
   }
 
   // Nothing true and specific to say — so this candidate does not get to be the
-  // recommendation, however well it scored.
+  // recommendation, however well it scored. This is the refusal that keeps the
+  // page from padding: a market with no claim of its own is simply not offered.
   if (them.length === 0 && between.length === 0) return null;
 
   const parts = [...them, ...between];

@@ -72,8 +72,15 @@ export interface SideChange {
 export const PROFILE = {
   /** Below this a "story" is a coincidence. Two markets is not a pattern. */
   minMarketsForPattern: 4,
-  /** A crowd smaller than this cannot make anyone contrarian. */
-  minParticipantsForCrowd: 8,
+  /**
+   * A crowd smaller than this cannot make anyone contrarian.
+   *
+   * Measured: of 789 markets with any participant, room sizes run p50 1 · p90 4
+   * · p95 5 · max 37. At 8 this reached 2.5% of live markets and "Against the
+   * crowd" was effectively dead copy. Four is p90 — rare enough to mean
+   * something, common enough to ever fire. Revisit as the platform grows.
+   */
+  minParticipantsForCrowd: 4,
   /** How lopsided the room must be before standing apart from it is notable. */
   contrarianMajorityPct: 70,
   /** A hold shorter than this is not yet an endurance story. */
@@ -443,6 +450,59 @@ export interface ConvictionTheme {
 }
 
 export const ELSEWHERE = "Elsewhere";
+
+/**
+ * REPETITION CONTROL — how many times one market may appear before the page
+ * starts feeling like it owns two markets and keeps showing them.
+ *
+ * Some repetition is correct: "Start Here" and "Largest conviction" and a
+ * shared-market row answer different questions about the same market, and
+ * suppressing all of it would leave a section wrong rather than tidy. The
+ * failure is a SPARSE profile, where three positions can fill five sections and
+ * the visitor sees the same question five times in one scroll.
+ *
+ * So the interpreting sections are ranked by how much each one adds when a
+ * market has already appeared, and past the budget the weakest one drops. The
+ * complete lists — the conviction map and All Convictions — are deliberately
+ * NOT in the budget: they are inventories, and an inventory with holes in it is
+ * a broken inventory, not a tidier page.
+ */
+export const REPEAT = {
+  /** Appearances allowed across the interpreting sections. */
+  maxAppearances: 2,
+} as const;
+
+/** The interpreting sections, strongest claim on a market first. */
+export type ProfileSlot = "start_here" | "defining" | "shared" | "explore";
+
+const SLOT_RANK: Record<ProfileSlot, number> = {
+  start_here: 0,
+  defining: 1,
+  shared: 2,
+  explore: 3,
+};
+
+/**
+ * Which (slot, market) pairs survive the repetition budget.
+ *
+ * Returns the set of slots each market keeps. The caller filters its sections
+ * against this rather than each section guessing about the others — the reason
+ * V1's duplication was invisible is that no single section could see the page.
+ */
+export function limitRepeats(
+  claims: readonly { slot: ProfileSlot; marketId: number }[],
+  max: number = REPEAT.maxAppearances,
+): Set<string> {
+  const seen = new Map<number, number>();
+  const keep = new Set<string>();
+  for (const c of [...claims].sort((a, b) => SLOT_RANK[a.slot] - SLOT_RANK[b.slot])) {
+    const n = seen.get(c.marketId) ?? 0;
+    if (n >= max) continue;
+    seen.set(c.marketId, n + 1);
+    keep.add(`${c.slot}:${c.marketId}`);
+  }
+  return keep;
+}
 
 /**
  * EVERY position they currently hold, biggest commitment first.

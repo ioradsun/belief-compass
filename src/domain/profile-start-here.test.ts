@@ -31,8 +31,11 @@ describe("it is not simply their biggest position", () => {
   });
 
   it("prefers a conviction you have not met over one you already share", () => {
+    // Both have a claim of their own; the only difference is whether the viewer
+    // has been there. A market with NO claim is not a candidate at all — see
+    // "an absence is not a reason" below.
     const shared = c({ marketId: 1, viewerSide: "YES", personSide: "YES", isLargest: true });
-    const fresh = c({ marketId: 2, viewerSide: null });
+    const fresh = c({ marketId: 2, viewerSide: null, isLongest: true, daysHeld: 120 });
     expect(startHere([shared, fresh])?.marketId).toBe(2);
   });
 
@@ -323,5 +326,70 @@ describe("disagreement does not take over the page", () => {
   it("does not cap anything when there is no viewer to disagree with", () => {
     const list = [1, 2, 3].map((id) => c({ marketId: id, againstPct: 90, participants: 40 }));
     expect(rankStartCandidates(list, { hasViewer: false })).toHaveLength(3);
+  });
+});
+
+/**
+ * Caught by running the archetype harness, not by a unit test — which is
+ * exactly why the harness exists.
+ *
+ * "You have not taken a side here yet" describes the ABSENCE of a fact, and it
+ * is true of almost every market a reader has never opened. Printed as a
+ * standalone reason it turned a forty-position profile into four identical
+ * rows: "Recommended" wearing other words.
+ */
+describe("an absence is not a reason", () => {
+  it("refuses a market whose only claim is that you have not been there", () => {
+    expect(startHere([c({ marketId: 1, viewerSide: null })])).toBeNull();
+  });
+
+  it("still uses it to QUALIFY a real claim about them", () => {
+    const r = startHere([c({ marketId: 1, viewerSide: null, isLargest: true, valueUsd: 40 })], {
+      personName: "Sarah",
+    });
+    expect(r?.why).toBe(
+      "Sarah — Their largest current position, and you have not taken a side here yet.",
+    );
+  });
+
+  it("keeps the topic version, which says something specific", () => {
+    const r = startHere([c({ marketId: 1, viewerSide: null, topicUsuallyAligned: true })], {
+      personName: "Sarah",
+    });
+    expect(r?.why).toBe(
+      "Sarah — Technology is a topic you keep meeting on, and you have not taken a side here.",
+    );
+  });
+
+  it("does not pad a long list of unremarkable markets", () => {
+    const many = Array.from({ length: 40 }, (_, i) => c({ marketId: i + 1, viewerSide: null }));
+    expect(rankStartCandidates(many)).toEqual([]);
+  });
+});
+
+/**
+ * On a platform whose 95th-percentile market holds $23 in total, duration is
+ * the scarcer signal. Without the tenure term a long-tenured account opened on
+ * an $8 position instead of a 512-day conviction.
+ */
+describe("a long conviction outweighs a small largest position", () => {
+  it("opens on the 512-day hold, not the $8 one", () => {
+    const long = c({
+      marketId: 1,
+      title: "Will remote work outlast the mandate?",
+      isLongest: true,
+      daysHeld: 512,
+      tenureIsFloor: true,
+      valueUsd: 1,
+      participants: 4,
+    });
+    const big = c({ marketId: 2, isLargest: true, valueUsd: 8, participants: 1 });
+    expect(startHere([long, big])?.marketId).toBe(1);
+  });
+
+  it("but a genuinely large position still wins against a short hold", () => {
+    const shortish = c({ marketId: 1, isLongest: true, daysHeld: 20, valueUsd: 1 });
+    const big = c({ marketId: 2, isLargest: true, valueUsd: 500, participants: 37 });
+    expect(startHere([shortish, big])?.marketId).toBe(2);
   });
 });
