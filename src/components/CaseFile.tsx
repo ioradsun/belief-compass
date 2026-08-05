@@ -83,8 +83,6 @@ export function CaseColumn({
   row,
   viewerWallet,
   ethUsd = 0,
-  onInvestigate,
-  investigating = false,
   compactRoster = false,
 }: {
   side: Side;
@@ -93,9 +91,6 @@ export function CaseColumn({
   viewerWallet?: string;
   /** Live ETH/USD, so money reads in dollars like the rest of the app. */
   ethUsd?: number;
-  /** Optional deep-dive into the center timeline (desktop). */
-  onInvestigate?: (s: Side) => void;
-  investigating?: boolean;
   /** Mobile: collapse the roster into an Instagram-style face pile. */
   compactRoster?: boolean;
 }) {
