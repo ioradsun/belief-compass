@@ -3,8 +3,11 @@ import {
   definingConvictions,
   introduction,
   connection,
-  exploreThrough,
   tenureText,
+  whyFollow,
+  convictionMap,
+  sharedCuriosity,
+  ELSEWHERE,
   PROFILE,
   type PersonPosition,
   type SideChange,
@@ -257,53 +260,6 @@ describe("what connects you is a pattern, not a percentage", () => {
   });
 });
 
-describe("every market offered explains itself", () => {
-  const defining = definingConvictions([
-    pos({ marketId: 1, valueUsd: 5000, title: "Biggest" }),
-    pos({ marketId: 2, valueUsd: 10, daysHeld: 400, title: "Oldest" }),
-  ]);
-
-  it("leads with disagreement — the most useful thing a person offers", () => {
-    const out = exploreThrough(defining, {
-      agreed: [{ marketId: 8, title: "Agreed" }],
-      opposed: [{ marketId: 9, title: "Split", personSide: "NO", viewerSide: "YES" }],
-    });
-    expect(out[0]).toMatchObject({
-      marketId: 9,
-      reason: "you_differ",
-      why: "You back YES here, they back NO.",
-    });
-  });
-
-  it("gives every row a reason in the person's terms", () => {
-    const out = exploreThrough(defining, { agreed: [], opposed: [] });
-    for (const s of out) expect(s.why.length).toBeGreaterThan(0);
-    expect(out.map((s) => s.why)).toContain("Their largest current position.");
-  });
-
-  it("never says 'recommended for you' or anything like it", () => {
-    const out = exploreThrough(defining, {
-      agreed: [{ marketId: 8, title: "Agreed" }],
-      opposed: [{ marketId: 9, title: "Split", personSide: "NO", viewerSide: "YES" }],
-    });
-    for (const s of out) {
-      expect(s.why).not.toMatch(/recommended|you may|similar market|trending for you/i);
-    }
-  });
-
-  it("shows one market once even when several reasons apply", () => {
-    const out = exploreThrough(defining, {
-      agreed: [{ marketId: 1, title: "Biggest" }],
-      opposed: [{ marketId: 1, title: "Biggest", personSide: "NO", viewerSide: "YES" }],
-    });
-    expect(out.filter((s) => s.marketId === 1)).toHaveLength(1);
-  });
-
-  it("returns fewer rows rather than padding with a vague one", () => {
-    expect(exploreThrough([], { agreed: [], opposed: [] })).toEqual([]);
-  });
-});
-
 describe("tenure never overclaims", () => {
   it("marks a floor", () => {
     expect(tenureText(512, true)).toBe("512+ days");
@@ -311,5 +267,164 @@ describe("tenure never overclaims", () => {
   });
   it("keeps the singular honest", () => {
     expect(tenureText(1, false)).toBe("1 day");
+  });
+});
+
+// ── V2 ───────────────────────────────────────────────────────────────────────
+
+/**
+ * The distinction the whole section rests on: a reason to follow describes what
+ * will arrive in your feed, never how well this person has done.
+ */
+describe("why follow them", () => {
+  it("says what following surfaces, from where their convictions sit", () => {
+    const r = whyFollow(enough({ category: "technology" }));
+    expect(r[0].text).toBe(
+      "Most of what they back is technology — following them surfaces those markets.",
+    );
+  });
+
+  it("describes breadth when nothing concentrates", () => {
+    const spread = [
+      pos({ marketId: 1, category: "crypto" }),
+      pos({ marketId: 2, category: "sports" }),
+      pos({ marketId: 3, category: "politics" }),
+      pos({ marketId: 4, category: "culture" }),
+    ];
+    expect(whyFollow(spread)[0].text).toMatch(/take sides across 4 different topics/);
+  });
+
+  it("never claims returns, rank, profit or followers", () => {
+    const rich = enough({ daysHeld: 200, crowdYesPct: 5, participants: 40, daysAfterOpen: 1 });
+    const all = whyFollow(rich, { marketsCreated: 3 })
+      .map((r) => r.text)
+      .join(" ");
+    // Word boundaries, or "following" trips a bare /win/ and the assertion
+    // starts failing on copy that is perfectly fine.
+    expect(all).not.toMatch(
+      /\b(returns?|profit|ranked?|top|best|wins?|winning|followers?|success(ful)?)\b/i,
+    );
+  });
+
+  it("carries the count behind every claim", () => {
+    const patient = enough({ daysHeld: 200 });
+    const line = whyFollow(patient).find((r) => r.kind === "patient");
+    expect(line?.text).toBe(
+      "4 of their positions have stood for more than three months — these are convictions, not trades.",
+    );
+  });
+
+  it("caps at three, so it reads as a person and not a pitch", () => {
+    const everything = enough({
+      daysHeld: 200,
+      crowdYesPct: 2,
+      participants: 40,
+      daysAfterOpen: 1,
+      category: "technology",
+    });
+    expect(whyFollow(everything, { marketsCreated: 9 })).toHaveLength(PROFILE.maxFollowReasons);
+  });
+
+  /**
+   * A belief that predates the index has no knowable start, so counting it as
+   * "arrived early" would turn "we cannot tell" into evidence.
+   */
+  it("only counts early entries where the timing is knowable", () => {
+    const unknowable = enough({ daysAfterOpen: null, tenureIsFloor: true });
+    expect(whyFollow(unknowable).some((r) => r.kind === "early")).toBe(false);
+
+    const known = enough({ daysAfterOpen: 2 });
+    expect(whyFollow(known).find((r) => r.kind === "early")?.text).toMatch(
+      /within a week of the market opening in 4 of 4/,
+    );
+  });
+
+  it("claims nothing at all from too few positions", () => {
+    expect(whyFollow([pos({ marketId: 1 }), pos({ marketId: 2 })])).toEqual([]);
+  });
+
+  it("but still credits an author with no positions to speak of", () => {
+    const r = whyFollow([pos({ marketId: 1 })], { marketsCreated: 4 });
+    expect(r).toEqual([{ kind: "author", text: "Wrote 4 of the questions on Conviction." }]);
+  });
+});
+
+describe("their conviction map", () => {
+  const map = (list: PersonPosition[]) => convictionMap(list).map((t) => t.theme);
+
+  it("groups by theme, biggest theme first", () => {
+    const list = [
+      pos({ marketId: 1, category: "culture" }),
+      pos({ marketId: 2, category: "culture" }),
+      pos({ marketId: 3, category: "culture" }),
+      pos({ marketId: 4, category: "crypto" }),
+      pos({ marketId: 5, category: "crypto" }),
+    ];
+    expect(map(list)).toEqual(["culture", "crypto"]);
+  });
+
+  /** Nine headings of one item is a list wearing a map's clothes. */
+  it("collects the long tail rather than making a heading per market", () => {
+    const list = [
+      pos({ marketId: 1, category: "crypto" }),
+      pos({ marketId: 2, category: "crypto" }),
+      pos({ marketId: 3, category: "sports" }),
+      pos({ marketId: 4, category: "politics" }),
+      pos({ marketId: 5, category: null }),
+    ];
+    const out = convictionMap(list);
+    expect(out.map((t) => t.theme)).toEqual(["crypto", ELSEWHERE]);
+    expect(out[1].total).toBe(3);
+  });
+
+  it("leads each theme with the biggest commitment", () => {
+    const list = [
+      pos({ marketId: 1, valueUsd: 10 }),
+      pos({ marketId: 2, valueUsd: 900 }),
+      pos({ marketId: 3, valueUsd: 50 }),
+    ];
+    expect(convictionMap(list)[0].positions.map((p) => p.marketId)).toEqual([2, 3, 1]);
+  });
+
+  it("keeps the true total when a theme is truncated", () => {
+    const many = Array.from({ length: 9 }, (_, i) => pos({ marketId: i + 1 }));
+    const [theme] = convictionMap(many);
+    expect(theme.positions).toHaveLength(PROFILE.maxPerTheme);
+    expect(theme.total).toBe(9);
+  });
+
+  it("says nothing about someone holding nothing", () => {
+    expect(convictionMap([])).toEqual([]);
+  });
+});
+
+describe("markets you both care about", () => {
+  const m = (id: number, v: "YES" | "NO", p: "YES" | "NO") => ({
+    marketId: id,
+    title: `Market ${id}`,
+    viewerSide: v,
+    personSide: p,
+  });
+
+  /** A page ordered by agreement teaches nobody anything they did not believe. */
+  it("leads with disagreement", () => {
+    const rows = sharedCuriosity([m(1, "YES", "YES")], [m(2, "YES", "NO")]);
+    expect(rows.map((r) => r.marketId)).toEqual([2, 1]);
+  });
+
+  it("carries both sides on every row, not a verdict", () => {
+    const [row] = sharedCuriosity([], [m(1, "NO", "YES")]);
+    expect(row).toEqual({
+      marketId: 1,
+      title: "Market 1",
+      viewerSide: "NO",
+      personSide: "YES",
+      agree: false,
+    });
+  });
+
+  it("caps the list rather than printing forty rows at equal weight", () => {
+    const agreed = Array.from({ length: 30 }, (_, i) => m(i + 1, "YES", "YES"));
+    expect(sharedCuriosity(agreed, [], 6)).toHaveLength(6);
   });
 });

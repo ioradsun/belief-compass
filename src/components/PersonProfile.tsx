@@ -1,33 +1,42 @@
 /**
- * PROFILE — a person, told through their convictions, and a way onward.
+ * PROFILE — a person told through their convictions, and a door out of every
+ * section.
  *
- * The page answers "why should this person matter to me", in the order a
- * curious visitor actually asks it:
+ * THE FAILURE V1 HAD. It answered "who is this person" well and then stopped
+ * being a page you could leave through. Four defining convictions, then four
+ * more markets to explore: eight doors of equal size, and a visitor given eight
+ * equal choices takes none of them. Worse, the one section about the
+ * RELATIONSHIP — "what connects you" — was prose with no markets under it, so
+ * the most personal thing on the page was the only thing you could not act on.
  *
- *   NOTICE    who they appear to be, from what they have actually backed
- *   EXPLORE   the convictions that most reveal them
- *   REFLECT   what connects the two of you, and where you differ
- *   DISCOVER  markets worth opening because of them, and people around them
+ * V2 keeps the order a curious visitor actually asks in, and gives every
+ * section somewhere to go:
  *
- * WHAT THIS REPLACED, and why none of it is missed:
+ *   1  WHO THEY ARE          observable patterns, never personality
+ *   2  WHY FOLLOW THEM       what arrives in your feed, not how well they did
+ *   3  START HERE            ONE market, with the reason. The front door.
+ *   4  CONVICTIONS           the positions that most reveal them
+ *   5  CONVICTION MAP        everything they back, by theme — browsable
+ *   6  BOTH CARE ABOUT       the relationship WITH its evidence under it
+ *   7  EXPLORE               more markets, each explaining itself
+ *   8  PEOPLE AROUND THEM    person → market → person
+ *   9  SUPPORTING            evidence, last and quiet
  *
- *   A relationship PERCENTAGE in the largest type on the page. It told a
- *   visitor they were 68% compatible with a stranger without telling them one
- *   thing they would disagree about.
+ * WHAT IS DELIBERATELY ABSENT. A relationship percentage (it told a visitor
+ * they were 68% compatible without naming one thing they would disagree about).
+ * A Together/Apart stat pair. A per-topic bar chart. Returns, rank, profit,
+ * follower counts — outcomes, and an outcome is not a reason to listen to
+ * someone.
  *
- *   A Together / Apart stat pair. Two numbers where one sentence — "you agree
- *   on technology and differ on economics" — carries more and reads faster.
+ * WHAT COULD NOT BE BUILT HONESTLY. "Recently increased" — the events log
+ * records becoming directional, changing side, going mixed and going inactive,
+ * but nothing for strengthening a position. Inferring it from a rising marked
+ * value would report "they doubled down" when in fact someone else bought and
+ * moved the price. It is omitted rather than faked.
  *
- *   A per-topic BAR CHART. A visualisation of a comparison, when the comparison
- *   itself fits in a line.
- *
- *   TWO FLAT LISTS of up to forty shared markets each. Everything at equal
- *   weight is the same as nothing being important. The markets that survive
- *   are the ones that earned a reason.
- *
- * All of it was true. None of it was an introduction. The judgement about what
- * reveals a person lives in @/domain/person-profile — including its refusals,
- * which are most of it; this file only arranges what that module allows.
+ * All judgement lives in @/domain/person-profile and @/domain/profile-start-here
+ * — including the refusals, which are most of it. This file only arranges what
+ * those modules allow.
  */
 import { useQuery } from "@tanstack/react-query";
 import { getPersonProfile } from "@/lib/dna.functions";
@@ -38,12 +47,20 @@ import {
   definingConvictions,
   introduction,
   connection,
-  exploreThrough,
+  whyFollow,
+  convictionMap,
+  sharedCuriosity,
   type DefiningConviction,
-  type DiscoverySuggestion,
+  type PersonPosition,
+  type SharedRow,
+  type ConvictionTheme,
 } from "@/domain/person-profile";
+import {
+  rankStartCandidates,
+  type StartCandidate,
+  type StartHere,
+} from "@/domain/profile-start-here";
 import { peopleAround, type ConnectedPerson } from "@/domain/person-network";
-import { hueFor as personHue } from "@/lib/wallet-identity";
 
 export function PersonProfile({
   wallet,
@@ -68,7 +85,9 @@ export function PersonProfile({
   }
 
   const intro = introduction(data.positions, { marketsParticipated: data.positions.length });
+  const follow = whyFollow(data.positions, { marketsCreated: data.marketsCreated });
   const defining = definingConvictions(data.positions, data.changes);
+  const themes = convictionMap(data.positions);
   const link = connection({
     sharedMarkets: data.sharedBeliefs,
     together: data.together,
@@ -79,22 +98,45 @@ export function PersonProfile({
     personMedianDays: data.personMedianDays,
   });
   const around = peopleAround(data.around);
-  const explore = exploreThrough(defining, {
-    agreed: data.sharedBoth.map((m) => ({ marketId: Number(m.marketId), title: m.title })),
-    opposed: data.opposing.map((m) => ({
-      marketId: Number(m.marketId),
-      title: m.title,
-      personSide: m.personSide,
-      viewerSide: m.viewerSide,
-    })),
+
+  const agreed = data.sharedBoth.map((m) => ({
+    marketId: Number(m.marketId),
+    title: m.title,
+    viewerSide: m.viewerSide,
+    personSide: m.personSide,
+  }));
+  const opposed = data.opposing.map((m) => ({
+    marketId: Number(m.marketId),
+    title: m.title,
+    viewerSide: m.viewerSide,
+    personSide: m.personSide,
+  }));
+  const shared = sharedCuriosity(agreed, opposed);
+
+  // ONE ranking drives both the front door and the further reading, so the page
+  // can never recommend a market for one reason at the top and a different
+  // reason four sections down.
+  const ranked = rankStartCandidates(candidatesFrom(data, defining), {
+    personName: data.displayName,
+    hasViewer: data.hasViewer,
   });
+  const lead = ranked[0] ?? null;
+  // Nothing is offered twice. Everything above has already claimed its markets,
+  // so "explore" genuinely means somewhere else to go — and when that leaves
+  // nothing, the section is absent rather than padded.
+  const claimed = new Set<number>([
+    ...(lead ? [lead.marketId] : []),
+    ...defining.map((d) => d.marketId),
+    ...shared.map((s) => s.marketId),
+  ]);
+  const explore = ranked.filter((r) => !claimed.has(r.marketId)).slice(0, 4);
 
   return (
     <div className="space-y-7">
-      {/* ── NOTICE ─────────────────────────────────────────────────────────
-          A name, a face, and two sentences about what they have backed. No
-          score: a number here would be the first thing read and the least
-          useful thing said. */}
+      {/* ── 1 · WHO THEY ARE ─────────────────────────────────────────────────
+          A name, a face, and two sentences about what they have actually
+          backed. No score: a number here would be the first thing read and the
+          least useful thing said. */}
       <header className="flex items-start gap-3">
         {data.avatarUrl ? (
           <img
@@ -117,16 +159,37 @@ export function PersonProfile({
             {intro.lines.join(" ")}
           </p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <FollowButton person={wallet} viewer={viewer} />
-          {/* Say what following DOES, once, and only where it is not obvious. */}
-          <span className="max-w-[9rem] text-right text-[10px] leading-tight text-[var(--text-muted)]">
-            Surfaces markets connected to them
-          </span>
-        </div>
+        <FollowButton person={wallet} viewer={viewer} />
       </header>
 
-      {/* ── EXPLORE ────────────────────────────────────────────────────────── */}
+      {/* ── 2 · WHY FOLLOW THEM ──────────────────────────────────────────────
+          What you GET, never how well they have done. V1 said "surfaces markets
+          connected to them" — true of following anybody, and therefore a
+          description of the button rather than of the person. */}
+      {follow.length > 0 && (
+        <section>
+          <SectionTitle>Why follow them</SectionTitle>
+          <ul className="space-y-1.5">
+            {follow.map((r) => (
+              <li
+                key={r.kind}
+                className="flex gap-2 text-[13px] leading-relaxed text-[var(--text-secondary)]"
+              >
+                <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[var(--text-muted)]" />
+                <span>{r.text}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ── 3 · START HERE ───────────────────────────────────────────────────
+          The front door, and the only element on the page allowed to be loud.
+          One market, chosen for how much opening it would explain — not for
+          being the biggest. Omitted entirely when nothing can explain itself. */}
+      {lead && <StartHereCard lead={lead} onSelect={onSelectMarket} />}
+
+      {/* ── 4 · CONVICTIONS THAT DEFINE THEM ─────────────────────────────── */}
       {defining.length > 0 && (
         <section>
           <SectionTitle>Convictions that define them</SectionTitle>
@@ -140,35 +203,68 @@ export function PersonProfile({
         </section>
       )}
 
-      {/* ── REFLECT ─────────────────────────────────────────────────────────
-          Only for a signed-in visitor: with no viewer there is no relationship
-          to describe, and an empty "what connects you" is worse than none. */}
-      {data.hasViewer && (
+      {/* ── 5 · THEIR CONVICTION MAP ─────────────────────────────────────────
+          Everything they currently back, by theme. A flat list of forty
+          positions is the same as no list — nothing in it is more important
+          than anything else. Grouped, "what do they think about culture"
+          becomes a question the page can answer. */}
+      {themes.length > 0 && (
         <section>
-          <SectionTitle>What connects you</SectionTitle>
-          <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
-            {link.lines.join(" ")}
-          </p>
+          <SectionTitle>Their conviction map</SectionTitle>
+          <div className="space-y-4">
+            {themes.map((t) => (
+              <ThemeGroup key={t.theme} theme={t} onSelect={onSelectMarket} />
+            ))}
+          </div>
         </section>
       )}
 
-      {/* ── DISCOVER ───────────────────────────────────────────────────────
-          The point of the page. Every row states why it is here, in terms of
-          this person — never "recommended for you". */}
+      {/* ── 6 · MARKETS YOU BOTH CARE ABOUT ──────────────────────────────────
+          Shared curiosity, not a tally. The summary, and then — the part V1
+          never had — the markets themselves, each showing what the two of you
+          concluded side by side. Signed-out visitors see neither: with no
+          viewer there is no relationship, and an empty "what connects you" is
+          worse than none. */}
+      {data.hasViewer && (
+        <section>
+          <SectionTitle>Markets you both care about</SectionTitle>
+          <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
+            {link.lines.join(" ")}
+          </p>
+          {shared.length > 0 && (
+            <ul className="mt-2.5 space-y-0.5">
+              {shared.map((s) => (
+                <li key={s.marketId}>
+                  <SharedMarketRow s={s} onSelect={onSelectMarket} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {/* ── 7 · MARKETS YOU SHOULD EXPLORE ───────────────────────────────────
+          Every row states why it is here, in terms of this person — never
+          "recommended for you". Nothing already offered above appears again. */}
       {explore.length > 0 && (
         <section>
-          <SectionTitle>Explore through them</SectionTitle>
+          <SectionTitle>Markets to explore because of them</SectionTitle>
           <ul className="space-y-0.5">
             {explore.map((s) => (
               <li key={s.marketId}>
-                <SuggestionRow s={s} onSelect={onSelectMarket} />
+                <SuggestionRow
+                  title={s.title}
+                  why={s.why}
+                  id={s.marketId}
+                  onSelect={onSelectMarket}
+                />
               </li>
             ))}
           </ul>
         </section>
       )}
 
-      {/* ── DISCOVER, part two: people ─────────────────────────────────────
+      {/* ── 8 · PEOPLE AROUND THEIR CONVICTIONS ──────────────────────────────
           Markets lead to more people. These are structurally connected to THE
           PROFILE OWNER — everyone who keeps turning up in the same markets as
           them — which is a different question from the viewer's own network and
@@ -187,7 +283,7 @@ export function PersonProfile({
         </section>
       )}
 
-      {/* ── SUPPORTING ──────────────────────────────────────────────────────
+      {/* ── 9 · SUPPORTING ───────────────────────────────────────────────────
           Evidence, not identity, so it sits last and stays quiet. */}
       <section className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)]">
         <span>
@@ -201,6 +297,12 @@ export function PersonProfile({
               {Math.round(data.personMedianDays)}
             </span>{" "}
             days
+          </span>
+        )}
+        {data.marketsCreated > 0 && (
+          <span>
+            <span className="num text-[var(--text-secondary)]">{data.marketsCreated}</span>{" "}
+            {data.marketsCreated === 1 ? "question" : "questions"} written
           </span>
         )}
         {data.recentActivity.map((a) => (
@@ -218,11 +320,93 @@ export function PersonProfile({
   );
 }
 
+/**
+ * Everything the Start Here engine needs, assembled from data the page already
+ * has. No extra query: the person's positions carry the market facts, the
+ * viewer's shared markets carry their side, and the DNA domains say which topics
+ * the two of them usually land the same way on.
+ */
+function candidatesFrom(
+  data: {
+    positions: PersonPosition[];
+    sharedBoth: { marketId: string; personSide: "YES" | "NO"; viewerSide: "YES" | "NO" }[];
+    opposing: { marketId: string; personSide: "YES" | "NO"; viewerSide: "YES" | "NO" }[];
+    alignedDomains: { domain: string }[];
+    viewerMarketIds: number[];
+  },
+  defining: readonly DefiningConviction[],
+): StartCandidate[] {
+  const viewerSideOf = new Map<number, "YES" | "NO">();
+  for (const m of [...data.sharedBoth, ...data.opposing])
+    viewerSideOf.set(Number(m.marketId), m.viewerSide);
+  // A market the viewer holds that is NOT in the shared lists still counts as
+  // explored: those lists only cover the overlap the DNA engine scored, while
+  // "have you been here" is a fact about the viewer alone.
+  const viewerHeld = new Set(data.viewerMarketIds);
+  const alignedTopics = new Set(data.alignedDomains.map((d) => d.domain.toLowerCase()));
+
+  const largestId = defining.find((d) => d.kind === "largest")?.marketId ?? null;
+  const longestId = defining.find((d) => d.kind === "longest")?.marketId ?? null;
+
+  return data.positions.map((p) => {
+    const against =
+      p.crowdYesPct == null
+        ? null
+        : Math.round(
+            Math.max(0, Math.min(100, p.side === "YES" ? 100 - p.crowdYesPct : p.crowdYesPct)),
+          );
+    return {
+      marketId: p.marketId,
+      title: p.title,
+      personSide: p.side,
+      valueUsd: p.valueUsd,
+      daysHeld: p.daysHeld,
+      tenureIsFloor: p.tenureIsFloor,
+      againstPct: against,
+      participants: p.participants,
+      viewerSide: viewerSideOf.get(p.marketId) ?? (viewerHeld.has(p.marketId) ? p.side : null),
+      category: p.category,
+      topicUsuallyAligned: p.category ? alignedTopics.has(p.category.toLowerCase()) : false,
+      isLargest: p.marketId === largestId,
+      isLongest: p.marketId === longestId,
+    };
+  });
+}
+
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="mb-2 text-[11px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
       {children}
     </h2>
+  );
+}
+
+/**
+ * The front door. The only card on the page with a highlighted border, because
+ * a page with two primary actions has none — and the whole point of this section
+ * is that a visitor leaves through it rather than reading on.
+ */
+function StartHereCard({ lead, onSelect }: { lead: StartHere; onSelect: (id: number) => void }) {
+  return (
+    <section>
+      <SectionTitle>Start here</SectionTitle>
+      <button
+        type="button"
+        onClick={() => onSelect(lead.marketId)}
+        className="block w-full rounded-[14px] px-4 py-3.5 text-left transition-colors hover:bg-[var(--surface-2)]"
+        style={{ background: "var(--surface)", border: "1px solid var(--text-secondary)" }}
+      >
+        <span className="block text-[15px] leading-snug font-semibold text-[var(--text)]">
+          {lead.title}
+        </span>
+        <span className="mt-1.5 block text-[12px] leading-relaxed text-[var(--text-secondary)]">
+          {lead.why}
+        </span>
+        <span className="mt-2 block text-[12px] font-medium text-[var(--text)]">
+          Explore market →
+        </span>
+      </button>
+    </section>
   );
 }
 
@@ -256,6 +440,80 @@ function DefiningRow({ c, onSelect }: { c: DefiningConviction; onSelect: (id: nu
   );
 }
 
+/** One theme of the map: a quiet heading, then the markets inside it. */
+function ThemeGroup({
+  theme,
+  onSelect,
+}: {
+  theme: ConvictionTheme;
+  onSelect: (id: number) => void;
+}) {
+  const hidden = theme.total - theme.positions.length;
+  return (
+    <div>
+      <h3 className="mb-1 flex items-baseline gap-1.5 text-[12px] font-medium text-[var(--text)] capitalize">
+        {theme.theme}
+        <span className="num text-[11px] font-normal text-[var(--text-muted)]">{theme.total}</span>
+      </h3>
+      <ul className="space-y-0.5">
+        {theme.positions.map((p) => (
+          <li key={p.marketId}>
+            <button
+              type="button"
+              onClick={() => onSelect(p.marketId)}
+              className="flex w-full items-baseline gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-2)]"
+            >
+              <span
+                className="w-[26px] shrink-0 text-[10px] font-semibold"
+                style={{ color: p.side === "YES" ? "var(--yes)" : "var(--no)" }}
+              >
+                {p.side}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text)]">
+                {p.title}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 && (
+        <p className="mt-0.5 px-2 text-[11px] text-[var(--text-muted)]">
+          and {hidden} more in {theme.theme.toLowerCase()}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One market you both took a side in, with both sides shown.
+ *
+ * The two sides sit together on purpose: this section exists to make the
+ * relationship legible, and a row that showed only an agreement count would be
+ * the similarity score this page was built to replace.
+ */
+function SharedMarketRow({ s, onSelect }: { s: SharedRow; onSelect: (id: number) => void }) {
+  const tone = (v: "YES" | "NO") => (v === "YES" ? "var(--yes)" : "var(--no)");
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(s.marketId)}
+      className="block w-full rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
+    >
+      <span className="block text-[13px] leading-snug text-[var(--text)]">{s.title}</span>
+      <span className="mt-0.5 flex items-center gap-3 text-[11px] text-[var(--text-muted)]">
+        <span>
+          You <span style={{ color: tone(s.viewerSide) }}>{s.viewerSide}</span>
+        </span>
+        <span>
+          Them <span style={{ color: tone(s.personSide) }}>{s.personSide}</span>
+        </span>
+        {!s.agree && <span className="text-[var(--text-secondary)]">— you differ here</span>}
+      </span>
+    </button>
+  );
+}
+
 /**
  * One connected person. The pattern colours the row and nothing else — it is a
  * shape, not a badge, and turning "often opposed" into a permanent label is
@@ -283,7 +541,7 @@ function PersonRow({ p, onSelect }: { p: ConnectedPerson; onSelect: (w: string) 
       ) : (
         <span
           className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
-          style={{ background: `hsl(${personHue(p.wallet)} 45% 45%)` }}
+          style={{ background: `hsl(${hueFor(p.wallet)} 45% 45%)` }}
           aria-hidden
         >
           {initialsFor(p.name)}
@@ -305,21 +563,26 @@ function PersonRow({ p, onSelect }: { p: ConnectedPerson; onSelect: (w: string) 
   );
 }
 
+/** A market and the sentence saying why it is here. Never "recommended". */
 function SuggestionRow({
-  s,
+  id,
+  title,
+  why,
   onSelect,
 }: {
-  s: DiscoverySuggestion;
+  id: number;
+  title: string;
+  why: string;
   onSelect: (id: number) => void;
 }) {
   return (
     <button
       type="button"
-      onClick={() => onSelect(s.marketId)}
+      onClick={() => onSelect(id)}
       className="block w-full rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
     >
-      <span className="block text-[13px] leading-snug text-[var(--text)]">{s.title}</span>
-      <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">{s.why}</span>
+      <span className="block text-[13px] leading-snug text-[var(--text)]">{title}</span>
+      <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">{why}</span>
     </button>
   );
 }

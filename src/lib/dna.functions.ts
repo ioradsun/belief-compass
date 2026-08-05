@@ -587,8 +587,14 @@ async function loadConvictionEvidence(
   const [titles, meta, state] = await Promise.all([
     marketTitles(sb, allIds),
     allIds.length
-      ? sb.from("markets").select("onchain_id, category").in("onchain_id", allIds)
-      : Promise.resolve({ data: [] as { onchain_id: number; category: string | null }[] }),
+      ? sb.from("markets").select("onchain_id, category, created_at").in("onchain_id", allIds)
+      : Promise.resolve({
+          data: [] as {
+            onchain_id: number;
+            category: string | null;
+            created_at: string | null;
+          }[],
+        }),
     ids.length
       ? sb
           .from("market_state")
@@ -604,8 +610,16 @@ async function loadConvictionEvidence(
         }),
   ]);
   const categoryOf = new Map<number, string | null>();
-  for (const m of (meta.data ?? []) as { onchain_id: number; category: string | null }[])
+  const openedAt = new Map<number, number>();
+  for (const m of (meta.data ?? []) as {
+    onchain_id: number;
+    category: string | null;
+    created_at: string | null;
+  }[]) {
     categoryOf.set(Number(m.onchain_id), m.category);
+    const t = m.created_at ? Date.parse(m.created_at) : NaN;
+    if (Number.isFinite(t)) openedAt.set(Number(m.onchain_id), t);
+  }
   const crowdOf = new Map<number, { yesPct: number | null; participants: number }>();
   for (const m of (state.data ?? []) as {
     onchain_id: number;
@@ -627,16 +641,28 @@ async function loadConvictionEvidence(
     // The marked value of the side they actually hold; cost is not a fallback
     // here, because "committed" in the copy means what it is worth now.
     const valueUsd = r.stance_side === "YES" ? r.yes_value_usd : r.no_value_usd;
+    const backedMs = r.first_backed_at ? Date.parse(r.first_backed_at) : NaN;
+    const isFloor = Number.isFinite(backedMs) ? firstBackedIsFloor(backedMs) : false;
+    const opened = openedAt.get(id);
+    // HOW LONG AFTER THE MARKET OPENED they arrived — null whenever that cannot
+    // be known, which includes every belief that predates the index. A floored
+    // start would compute a confident number out of a guess, and "we cannot
+    // tell" must never render as evidence of arriving early.
+    const daysAfterOpen =
+      !isFloor && Number.isFinite(backedMs) && opened != null
+        ? Math.max(0, (backedMs - opened) / 86_400_000)
+        : null;
     return {
       marketId: id,
       title: titles.get(id) ?? `Market #${id}`,
       side: r.stance_side,
       valueUsd: valueUsd == null ? null : Number(valueUsd),
       daysHeld: days,
-      tenureIsFloor: r.first_backed_at ? firstBackedIsFloor(Date.parse(r.first_backed_at)) : false,
+      tenureIsFloor: isFloor,
       crowdYesPct: crowd?.yesPct ?? null,
       participants: crowd?.participants ?? 0,
       category: categoryOf.get(id) ?? null,
+      daysAfterOpen,
     };
   });
 
@@ -843,6 +869,14 @@ export type PersonProfile = {
   viewerMedianDays: number | null;
   /** People structurally connected to THIS person — never the viewer's network. */
   around: Overlap[];
+  /** Questions they wrote. Authorship is participation, never a separate role. */
+  marketsCreated: number;
+  /**
+   * Market ids the VIEWER has taken a side in. Lets the page tell "you have not
+   * explored this" from "you two disagree here" — the difference between the
+   * two best Start Here reasons. Empty for a signed-out visitor.
+   */
+  viewerMarketIds: number[];
 };
 
 function personSummary(aligned: { domain: string }[], opposed: { domain: string }[]): string {
@@ -882,10 +916,17 @@ export const getPersonProfile = createServerFn({ method: "GET" })
     // Both are about the PROFILE OWNER, so both run whether or not a viewer is
     // present — "who is this person and who is around them" is answerable
     // without knowing who is asking.
-    const [evidence, around] = await Promise.all([
+    const [evidence, around, authored] = await Promise.all([
       loadConvictionEvidence(sb, target, viewer),
       loadPeopleAround(sb, target),
+      // Authorship is participation, not a role — the count supports the "why
+      // follow" line and the metrics footer, and is never shown as a badge.
+      sb
+        .from("markets")
+        .select("onchain_id", { count: "exact", head: true })
+        .eq("author_wallet", target),
     ]);
+    const marketsCreated = Math.max(0, Number(authored.count ?? 0));
 
     const base: PersonProfile = {
       wallet: target,
@@ -910,6 +951,8 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       personMedianDays: evidence.personMedianDays,
       viewerMedianDays: null,
       around,
+      marketsCreated,
+      viewerMarketIds: [],
     };
     if (!viewer || viewerFactors.length === 0) return base;
 
@@ -993,6 +1036,8 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       personMedianDays: evidence.personMedianDays,
       viewerMedianDays: evidence.viewerMedianDays,
       around,
+      marketsCreated,
+      viewerMarketIds: viewerMarkets,
     };
   });
 
