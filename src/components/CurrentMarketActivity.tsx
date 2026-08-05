@@ -108,8 +108,8 @@ export function CurrentMarketActivity({
         tight column can only ever show three beats and pushes the order bar
         around; reading "what just happened" is a whole-attention task, so it
         takes the whole screen and gives it straight back on dismiss. */}
-      {open && (
-        <div className="fixed inset-0 z-[100] flex flex-col" role="dialog" aria-modal="true">
+      {open && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[2147483000] flex flex-col" role="dialog" aria-modal="true">
           <button
             type="button"
             aria-label="Close live activity"
