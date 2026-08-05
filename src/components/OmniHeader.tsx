@@ -493,10 +493,12 @@ export function OmniHeader({
                     style={active_i === i ? { background: "var(--surface)" } : undefined}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] text-[var(--text)]">
+                      {/* One question, one line: a wrapped title turns a scannable
+                          list into paragraphs. It clips instead. */}
+                      <span className="block truncate whitespace-nowrap text-[13px] text-[var(--text)]">
                         {m.title}
                       </span>
-                      <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]">
+                      <span className="mt-0.5 block truncate whitespace-nowrap text-[11px] text-[var(--text-muted)]">
                         {row.story}
                       </span>
                       {(row.participantsText || row.capText) && (
