@@ -755,7 +755,7 @@ function RosterSheet({
 
   return (
     <div
-      className="fixed bottom-0 top-0 z-50 flex items-end"
+      className="fixed bottom-0 top-0 z-50 flex flex-col"
       style={anchorStyle(anchor)}
       role="dialog"
       aria-modal="true"
@@ -766,8 +766,10 @@ function RosterSheet({
         onClick={onClose}
         className="absolute inset-0 bg-black/50"
       />
-      <div className="relative max-h-[75vh] w-full overflow-y-auto rounded-t-[16px] border-t border-[var(--border)] bg-[var(--bg)] px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
-        <div className="mb-2 flex items-center justify-between">
+      {/* Fills the column top to bottom: a pinned header over one scroll area,
+        so the roster never resizes the sheet as it loads. */}
+      <div className="relative mt-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-t-[16px] border-t border-[var(--border)] bg-[var(--bg)] pt-3">
+        <div className="mb-2 flex shrink-0 items-center justify-between px-4">
           <span className="text-[12px] font-semibold text-[var(--text)]">
             Who backs {side} · <span className="num text-[var(--text-muted)]">{count}</span>
           </span>
@@ -780,7 +782,9 @@ function RosterSheet({
             ×
           </button>
         </div>
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
+          {children}
+        </div>
       </div>
     </div>
   );

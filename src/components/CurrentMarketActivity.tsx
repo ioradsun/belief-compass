@@ -125,7 +125,10 @@ export function CurrentMarketActivity({
             onClick={toggle}
             className="absolute inset-0 bg-[color-mix(in_oklab,var(--background)_82%,transparent)] backdrop-blur-sm"
           />
-          <div className="relative mt-auto flex max-h-[85svh] min-h-0 flex-col rounded-t-[16px] border-t border-[var(--border)] bg-[var(--surface-1,var(--background))] shadow-2xl">
+          {/* Instagram's comment sheet: one fixed pane that fills its column,
+            with a pinned header and a single scrolling body. A height that
+            tracks content is what makes the panel jump, so it never does. */}
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[16px] border-t border-[var(--border)] bg-[var(--surface-1,var(--background))] shadow-2xl">
             <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-3">
               <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
                 Live activity
@@ -139,7 +142,7 @@ export function CurrentMarketActivity({
                 ✕
               </button>
             </div>
-            <div className="min-h-0 flex-1 px-3 pb-[max(env(safe-area-inset-bottom),12px)]">
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[max(env(safe-area-inset-bottom),12px)]">
               <LiveTape
                 wallet={wallet}
                 onSelect={(id) => {
