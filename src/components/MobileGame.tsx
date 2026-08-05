@@ -512,8 +512,11 @@ function BothSides({
     const capBase = s === "YES" ? bl?.yesCapitalUsd : bl?.noCapitalUsd;
     const belChg = belBase != null ? windowChange(bel, belBase) : null;
     const capChg = capBase != null ? windowChange(cap, capBase) : null;
+    const belDelta = belChg?.delta ?? null;
+    const capDelta = capChg?.delta ?? null;
     const priceUsd = Number(s === "YES" ? row.yes_price_usd : row.no_price_usd) || null;
-    const pricePct = num(s === "YES" ? row.chg_24h_yes : row.chg_24h_no);
+    const rawPct = Number(s === "YES" ? row.chg_24h_yes : row.chg_24h_no);
+    const pricePct = Number.isFinite(rawPct) ? rawPct : null;
     const priceDelta =
       priceUsd != null && pricePct != null ? priceUsd - priceUsd / (1 + pricePct / 100) : null;
     return [
@@ -522,22 +525,22 @@ function BothSides({
         value: bel.toLocaleString("en-US"),
         pct: belChg?.pct ?? null,
         absolute:
-          belChg == null
+          belDelta == null
             ? null
-            : belChg.delta === 0
+            : belDelta === 0
               ? "No change today"
-              : `${belChg.delta > 0 ? "+" : "−"}${Math.abs(belChg.delta)} believer${Math.abs(belChg.delta) === 1 ? "" : "s"} today`,
+              : `${belDelta > 0 ? "+" : "−"}${Math.abs(belDelta)} believer${Math.abs(belDelta) === 1 ? "" : "s"} today`,
       },
       {
         label: "Committed",
         value: format(cap, "USD"),
         pct: capChg?.pct ?? null,
         absolute:
-          capChg == null
+          capDelta == null
             ? null
-            : Math.abs(capChg.delta) < 0.005
+            : Math.abs(capDelta) < 0.005
               ? "No change today"
-              : `${format(capChg.delta, "USD", { signed: true })} ${capChg.delta > 0 ? "committed" : "withdrawn"} today`,
+              : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "withdrawn"} today`,
       },
       {
         label: "Per share",
