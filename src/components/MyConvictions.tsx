@@ -215,6 +215,7 @@ export function MyConvictions({
   onSelect,
   onExplore,
   onCount,
+  onOpenDashboard,
 }: {
   wallet?: string;
   rows: MarketRow[];
@@ -227,6 +228,8 @@ export function MyConvictions({
   onExplore?: () => void;
   /** Reports the number of live convictions to the tab strip. */
   onCount?: (n: number) => void;
+  /** Open the full Conviction Dashboard (complete P&L history). */
+  onOpenDashboard?: () => void;
 }) {
   const { unit } = useDisplayUnit();
   // Position value and gain are USD-native (POV marks the tokens in dollars); one
@@ -511,6 +514,15 @@ export function MyConvictions({
                 </>
               )}
             </div>
+            {onOpenDashboard && (
+              <button
+                type="button"
+                onClick={onOpenDashboard}
+                className="mt-2 text-[11px] font-semibold text-[var(--text-secondary)] underline-offset-2 hover:underline"
+              >
+                Full P&amp;L &rarr;
+              </button>
+            )}
           </div>
         );
       })()}

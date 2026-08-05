@@ -832,6 +832,7 @@ function Feed() {
                 selectedPerson={selectedPerson}
                 onSelectPerson={selectPerson}
                 onOpenDna={openDna}
+                onOpenDashboard={openDashboard}
                 initialNetwork={Boolean(selectedPerson || dnaOpen)}
               />
             </>
