@@ -18,7 +18,6 @@ import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getMarketChange, getMarketBaselines, type VolumeWindow } from "@/lib/markets.functions";
 import { windowChange } from "@/domain/window-change";
-import { priceMove } from "@/domain/metric-display";
 import { LiveTape } from "@/components/LiveTape";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
@@ -29,8 +28,6 @@ import { PersonAvatar } from "@/components/PersonAvatar";
 import {
   LENS_META,
   lensColdStart,
-  lensFacts,
-  lensStory,
   type LensMetric,
 } from "@/domain/side-lens";
 import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT } from "@/domain/market-flow";
@@ -184,33 +181,8 @@ export function CaseColumn({
   // The one shared formatter: capital/proceeds are ETH-native, POV worth is USD —
   // each renders in the viewer's chosen unit through the single global rate.
   const money = useMemo(() => (eth: number) => format(eth, "ETH"), [format]);
-  const facts = useMemo(() => lensFacts(series), [series]);
   const coldStart = lensColdStart(metric, series);
   const meta = LENS_META[metric];
-  const lensSentence = lensStory(metric, side, facts, FLOW_WINDOW_PHRASE[win], money);
-
-  // Price is the one metric where the % leads (traders read price proportionally),
-  // so its sentence must carry a number — the current price, the %, and the exact
-  // per-share change — never just "climbed". The other lenses already state their
-  // magnitude ("3 believers joined", "$142 entered"), so they keep lensStory.
-  const priceLine = useMemo(() => {
-    if (metric !== "price" || priceUsd == null || summary?.pricePct == null) return null;
-    const pct = summary.pricePct;
-    const prev = priceUsd / (1 + pct / 100);
-    const delta = Number.isFinite(prev) ? priceUsd - prev : null;
-    const move = priceMove({
-      pricePct: pct,
-      priceDelta: delta,
-      since: FLOW_WINDOW_PHRASE[win],
-      money: (v, signed) => format(v, "USD", { signed }),
-    });
-    if (move.direction === "flat") {
-      return `${side} holds at ${format(priceUsd, "USD")} ${FLOW_WINDOW_PHRASE[win]}.`;
-    }
-    const verb = move.direction === "up" ? "climbed to" : "eased to";
-    const change = move.absolute ? ` (${move.absolute})` : "";
-    return `${side} ${verb} ${format(priceUsd, "USD")} · ${move.pct}${change}.`;
-  }, [metric, priceUsd, summary?.pricePct, win, side, format]);
 
   // THE PULSE — the same overall read the full timeline used to open with: one
   // headline for the window plus the sentence that explains it, derived from the
@@ -396,22 +368,16 @@ export function CaseColumn({
           ))}
         </div>
 
-        <div className="space-y-2">
-          <LensChart
-            side={side}
-            metric={metric}
-            kind={meta.kind}
-            series={series}
-            markers={[]}
-            coldStart={coldStart}
-          />
-          <p
-            key={metric}
-            className="animate-in fade-in duration-200 text-[12px] leading-snug text-[var(--text-secondary)] motion-reduce:animate-none"
-          >
-            {metric === "price" && priceLine ? priceLine : lensSentence}
-          </p>
-        </div>
+        {/* The chart carries no caption: the headline and the metric row above
+          already say what moved and by how much. */}
+        <LensChart
+          side={side}
+          metric={metric}
+          kind={meta.kind}
+          series={series}
+          markers={[]}
+          coldStart={coldStart}
+        />
 
         {/* 3 — BELIEVERS: the people currently backing this side. */}
         <CaseRoster
