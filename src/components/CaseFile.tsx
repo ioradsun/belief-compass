@@ -399,18 +399,15 @@ export function CaseColumn({
             What&rsquo;s happening to {side}
           </span>
           {lead && (
-            <p className="flex items-baseline gap-2 px-0.5 text-[12px]">
-              <span aria-hidden className="shrink-0">
-                {lead.emoji}
-              </span>
+            <p className="px-0.5 text-[12px]">
               <span
-                className={`min-w-0 flex-1 leading-snug ${lead.tier === 1 ? "font-semibold" : ""}`}
-                style={{ color: lead.tone === "down" ? "var(--text-muted)" : color }}
+                className={`leading-snug text-[var(--text)] ${lead.tier === 1 ? "font-semibold" : ""}`}
               >
-                {lead.headline}
+                <SideWords text={lead.headline} />
               </span>
             </p>
           )}
+
           <LiveTape
             marketIds={[marketId]}
             side={side}
