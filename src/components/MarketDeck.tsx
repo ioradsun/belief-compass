@@ -23,7 +23,6 @@ import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
 import { DnaFirstReveal } from "@/components/DnaFirstReveal";
 import { MobileCaseView } from "@/components/MobileCase";
-import { CaseStory } from "@/components/CaseStory";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
@@ -92,8 +91,6 @@ export function MarketDeck({
   caseOpen = false,
   mobileCaseOpen = false,
   onToggleCase,
-  storySide = null,
-  onCloseStory,
   onSelectPerson,
 }: {
   row: MarketRow;
@@ -109,9 +106,6 @@ export function MarketDeck({
   /** Case File mode (mobile): the center becomes a NO ← MARKET → YES carousel. */
   mobileCaseOpen?: boolean;
   onToggleCase?: () => void;
-  /** Investigation mode: one side's story takes the center. */
-  storySide?: OrderSide | null;
-  onCloseStory?: () => void;
   /** Open a person's profile (used by the clickable creator byline). */
   onSelectPerson?: (wallet: string) => void;
 }) {
@@ -410,7 +404,7 @@ export function MarketDeck({
         win={deckWin}
         believersTotal={authBelieversTotal}
         footer={
-          onToggleCase && !storySide && !mobileCaseOpen ? (
+          onToggleCase && !mobileCaseOpen ? (
             <ExamineCta
               open={caseOpen}
               onToggle={onToggleCase}
@@ -525,17 +519,7 @@ export function MarketDeck({
         </div>
       </div>
 
-      {/* Investigation Mode: one side's story replaces the comparison, while the
-        side columns stay put as anchors and the decision dock stays reachable. */}
-      {storySide ? (
-        <CaseStory
-          side={storySide}
-          marketId={marketId}
-          ethUsd={ethUsd}
-          viewerWallet={viewerWallet}
-          onClose={() => onCloseStory?.()}
-        />
-      ) : mobileCaseOpen ? (
+      {mobileCaseOpen ? (
         <MobileCaseView
           title={title}
           marketId={marketId}

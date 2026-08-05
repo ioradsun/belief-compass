@@ -502,11 +502,6 @@ function Feed() {
   const win = useDeckWindow() as VolumeWindow;
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
-  // Investigation Mode: which side's story has taken the center (null = Discovery,
-  // where both sides are compared side by side). Clicking a side card opens it;
-  // clicking the same card, Escape, or "Compare" returns to Discovery.
-  const [storySide, setStorySide] = useState<"YES" | "NO" | null>(null);
-  const toggleStory = (s: "YES" | "NO") => setStorySide((prev) => (prev === s ? null : s));
 
   // The active lens is a SERVER filter on the one global classification: it is
   // sent with the feed request, so the server still owns the whole sequence.
@@ -813,8 +808,6 @@ function Feed() {
                 row={currentRow}
                 viewerWallet={wallet}
                 ethUsd={stableFeed?.ethUsd ?? 0}
-                investigating={storySide === "YES"}
-                onInvestigate={toggleStory}
               />
             </Suspense>
           ) : walletResolving ? (
@@ -967,8 +960,6 @@ function Feed() {
                     caseOpen={caseActive}
                     mobileCaseOpen={mobileCaseActive}
                     onToggleCase={toggleCase}
-                    storySide={caseActive ? storySide : null}
-                    onCloseStory={() => setStorySide(null)}
                     onSelectPerson={selectPerson}
                   />
                 )}
@@ -1014,8 +1005,6 @@ function Feed() {
                 row={currentRow}
                 viewerWallet={wallet}
                 ethUsd={stableFeed?.ethUsd ?? 0}
-                investigating={storySide === "NO"}
-                onInvestigate={toggleStory}
               />
             </Suspense>
           ) : (
