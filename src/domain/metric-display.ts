@@ -214,9 +214,13 @@ export function positionReturn(input: {
   const { gainUsd, gainPct, money } = input;
   if (gainUsd == null) return null;
   const direction = metricDirection(gainUsd, 0.005);
+  // Flat is flat: "+$0.00 / +0.0%" reads as a result when nothing happened. A
+  // single em dash says "no movement" without pretending to be a number.
+  if (direction === "flat") return { direction, pnl: "—", pct: null };
   return {
     direction,
     pnl: money(gainUsd, true),
     pct: gainPct == null ? null : formatPct(gainPct, { precise: true }),
   };
 }
+

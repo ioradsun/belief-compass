@@ -128,17 +128,26 @@ function ConvictionCard({
   // Without a cost basis the honest outcome is the selected window's move.
   const windowMove =
     !ret && p.deltaUsd != null && Math.abs(p.deltaUsd) >= 0.005 ? p.deltaUsd : null;
-  const outcomeTone = ret
+  // One rule everywhere: up is gain, down is loss, flat is neutral — never a
+  // coloured zero.
+  const outcomeDir: "up" | "down" | "flat" = ret
     ? ret.direction === "up"
-      ? "var(--gain)"
+      ? "up"
       : ret.direction === "down"
-        ? "var(--loss)"
-        : "var(--text-secondary)"
+        ? "down"
+        : "flat"
     : windowMove != null
       ? windowMove > 0
-        ? "var(--gain)"
-        : "var(--loss)"
-      : "var(--text-muted)";
+        ? "up"
+        : "down"
+      : "flat";
+  const outcomeTone =
+    outcomeDir === "up"
+      ? "var(--gain)"
+      : outcomeDir === "down"
+        ? "var(--loss)"
+        : "var(--text-muted)";
+
   return (
     <div
       role="button"
@@ -493,7 +502,7 @@ export function MyConvictions({
                 className="num shrink-0 text-[20px] font-semibold leading-none tabular-nums"
                 style={{ color: tone }}
               >
-                {pct ?? (move === 0 ? "0%" : "")}
+                {pct ?? "—"}
                 {arrow && pct ? (
                   <span className="ml-1.5 align-middle text-[0.6em]">{arrow}</span>
                 ) : null}
@@ -505,7 +514,7 @@ export function MyConvictions({
             <div className="mt-0.5 flex items-baseline justify-between gap-3">
               <div className="num text-[12px]" style={{ color: tone }}>
                 {move === 0 ? (
-                  <span className="text-[var(--text-muted)]">No change</span>
+                  <span className="text-[var(--text-muted)]">—</span>
                 ) : (
                   <>
                     {signedMoney(move)}{" "}
@@ -515,6 +524,7 @@ export function MyConvictions({
                   </>
                 )}
               </div>
+
               {onOpenDashboard && (
                 <button
                   type="button"
@@ -535,15 +545,18 @@ export function MyConvictions({
       <div className="flex flex-col gap-2.5 pt-4">
         {positions.map((p) => (
           // The share control is a sibling of the card button (never nested — a
-          // button inside a button is invalid), pinned to the corner.
-          <div key={p.key} className="relative">
+          // button inside a button is invalid), pinned to the corner. It stays
+          // hidden until the card is hovered or the control itself is focused,
+          // so the list reads as beliefs, not toolbars.
+          <div key={p.key} className="group relative">
             <ConvictionCard p={p} onSelect={onSelect} money={money} signedMoney={signedMoney} />
-            <div className="absolute right-2.5 top-3">
+            <div className="absolute right-2.5 top-3 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
               <StandOnIt variant="card" marketId={p.id} title={p.title} side={p.side} />
             </div>
           </div>
         ))}
       </div>
+
     </div>
   );
 }
