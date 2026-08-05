@@ -311,7 +311,7 @@ export function CaseColumn({
       metric: "price",
       label: "Price",
       value: priceUsd != null ? format(priceUsd, "USD") : "—",
-      pct: summary?.pricePct ?? null,
+      pct: pricePct,
       absolute: priceAbs,
     },
   ];
