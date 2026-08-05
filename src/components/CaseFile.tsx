@@ -55,8 +55,26 @@ const REL_TONE: Record<CaseRelationship, string> = {
   unmapped: "var(--text-muted)",
 };
 
+/** Neutral sentence where only the words YES / NO carry a side colour. */
+function SideWords({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\bYES\b|\bNO\b)/g).map((part, i) =>
+        part === "YES" || part === "NO" ? (
+          <span key={i} style={{ color: part === "YES" ? "var(--yes)" : "var(--no)" }}>
+            {part}
+          </span>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 const num = (v: unknown): number | null =>
   v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+
 
 export function CaseColumn({
   side,
