@@ -198,9 +198,9 @@ function ConvictionCard({
             style={{
               color:
                 ret.direction === "up"
-                  ? "var(--yes)"
+                  ? "var(--gain)"
                   : ret.direction === "down"
-                    ? "var(--no)"
+                    ? "var(--loss)"
                     : "var(--text-secondary)",
             }}
           >
@@ -229,7 +229,7 @@ function ConvictionCard({
             </span>
             <span className="text-[11px] text-[var(--text-muted)]">Believers</span>
             {p.newInWindow != null && p.newInWindow > 0 && (
-              <span className="num ml-auto text-[11px] font-semibold text-[var(--yes)]">
+              <span className="num ml-auto text-[11px] font-semibold text-[var(--gain)]">
                 +{p.newInWindow.toLocaleString("en-US")}
                 {p.believers != null && p.believers - p.newInWindow > 0
                   ? ` (+${Math.round((p.newInWindow / (p.believers - p.newInWindow)) * 100)}%)`

@@ -604,7 +604,7 @@ function BuyTicket({
         />
         <div className="mt-1.5 text-[12px] text-[var(--text-muted)]">
           {amountError ? (
-            <span style={{ color: "var(--no)" }}>
+            <span style={{ color: "var(--loss)" }}>
               {amountError} · Available {availUnit ?? "—"}
             </span>
           ) : (
