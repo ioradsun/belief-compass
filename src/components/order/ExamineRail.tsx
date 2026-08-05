@@ -120,7 +120,6 @@ export function ExamineCta({
         }}
       >
         <div className="flex min-w-0 items-center gap-2 text-[13px] leading-snug text-[var(--text)]">
-          <SignalSpark hot={hot} />
           <span className="min-w-0 truncate">{signal}</span>
         </div>
         {houseRead && <HouseRead state={houseRead} className="mt-1" />}
@@ -136,7 +135,6 @@ export function ExamineCta({
           compact ? "min-h-[40px] px-3.5 py-2" : "min-h-[48px] px-4 py-3 sm:px-5"
         }`}
       >
-        <SplitPanelIcon open={open} />
         <span className="min-w-0 truncate text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text)]">
           {open ? closeLabel : openLabel}
         </span>
