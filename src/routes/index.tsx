@@ -325,8 +325,6 @@ function Feed() {
   // intelligence is shown, so it just flips the URL flag (preserved across switches).
   const toggleCase = () => {
     navigate({ search: (prev: Search) => ({ ...prev, case: prev.case ? undefined : true }) });
-    // Each Case File session opens in Discovery Mode — comparison before investigation.
-    setStorySide(null);
   };
   // Brand introduction layer. Intentional product interactions (opening a
   // market, a person, DNA) collapse it; nothing else does.
@@ -354,7 +352,6 @@ function Feed() {
       }),
     });
     setTab("belief");
-    setStorySide(null);
     enterProduct();
   };
   const selectPerson = (personWallet: string) => {
@@ -483,7 +480,6 @@ function Feed() {
   const openFeed = () => {
     navigate({ search: (prev: Search) => ({ wallet: prev.wallet, r: prev.r }) });
     setTab("belief");
-    setStorySide(null);
     setCaughtUp(false);
     enterProduct();
   };
