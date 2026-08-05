@@ -322,7 +322,7 @@ export function CreateMarket({
           {/* AI check / polish — subtle, advisory. */}
           {review && (
             <div className="mt-1 flex items-center gap-1.5 text-[11.5px]">
-              {review.review.ok && <span className="text-[var(--yes)]">✓ AI-checked</span>}
+              {review.review.ok && <span className="text-[var(--gain)]">✓ AI-checked</span>}
               {review.review.suggestion && (
                 <>
                   {review.review.ok && <span className="text-[var(--text-muted)]">·</span>}
@@ -369,9 +369,9 @@ export function CreateMarket({
             <p
               className={`num text-right text-[11px] ${
                 belowMin && amount > 0
-                  ? "text-[var(--no)]"
+                  ? "text-[var(--loss)]"
                   : overBalance
-                    ? "text-[var(--no)]"
+                    ? "text-[var(--loss)]"
                     : "text-[var(--text-muted)]"
               }`}
               aria-live="polite"
@@ -389,7 +389,7 @@ export function CreateMarket({
 
 
         {errorText && !belowMin && !overBalance && (
-          <p className="text-[12px] text-[var(--no)]">{errorText}</p>
+          <p className="text-[12px] text-[var(--loss)]">{errorText}</p>
         )}
       </div>
 
@@ -536,7 +536,7 @@ function EmbedPicker({
         </button>
       </div>
       {media && <MediaEmbed media={media} />}
-      {error && <p className="text-[12px] text-[var(--no)]">{error}</p>}
+      {error && <p className="text-[12px] text-[var(--loss)]">{error}</p>}
     </div>
   );
 }

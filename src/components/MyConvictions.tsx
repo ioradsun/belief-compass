@@ -61,9 +61,9 @@ type MoneyFmt = (n: number) => string;
  *  weakening, quiet otherwise. Typography carries the rest of the hierarchy. */
 const toneColor = (t: PulseTone): string =>
   t === "up"
-    ? "var(--yes)"
+    ? "var(--gain)"
     : t === "down"
-      ? "var(--no)"
+      ? "var(--loss)"
       : t === "neutral"
         ? "var(--text-secondary)"
         : "var(--text-muted)";
@@ -176,7 +176,7 @@ function ConvictionCard({
           (Math.abs(p.deltaUsd) >= 0.005 ? (
             <span
               className="num ml-auto text-[12px] font-semibold"
-              style={{ color: p.deltaUsd > 0 ? "var(--yes)" : "var(--no)" }}
+              style={{ color: p.deltaUsd > 0 ? "var(--gain)" : "var(--loss)" }}
             >
               {signedMoney(p.deltaUsd)}
               <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">
@@ -535,7 +535,7 @@ export function MyConvictions({
         const basis = total - move;
         const pct =
           move !== 0 && basis > 0 ? formatPct((move / basis) * 100, { precise: true }) : null;
-        const tone = move > 0 ? "var(--yes)" : move < 0 ? "var(--no)" : "var(--text-muted)";
+        const tone = move > 0 ? "var(--gain)" : move < 0 ? "var(--loss)" : "var(--text-muted)";
         const arrow = move > 0 ? "▲" : move < 0 ? "▼" : "";
         return (
           <div className="pb-4">

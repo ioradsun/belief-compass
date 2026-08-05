@@ -669,7 +669,7 @@ function SideMetric({
   color: string;
 }) {
   const flat = pct == null || Math.abs(pct) < 0.05;
-  const tone = flat ? "var(--text-muted)" : pct! > 0 ? "var(--yes)" : "var(--no)";
+  const tone = flat ? "var(--text-muted)" : pct! > 0 ? "var(--gain)" : "var(--loss)";
   const arrow = flat ? "" : pct! > 0 ? "▲" : "▼";
   const pctText =
     pct == null ? "" : `${Math.abs(pct).toFixed(!flat && Math.abs(pct) < 10 ? 1 : 0)}%`;

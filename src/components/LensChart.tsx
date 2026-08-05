@@ -151,7 +151,7 @@ function Plot({
       {markers.map((m, i) => {
         const mx = Math.min(96, Math.max(4, x(m.t)));
         const mColor =
-          m.dir === "up" ? "var(--yes)" : m.dir === "down" ? "var(--no)" : "var(--text-muted)";
+          m.dir === "up" ? "var(--gain)" : m.dir === "down" ? "var(--loss)" : "var(--text-muted)";
         return (
           <div
             key={`${m.t}-${i}`}

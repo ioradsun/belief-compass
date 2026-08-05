@@ -160,7 +160,7 @@ export function LinkWalletCard() {
         to the trading address, then press it again to sign. A signature only proves you own the
         address — it doesn't let this app trade from it.
       </p>
-      {msg && <p className="mt-2 text-xs text-emerald-600">{msg}</p>}
+      {msg && <p className="mt-2 text-xs text-[var(--gain)]">{msg}</p>}
       {err && <p className="mt-2 text-xs text-destructive">{err}</p>}
     </div>
   );

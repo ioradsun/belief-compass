@@ -389,7 +389,7 @@ function SideText({ text, tone }: { text?: string | null; tone?: BeatTone }) {
             <span
               key={i}
               className="num font-semibold"
-              style={{ color: p.startsWith("−") || p.startsWith("-") ? "var(--no)" : "var(--yes)" }}
+              style={{ color: p.startsWith("−") || p.startsWith("-") ? "var(--loss)" : "var(--gain)" }}
             >
               {p}
             </span>

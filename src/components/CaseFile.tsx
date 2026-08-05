@@ -485,7 +485,7 @@ export function StatRow({
 export function PctChip({ pct, muted = false }: { pct: number | null; muted?: boolean }) {
   if (pct == null) return <span className="num text-[11px] text-[var(--text-muted)]">—</span>;
   const flat = Math.abs(pct) < 0.05;
-  const color = flat ? "var(--text-muted)" : pct > 0 ? "var(--yes)" : "var(--no)";
+  const color = flat ? "var(--text-muted)" : pct > 0 ? "var(--gain)" : "var(--loss)";
   const arrow = flat ? "•" : pct > 0 ? "▲" : "▼";
   return (
     <span
@@ -525,7 +525,7 @@ function MetricRow({
   onSelect: () => void;
 }) {
   const flat = pct == null || Math.abs(pct) < 0.05;
-  const tone = flat ? "var(--text-muted)" : pct! > 0 ? "var(--yes)" : "var(--no)";
+  const tone = flat ? "var(--text-muted)" : pct! > 0 ? "var(--gain)" : "var(--loss)";
   const arrow = flat ? "" : pct! > 0 ? "▲" : "▼";
   const pctText =
     pct == null ? "" : `${Math.abs(pct).toFixed(!flat && Math.abs(pct) < 10 ? 1 : 0)}%`;
