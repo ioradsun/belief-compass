@@ -48,6 +48,16 @@ export interface DiscoveryRow {
   participantsText: string | null;
   /** "$18.2K market cap" — always shown once anyone has participated. */
   capText: string | null;
+  /**
+   * Scannable metrics: the number carries the weight, the noun stays light.
+   * Users read digits far faster than prose.
+   */
+  metrics: Array<{ value: string; label: string }>;
+  /**
+   * A 2px left rail, not a badge. Colour is rationed so a scrolling list stays
+   * calm: only real momentum earns a tint.
+   */
+  accent: "none" | "growing" | "active";
 }
 
 const HOUR = 3_600_000;
@@ -106,10 +116,29 @@ export function composeDiscoveryRow(i: DiscoveryInput): DiscoveryRow {
   const stage = marketStage(i);
   const participants = Math.floor(n(i.participants));
   const capital = n(i.capitalUsd);
+  const joined = Math.floor(n(i.joined24h));
+
+  // A fact beats an interpretation: when we know who arrived today, say that
+  // instead of characterising the mood.
+  const story =
+    stage === "growing" && joined > 0
+      ? `${joined} new participant${joined === 1 ? "" : "s"} today`
+      : STORY[stage];
+
+  const metrics: Array<{ value: string; label: string }> = [];
+  if (participants > 0) {
+    metrics.push({
+      value: participants.toLocaleString("en-US"),
+      label: `participant${participants === 1 ? "" : "s"}`,
+    });
+  }
+  if (stage !== "new") metrics.push({ value: compactUsd(capital), label: "market cap" });
 
   return {
     stage,
-    story: STORY[stage],
+    metrics,
+    accent: stage === "growing" ? "growing" : stage === "active" ? "active" : "none",
+    story,
     participantsText:
       participants > 0 ? `${participants.toLocaleString("en-US")} participant${participants === 1 ? "" : "s"}` : null,
     capText: stage === "new" ? null : `${compactUsd(capital)} market cap`,
