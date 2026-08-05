@@ -113,12 +113,14 @@ export function positionPulse(
 }
 
 /**
- * The one dynamic story for a card, chosen by priority. `money` formats the gain
- * for the everyday fallback; everything above it needs no currency.
+ * The one dynamic story for a card, chosen by priority. Every branch is plain
+ * language — the money on the card speaks for itself, so no branch spends the
+ * sentence restating a gain. `_money` is kept for callers (and future copy that
+ * needs a currency) and deliberately unused here.
  */
 export function positionStory(
   input: PositionStoryInput,
-  money: (n: number) => string,
+  _money?: (n: number) => string,
 ): PositionStory {
   const { side, believers, gainUsd } = input;
   const n = input.newToday ?? 0;
