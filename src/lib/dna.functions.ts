@@ -14,6 +14,7 @@ import { aliasFor } from "@/lib/wallet-identity";
 import { categoryToDomain } from "@/domain/categories";
 import { firstBackedIsFloor } from "@/domain/tenure";
 import type { PersonPosition, SideChange } from "@/domain/person-profile";
+import { NETWORK, type Overlap } from "@/domain/person-network";
 import { CIRCLE_MIN_PEOPLE, type EvidenceLevel, type RelationshipLabel } from "@/domain/dna/config";
 import { scoreRelationship, type DnaFactor } from "@/domain/dna/score";
 import { classifyRelationship } from "@/domain/dna/classify";
@@ -671,6 +672,147 @@ async function loadConvictionEvidence(
   };
 }
 
+/**
+ * WHO IS STRUCTURALLY CONNECTED TO THIS PERSON — a different question from the
+ * one `viewer_dna_cache` answers, and the reason this query exists at all.
+ *
+ * The cache is viewer-relative: "how is this person connected to ME". Deriving
+ * the profile owner's network from it would render the VIEWER's tribe under
+ * someone else's name — confident and wrong. So this walks the actual overlap:
+ * the markets the owner took a side in, then everyone else who took a side in
+ * those same markets.
+ *
+ * BOUNDED THREE WAYS, because this is the widest read on the profile: the
+ * owner's markets are capped, the co-participant rows are capped, and the
+ * result is trimmed to the candidates worth describing. A profile page is not
+ * allowed to become a graph traversal.
+ *
+ * The JUDGEMENT — which of these connections is worth showing and how to say
+ * it — lives in @/domain/person-network. This only counts.
+ */
+const NETWORK_SCAN = {
+  /** Owner markets examined. Their most recent convictions carry the signal. */
+  maxMarkets: 60,
+  /** Co-participant rows read. Bounds a market with hundreds of believers. */
+  maxRows: 4000,
+} as const;
+
+async function loadPeopleAround(sb: Sb, target: string): Promise<Overlap[]> {
+  const { data: ownRows } = await sb
+    .from("wallet_beliefs")
+    .select("onchain_id, stance_side, first_backed_at, last_trade_at")
+    .eq("wallet", target)
+    .in("stance_side", ["YES", "NO"])
+    .order("last_trade_at", { ascending: false, nullsFirst: false })
+    .limit(NETWORK_SCAN.maxMarkets);
+  type Own = {
+    onchain_id: number;
+    stance_side: "YES" | "NO";
+    first_backed_at: string | null;
+    last_trade_at: string | null;
+  };
+  const own = (ownRows ?? []) as unknown as Own[];
+  if (own.length === 0) return [];
+
+  const ownById = new Map<number, Own>();
+  for (const r of own) ownById.set(Number(r.onchain_id), r);
+  const ids = [...ownById.keys()];
+
+  const [{ data: others }, { data: meta }] = await Promise.all([
+    sb
+      .from("wallet_beliefs")
+      .select("wallet, onchain_id, stance_side, first_backed_at, last_trade_at")
+      .in("onchain_id", ids)
+      .in("stance_side", ["YES", "NO"])
+      .neq("wallet", target)
+      .limit(NETWORK_SCAN.maxRows),
+    sb.from("markets").select("onchain_id, category").in("onchain_id", ids),
+  ]);
+  const topicOf = new Map<number, string | null>();
+  for (const m of (meta ?? []) as { onchain_id: number; category: string | null }[])
+    topicOf.set(Number(m.onchain_id), categoryToDomain(m.category));
+
+  type Acc = Omit<Overlap, "name" | "avatarUrl" | "byTopic"> & {
+    topics: Map<string, { same: number; opposite: number }>;
+    lastMs: number | null;
+  };
+  const acc = new Map<string, Acc>();
+  for (const r of (others ?? []) as unknown as {
+    wallet: string;
+    onchain_id: number;
+    stance_side: "YES" | "NO";
+    first_backed_at: string | null;
+    last_trade_at: string | null;
+  }[]) {
+    const w = String(r.wallet).toLowerCase();
+    const id = Number(r.onchain_id);
+    const mine = ownById.get(id);
+    if (!mine) continue;
+    const cur =
+      acc.get(w) ??
+      ({
+        wallet: w,
+        sharedMarkets: 0,
+        sameSide: 0,
+        oppositeSide: 0,
+        // Both hold a directional side right now — the query already filtered
+        // to directional stances, so every shared row IS a live one.
+        currentlyTogether: 0,
+        daysSinceTogether: null,
+        enteredAfter: 0,
+        topics: new Map(),
+        lastMs: null,
+      } satisfies Acc);
+    cur.sharedMarkets += 1;
+    cur.currentlyTogether += 1;
+    const same = r.stance_side === mine.stance_side;
+    if (same) cur.sameSide += 1;
+    else cur.oppositeSide += 1;
+
+    const topic = topicOf.get(id);
+    if (topic) {
+      const t = cur.topics.get(topic) ?? { same: 0, opposite: 0 };
+      if (same) t.same += 1;
+      else t.opposite += 1;
+      cur.topics.set(topic, t);
+    }
+
+    // Sequence only. Both timestamps must exist — an unknown start proves
+    // nothing about who arrived first.
+    const theirs = r.first_backed_at ? Date.parse(r.first_backed_at) : NaN;
+    const ours = mine.first_backed_at ? Date.parse(mine.first_backed_at) : NaN;
+    if (Number.isFinite(theirs) && Number.isFinite(ours) && theirs > ours) cur.enteredAfter += 1;
+
+    const at = r.last_trade_at ? Date.parse(r.last_trade_at) : NaN;
+    if (Number.isFinite(at)) cur.lastMs = Math.max(cur.lastMs ?? 0, at);
+
+    acc.set(w, cur);
+  }
+
+  // Only candidates the domain module could possibly describe are worth naming.
+  const worth = [...acc.values()]
+    .filter((a) => a.sharedMarkets >= NETWORK.minShared)
+    .sort((a, b) => b.sharedMarkets - a.sharedMarkets)
+    .slice(0, 24);
+  const profiles = await resolvePeople(
+    sb,
+    worth.map((a) => a.wallet),
+  );
+  const now = Date.now();
+  return worth.map((a) => ({
+    wallet: a.wallet,
+    name: profiles.get(a.wallet)?.name ?? aliasFor(a.wallet),
+    avatarUrl: profiles.get(a.wallet)?.avatarUrl ?? null,
+    sharedMarkets: a.sharedMarkets,
+    sameSide: a.sameSide,
+    oppositeSide: a.oppositeSide,
+    currentlyTogether: a.currentlyTogether,
+    daysSinceTogether: a.lastMs == null ? null : Math.max(0, (now - a.lastMs) / 86_400_000),
+    byTopic: [...a.topics.entries()].map(([topic, t]) => ({ topic, ...t })),
+    enteredAfter: a.enteredAfter,
+  }));
+}
+
 export type PersonProfile = {
   wallet: string;
   displayName: string;
@@ -699,6 +841,8 @@ export type PersonProfile = {
   /** Median days held, each side, for the holding-behaviour contrast. */
   personMedianDays: number | null;
   viewerMedianDays: number | null;
+  /** People structurally connected to THIS person — never the viewer's network. */
+  around: Overlap[];
 };
 
 function personSummary(aligned: { domain: string }[], opposed: { domain: string }[]): string {
@@ -735,7 +879,13 @@ export const getPersonProfile = createServerFn({ method: "GET" })
     // The convictions themselves. Loaded whether or not a viewer is present:
     // "who is this person" is answerable without knowing who is asking, and a
     // signed-out visitor deserves the same introduction.
-    const evidence = await loadConvictionEvidence(sb, target, viewer);
+    // Both are about the PROFILE OWNER, so both run whether or not a viewer is
+    // present — "who is this person and who is around them" is answerable
+    // without knowing who is asking.
+    const [evidence, around] = await Promise.all([
+      loadConvictionEvidence(sb, target, viewer),
+      loadPeopleAround(sb, target),
+    ]);
 
     const base: PersonProfile = {
       wallet: target,
@@ -759,6 +909,7 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       changes: evidence.changes,
       personMedianDays: evidence.personMedianDays,
       viewerMedianDays: null,
+      around,
     };
     if (!viewer || viewerFactors.length === 0) return base;
 
@@ -841,6 +992,7 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       changes: evidence.changes,
       personMedianDays: evidence.personMedianDays,
       viewerMedianDays: evidence.viewerMedianDays,
+      around,
     };
   });
 
