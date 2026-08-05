@@ -231,6 +231,21 @@ export function CaseColumn({
         ? priceUsd - priceUsd / (1 + pricePct / 100)
         : null;
 
+  // THE PULSE — one headline for the window plus the sentence that explains it.
+  // It reads the same authoritative price move the metric row shows, so the
+  // summary can never contradict the numbers under it.
+  const pulse = useMemo(() => {
+    // Half a cent, expressed in ETH: anything smaller renders as $0.00, so it
+    // must not generate a capital story.
+    const capitalDust = ethUsd > 0 ? 0.005 / ethUsd : 1e-9;
+    const st = summary
+      ? convictionStory(side, summary.series, { capitalDust, pricePct })
+      : null;
+    if (!st) return null;
+    return { headline: st.headline, narrative: narrateStory(st, side, FLOW_WINDOW_PHRASE[win], money) };
+  }, [summary, side, win, money, ethUsd, pricePct]);
+
+
   // Supporting copy only when something actually moved. "No change today" /
   // "Flat today" is filler — whitespace says it better.
   const believerAbs =
