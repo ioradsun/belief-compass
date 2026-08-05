@@ -308,20 +308,20 @@ export function CaseColumn({
     {
       metric: "capital",
       label: `${side} Capital`,
-      value:
-        capChange != null
-          ? format(authCapitalUsd!, "USD")
-          : capitalUsd != null
-            ? format(capitalUsd, "USD")
-            : "—",
+      // One source of capital: the holders' committed value (auth), else the
+      // tape only while the row is missing. Never the replayed residue.
+      value: capitalUsd != null ? format(capitalUsd, "USD") : "—",
       pct:
         capChange != null
           ? capChange.pct
-          : capitalMetric
-            ? metricPct(capitalMetric)
-            : (summary?.capitalPct ?? null),
+          : rowCapitalUsd != null
+            ? null
+            : capitalMetric
+              ? metricPct(capitalMetric)
+              : (summary?.capitalPct ?? null),
       absolute: capitalAbs,
     },
+
     {
       metric: "price",
       label: "Price",
