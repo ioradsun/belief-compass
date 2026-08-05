@@ -130,7 +130,7 @@ export function MobileCaseView({
             row={row}
             viewerWallet={viewerWallet}
             ethUsd={ethUsd}
-            compactRoster={false}
+            compactRoster
           />
         ) : (
           <>
