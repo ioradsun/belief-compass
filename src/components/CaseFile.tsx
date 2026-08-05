@@ -209,7 +209,8 @@ export function CaseColumn({
   // tape-derived marketBook figures (identical on the ~all non-truncated markets).
   const bl = baselines?.[win as VolumeWindow];
   const authBelievers = num(side === "YES" ? rr.believers_yes : rr.believers_no);
-  const authCapitalUsd = num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
+  const authCapitalUsd = rowCapitalUsd;
+
   const belBase = side === "YES" ? bl?.believersYes : bl?.believersNo;
   const capBase = side === "YES" ? bl?.yesCapitalUsd : bl?.noCapitalUsd;
   const priceBaseUsd = side === "YES" ? bl?.yesPriceUsd : bl?.noPriceUsd;
