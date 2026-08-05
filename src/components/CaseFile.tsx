@@ -357,6 +357,8 @@ export function CaseColumn({
               label={r.label}
               value={r.value}
               pct={r.pct}
+              absolute={r.absolute}
+
               active={metric === r.metric}
               color={color}
               onSelect={() => setDeckLens(r.metric)}
