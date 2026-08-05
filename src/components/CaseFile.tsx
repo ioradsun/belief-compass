@@ -24,6 +24,7 @@ import type { MarketRow } from "@/components/MarketCard";
 import { useAnchorRect, anchorStyle, type AnchorBox } from "@/hooks/useAnchorRect";
 import { useMoney } from "@/lib/display-unit";
 import { PersonAvatar } from "@/components/PersonAvatar";
+import { Clock, DollarSign } from "lucide-react";
 
 import {
   LENS_META,
@@ -534,6 +535,13 @@ function MetricRow({
 }
 
 
+/** Time held, at a glance: hours until a day has passed, then whole days. */
+function heldLabel(daysHeld: number): string {
+  if (!Number.isFinite(daysHeld) || daysHeld <= 0) return "new";
+  if (daysHeld < 1) return `${Math.max(1, Math.round(daysHeld * 24))}h`;
+  return `${Math.round(daysHeld)}d`;
+}
+
 /** How many believers the panel previews before "+N more". */
 const PREVIEW = 5;
 
@@ -592,11 +600,17 @@ export function CaseRoster({
                 </div>
               )}
             </div>
-            {amount && (
-              <span className="num shrink-0 text-[12px] font-semibold text-[var(--text)]">
-                {amount}
-              </span>
-            )}
+            <span className="num w-[52px] shrink-0 text-right text-[12px] font-semibold text-[var(--text)]">
+              {amount ?? "—"}
+            </span>
+            {/* Conviction = how long they have stayed in. Time held is the one
+              thing money cannot fake, so it earns its own column. */}
+            <span
+              className="num w-[34px] shrink-0 text-right text-[11px] text-[var(--text-muted)]"
+              title={`Held ${heldLabel(b.daysHeld)}`}
+            >
+              {heldLabel(b.daysHeld)}
+            </span>
           </li>
         );
       })}
@@ -617,6 +631,20 @@ export function CaseRoster({
           <span className="num text-[10px] text-[var(--text-muted)]">{roster.length}</span>
         )}
       </div>
+      {/* Icon column heads — the row grammar (who · how much · how long) without
+        three words of chrome. */}
+      {roster.length > 0 && variant !== "compact" && (
+        <div className="flex items-center gap-2 px-1 pb-0.5 text-[var(--text-muted)]">
+          <span className="w-[28px] shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1" aria-hidden />
+          <span className="flex w-[52px] shrink-0 justify-end" title="Position">
+            <DollarSign size={11} aria-label="Position" />
+          </span>
+          <span className="flex w-[34px] shrink-0 justify-end" title="Conviction — time held">
+            <Clock size={11} aria-label="Conviction, time held" />
+          </span>
+        </div>
+      )}
       {roster.length === 0 ? (
         <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No one on this side yet.</p>
       ) : variant === "compact" ? (
