@@ -24,7 +24,8 @@ import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { useHouseFinalize } from "@/lib/house-round";
-import { getMarketChange, listMarketPulses } from "@/lib/markets.functions";
+import { getMarketChange, listMarketPulses, getMarketBaselines } from "@/lib/markets.functions";
+import { windowChange } from "@/domain/window-change";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getConvictionMarket } from "@/lib/market-create.functions";
@@ -479,6 +480,13 @@ function BothSides({
     queryFn: () => listMarketPulses({ data: { ids: [marketId] } }),
     staleTime: 15_000,
   });
+  // Authoritative window-open baselines — the same source the desktop case file
+  // uses, so mobile momentum can never disagree with it.
+  const { data: baselines } = useQuery({
+    queryKey: ["market-baselines", marketId],
+    queryFn: () => getMarketBaselines({ data: { id: marketId } }),
+    staleTime: 30_000,
+  });
 
   const believers = evidence?.believers ?? [];
   // Prefer the read-model's authoritative per-side capital; fall back to the
@@ -494,6 +502,59 @@ function BothSides({
     return Math.max(seen, rowCount ?? 0);
   };
   const events = pulses?.pulses?.[String(marketId)] ?? [];
+
+  const bl = baselines?.["24h"];
+  /** Believers / capital / price momentum for one side, read the Total Market way. */
+  const rows = (s: OrderSide) => {
+    const bel = count(s);
+    const cap = capital(s);
+    const belBase = s === "YES" ? bl?.believersYes : bl?.believersNo;
+    const capBase = s === "YES" ? bl?.yesCapitalUsd : bl?.noCapitalUsd;
+    const belChg = belBase != null ? windowChange(bel, belBase) : null;
+    const capChg = capBase != null ? windowChange(cap, capBase) : null;
+    const belDelta = belChg?.delta ?? null;
+    const capDelta = capChg?.delta ?? null;
+    const priceUsd = Number(s === "YES" ? row.yes_price_usd : row.no_price_usd) || null;
+    const rawPct = Number(s === "YES" ? row.chg_24h_yes : row.chg_24h_no);
+    const pricePct = Number.isFinite(rawPct) ? rawPct : null;
+    const priceDelta =
+      priceUsd != null && pricePct != null ? priceUsd - priceUsd / (1 + pricePct / 100) : null;
+    return [
+      {
+        label: "Believers",
+        value: bel.toLocaleString("en-US"),
+        pct: belChg?.pct ?? null,
+        absolute:
+          belDelta == null
+            ? null
+            : belDelta === 0
+              ? "No change today"
+              : `${belDelta > 0 ? "+" : "−"}${Math.abs(belDelta)} believer${Math.abs(belDelta) === 1 ? "" : "s"} today`,
+      },
+      {
+        label: "Committed",
+        value: format(cap, "USD"),
+        pct: capChg?.pct ?? null,
+        absolute:
+          capDelta == null
+            ? null
+            : Math.abs(capDelta) < 0.005
+              ? "No change today"
+              : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "withdrawn"} today`,
+      },
+      {
+        label: "Per share",
+        value: priceUsd == null ? "—" : format(priceUsd, "USD"),
+        pct: pricePct,
+        absolute:
+          priceDelta == null
+            ? null
+            : Math.abs(priceDelta) < 0.005
+              ? "Flat today"
+              : `${format(priceDelta, "USD", { signed: true })} per share today`,
+      },
+    ];
+  };
 
   return (
     <Screen>
@@ -516,18 +577,28 @@ function BothSides({
               className="w-full pt-5 text-left"
             >
               <div
-                className="text-[20px] font-semibold"
+                className="flex items-baseline justify-between text-[20px] font-semibold"
                 style={{ color: s === "YES" ? "var(--yes)" : "var(--no)" }}
               >
                 {s}
+                <span className="text-[12px] font-medium text-[var(--text-muted)]">
+                  {open === s ? "Hide" : "Details"}
+                </span>
               </div>
-              <div className="num mt-2 text-[16px] text-[var(--text)]">
-                {count(s)} believer{count(s) === 1 ? "" : "s"}
-              </div>
-              <div className="num mt-1 text-[16px] text-[var(--text-secondary)]">
-                {format(capital(s), "USD")} committed
+              <div className="mt-2 space-y-1.5">
+                {rows(s).map((m) => (
+                  <SideMetric
+                    key={m.label}
+                    label={m.label}
+                    value={m.value}
+                    pct={m.pct}
+                    absolute={m.absolute}
+                    color={s === "YES" ? "var(--yes)" : "var(--no)"}
+                  />
+                ))}
               </div>
             </button>
+
 
             {open === s && (
               <div className="mt-5 space-y-5">
@@ -578,6 +649,61 @@ function BothSides({
 }
 
 /* ---------- primitives ---------- */
+
+/**
+ * One side metric, read exactly like the Total Market instrument: the current
+ * total leads on the left, the window's % change is the big figure on the right
+ * with a trailing arrow, and the EXACT move states what actually happened.
+ */
+function SideMetric({
+  label,
+  value,
+  pct,
+  absolute,
+  color,
+}: {
+  label: string;
+  value: string;
+  pct: number | null;
+  absolute?: string | null;
+  color: string;
+}) {
+  const flat = pct == null || Math.abs(pct) < 0.05;
+  const tone = flat ? "var(--text-muted)" : pct! > 0 ? "var(--yes)" : "var(--no)";
+  const arrow = flat ? "" : pct! > 0 ? "▲" : "▼";
+  const pctText =
+    pct == null ? "" : `${Math.abs(pct).toFixed(!flat && Math.abs(pct) < 10 ? 1 : 0)}%`;
+  return (
+    <div
+      className="rounded-[10px] py-2 pl-2 pr-2.5"
+      style={{
+        borderLeft: `2px solid ${color}`,
+        background: `color-mix(in oklab, ${color} 7%, transparent)`,
+      }}
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="num min-w-0 truncate text-[20px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
+          {value}
+        </span>
+        <span
+          className="num shrink-0 text-[18px] font-semibold leading-none tabular-nums"
+          style={{ color: tone }}
+        >
+          {pctText}
+          {arrow && pctText ? <span className="ml-1 align-middle text-[0.6em]">{arrow}</span> : null}
+        </span>
+      </div>
+      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
+        {label}
+      </div>
+      {absolute && (
+        <div className="num mt-0.5 text-[11px]" style={{ color: tone }}>
+          {absolute}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Screen({ children }: { children: React.ReactNode }) {
   return <div className="flex h-full min-h-0 flex-col">{children}</div>;
