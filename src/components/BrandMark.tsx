@@ -24,17 +24,17 @@ export function BrandMark({
       aria-label="conviction.company"
       className={className}
     >
-      {/* top C — normal orientation, faces right */}
+      {/* top C — YES, Conviction Blue */}
       <path
         d="M15.77 4.56 A4.6 4.6 0 1 0 15.77 9.84"
-        stroke="currentColor"
+        stroke="var(--yes)"
         strokeWidth="2.4"
         strokeLinecap="round"
       />
-      {/* bottom C — horizontally inverted, faces left */}
+      {/* bottom C — NO, Conviction Amber. Equal weight, never a loser. */}
       <path
         d="M8.23 14.16 A4.6 4.6 0 1 1 8.23 19.44"
-        stroke="currentColor"
+        stroke="var(--no)"
         strokeWidth="2.4"
         strokeLinecap="round"
       />
@@ -44,7 +44,7 @@ export function BrandMark({
         stroke="currentColor"
         strokeWidth="1"
         strokeLinecap="round"
-        opacity="0.7"
+        opacity="0.45"
       />
     </svg>
   );
