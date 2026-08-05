@@ -145,6 +145,8 @@ export function LandingExampleCard({
       <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
         Illustrative values only.
       </p>
+      </div>
     </div>
   );
+
 }
