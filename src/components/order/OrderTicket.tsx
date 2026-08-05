@@ -226,13 +226,13 @@ export function OwnedLine({ yes, no }: { yes?: string | null; no?: string | null
         You own
       </span>
       {yes && (
-        <span className="num text-[12px] font-semibold" style={{ color: "var(--yes)" }}>
-          {yes} YES
+        <span className="num text-[12px] font-semibold text-[var(--text)]">
+          {yes} <span style={{ color: "var(--yes)" }}>YES</span>
         </span>
       )}
       {no && (
-        <span className="num text-[12px] font-semibold" style={{ color: "var(--no)" }}>
-          {no} NO
+        <span className="num text-[12px] font-semibold text-[var(--text)]">
+          {no} <span style={{ color: "var(--no)" }}>NO</span>
         </span>
       )}
     </div>
@@ -531,21 +531,21 @@ function BuyTicket({
   }
 
   // Neutral: the decision only — one tap on an action opens the order form.
-  // NO left, YES right, Pass last: the same three equal columns every other
+  // YES left, NO right, Pass last: the same three equal columns every other
   // selector uses, so nothing shifts as the dock morphs.
   if (!side) {
     return (
       <ActionRow>
         <SideButton
-          label="Back NO"
-          tone="no"
-          onClick={() => onSelect("NO")}
-          className={`${CTRL} flex-1`}
-        />
-        <SideButton
           label="Back YES"
           tone="yes"
           onClick={() => onSelect("YES")}
+          className={`${CTRL} flex-1`}
+        />
+        <SideButton
+          label="Back NO"
+          tone="no"
+          onClick={() => onSelect("NO")}
           className={`${CTRL} flex-1`}
         />
         <SideButton label="Pass" tone="pass" onClick={onPass} className={`${CTRL} flex-1`} />

@@ -7,8 +7,8 @@
  *
  * The market stays the default (center) page; the two competing cases sit just
  * off-screen and are reached by swiping. The spatial model matches the order
- * dock below — NO on the left, YES on the right — so a user never swipes left
- * for YES while tapping left for NO. Not two drawers, not a squeezed desktop.
+ * dock below: the two cases flank the market so a side is always one swipe
+ * away. Not two drawers, not a squeezed desktop.
  *
  * Presentation only: the side pages reuse CaseColumn (same query keys, no new
  * data), and the middle page is the exact neutral market content passed as

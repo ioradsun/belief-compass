@@ -349,8 +349,8 @@ export function MarketDeck({
       const el = document.activeElement;
       if (el && ["INPUT", "TEXTAREA"].includes(el.tagName)) return;
       if (el?.getAttribute("role") === "tab") return;
-      if (e.key === "ArrowLeft") chooseSide("NO");
-      else if (e.key === "ArrowRight") chooseSide("YES");
+      if (e.key === "ArrowLeft") chooseSide("YES");
+      else if (e.key === "ArrowRight") chooseSide("NO");
       else if (e.key === "ArrowUp") {
         e.preventDefault();
         choosePass();
@@ -610,7 +610,7 @@ export function MarketDeck({
         <div className="overflow-hidden rounded-[16px]" style={{ background: "var(--surface)" }}>
           {/* Owned and undecided? The SHARED dock renders ownership + the stable
             selector (or the sell ticket). Otherwise the buy ticket takes over —
-            discovery (Back NO · Back YES · Pass), or the amount + confirm form
+            discovery (Back YES · Back NO · Pass), or the amount + confirm form
             once a side is chosen. The SAME ticket in both cases. */}
           {dockOwns ? (
             dockNode

@@ -12,7 +12,7 @@
  * selector — Buy · Sell · Pass — and the side is chosen explicitly in a second
  * step, in the SAME three-button footprint:
  *
- *     Buy  → Back NO · Back YES · Cancel
+ *     Buy  → Back YES · Back NO · Cancel
  *     Sell → (one side owned) straight to that side
  *            (both owned)     Sell NO · Sell YES · Cancel
  *

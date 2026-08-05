@@ -13,6 +13,9 @@ export type LandingExample = {
   noPeople: number;
   entry: string;
   current: string;
+  /** The gain on the early position — performance, so it reads green. */
+  gain: string;
+  gainPct: string;
   growth: { label: string; value: string }[];
 };
 
@@ -23,6 +26,8 @@ export const SOCKS_EXAMPLE: LandingExample = {
   noPeople: 12,
   entry: "$10.00",
   current: "$23.94",
+  gain: "+$13.94",
+  gainPct: "+139%",
   growth: [
     { label: "5× more backing", value: "~$47" },
     { label: "20× more backing", value: "~$120" },
@@ -37,6 +42,8 @@ export const SMILING_EXAMPLE: LandingExample = {
   noPeople: 9,
   entry: "$10.00",
   current: "$18.60",
+  gain: "+$8.60",
+  gainPct: "+86%",
   growth: [
     { label: "5× more backing", value: "~$38" },
     { label: "20× more backing", value: "~$94" },
@@ -83,11 +90,11 @@ export function LandingExampleCard({
 
       <div className="mt-3 flex items-center gap-4 text-[12px] text-[var(--text-secondary)]">
         <span>
-          <span className="num font-semibold text-[var(--yes)]">{example.yesPeople}</span> people
+          <span className="num font-semibold text-[var(--text)]">{example.yesPeople}</span> people
           back <span className="font-semibold text-[var(--yes)]">YES</span>
         </span>
         <span>
-          <span className="num font-semibold text-[var(--no)]">{example.noPeople}</span> people
+          <span className="num font-semibold text-[var(--text)]">{example.noPeople}</span> people
           back <span className="font-semibold text-[var(--no)]">NO</span>
         </span>
       </div>
@@ -103,8 +110,12 @@ export function LandingExampleCard({
           </div>
           <div className="text-right">
             <div className="text-[11px] text-[var(--text-muted)]">Current position</div>
-            <div className="num text-[26px] font-semibold leading-none text-[var(--gain)]">
+            <div className="num text-[26px] font-semibold leading-none text-[var(--text)]">
               {example.current}
+            </div>
+            <div className="num mt-1 text-[13px] font-semibold leading-none text-[var(--gain)]">
+              {example.gain} <span className="text-[0.95em]">({example.gainPct})</span>
+              <span className="ml-1 text-[0.7em] align-middle">▲</span>
             </div>
           </div>
         </div>
