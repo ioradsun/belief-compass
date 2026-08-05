@@ -508,12 +508,7 @@ export const getMarketChange = createServerFn({ method: "GET" })
       const wei = Number(t.amount_eth ?? 0);
       const eth = Number.isFinite(wei) ? wei / 1e18 : 0;
       const at = new Date(t.occurred_at).getTime();
-      // PRICE, HONESTLY. Only BUY events carry a real per-share mark. SELL logs
-      // report the contract's floor parameter (1e15 wei on ~77% of sells), not
-      // an execution price — treating it as one slams the price track to the
-      // floor and invents "price fell 53%" on a market where nothing traded.
-      // A sell therefore carries no price and the track holds its last real mark.
-      const priceWei = action === "BUY" && t.price != null ? Number(t.price) : null;
+      const priceWei = t.price == null ? null : Number(t.price);
       // Chain order inside the block. Whole blocks share one occurred_at, so
       // without this a SELL can be replayed before the BUY it closes and the
       // wallet keeps phantom shares (and phantom believer/capital totals).
@@ -527,7 +522,7 @@ export const getMarketChange = createServerFn({ method: "GET" })
         side,
         action,
         eth,
-        price: priceWei != null && Number.isFinite(priceWei) && priceWei > 0 ? priceWei / 1e18 : null,
+        price: priceWei != null && Number.isFinite(priceWei) ? priceWei / 1e18 : null,
         t: at,
         seq,
       });
