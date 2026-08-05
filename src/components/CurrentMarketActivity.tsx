@@ -13,6 +13,7 @@
  * and a quiet unread count; tapping expands the bounded, internally-scrolled feed.
  */
 import { useEffect, useState } from "react";
+import { useAnchorRect, anchorStyle } from "@/hooks/useAnchorRect";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
@@ -34,6 +35,8 @@ export function CurrentMarketActivity({
   embedded?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // The sheet belongs to this column, not the viewport.
+  const { ref: anchorRef, box: anchorBox } = useAnchorRect<HTMLDivElement>(open);
 
   // The SAME scoped live query LiveTape runs, so the count matches what opens and
   // React Query never double-fetches.
@@ -68,6 +71,7 @@ export function CurrentMarketActivity({
 
   return (
     <div
+      ref={anchorRef}
       className={
         embedded ? "shrink-0 overflow-hidden" : "mb-3 shrink-0 overflow-hidden rounded-[12px]"
       }
@@ -109,7 +113,12 @@ export function CurrentMarketActivity({
         around; reading "what just happened" is a whole-attention task, so it
         takes the whole screen and gives it straight back on dismiss. */}
       {open && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[2147483000] flex flex-col" role="dialog" aria-modal="true">
+        <div
+          className="fixed bottom-0 top-0 z-[2147483000] flex flex-col"
+          style={anchorStyle(anchorBox)}
+          role="dialog"
+          aria-modal="true"
+        >
           <button
             type="button"
             aria-label="Close live activity"
