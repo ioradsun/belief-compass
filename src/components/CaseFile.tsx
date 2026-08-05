@@ -160,14 +160,23 @@ export function CaseColumn({
   // opens blank. The row totals are period-less; the deltas need the tape.
   const rr = row as Record<string, unknown>;
   const rawBelievers =
-    believerMetric?.current ?? num(side === "YES" ? rr.believers_yes : rr.believers_no) ?? 0;
-  const capitalUsd =
-    capitalMetric != null
-      ? capitalMetric.current * (ethUsd || 0)
-      : num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
+    num(side === "YES" ? rr.believers_yes : rr.believers_no) ?? believerMetric?.current ?? 0;
+  // CAPITAL IS AUTHORITATIVE, NOT TAPE-DERIVED — the same rule as believers and
+  // price. Replaying buys and sells accumulates float residue (and per-wallet
+  // clamping), so a market everyone has fully exited can leave a few cents on
+  // the tape. That produced "capital on YES, nobody backing it". The holders
+  // table is the truth; the tape only fills in before it has loaded.
+  const tapeCapitalUsd = capitalMetric != null ? capitalMetric.current * (ethUsd || 0) : null;
+  const rowCapitalUsd = num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
+  const capitalUsd = rowCapitalUsd ?? tapeCapitalUsd;
   // Capital on this side means someone stands behind it — the market's initial
   // investment isn't an indexed position, so never show "0 believers, $13".
-  const believersTotal = seededBelievers(rawBelievers, capitalUsd);
+  // Dust (< 1c) is not capital and must never seed a believer.
+  const believersTotal = seededBelievers(
+    rawBelievers,
+    capitalUsd != null && capitalUsd >= 0.01 ? capitalUsd : 0,
+  );
+
   // PRICE IS AUTHORITATIVE, NOT TAPE-DERIVED. The tape carries each trade's
   // post-trade `newPrice`, which spikes and collapses inside a single whale
   // round-trip; reading it as "the price" makes a market that has been flat for
@@ -200,7 +209,8 @@ export function CaseColumn({
   // tape-derived marketBook figures (identical on the ~all non-truncated markets).
   const bl = baselines?.[win as VolumeWindow];
   const authBelievers = num(side === "YES" ? rr.believers_yes : rr.believers_no);
-  const authCapitalUsd = num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
+  const authCapitalUsd = rowCapitalUsd;
+
   const belBase = side === "YES" ? bl?.believersYes : bl?.believersNo;
   const capBase = side === "YES" ? bl?.yesCapitalUsd : bl?.noCapitalUsd;
   const priceBaseUsd = side === "YES" ? bl?.yesPriceUsd : bl?.noPriceUsd;
@@ -221,7 +231,13 @@ export function CaseColumn({
   const phrase = FLOW_WINDOW_PHRASE[win];
   const belDelta = belChange?.delta ?? believerMetric?.delta ?? null;
   const capDelta =
-    capChange?.delta ?? (capitalMetric != null ? capitalMetric.delta * (ethUsd || 0) : null);
+    capChange?.delta ??
+    (rowCapitalUsd != null
+      ? null
+      : capitalMetric != null
+        ? capitalMetric.delta * (ethUsd || 0)
+        : null);
+
   const pricePct =
     priceChange != null ? priceChange.pct : authPriceUsd != null ? null : (summary?.pricePct ?? null);
   const priceDelta =
@@ -298,20 +314,20 @@ export function CaseColumn({
     {
       metric: "capital",
       label: `${side} Capital`,
-      value:
-        capChange != null
-          ? format(authCapitalUsd!, "USD")
-          : capitalUsd != null
-            ? format(capitalUsd, "USD")
-            : "—",
+      // One source of capital: the holders' committed value (auth), else the
+      // tape only while the row is missing. Never the replayed residue.
+      value: capitalUsd != null ? format(capitalUsd, "USD") : "—",
       pct:
         capChange != null
           ? capChange.pct
-          : capitalMetric
-            ? metricPct(capitalMetric)
-            : (summary?.capitalPct ?? null),
+          : rowCapitalUsd != null
+            ? null
+            : capitalMetric
+              ? metricPct(capitalMetric)
+              : (summary?.capitalPct ?? null),
       absolute: capitalAbs,
     },
+
     {
       metric: "price",
       label: "Price",
