@@ -327,14 +327,19 @@ export function CaseColumn({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Header: the side. The timeframe is chosen once, in the center panel. */}
+      {/* Header IS the headline: the pulse for the window when there is one,
+        otherwise just the side. Either way the side name is said once, never
+        twice. The timeframe is chosen in the center panel and quoted here. */}
       <div className="mb-3 shrink-0">
-        <div className="flex items-baseline gap-2">
-          <span className="text-[13px] font-semibold" style={{ color }}>
-            {side}
-          </span>
-
-          <span className="ml-auto text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+        <div className="flex items-baseline gap-3">
+          <h3 className="min-w-0 text-[15px] font-semibold leading-snug tracking-[-0.01em] text-[var(--text)]">
+            {pulse ? (
+              <SideWords text={pulse.headline} />
+            ) : (
+              <span style={{ color }}>{side}</span>
+            )}
+          </h3>
+          <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
             {FLOW_WINDOW_SHORT[win]}
           </span>
         </div>
@@ -344,9 +349,6 @@ export function CaseColumn({
         {/* 1 — CURRENT STATE: what this side IS, in plain language, before any
           metric. When something moved in the window, one sentence says what. */}
         <div className="space-y-1">
-          <p className="text-[15px] font-semibold leading-snug tracking-[-0.01em] text-[var(--text)]">
-            <SideWords text={pulse?.headline ?? stateLine} />
-          </p>
           {pulse ? (
             <>
               <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
@@ -357,13 +359,19 @@ export function CaseColumn({
               </p>
             </>
           ) : (
-            changeLine && (
+            <>
               <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
-                <SideWords text={changeLine} />
+                <SideWords text={stateLine} />
               </p>
-            )
+              {changeLine && (
+                <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+                  <SideWords text={changeLine} />
+                </p>
+              )}
+            </>
           )}
         </div>
+
 
         {/* 2 — SNAPSHOT: the three essential metrics. They double as the chart's
           lens selector — no tabs, no segmented control. Supporting copy appears
