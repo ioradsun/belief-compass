@@ -502,27 +502,30 @@ export function MyConvictions({
             <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
               Backing {count} belief{count === 1 ? "" : "s"}
             </div>
-            <div className="num mt-0.5 text-[12px]" style={{ color: tone }}>
-              {move === 0 ? (
-                <span className="text-[var(--text-muted)]">No change</span>
-              ) : (
-                <>
-                  {signedMoney(move)}{" "}
-                  <span className="font-normal text-[var(--text-muted)]">
-                    {lifetimeMove ? "since you started" : winLabel.toLowerCase()}
-                  </span>
-                </>
+            <div className="mt-0.5 flex items-baseline justify-between gap-3">
+              <div className="num text-[12px]" style={{ color: tone }}>
+                {move === 0 ? (
+                  <span className="text-[var(--text-muted)]">No change</span>
+                ) : (
+                  <>
+                    {signedMoney(move)}{" "}
+                    <span className="font-normal text-[var(--text-muted)]">
+                      {lifetimeMove ? "since you started" : winLabel.toLowerCase()}
+                    </span>
+                  </>
+                )}
+              </div>
+              {onOpenDashboard && (
+                <button
+                  type="button"
+                  onClick={onOpenDashboard}
+                  className="shrink-0 text-[11px] font-semibold text-[var(--text-secondary)] underline-offset-2 hover:underline"
+                >
+                  Full P&amp;L &rarr;
+                </button>
               )}
             </div>
-            {onOpenDashboard && (
-              <button
-                type="button"
-                onClick={onOpenDashboard}
-                className="mt-2 text-[11px] font-semibold text-[var(--text-secondary)] underline-offset-2 hover:underline"
-              >
-                Full P&amp;L &rarr;
-              </button>
-            )}
+
           </div>
         );
       })()}
