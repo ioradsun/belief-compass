@@ -39,6 +39,7 @@ export function MyWorld({
   selectedPerson,
   onSelectPerson,
   onOpenDna,
+  onOpenDashboard,
   initialNetwork,
 }: {
   wallet?: string;
@@ -51,6 +52,8 @@ export function MyWorld({
   selectedPerson?: string;
   onSelectPerson: (wallet: string) => void;
   onOpenDna: () => void;
+  /** Open the full Conviction Dashboard (P&L) in the center. */
+  onOpenDashboard?: () => void;
   /** Force a people tab when a person/DNA view is active in the center. */
   initialNetwork?: boolean;
 }) {
@@ -169,6 +172,7 @@ export function MyWorld({
             onSelect={onSelectMarket}
             onCount={setConvictionCount}
             onExplore={exploreMarkets}
+            onOpenDashboard={onOpenDashboard}
           />
         </div>
       ) : (
