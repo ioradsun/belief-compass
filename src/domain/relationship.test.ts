@@ -3,13 +3,10 @@ import {
   presentRelationship,
   relationshipInsight,
   relationshipLabel,
-  relationshipTopicLine,
   formatSharedConvictions,
-  relationshipBreakdown,
   sortTribe,
   sortRivals,
   dnaMaturity,
-  sharedDna,
   type RelationshipInput,
 } from "./relationship";
 
@@ -66,7 +63,6 @@ describe("mature relationships show the % WITH its evidence", () => {
     expect(p.group).toBe("tribe");
     expect(p.tier).toBe("mature");
     expect(relationshipInsight(p)).toBe("84% aligned");
-    expect(relationshipBreakdown(p)).toBe("Together on 16 · Apart on 3");
     // 84% < 90% Twin bar → Tribe, not Twin.
     expect(p.earnedLabel).toBeNull();
     expect(relationshipLabel(p)?.text).toBe("Tribe");
@@ -180,29 +176,9 @@ describe("topic lines and copy", () => {
         strongestAlignedTopic: "Culture",
       }),
     );
-    expect(relationshipTopicLine(tribe)).toBe("Strongest connection: Culture");
-    const earlyTribe = presentRelationship(
-      make({
-        agreement: 80,
-        sharedConvictions: 4,
-        together: 3,
-        apart: 1,
-        topicCount: 2,
-        strongestAlignedTopic: "Culture",
-      }),
-    );
-    expect(relationshipTopicLine(earlyTribe)).toBe("Common ground: Culture");
-    const rival = presentRelationship(
-      make({
-        agreement: 15,
-        sharedConvictions: 20,
-        together: 3,
-        apart: 17,
-        topicCount: 4,
-        strongestOpposedTopic: "Technology",
-      }),
-    );
-    expect(relationshipTopicLine(rival)).toBe("Strongest divide: Technology");
+    // The presentation still carries the topics; the line that rendered them
+    // belonged to a profile layout that no longer exists.
+    expect(tribe.strongestAlignedTopic).toBe("Culture");
   });
 
   it("formats shared convictions with correct pluralisation", () => {
@@ -228,54 +204,5 @@ describe("page-level DNA maturity (factual, not a fake identity %)", () => {
 
   it("invites the first decision when nothing is mapped", () => {
     expect(dnaMaturity(0, 0).note).toContain("Take a side");
-  });
-});
-
-describe("Shared DNA is a relationship, not a statistic", () => {
-  const twin = presentRelationship(
-    make({ agreement: 94, sharedConvictions: 41, together: 39, apart: 2, topicCount: 5 }),
-  );
-
-  it("leads with the relationship, supports with the score, validates with evidence", () => {
-    const d = sharedDna(twin);
-    expect(d.lead).toBe("Twin");
-    expect(d.score).toBe("94% Shared DNA");
-    expect(d.evidence).toBe("41 shared convictions · 5 topics");
-  });
-
-  it("an Opp reads as opposite DNA, never as a lesser match", () => {
-    const opp = presentRelationship(
-      make({ agreement: 8, sharedConvictions: 30, together: 2, apart: 28, topicCount: 4 }),
-    );
-    const d = sharedDna(opp);
-    expect(d.lead).toBe("Opp");
-    expect(d.score).toBe("92% Opposite DNA");
-    expect(d.kind).toBe("earned");
-  });
-
-  it("withholds the percentage when the evidence cannot carry one", () => {
-    const thin = presentRelationship(
-      make({ agreement: 100, sharedConvictions: 4, together: 4, apart: 0, topicCount: 1 }),
-    );
-    const d = sharedDna(thin);
-    expect(d.score).toBeNull();
-    // The honest count still appears — the claim is not hidden, only unpadded.
-    expect(d.evidence).toContain("4 shared convictions");
-  });
-
-  it("says 'Still learning' rather than inventing a relationship", () => {
-    const d = sharedDna(presentRelationship(make({ agreement: 50, sharedConvictions: 1 })));
-    expect(d.lead).toBe("Still learning");
-    expect(d.kind).toBe("learning");
-    expect(d.score).toBeNull();
-  });
-
-  it("never shows a naked number with nothing behind it", () => {
-    const cases = [twin, presentRelationship(make({ agreement: 50, sharedConvictions: 0 }))];
-    for (const p of cases) {
-      const d = sharedDna(p);
-      expect(d.lead.length).toBeGreaterThan(0);
-      expect(d.evidence.length).toBeGreaterThan(0);
-    }
   });
 });

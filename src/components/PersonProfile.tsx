@@ -1,14 +1,33 @@
 /**
- * COMPARE DNA — you ↔ this person, told as a social story, not a stat sheet.
+ * PROFILE — a person, told through their convictions, and a way onward.
  *
- * The magic isn't the percentage; it's seeing exactly WHICH beliefs connect two
- * people. So the header states the relationship honestly (earned Twin/Opp, a
- * mature % with its evidence, or early counts), then the page shows your
- * strongest common ground and divide, the markets you both backed, the ones you
- * split on, and — where it exists — a per-topic breakdown.
+ * The page answers "why should this person matter to me", in the order a
+ * curious visitor actually asks it:
  *
- * Presentation only: getPersonProfile owns the comparison; the pure
- * src/domain/relationship engine turns it into one consistent story.
+ *   NOTICE    who they appear to be, from what they have actually backed
+ *   EXPLORE   the convictions that most reveal them
+ *   REFLECT   what connects the two of you, and where you differ
+ *   DISCOVER  markets worth opening because of them, and people around them
+ *
+ * WHAT THIS REPLACED, and why none of it is missed:
+ *
+ *   A relationship PERCENTAGE in the largest type on the page. It told a
+ *   visitor they were 68% compatible with a stranger without telling them one
+ *   thing they would disagree about.
+ *
+ *   A Together / Apart stat pair. Two numbers where one sentence — "you agree
+ *   on technology and differ on economics" — carries more and reads faster.
+ *
+ *   A per-topic BAR CHART. A visualisation of a comparison, when the comparison
+ *   itself fits in a line.
+ *
+ *   TWO FLAT LISTS of up to forty shared markets each. Everything at equal
+ *   weight is the same as nothing being important. The markets that survive
+ *   are the ones that earned a reason.
+ *
+ * All of it was true. None of it was an introduction. The judgement about what
+ * reveals a person lives in @/domain/person-profile — including its refusals,
+ * which are most of it; this file only arranges what that module allows.
  */
 import { useQuery } from "@tanstack/react-query";
 import { getPersonProfile } from "@/lib/dna.functions";
@@ -16,11 +35,13 @@ import { ago } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { FollowButton } from "@/components/FollowButton";
 import {
-  presentRelationship,
-  relationshipBreakdown,
-  relationshipTopicLine,
-  sharedDna,
-} from "@/domain/relationship";
+  definingConvictions,
+  introduction,
+  connection,
+  exploreThrough,
+  type DefiningConviction,
+  type DiscoverySuggestion,
+} from "@/domain/person-profile";
 
 export function PersonProfile({
   wallet,
@@ -41,25 +62,33 @@ export function PersonProfile({
     return <div className="h-40 animate-pulse rounded-xl bg-[var(--surface-2)]" />;
   }
 
-  const rel = presentRelationship({
-    agreement: data.agreement,
-    sharedConvictions: data.sharedBeliefs,
+  const intro = introduction(data.positions, { marketsParticipated: data.positions.length });
+  const defining = definingConvictions(data.positions, data.changes);
+  const link = connection({
+    sharedMarkets: data.sharedBeliefs,
     together: data.together,
     apart: data.apart,
-    topicCount: data.topicCount,
-    strongestAlignedTopic: data.alignedDomains[0]?.domain ?? null,
-    strongestOpposedTopic: data.opposedDomains[0]?.domain ?? null,
+    alignedTopics: data.alignedDomains.map((d) => d.domain),
+    opposedTopics: data.opposedDomains.map((d) => d.domain),
+    viewerMedianDays: data.viewerMedianDays,
+    personMedianDays: data.personMedianDays,
   });
-  // THE RELATIONSHIP IS THE HEADLINE. The percentage supports it; the shared
-  // convictions validate it. A number about a person is a statistic; a person
-  // with a number behind them is a relationship.
-  const dna = data.hasViewer ? sharedDna(rel) : null;
-  const dnaColor =
-    dna?.tone === "opposed" ? "var(--no)" : dna?.tone === "aligned" ? "var(--yes)" : "var(--text)";
+  const explore = exploreThrough(defining, {
+    agreed: data.sharedBoth.map((m) => ({ marketId: Number(m.marketId), title: m.title })),
+    opposed: data.opposing.map((m) => ({
+      marketId: Number(m.marketId),
+      title: m.title,
+      personSide: m.personSide,
+      viewerSide: m.viewerSide,
+    })),
+  });
 
   return (
-    <div className="space-y-6">
-      {/* Header — YOU + PERSON, and the relationship in one honest line. */}
+    <div className="space-y-7">
+      {/* ── NOTICE ─────────────────────────────────────────────────────────
+          A name, a face, and two sentences about what they have backed. No
+          score: a number here would be the first thing read and the least
+          useful thing said. */}
       <header className="flex items-start gap-3">
         {data.avatarUrl ? (
           <img
@@ -77,224 +106,146 @@ export function PersonProfile({
           </span>
         )}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-lg font-semibold text-[var(--text)]">
-            {data.displayName}
-          </div>
-          {dna ? (
-            <>
-              {/* LEAD — the relationship, in the largest type on the header. */}
-              <div
-                className="mt-0.5 text-[15px] font-semibold leading-tight"
-                style={{ color: dnaColor }}
-              >
-                {dna.lead}
-              </div>
-              {/* SCORE — supports the relationship; absent when unearned. */}
-              {dna.score && (
-                <div className="num mt-0.5 text-[13px] text-[var(--text-secondary)]">
-                  {dna.score}
-                </div>
-              )}
-              {/* EVIDENCE — what the claim rests on. Never omitted. */}
-              <div className="mt-0.5 text-[12px] text-[var(--text-muted)]">{dna.evidence}</div>
-            </>
-          ) : (
-            <div className="mt-0.5 text-[12px] text-[var(--text-muted)]">{data.summary}</div>
-          )}
+          <h1 className="truncate text-lg font-semibold text-[var(--text)]">{data.displayName}</h1>
+          <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">
+            {intro.lines.join(" ")}
+          </p>
         </div>
-        {/* Follow sits beside the inferred relationship, not instead of it: the
-            DNA line says what the data concluded, this says what you decided. */}
-        <FollowButton person={wallet} viewer={viewer} />
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <FollowButton person={wallet} viewer={viewer} />
+          {/* Say what following DOES, once, and only where it is not obvious. */}
+          <span className="max-w-[9rem] text-right text-[10px] leading-tight text-[var(--text-muted)]">
+            Surfaces markets connected to them
+          </span>
+        </div>
       </header>
 
-      {data.hasViewer && (
-        <>
-          {/* Together / Apart — the shape of the relationship at a glance. */}
-          <div className="grid grid-cols-2 gap-3">
-            <Stat
-              label="Together"
-              value={data.together}
-              tone="var(--yes)"
-              sub={
-                rel.strongestAlignedTopic ? `Strongest: ${rel.strongestAlignedTopic}` : undefined
-              }
-            />
-            <Stat
-              label="Apart"
-              value={data.apart}
-              tone="var(--no)"
-              sub={
-                rel.strongestOpposedTopic ? `Strongest: ${rel.strongestOpposedTopic}` : undefined
-              }
-            />
-          </div>
-          {rel.tier === "mature" && relationshipTopicLine(rel) && (
-            <p className="text-[12px] text-[var(--text-muted)]">
-              {relationshipBreakdown(rel)} · {relationshipTopicLine(rel)}
-            </p>
-          )}
-
-          {/* Per-topic breakdown, where the evidence exists. */}
-          {(data.alignedDomains.length > 0 || data.opposedDomains.length > 0) && (
-            <section>
-              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                By topic
-              </h3>
-              <ul className="space-y-1.5">
-                {[...data.alignedDomains, ...data.opposedDomains]
-                  .sort((a, b) => b.agreement - a.agreement)
-                  .map((d) => (
-                    <TopicRow key={d.domain} domain={d.domain} agreement={d.agreement} />
-                  ))}
-              </ul>
-            </section>
-          )}
-
-          {/* The 23andMe moment: the actual beliefs that connect or divide you. */}
-          <BeliefSection
-            title="You both backed"
-            markets={data.sharedBoth}
-            onSelectMarket={onSelectMarket}
-            render={(m) => (
-              <>
-                Both <SideTag side={m.viewerSide} />
-              </>
-            )}
-          />
-          <BeliefSection
-            title="You split on"
-            markets={data.opposing}
-            onSelectMarket={onSelectMarket}
-            render={(m) => (
-              <>
-                You <SideTag side={m.viewerSide} /> · them <SideTag side={m.personSide} />
-              </>
-            )}
-          />
-        </>
-      )}
-
-      {data.recentActivity.length > 0 && (
+      {/* ── EXPLORE ────────────────────────────────────────────────────────── */}
+      {defining.length > 0 && (
         <section>
-          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            Recent activity
-          </h3>
-          {data.recentActivity.map((a) => (
-            <button
-              key={a.marketId}
-              type="button"
-              onClick={() => onSelectMarket(Number(a.marketId))}
-              className="block w-full rounded-lg px-2 py-2 text-left text-[13px] transition-colors hover:bg-[var(--surface-2)]"
-            >
-              <span className="text-[var(--text)]">{data.displayName}</span> {a.action}{" "}
-              <SideTag side={a.side} /> ·{" "}
-              <span className="text-[var(--text-muted)]">{a.marketTitle}</span>{" "}
-              <span className="text-[var(--text-muted)]">{ago(a.occurredAt)}</span>
-            </button>
-          ))}
+          <SectionTitle>Convictions that define them</SectionTitle>
+          <ul className="space-y-2">
+            {defining.map((d) => (
+              <li key={`${d.kind}:${d.marketId}`}>
+                <DefiningRow c={d} onSelect={onSelectMarket} />
+              </li>
+            ))}
+          </ul>
         </section>
       )}
+
+      {/* ── REFLECT ─────────────────────────────────────────────────────────
+          Only for a signed-in visitor: with no viewer there is no relationship
+          to describe, and an empty "what connects you" is worse than none. */}
+      {data.hasViewer && (
+        <section>
+          <SectionTitle>What connects you</SectionTitle>
+          <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
+            {link.lines.join(" ")}
+          </p>
+        </section>
+      )}
+
+      {/* ── DISCOVER ───────────────────────────────────────────────────────
+          The point of the page. Every row states why it is here, in terms of
+          this person — never "recommended for you". */}
+      {explore.length > 0 && (
+        <section>
+          <SectionTitle>Explore through them</SectionTitle>
+          <ul className="space-y-0.5">
+            {explore.map((s) => (
+              <li key={s.marketId}>
+                <SuggestionRow s={s} onSelect={onSelectMarket} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ── SUPPORTING ──────────────────────────────────────────────────────
+          Evidence, not identity, so it sits last and stays quiet. */}
+      <section className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)]">
+        <span>
+          <span className="num text-[var(--text-secondary)]">{data.positions.length}</span> active{" "}
+          {data.positions.length === 1 ? "conviction" : "convictions"}
+        </span>
+        {data.personMedianDays != null && data.personMedianDays > 0 && (
+          <span>
+            typically held{" "}
+            <span className="num text-[var(--text-secondary)]">
+              {Math.round(data.personMedianDays)}
+            </span>{" "}
+            days
+          </span>
+        )}
+        {data.recentActivity.map((a) => (
+          <button
+            key={a.marketId}
+            type="button"
+            onClick={() => onSelectMarket(Number(a.marketId))}
+            className="underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--text)]"
+          >
+            last active {ago(a.occurredAt)}
+          </button>
+        ))}
+      </section>
     </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  tone,
-  sub,
-}: {
-  label: string;
-  value: number;
-  tone: string;
-  sub?: string;
-}) {
+function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="rounded-[12px] px-3.5 py-2.5"
-      style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
+    <h2 className="mb-2 text-[11px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+      {children}
+    </h2>
+  );
+}
+
+/**
+ * One defining conviction — a heading, the question, the evidence.
+ *
+ * Deliberately a whole tappable block rather than a list row: these are the
+ * invitations, and the question needs room to be read rather than truncated.
+ */
+function DefiningRow({ c, onSelect }: { c: DefiningConviction; onSelect: (id: number) => void }) {
+  const tone =
+    c.side === "YES" ? "var(--yes)" : c.side === "NO" ? "var(--no)" : "var(--text-muted)";
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(c.marketId)}
+      className="block w-full rounded-[12px] px-3.5 py-3 text-left transition-colors hover:bg-[var(--surface-2)]"
+      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
-      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
-        {label}
-      </div>
-      <div className="num text-[22px] font-semibold leading-tight" style={{ color: tone }}>
-        {value}
-      </div>
-      {sub && <div className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{sub}</div>}
-    </div>
-  );
-}
-
-/** One topic as a mini alignment bar — green toward aligned, red toward opposite. */
-function TopicRow({ domain, agreement }: { domain: string; agreement: number }) {
-  const aligned = agreement >= 50;
-  const tone = aligned ? "var(--yes)" : "var(--no)";
-  const label = aligned ? `${agreement}% aligned` : `${100 - agreement}% opposite`;
-  return (
-    <li className="flex items-center gap-3">
-      <span className="w-24 shrink-0 truncate text-[13px] text-[var(--text)]">{domain}</span>
-      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--bg)]">
-        <span
-          className="block h-full rounded-full"
-          style={{ width: `${Math.max(4, agreement)}%`, background: tone }}
-        />
-      </span>
       <span
-        className="num w-20 shrink-0 text-right text-[12px] font-semibold"
+        className="block text-[10px] font-semibold tracking-[0.1em] uppercase"
         style={{ color: tone }}
       >
-        {label}
+        {c.label}
       </span>
-    </li>
+      <span className="mt-1 block text-[14px] leading-snug font-medium text-[var(--text)]">
+        {c.title}
+      </span>
+      <span className="num mt-1 block text-[12px] text-[var(--text-secondary)]">{c.detail}</span>
+    </button>
   );
 }
 
-function SideTag({ side }: { side: "YES" | "NO" }) {
-  return (
-    <span style={{ color: side === "YES" ? "var(--yes)" : "var(--no)" }} className="font-semibold">
-      {side}
-    </span>
-  );
-}
-
-function BeliefSection({
-  title,
-  markets,
-  onSelectMarket,
-  render,
+function SuggestionRow({
+  s,
+  onSelect,
 }: {
-  title: string;
-  markets: {
-    marketId: string;
-    title: string;
-    viewerSide: "YES" | "NO";
-    personSide: "YES" | "NO";
-  }[];
-  onSelectMarket: (id: number) => void;
-  render: (m: { viewerSide: "YES" | "NO"; personSide: "YES" | "NO" }) => React.ReactNode;
+  s: DiscoverySuggestion;
+  onSelect: (id: number) => void;
 }) {
-  if (markets.length === 0) return null;
   return (
-    <section>
-      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-        {title} · {markets.length}
-      </h3>
-      <ul className="space-y-0.5">
-        {markets.map((m) => (
-          <li key={m.marketId}>
-            <button
-              type="button"
-              onClick={() => onSelectMarket(Number(m.marketId))}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-2)]"
-            >
-              <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text)]">
-                {m.title}
-              </span>
-              <span className="shrink-0 text-[11px] text-[var(--text-muted)]">{render(m)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <button
+      type="button"
+      onClick={() => onSelect(s.marketId)}
+      className="block w-full rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
+    >
+      <span className="block text-[13px] leading-snug text-[var(--text)]">{s.title}</span>
+      <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">{s.why}</span>
+    </button>
   );
 }

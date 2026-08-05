@@ -93,6 +93,24 @@ export const FOLLOWS = {
   SATURATE_AT: 4,
 } as const;
 
+/**
+ * ORIGIN CONTINUITY — how far a search result reaches into what comes next.
+ *
+ * When someone opens a market from outside the queue, the people in it become
+ * a weak signal for the markets that follow. Weak on purpose: a shared
+ * participant is a fact about a stranger, not about the reader, so this nudges
+ * an order and never reorganises one.
+ */
+export const ORIGIN = {
+  /** Overlapping people beyond this add nothing — three is already a thread. */
+  SATURATE_AT: 3,
+  /**
+   * How many of the origin market's believers are examined. A query bound: a
+   * busy market has hundreds and the strongest few carry the signal.
+   */
+  MAX_PEOPLE: 40,
+} as const;
+
 /** What counts as a material event worth re-showing an already-acted market. */
 export const REENTRY = {
   MIN_ACCELERATION: 2,

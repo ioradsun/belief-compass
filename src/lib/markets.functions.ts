@@ -15,6 +15,7 @@ import { composeMarketStory, type NetworkFace, type NetworkLabel } from "@/domai
 import { accelerationFrom } from "@/domain/feed/score";
 import { swrCache } from "@/lib/server-cache";
 import { rankMarkets } from "@/domain/market-search";
+import { availableModes, type FeedMode } from "@/domain/feed/mode";
 
 /** SSR/anon feed snapshots live this long before a background refresh. */
 const ANON_FEED_TTL_MS = 5_000;
@@ -223,11 +224,25 @@ export const listFeed = createServerFn({ method: "GET" })
      */
     const tribeHere = new Map<number, (MatchPerson & { side: "YES" | "NO" })[]>();
     const oppHere = new Map<number, (MatchPerson & { side: "YES" | "NO" })[]>();
+    /**
+     * How much shared history the viewer has with the people present, summed —
+     * same-side for allies, opposite-side for rivals. This is what the Tribe and
+     * Rivals orderings rank on, and specifically what keeps Rivals from ranking
+     * by how HARD someone disagrees (see @/domain/feed/mode).
+     */
+    const tribeOverlap = new Map<number, number>();
+    const oppOverlap = new Map<number, number>();
+    /** When one of the viewer's people last traded here — THEIR recency. */
+    const netRecency = new Map<number, number>();
     let tribePerson: MatchPerson | null = null;
     let oppPerson: MatchPerson | null = null;
     // The DNA labels behind the LEAD person on each side, for the story beat.
     let tribeRel: NetworkLabel = "tribe";
     let oppRel: NetworkLabel = "opp";
+    // Which social perspectives this viewer's network can actually seat. Read
+    // here because this is where the DNA cache is already open; the gate itself
+    // lives in @/domain/feed/mode.
+    let modes: FeedMode[] = ["for_you"];
     if (viewer && rows.length) {
       // Read the bounded viewer DNA cache (closest / tribe / opp). The feed NEVER
       // computes DNA inline — on a miss/stale it enqueues a bounded background
@@ -253,6 +268,13 @@ export const listFeed = createServerFn({ method: "GET" })
         .slice(0, NETWORK_OVERLAY_CAP);
       tribeRel = aligned[0]?.relationship === "twin" ? "twin" : "tribe";
       oppRel = opposed[0]?.relationship === "inverse" ? "inverse" : "opp";
+      // Judged on the WHOLE bucket, not the capped overlay slice: whether a
+      // mode is worth offering is a question about the viewer's network, not
+      // about how many of them this feed page happened to look at.
+      modes = availableModes({
+        aligned: [...(cache?.closest ?? []), ...(cache?.tribe ?? [])],
+        opposed: [...(cache?.inverse ?? []), ...(cache?.opp ?? [])],
+      });
 
       const alignedBy = new Map(aligned.map((e) => [e.wallet.toLowerCase(), e]));
       const opposedBy = new Map(opposed.map((e) => [e.wallet.toLowerCase(), e]));
@@ -262,7 +284,10 @@ export const listFeed = createServerFn({ method: "GET" })
         const [{ data: beliefs }, profiles] = await Promise.all([
           sb
             .from("wallet_beliefs")
-            .select("wallet, onchain_id, stance_side")
+            // `last_trade_at` is THEIR recency, which is what a Tribe or Rivals
+            // ordering means by "recent" — not the market's own last trade,
+            // which could be anyone.
+            .select("wallet, onchain_id, stance_side, last_trade_at")
             .in("wallet", focus)
             .in("onchain_id", ids)
             // A directional stance only. A wallet that churned its way to flat
@@ -286,6 +311,8 @@ export const listFeed = createServerFn({ method: "GET" })
           const w = String(b.wallet).toLowerCase();
           const id = Number(b.onchain_id);
           const side = b.stance_side as "YES" | "NO";
+          const at = b.last_trade_at ? Date.parse(String(b.last_trade_at)) : NaN;
+          if (Number.isFinite(at)) netRecency.set(id, Math.max(netRecency.get(id) ?? 0, at));
           const a = alignedBy.get(w);
           if (a) {
             const list = tribeHere.get(id) ?? [];
@@ -295,6 +322,10 @@ export const listFeed = createServerFn({ method: "GET" })
             // "your Tribe is backing X" copy keeps meaning what it meant.
             if (!tribeBySide.has(id) || w === aligned[0]?.wallet.toLowerCase())
               tribeBySide.set(id, side);
+            // Depth of the relationship, summed over the people actually here.
+            // Same-side history for allies, opposite-side for rivals: the honest
+            // measure of each, and what Tribe/Rivals rank on.
+            tribeOverlap.set(id, (tribeOverlap.get(id) ?? 0) + (a.sameSideBeliefs ?? 0));
           }
           const o = opposedBy.get(w);
           if (o) {
@@ -303,6 +334,7 @@ export const listFeed = createServerFn({ method: "GET" })
             oppHere.set(id, list);
             if (!oppBySide.has(id) || w === opposed[0]?.wallet.toLowerCase())
               oppBySide.set(id, side);
+            oppOverlap.set(id, (oppOverlap.get(id) ?? 0) + (o.oppositeSideBeliefs ?? 0));
           }
         }
         // Strongest first within each market, so a face pile or a named sentence
@@ -382,6 +414,9 @@ export const listFeed = createServerFn({ method: "GET" })
         // it had no way to say.
         tribe_count: tribeHere.get(id)?.length ?? 0,
         opp_count: oppHere.get(id)?.length ?? 0,
+        tribe_overlap: tribeOverlap.get(id) ?? 0,
+        opp_overlap: oppOverlap.get(id) ?? 0,
+        network_last_at: netRecency.get(id) ?? null,
         // Lifetime reach and activity span, from the same RPC the search index
         // reads — so the Feed List and a search result describe one market with
         // one set of numbers.
@@ -417,6 +452,7 @@ export const listFeed = createServerFn({ method: "GET" })
       historyFrom,
       tribe: tribePerson,
       opp: oppPerson,
+      modes,
     };
   });
 

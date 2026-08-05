@@ -12,6 +12,8 @@ import { z } from "zod";
 import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { categoryToDomain } from "@/domain/categories";
+import { firstBackedIsFloor } from "@/domain/tenure";
+import type { PersonPosition, SideChange } from "@/domain/person-profile";
 import { CIRCLE_MIN_PEOPLE, type EvidenceLevel, type RelationshipLabel } from "@/domain/dna/config";
 import { scoreRelationship, type DnaFactor } from "@/domain/dna/score";
 import { classifyRelationship } from "@/domain/dna/classify";
@@ -513,6 +515,162 @@ export type SharedMarket = {
   personSide: "YES" | "NO";
 };
 
+/**
+ * Held positions, side changes and holding behaviour — what the profile needs
+ * to describe a person through their convictions rather than through a score.
+ *
+ * One query per fact, all bounded to this wallet. The judgement about which of
+ * these reveals the person lives in @/domain/person-profile; this only fetches.
+ */
+async function loadConvictionEvidence(
+  sb: Sb,
+  target: string,
+  viewer: string | null,
+): Promise<{
+  positions: PersonPosition[];
+  changes: SideChange[];
+  personMedianDays: number | null;
+  viewerMedianDays: number | null;
+  marketsParticipated: number;
+}> {
+  const [mine, theirs, flips] = await Promise.all([
+    sb
+      .from("wallet_beliefs")
+      .select(
+        "onchain_id, stance_side, yes_value_usd, no_value_usd, yes_cost, no_cost, days_held, first_backed_at",
+      )
+      .eq("wallet", target)
+      .in("stance_side", ["YES", "NO"])
+      .order("days_held", { ascending: false })
+      .limit(200),
+    viewer
+      ? sb
+          .from("wallet_beliefs")
+          .select("days_held")
+          .eq("wallet", viewer)
+          .in("stance_side", ["YES", "NO"])
+          .limit(200)
+      : Promise.resolve({ data: [] as { days_held: number }[] }),
+    // A change of mind is a RECORDED event, never inferred from a position that
+    // merely closed — someone selling out has not changed their mind, they have
+    // left. Newest first: the most recent reversal is the one worth showing.
+    sb
+      .from("events")
+      .select("market_id, side, occurred_at")
+      .eq("wallet", target)
+      .eq("kind", "position_changed_side")
+      .eq("is_canonical", true)
+      .order("occurred_at", { ascending: false })
+      .limit(5),
+  ]);
+
+  type BeliefRow = {
+    onchain_id: number;
+    stance_side: "YES" | "NO";
+    yes_value_usd: number | null;
+    no_value_usd: number | null;
+    yes_cost: number | null;
+    no_cost: number | null;
+    days_held: number | null;
+    first_backed_at: string | null;
+  };
+  const rows = (mine.data ?? []) as unknown as BeliefRow[];
+  const ids = rows.map((r) => Number(r.onchain_id));
+  const flipRows = (flips.data ?? []) as unknown as {
+    market_id: number;
+    side: "YES" | "NO" | null;
+    occurred_at: string;
+  }[];
+  const allIds = [...new Set([...ids, ...flipRows.map((f) => Number(f.market_id))])];
+
+  const [titles, meta, state] = await Promise.all([
+    marketTitles(sb, allIds),
+    allIds.length
+      ? sb.from("markets").select("onchain_id, category").in("onchain_id", allIds)
+      : Promise.resolve({ data: [] as { onchain_id: number; category: string | null }[] }),
+    ids.length
+      ? sb
+          .from("market_state")
+          .select("onchain_id, people_yes_pct, believers_yes, believers_no")
+          .in("onchain_id", ids)
+      : Promise.resolve({
+          data: [] as {
+            onchain_id: number;
+            people_yes_pct: number | null;
+            believers_yes: number | null;
+            believers_no: number | null;
+          }[],
+        }),
+  ]);
+  const categoryOf = new Map<number, string | null>();
+  for (const m of (meta.data ?? []) as { onchain_id: number; category: string | null }[])
+    categoryOf.set(Number(m.onchain_id), m.category);
+  const crowdOf = new Map<number, { yesPct: number | null; participants: number }>();
+  for (const m of (state.data ?? []) as {
+    onchain_id: number;
+    people_yes_pct: number | null;
+    believers_yes: number | null;
+    believers_no: number | null;
+  }[]) {
+    crowdOf.set(Number(m.onchain_id), {
+      yesPct: m.people_yes_pct == null ? null : Number(m.people_yes_pct),
+      participants: (Number(m.believers_yes) || 0) + (Number(m.believers_no) || 0),
+    });
+  }
+
+  const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const positions: PersonPosition[] = rows.map((r) => {
+    const id = Number(r.onchain_id);
+    const crowd = crowdOf.get(id);
+    const days = num(r.days_held);
+    // The marked value of the side they actually hold; cost is not a fallback
+    // here, because "committed" in the copy means what it is worth now.
+    const valueUsd = r.stance_side === "YES" ? r.yes_value_usd : r.no_value_usd;
+    return {
+      marketId: id,
+      title: titles.get(id) ?? `Market #${id}`,
+      side: r.stance_side,
+      valueUsd: valueUsd == null ? null : Number(valueUsd),
+      daysHeld: days,
+      tenureIsFloor: r.first_backed_at ? firstBackedIsFloor(Date.parse(r.first_backed_at)) : false,
+      crowdYesPct: crowd?.yesPct ?? null,
+      participants: crowd?.participants ?? 0,
+      category: categoryOf.get(id) ?? null,
+    };
+  });
+
+  const changes: SideChange[] = flipRows
+    .filter((f) => f.side === "YES" || f.side === "NO")
+    .map((f) => {
+      const id = Number(f.market_id);
+      const to = f.side as "YES" | "NO";
+      return {
+        marketId: id,
+        title: titles.get(id) ?? `Market #${id}`,
+        from: to === "YES" ? ("NO" as const) : ("YES" as const),
+        to,
+        occurredAt: f.occurred_at,
+      };
+    });
+
+  const median = (xs: number[]): number | null => {
+    const v = xs.filter((x) => Number.isFinite(x) && x > 0).sort((a, b) => a - b);
+    if (v.length === 0) return null;
+    const m = Math.floor(v.length / 2);
+    return v.length % 2 ? v[m]! : (v[m - 1]! + v[m]!) / 2;
+  };
+
+  return {
+    positions,
+    changes,
+    personMedianDays: median(positions.map((p) => p.daysHeld)),
+    viewerMedianDays: median(
+      ((theirs.data ?? []) as { days_held: number }[]).map((r) => num(r.days_held)),
+    ),
+    marketsParticipated: positions.length,
+  };
+}
+
 export type PersonProfile = {
   wallet: string;
   displayName: string;
@@ -534,6 +692,13 @@ export type PersonProfile = {
   sharedBoth: SharedMarket[];
   opposing: SharedMarket[];
   recentActivity: Activity[];
+  /** Their held positions — what the profile is built FROM, not a list to show. */
+  positions: PersonPosition[];
+  /** Recorded reversals. Empty when the events log has none. */
+  changes: SideChange[];
+  /** Median days held, each side, for the holding-behaviour contrast. */
+  personMedianDays: number | null;
+  viewerMedianDays: number | null;
 };
 
 function personSummary(aligned: { domain: string }[], opposed: { domain: string }[]): string {
@@ -567,6 +732,11 @@ export const getPersonProfile = createServerFn({ method: "GET" })
     const single = act.get(target);
     const recentActivity = single ? [single] : [];
 
+    // The convictions themselves. Loaded whether or not a viewer is present:
+    // "who is this person" is answerable without knowing who is asking, and a
+    // signed-out visitor deserves the same introduction.
+    const evidence = await loadConvictionEvidence(sb, target, viewer);
+
     const base: PersonProfile = {
       wallet: target,
       displayName: prof?.name ?? aliasFor(target),
@@ -585,6 +755,10 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       sharedBoth: [],
       opposing: [],
       recentActivity,
+      positions: evidence.positions,
+      changes: evidence.changes,
+      personMedianDays: evidence.personMedianDays,
+      viewerMedianDays: null,
     };
     if (!viewer || viewerFactors.length === 0) return base;
 
@@ -663,6 +837,10 @@ export const getPersonProfile = createServerFn({ method: "GET" })
         personSide: o.pSide,
       })),
       recentActivity,
+      positions: evidence.positions,
+      changes: evidence.changes,
+      personMedianDays: evidence.personMedianDays,
+      viewerMedianDays: evidence.viewerMedianDays,
     };
   });
 
