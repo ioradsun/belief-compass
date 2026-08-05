@@ -217,7 +217,33 @@ export function LandingPanel({
                   />
                   Powered by POV and $degen
                 </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setHowOpen(true);
+                  }}
+                  tabIndex={expanded ? 0 : -1}
+                  className="ml-auto inline-flex items-center gap-2 text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    aria-hidden="true"
+                    className="shrink-0 opacity-80"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M9.6 9.2a2.5 2.5 0 1 1 3.2 2.4c-.6.2-.8.7-.8 1.3v.4" strokeLinecap="round" />
+                    <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none" />
+                  </svg>
+                  How it works
+                </button>
               </div>
+
 
             </div>
           </div>
