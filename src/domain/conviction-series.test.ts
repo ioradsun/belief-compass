@@ -3,6 +3,9 @@ import {
   convictionSeries,
   timelineEvents,
   leadStory,
+  convictionStory,
+  narrateStory,
+  type SeriesPoint,
   type TapeTrade,
 } from "./conviction-series";
 
