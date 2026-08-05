@@ -325,11 +325,17 @@ export function LiveTape({
                           </span>
                         )}
                       </div>
-                      {r.amountUsd != null && r.amountUsd > 0 && (
-                        <span className="num ml-auto shrink-0 text-[11px] font-semibold text-[var(--text-secondary)]">
-                          {usdShort(r.amountUsd)}
+                      {/* Never a bare figure: if the sentence already names the
+                        money, don't repeat it; otherwise say what it is. */}
+                      {r.amountUsd != null && r.amountUsd > 0 && !s.body.includes("$") && (
+                        <span className="ml-auto shrink-0 text-[11px] text-[var(--text-muted)]">
+                          <span className="num font-semibold text-[var(--text-secondary)]">
+                            {usdShort(r.amountUsd)}
+                          </span>{" "}
+                          traded
                         </span>
                       )}
+
                     </div>
                   )}
 
