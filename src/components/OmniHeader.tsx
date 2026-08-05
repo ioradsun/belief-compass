@@ -647,3 +647,42 @@ export function OmniHeader({
     </div>
   );
 }
+
+/**
+ * Overlapping faces, small and quiet. Only people with a real identity get
+ * here (see getMarketFaces), so every circle carries information.
+ */
+function FaceStack({ faces }: { faces: MarketFace[] }) {
+  return (
+    <span className="mr-0.5 flex shrink-0 items-center">
+      {faces.map((f, i) => (
+        <span
+          key={f.wallet}
+          title={f.name}
+          className="inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full border border-[var(--panel)] bg-[var(--surface)] text-[8px] font-semibold uppercase text-[var(--text-muted)]"
+          style={{ marginLeft: i === 0 ? 0 : -5, zIndex: faces.length - i }}
+        >
+          {f.avatarUrl ? (
+            <img src={f.avatarUrl} alt="" width={16} height={16} className="h-full w-full object-cover" loading="lazy" />
+          ) : (
+            f.name.slice(0, 1)
+          )}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * "Sarah and Mike participated" beats "Believers are joining." — but only when
+ * the names mean something to this viewer. Without a shared network we let the
+ * momentum sentence stand.
+ */
+function socialLine(faces: MarketFace[], knownCount: number): string | null {
+  if (knownCount === 0) return null;
+  const names = faces.filter((f) => f.known).map((f) => f.name);
+  if (names.length === 0) return null;
+  if (names.length === 1) return `${names[0]} participated`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} participated`;
+  return `${names[0]}, ${names[1]} and ${names.length - 2} more you know participated`;
+}
