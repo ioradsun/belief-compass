@@ -146,3 +146,36 @@ describe("leadStory", () => {
     expect(leadStory([])).toBeNull();
   });
 });
+
+describe("story copy edge cases", () => {
+  const pts = (a: Partial<SeriesPoint>, z: Partial<SeriesPoint>): SeriesPoint[] =>
+    [
+      { t: 0, believers: 0, capital: 0, price: null, believersPct: 0, capitalPct: 0, pricePct: 0, ...a },
+      { t: 1, believers: 0, capital: 0, price: null, believersPct: 0, capitalPct: 0, pricePct: 0, ...z },
+    ] as SeriesPoint[];
+  const money = (eth: number) => `$${(eth * 1000).toFixed(2)}`;
+
+  it("dust capital never becomes a funding story", () => {
+    const s = convictionStory("YES", pts({ believers: 1, capital: 1 }, { believers: 1, capital: 1.000001 }), {
+      capitalDust: 0.000005,
+    })!;
+    expect(s.headline).toBe("YES has been quiet");
+    expect(s.capitalDeltaEth).toBe(0);
+    expect(narrateStory(s, "YES", "today", money)).not.toContain("$0.00");
+  });
+
+  it("never says 'they' when nobody joined", () => {
+    const s = convictionStory("YES", pts({ believers: 2, capital: 1 }, { believers: 2, capital: 2 }))!;
+    expect(narrateStory(s, "YES", "today", money)).toContain("existing believers committed");
+  });
+
+  it("reports believers leaving instead of 'quiet'", () => {
+    const s = convictionStory("NO", pts({ believers: 4, capital: 1 }, { believers: 2, capital: 1 }))!;
+    expect(s.headline).toBe("NO is losing believers");
+  });
+
+  it("omits price when it did not move", () => {
+    const s = convictionStory("YES", pts({ believers: 0, capital: 0 }, { believers: 1, capital: 1, pricePct: 0 }))!;
+    expect(narrateStory(s, "YES", "today", money)).not.toContain("Price rose");
+  });
+});
