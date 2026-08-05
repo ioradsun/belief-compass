@@ -41,8 +41,15 @@ describe("composeMarketRow", () => {
 
   it("clamps a nonsense percentage and ignores negative crowds", () => {
     const r = composeMarketRow({ yesPct: 140, believers: -2 });
-    expect(r.leadPct).toBe(100);
-    expect(r.stateText).toBe("100% YES");
+    expect(r.leadPct).toBeNull();
+    expect(r.stateText).toBeNull();
     expect(r.crowdText).toBeNull();
+    expect(r.emptyText).toBe("New — no side yet");
+  });
+
+  it("never claims a side on a market nobody is in", () => {
+    const r = composeMarketRow({ yesPct: 0, believers: 0 });
+    expect(r.stateText).toBeNull();
+    expect(r.emptyText).toBe("New — no side yet");
   });
 });

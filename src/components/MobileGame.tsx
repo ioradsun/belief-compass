@@ -205,6 +205,16 @@ export function MobileGame({
     return (Number.isFinite(y) ? y : 0) + (Number.isFinite(n) ? n : 0);
   }, [row]);
 
+  // Capital must come from the SAME holders row the sides quote — the tape replay
+  // leaves float residue after full exits, which showed money on an empty market.
+  const authCapitalUsd = useMemo(() => {
+    const r = row as Record<string, unknown>;
+    const y = Number(r["yes_capital_usd"]);
+    const n = Number(r["no_capital_usd"]);
+    if (!Number.isFinite(y) && !Number.isFinite(n)) return null;
+    return (Number.isFinite(y) ? y : 0) + (Number.isFinite(n) ? n : 0);
+  }, [row]);
+
   // THE HOUSE READ — the SAME shared engine and state the desktop deck uses, so
   // the phone shows the identical feature, data and copy. Never hidden, never a
   // mobile-only variant.
@@ -342,6 +352,7 @@ export function MobileGame({
           ethUsd={ethUsd}
           win={deckWin}
           believersTotal={authBelieversTotal}
+          capitalTotalUsd={authCapitalUsd}
           footer={
             <CurrentMarketActivity
               embedded

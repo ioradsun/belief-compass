@@ -44,9 +44,14 @@ export function composeMarketRow(i: MarketRowInput): MarketRow {
   const yes = clampPct(i.yesPct);
   const believers = count(i.believers);
 
+  // A split only exists if someone is actually in the market. With nobody in it,
+  // the priced share is an artefact of the curve, not a stance — an empty market
+  // must never read "100% NO".
+  const priced = believers > 0 ? yes : null;
+
   // The leader and its margin — a tie leans YES by convention (the affirmative).
-  const leadSide: "YES" | "NO" | null = yes == null ? null : yes >= 50 ? "YES" : "NO";
-  const leadPct = yes == null ? null : yes >= 50 ? yes : 100 - yes;
+  const leadSide: "YES" | "NO" | null = priced == null ? null : priced >= 50 ? "YES" : "NO";
+  const leadPct = priced == null ? null : priced >= 50 ? priced : 100 - priced;
   const stateText = leadSide == null ? null : `${leadPct}% ${leadSide}`;
 
   const crowdText = believers > 0 ? `${believers} believer${believers === 1 ? "" : "s"}` : null;
