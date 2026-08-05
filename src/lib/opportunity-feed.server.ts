@@ -6,11 +6,7 @@
  * then gates (hard exclusions), ranks (composite score) and sequences (rhythm +
  * diversity). The client receives a finished queue and renders it as-is.
  */
-import {
-  eligibilityFor,
-  reentryFor,
-  type ViewerMarketState,
-} from "@/domain/feed/eligibility";
+import { eligibilityFor, reentryFor, type ViewerMarketState } from "@/domain/feed/eligibility";
 import { scoreMarket, type FeedAiAnalysis, type FeedMarketSignals } from "@/domain/feed/score";
 import { reasonFor } from "@/domain/feed/reasons";
 import {
@@ -60,8 +56,14 @@ const numOrNull = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** Read-model row → the bounded live signals the ranker is allowed to see. */
-function signalsOf(r: Row): FeedMarketSignals {
+/**
+ * Read-model row → the bounded live signals the ranker is allowed to see.
+ *
+ * `followedHere` cannot come from the row — it is a fact about the VIEWER, not
+ * the market — so it is passed in and defaults to zero. An anonymous feed then
+ * scores exactly as it always did.
+ */
+function signalsOf(r: Row, followedHere = 0): FeedMarketSignals {
   const meta = (r["markets"] ?? null) as {
     category?: string | null;
     author_wallet?: string | null;
@@ -88,6 +90,7 @@ function signalsOf(r: Row): FeedMarketSignals {
     opportunityEligible: Boolean(r["opportunity_eligible"]),
     tribeSide: (r["tribe_side"] as "YES" | "NO" | null) ?? null,
     oppSide: (r["opp_side"] as "YES" | "NO" | null) ?? null,
+    followedHere,
     hasMedia: Boolean(r["has_media"]),
   };
 }
@@ -200,7 +203,17 @@ export async function buildOpportunityFeed(
   const epoch = Math.floor(now / 3_600_000);
 
   const candidates: SequenceCandidate[] = rows.map((r) => {
-    const s = signalsOf(r);
+    // Followed people connected to this market: the ones holding a position,
+    // plus the creator when the viewer follows them. ONE set, because the
+    // product never distinguishes creating from participating — and a set
+    // rather than a sum, so a followed creator who also backed their own market
+    // is the one person they are.
+    const creator = ((r["markets"] ?? null) as { author_wallet?: string | null } | null)
+      ?.author_wallet;
+    const here = new Set(signals.followedInMarket.get(Number(r.onchain_id)) ?? []);
+    if (creator && signals.following.has(String(creator).toLowerCase()))
+      here.add(String(creator).toLowerCase());
+    const s = signalsOf(r, here.size);
     const ai = aiOf(analyses.get(s.onchainId));
     const state: ViewerMarketState | undefined = signals.states.get(s.onchainId);
     const scored = scoreMarket({ signals: s, ai, viewer: signals.profile, now, epoch });

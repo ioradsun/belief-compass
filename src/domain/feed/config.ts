@@ -76,6 +76,23 @@ export const MOMENTUM_CAPS = {
   ACCELERATION: 4,
 } as const;
 
+/**
+ * Follows — the deliberate half of the social signal.
+ *
+ * Kept small on purpose. A follow moves a market up the order; it never
+ * promises the market will appear, and it never excludes anything. If following
+ * one prolific creator visibly took over someone's feed, this number is why,
+ * and it is the number to lower.
+ */
+export const FOLLOWS = {
+  /**
+   * Where a follower count stops adding much. Four people you follow in one
+   * market already says "this is your corner of the platform"; the tenth says
+   * the same thing louder.
+   */
+  SATURATE_AT: 4,
+} as const;
+
 /** What counts as a material event worth re-showing an already-acted market. */
 export const REENTRY = {
   MIN_ACCELERATION: 2,
@@ -85,7 +102,8 @@ export const REENTRY = {
   MIN_DIVERGENCE: 0.25,
 } as const;
 
-export const clamp01 = (x: number): number => (Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 0);
+export const clamp01 = (x: number): number =>
+  Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 0;
 export const clamp = (x: number, lo: number, hi: number): number =>
   Math.min(hi, Math.max(lo, Number.isFinite(x) ? x : lo));
 

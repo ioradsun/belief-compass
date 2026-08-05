@@ -122,6 +122,16 @@ const REQUIRED: Requirement[] = [
     columns: ["viewer_wallet", "twin_matches", "inverse_matches"],
     migration: "20260803000000_viewer_dna_cache.sql",
   },
+  {
+    feature: "Feed ranking — who the viewer chose to follow",
+    table: "follows",
+    columns: ["follower", "followed"],
+    migration: "20260824000000_follows.sql",
+    // Nobody has followed anyone yet is a perfectly good state on day one, and
+    // it looks identical to RLS-with-no-policy from out here. Say so rather
+    // than sending the reader to a migration that is already applied.
+    emptyMeans: "No follows recorded yet — expected until someone taps Follow.",
+  },
 ];
 
 type Verdict = "ok" | "missing_table" | "missing_column" | "blocked" | "empty" | "error";

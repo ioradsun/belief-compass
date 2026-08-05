@@ -14,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getPersonProfile } from "@/lib/dna.functions";
 import { ago } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
+import { FollowButton } from "@/components/FollowButton";
 import {
   presentRelationship,
   relationshipBreakdown,
@@ -101,6 +102,9 @@ export function PersonProfile({
             <div className="mt-0.5 text-[12px] text-[var(--text-muted)]">{data.summary}</div>
           )}
         </div>
+        {/* Follow sits beside the inferred relationship, not instead of it: the
+            DNA line says what the data concluded, this says what you decided. */}
+        <FollowButton person={wallet} viewer={viewer} />
       </header>
 
       {data.hasViewer && (

@@ -7,7 +7,15 @@
  * wasn't given, or touches IO — so a card's position is always reproducible and
  * explainable (see `diagnostics`).
  */
-import { WEIGHTS, MOMENTUM_CAPS, FRESHNESS, clamp01, sat, type ScoreComponent } from "./config";
+import {
+  WEIGHTS,
+  MOMENTUM_CAPS,
+  FRESHNESS,
+  FOLLOWS,
+  clamp01,
+  sat,
+  type ScoreComponent,
+} from "./config";
 
 /** Live, continuously-updated market signals (never AI). */
 export interface FeedMarketSignals {
@@ -33,6 +41,16 @@ export interface FeedMarketSignals {
   opportunityEligible: boolean;
   tribeSide: "YES" | "NO" | null;
   oppSide: "YES" | "NO" | null;
+  /**
+   * People the viewer explicitly follows who are connected to this market —
+   * whether they created it or took a side in it.
+   *
+   * ONE number, not two. A person is a connection, and whether they wrote the
+   * question or backed it is a ranking detail the interface never surfaces. The
+   * count is of DISTINCT people, so a market cannot look crowded because one
+   * follower did several things in it.
+   */
+  followedHere: number;
   hasMedia: boolean;
 }
 
@@ -145,7 +163,12 @@ function personal(s: FeedMarketSignals, ai: FeedAiAnalysis | undefined, v: Viewe
   const topicAff = topic ? clamp01(v.topicAffinity[topic] ?? 0) : 0;
   const creatorAff = s.creator ? clamp01(v.creatorAffinity[s.creator.toLowerCase()] ?? 0) : 0;
   const semantic = cosine(v.tasteEmbedding, ai?.embedding ?? null);
-  const social = s.tribeSide ? 0.6 : s.oppSide ? 0.4 : 0;
+  // A follow belongs here as much as in `socialSignal`: it is the DELIBERATE
+  // version of `creatorAffinity` two lines up — that measures whose markets you
+  // ended up trading, this records whose you said you wanted. Tribe and Rival
+  // are already counted in both components, so leaving follows out of this one
+  // would have made an explicit choice permanently weaker than an inference.
+  const social = s.followedHere > 0 ? 0.8 : s.tribeSide ? 0.6 : s.oppSide ? 0.4 : 0;
   return clamp01(
     0.3 * catAff + 0.2 * topicAff + 0.15 * creatorAff + 0.2 * semantic + 0.15 * social,
   );
@@ -165,10 +188,28 @@ function freshness(s: FeedMarketSignals, v: ViewerProfile, now: number): number 
   return clamp01(unseen + byAge);
 }
 
+/**
+ * FOLLOWS AND INFERRED RELATIONSHIPS SIT IN THE SAME BAND, on purpose.
+ *
+ * The tempting claim is that choosing beats inferring, so a follow should
+ * outrank a Tribe. It should not, and the measured gradient is better: ONE
+ * follow is a cheap gesture and scores below a Tribe relationship, which the
+ * DNA engine only asserts after real agreement across real markets. SEVERAL
+ * followed people in one market scores above it — that is no longer a gesture,
+ * it is the viewer's corner of the platform.
+ *
+ * `sat` rather than a linear count, so the fourth follower adds less than the
+ * first. Otherwise one prolific creator would own the feed of everyone who
+ * followed them.
+ *
+ * Either way this is one term of two components, so a followed market rises and
+ * never excludes anything. Following is not a filter.
+ */
 function socialSignal(s: FeedMarketSignals): number {
   const split = clamp01(1 - Math.abs(0.5 - clamp01(0.5 + s.divergence / 2)) * 2);
   return clamp01(
-    (s.tribeSide ? 0.4 : 0) +
+    (s.followedHere > 0 ? 0.45 * sat(s.followedHere, FOLLOWS.SATURATE_AT) : 0) +
+      (s.tribeSide ? 0.4 : 0) +
       (s.oppSide ? 0.3 : 0) +
       0.2 * sat(s.newBelievers24h, 25) +
       0.1 * split,
