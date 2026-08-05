@@ -10,7 +10,7 @@
  *   Question → community exists → Pulse → The House → Decision → Reveal → Next.
  *
  * Presentation only: every number comes from the same server/domain modules the
- * desktop deck uses (marketBook / marketPulse / evidence / house read), so the
+ * desktop deck uses (marketBook / evidence / house read), so the
  * two experiences can never disagree.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -46,7 +46,6 @@ import { OrderTicket } from "@/components/order/OrderTicket";
 import { useOwnedDock, OwnedDock, ownedDockShown } from "@/components/order/OwnedDock";
 import { ExamineCta } from "@/components/order/ExamineRail";
 import { marketBook } from "@/domain/market-book";
-import { marketPulse } from "@/domain/market-pulse";
 import { houseReadState } from "@/domain/house-read";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
