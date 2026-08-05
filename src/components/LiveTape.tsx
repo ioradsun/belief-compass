@@ -293,7 +293,7 @@ export function LiveTape({
                     </div>
                   )}
                   <div className="mt-0.5 text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--text)]">
-                    <SideText text={s.headline} tone={s.tone} />
+                    <SideText text={s.headline} />
                   </div>
                   <div className="mt-0.5 text-[13px] leading-snug text-[var(--text-secondary)]">
                     <SideText text={s.body} />
@@ -358,8 +358,8 @@ function AttributionFace({ r }: { r: LiveRow }) {
 
 /**
  * Colour discipline: the only tinted glyphs in the tape are the words YES / NO
- * and signed percentages. Everything else stays neutral so the eye isn't asked
- * to decode a wall of red and green.
+ * (side colours) and signed percentages (gain green / loss red). Event labels
+ * such as BACKED, SOLD SOME and EXITED stay neutral.
  */
 function SideText({ text, tone }: { text?: string | null; tone?: BeatTone }) {
   // A toned headline (e.g. "CAPITAL PULLED BACK") carries its direction; body text
