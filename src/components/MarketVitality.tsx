@@ -126,6 +126,13 @@ export function MarketMomentum({
    * The window delta still comes from the tape, so the % stays consistent.
    */
   believersTotal?: number | null;
+  /**
+   * The AUTHORITATIVE market-wide capital in USD (market_state: YES + NO), the
+   * same holders-table source the side rails quote. The tape replay leaves float
+   * residue behind after full exits, which is what showed capital on a market
+   * nobody is in. The window delta still comes from the tape.
+   */
+  capitalTotalUsd?: number | null;
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs, win), [tape, nowMs, win]);
   const { unit } = useDisplayUnit();
@@ -141,7 +148,13 @@ export function MarketMomentum({
     believersTotal != null && Number.isFinite(believersTotal)
       ? { ...raw, current: believersTotal, base: believersTotal - raw.delta }
       : raw;
-  const c = book.capitalEth.market;
+  const rawC = book.capitalEth.market;
+  const authCapEth =
+    capitalTotalUsd != null && Number.isFinite(capitalTotalUsd) && ethUsd > 0
+      ? capitalTotalUsd / ethUsd
+      : null;
+  const c: BookMetric =
+    authCapEth != null ? { ...rawC, current: authCapEth, base: authCapEth - rawC.delta } : rawC;
 
   // ONE analytical container: heading → believers → cap → insight → Case File.
   // No floating typography, no nested cards — a single market instrument.
@@ -151,10 +164,15 @@ export function MarketMomentum({
       className="shrink-0 overflow-hidden rounded-[16px]"
       style={{ background: "var(--surface)", border: "1px solid var(--hairline)" }}
     >
+      <div
+        className={`${dense ? "px-4 pt-2" : "px-4 pt-3 sm:px-5"} text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]`}
+      >
+        Total market
+      </div>
       <MomentumMetric
         dense={dense}
         total={b.current.toLocaleString("en-US")}
-        label="Believers"
+        label="Participants"
         copy={believerCopy(b, book.window)}
       />
       <div className="border-t border-[var(--hairline)]" aria-hidden />
@@ -164,6 +182,7 @@ export function MarketMomentum({
         label="Capital"
         copy={capitalCopy(c, book.window, usd, money)}
       />
+
 
       {footer && (
         <>
