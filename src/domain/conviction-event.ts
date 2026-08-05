@@ -274,12 +274,14 @@ function clause(type: ConvictionEventType, c: ConvictionContext): string {
     case "biggest_believer_left":
       return amt > 0 ? ` with ${money(amt)}` : "";
     default:
-      // Everyday moves earn a clause only when the number is genuinely notable.
-      if (amt >= CONVICTION_EVENT.bigUsd) return ` with ${money(amt)}`;
+      // Never leave a number unlabelled elsewhere in the UI: if there is money
+      // in the move, the sentence says what the money IS.
+      if (amt >= 0.005) return ` with ${money(amt)}`;
       if (days >= CONVICTION_EVENT.longHeldDays) return ` after ${heldFor(days, floor)}`;
       return "";
   }
 }
+
 
 /**
  * Write the row. `headline` is the kicker, `body` is the human sentence, and
@@ -404,7 +406,15 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
       body = side ? `${who} backed ${s}${tail}.` : `${who} took a side${tail}.`;
       break;
     case "trimmed":
-      body = side ? `${who} sold some of ${s}${tail}.` : `${who} sold some${tail}.`;
+      body =
+        n(c.amountUsd) >= 0.005
+          ? side
+            ? `${who} sold ${money(n(c.amountUsd))} of ${s}.`
+            : `${who} sold ${money(n(c.amountUsd))}.`
+          : side
+            ? `${who} sold some of ${s}${tail}.`
+            : `${who} sold some${tail}.`;
+
       break;
     case "long_held_exit":
       body = side ? `${who} gave up on ${s}${tail}.` : `${who} gave up${tail}.`;
