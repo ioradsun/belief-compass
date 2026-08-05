@@ -230,7 +230,9 @@ export interface Introduction {
 }
 
 /** The most-represented categories, strongest first. */
-function topCategories(positions: readonly PersonPosition[]): { name: string; share: number }[] {
+export function topCategories(
+  positions: readonly PersonPosition[],
+): { name: string; share: number }[] {
   const counts = new Map<string, number>();
   let total = 0;
   for (const p of positions) {
@@ -595,69 +597,4 @@ export function sharedCuriosity(
     agree: m.viewerSide === m.personSide,
   });
   return [...opposed.map(row), ...agreed.map(row)].slice(0, Math.max(0, limit));
-}
-
-/** Everything the viewer↔person comparison needs to be described in words. */
-export interface ConnectionInput {
-  sharedMarkets: number;
-  together: number;
-  apart: number;
-  alignedTopics: readonly string[];
-  opposedTopics: readonly string[];
-  /** Median days held, each side of the comparison. Null when unknown. */
-  viewerMedianDays?: number | null;
-  personMedianDays?: number | null;
-}
-
-export interface Connection {
-  lines: string[];
-  /** True when there is not enough overlap to describe a pattern. */
-  provisional: boolean;
-}
-
-/**
- * What connects the two of you, as sentences rather than a percentage.
- *
- * A single similarity number is the one thing this deliberately does not
- * produce. "68% aligned" tells a reader they are compatible with someone
- * without telling them one thing they would disagree about.
- */
-export function connection(i: ConnectionInput): Connection {
-  const shared = Math.max(0, Math.floor(i.sharedMarkets));
-  if (shared < PROFILE.minMarketsForPattern) {
-    return {
-      provisional: true,
-      lines: [
-        shared === 0
-          ? "You have not taken a side in any of the same markets yet."
-          : `You have taken a side in ${shared} of the same market${shared === 1 ? "" : "s"} — not enough yet to see a pattern.`,
-      ],
-    };
-  }
-
-  const lines: string[] = [`You have taken a side in ${shared} of the same markets.`];
-
-  const aligned = i.alignedTopics.slice(0, 2);
-  const opposed = i.opposedTopics.slice(0, 2);
-  if (aligned.length > 0 && opposed.length > 0) {
-    lines.push(
-      `You often agree on ${joinNames([...aligned])}, and reach different conclusions on ${joinNames([...opposed])}.`,
-    );
-  } else if (aligned.length > 0) {
-    lines.push(`You most often agree on ${joinNames([...aligned])}.`);
-  } else if (opposed.length > 0) {
-    lines.push(`Where you differ most is ${joinNames([...opposed])}.`);
-  }
-
-  // Holding behaviour — a real difference between two people that a side-by-side
-  // agreement count cannot show.
-  const vm = i.viewerMedianDays;
-  const pm = i.personMedianDays;
-  if (vm != null && pm != null && vm > 0 && pm > 0) {
-    const ratio = pm / vm;
-    if (ratio >= 1.5) lines.push("They tend to hold their positions longer than you do.");
-    else if (ratio <= 0.67) lines.push("You tend to hold your positions longer than they do.");
-  }
-
-  return { provisional: false, lines };
 }

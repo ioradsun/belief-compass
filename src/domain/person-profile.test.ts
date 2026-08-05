@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   definingConvictions,
   introduction,
-  connection,
   tenureText,
   whyFollow,
   convictionMap,
@@ -182,82 +181,6 @@ describe("the introduction never invents a person", () => {
       ...introduction(enough().map((p) => ({ ...p, side: "NO" as const, crowdYesPct: 90 }))).lines,
     ].join(" ");
     expect(all).not.toMatch(/believes|feels|wants|thinks that|expert|bull|bear|contrarian|smart/i);
-  });
-});
-
-describe("what connects you is a pattern, not a percentage", () => {
-  it("never produces a similarity score", () => {
-    const c = connection({
-      sharedMarkets: 18,
-      together: 12,
-      apart: 6,
-      alignedTopics: ["technology"],
-      opposedTopics: ["economics"],
-    });
-    expect(c.lines.join(" ")).not.toMatch(/%|percent|match|compatib/i);
-  });
-
-  it("names both the agreement and the difference", () => {
-    const c = connection({
-      sharedMarkets: 18,
-      together: 12,
-      apart: 6,
-      alignedTopics: ["technology", "entrepreneurship"],
-      opposedTopics: ["economics"],
-    });
-    expect(c.lines[0]).toBe("You have taken a side in 18 of the same markets.");
-    expect(c.lines[1]).toBe(
-      "You often agree on technology and entrepreneurship, and reach different conclusions on economics.",
-    );
-  });
-
-  it("admits when there is not enough overlap to say anything", () => {
-    const c = connection({
-      sharedMarkets: 2,
-      together: 2,
-      apart: 0,
-      alignedTopics: [],
-      opposedTopics: [],
-    });
-    expect(c.provisional).toBe(true);
-    expect(c.lines[0]).toMatch(/not enough yet to see a pattern/);
-  });
-
-  it("says so plainly when you have never overlapped", () => {
-    const c = connection({
-      sharedMarkets: 0,
-      together: 0,
-      apart: 0,
-      alignedTopics: [],
-      opposedTopics: [],
-    });
-    expect(c.lines[0]).toBe("You have not taken a side in any of the same markets yet.");
-  });
-
-  it("contrasts holding behaviour, which an agreement count cannot show", () => {
-    const longer = connection({
-      sharedMarkets: 10,
-      together: 8,
-      apart: 2,
-      alignedTopics: [],
-      opposedTopics: [],
-      viewerMedianDays: 20,
-      personMedianDays: 90,
-    });
-    expect(longer.lines).toContain("They tend to hold their positions longer than you do.");
-  });
-
-  it("says nothing about holding when the two are similar", () => {
-    const same = connection({
-      sharedMarkets: 10,
-      together: 8,
-      apart: 2,
-      alignedTopics: [],
-      opposedTopics: [],
-      viewerMedianDays: 30,
-      personMedianDays: 33,
-    });
-    expect(same.lines.join(" ")).not.toMatch(/hold their positions|hold your positions/);
   });
 });
 

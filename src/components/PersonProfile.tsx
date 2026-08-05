@@ -12,20 +12,32 @@
  * V2 keeps the order a curious visitor actually asks in, and gives every
  * section somewhere to go:
  *
- *   1  WHO THEY ARE          observable patterns, never personality
- *   2  WHY FOLLOW THEM       what arrives in your feed, not how well they did
- *   3  START HERE            ONE market, with the reason. The front door.
- *   4  CONVICTIONS           the positions that most reveal them
- *   5  BOTH CARE ABOUT       the relationship WITH its evidence under it
- *   6  CONVICTION MAP        everything they back, by theme — browsable
- *   7  EXPLORE               more markets, each explaining itself
- *   8  PEOPLE AROUND THEM    person → market → person
- *   9  ALL CONVICTIONS       the unabridged list, collapsed but never absent
- *  10  SUPPORTING            evidence, last and quiet
+ *   1  WHAT CONNECTS YOU     the bridge, before anything about them
+ *   2  WHO THEY ARE          observable patterns, never personality
+ *   3  WHY FOLLOW THEM       what arrives in your feed, not how well they did
+ *   4  START HERE            ONE market, with the reason. The front door.
+ *   5  CONVICTIONS           the positions that most reveal them
+ *   6  BOTH CARE ABOUT       the evidence under the bridge
+ *   7  CONVICTION MAP        everything they back, by theme — browsable
+ *   8  EXPLORE               more markets, each explaining itself
+ *   9  PEOPLE AROUND THEM    person → market → person
+ *  10  ALL CONVICTIONS       the unabridged list, collapsed but never absent
+ *  11  SUPPORTING            evidence, last and quiet
  *
- * THE RELATIONSHIP COMES BEFORE THE BROWSE. 5 sits above 6 because the page is
- * viewer-relative: "why does this person matter to me" has to be answered
- * before a visitor is asked to walk through someone's whole history.
+ * CONNECTION BEFORE EXPLANATION — the reordering everything else hangs off.
+ * Opening by describing a stranger asks a visitor to become interested in
+ * somebody they have no reason to care about yet, and then offers statistics as
+ * the argument. People do not become curious about strangers through
+ * statistics; they become curious the moment they recognise a point of contact.
+ * So the page opens with the bridge and only then describes who is standing on
+ * the other side of it. See @/domain/what-connects-you, including its refusal
+ * to ever report an absence: a reader with no overlap is EARLY, not
+ * incompatible, and "no shared markets" is the worst sentence this page could
+ * lead with.
+ *
+ * THE RELATIONSHIP COMES BEFORE THE BROWSE. 6 sits above 7 for the same reason
+ * 1 sits above 2 — a viewer-relative page answers "why does this matter to me"
+ * before asking anyone to walk through a stranger's whole history.
  *
  * INTERPRETATION AND COMPLETENESS ARE BOTH REQUIRED, and they are different
  * jobs. Sections 4 and 6 pick, group and truncate — that is what builds
@@ -59,7 +71,7 @@ import { FollowButton } from "@/components/FollowButton";
 import {
   definingConvictions,
   introduction,
-  connection,
+  topCategories,
   whyFollow,
   convictionMap,
   sharedCuriosity,
@@ -78,6 +90,7 @@ import {
   type StartHere,
 } from "@/domain/profile-start-here";
 import { peopleAround, type ConnectedPerson } from "@/domain/person-network";
+import { whatConnectsYou } from "@/domain/what-connects-you";
 
 export function PersonProfile({
   wallet,
@@ -128,15 +141,20 @@ export function PersonProfile({
   const follow = whyFollow(data.positions, { marketsCreated: data.marketsCreated });
   const defining = definingConvictions(data.positions, data.changes);
   const themes = convictionMap(data.positions);
-  const link = connection({
-    sharedMarkets: data.sharedBeliefs,
-    together: data.together,
-    apart: data.apart,
-    alignedTopics: data.alignedDomains.map((d) => d.domain),
-    opposedTopics: data.opposedDomains.map((d) => d.domain),
-    viewerMedianDays: data.viewerMedianDays,
-    personMedianDays: data.personMedianDays,
-  });
+  const link = whatConnectsYou(
+    {
+      sharedMarkets: data.sharedBeliefs,
+      together: data.together,
+      apart: data.apart,
+      alignedTopics: data.alignedDomains.map((d) => d.domain),
+      opposedTopics: data.opposedDomains.map((d) => d.domain),
+      viewerTopics: data.viewerTopics,
+      personTopics: topCategories(data.positions).map((c) => c.name),
+      viewerMedianDays: data.viewerMedianDays,
+      personMedianDays: data.personMedianDays,
+    },
+    data.displayName,
+  );
   const around = peopleAround(data.around);
 
   const agreed = data.sharedBoth.map((m) => ({
@@ -199,7 +217,51 @@ export function PersonProfile({
 
   return (
     <div className="space-y-7">
-      {/* ── 1 · WHO THEY ARE ─────────────────────────────────────────────────
+      {/* ── 1 · WHAT CONNECTS YOU ────────────────────────────────────────────
+          CONNECTION BEFORE EXPLANATION, and this is the whole reason it sits
+          above the person's own name.
+
+          Every earlier version opened by explaining a stranger, which asks a
+          visitor to become interested in somebody they have no reason to care
+          about yet and then offers statistics as the argument. People do not
+          become curious about strangers through statistics; they become curious
+          the moment they recognise a point of contact. Two people who discover
+          a shared birthday feel something, and the fact carries no information
+          at all — the feeling is "we have something in common", and everything
+          after it lands warmer.
+
+          Only for a signed-in visitor: with nobody on the other side there is
+          no bridge to describe, and a "what connects you" panel addressed to
+          no one is worse than starting with the person. */}
+      {data.hasViewer && (
+        <section>
+          <SectionTitle>What connects you</SectionTitle>
+          <p className="text-[14px] leading-relaxed font-medium text-[var(--text)]">
+            {link.opening}
+          </p>
+          <ul className="mt-2 space-y-1">
+            {link.bonds.map((b) => (
+              <li
+                key={b}
+                className="flex gap-2 text-[13px] leading-relaxed text-[var(--text-secondary)]"
+              >
+                <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[var(--text-muted)]" />
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+          {/* An empty overlap is a beginning, not a verdict — so it gets the one
+              onward sentence rather than a shrug. */}
+          {link.early && (
+            <p className="mt-2 text-[12px] leading-relaxed text-[var(--text-muted)]">
+              Open one of their convictions below to find where your thinking overlaps — or where it
+              does not.
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* ── 2 · WHO THEY ARE ─────────────────────────────────────────────────
           A name, a face, and two sentences about what they have actually
           backed. No score: a number here would be the first thing read and the
           least useful thing said. */}
@@ -228,7 +290,7 @@ export function PersonProfile({
         <FollowButton person={wallet} viewer={viewer} />
       </header>
 
-      {/* ── 2 · WHY FOLLOW THEM ──────────────────────────────────────────────
+      {/* ── 3 · WHY FOLLOW THEM ──────────────────────────────────────────────
           What you GET, never how well they have done. V1 said "surfaces markets
           connected to them" — true of following anybody, and therefore a
           description of the button rather than of the person. */}
@@ -253,13 +315,13 @@ export function PersonProfile({
         </section>
       )}
 
-      {/* ── 3 · START HERE ───────────────────────────────────────────────────
+      {/* ── 4 · START HERE ───────────────────────────────────────────────────
           The front door, and the only element on the page allowed to be loud.
           One market, chosen for how much opening it would explain — not for
           being the biggest. Omitted entirely when nothing can explain itself. */}
       {lead && <StartHereCard lead={lead} onSelect={onSelectMarket} />}
 
-      {/* ── 4 · CONVICTIONS THAT DEFINE THEM ─────────────────────────────── */}
+      {/* ── 5 · CONVICTIONS THAT DEFINE THEM ─────────────────────────────── */}
       {definingShown.length > 0 && (
         <section>
           <SectionTitle>Convictions that define them</SectionTitle>
@@ -273,7 +335,7 @@ export function PersonProfile({
         </section>
       )}
 
-      {/* ── 5 · MARKETS YOU BOTH CARE ABOUT ──────────────────────────────────
+      {/* ── 6 · MARKETS YOU BOTH CARE ABOUT ──────────────────────────────────
           Ahead of their conviction map ON PURPOSE. The page is viewer-relative,
           and "why does this person matter to me" has to be answered before a
           visitor is asked to browse someone's whole history.
@@ -289,9 +351,10 @@ export function PersonProfile({
       {data.hasViewer && (
         <section>
           <SectionTitle>Markets you both care about</SectionTitle>
-          <p className="text-[13px] leading-relaxed text-[var(--text-secondary)]">
-            {link.lines.join(" ")}
-          </p>
+          {/* The SUMMARY of this relationship now opens the page. What is left
+              here is the evidence for it — the markets themselves, each showing
+              what the two of you concluded. Saying it twice would make the
+              recognition at the top feel like a preview of a list. */}
           {sharedShown.length > 0 && (
             <>
               <ul className="mt-2.5 space-y-0.5">
@@ -311,7 +374,7 @@ export function PersonProfile({
         </section>
       )}
 
-      {/* ── 6 · THEIR CONVICTION MAP ─────────────────────────────────────────
+      {/* ── 7 · THEIR CONVICTION MAP ─────────────────────────────────────────
           Everything they currently back, by theme. A flat list of forty
           positions is the same as no list — nothing in it is more important
           than anything else. Grouped, "what do they think about culture"
@@ -332,7 +395,7 @@ export function PersonProfile({
         </section>
       )}
 
-      {/* ── 7 · MARKETS YOU SHOULD EXPLORE ───────────────────────────────────
+      {/* ── 8 · MARKETS YOU SHOULD EXPLORE ───────────────────────────────────
           Every row states why it is here, in terms of this person — never
           "recommended for you". Nothing already offered above appears again. */}
       {explore.length > 0 && (
@@ -353,7 +416,7 @@ export function PersonProfile({
         </section>
       )}
 
-      {/* ── 8 · PEOPLE AROUND THEIR CONVICTIONS ──────────────────────────────
+      {/* ── 9 · PEOPLE AROUND THEIR CONVICTIONS ──────────────────────────────
           Markets lead to more people. These are structurally connected to THE
           PROFILE OWNER — everyone who keeps turning up in the same markets as
           them — which is a different question from the viewer's own network and
@@ -372,7 +435,7 @@ export function PersonProfile({
         </section>
       )}
 
-      {/* ── 9 · ALL CONVICTIONS ──────────────────────────────────────────────
+      {/* ── 10 · ALL CONVICTIONS ──────────────────────────────────────────────
           The unabridged list, and the reason every section above is allowed to
           be selective. Sections 4 and 6 interpret — they pick, group and
           truncate — and a visitor who suspects the highlights were cherry
@@ -421,7 +484,7 @@ export function PersonProfile({
         </section>
       )}
 
-      {/* ── 10 · SUPPORTING ──────────────────────────────────────────────────
+      {/* ── 11 · SUPPORTING ──────────────────────────────────────────────────
           Evidence, not identity, so it sits last and stays quiet. */}
       <section className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)]">
         <span>

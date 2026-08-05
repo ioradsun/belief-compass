@@ -892,6 +892,14 @@ export type PersonProfile = {
   viewerMedianDays: number | null;
   /** People structurally connected to THIS person — never the viewer's network. */
   around: Overlap[];
+  /**
+   * The topics the VIEWER backs most, strongest first.
+   *
+   * Needed so "What connects you" can find a bond when the two have never met
+   * in a market: caring about the same thing is a real connection whether or
+   * not it has produced an overlap yet. Empty for a signed-out visitor.
+   */
+  viewerTopics: string[];
   /** Questions they wrote. Authorship is participation, never a separate role. */
   marketsCreated: number;
   /**
@@ -982,6 +990,7 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       around,
       marketsCreated,
       positionsTotal: evidence.positionsTotal,
+      viewerTopics: [],
       viewerMarketIds: [],
     };
     if (!viewer || viewerFactors.length === 0) return base;
@@ -1068,6 +1077,16 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       around,
       marketsCreated,
       positionsTotal: evidence.positionsTotal,
+      // Counted from the domain map already built for the shared-market split —
+      // no extra query, and the same vocabulary the aligned/opposed topics use.
+      viewerTopics: (() => {
+        const counts = new Map<string, number>();
+        for (const id of viewerMarkets) {
+          const d = domainOf.get(Number(id));
+          if (d) counts.set(d, (counts.get(d) ?? 0) + 1);
+        }
+        return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([d]) => d);
+      })(),
       viewerMarketIds: viewerMarkets,
     };
   });
