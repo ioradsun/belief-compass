@@ -14,6 +14,7 @@ import { toLegacyFeedEventRow } from "@/lib/events";
 import { composeMarketStory, type NetworkFace, type NetworkLabel } from "@/domain/story";
 import { accelerationFrom } from "@/domain/feed/score";
 import { swrCache } from "@/lib/server-cache";
+import { rankMarkets } from "@/domain/market-search";
 
 /** SSR/anon feed snapshots live this long before a background refresh. */
 const ANON_FEED_TTL_MS = 5_000;
@@ -337,24 +338,123 @@ const MARKET_ROW_SELECT = `
   markets:onchain_id ( title, category, author_name, author_pfp, pov_slug )
 `;
 
+/**
+ * One search result. Deliberately small: the question (is this the market I
+ * mean?), the two signals that say whether anyone cares — lifetime participants
+ * and capital committed right now — and the raw facts the momentum sentence is
+ * derived from. No price split, no category: neither helps a searcher decide.
+ */
 export interface MarketSearchHit {
   onchain_id: number;
   title: string;
-  category: string | null;
+  /** Unique wallets that ever traded here — lifetime reach. */
+  participants: number;
+  /** Directional believers holding right now. */
   believers: number;
-  yesPrice: number | null;
-  /** Money-weighted YES share, 0–100, or null when unpriced — the current split. */
-  yesPct: number | null;
+  /** Capital currently committed across both sides, in USD. */
+  capitalUsd: number;
+  /** Epoch ms of first/last trade, when known. */
+  firstActivityAt: number | null;
+  lastActivityAt: number | null;
+  /** Wallets that arrived in the last 24h. */
+  joined24h: number;
 }
 
-/** Escape ilike wildcards so user input matches literally. */
-const escapeLike = (s: string) => s.replace(/[\\%_]/g, "\\$&");
+interface IndexRow extends MarketSearchHit {
+  category: string | null;
+  /** 0–1 momentum weight — breaks relevance ties only. */
+  interest: number;
+}
+
+const SEARCH_INDEX_TTL_MS = 60_000;
 
 /**
- * Full-catalog market search, ranked by INTENT: title prefix-matches first (you
- * usually type the start of what you mean), then the most-alive market (directional
- * believers) so the hottest match surfaces. Covers every market, not just the
- * loaded feed slice — so anything you can name, you can open.
+ * The searchable catalog, held warm in-process. The catalog is small (a few
+ * thousand questions), so matching happens in memory against normalised tokens
+ * — that is what lets search understand plurals, synonyms, word order and typos
+ * instead of demanding the exact title back.
+ */
+async function searchIndex(): Promise<IndexRow[]> {
+  return swrCache("market-search-index", { ttlMs: SEARCH_INDEX_TTL_MS }, async () => {
+    const sb = serviceClient();
+
+    const rows: Array<{
+      onchain_id: number;
+      believers_yes: number | null;
+      believers_no: number | null;
+      yes_capital_usd: number | null;
+      no_capital_usd: number | null;
+      new_believers_24h: number | null;
+      trade_count_24h: number | null;
+      last_trade_at: string | null;
+      market_created_at: string | null;
+      markets: { title: string | null; category: string | null } | null;
+    }> = [];
+    // PostgREST caps a page at 1000 rows; walk the whole catalog.
+    for (let from = 0; from < 20_000; from += 1000) {
+      const { data } = await sb
+        .from("market_state")
+        .select(
+          `onchain_id, believers_yes, believers_no, yes_capital_usd, no_capital_usd,
+           new_believers_24h, trade_count_24h, last_trade_at, market_created_at,
+           markets:onchain_id!inner ( title, category )`,
+        )
+        .range(from, from + 999);
+      const page = (data ?? []) as unknown as typeof rows;
+      rows.push(...page);
+      if (page.length < 1000) break;
+    }
+
+    // Lifetime reach: unique wallets that ever traded each market.
+    const { data: part } = await sb.rpc("market_participation");
+    const reach = new Map<number, { participants: number; first: number | null; last: number | null }>();
+    for (const p of (part ?? []) as unknown as Array<{
+      onchain_id: number;
+      participants: number;
+      first_activity_at: string | null;
+      last_activity_at: string | null;
+    }>) {
+      reach.set(Number(p.onchain_id), {
+        participants: Number(p.participants) || 0,
+        first: p.first_activity_at ? Date.parse(p.first_activity_at) : null,
+        last: p.last_activity_at ? Date.parse(p.last_activity_at) : null,
+      });
+    }
+
+    const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+    const built = rows.map((r) => {
+      const id = Number(r.onchain_id);
+      const r2 = reach.get(id);
+      const capitalUsd = Math.max(0, num(r.yes_capital_usd) + num(r.no_capital_usd));
+      const believers = num(r.believers_yes) + num(r.believers_no);
+      const lastTrade = r.last_trade_at ? Date.parse(r.last_trade_at) : null;
+      return {
+        onchain_id: id,
+        title: r.markets?.title ?? "",
+        category: r.markets?.category ?? null,
+        participants: r2?.participants ?? 0,
+        believers,
+        capitalUsd,
+        firstActivityAt: r2?.first ?? (r.market_created_at ? Date.parse(r.market_created_at) : null),
+        lastActivityAt: r2?.last ?? lastTrade,
+        joined24h: num(r.new_believers_24h),
+        // A soft 0–1 liveness weight: recent trades and standing conviction.
+        interest: Math.min(
+          1,
+          num(r.trade_count_24h) / 20 + participantsWeight(r2?.participants ?? 0) + Math.min(0.3, capitalUsd / 5_000),
+        ),
+      } satisfies IndexRow;
+    });
+    return built.filter((r) => r.title.length > 0);
+  });
+}
+
+const participantsWeight = (p: number) => Math.min(0.4, p / 100);
+
+/**
+ * Full-catalog market search ranked by USEFULNESS: exact phrase, then keyword
+ * and concept relevance, with momentum only breaking ties. A searcher should
+ * never have to remember the exact wording of a question.
  */
 export const searchMarkets = createServerFn({ method: "GET" })
   .inputValidator((d: { query: string; limit?: number }) =>
@@ -363,48 +463,19 @@ export const searchMarkets = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<MarketSearchHit[]> => {
     const term = data.query.trim();
     if (term.length < 2) return [];
-    const sb = serviceClient();
-    const like = `%${escapeLike(term)}%`;
-    const { data: rows } = await sb
-      .from("market_state")
-      .select(
-        "onchain_id, believers_yes, believers_no, yes_price_usd, money_yes_pct, markets:onchain_id!inner ( title, category )",
-      )
-      .ilike("markets.title", like)
-      .order("directional_believers", { ascending: false, nullsFirst: false })
-      .limit(40);
-
-    const lower = term.toLowerCase();
-    const hits = (
-      (rows ?? []) as unknown as Array<{
-        onchain_id: number;
-        believers_yes: number | null;
-        believers_no: number | null;
-        yes_price_usd: number | null;
-        money_yes_pct: number | null;
-        markets: { title: string | null; category: string | null } | null;
-      }>
-    )
-      .map((r) => {
-        const title = r.markets?.title ?? "";
-        return {
-          onchain_id: Number(r.onchain_id),
-          title,
-          category: r.markets?.category ?? null,
-          believers: (Number(r.believers_yes) || 0) + (Number(r.believers_no) || 0),
-          yesPrice: r.yes_price_usd == null ? null : Number(r.yes_price_usd),
-          yesPct:
-            r.money_yes_pct == null || !Number.isFinite(Number(r.money_yes_pct))
-              ? null
-              : Number(r.money_yes_pct),
-          _prefix: title.toLowerCase().startsWith(lower) ? 1 : 0,
-        };
-      })
-      // Prefix matches win; within a tier, the most-backed market first.
-      .sort((a, b) => b._prefix - a._prefix || b.believers - a.believers)
-      .slice(0, data.limit ?? 8);
-    return hits.map(({ _prefix, ...h }) => h);
+    const index = await searchIndex();
+    const ranked = rankMarkets(
+      term,
+      index.map((r) => ({ id: r.onchain_id, title: r.title, category: r.category, interest: r.interest })),
+      data.limit ?? 8,
+    );
+    const byId = new Map(index.map((r) => [r.onchain_id, r]));
+    return ranked
+      .map((s) => byId.get(s.id))
+      .filter((r): r is IndexRow => Boolean(r))
+      .map(({ category: _c, interest: _i, ...hit }) => hit);
   });
+
 
 /**
  * One market's read-model row, shaped like a feed row so the center deck can

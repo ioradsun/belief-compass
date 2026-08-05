@@ -1715,6 +1715,15 @@ export type Database = {
         Args: { p_market: number; p_now: string }
         Returns: Json
       }
+      market_participation: {
+        Args: never
+        Returns: {
+          first_activity_at: string
+          last_activity_at: string
+          onchain_id: number
+          participants: number
+        }[]
+      }
       market_position_aggregates: {
         Args: { p_market: number; p_now: string }
         Returns: Json
