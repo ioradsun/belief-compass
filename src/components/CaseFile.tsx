@@ -160,14 +160,23 @@ export function CaseColumn({
   // opens blank. The row totals are period-less; the deltas need the tape.
   const rr = row as Record<string, unknown>;
   const rawBelievers =
-    believerMetric?.current ?? num(side === "YES" ? rr.believers_yes : rr.believers_no) ?? 0;
-  const capitalUsd =
-    capitalMetric != null
-      ? capitalMetric.current * (ethUsd || 0)
-      : num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
+    num(side === "YES" ? rr.believers_yes : rr.believers_no) ?? believerMetric?.current ?? 0;
+  // CAPITAL IS AUTHORITATIVE, NOT TAPE-DERIVED — the same rule as believers and
+  // price. Replaying buys and sells accumulates float residue (and per-wallet
+  // clamping), so a market everyone has fully exited can leave a few cents on
+  // the tape. That produced "capital on YES, nobody backing it". The holders
+  // table is the truth; the tape only fills in before it has loaded.
+  const tapeCapitalUsd = capitalMetric != null ? capitalMetric.current * (ethUsd || 0) : null;
+  const rowCapitalUsd = num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
+  const capitalUsd = rowCapitalUsd ?? tapeCapitalUsd;
   // Capital on this side means someone stands behind it — the market's initial
   // investment isn't an indexed position, so never show "0 believers, $13".
-  const believersTotal = seededBelievers(rawBelievers, capitalUsd);
+  // Dust (< 1c) is not capital and must never seed a believer.
+  const believersTotal = seededBelievers(
+    rawBelievers,
+    capitalUsd != null && capitalUsd >= 0.01 ? capitalUsd : 0,
+  );
+
   // PRICE IS AUTHORITATIVE, NOT TAPE-DERIVED. The tape carries each trade's
   // post-trade `newPrice`, which spikes and collapses inside a single whale
   // round-trip; reading it as "the price" makes a market that has been flat for
