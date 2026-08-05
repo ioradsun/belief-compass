@@ -128,17 +128,26 @@ function ConvictionCard({
   // Without a cost basis the honest outcome is the selected window's move.
   const windowMove =
     !ret && p.deltaUsd != null && Math.abs(p.deltaUsd) >= 0.005 ? p.deltaUsd : null;
-  const outcomeTone = ret
+  // One rule everywhere: up is gain, down is loss, flat is neutral — never a
+  // coloured zero.
+  const outcomeDir: "up" | "down" | "flat" = ret
     ? ret.direction === "up"
-      ? "var(--gain)"
+      ? "up"
       : ret.direction === "down"
-        ? "var(--loss)"
-        : "var(--text-secondary)"
+        ? "down"
+        : "flat"
     : windowMove != null
       ? windowMove > 0
-        ? "var(--gain)"
-        : "var(--loss)"
-      : "var(--text-muted)";
+        ? "up"
+        : "down"
+      : "flat";
+  const outcomeTone =
+    outcomeDir === "up"
+      ? "var(--gain)"
+      : outcomeDir === "down"
+        ? "var(--loss)"
+        : "var(--text-muted)";
+
   return (
     <div
       role="button"
