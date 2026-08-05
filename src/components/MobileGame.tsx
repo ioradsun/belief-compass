@@ -32,6 +32,7 @@ import { getConvictionMarket } from "@/lib/market-create.functions";
 import { marketAgeCopy } from "@/domain/market-freshness";
 import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
 import { StandOnIt } from "@/components/StandOnIt";
+import { CaseRoster } from "@/components/CaseFile";
 import { ShareImpact } from "@/components/ShareImpact";
 import { getHouseRead } from "@/lib/house.functions";
 import { houseKey } from "@/lib/house-round";
