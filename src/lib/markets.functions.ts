@@ -78,10 +78,22 @@ async function sharedFeedData(win: VolumeWindow) {
   const chgYes = new Map<number, number>();
   const chgNo = new Map<number, number>();
   let historyFrom: string | null = null;
+  /**
+   * Lifetime reach and the activity span — the SAME `market_participation` RPC
+   * the search index reads (see `searchIndex`). The feed did not carry these, so
+   * a market's participant count in search and in the running order would have
+   * come from two different definitions of "participant": everyone who ever
+   * traded, versus whoever is holding right now. Two numbers for one fact is the
+   * gap that makes a reader distrust both.
+   */
+  const reach = new Map<
+    number,
+    { participants: number; first: number | null; last: number | null }
+  >();
   if (ids.length) {
     // Window price-moves and the ETH/USD calibration are PRECOMPUTED by cron
     // (market_window_change / calc_cache) — indexed lookups, not aggregate scans.
-    const [vol, cal, chg] = await Promise.all([
+    const [vol, cal, chg, part] = await Promise.all([
       sb.rpc("market_volume_window", { p_ids: ids, p_since: since }),
       sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
       sb
@@ -89,7 +101,20 @@ async function sharedFeedData(win: VolumeWindow) {
         .select("onchain_id, chg_yes, chg_no, since_at")
         .eq("window_key", win)
         .in("onchain_id", ids),
+      sb.rpc("market_participation"),
     ]);
+    for (const p of (part.data ?? []) as unknown as Array<{
+      onchain_id: number;
+      participants: number;
+      first_activity_at: string | null;
+      last_activity_at: string | null;
+    }>) {
+      reach.set(Number(p.onchain_id), {
+        participants: Number(p.participants) || 0,
+        first: p.first_activity_at ? Date.parse(p.first_activity_at) : null,
+        last: p.last_activity_at ? Date.parse(p.last_activity_at) : null,
+      });
+    }
     for (const t of (vol.data ?? []) as {
       onchain_id: number;
       side: string;
@@ -121,7 +146,7 @@ async function sharedFeedData(win: VolumeWindow) {
       if (c.since_at && (historyFrom == null || c.since_at < historyFrom)) historyFrom = c.since_at;
     }
   }
-  return { rows, yesEth, noEth, yesTrades, noTrades, ethUsd, chgYes, chgNo, historyFrom };
+  return { rows, yesEth, noEth, yesTrades, noTrades, ethUsd, chgYes, chgNo, historyFrom, reach };
 }
 
 export const listFeed = createServerFn({ method: "GET" })
@@ -157,7 +182,8 @@ export const listFeed = createServerFn({ method: "GET" })
         opp: null as MatchPerson | null,
       };
     }
-    const { rows, yesEth, noEth, yesTrades, noTrades, ethUsd, chgYes, chgNo, historyFrom } = shared;
+    const { rows, yesEth, noEth, yesTrades, noTrades, ethUsd, chgYes, chgNo, historyFrom, reach } =
+      shared;
     const sb = serviceClient();
 
     // Viewer-relative: is the viewer's closest match (tribe) or most-opposed
@@ -290,6 +316,12 @@ export const listFeed = createServerFn({ method: "GET" })
         chg_window_no: chgNo.get(id) ?? null,
         tribe_side: tribeBySide.get(id) ?? null,
         opp_side: oppBySide.get(id) ?? null,
+        // Lifetime reach and activity span, from the same RPC the search index
+        // reads — so the Feed List and a search result describe one market with
+        // one set of numbers.
+        participants: reach.get(id)?.participants ?? 0,
+        first_activity_at: reach.get(id)?.first ?? null,
+        last_activity_at: reach.get(id)?.last ?? null,
         story,
       };
     });
@@ -407,7 +439,10 @@ async function searchIndex(): Promise<IndexRow[]> {
 
     // Lifetime reach: unique wallets that ever traded each market.
     const { data: part } = await sb.rpc("market_participation");
-    const reach = new Map<number, { participants: number; first: number | null; last: number | null }>();
+    const reach = new Map<
+      number,
+      { participants: number; first: number | null; last: number | null }
+    >();
     for (const p of (part ?? []) as unknown as Array<{
       onchain_id: number;
       participants: number;
@@ -438,13 +473,16 @@ async function searchIndex(): Promise<IndexRow[]> {
         participants: Math.max(r2?.participants ?? 0, believers),
         believers,
         capitalUsd,
-        firstActivityAt: r2?.first ?? (r.market_created_at ? Date.parse(r.market_created_at) : null),
+        firstActivityAt:
+          r2?.first ?? (r.market_created_at ? Date.parse(r.market_created_at) : null),
         lastActivityAt: r2?.last ?? lastTrade,
         joined24h: num(r.new_believers_24h),
         // A soft 0–1 liveness weight: recent trades and standing conviction.
         interest: Math.min(
           1,
-          num(r.trade_count_24h) / 20 + participantsWeight(r2?.participants ?? 0) + Math.min(0.3, capitalUsd / 5_000),
+          num(r.trade_count_24h) / 20 +
+            participantsWeight(r2?.participants ?? 0) +
+            Math.min(0.3, capitalUsd / 5_000),
         ),
       } satisfies IndexRow;
     });
@@ -469,7 +507,12 @@ export const searchMarkets = createServerFn({ method: "GET" })
     const index = await searchIndex();
     const ranked = rankMarkets(
       term,
-      index.map((r) => ({ id: r.onchain_id, title: r.title, category: r.category, interest: r.interest })),
+      index.map((r) => ({
+        id: r.onchain_id,
+        title: r.title,
+        category: r.category,
+        interest: r.interest,
+      })),
       data.limit ?? 8,
     );
     const byId = new Map(index.map((r) => [r.onchain_id, r]));
@@ -478,7 +521,6 @@ export const searchMarkets = createServerFn({ method: "GET" })
       .filter((r): r is IndexRow => Boolean(r))
       .map(({ category: _c, interest: _i, ...hit }) => hit);
   });
-
 
 /**
  * A face in a search result: a real person who put money behind this question.
@@ -547,7 +589,8 @@ export const getMarketFaces = createServerFn({ method: "GET" })
     for (const r of (rows ?? []) as Array<Record<string, unknown>>) {
       const id = Number(r.onchain_id);
       const wallet = String(r.wallet).toLowerCase();
-      const value = Math.max(0, Number(r.yes_value_usd) || 0) + Math.max(0, Number(r.no_value_usd) || 0);
+      const value =
+        Math.max(0, Number(r.yes_value_usd) || 0) + Math.max(0, Number(r.no_value_usd) || 0);
       const list = byMarket.get(id) ?? [];
       list.push({ wallet, value, known: known.has(wallet) });
       byMarket.set(id, list);
@@ -586,8 +629,7 @@ export const getMarketFaces = createServerFn({ method: "GET" })
         });
         if (faces.length === 3) break;
       }
-      if (faces.length > 0)
-        out[id] = { faces, knownCount: faces.filter((f) => f.known).length };
+      if (faces.length > 0) out[id] = { faces, knownCount: faces.filter((f) => f.known).length };
     }
     return out;
   });

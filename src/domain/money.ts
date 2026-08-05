@@ -81,37 +81,11 @@ export function formatMoney(value: number, opts: FormatMoneyOpts): string {
 }
 
 /**
- * The same amount, abbreviated for a place with no room: `$187K`, `$1.2M`.
- *
- * A running-order row carries a question, a reason, a participant count and a
- * size on 320px of rail, so `$187,000` costs more width than the extra three
- * digits are worth there. This exists so that abbreviation happens ONCE, here,
- * rather than as a private `fmtUsd` inside whichever component ran out of space
- * — the way two of them already do, with two different thresholds.
- *
- * ONLY for a glanceable figure. Anything a person might act on — a cost, a
- * marked value, a P&L — uses `formatMoney` and shows the real number. Below the
- * abbreviation threshold this IS `formatMoney`, so small markets read exactly as
- * they do everywhere else.
- *
- * ETH is never abbreviated: `ethBody` already adapts its precision, and the
- * magnitudes involved (a few Ξ) have nothing to abbreviate.
+ * Compact money for a dense row — `$187K` — lives in `@/domain/market-discovery`
+ * as `compactUsd`, beside the composer that decides when a figure is glanceable
+ * rather than actionable. A second copy briefly existed here; one abbreviation
+ * rule is the whole point, so this note replaces it rather than a function.
  */
-export function formatMoneyCompact(value: number, opts: FormatMoneyOpts): string {
-  const { from, to, ethUsd } = opts;
-  const converted = convertMoney(value, from, to, ethUsd);
-  if (converted == null) return "—";
-  if (to !== "USD") return formatMoney(value, opts);
-  const abs = Math.abs(converted);
-  if (abs < 10_000) return formatMoney(value, opts);
-  const sign = converted < 0 ? "−" : "";
-  const [scaled, suffix] = abs >= 1_000_000 ? [abs / 1_000_000, "M"] : [abs / 1000, "K"];
-  // One decimal below 100 of a unit ($1.2M), none above ($187K) — enough
-  // resolution to distinguish sizes without a figure that reads as precise.
-  const body =
-    scaled >= 100 ? Math.round(scaled).toString() : scaled.toFixed(1).replace(/\.0$/, "");
-  return `${sign}$${body}${suffix}`;
-}
 
 /** The live rate, shown beside the toggle: "1 ETH = $3,214". Null when unknown. */
 export function formatRate(ethUsd: number): string | null {

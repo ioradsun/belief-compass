@@ -194,10 +194,6 @@ export function OmniHeader({
   onSelectMarket,
   onSelectPerson,
   onOpenMenu,
-  onFeed,
-  feedActive,
-  onFeedList,
-  feedListOpen,
   right,
   center,
 }: {
@@ -205,19 +201,6 @@ export function OmniHeader({
   onSelectMarket: (id: number) => void;
   onSelectPerson: (w: string) => void;
   onOpenMenu: () => void;
-  /** Return to the market feed from any center destination. */
-  onFeed?: () => void;
-  /** True when the feed itself is what's on screen. */
-  feedActive?: boolean;
-  /**
-   * Show or hide the running order. Supplied by the caller ONLY while the centre
-   * holds a market — the feed itself or one opened from the list. Absent (and so
-   * the button reverts to "the way home") when the centre holds a person, DNA or
-   * a form, where a running order of markets has nothing to run alongside.
-   */
-  onFeedList?: () => void;
-  /** True while the running order holds the left rail. */
-  feedListOpen?: boolean;
   /** Top-right slot — the account affordance. */
   right?: ReactNode;
   /** Mobile-only center slot — the primary action (+ Conviction). */
@@ -279,8 +262,7 @@ export function OmniHeader({
   const showResults = open && term.length >= 2;
   // Still typing (the debounced term trails the field) or still fetching: the
   // list is unresolved, not empty.
-  const searching =
-    q.trim() !== term || marketsFetching || (Boolean(wallet) && peopleFetching);
+  const searching = q.trim() !== term || marketsFetching || (Boolean(wallet) && peopleFetching);
 
   // One universal field, quick filters beneath it: the scope narrows the current
   // results in place rather than opening a different search.
@@ -339,48 +321,11 @@ export function OmniHeader({
           </span>
         </button>
 
-        {/* The way home — and, once you are home, the way into the running order.
-            One control with two states rather than two controls: "the feed" and
-            "the list of what the feed will show you next" are the same idea, and
-            a second button would have to explain how it differed from this one. */}
-        {onFeed && (
-          <button
-            type="button"
-            onClick={onFeedList ?? onFeed}
-            aria-label={
-              onFeedList
-                ? feedListOpen
-                  ? "Hide what's coming up"
-                  : "Show what's coming up"
-                : "Back to the market feed"
-            }
-            aria-current={feedActive ? "page" : undefined}
-            aria-expanded={onFeedList ? Boolean(feedListOpen) : undefined}
-            title={onFeedList ? "What's coming up" : "Market feed"}
-            className={`${expanded ? "hidden" : "flex"} h-9 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-semibold transition-colors lg:px-3.5 ${
-              feedListOpen
-                ? "border-[var(--text)] bg-[var(--surface)] text-[var(--text)]"
-                : feedActive
-                  ? "border-transparent bg-[var(--surface)] text-[var(--text)]"
-                  : "border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text)]"
-            }`}
-          >
-            {/* Stacked cards — one market after another, distinct from the menu bars. */}
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-            >
-              <rect x="3" y="8" width="18" height="12" rx="2.5" />
-              <path d="M6 5h12M8 2.5h8" strokeLinecap="round" />
-            </svg>
-
-            <span className="hidden lg:inline">Feed</span>
-          </button>
-        )}
+        {/* The Feed button used to sit here with two jobs fused together: "show
+            me what's next" and "get me out of here". The first became the left
+            rail's Feed tab, which is where the running order actually lives; the
+            second went to the panels doing the taking-over, each of which now
+            clears its own search param. Neither job needed a global control. */}
 
         {/* Mobile: the primary action owns the middle of the bar. */}
         {center && (
@@ -497,7 +442,6 @@ export function OmniHeader({
             ))}
           </div>
 
-
           {/* Typing is not failure: while a query is in flight we say we're
               looking. "No matches" is a verdict, and a verdict only lands once
               the search has actually finished. */}
@@ -593,7 +537,6 @@ export function OmniHeader({
                   </button>
                 );
               })}
-
             </>
           )}
 
@@ -686,7 +629,14 @@ function FaceStack({ faces }: { faces: MarketFace[] }) {
           style={{ marginLeft: i === 0 ? 0 : -5, zIndex: faces.length - i }}
         >
           {f.avatarUrl ? (
-            <img src={f.avatarUrl} alt="" width={16} height={16} className="h-full w-full object-cover" loading="lazy" />
+            <img
+              src={f.avatarUrl}
+              alt=""
+              width={16}
+              height={16}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
           ) : (
             f.name.slice(0, 1)
           )}
