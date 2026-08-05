@@ -29,12 +29,42 @@ const signals = (o: Partial<FeedMarketSignals> = {}): FeedMarketSignals => ({
   tribeCount: 0,
   oppCount: 0,
   followedHere: 0,
+  connectedToOrigin: 0,
   hasMedia: false,
   ...o,
 });
 
 const score = (s: FeedMarketSignals) =>
   scoreMarket({ signals: s, ai: undefined, viewer: EMPTY_PROFILE, now: NOW, epoch: 0 });
+
+describe("the market you arrived from reaches into what comes next", () => {
+  it("lifts a market that shares people with the origin", () => {
+    const plain = score(signals()).score;
+    const connected = score(signals({ connectedToOrigin: 2 })).score;
+    expect(connected).toBeGreaterThan(plain);
+  });
+
+  /**
+   * Deliberately the weakest social claim in the model. A shared participant is
+   * a fact about a stranger — one overlap is a coincidence — so this carries a
+   * search into the queue without letting it take the queue over.
+   */
+  it("is weaker than a person the viewer actually chose", () => {
+    const followed = score(signals({ followedHere: 1 })).score;
+    const connected = score(signals({ connectedToOrigin: 3 })).score;
+    expect(connected).toBeLessThan(followed);
+  });
+
+  it("changes nothing when the reader simply walked down the feed", () => {
+    expect(score(signals({ connectedToOrigin: 0 })).score).toBe(score(signals()).score);
+  });
+
+  it("saturates — a crowded market is not a stronger thread", () => {
+    const three = score(signals({ connectedToOrigin: 3 })).score;
+    const thirty = score(signals({ connectedToOrigin: 30 })).score;
+    expect(thirty).toBe(three);
+  });
+});
 
 describe("following raises a market, it does not select one", () => {
   it("lifts a market where someone followed is active", () => {

@@ -108,9 +108,10 @@ const feedQO = (
   wallet: string | undefined,
   window: VolumeWindow = "24h",
   mode: FeedMode = "for_you",
+  originMarketId: number | null = null,
 ) =>
   queryOptions({
-    queryKey: ["opp-feed", wallet ?? null, window, mode],
+    queryKey: ["opp-feed", wallet ?? null, window, mode, originMarketId],
     queryFn: async () => {
       const request = getOpportunityFeed({
         data: {
@@ -118,6 +119,7 @@ const feedQO = (
           sessionToken: wallet ? readSessionToken(wallet) : null,
           window,
           mode,
+          originMarketId,
           ...feedSession(),
         },
       });
@@ -132,7 +134,7 @@ const feedQO = (
           ),
         ]);
       } catch {
-        return await getOpportunityFeed({ data: { window, mode } });
+        return await getOpportunityFeed({ data: { window, mode, originMarketId } });
       }
     },
     // The realtime coordinator (startRealtime) now moves each card's canonical
@@ -510,15 +512,28 @@ function Feed() {
   // server still owns the whole sequence — the client never re-sorts a feed.
   const [mode, setMode] = useState<FeedMode>("for_you");
 
+  /**
+   * The market the reader arrived at from OUTSIDE the running order — opened
+   * from search, a Live row or one of their positions. Its people become a weak
+   * signal for what the feed offers next, which is what makes a search an entry
+   * point into the network instead of a lookup that ends when the result opens.
+   *
+   * Only an off-queue arrival sets it. Walking the queue must not, or every
+   * "Next" would re-request the feed and the running order would never settle.
+   */
+  const [originMarket, setOriginMarket] = useState<number | null>(null);
+
   // The SSR loader prefetched the anonymous 24h feed; adopt it as initialData so
   // the very first render (server AND client) paints the real deck with no
   // round-trip. Only the anon 24h "all" query matches what the loader fetched —
   // a wallet, window or mode falls through to a normal client fetch.
   const loaderData = Route.useLoaderData();
   const initialFeed =
-    win === "24h" && mode === "for_you" ? (loaderData?.feed ?? undefined) : undefined;
+    win === "24h" && mode === "for_you" && originMarket == null
+      ? (loaderData?.feed ?? undefined)
+      : undefined;
   const { data } = useQuery({
-    ...feedQO(wallet, win, mode),
+    ...feedQO(wallet, win, mode, originMarket),
     // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
     // React Query ages it against staleTime instead of refetching on hydration.
     ...(initialFeed
@@ -621,7 +636,13 @@ function Feed() {
   // the session continues from there rather than restarting.
   useEffect(() => {
     if (activeMarket == null) return;
-    setQueue((q) => (q.activeId === activeMarket ? q : jumpTo(q, activeMarket)));
+    setQueue((q) => {
+      if (q.activeId === activeMarket) return q;
+      // Not in the order yet = they came from somewhere else. That is the whole
+      // definition of an origin, and `jumpTo` is about to splice it in.
+      if (q.order.length > 0 && !q.order.includes(activeMarket)) setOriginMarket(activeMarket);
+      return jumpTo(q, activeMarket);
+    });
   }, [activeMarket]);
 
   // Forward only — never a carousel. The queue decides what "next" means,
@@ -666,6 +687,10 @@ function Feed() {
   const refreshFeed = () => {
     setCaughtUp(false);
     resetFeedSession();
+    // Starting over drops the thread. Everything else keeps it: walking the
+    // queue and switching perspective are both "keep exploring from here",
+    // which is exactly what an origin is for.
+    setOriginMarket(null);
     setQueue((q) => commit(q));
     void qc.invalidateQueries({ queryKey: ["opp-feed"] });
   };

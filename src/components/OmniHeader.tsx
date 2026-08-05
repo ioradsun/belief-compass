@@ -112,8 +112,11 @@ export function OmniHeader({
   const choose = (item: (typeof flat)[number]) => {
     if (item.kind === "market") onSelectMarket(item.id);
     else onSelectPerson(item.wallet);
+    // The panel closes; the QUERY stays. Clearing it meant that opening a result
+    // and coming back to look at the next one required retyping the search —
+    // the search context thrown away at the exact moment it was still wanted.
+    // The explicit ✕ still clears it.
     setOpen(false);
-    setQ("");
   };
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!showResults || flat.length === 0) {

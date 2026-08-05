@@ -27,6 +27,7 @@ const signals = (o: Partial<FeedMarketSignals> = {}): FeedMarketSignals => ({
   tribeCount: 0,
   oppCount: 0,
   followedHere: 0,
+  connectedToOrigin: 0,
   hasMedia: false,
   ...o,
 });

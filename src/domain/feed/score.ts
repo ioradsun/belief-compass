@@ -12,6 +12,7 @@ import {
   MOMENTUM_CAPS,
   FRESHNESS,
   FOLLOWS,
+  ORIGIN,
   clamp01,
   sat,
   type ScoreComponent,
@@ -60,6 +61,17 @@ export interface FeedMarketSignals {
    * follower did several things in it.
    */
   followedHere: number;
+  /**
+   * People who hold a side BOTH here and in the market the viewer arrived from
+   * — the one they opened out of search, a Live row or a position, rather than
+   * by walking the queue.
+   *
+   * This is what makes search an entry point into the network instead of a
+   * lookup that ends when the result opens: the people in the market you went
+   * looking for shape what the queue offers next. Zero when there is no origin,
+   * which is the ordinary case of reading straight down the feed.
+   */
+  connectedToOrigin: number;
   hasMedia: boolean;
 }
 
@@ -220,6 +232,12 @@ function socialSignal(s: FeedMarketSignals): number {
     (s.followedHere > 0 ? 0.45 * sat(s.followedHere, FOLLOWS.SATURATE_AT) : 0) +
       (s.tribeSide ? 0.4 : 0) +
       (s.oppSide ? 0.3 : 0) +
+      // The people in the market you arrived at, still connected. Deliberately
+      // the smallest term here: a shared participant is the weakest of these
+      // claims — they are not yours, and one overlapping stranger is a
+      // coincidence — but it is what carries a search into the queue rather
+      // than letting the thread end when the result opens.
+      (s.connectedToOrigin > 0 ? 0.25 * sat(s.connectedToOrigin, ORIGIN.SATURATE_AT) : 0) +
       0.2 * sat(s.newBelievers24h, 25) +
       0.1 * split,
   );

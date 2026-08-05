@@ -28,8 +28,10 @@ import { listFeed, type VolumeWindow } from "@/lib/markets.functions";
 import {
   EMPTY_SIGNALS,
   loadMarketAnalyses,
+  loadOriginOverlap,
   loadViewerSignals,
 } from "@/lib/feed/viewer-signals.server";
+import { serviceClient } from "@/lib/supabase-clients";
 
 export interface FeedSessionState {
   /** Market ids already shown to this viewer in this browsing session. */
@@ -52,6 +54,13 @@ export interface OpportunityFeedInput extends FeedSessionState {
    * `?lens=hot` links) fall back to For You rather than emptying the feed.
    */
   mode?: string;
+  /**
+   * The market the viewer arrived at from OUTSIDE the running order — a search
+   * result, a Live row, one of their positions. Its people become a weak signal
+   * for what follows, which is what turns a search into an entry point rather
+   * than a lookup that ends when the result opens.
+   */
+  originMarketId?: number | null;
   limit?: number;
 }
 
@@ -80,7 +89,7 @@ const numOrNull = (v: unknown): number | null => {
  * the market — so it is passed in and defaults to zero. An anonymous feed then
  * scores exactly as it always did.
  */
-function signalsOf(r: Row, followedHere = 0): FeedMarketSignals {
+function signalsOf(r: Row, followedHere = 0, connectedToOrigin = 0): FeedMarketSignals {
   const meta = (r["markets"] ?? null) as {
     category?: string | null;
     author_wallet?: string | null;
@@ -110,6 +119,7 @@ function signalsOf(r: Row, followedHere = 0): FeedMarketSignals {
     tribeCount: num(r["tribe_count"]),
     oppCount: num(r["opp_count"]),
     followedHere,
+    connectedToOrigin,
     hasMedia: Boolean(r["has_media"]),
   };
 }
@@ -216,10 +226,17 @@ export async function buildOpportunityFeed(
   const rows = (feed.data ?? []) as unknown as Row[];
   const ids = rows.map((r) => Number(r.onchain_id));
 
-  const [signals, analyses, ideaResult] = await Promise.all([
+  const origin =
+    typeof input.originMarketId === "number" && Number.isFinite(input.originMarketId)
+      ? input.originMarketId
+      : null;
+  const [signals, analyses, ideaResult, originOverlap] = await Promise.all([
     wallet && ids.length ? loadViewerSignals(wallet, ids) : Promise.resolve(EMPTY_SIGNALS),
     loadMarketAnalyses(ids),
     ideaFor(wallet, input.sessionToken ?? null, input),
+    // Anonymous viewers get this too: it is a fact about the MARKET they opened,
+    // not about them, so it needs no wallet and no history.
+    loadOriginOverlap(serviceClient(), origin, ids),
   ]);
 
   const sessionSeen = new Set<number>(input.seenIds ?? []);
@@ -239,7 +256,7 @@ export async function buildOpportunityFeed(
     const here = new Set(signals.followedInMarket.get(Number(r.onchain_id)) ?? []);
     if (creator && signals.following.has(String(creator).toLowerCase()))
       here.add(String(creator).toLowerCase());
-    const s = signalsOf(r, here.size);
+    const s = signalsOf(r, here.size, originOverlap.get(Number(r.onchain_id)) ?? 0);
     const ai = aiOf(analyses.get(s.onchainId));
     const state: ViewerMarketState | undefined = signals.states.get(s.onchainId);
     const scored = scoreMarket({ signals: s, ai, viewer: signals.profile, now, epoch });

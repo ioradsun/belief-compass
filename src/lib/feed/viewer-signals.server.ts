@@ -10,6 +10,58 @@ import { serviceClient } from "@/lib/supabase-clients";
 import type { ViewerMarketState } from "@/domain/feed/eligibility";
 import { EMPTY_PROFILE, type ViewerProfile } from "@/domain/feed/score";
 import { loadFollowing } from "@/lib/follows.functions";
+import { ORIGIN } from "@/domain/feed/config";
+
+/**
+ * Who else is where the viewer just arrived.
+ *
+ * When a market is opened from OUTSIDE the running order — a search result, a
+ * Live row, one of their own positions — the people holding a side in it are
+ * the thread that carries them onward. This counts, for each market in play,
+ * how many of those people are also here.
+ *
+ * Bounded twice: the origin's believers are capped, and the second read is
+ * scoped to the markets already on the board. Returns an empty map for no
+ * origin, so the ordinary case of reading down the feed costs nothing.
+ */
+export async function loadOriginOverlap(
+  sb: ReturnType<typeof serviceClient>,
+  originMarketId: number | null,
+  marketIds: number[],
+): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  if (originMarketId == null || marketIds.length === 0) return out;
+
+  const { data: theirs } = await sb
+    .from("wallet_beliefs")
+    .select("wallet")
+    .eq("onchain_id", originMarketId)
+    .in("stance_side", ["YES", "NO"])
+    .limit(ORIGIN.MAX_PEOPLE);
+  const people = [
+    ...new Set(((theirs ?? []) as { wallet: string }[]).map((r) => String(r.wallet).toLowerCase())),
+  ];
+  if (people.length === 0) return out;
+
+  const { data: elsewhere } = await sb
+    .from("wallet_beliefs")
+    .select("onchain_id, wallet")
+    .in("wallet", people)
+    .in("onchain_id", marketIds)
+    .in("stance_side", ["YES", "NO"]);
+  // Distinct people per market: someone holding both sides is one person here.
+  const seen = new Map<number, Set<string>>();
+  for (const r of (elsewhere ?? []) as { onchain_id: number; wallet: string }[]) {
+    const id = Number(r.onchain_id);
+    // The origin itself is not "connected to" anything — it IS the origin.
+    if (id === originMarketId) continue;
+    const at = seen.get(id) ?? new Set<string>();
+    at.add(String(r.wallet).toLowerCase());
+    seen.set(id, at);
+  }
+  for (const [id, set] of seen) out.set(id, set.size);
+  return out;
+}
 
 export interface ViewerSignals {
   states: Map<number, ViewerMarketState>;
