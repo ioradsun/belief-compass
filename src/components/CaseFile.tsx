@@ -18,7 +18,6 @@ import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
 import { getNetwork } from "@/lib/dna.functions";
 import { getMarketChange, getMarketBaselines, type VolumeWindow } from "@/lib/markets.functions";
 import { windowChange } from "@/domain/window-change";
-import { priceMove } from "@/domain/metric-display";
 import { LiveTape } from "@/components/LiveTape";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
@@ -29,8 +28,6 @@ import { PersonAvatar } from "@/components/PersonAvatar";
 import {
   LENS_META,
   lensColdStart,
-  lensFacts,
-  lensStory,
   type LensMetric,
 } from "@/domain/side-lens";
 import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT } from "@/domain/market-flow";
@@ -184,7 +181,6 @@ export function CaseColumn({
   // The one shared formatter: capital/proceeds are ETH-native, POV worth is USD —
   // each renders in the viewer's chosen unit through the single global rate.
   const money = useMemo(() => (eth: number) => format(eth, "ETH"), [format]);
-  const facts = useMemo(() => lensFacts(series), [series]);
   const coldStart = lensColdStart(metric, series);
   const meta = LENS_META[metric];
 
