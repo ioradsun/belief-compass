@@ -20,7 +20,11 @@ import { scoreMarketTransition } from "@/domain/significance";
 import { decideTransitionEmit, type TransitionStore } from "@/domain/transition-emit";
 import { accelerationFrom } from "@/domain/feed/score";
 
+/** Real trades in the last hour before "× normal" means anything at all. */
+const MIN_RECENT_TRADES = 3;
+
 const num = (v: unknown): number => Number(v ?? 0) || 0;
+
 const numOrNull = (v: unknown): number | null =>
   v == null || !Number.isFinite(Number(v)) ? null : Number(v);
 
@@ -112,11 +116,17 @@ export async function emitStoryEvents(
     const believersNo = num(r.believers_no);
     const dYes = num(r.new_believers_yes_24h);
     const dNo = num(r.new_believers_no_24h);
-    const accel = accelerationFrom(
-      num(r.trade_count_1h),
-      num(r.trade_count_24h),
-      num(r.velocity_5m),
-    );
+    // Acceleration is only a claim we can make when there are REAL recent
+    // trades. `velocity_5m` extrapolates one tick into an hourly rate, so a
+    // single (or stale) 5-minute sample against a near-empty 24h baseline
+    // produced "24× normal" on markets with nothing in them. Require a handful
+    // of actual trades in the last hour before any multiple is offered.
+    const recentTrades = num(r.trade_count_1h);
+    const accel =
+      recentTrades >= MIN_RECENT_TRADES
+        ? accelerationFrom(recentTrades, num(r.trade_count_24h), num(r.velocity_5m))
+        : null;
+
     const prevStore = storedById.get(id) ?? null;
 
     // Per-side 24h capital delta from market_state (snapshot-derived; null when no
