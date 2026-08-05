@@ -13,6 +13,7 @@
  * and a quiet unread count; tapping expands the bounded, internally-scrolled feed.
  */
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { LiveTape } from "@/components/LiveTape";
