@@ -39,6 +39,7 @@ import { marketBook, type BookMetric } from "@/domain/market-book";
 import { seededBelievers } from "@/lib/market-state/read-model";
 import { rankBelievers, sideCaseSummary, type CaseRelationship } from "@/domain/case-file";
 import { sideChangeLine, sideStateLine } from "@/domain/side-summary";
+import { convictionStory, narrateStory } from "@/domain/conviction-series";
 
 /** Window-relative % for a book metric, or null when the base is too small. */
 const metricPct = (m: BookMetric): number | null => (m.base > 0 ? (m.delta / m.base) * 100 : null);
@@ -210,8 +211,15 @@ export function CaseColumn({
     return `${side} ${verb} ${format(priceUsd, "USD")} · ${move.pct}${change}.`;
   }, [metric, priceUsd, summary?.pricePct, win, side, format]);
 
-  // The side's momentum beats used to lead this panel; the plain-language state
-  // + change sentences below say it faster, and Recent activity carries the rest.
+  // THE PULSE — the same overall read the full timeline used to open with: one
+  // headline for the window plus the sentence that explains it, derived from the
+  // side's believers/capital/price series. It is the summary of the timeframe,
+  // so it leads the panel before any metric.
+  const pulse = useMemo(() => {
+    const st = summary ? convictionStory(side, summary.series) : null;
+    if (!st) return null;
+    return { headline: st.headline, narrative: narrateStory(st, side, FLOW_WINDOW_PHRASE[win], money) };
+  }, [summary, side, win, money]);
 
 
 
@@ -337,12 +345,23 @@ export function CaseColumn({
           metric. When something moved in the window, one sentence says what. */}
         <div className="space-y-1">
           <p className="text-[15px] font-semibold leading-snug tracking-[-0.01em] text-[var(--text)]">
-            <SideWords text={stateLine} />
+            <SideWords text={pulse?.headline ?? stateLine} />
           </p>
-          {changeLine && (
-            <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
-              <SideWords text={changeLine} />
-            </p>
+          {pulse ? (
+            <>
+              <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+                <SideWords text={pulse.narrative} />
+              </p>
+              <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+                <SideWords text={stateLine} />
+              </p>
+            </>
+          ) : (
+            changeLine && (
+              <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+                <SideWords text={changeLine} />
+              </p>
+            )
           )}
         </div>
 
