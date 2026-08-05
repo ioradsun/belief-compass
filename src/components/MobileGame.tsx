@@ -615,16 +615,19 @@ function BothSides({
             </button>
 
 
+            {/* WHO BACKS THIS SIDE — always visible face pile; tap it to open
+                the full roster without the list eating the screen. */}
+            <div className="mt-4">
+              <CaseRoster
+                side={s}
+                believers={believers.filter((b) => b.side === s)}
+                priceUsd={Number(s === "YES" ? row.yes_price_usd : row.no_price_usd) || null}
+                variant="compact"
+              />
+            </div>
+
             {open === s && (
               <div className="mt-5 space-y-5">
-                {/* WHO BACKS THIS SIDE — the Instagram-likers face pile; tap to
-                    open the full roster without the list eating the screen. */}
-                <CaseRoster
-                  side={s}
-                  believers={believers.filter((b) => b.side === s)}
-                  priceUsd={Number(s === "YES" ? row.yes_price_usd : row.no_price_usd) || null}
-                  variant="compact"
-                />
                 {(evidence?.defense ?? []).filter((d) => d.vote === s).length > 0 && (
                   <div>
                     <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
