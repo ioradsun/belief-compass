@@ -22,7 +22,6 @@ import { useDisplayUnit } from "@/lib/display-unit";
 import {
   positionSignal,
   type PositionSignal,
-  type PulseTone,
   type Side,
 } from "@/domain/position-story";
 
@@ -107,7 +106,7 @@ function ConvictionCard({
   signedMoney: MoneyFmt;
 }) {
   const sideColor = p.side === "YES" ? "var(--yes)" : "var(--no)";
-  const { pulse, pulseTone, story } = p.signal;
+  const { pulse, story } = p.signal;
   // The personal outcome, by the one rule: value leads, P&L is the answer, the
   // return % is paired to it. Never a market price %. Null → no trusted cost basis.
   const ret = positionReturn({
