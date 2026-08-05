@@ -531,21 +531,21 @@ function BuyTicket({
   }
 
   // Neutral: the decision only — one tap on an action opens the order form.
-  // NO left, YES right, Pass last: the same three equal columns every other
+  // YES left, NO right, Pass last: the same three equal columns every other
   // selector uses, so nothing shifts as the dock morphs.
   if (!side) {
     return (
       <ActionRow>
         <SideButton
-          label="Back NO"
-          tone="no"
-          onClick={() => onSelect("NO")}
-          className={`${CTRL} flex-1`}
-        />
-        <SideButton
           label="Back YES"
           tone="yes"
           onClick={() => onSelect("YES")}
+          className={`${CTRL} flex-1`}
+        />
+        <SideButton
+          label="Back NO"
+          tone="no"
+          onClick={() => onSelect("NO")}
           className={`${CTRL} flex-1`}
         />
         <SideButton label="Pass" tone="pass" onClick={onPass} className={`${CTRL} flex-1`} />
