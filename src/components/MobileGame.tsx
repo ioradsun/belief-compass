@@ -10,7 +10,7 @@
  *   Question → community exists → Pulse → The House → Decision → Reveal → Next.
  *
  * Presentation only: every number comes from the same server/domain modules the
- * desktop deck uses (marketBook / marketPulse / evidence / house read), so the
+ * desktop deck uses (marketBook / evidence / house read), so the
  * two experiences can never disagree.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -46,7 +46,6 @@ import { OrderTicket } from "@/components/order/OrderTicket";
 import { useOwnedDock, OwnedDock, ownedDockShown } from "@/components/order/OwnedDock";
 import { ExamineCta } from "@/components/order/ExamineRail";
 import { marketBook } from "@/domain/market-book";
-import { marketPulse } from "@/domain/market-pulse";
 import { houseReadState } from "@/domain/house-read";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
@@ -195,13 +194,6 @@ export function MobileGame({
     side === "YES",
     side && backing ? ethWei : 0n,
   );
-  // The market signal shown on the rail above the order form — same read the
-  // desktop bar carries, from the same book/pulse domain modules.
-  const teaser = useMemo(() => {
-    const t = change?.tape ?? [];
-    if (!t.length) return null;
-    return marketPulse(marketBook(t, Date.now(), deckWin)).headline;
-  }, [change, deckWin]);
   // THE HOUSE READ — the SAME shared engine and state the desktop deck uses, so
   // the phone shows the identical feature, data and copy. Never hidden, never a
   // mobile-only variant.
@@ -380,7 +372,6 @@ export function MobileGame({
             compact
             open={false}
             onToggle={() => setPhase("sides")}
-            teaser={teaser}
             houseRead={houseReadState_}
             openLabel="See both sides"
           />

@@ -151,7 +151,7 @@ describe("factual copy only", () => {
     const s = liveRowStory(rowBase());
     expect(s.category).toBe("shrinking");
     expect(s.headline).toBe("BELIEVER LEFT");
-    expect(s.body).toBe("4 people left NO.");
+    expect(s.body).toBe("4 people left NO with $500.");
   });
   it("liveRowStory: a milestone shows its threshold", () => {
     const s = liveRowStory(

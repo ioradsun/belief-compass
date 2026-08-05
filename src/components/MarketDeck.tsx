@@ -50,10 +50,7 @@ import {
   sharesForPct,
   type OrderSide,
 } from "@/domain/order";
-import { marketBook } from "@/domain/market-book";
-import { marketPulse } from "@/domain/market-pulse";
 import { houseReadState } from "@/domain/house-read";
-import { emitStoryEvent, type StoryEventType, type Side } from "@/domain/story-event";
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { OrderTicket } from "@/components/order/OrderTicket";
@@ -189,7 +186,6 @@ export function MarketDeck({
   // The one on-screen timeframe — the center owns it, both cases follow it.
   const deckWin = useDeckWindow();
 
-  const prevTransition = useRef<{ type: StoryEventType; side?: Side } | null>(null);
 
   // Escape closes the Case File — a disclosure, so it dismisses like one.
   useEffect(() => {
@@ -244,51 +240,6 @@ export function MarketDeck({
     // placeholder for this one, it is a wrong answer.
   });
 
-  // The center's ONE interpretation. The state-transition emitter reads YES and NO
-  // together and names the strongest market-wide meaning — a contradiction, a
-  // dividing market, a Tribe forming, a side accelerating — falling back to the
-  // momentum label when nothing rises above noise. It's fed three canonical
-  // inputs: the per-side windows from marketBook, the ranker's acceleration
-  // baseline (server-computed, never re-derived here), and per-side Tribe counts
-  // from the viewer's own network. `prevTransition` carries state across polls so
-  // the emitter's hysteresis keeps the read calm instead of flipping per trade.
-  const social = useMemo(() => {
-    const relOf = new Map(
-      (net?.people ?? []).map((p) => [p.wallet.toLowerCase(), p.relationship] as const),
-    );
-    let tribeJoinedYes = 0;
-    let tribeJoinedNo = 0;
-    for (const b of evidence?.believers ?? []) {
-      const r = relOf.get(b.wallet.toLowerCase());
-      if (r === "tribe" || r === "twin") {
-        if (b.side === "YES") tribeJoinedYes += 1;
-        else if (b.side === "NO") tribeJoinedNo += 1;
-      }
-    }
-    return { tribeJoinedYes, tribeJoinedNo };
-  }, [net, evidence]);
-  const caseTeaser = useMemo(() => {
-    const t = change?.tape ?? [];
-    if (!t.length) return null;
-    const book = marketBook(t, Date.now(), deckWin);
-    const toWin = (bel: { delta: number; base: number }, cap: { delta: number; base: number }) => ({
-      believerDelta: bel.delta,
-      believerBase: bel.base,
-      capitalDeltaUsd: cap.delta * ethUsd,
-      capitalBaseUsd: cap.base * ethUsd,
-      pricePct: null,
-    });
-    const transition = emitStoryEvent({
-      timeframeShort: book.window.short,
-      yes: toWin(book.believers.yes, book.capitalEth.yes),
-      no: toWin(book.believers.no, book.capitalEth.no),
-      baseline: change?.acceleration != null ? { accelerationMultiple: change.acceleration } : null,
-      social,
-      prev: prevTransition.current,
-    });
-    prevTransition.current = transition ? { type: transition.type, side: transition.side } : null;
-    return transition?.headline ?? marketPulse(book).headline;
-  }, [change, deckWin, ethUsd, social]);
 
   // THE HOUSE READ — derived by the shared pure engine, so desktop and mobile
   // show the same state from the same data. Only a connected viewer has tells to
@@ -451,7 +402,6 @@ export function MarketDeck({
             <ExamineCta
               open={caseOpen}
               onToggle={onToggleCase}
-              teaser={caseTeaser}
               houseRead={houseReadState_}
             />
           ) : null
