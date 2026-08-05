@@ -159,57 +159,47 @@ function ConvictionCard({
         {p.title}
       </div>
 
-      {/* 2 — What is happening to my side? The one sentence that is the reason to
-        open this market today. It leads the body: meaning before numbers. */}
-      <div className="mt-2 text-[12.5px] leading-snug text-[var(--text)]">{story.headline}</div>
-      {story.body && (
-        <div className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">{story.body}</div>
-      )}
+      {/* 2 — One concise sentence explaining what changed. */}
+      <div className="mt-1.5 text-[12px] leading-snug text-[var(--text-muted)]">
+        {story.headline}
+      </div>
 
-      {/* 3 — Where do I stand? One line, every number inside a phrase: which side
-        you are on, what your conviction is worth now, and what it has done. */}
-      <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span
-          className="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide"
-          style={{ color: sideColor, background: "var(--surface-2)" }}
-        >
-          {p.side}
-        </span>
-        <span className="num text-[15px] font-semibold leading-none text-[var(--text)]">
-          {money(p.value)}
-        </span>
-        <span className="text-[11px] text-[var(--text-muted)]">backing this</span>
-        <span className="num ml-auto text-[12px] font-semibold" style={{ color: outcomeTone }}>
-          {ret ? (
-            <>
-              {ret.pnl}
-              {ret.pct && <span className="ml-1">· {ret.pct}</span>}
-              <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">
-                since you backed it
-              </span>
-            </>
-          ) : windowMove != null ? (
-            <>
-              {signedMoney(windowMove)}
-              <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">
-                {p.deltaLabel.toLowerCase()}
-              </span>
-            </>
-          ) : (
-            <span className="text-[11px] font-normal text-[var(--text-muted)]">
-              unchanged {p.deltaLabel.toLowerCase()}
-            </span>
-          )}
-        </span>
+      {/* 3 — Side, current value, and the return, each under its own label. */}
+      <div className="mt-3 flex items-end gap-6">
+        <div>
+          <div
+            className="text-[10px] font-semibold tracking-wide"
+            style={{ color: sideColor }}
+          >
+            {p.side}
+          </div>
+          <div className="num mt-0.5 text-[18px] font-semibold leading-none text-[var(--text)]">
+            {money(p.value)}
+          </div>
+          <div className="mt-1 text-[10px] text-[var(--text-muted)]">Current value</div>
+        </div>
+
+        {(ret || windowMove != null) && (
+          <div className="ml-auto text-right">
+            <div className="num text-[14px] font-semibold leading-none" style={{ color: outcomeTone }}>
+              {ret ? ret.pnl : signedMoney(windowMove as number)}
+              {ret?.pct && <span className="ml-3">{ret.pct}</span>}
+            </div>
+            <div className="mt-1 text-[10px] text-[var(--text-muted)]">
+              Return{ret?.pct && <span className="ml-3">Return %</span>}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* The only other fact worth a line: you hold the other side of this same
         question, so two cards under one belief read as deliberate. */}
       {p.paired && (
-        <div className="mt-1.5 text-[10px] text-[var(--text-muted)]">
+        <div className="mt-2 text-[10px] text-[var(--text-muted)]">
           You also back {p.side === "YES" ? "NO" : "YES"} on this question.
         </div>
       )}
+
     </div>
   );
 }
