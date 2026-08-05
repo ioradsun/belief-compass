@@ -327,13 +327,27 @@ export interface ConvictionStory {
   capitalPct: number;
 }
 
-/** Reads the window's own start→end move. Pure; says only what the tape proves. */
-export function convictionStory(side: "YES" | "NO", pts: SeriesPoint[]): ConvictionStory | null {
+/**
+ * Reads the window's own start→end move. Pure; says only what the tape proves.
+ *
+ * `capitalDust` is the smallest capital move worth calling capital: anything
+ * under it rounds to $0.00 on screen, so treating it as movement produces false
+ * copy ("heavily funded" next to $0.00). Callers pass the ETH equivalent of
+ * half a cent; the default is a safe non-zero epsilon.
+ */
+export function convictionStory(
+  side: "YES" | "NO",
+  pts: SeriesPoint[],
+  opts: { capitalDust?: number } = {},
+): ConvictionStory | null {
   if (pts.length < 2) return null;
+  const dust = Math.max(opts.capitalDust ?? 1e-9, 0);
   const a = pts[0];
   const z = pts[pts.length - 1];
   const believerDelta = z.believers - a.believers;
-  const capitalDeltaEth = z.capital - a.capital;
+  const rawCap = z.capital - a.capital;
+  // Below the dust floor there is no capital story to tell.
+  const capitalDeltaEth = Math.abs(rawCap) < dust ? 0 : rawCap;
   const pricePct = z.pricePct;
   const base: Omit<ConvictionStory, "shape" | "headline"> = {
     believerDelta,
@@ -344,16 +358,22 @@ export function convictionStory(side: "YES" | "NO", pts: SeriesPoint[]): Convict
   };
   const avg = believerDelta > 0 ? capitalDeltaEth / believerDelta : Infinity;
 
-  if (believerDelta <= 0 && capitalDeltaEth <= 0)
-    return {
-      ...base,
-      shape: capitalDeltaEth < 0 ? "cooling" : "quiet",
-      headline:
-        capitalDeltaEth < 0 ? `${side} is losing capital` : `${side} has been quiet`,
-    };
+  // Nothing arrived: name what actually happened rather than inventing funding.
+  if (capitalDeltaEth < 0)
+    return { ...base, shape: "cooling", headline: `${side} is losing capital` };
+  if (capitalDeltaEth === 0 && believerDelta < 0)
+    return { ...base, shape: "cooling", headline: `${side} is losing believers` };
+  if (capitalDeltaEth === 0 && believerDelta <= 0)
+    return { ...base, shape: "quiet", headline: `${side} has been quiet` };
+  if (capitalDeltaEth === 0)
+    return { ...base, shape: "growing", headline: `${side} is gaining believers` };
+
+  // From here capital genuinely moved in.
   if (believerDelta >= 5 && avg < 0.02)
     return { ...base, shape: "grassroots", headline: `${side} is a crowd, not a whale` };
-  if (believerDelta <= 1 && capitalDeltaEth > 0)
+  if (believerDelta <= 0)
+    return { ...base, shape: "concentrated", headline: `${side} is being topped up` };
+  if (believerDelta === 1)
     return { ...base, shape: "concentrated", headline: `${side} is one conviction, heavily funded` };
   if (pricePct != null && pricePct > z.believersPct && pricePct > z.capitalPct && pricePct > 10)
     return { ...base, shape: "price-ahead", headline: `${side} price is ahead of its believers` };
@@ -363,6 +383,8 @@ export function convictionStory(side: "YES" | "NO", pts: SeriesPoint[]): Convict
 /**
  * The narrative paragraph under the headline. People first, money second, price
  * third — the caller supplies money formatting so the domain stays unit-pure.
+ * Every clause must be true of the numbers: no "they" without people, no
+ * "$0.00 backed it", no price claim when price never moved.
  */
 export function narrateStory(
   story: ConvictionStory,
@@ -370,17 +392,41 @@ export function narrateStory(
   when: string,
   money: (eth: number) => string,
 ): string {
-  const p =
-    story.believerDelta > 0
-      ? `${story.believerDelta} new believer${story.believerDelta === 1 ? "" : "s"} joined ${side} ${when}`
-      : `No new believers joined ${side} ${when}`;
-  const m =
-    Math.abs(story.capitalDeltaEth) > 0
-      ? `${story.capitalDeltaEth < 0 ? "and " : "and they backed it with "}${money(Math.abs(story.capitalDeltaEth))}${story.capitalDeltaEth < 0 ? " left the side" : ""}`
-      : "and no new capital arrived";
-  const pr =
-    story.pricePct == null
-      ? "Price has not moved on the record."
-      : `Price ${story.pricePct > 0 ? "rose" : story.pricePct < 0 ? "fell" : "held"} ${Math.abs(story.pricePct).toFixed(1)}% behind them.`;
-  return `${p}, ${m}. ${pr}`;
+  const bel = story.believerDelta;
+  const cap = story.capitalDeltaEth;
+  const pct = story.pricePct;
+  const priceMoved = pct != null && Math.abs(pct) >= 0.05;
+
+  const clauses: string[] = [];
+  if (bel > 0) {
+    clauses.push(`${bel} new believer${bel === 1 ? "" : "s"} joined ${side}`);
+  } else if (bel < 0) {
+    const n = Math.abs(bel);
+    clauses.push(`${n} believer${n === 1 ? "" : "s"} left ${side}`);
+  }
+  if (cap > 0) {
+    clauses.push(
+      bel > 0
+        ? `they committed ${money(cap)}`
+        : `existing believers committed ${money(cap)}`,
+    );
+  } else if (cap < 0) {
+    clauses.push(`${money(Math.abs(cap))} left the side`);
+  }
+
+  let people: string;
+  if (clauses.length === 0) {
+    people = `Nothing moved on ${side} ${when} — no new believers and no capital in or out.`;
+  } else {
+    const joined =
+      clauses.length === 1 ? clauses[0] : `${clauses.slice(0, -1).join(", ")} and ${clauses[clauses.length - 1]}`;
+    people = `${joined.charAt(0).toUpperCase()}${joined.slice(1)} ${when}.`;
+  }
+
+  if (!priceMoved) {
+    return pct == null ? people : `${people} Price held steady.`;
+  }
+  const dir = pct! > 0 ? "rose" : "fell";
+  return `${people} Price ${dir} ${Math.abs(pct!).toFixed(1)}% ${when}.`;
 }
+

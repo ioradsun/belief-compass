@@ -190,10 +190,13 @@ export function CaseColumn({
   // side's believers/capital/price series. It is the summary of the timeframe,
   // so it leads the panel before any metric.
   const pulse = useMemo(() => {
-    const st = summary ? convictionStory(side, summary.series) : null;
+    // Half a cent, expressed in ETH: anything smaller renders as $0.00, so it
+    // must not generate a capital story.
+    const capitalDust = ethUsd > 0 ? 0.005 / ethUsd : 1e-9;
+    const st = summary ? convictionStory(side, summary.series, { capitalDust }) : null;
     if (!st) return null;
     return { headline: st.headline, narrative: narrateStory(st, side, FLOW_WINDOW_PHRASE[win], money) };
-  }, [summary, side, win, money]);
+  }, [summary, side, win, money, ethUsd]);
 
 
 
