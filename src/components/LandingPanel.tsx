@@ -156,6 +156,11 @@ export function LandingPanel({
                     Find your tribe.
                   </p>
 
+                  <p className="mt-3 text-[15px] leading-snug text-[var(--text-secondary)] sm:text-[17px]">
+                    Traders make money.
+                    <br />
+                    Conviction builds wealth.
+                  </p>
 
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <button
@@ -169,19 +174,8 @@ export function LandingPanel({
                     >
                       Enter Conviction Market
                     </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setHowOpen(true);
-                      }}
-                      tabIndex={expanded ? 0 : -1}
-                      className="text-[13px] text-[var(--text-muted)] underline underline-offset-4 transition-colors hover:text-[var(--text)]"
-                    >
-                      How it works
-                    </button>
-
                   </div>
+
                 </div>
 
                 <div
