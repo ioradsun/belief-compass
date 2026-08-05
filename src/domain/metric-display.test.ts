@@ -121,7 +121,7 @@ describe("capitalMove — the money leads", () => {
       money,
     });
     expect(m.pct).toBe("−86%");
-    expect(m.absolute).toBe("−$209.56 committed over 1D");
+    expect(m.absolute).toBe("−$209.56 left over 1D");
     expect(m.direction).toBe("down");
     expect(m.pctQuiet).toBe(false);
   });

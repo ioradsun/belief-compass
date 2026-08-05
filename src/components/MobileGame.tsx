@@ -540,7 +540,7 @@ function BothSides({
             ? null
             : Math.abs(capDelta) < 0.005
               ? "No change today"
-              : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "withdrawn"} today`,
+              : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "left"} today`,
       },
       {
         label: "Per share",

@@ -170,7 +170,7 @@ export function capitalMove(input: {
     direction,
     pct,
     pctQuiet: rank === "quiet",
-    absolute: `${money(delta, true)} committed ${since}`,
+    absolute: `${money(delta, true)} ${direction === "down" ? "left" : "committed"} ${since}`,
   };
 }
 
