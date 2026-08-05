@@ -55,8 +55,26 @@ const REL_TONE: Record<CaseRelationship, string> = {
   unmapped: "var(--text-muted)",
 };
 
+/** Neutral sentence where only the words YES / NO carry a side colour. */
+function SideWords({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\bYES\b|\bNO\b)/g).map((part, i) =>
+        part === "YES" || part === "NO" ? (
+          <span key={i} style={{ color: part === "YES" ? "var(--yes)" : "var(--no)" }}>
+            {part}
+          </span>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 const num = (v: unknown): number | null =>
   v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+
 
 export function CaseColumn({
   side,
@@ -399,18 +417,15 @@ export function CaseColumn({
             What&rsquo;s happening to {side}
           </span>
           {lead && (
-            <p className="flex items-baseline gap-2 px-0.5 text-[12px]">
-              <span aria-hidden className="shrink-0">
-                {lead.emoji}
-              </span>
+            <p className="px-0.5 text-[12px]">
               <span
-                className={`min-w-0 flex-1 leading-snug ${lead.tier === 1 ? "font-semibold" : ""}`}
-                style={{ color: lead.tone === "down" ? "var(--text-muted)" : color }}
+                className={`leading-snug text-[var(--text)] ${lead.tier === 1 ? "font-semibold" : ""}`}
               >
-                {lead.headline}
+                <SideWords text={lead.headline} />
               </span>
             </p>
           )}
+
           <LiveTape
             marketIds={[marketId]}
             side={side}
