@@ -494,7 +494,9 @@ export const getMarketChange = createServerFn({ method: "GET" })
     // second, precomputed source of truth to drift from — and no wasted per-request
     // snapshot/flow queries. `amount_eth`/`price` are wei (strings on the wire, so
     // precision survives); scaled to whole ETH here.
-    const trades = await readLatestTradeEvents(publicClient(), {
+    // Server-side read: the public events policy only exposes the last 3 days,
+    // which would silently truncate the tape the book is rebuilt from.
+    const trades = await readLatestTradeEvents(serviceClient(), {
       marketIds: [data.id],
       limit: 1000,
     });
@@ -611,7 +613,7 @@ export const listMarketPulses = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const ids = data.ids;
     if (ids.length === 0) return { pulses: {} as Record<string, Pulse[]> };
-    const sb = publicClient();
+    const sb = serviceClient();
     // Canonical trade activity from the events log, adapted to the legacy row
     // shape the pulse strips are built from. Exactly 8 per market (the strip's
     // cap) — no global over-fetch, and a quiet market never gets starved out.
@@ -906,7 +908,7 @@ export const getWallet = createServerFn({ method: "GET" })
     if (ids.length && winMs != null) {
       const since = Date.now() - winMs;
       try {
-        const tape = await readLatestTradesPerMarket(publicClient(), ids.slice(0, 60), 400);
+        const tape = await readLatestTradesPerMarket(serviceClient(), ids.slice(0, 60), 400);
         const firstSeen = new Map<string, number>(); // `${id}|${side}|${wallet}` -> ms
         const oldest = new Map<number, number>();
         for (const t of tape) {
