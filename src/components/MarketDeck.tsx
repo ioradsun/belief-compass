@@ -50,7 +50,6 @@ import {
   sharesForPct,
   type OrderSide,
 } from "@/domain/order";
-import { marketBook } from "@/domain/market-book";
 import { houseReadState } from "@/domain/house-read";
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
