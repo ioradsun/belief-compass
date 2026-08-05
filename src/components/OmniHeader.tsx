@@ -441,7 +441,7 @@ export function OmniHeader({
 
       {/* Results */}
       {showResults && (
-        <div className="absolute inset-x-0 top-11 z-50 max-h-[60vh] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl">
+        <div className="absolute inset-x-0 top-11 z-50 max-h-[60vh] lg:right-auto lg:w-[720px] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] p-1 shadow-xl">
           {/* One search, quick filters — the scope narrows results in place. */}
           <div className="flex items-center gap-1 px-2 pb-1 pt-1.5">
             {(["all", "markets", "people"] as const).map((s) => (
@@ -493,10 +493,12 @@ export function OmniHeader({
                     style={active_i === i ? { background: "var(--surface)" } : undefined}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] text-[var(--text)]">
+                      {/* One question, one line: a wrapped title turns a scannable
+                          list into paragraphs. It clips instead. */}
+                      <span className="block truncate whitespace-nowrap text-[13px] text-[var(--text)]">
                         {m.title}
                       </span>
-                      <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]">
+                      <span className="mt-0.5 block truncate whitespace-nowrap text-[11px] text-[var(--text-muted)]">
                         {row.story}
                       </span>
                       {(row.participantsText || row.capText) && (
