@@ -13,6 +13,7 @@ import type { LiveStory } from "@/domain/story";
 import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
 import type { StackPerson } from "@/domain/conviction-cohort";
 import type { MixCandidate } from "@/domain/feed-cadence";
+import { findWashTrades, WASH } from "@/domain/wash-trading";
 import type { Perishability } from "@/domain/feed-scheduler";
 
 export interface LiveEventInput {
@@ -169,8 +170,8 @@ export function liveRowStory(r: Omit<LiveRow, "text" | "story">): LiveStory {
   });
 }
 
-const ROUND_TRIP_WINDOW_MS = 15 * 60_000;
-const ROUND_TRIP_TOLERANCE = 0.02; // 2% size difference still counts as a wash
+const ROUND_TRIP_WINDOW_MS = WASH.roundTripWindowMs;
+const ROUND_TRIP_TOLERANCE = WASH.roundTripTolerance;
 
 /**
  * CHURN — a wallet cycling in and out of the same belief, over and over.
@@ -194,44 +195,30 @@ const ROUND_TRIP_TOLERANCE = 0.02; // 2% size difference still counts as a wash
  * jittering sizes or spacing, only by taking real directional risk, which is
  * precisely the thing this feed is about.
  */
-const CHURN = {
-  /** Below this it is trading, not a pattern. Six is three full cycles. */
-  minTrades: 6,
-  /** How closely buy and sell volume must match to read as "went nowhere". */
-  balanceTolerance: 0.1,
-  windowMs: 2 * 60 * 60_000,
-} as const;
-
 /**
- * Wallets that went nowhere, loudly. Returns the source_keys to drop entirely —
- * they are volume, not conviction, and the feed reports conviction.
+ * Wallets that went nowhere, loudly — the source_keys to drop entirely.
+ *
+ * The RULE now lives in src/domain/wash-trading, because the metrics need the
+ * same verdict: a market whose volume spikes on the scoreboard while the tape
+ * stays silent makes a reader distrust both. This is the read-time application
+ * of it; `events.is_wash` is the persisted one.
  */
 function findChurn(events: LiveEventInput[]): Set<string> {
-  const byActor = new Map<string, LiveEventInput[]>();
-  for (const e of events) {
-    if (e.kind !== "trade" || !e.wallet || !e.action) continue;
-    const k = `${e.wallet.toLowerCase()}:${e.market_id}:${e.side}`;
-    const list = byActor.get(k) ?? [];
-    list.push(e);
-    byActor.set(k, list);
-  }
+  const verdict = findWashTrades(
+    events
+      .filter((e) => e.kind === "trade")
+      .map((e) => ({
+        key: e.source_key,
+        wallet: e.wallet,
+        marketId: e.market_id,
+        side: e.side,
+        action: e.action,
+        amountEth: e.amount_eth,
+        occurredAt: e.occurred_at,
+      })),
+  );
   const drop = new Set<string>();
-  for (const list of byActor.values()) {
-    if (list.length < CHURN.minTrades) continue;
-    const newest = Date.parse(list[0].occurred_at);
-    const near = list.filter((e) => newest - Date.parse(e.occurred_at) <= CHURN.windowMs);
-    if (near.length < CHURN.minTrades) continue;
-    let bought = 0;
-    let sold = 0;
-    for (const e of near) {
-      if (e.action === "BUY") bought += e.amount_eth;
-      else sold += e.amount_eth;
-    }
-    const base = Math.max(bought, sold, Number.EPSILON);
-    // Balanced both ways: they ended where they started.
-    if (Math.abs(bought - sold) / base <= CHURN.balanceTolerance)
-      for (const e of near) drop.add(e.source_key);
-  }
+  for (const [key, reason] of verdict) if (reason === "churn") drop.add(key);
   return drop;
 }
 
@@ -284,7 +271,6 @@ const LARGE_TRADE_USD = 1000;
  * keeps the payload (and the row) from turning into a directory.
  */
 const BURST_WALLET_CAP = 8;
-
 
 /**
  * Collapse canonical events (in reverse-chronological order) into Live rows.

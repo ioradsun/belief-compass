@@ -10,6 +10,7 @@ import { getServiceSupabase, assertIngestBearer } from "@/lib/service-supabase.s
 import { refreshDirtyBatch } from "@/lib/market-state/refresh-market.server";
 import { emitStoryEvents } from "@/lib/story-event-emit.server";
 import { emitConvictionCohorts } from "@/lib/conviction-cohort-emit.server";
+import { markWashTrades } from "@/lib/wash-marker.server";
 
 export const Route = createFileRoute("/api/public/jobs/market-refresher")({
   server: {
@@ -60,6 +61,8 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
         // keeps a quiet market inhabited without inventing any movement.
         let cohortsEmitted = 0;
         let cohortsError: string | null = null;
+        let wash: Awaited<ReturnType<typeof markWashTrades>> | null = null;
+        let washError: string | null = null;
         try {
           // NO market filter. A duration milestone is driven by the CLOCK, not
           // by trading: scoping this to the markets we just refreshed meant a
@@ -69,6 +72,18 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
         } catch (e) {
           cohortsError = e instanceof Error ? e.message : String(e);
           console.error("[market-refresher] emitConvictionCohorts failed:", cohortsError);
+        }
+
+        // Record which trades expressed no belief, so the aggregates exclude
+        // exactly what the feed excludes. Runs BEFORE nothing in particular —
+        // it is idempotent and its own scan window — but it must report itself,
+        // because a marker that silently stops leaves the scoreboard drifting
+        // away from the tape with no signal that it happened.
+        try {
+          wash = await markWashTrades(sb);
+        } catch (e) {
+          washError = e instanceof Error ? e.message : String(e);
+          console.error("[market-refresher] markWashTrades failed:", washError);
         }
 
         const { count: remaining } = await sb
@@ -90,6 +105,8 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
           market_refresh_failures: out.failed,
           transitions_error: transitionsError,
           cohorts_error: cohortsError,
+          wash_error: washError,
+          wash,
           milestones_emitted: milestonesEmitted,
           tribe_doublings_emitted: doublingsEmitted,
           transitions_emitted: transitionsEmitted,

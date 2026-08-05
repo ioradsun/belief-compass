@@ -15,6 +15,16 @@ import { feedSession, resetFeedSession } from "@/lib/feed-session";
 import { readSessionToken } from "@/lib/wallet-session";
 
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
+import { FeedListPanel, type FeedListEntry } from "@/components/FeedListPanel";
+import {
+  emptyQueue,
+  receiveOrder,
+  jumpTo,
+  advance,
+  commit,
+  arrivalCount,
+  type FeedQueue,
+} from "@/domain/feed-queue";
 import { LiveTape } from "@/components/LiveTape";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
@@ -483,6 +493,21 @@ function Feed() {
     setCaughtUp(false);
     enterProduct();
   };
+  /**
+   * The same header control, second state: off the feed it takes you home,
+   * on the feed it opens the running order. One button, because "the feed" and
+   * "the list of what the feed will show you" are the same idea.
+   *
+   * The Case File spans BOTH rails, so opening the list closes it rather than
+   * leaving half an investigation on screen.
+   */
+  const toggleFeedList = () => {
+    setFeedListOpen((open) => {
+      if (!open && caseOpen) navigate({ search: (prev: Search) => ({ ...prev, case: undefined }) });
+      return !open;
+    });
+    enterProduct();
+  };
   const feedActive = !(
     selectedMarket ||
     selectedPerson ||
@@ -498,6 +523,11 @@ function Feed() {
   const win = useDeckWindow() as VolumeWindow;
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // The Feed List takes the left rail when open. Not a URL param: it is a view
+  // of the session's own running order, which a shared link cannot reconstruct —
+  // unlike ?m/?p/?dna, which name something a stranger can also open.
+  const [feedListOpen, setFeedListOpen] = useState(false);
 
   // The active lens is a SERVER filter on the one global classification: it is
   // sent with the feed request, so the server still owns the whole sequence.
@@ -543,11 +573,42 @@ function Feed() {
   const winLabel = WINDOW_OPTIONS.find((w) => w.key === win)?.label ?? "24H";
 
   // Every card carries the reason the SERVER surfaced it (personal fact first,
-  // global classification otherwise).
+  // global classification otherwise). The Feed List shows it under the question:
+  // this map was built and read by nothing for as long as it has existed.
   const reasonByMarket: Record<number, string> = {};
   for (const it of items) {
     if (it.kind === "market" && it.primaryReason) reasonByMarket[it.onchainId] = it.primaryReason;
   }
+
+  // ── The running order ──────────────────────────────────────────────────────
+  // The queue owns what the reader SEES, which is not the same as the latest
+  // server order: a re-rank arrives every 8s and is held until the reader
+  // accepts it (see @/domain/feed-queue). The active market stays owned by the
+  // URL — one source of truth for "what is in the centre" — and the queue is
+  // told about it, never the reverse.
+  const [queue, setQueue] = useState<FeedQueue>(emptyQueue);
+  const serverOrder = items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
+  const serverOrderKey = serverOrder.join(",");
+  useEffect(() => {
+    if (serverOrder.length === 0) return;
+    setQueue((q) => receiveOrder(q, serverOrder));
+    // serverOrderKey identifies the order by value: a poll that returns the same
+    // sequence must not re-enter this, or every 8s tick becomes a render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverOrderKey]);
+
+  // A market that has left the feed keeps its row in the queue, so its facts
+  // must outlive the response that last carried them. Rows accumulate here and
+  // are never removed — the map is bounded by the session's own browsing.
+  const knownRowsRef = useRef<Record<number, MarketRow>>({});
+  for (const [id, row] of Object.entries(rowsById)) {
+    if (row) knownRowsRef.current[Number(id)] = row as unknown as MarketRow;
+  }
+  const waiting = arrivalCount(queue);
+  const feedEntries: FeedListEntry[] = queue.order.map((id) => ({
+    onchainId: id,
+    reason: reasonByMarket[id] ?? null,
+  }));
 
   const ids = rows.map((r) => Number(r.onchain_id));
   const { data: pulseData } = useQuery(pulsesQO(ids));
@@ -576,22 +637,40 @@ function Feed() {
   // Warm the immediate neighbors' deck-core so "Next" (and back) feels local.
   usePredictivePrefetch(ids, currentIdx);
 
-  // Forward only — never a carousel. If the current market has left the feed
-  // (just decided), the next one is the new top; otherwise it's the following id.
+  // Tell the queue where the reader is. The URL decides; this keeps the list's
+  // highlight in step and splices in a market the running order has never seen
+  // (opened from search, a Live row, a position) right after the current one, so
+  // the session continues from there rather than restarting.
+  useEffect(() => {
+    if (activeMarket == null) return;
+    setQueue((q) => (q.activeId === activeMarket ? q : jumpTo(q, activeMarket)));
+  }, [activeMarket]);
+
+  // Forward only — never a carousel. The queue decides what "next" means,
+  // including the one case that used to end the session early: running off the
+  // end now adopts whatever arrived while the reader was working through the
+  // list, so "caught up" means genuinely nothing new rather than nothing shown.
   const nextMarket = () => {
-    const ids = marketRows.map((r) => Number(r.onchain_id));
-    if (ids.length === 0) return setCaughtUp(true);
-    const idx = activeMarket == null ? -1 : ids.indexOf(activeMarket);
-    const next = idx < 0 ? ids[0] : idx + 1 < ids.length ? ids[idx + 1] : null;
-    if (next != null) selectMarket(next);
-    else setCaughtUp(true);
+    const moved = advance(queue);
+    if (moved.activeId != null && moved.activeId !== queue.activeId) {
+      setQueue(moved);
+      selectMarket(moved.activeId);
+      return;
+    }
+    if (moved !== queue) setQueue(moved);
+    setCaughtUp(true);
   };
 
+  /** The reader accepted the markets that arrived while they were reading. */
+  const commitArrivals = () => setQueue((q) => commit(q));
+
   // Refresh the discovery feed: re-fetch (newly created markets may appear) and
-  // leave the caught-up state.
+  // leave the caught-up state. The held order is adopted here too — asking for a
+  // refresh is the clearest possible statement that a rearrangement is welcome.
   const refreshFeed = () => {
     setCaughtUp(false);
     resetFeedSession();
+    setQueue((q) => commit(q));
     void qc.invalidateQueries({ queryKey: ["opp-feed"] });
   };
 
@@ -721,6 +800,11 @@ function Feed() {
             onOpenMenu={() => setMenuOpen(true)}
             onFeed={openFeed}
             feedActive={feedActive}
+            /* The list stays reachable while reading a market — that is the
+               whole point of it. It steps aside only for a person, DNA or a
+               form, where there is no running order to be in the middle of. */
+            onFeedList={feedActive || selectedMarket != null ? toggleFeedList : undefined}
+            feedListOpen={feedListOpen}
             center={
               <button
                 type="button"
@@ -786,12 +870,25 @@ function Feed() {
         (no 264 vs 344 asymmetry). It also means the Case File's YES/NO columns get
         equal visual authority automatically, with no mode-specific grid. */}
       <div className="grid h-full min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:320px_minmax(0,1fr)_320px]">
-        {/* LEFT — You (Positions | Network) — fixed 320px rail */}
+        {/* LEFT — the running order, or You (Positions | Network) — 320px rail */}
         <aside
           className={`${show("mine")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
           style={{ borderRight: "1px solid var(--hairline)" }}
         >
-          {caseActive && currentRow ? (
+          {feedListOpen ? (
+            /* The control the reader just pressed wins the rail — including over
+               the Case File, which `openFeedList` closes on the way in so the
+               investigation never ends up with one of its two columns missing.
+               Signed out this is the whole rail: the running order is public. */
+            <FeedListPanel
+              entries={feedEntries}
+              rows={knownRowsRef.current}
+              activeId={activeMarket}
+              arrivalCount={waiting}
+              onSelect={selectMarket}
+              onCommitArrivals={commitArrivals}
+            />
+          ) : caseActive && currentRow ? (
             // YES Case — the existing YES-supporting intelligence, reorganized.
             // Keyed on the market so switching resets the column scroll to top.
             <Suspense fallback={<DeckSkeleton />}>

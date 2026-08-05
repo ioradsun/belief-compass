@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { convertMoney, formatMoney, formatRate, formatUsdPrice, isRateStale } from "./money";
+import {
+  convertMoney,
+  formatMoney,
+  formatMoneyCompact,
+  formatRate,
+  formatUsdPrice,
+  isRateStale,
+} from "./money";
 
 const RATE = 2000; // 1 ETH = $2,000
 
@@ -64,6 +71,46 @@ describe("formatMoney", () => {
   it("shows an em dash rather than a wrong number when the rate is missing", () => {
     expect(formatMoney(100, { from: "USD", to: "ETH", ethUsd: 0 })).toBe("—");
     expect(formatMoney(100, { from: "ETH", to: "USD", ethUsd: Number.NaN })).toBe("—");
+  });
+});
+
+describe("formatMoneyCompact", () => {
+  const usd = { from: "USD" as const, to: "USD" as const, ethUsd: RATE };
+
+  it("abbreviates the sizes that cost a rail its width", () => {
+    expect(formatMoneyCompact(187_000, usd)).toBe("$187K");
+    expect(formatMoneyCompact(1_200_000, usd)).toBe("$1.2M");
+    expect(formatMoneyCompact(12_400, usd)).toBe("$12.4K");
+  });
+
+  it("drops a trailing .0 rather than showing false precision", () => {
+    expect(formatMoneyCompact(2_000_000, usd)).toBe("$2M");
+    expect(formatMoneyCompact(50_000, usd)).toBe("$50K");
+  });
+
+  it("IS formatMoney below the threshold — a small market reads the same everywhere", () => {
+    for (const v of [0, 12.5, 940, 9_999]) {
+      expect(formatMoneyCompact(v, usd)).toBe(formatMoney(v, usd));
+    }
+  });
+
+  it("never abbreviates ETH — its own precision already adapts", () => {
+    const eth = { from: "ETH" as const, to: "ETH" as const, ethUsd: RATE };
+    expect(formatMoneyCompact(120, eth)).toBe(formatMoney(120, eth));
+  });
+
+  it("converts before deciding, so the unit chooses the shape", () => {
+    // Ξ100 at $2,000 is $200,000 — abbreviated as USD, spelled out as ETH.
+    expect(formatMoneyCompact(100, { from: "ETH", to: "USD", ethUsd: RATE })).toBe("$200K");
+    expect(formatMoneyCompact(200_000, { from: "USD", to: "ETH", ethUsd: RATE })).toBe("Ξ100");
+  });
+
+  it("keeps the sign", () => {
+    expect(formatMoneyCompact(-187_000, usd)).toBe("−$187K");
+  });
+
+  it("shows nothing rather than something false when the rate is unknown", () => {
+    expect(formatMoneyCompact(1_000_000, { from: "ETH", to: "USD", ethUsd: 0 })).toBe("—");
   });
 });
 
