@@ -715,7 +715,7 @@ function Feed() {
   const mobileCaseActive = !isDesktop && caseEligible;
 
   return (
-    <div className="flex h-[100svh] w-full flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)] supports-[height:100dvh]:h-[100dvh]">
+    <div className="relative flex h-[100svh] w-full flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)] supports-[height:100dvh]:h-[100dvh]">
       <LandingPanel
         state={landing.state}
         onEnter={enterProduct}
