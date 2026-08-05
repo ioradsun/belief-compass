@@ -215,7 +215,6 @@ function ConvictionCard({
 }
 
 
-const Divider = () => <div className="my-2.5" style={{ borderTop: "1px solid var(--hairline)" }} />;
 
 export function MyConvictions({
   wallet,
