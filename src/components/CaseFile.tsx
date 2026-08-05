@@ -558,10 +558,15 @@ function MetricRow({
         {label}
       </div>
       {absolute && (
-        <div className="num mt-0.5 text-[11px]" style={{ color: tone, opacity: active ? 1 : 0.6 }}>
-          {absolute}
+        <div
+          className="num mt-0.5 text-[11px]"
+          style={{ color: "var(--text-muted)", opacity: active ? 1 : 0.6 }}
+        >
+          <span style={{ color: tone }}>{absolute.split(" ")[0]}</span>
+          {absolute.slice(absolute.split(" ")[0].length)}
         </div>
       )}
+
     </button>
   );
 }
