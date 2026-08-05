@@ -1,25 +1,63 @@
 /**
- * MobileCase — the mobile Case File as a three-page horizontal carousel.
+ * MOBILE CASE — the comparison first, a side on demand.
  *
- * One full-screen idea at a time, with the next physically waiting beside it:
+ * WHAT THIS REPLACED. A three-page carousel — NO ← MARKET → YES — where each
+ * side page rendered `CaseColumn`, the desktop component, with one prop
+ * flipped. Mobile had no design of its own; it was the desktop layout on a
+ * smaller screen, and the consequence was worse than cosmetic:
  *
- *        NO CASE   ←   MARKET   →   YES CASE
+ *   Comparing two sides requires seeing them at once. The carousel put YES and
+ *   NO on separate screens WITH THE MARKET BETWEEN THEM, so comparing meant two
+ *   swipes and holding numbers in your head. The feature is named "See Both
+ *   Sides" and its mobile layout was the one arrangement that prevented it.
  *
- * The market stays the default (center) page; the two competing cases sit just
- * off-screen and are reached by swiping. The spatial model matches the order
- * dock below: the two cases flank the market so a side is always one swipe
- * away. Not two drawers, not a squeezed desktop.
+ * The shape now answers the five questions a reader actually arrives with, in
+ * the order they ask them:
  *
- * Presentation only: the side pages reuse CaseColumn (same query keys, no new
- * data), and the middle page is the exact neutral market content passed as
- * children. The shared order dock stays pinned below, unchanged.
+ *   1. WHICH SIDE IS GAINING?  one sentence, above everything
+ *   2. WHY?                    the same sentence, then two numbers each
+ *   3. WHO IS BACKING IT?      tap a side; the people are the first thing in it
+ *   4. EXPLORE SOMEONE?        every believer opens their profile
+ *   5. BACK A SIDE?            the dock below, unchanged
+ *
+ * WHAT WAS REMOVED, and why none of it is missed:
+ *
+ *   PRICE. On a bonding curve price is a DERIVATIVE of capital — it moves
+ *   because capital moved — so showing both showed one fact twice. It answers
+ *   none of the five questions; it is an execution detail, and the order dock
+ *   already surfaces it at the moment it matters.
+ *
+ *   THE TIMEFRAME LABEL. It was quoted on the side page and CHOSEN on the
+ *   market page: a control you could see and could not reach. Mobile now reads
+ *   the shared window silently and says nothing about it.
+ *
+ *   THE METRIC RADIOGROUP. Three metric rows secretly acting as a chart lens
+ *   selector is a desktop interaction — nothing on a phone tells you that
+ *   tapping "Capital" redraws the chart below it.
+ *
+ *   THE SECOND NARRATIVE LINE. A headline plus two prose lines is three
+ *   overlapping statements of one fact.
+ *
+ * Presentation only. The comparison sentence and the strip come from the pure
+ * `@/domain/side-compare`; an expanded side reuses `CaseColumn`, so no query
+ * key or data path changes.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { CaseColumn } from "@/components/CaseFile";
 import type { MarketRow } from "@/components/MarketCard";
 import type { OrderSide } from "@/domain/order";
+import { useMoney } from "@/lib/display-unit";
+import { compareSides, comparisonStrip, type Side, type StripSide } from "@/domain/side-compare";
 
-type Page = 0 | 1 | 2; // NO · MARKET · YES
+const num = (v: unknown): number => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+const numOrNull = (v: unknown): number | null => {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 export function MobileCaseView({
   title,
@@ -38,216 +76,182 @@ export function MobileCaseView({
   ethUsd: number;
   /** Close case mode → return to the neutral market page. */
   onClose: () => void;
-  /** Pick a side from a case page (the dock below then confirms it). */
+  /** Pick a side (the dock below then confirms it). */
   onBackSide: (side: OrderSide) => void;
-  /** The neutral market content — the middle page, unchanged. */
+  /** The neutral market content, shown beneath the comparison. */
   children: React.ReactNode;
 }) {
-  const scroller = useRef<HTMLDivElement | null>(null);
-  const pages = useRef<(HTMLDivElement | null)[]>([]);
-  const [active, setActive] = useState<Page>(1);
+  // Null = comparing. A side = that side is open. There is no third state, and
+  // no page you can be "between" — the reason the carousel needed an indicator.
+  const [open, setOpen] = useState<Side | null>(null);
+  const { format } = useMoney();
 
-  // Start centered on MARKET without animation, before first paint.
-  useEffect(() => {
-    const el = pages.current[1];
-    if (el) el.scrollIntoView({ block: "nearest", inline: "center" });
-  }, []);
-
-  const goTo = useCallback((p: Page) => {
-    pages.current[p]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-  }, []);
-
-  // Track the nearest page to drive the indicator + edge state.
-  const onScroll = useCallback(() => {
-    const box = scroller.current;
-    if (!box) return;
-    const mid = box.scrollLeft + box.clientWidth / 2;
-    let best: Page = active;
-    let bestDist = Infinity;
-    ([0, 1, 2] as Page[]).forEach((i) => {
-      const el = pages.current[i];
-      if (!el) return;
-      const center = el.offsetLeft + el.offsetWidth / 2;
-      const d = Math.abs(center - mid);
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
-      }
-    });
-    if (best !== active) setActive(best);
-  }, [active]);
-
-  // Escape returns to MARKET (or closes when already there).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (active === 1) onClose();
-      else goTo(1);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [active, onClose, goTo]);
+  const r = row as unknown as Record<string, unknown>;
+  const yes = {
+    believers: num(r.believers_yes),
+    capitalUsd: numOrNull(r.yes_capital_usd),
+    joined: num(r.new_believers_yes_24h),
+    capitalChangePct: numOrNull(r.chg_window_yes ?? r.chg_24h_yes),
+  };
+  const no = {
+    believers: num(r.believers_no),
+    capitalUsd: numOrNull(r.no_capital_usd),
+    joined: num(r.new_believers_no_24h),
+    capitalChangePct: numOrNull(r.chg_window_no ?? r.chg_24h_no),
+  };
+  const { story, focus } = compareSides(yes, no);
+  const strip = comparisonStrip(yes, no);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Pinned header: the question stays put; the close control and a tiny
-        three-state indicator do the rest. No chunky segmented control. */}
-      <div className="shrink-0 pb-2">
-        <div className="mb-1.5 flex items-start gap-2">
-          <h1 className="min-w-0 flex-1 text-[16px] font-semibold leading-tight tracking-tight text-[var(--text)]">
-            {title}
-          </h1>
-          <button
-            type="button"
-            onClick={onClose}
-            className="-mr-1 -mt-0.5 shrink-0 rounded-full px-2 py-1 text-[12px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-            aria-label="Close case"
-          >
-            <span aria-hidden>×</span> Case
-          </button>
-        </div>
-        <Indicator active={active} onGo={goTo} />
+      {/* The question, and the way out. Both stay put. */}
+      <div className="mb-3 flex shrink-0 items-start gap-2">
+        <h1 className="min-w-0 flex-1 text-[16px] leading-tight font-semibold tracking-tight text-[var(--text)]">
+          {title}
+        </h1>
+        <button
+          type="button"
+          onClick={() => (open ? setOpen(null) : onClose())}
+          className="-mt-0.5 -mr-1 shrink-0 rounded-full px-2 py-1 text-[12px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+          aria-label={open ? "Back to the comparison" : "Close case"}
+        >
+          {open ? "← Compare" : "× Case"}
+        </button>
       </div>
 
-      {/* Horizontal snapping carousel. Pages peek at the edges (~6% each side) so
-        the screen reads as navigable with no arrows or tabs. */}
-      <div
-        ref={scroller}
-        onScroll={onScroll}
-        className="flex min-h-0 flex-1 snap-x snap-mandatory gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none]"
-        style={{ scrollPaddingInline: "0" }}
-      >
-        <CasePage
-          elRef={(el) => {
-            pages.current[0] = el;
-          }}
-          side="NO"
-          edge="left"
-          dimmed={active !== 0}
-        >
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain">
+        {open ? (
+          /* A SIDE, IN PLACE. The comparison is one tap behind, not a swipe
+             through an unrelated page. `CaseColumn` is reused whole — the same
+             queries, the same believers, the same tape. */
           <CaseColumn
-            side="NO"
+            side={open}
             marketId={marketId}
             row={row}
             viewerWallet={viewerWallet}
             ethUsd={ethUsd}
-            compactRoster
+            compactRoster={false}
           />
-          <SideAction side="NO" onBack={() => onBackSide("NO")} />
-        </CasePage>
+        ) : (
+          <>
+            {/* 1 — THE STORY. The first thing read, and the thing that makes
+                every number below it interpretable. */}
+            <p className="text-[15px] leading-snug font-medium text-[var(--text)]">{story}</p>
 
-        <div
-          ref={(el) => {
-            pages.current[1] = el;
-          }}
-          className="min-h-0 w-[88%] shrink-0 snap-center touch-pan-y overflow-y-auto overscroll-contain pr-0.5"
-        >
-          {children}
-        </div>
+            {/* 2 — BOTH SIDES, AT ONCE. The entire point: no swipe, no memory. */}
+            <div className="space-y-2">
+              <ShareBar strip={strip} />
+              {strip.map((s) => (
+                <SideRow
+                  key={s.side}
+                  s={s}
+                  emphasised={focus === s.side}
+                  money={(v) => format(v, "USD")}
+                  onOpen={() => setOpen(s.side)}
+                />
+              ))}
+            </div>
 
-        <CasePage
-          elRef={(el) => {
-            pages.current[2] = el;
-          }}
-          side="YES"
-          edge="right"
-          dimmed={active !== 2}
-        >
-          <CaseColumn
-            side="YES"
-            marketId={marketId}
-            row={row}
-            viewerWallet={viewerWallet}
-            ethUsd={ethUsd}
-            compactRoster
-          />
-          <SideAction side="YES" onBack={() => onBackSide("YES")} />
-        </CasePage>
+            {/* 3 — THE MARKET ITSELF, beneath the comparison rather than between
+                the two sides where it used to block them from meeting. */}
+            <div className="border-t border-[var(--hairline)] pt-4">{children}</div>
+          </>
+        )}
       </div>
+
+      {/* The side action appears only inside a side — offering "Back YES" while
+          someone is still comparing asks for a decision before the question. */}
+      {open && (
+        <button
+          type="button"
+          onClick={() => onBackSide(open)}
+          className="mt-3 shrink-0 rounded-[12px] py-3 text-[15px] font-semibold transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
+          style={{
+            border: `1px solid ${open === "YES" ? "var(--yes)" : "var(--no)"}`,
+            color: open === "YES" ? "var(--yes)" : "var(--no)",
+          }}
+        >
+          Back {open}
+        </button>
+      )}
     </div>
   );
 }
 
-/** A case page: full-height vertical scroll, with a thin side-colored edge. */
-const CasePage = ({
-  elRef,
-  side,
-  edge,
-  dimmed,
-  children,
-}: {
-  elRef: (el: HTMLDivElement | null) => void;
-  side: "YES" | "NO";
-  edge: "left" | "right";
-  dimmed: boolean;
-  children: React.ReactNode;
-}) => {
-  const color = side === "YES" ? "var(--yes)" : "var(--no)";
-  const border = `2px solid color-mix(in oklab, ${color} 55%, transparent)`;
-  const edgeStyle: React.CSSProperties =
-    edge === "left"
-      ? { borderLeft: border, paddingLeft: "10px" }
-      : { borderRight: border, paddingRight: "10px" };
+/**
+ * One bar, split by believers. The share arrives already computed beside the
+ * numbers (see `comparisonStrip`) so the bar and the labels beneath it cannot
+ * disagree — a bar that says one thing while the count says another is worse
+ * than no bar.
+ */
+function ShareBar({ strip }: { strip: readonly [StripSide, StripSide] }) {
+  const [yes, no] = strip;
   return (
-    <div
-      ref={elRef}
-      className="flex min-h-0 w-[88%] shrink-0 snap-center touch-pan-y flex-col overflow-y-auto overscroll-contain transition-opacity duration-200 motion-reduce:transition-none"
-      style={{ opacity: dimmed ? 0.72 : 1, ...edgeStyle }}
-    >
-      {children}
+    <div className="flex h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]" aria-hidden>
+      <span style={{ width: `${yes.share * 100}%`, background: "var(--yes)" }} />
+      <span style={{ width: `${no.share * 100}%`, background: "var(--no)" }} />
     </div>
   );
-};
+}
 
-/** The side-specific action, pinned to the bottom of a case page. */
-function SideAction({ side, onBack }: { side: "YES" | "NO"; onBack: () => void }) {
-  const color = side === "YES" ? "var(--yes)" : "var(--no)";
+/**
+ * One side: who is on it, what they have committed, who just arrived.
+ *
+ * TWO numbers, not five. Believers and capital are the only ones that answer
+ * "is this side gaining conviction" — price was a restatement of capital, and
+ * a percentage change beside both of them was a fourth way of saying the same
+ * sentence already printed above.
+ */
+function SideRow({
+  s,
+  emphasised,
+  money,
+  onOpen,
+}: {
+  s: StripSide;
+  emphasised: boolean;
+  money: (v: number) => string;
+  onOpen: () => void;
+}) {
+  const color = s.side === "YES" ? "var(--yes)" : "var(--no)";
   return (
     <button
       type="button"
-      onClick={onBack}
-      className="mt-3 shrink-0 rounded-[12px] py-2.5 text-[14px] font-semibold transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
-      style={{ border: `1px solid ${color}`, color }}
+      onClick={onOpen}
+      className="flex w-full items-center gap-3 rounded-[14px] px-3.5 py-3 text-left transition-colors active:bg-[var(--surface-2)]"
+      style={{
+        background: "var(--surface)",
+        // Emphasis, not decoration: the side the story is about gets the edge
+        // the eye lands on first. Never a border on both — that is just a box.
+        border: emphasised ? `1px solid ${color}` : "1px solid var(--border)",
+      }}
     >
-      Back {side}
-    </button>
-  );
-}
+      <span className="w-[34px] shrink-0 text-[13px] font-semibold tracking-wide" style={{ color }}>
+        {s.side}
+      </span>
 
-/** NO CASE · MARKET · YES CASE — labels over three dots; each is tappable. */
-function Indicator({ active, onGo }: { active: Page; onGo: (p: Page) => void }) {
-  const items: { p: Page; label: string }[] = [
-    { p: 0, label: "NO Case" },
-    { p: 1, label: "Market" },
-    { p: 2, label: "YES Case" },
-  ];
-  return (
-    <div className="flex items-center justify-center gap-6" role="tablist" aria-label="Case pages">
-      {items.map(({ p, label }) => {
-        const on = active === p;
-        return (
-          <button
-            key={p}
-            type="button"
-            role="tab"
-            aria-selected={on}
-            onClick={() => onGo(p)}
-            className="flex flex-col items-center gap-1"
-          >
-            <span
-              className="text-[9px] font-semibold uppercase tracking-[0.1em] transition-colors"
-              style={{ color: on ? "var(--text)" : "var(--text-muted)" }}
-            >
-              {label}
+      <span className="min-w-0 flex-1">
+        <span className="num block text-[17px] leading-none font-semibold text-[var(--text)]">
+          {s.believers.toLocaleString("en-US")}
+          <span className="ml-1.5 text-[11px] font-normal text-[var(--text-muted)]">
+            {s.believers === 1 ? "believer" : "believers"}
+          </span>
+        </span>
+        <span className="num mt-1 block text-[12px] text-[var(--text-secondary)]">
+          {s.capitalUsd != null && s.capitalUsd > 0 ? money(s.capitalUsd) : "—"}
+          {/* Arrivals only when there ARE any: "+0 today" is noise wearing the
+              costume of an update. */}
+          {s.joined > 0 && (
+            <span className="ml-2" style={{ color }}>
+              +{s.joined} today
             </span>
-            <span
-              className="h-1.5 w-1.5 rounded-full transition-colors"
-              style={{ background: on ? "var(--text)" : "var(--border)" }}
-              aria-hidden
-            />
-          </button>
-        );
-      })}
-    </div>
+          )}
+        </span>
+      </span>
+
+      <span className="shrink-0 text-[var(--text-muted)]" aria-hidden>
+        ›
+      </span>
+    </button>
   );
 }
