@@ -239,7 +239,7 @@ export function OmniHeader({
   }, []);
 
   // Markets: full-catalog, intent-ranked search (server), not just the loaded feed.
-  const { data: marketHits = [] } = useQuery({
+  const { data: marketHits = [], isFetching: marketsFetching } = useQuery({
     queryKey: ["omni-markets", term],
     queryFn: async () => await searchMarkets({ data: { query: term, limit: 8 } }),
     enabled: term.length >= 2,
@@ -247,7 +247,7 @@ export function OmniHeader({
     placeholderData: (prev) => prev,
   });
 
-  const { data: net } = useQuery({
+  const { data: net, isFetching: peopleFetching } = useQuery({
     queryKey: ["omni-people", wallet ?? null, term],
     queryFn: async () => await getNetwork({ data: { wallet, query: term, limit: 6 } }),
     enabled: Boolean(wallet) && term.length >= 2,
@@ -256,6 +256,10 @@ export function OmniHeader({
   const peopleHits = net?.people ?? [];
 
   const showResults = open && term.length >= 2;
+  // Still typing (the debounced term trails the field) or still fetching: the
+  // list is unresolved, not empty.
+  const searching =
+    q.trim() !== term || marketsFetching || (Boolean(wallet) && peopleFetching);
 
   // One universal field, quick filters beneath it: the scope narrows the current
   // results in place rather than opening a different search.
@@ -461,8 +465,23 @@ export function OmniHeader({
             ))}
           </div>
 
+          {/* Typing is not failure: while a query is in flight we say we're
+              looking. "No matches" is a verdict, and a verdict only lands once
+              the search has actually finished. */}
           {visibleMarkets.length === 0 && visiblePeople.length === 0 ? (
-            <p className="px-3 py-3 text-[13px] text-[var(--text-muted)]">No matches.</p>
+            searching ? (
+              <p className="flex items-center gap-2 px-3 py-3 text-[13px] text-[var(--text-muted)]">
+                <span
+                  aria-hidden
+                  className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[var(--border)] border-t-[var(--text-muted)]"
+                />
+                Searching…
+              </p>
+            ) : (
+              <p className="px-3 py-3 text-[13px] text-[var(--text-muted)]">
+                No matches for “{term}”.
+              </p>
+            )
           ) : null}
 
           {visibleMarkets.length > 0 && (
@@ -489,23 +508,46 @@ export function OmniHeader({
                     type="button"
                     onMouseEnter={() => setActiveI(i)}
                     onClick={() => choose({ kind: "market", id: m.onchain_id })}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left"
+                    className="flex w-full items-stretch gap-2.5 rounded-lg py-2 pr-3 text-left"
                     style={active_i === i ? { background: "var(--surface)" } : undefined}
                   >
+                    {/* A 2px rail, not a badge: enough to group by momentum while
+                        scanning, never enough to compete with the question. */}
+                    <span
+                      aria-hidden
+                      className="ml-1.5 w-[2px] shrink-0 rounded-full"
+                      style={{
+                        background:
+                          row.accent === "growing"
+                            ? "color-mix(in oklab, var(--yes) 55%, transparent)"
+                            : row.accent === "active"
+                              ? "color-mix(in oklab, var(--text-muted) 55%, transparent)"
+                              : "transparent",
+                      }}
+                    />
                     <span className="min-w-0 flex-1">
                       {/* One question, one line: a wrapped title turns a scannable
                           list into paragraphs. It clips instead. */}
-                      <span className="block truncate whitespace-nowrap text-[13px] text-[var(--text)]">
+                      <span className="block truncate whitespace-nowrap text-[13px] font-medium text-[var(--text)]">
                         {m.title}
                       </span>
-                      <span className="mt-0.5 block truncate whitespace-nowrap text-[11px] text-[var(--text-muted)]">
+                      {/* Story and numbers read as one block — neutral, uncoloured. */}
+                      <span className="mt-1 block truncate whitespace-nowrap text-[11px] text-[var(--text-muted)]">
                         {row.story}
                       </span>
-                      {(row.participantsText || row.capText) && (
-                        <span className="num mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-[var(--text-muted)]">
-                          {row.participantsText && <span>{row.participantsText}</span>}
-                          {row.participantsText && row.capText && <span aria-hidden>·</span>}
-                          {row.capText && <span>{row.capText}</span>}
+                      {row.metrics.length > 0 && (
+                        <span className="num mt-0 flex items-center gap-1.5 truncate text-[11px]">
+                          {row.metrics.map((mt, k) => (
+                            <span key={mt.label} className="flex items-center gap-1.5">
+                              {k > 0 && (
+                                <span aria-hidden className="text-[var(--text-muted)]">
+                                  ·
+                                </span>
+                              )}
+                              <span className="font-medium text-[var(--text)]">{mt.value}</span>
+                              <span className="text-[var(--text-muted)]">{mt.label}</span>
+                            </span>
+                          ))}
                         </span>
                       )}
                     </span>
