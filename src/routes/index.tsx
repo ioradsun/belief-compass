@@ -274,6 +274,24 @@ export const Route = createFileRoute("/")({
   notFoundComponent: () => <div className="p-8">Not found.</div>,
 });
 
+/**
+ * The way out of a centre takeover. Every panel that covers the market owns one,
+ * which is what let the global header Feed button go: a single control that
+ * dropped every search param at once was the only exit two of these panels had,
+ * and it took unrelated state (an open Case File) with it.
+ */
+function BackLink({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mb-4 flex items-center gap-1.5 text-[13px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+    >
+      <span aria-hidden>←</span> Back
+    </button>
+  );
+}
+
 type MobileTab = "mine" | "belief" | "room";
 
 const TABS: { key: MobileTab; label: string }[] = [
@@ -487,35 +505,26 @@ function Feed() {
   // The way home. Every center destination (market, person, DNA, create, terms,
   // dashboard, case) is a search param, so returning to the feed is simply
   // dropping them — one predictable exit from anywhere in the app.
-  const openFeed = () => {
-    navigate({ search: (prev: Search) => ({ wallet: prev.wallet, r: prev.r }) });
-    setTab("belief");
-    setCaughtUp(false);
-    enterProduct();
-  };
   /**
-   * The same header control, second state: off the feed it takes you home,
-   * on the feed it opens the running order. One button, because "the feed" and
-   * "the list of what the feed will show you" are the same idea.
+   * The way back to a market from a centre takeover.
    *
-   * The Case File spans BOTH rails, so opening the list closes it rather than
-   * leaving half an investigation on screen.
+   * This used to be one global header button that dropped EVERY search param,
+   * and it was the only exit two of those takeovers had. Each panel now clears
+   * its own — so leaving a person profile no longer also closes the Case File
+   * you had open, and the exit sits where the thing being exited is.
    */
-  const toggleFeedList = () => {
-    setFeedListOpen((open) => {
-      if (!open && caseOpen) navigate({ search: (prev: Search) => ({ ...prev, case: undefined }) });
-      return !open;
-    });
+  const closePerson = () => {
+    navigate({ search: (prev: Search) => ({ ...prev, p: undefined }) });
     enterProduct();
   };
-  const feedActive = !(
-    selectedMarket ||
-    selectedPerson ||
-    dnaOpen ||
-    createOpen ||
-    termsOpen ||
-    dashOpen
-  );
+  const closeDna = () => {
+    navigate({ search: (prev: Search) => ({ ...prev, dna: undefined }) });
+    enterProduct();
+  };
+  /** The Case File spans BOTH rails, so the running order displaces it. */
+  const closeCase = () => {
+    if (caseOpen) navigate({ search: (prev: Search) => ({ ...prev, case: undefined }) });
+  };
 
   // ONE timeframe for the whole app. The center's WindowFilter publishes to the
   // deck-window store; the feed, the left rail and every metric read it here, so
@@ -523,11 +532,6 @@ function Feed() {
   const win = useDeckWindow() as VolumeWindow;
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
-
-  // The Feed List takes the left rail when open. Not a URL param: it is a view
-  // of the session's own running order, which a shared link cannot reconstruct —
-  // unlike ?m/?p/?dna, which name something a stranger can also open.
-  const [feedListOpen, setFeedListOpen] = useState(false);
 
   // The active lens is a SERVER filter on the one global classification: it is
   // sent with the feed request, so the server still owns the whole sequence.
@@ -798,13 +802,6 @@ function Feed() {
             onSelectMarket={selectMarket}
             onSelectPerson={selectPerson}
             onOpenMenu={() => setMenuOpen(true)}
-            onFeed={openFeed}
-            feedActive={feedActive}
-            /* The list stays reachable while reading a market — that is the
-               whole point of it. It steps aside only for a person, DNA or a
-               form, where there is no running order to be in the middle of. */
-            onFeedList={feedActive || selectedMarket != null ? toggleFeedList : undefined}
-            feedListOpen={feedListOpen}
             center={
               <button
                 type="button"
@@ -864,31 +861,16 @@ function Feed() {
         }`}
       />
 
-
-
       {/* One rail width for both sides in every mode — a single source of truth
         (no 264 vs 344 asymmetry). It also means the Case File's YES/NO columns get
         equal visual authority automatically, with no mode-specific grid. */}
       <div className="grid h-full min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:320px_minmax(0,1fr)_320px]">
-        {/* LEFT — the running order, or You (Positions | Network) — 320px rail */}
+        {/* LEFT — Feed | Convictions | Tribe | Rivals — fixed 320px rail */}
         <aside
           className={`${show("mine")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
           style={{ borderRight: "1px solid var(--hairline)" }}
         >
-          {feedListOpen ? (
-            /* The control the reader just pressed wins the rail — including over
-               the Case File, which `openFeedList` closes on the way in so the
-               investigation never ends up with one of its two columns missing.
-               Signed out this is the whole rail: the running order is public. */
-            <FeedListPanel
-              entries={feedEntries}
-              rows={knownRowsRef.current}
-              activeId={activeMarket}
-              arrivalCount={waiting}
-              onSelect={selectMarket}
-              onCommitArrivals={commitArrivals}
-            />
-          ) : caseActive && currentRow ? (
+          {caseActive && currentRow ? (
             // YES Case — the existing YES-supporting intelligence, reorganized.
             // Keyed on the market so switching resets the column scroll to top.
             <Suspense fallback={<DeckSkeleton />}>
@@ -903,22 +885,13 @@ function Feed() {
                 ethUsd={stableFeed?.ethUsd ?? 0}
               />
             </Suspense>
-          ) : walletResolving ? (
-            /* Wallet still reconnecting on load — hold neutral space so the rail
-               never flashes the Connect CTA before positions appear. */
-            <div className="min-h-0 flex-1" aria-hidden />
-          ) : !wallet ? (
-            /* Signed out: nothing to show but the one thing to do. */
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
-              <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
-                Connect a wallet to see your convictions.
-              </p>
-              <WalletConnectButton />
-            </div>
           ) : (
             <>
               {/* Recipient side of belonging — one aggregated line, dismissible. */}
-              <WelcomeReceived wallet={wallet} />
+              {wallet && <WelcomeReceived wallet={wallet} />}
+              {/* Rendered whether or not a wallet is connected: the Feed tab is
+                  the one that works signed out, and the rail used to hide it
+                  behind a connect prompt that replaced the whole column. */}
               <MyWorld
                 wallet={wallet}
                 rows={rows as unknown as MarketRow[]}
@@ -931,6 +904,32 @@ function Feed() {
                 onOpenDna={openDna}
                 onOpenDashboard={openDashboard}
                 initialNetwork={Boolean(selectedPerson || dnaOpen)}
+                feedCount={queue.order.length}
+                onOpenFeedTab={closeCase}
+                feedList={
+                  <FeedListPanel
+                    entries={feedEntries}
+                    rows={knownRowsRef.current}
+                    activeId={activeMarket}
+                    arrivalCount={waiting}
+                    onSelect={selectMarket}
+                    onCommitArrivals={commitArrivals}
+                  />
+                }
+                connectPrompt={
+                  walletResolving ? (
+                    /* Still reconnecting — hold neutral space rather than flash
+                       a Connect prompt in front of positions that are arriving. */
+                    <div className="min-h-0 flex-1" aria-hidden />
+                  ) : (
+                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
+                      <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
+                        Connect a wallet to see your convictions.
+                      </p>
+                      <WalletConnectButton />
+                    </div>
+                  )
+                }
               />
             </>
           )}
@@ -946,13 +945,7 @@ function Feed() {
               The deck owns its own internal scroll so its dock stays pinned. */}
             {termsOpen ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
-                <button
-                  type="button"
-                  onClick={closeTerms}
-                  className="mb-4 flex items-center gap-1.5 text-[13px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-                >
-                  <span aria-hidden>←</span> Back
-                </button>
+                <BackLink onClick={closeTerms} />
                 <h1 className="mb-3 text-[24px] font-semibold tracking-[-0.02em] text-[var(--text)]">
                   Terms &amp; risk
                 </h1>
@@ -985,7 +978,12 @@ function Feed() {
                 </Suspense>
               </PanelBoundary>
             ) : selectedPerson ? (
+              /* The exit lives here rather than inside the panel: both of these
+                 components have several early returns (loading, no wallet, not
+                 enough evidence), and a back link owned by the component would
+                 have to appear in every one of them. */
               <div className="min-h-0 flex-1 overflow-y-auto">
+                <BackLink onClick={closePerson} />
                 <Suspense fallback={<DeckSkeleton />}>
                   <PersonProfile
                     wallet={selectedPerson}
@@ -996,6 +994,7 @@ function Feed() {
               </div>
             ) : dnaOpen ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
+                <BackLink onClick={closeDna} />
                 <Suspense fallback={<DeckSkeleton />}>
                   <DnaOverview wallet={wallet} onSelectPerson={selectPerson} />
                 </Suspense>

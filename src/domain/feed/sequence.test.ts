@@ -3,7 +3,11 @@ import { sequenceFeed, type SequenceCandidate } from "./sequence";
 import { SEQUENCE } from "./config";
 import type { ScoredMarket } from "./score";
 
-const scored = (id: number, score: number, driver: ScoredMarket["driver"] = "momentum"): ScoredMarket => ({
+const scored = (
+  id: number,
+  score: number,
+  driver: ScoredMarket["driver"] = "momentum",
+): ScoredMarket => ({
   onchainId: id,
   score,
   components: {
@@ -87,7 +91,9 @@ describe("diversity", () => {
       cand(i + 1, { category: i < 8 ? "Crypto" : "Sports" }),
     );
     const { items } = sequenceFeed({ candidates: cands, limit: 12 });
-    const cats = items.map((i) => cands.find((c) => c.onchainId === (i as { onchainId: number }).onchainId)!.category);
+    const cats = items.map(
+      (i) => cands.find((c) => c.onchainId === (i as { onchainId: number }).onchainId)!.category,
+    );
     let run = 1;
     for (let i = 1; i < cats.length; i += 1) {
       run = cats[i] === cats[i - 1] ? run + 1 : 1;

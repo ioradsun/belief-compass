@@ -269,9 +269,10 @@ export function composeMarketStory(input: StoryInput): MarketStory {
 //   • Terminology: never wallet / address / transaction / position / holder / the
 //     "YES tribe" (a Tribe belongs to the USER and is cross-market; YES/NO are
 //     market SIDES — you back / join / enter a side, you don't join its tribe).
-//   • Privacy: a network member's SIDE is never revealed here — their row is a
-//     side-blind belonging signal (YOUR TWIN / YOUR TRIBE / YOUR OPP) until the
-//     viewer has chosen. Non-network single actors may be named (pov.co identity).
+//   • A network member's row used to be a side-blind belonging signal (YOUR
+//     TWIN / YOUR TRIBE / YOUR OPP) and nothing else. It is now the ordinary
+//     story with the relationship as its kicker — see conviction-event.ts, which
+//     writes these. Non-network single actors may be named (pov.co identity).
 // ============================================================================
 
 export type LiveCategory =

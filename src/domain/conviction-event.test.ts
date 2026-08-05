@@ -101,28 +101,17 @@ describe("weak data, weak claim", () => {
   });
 });
 
-describe("the network stays side-blind", () => {
-  it("never reveals which way someone in your network moved", () => {
-    for (const relationship of ["twin", "tribe", "opp", "inverse"] as const) {
-      for (const action of ["enter", "add", "reduce", "exit", "flip"] as const) {
-        const s = tellConvictionStory(
-          ev({ action, actor: { name: "Maya", relationship }, context: { daysHeld: 60 } }),
-        );
-        expect(`${s.headline} ${s.body} ${s.attribution ?? ""}`).not.toMatch(/\bYES\b|\bNO\b/);
-        expect(s.personal).toBe(true);
-        expect(s.tone).toBe("neutral");
-      }
-    }
-  });
-
-  it("belonging outranks the mechanics of what they did", () => {
-    const s = tellConvictionStory(
-      ev({ action: "exit", actor: { name: "Maya", relationship: "twin" }, context: { rank: 1 } }),
-    );
-    expect(s.headline).toBe("YOUR TWIN");
-  });
-
-  it("tenure is safe to state — it shows commitment, not direction", () => {
+/**
+ * A relationship FRAMES the row; it does not replace it.
+ *
+ * These rows used to be flattened to "entered" / "stepped back" with no side
+ * and no context, so the rows a reader cared about most were the only ones that
+ * said nothing — your Twin selling a 40-day position and your Twin buying $5 of
+ * it produced the same sentence. The privacy that bought was thin anyway, since
+ * every position is public on-chain.
+ */
+describe("someone in your network gets the whole story", () => {
+  it("says what they actually did, side and all", () => {
     const s = tellConvictionStory(
       ev({
         action: "exit",
@@ -130,7 +119,55 @@ describe("the network stays side-blind", () => {
         context: { daysHeld: 90 },
       }),
     );
-    expect(s.body).toBe("Maya stepped back after 3 months.");
+    expect(s.body).toBe("Maya gave up on YES after 3 months.");
+  });
+
+  it("keeps the relationship as the kicker, the category and the wash", () => {
+    for (const [relationship, kicker] of [
+      ["twin", "YOUR TWIN"],
+      ["tribe", "YOUR TRIBE"],
+      ["opp", "YOUR RIVAL"],
+      ["inverse", "YOUR OPP"],
+    ] as const) {
+      const s = tellConvictionStory(
+        ev({ action: "exit", actor: { name: "Maya", relationship }, context: { rank: 1 } }),
+      );
+      expect(s.headline).toBe(kicker);
+      expect(s.category).toBe(relationship);
+      expect(s.personal).toBe(true);
+    }
+  });
+
+  it("distinguishes moves that used to read identically", () => {
+    const sold = tellConvictionStory(
+      ev({
+        action: "exit",
+        actor: { name: "Maya", relationship: "twin" },
+        context: { daysHeld: 40 },
+      }),
+    );
+    const bought = tellConvictionStory(
+      ev({
+        action: "add",
+        actor: { name: "Maya", relationship: "twin" },
+        context: { amountUsd: 5 },
+      }),
+    );
+    expect(sold.body).not.toBe(bought.body);
+  });
+
+  it("names them by relationship when there is no display name", () => {
+    const s = tellConvictionStory(
+      ev({ action: "enter", actor: { name: null, relationship: "twin" } }),
+    );
+    // Never "Someone" — the reader knows exactly who this is to them.
+    expect(s.body).toContain("Your closest match");
+  });
+
+  it("is still the ordinary story for a stranger", () => {
+    const s = tellConvictionStory(ev({ action: "exit", context: { daysHeld: 90 } }));
+    expect(s.personal).toBe(false);
+    expect(s.headline).toBe("LOST CONVICTION");
   });
 });
 

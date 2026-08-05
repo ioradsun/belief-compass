@@ -9,18 +9,37 @@
 import { serviceClient } from "@/lib/supabase-clients";
 import type { ViewerMarketState } from "@/domain/feed/eligibility";
 import { EMPTY_PROFILE, type ViewerProfile } from "@/domain/feed/score";
+import { loadFollowing } from "@/lib/follows.functions";
 
 export interface ViewerSignals {
   states: Map<number, ViewerMarketState>;
   profile: ViewerProfile;
   /** Markets the viewer currently holds a position in. */
   held: Set<number>;
+  /** Wallets this viewer explicitly follows. */
+  following: ReadonlySet<string>;
+  /**
+   * Which followed people hold a position in each market.
+   *
+   * Wallets rather than a count, so the caller can UNION them with a followed
+   * creator without double-counting the common case: someone who created a
+   * market and also backed it is one person connected to it, not two.
+   *
+   * One set, not a creator set and a participant set. The product's rule is
+   * that a person is a connection, not a role — whether they wrote the question
+   * or took a side in it is a ranking detail the interface never distinguishes,
+   * and splitting it here would put that distinction one careless render away
+   * from being visible.
+   */
+  followedInMarket: Map<number, Set<string>>;
 }
 
 export const EMPTY_SIGNALS: ViewerSignals = {
   states: new Map(),
   profile: EMPTY_PROFILE,
   held: new Set(),
+  following: new Set(),
+  followedInMarket: new Map(),
 };
 
 type EventRow = { market_id: number; kind: string; count: number; last_at: string };
@@ -67,12 +86,15 @@ export async function loadViewerSignals(
     states.set(id, { ...(states.get(id) ?? {}), ...patch });
   };
 
-  const [events, decisions, beliefs, history] = await Promise.all([
+  const [events, decisions, beliefs, history, following] = await Promise.all([
     sb
       .from("viewer_market_events")
       .select("market_id, kind, count, last_at")
       .eq("viewer_wallet", w),
-    sb.from("viewer_market_decisions").select("market_id, decision, decided_at").eq("viewer_wallet", w),
+    sb
+      .from("viewer_market_decisions")
+      .select("market_id, decision, decided_at")
+      .eq("viewer_wallet", w),
     sb
       .from("wallet_beliefs")
       .select("onchain_id, yes_shares, no_shares, stance_side, last_trade_at")
@@ -84,7 +106,33 @@ export async function loadViewerSignals(
       .in("stance_side", ["YES", "NO"])
       .order("last_trade_at", { ascending: false, nullsFirst: false })
       .limit(200),
+    loadFollowing(sb, w),
   ]);
+
+  /**
+   * Followed people with a position in the markets currently in play. One
+   * bounded query over (their wallets × these market ids) — the same shape the
+   * DNA overlay already uses for tribe/opp, and the reason a follow can say
+   * something specific ("4 people you follow are active here") instead of only
+   * nudging a score.
+   */
+  const followedInMarket = new Map<number, Set<string>>();
+  if (following.size > 0 && marketIds.length > 0) {
+    const { data: theirs } = await sb
+      .from("wallet_beliefs")
+      .select("onchain_id, wallet")
+      .in("wallet", [...following])
+      .in("onchain_id", marketIds)
+      .in("stance_side", ["YES", "NO"]);
+    // A Set per market, so one wallet holding both sides is one person who is
+    // here rather than two.
+    for (const r of (theirs ?? []) as { onchain_id: number; wallet: string }[]) {
+      const id = Number(r.onchain_id);
+      const at = followedInMarket.get(id) ?? new Set<string>();
+      at.add(String(r.wallet).toLowerCase());
+      followedInMarket.set(id, at);
+    }
+  }
 
   for (const e of (events.data ?? []) as unknown as EventRow[]) {
     const id = Number(e.market_id);
@@ -163,6 +211,8 @@ export async function loadViewerSignals(
   return {
     states,
     held,
+    following,
+    followedInMarket,
     profile: {
       categoryAffinity: normalize(categories),
       topicAffinity: normalize(topics),

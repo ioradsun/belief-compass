@@ -25,11 +25,27 @@
  *   COMMITMENT  first_believer · doubled_down · big_backing · biggest_believer
  *   DOUBT       trimmed · exited · long_held_exit · big_exit · last_believer_left
  *   REVERSAL    changed_mind
- *   SOCIAL      network_entered · network_left   (side-blind, always)
  *   MOMENTUM    surging · milestone · new_market · market_signal
  *
- * PRIVACY, unchanged and enforced by tests: a member of the viewer's network is
- * never shown taking a side. Their row says they moved, never which way.
+ * A RELATIONSHIP FRAMES A ROW, IT NO LONGER REPLACES IT.
+ *
+ * There used to be a fifth family — `network_entered` / `network_left` — which
+ * intercepted every event by someone in the viewer's network and flattened it
+ * to "entered" or "stepped back", with no side and no context. The intent was
+ * privacy; the effect was that the rows a reader cared about most were the only
+ * ones that said nothing. Your Twin selling out of a 40-day position and your
+ * Twin buying $5 of it produced the same sentence.
+ *
+ * The privacy it bought was also thin: every position is on-chain and public,
+ * so this was a product choice about drama, not a guarantee. Removed by
+ * decision. A network member's row is now the ordinary story — the same
+ * classification, the same context, the same side as anyone else — with their
+ * relationship supplying the kicker, the category and the "about you" wash.
+ *
+ * What it DID buy, and what to watch for: not showing your Twin's side stopped
+ * you copying it instead of forming your own belief. If that behaviour appears,
+ * the narrow fix is to withhold the side on the market the reader is currently
+ * deciding, not to blind every surface again.
  */
 import type { BeatTone, LiveCategory, LiveStory, NetworkLabel, Side } from "@/domain/story";
 
@@ -67,9 +83,6 @@ export type ConvictionEventType =
   | "round_trip"
   // Reversal
   | "changed_mind"
-  // Social
-  | "network_entered"
-  | "network_left"
   // Momentum
   | "surging"
   | "milestone"
@@ -130,8 +143,9 @@ const has = (v: number | null | undefined): v is number => v != null && Number.i
 
 /**
  * Name the human event. Ordered by how much it deserves a reader's attention:
- * the rarest, most consequential meaning wins. A network member is always a
- * social event first — belonging outranks mechanics.
+ * the rarest, most consequential meaning wins. WHO acted plays no part: a
+ * network member's event is classified on its merits like anyone else's, and
+ * the relationship is applied afterwards, in `tell`.
  */
 export function classifyConvictionEvent(e: ConvictionEvent): ConvictionEventType {
   const c = e.context ?? {};
@@ -140,10 +154,6 @@ export function classifyConvictionEvent(e: ConvictionEvent): ConvictionEventType
   if (e.action === "milestone") return "milestone";
   if (e.action === "surge") return "surging";
   if (e.action === "round_trip") return "round_trip";
-
-  // Someone you're connected to moved. That is the headline, whatever they did.
-  const rel = e.actor?.relationship ?? null;
-  if (rel) return e.action === "exit" || e.action === "reduce" ? "network_left" : "network_entered";
 
   if (e.action === "sweep_out") return "swept_out";
   if (e.action === "sweep_in") return "swept_in";
@@ -184,8 +194,6 @@ const KICKER: Record<ConvictionEventType, string> = {
   left: "BELIEVER LEFT",
   round_trip: "IN AND OUT",
   changed_mind: "CHANGED THEIR MIND",
-  network_entered: "",
-  network_left: "",
   surging: "SURGING",
   milestone: "MILESTONE",
   new_market: "NEW MARKET",
@@ -221,8 +229,6 @@ const CATEGORY: Record<ConvictionEventType, LiveCategory> = {
   left: "shrinking",
   round_trip: "momentum",
   changed_mind: "momentum",
-  network_entered: "twin",
-  network_left: "twin",
   surging: "momentum",
   milestone: "milestone",
   new_market: "fresh_market",
@@ -282,7 +288,6 @@ function clause(type: ConvictionEventType, c: ConvictionContext): string {
   }
 }
 
-
 /**
  * Write the row. `headline` is the kicker, `body` is the human sentence, and
  * `attribution` carries ONLY what the sentence could not — how big the side is
@@ -332,28 +337,9 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
     };
   }
 
-  // ── Someone in your network. Side-blind, always: the kicker says who they are
-  //    to you, the sentence says what they did, and neither says which way. ──
-  if (rel) {
-    const who = name ?? REL_WHO[rel];
-    const days = n(c.daysHeld);
-    const leaving = type === "network_left";
-    // Tenure is safe to state — it reveals commitment, not direction.
-    const tail =
-      leaving && days >= CONVICTION_EVENT.longHeldDays
-        ? ` after ${heldFor(days, c.tenureIsFloor === true)}`
-        : "";
-    return {
-      category: rel,
-      headline: REL_KICKER[rel],
-      body: `${who} ${leaving ? "stepped back" : "entered"}${tail}.`,
-      attribution: null,
-      tone: "neutral",
-      personal: true,
-    };
-  }
-
-  const who = name ?? (people > 1 ? `${people} people` : "Someone");
+  // Someone in your network is named by their relationship when we have no
+  // display name for them — "Your closest match", not "Someone".
+  const who = name ?? (rel ? REL_WHO[rel] : people > 1 ? `${people} people` : "Someone");
   const negative =
     type === "trimmed" ||
     type === "left" ||
@@ -438,8 +424,11 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
   }
 
   return {
-    category: CATEGORY[type],
-    headline: KICKER[type],
+    // A RELATIONSHIP FRAMES THE ROW, it no longer replaces it. The kicker says
+    // who this person is to the reader; the sentence below says what they
+    // actually did, side and all — where it used to say only "entered".
+    category: rel ?? CATEGORY[type],
+    headline: rel ? REL_KICKER[rel] : KICKER[type],
     body,
     // "N believers now" is noise next to "the last one left" or "the first to back".
     attribution:
@@ -447,6 +436,6 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
         ? null
         : scale,
     tone: toneFor(side, negative),
-    personal: false,
+    personal: rel != null,
   };
 }

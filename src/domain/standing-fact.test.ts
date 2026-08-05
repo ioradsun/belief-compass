@@ -50,37 +50,38 @@ describe("nothing is invented", () => {
 });
 
 /**
- * The feed's standing privacy rule — a person in the reader's network is shown
- * moving, never shown taking a side — applies with MORE force here, because a
- * standing fact is about a position they are still holding.
+ * A network member's side used to be withheld, which cost more here than
+ * anywhere else: a standing fact is already scoped to one market AND SIDE, so
+ * hiding it forced the reader's own people out of the strongest tenure facts
+ * entirely. A Twin who had held the longest could never be the one still
+ * holding.
  */
-describe("a network member's side is never disclosed", () => {
+describe("a network member's side is stated, like anyone else's", () => {
   const twin = h({ wallet: "0xa", relationship: "twin" });
 
-  it("carries no side on a tribe fact", () => {
+  it("carries the side on a tribe fact", () => {
     const f = findStandingFacts(input({ holders: [twin] })).find((x) => x.kind === "tribe_present");
-    expect(f?.side).toBeNull();
-    expect(tellStandingFact(f!).body).not.toMatch(/\bYES\b|\bNO\b/);
+    expect(f?.side).toBe("YES");
   });
 
-  it("carries no side on a crossed-paths fact", () => {
+  it("carries the side on a crossed-paths fact", () => {
     const recurring = h({ wallet: "0xa", relationship: "tribe", crossings: 5 });
     const f = findStandingFacts(input({ holders: [recurring] })).find(
       (x) => x.kind === "crossed_paths",
     );
-    expect(f?.side).toBeNull();
-    expect(tellStandingFact(f!).body).not.toMatch(/\bYES\b|\bNO\b/);
+    expect(f?.side).toBe("YES");
   });
 
-  it("keeps network members out of the side-naming facts entirely", () => {
-    // Otherwise "Kate has backed YES for 40 days" arrives by the back door.
+  it("lets your own people earn the tenure facts they had held longest for", () => {
     const facts = findStandingFacts(
       input({ holders: [twin, h({ wallet: "0xb" })], marketAgeDays: 42 }),
     );
-    for (const f of facts) {
-      if (f.side == null) continue;
-      expect(f.people.some((p) => p.wallet === "0xa")).toBe(false);
-    }
+    const named = facts.filter((f) => f.people.some((p) => p.wallet === "0xa"));
+    expect(named.map((f) => f.kind)).toContain("still_holding");
+  });
+
+  it("still never invents a fact about someone holding nothing", () => {
+    expect(findStandingFacts(input({ holders: [] }))).toEqual([]);
   });
 });
 

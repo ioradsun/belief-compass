@@ -14,14 +14,27 @@
  *   • an urgency rank so the most alive convictions rise to the top of the list.
  *
  * ZERO IO, pure, fully testable. Money arrives already formatted by the caller so
- * the domain stays unit-agnostic. It never reveals a network member's side — a
- * Twin/Tribe/Opp "entered this market", never "backed YES".
+ * the domain stays unit-agnostic.
+ *
+ * A network member's SIDE is stated when it is known. It used to be withheld
+ * everywhere — a Twin "entered this market", never "backed YES" — which on a
+ * card about your OWN position threw away the only part that mattered: your
+ * Twin agreeing with you and your Twin taking the other side are opposite news,
+ * and both printed the same sentence. Withholding it was a product choice about
+ * drama rather than a privacy guarantee, since every position is public
+ * on-chain. The side stays optional, so a caller that does not know one still
+ * gets the sentence it always got.
  */
 
 export type Side = "YES" | "NO";
 
 export type PositionPulse =
-  "Accelerating" | "Growing" | "Cooling" | "Mixed Momentum" | "Capital-led" | "Quiet";
+  | "Accelerating"
+  | "Growing"
+  | "Cooling"
+  | "Mixed Momentum"
+  | "Capital-led"
+  | "Quiet";
 
 export type PulseTone = "up" | "down" | "neutral" | "muted";
 
@@ -81,8 +94,12 @@ export interface PositionStoryInput {
   gainUsd: number | null;
   /** The held side's price move over the window, in %. Momentum only, not P&L. */
   chgPct: number | null;
-  /** Network activity on THIS market (side-blind): did they just enter? */
-  net?: { twin?: boolean; tribe?: boolean; opp?: boolean };
+  /**
+   * Network activity on THIS market. A side when we know which way they went,
+   * `true` when we only know they moved — so `if (net.twin)` reads the same as
+   * it always did, and the side is an upgrade rather than a requirement.
+   */
+  net?: { twin?: Side | true; tribe?: Side | true; opp?: Side | true };
   /** A believer milestone this market just crossed (10/25/50/…), or null. */
   milestone?: number | null;
 }
@@ -126,18 +143,42 @@ export function positionStory(
   const n = input.newToday ?? 0;
   const net = input.net ?? {};
 
-  // 1–3 — your people arrived. Side-blind: never reveal THEIR side.
-  if (net.twin)
-    return { kind: "twin", headline: "Your Conviction Twin just entered this market.", tone: "up" };
-  if (net.tribe)
+  // 1–3 — your people arrived, and WHICH WAY when we know. On your own position
+  // card that is the whole signal: your Twin agreeing with you and your Twin
+  // taking the other side are opposite news, and this used to print the same
+  // sentence for both.
+  const way = (v: Side | true | undefined): Side | null => (typeof v === "string" ? v : null);
+  const agrees = (s: Side | null) => (s == null ? null : s === side);
+  if (net.twin) {
+    const s = way(net.twin);
     return {
-      kind: "tribe",
-      headline: "Your Tribe is becoming active here.",
-      body: "Someone you move with just entered.",
+      kind: "twin",
+      headline: s
+        ? `Your Conviction Twin just backed ${s}.`
+        : "Your Conviction Twin just entered this market.",
+      body: agrees(s) === false ? "Your closest match is on the other side of you." : undefined,
       tone: "up",
     };
-  if (net.opp)
-    return { kind: "opp", headline: "Your strongest Opp entered this market.", tone: "neutral" };
+  }
+  if (net.tribe) {
+    const s = way(net.tribe);
+    return {
+      kind: "tribe",
+      headline: s ? `Your Tribe is backing ${s} here.` : "Your Tribe is becoming active here.",
+      body: s ? undefined : "Someone you move with just entered.",
+      tone: "up",
+    };
+  }
+  if (net.opp) {
+    const s = way(net.opp);
+    return {
+      kind: "opp",
+      headline: s
+        ? `Your strongest Opp just backed ${s}.`
+        : "Your strongest Opp entered this market.",
+      tone: "neutral",
+    };
+  }
 
   // 4 — the market hit a milestone.
   if (input.milestone != null)
@@ -154,9 +195,7 @@ export function positionStory(
       kind: "believer_surge",
       headline: `${n} people joined ${side} today.`,
       body:
-        believers != null
-          ? `${believers.toLocaleString("en-US")} now back ${side}.`
-          : undefined,
+        believers != null ? `${believers.toLocaleString("en-US")} now back ${side}.` : undefined,
       tone: "up",
     };
 
@@ -208,7 +247,6 @@ export function positionStory(
     };
   return { kind: "quiet", headline: "Nothing has changed today.", tone: "muted" };
 }
-
 
 export interface PositionSignal {
   pulse: PositionPulse;

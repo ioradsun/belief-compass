@@ -19,6 +19,18 @@ import { rankMarkets } from "@/domain/market-search";
 /** SSR/anon feed snapshots live this long before a background refresh. */
 const ANON_FEED_TTL_MS = 5_000;
 
+/**
+ * How many of the viewer's people, per side, the feed overlay looks for.
+ *
+ * Not a display cap — a QUERY bound. The `wallet_beliefs` lookup is
+ * (these wallets × the feed's markets), so this is what keeps a viewer with a
+ * large network from turning one feed build into a wide scan. Twelve is well
+ * past the point where a bigger number changes any sentence: the copy says "3
+ * people in your Tribe", and beyond about four the count stops carrying
+ * information.
+ */
+const NETWORK_OVERLAY_CAP = 12;
+
 export const VOLUME_WINDOWS = {
   "1h": 3_600_000,
   "24h": 86_400_000,
@@ -78,10 +90,22 @@ async function sharedFeedData(win: VolumeWindow) {
   const chgYes = new Map<number, number>();
   const chgNo = new Map<number, number>();
   let historyFrom: string | null = null;
+  /**
+   * Lifetime reach and the activity span — the SAME `market_participation` RPC
+   * the search index reads (see `searchIndex`). The feed did not carry these, so
+   * a market's participant count in search and in the running order would have
+   * come from two different definitions of "participant": everyone who ever
+   * traded, versus whoever is holding right now. Two numbers for one fact is the
+   * gap that makes a reader distrust both.
+   */
+  const reach = new Map<
+    number,
+    { participants: number; first: number | null; last: number | null }
+  >();
   if (ids.length) {
     // Window price-moves and the ETH/USD calibration are PRECOMPUTED by cron
     // (market_window_change / calc_cache) — indexed lookups, not aggregate scans.
-    const [vol, cal, chg] = await Promise.all([
+    const [vol, cal, chg, part] = await Promise.all([
       sb.rpc("market_volume_window", { p_ids: ids, p_since: since }),
       sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
       sb
@@ -89,7 +113,20 @@ async function sharedFeedData(win: VolumeWindow) {
         .select("onchain_id, chg_yes, chg_no, since_at")
         .eq("window_key", win)
         .in("onchain_id", ids),
+      sb.rpc("market_participation"),
     ]);
+    for (const p of (part.data ?? []) as unknown as Array<{
+      onchain_id: number;
+      participants: number;
+      first_activity_at: string | null;
+      last_activity_at: string | null;
+    }>) {
+      reach.set(Number(p.onchain_id), {
+        participants: Number(p.participants) || 0,
+        first: p.first_activity_at ? Date.parse(p.first_activity_at) : null,
+        last: p.last_activity_at ? Date.parse(p.last_activity_at) : null,
+      });
+    }
     for (const t of (vol.data ?? []) as {
       onchain_id: number;
       side: string;
@@ -121,7 +158,7 @@ async function sharedFeedData(win: VolumeWindow) {
       if (c.since_at && (historyFrom == null || c.since_at < historyFrom)) historyFrom = c.since_at;
     }
   }
-  return { rows, yesEth, noEth, yesTrades, noTrades, ethUsd, chgYes, chgNo, historyFrom };
+  return { rows, yesEth, noEth, yesTrades, noTrades, ethUsd, chgYes, chgNo, historyFrom, reach };
 }
 
 export const listFeed = createServerFn({ method: "GET" })
@@ -157,16 +194,38 @@ export const listFeed = createServerFn({ method: "GET" })
         opp: null as MatchPerson | null,
       };
     }
-    const { rows, yesEth, noEth, yesTrades, noTrades, ethUsd, chgYes, chgNo, historyFrom } = shared;
+    const { rows, yesEth, noEth, yesTrades, noTrades, ethUsd, chgYes, chgNo, historyFrom, reach } =
+      shared;
     const sb = serviceClient();
 
-    // Viewer-relative: is the viewer's closest match (tribe) or most-opposed
-    // wallet (opp) among the believers of each market, and on which side?
+    /**
+     * VIEWER-RELATIVE OVERLAY — the viewer's people, in each of these markets.
+     *
+     * This used to read `cache.closest[0]` and `cache.opp[0]`: ONE tribesman and
+     * ONE rival, out of buckets that hold the whole network. Everything
+     * downstream inherited that ceiling — the feed could only ever say "your
+     * Tribe is backing YES", never how many of them, because it had never asked
+     * about more than one person. The cache always had the answer.
+     *
+     * So the whole aligned bucket (twin ∪ tribe) and the whole opposed bucket
+     * (inverse ∪ opp) are read, capped, and resolved together. The cost is the
+     * same two queries it always was, over more wallets.
+     */
     const tribeBySide = new Map<number, "YES" | "NO">();
     const oppBySide = new Map<number, "YES" | "NO">();
+    /**
+     * Everyone from each group holding a side here — the counts the copy needs.
+     *
+     * The SIDE travels with the PERSON, never with the group. A tribe is not a
+     * bloc: two people the viewer agrees with can land on opposite sides of one
+     * market, and stamping the group's headline side onto each of them would
+     * state something false about a named individual.
+     */
+    const tribeHere = new Map<number, (MatchPerson & { side: "YES" | "NO" })[]>();
+    const oppHere = new Map<number, (MatchPerson & { side: "YES" | "NO" })[]>();
     let tribePerson: MatchPerson | null = null;
     let oppPerson: MatchPerson | null = null;
-    // The DNA labels behind the tribe/opp person, for the story's relationship beat.
+    // The DNA labels behind the LEAD person on each side, for the story beat.
     let tribeRel: NetworkLabel = "tribe";
     let oppRel: NetworkLabel = "opp";
     if (viewer && rows.length) {
@@ -182,40 +241,37 @@ export const listFeed = createServerFn({ method: "GET" })
           /* best-effort; the connect path also enqueues */
         }
       }
-      const tribeEntry = cache?.closest[0] ?? cache?.tribe[0] ?? null;
-      const oppEntry = cache?.opp[0] ?? cache?.inverse[0] ?? null;
-      tribeRel = tribeEntry?.relationship === "twin" ? "twin" : "tribe";
-      oppRel = oppEntry?.relationship === "inverse" ? "inverse" : "opp";
-      const tribe = tribeEntry
-        ? { matched_wallet: tribeEntry.wallet, match_score: tribeEntry.agreement }
-        : null;
-      const opp = oppEntry
-        ? { matched_wallet: oppEntry.wallet, match_score: oppEntry.agreement }
-        : null;
-      const focus = [tribe?.matched_wallet, opp?.matched_wallet].filter(Boolean) as string[];
+      // Strongest first, so a truncated group still keeps the people who matter
+      // and the LEAD of each side is the one the story would have picked anyway.
+      const byStrength = (a: { agreement: number }, b: { agreement: number }) =>
+        Math.abs(b.agreement - 50) - Math.abs(a.agreement - 50);
+      const aligned = [...(cache?.closest ?? []), ...(cache?.tribe ?? [])]
+        .sort(byStrength)
+        .slice(0, NETWORK_OVERLAY_CAP);
+      const opposed = [...(cache?.inverse ?? []), ...(cache?.opp ?? [])]
+        .sort(byStrength)
+        .slice(0, NETWORK_OVERLAY_CAP);
+      tribeRel = aligned[0]?.relationship === "twin" ? "twin" : "tribe";
+      oppRel = opposed[0]?.relationship === "inverse" ? "inverse" : "opp";
+
+      const alignedBy = new Map(aligned.map((e) => [e.wallet.toLowerCase(), e]));
+      const opposedBy = new Map(opposed.map((e) => [e.wallet.toLowerCase(), e]));
+      const focus = [...new Set([...alignedBy.keys(), ...opposedBy.keys()])];
       if (focus.length) {
         const ids = rows.map((r) => Number(r.onchain_id));
-        const { data: beliefs } = await sb
-          .from("wallet_beliefs")
-          .select("wallet, onchain_id, stance_side")
-          .in("wallet", focus)
-          .in("onchain_id", ids)
-          .in("stance_side", ["YES", "NO"]);
-        for (const b of beliefs ?? []) {
-          const w = String(b.wallet).toLowerCase();
-          const side = b.stance_side as "YES" | "NO";
-          if (tribe && w === tribe.matched_wallet.toLowerCase())
-            tribeBySide.set(Number(b.onchain_id), side);
-          if (opp && w === opp.matched_wallet.toLowerCase())
-            oppBySide.set(Number(b.onchain_id), side);
-        }
+        const [{ data: beliefs }, profiles] = await Promise.all([
+          sb
+            .from("wallet_beliefs")
+            .select("wallet, onchain_id, stance_side")
+            .in("wallet", focus)
+            .in("onchain_id", ids)
+            // A directional stance only. A wallet that churned its way to flat
+            // has no side, so wash activity cannot make someone look present —
+            // the stance filter already does what an is_wash join would.
+            .in("stance_side", ["YES", "NO"]),
+          import("@/lib/profiles.server").then((m) => m.resolveProfiles(focus, focus.length)),
+        ]);
 
-        // Put a face and a name on the tribesman / opp so the cards can show them.
-        const { resolveProfiles } = await import("@/lib/profiles.server");
-        const profiles = await resolveProfiles(
-          focus.map((w) => w.toLowerCase()),
-          4,
-        );
         const person = (w: string, score: number): MatchPerson => {
           const prof = profiles.get(w.toLowerCase());
           return {
@@ -225,8 +281,37 @@ export const listFeed = createServerFn({ method: "GET" })
             score: Math.round(score),
           };
         };
-        if (tribe) tribePerson = person(tribe.matched_wallet, Number(tribe.match_score));
-        if (opp) oppPerson = person(opp.matched_wallet, Number(opp.match_score));
+
+        for (const b of beliefs ?? []) {
+          const w = String(b.wallet).toLowerCase();
+          const id = Number(b.onchain_id);
+          const side = b.stance_side as "YES" | "NO";
+          const a = alignedBy.get(w);
+          if (a) {
+            const list = tribeHere.get(id) ?? [];
+            list.push({ ...person(w, a.agreement), side });
+            tribeHere.set(id, list);
+            // The lead's side stays the group's headline side, so the existing
+            // "your Tribe is backing X" copy keeps meaning what it meant.
+            if (!tribeBySide.has(id) || w === aligned[0]?.wallet.toLowerCase())
+              tribeBySide.set(id, side);
+          }
+          const o = opposedBy.get(w);
+          if (o) {
+            const list = oppHere.get(id) ?? [];
+            list.push({ ...person(w, o.agreement), side });
+            oppHere.set(id, list);
+            if (!oppBySide.has(id) || w === opposed[0]?.wallet.toLowerCase())
+              oppBySide.set(id, side);
+          }
+        }
+        // Strongest first within each market, so a face pile or a named sentence
+        // leads with the person the viewer has the clearest relationship to.
+        for (const list of tribeHere.values()) list.sort((x, y) => y.score - x.score);
+        for (const list of oppHere.values()) list.sort((x, y) => y.score - x.score);
+
+        if (aligned[0]) tribePerson = person(aligned[0].wallet, aligned[0].agreement);
+        if (opposed[0]) oppPerson = person(opposed[0].wallet, opposed[0].agreement);
       }
     }
 
@@ -237,27 +322,29 @@ export const listFeed = createServerFn({ method: "GET" })
       const yesUsd = ethUsd > 0 ? y * ethUsd : null;
       const noUsd = ethUsd > 0 ? n * ethUsd : null;
 
-      // Narrative layer: your network active in THIS market → named faces (privacy
-      // rule: only your own people are named; the crowd stays a count).
+      // Narrative layer: your network active in THIS market → named faces. Only
+      // the viewer's OWN people are ever named; the crowd stays a count.
       const rr = r as Record<string, unknown>;
       const network: NetworkFace[] = [];
-      const tSide = tribeBySide.get(id);
-      if (tribePerson && tSide)
+      // Everyone present, not just the lead — `composeMarketStory` caps the pile
+      // itself, and handing it one face when four are here was the reason a card
+      // could never say how many of your people were in a market. Each face
+      // carries its OWN side.
+      for (const p of tribeHere.get(id) ?? [])
         network.push({
-          wallet: tribePerson.wallet,
-          name: tribePerson.name ?? aliasFor(tribePerson.wallet),
-          avatarUrl: tribePerson.pfpUrl,
+          wallet: p.wallet,
+          name: p.name ?? aliasFor(p.wallet),
+          avatarUrl: p.pfpUrl,
           relationship: tribeRel,
-          side: tSide,
+          side: p.side,
         });
-      const oSide = oppBySide.get(id);
-      if (oppPerson && oSide)
+      for (const p of oppHere.get(id) ?? [])
         network.push({
-          wallet: oppPerson.wallet,
-          name: oppPerson.name ?? aliasFor(oppPerson.wallet),
-          avatarUrl: oppPerson.pfpUrl,
+          wallet: p.wallet,
+          name: p.name ?? aliasFor(p.wallet),
+          avatarUrl: p.pfpUrl,
           relationship: oppRel,
-          side: oSide,
+          side: p.side,
         });
       const story = composeMarketStory({
         recent: {
@@ -290,6 +377,17 @@ export const listFeed = createServerFn({ method: "GET" })
         chg_window_no: chgNo.get(id) ?? null,
         tribe_side: tribeBySide.get(id) ?? null,
         opp_side: oppBySide.get(id) ?? null,
+        // How many of the viewer's own people are here. The overlay has always
+        // known; until it stopped reading only the first entry of each bucket,
+        // it had no way to say.
+        tribe_count: tribeHere.get(id)?.length ?? 0,
+        opp_count: oppHere.get(id)?.length ?? 0,
+        // Lifetime reach and activity span, from the same RPC the search index
+        // reads — so the Feed List and a search result describe one market with
+        // one set of numbers.
+        participants: reach.get(id)?.participants ?? 0,
+        first_activity_at: reach.get(id)?.first ?? null,
+        last_activity_at: reach.get(id)?.last ?? null,
         story,
       };
     });
@@ -407,7 +505,10 @@ async function searchIndex(): Promise<IndexRow[]> {
 
     // Lifetime reach: unique wallets that ever traded each market.
     const { data: part } = await sb.rpc("market_participation");
-    const reach = new Map<number, { participants: number; first: number | null; last: number | null }>();
+    const reach = new Map<
+      number,
+      { participants: number; first: number | null; last: number | null }
+    >();
     for (const p of (part ?? []) as unknown as Array<{
       onchain_id: number;
       participants: number;
@@ -438,13 +539,16 @@ async function searchIndex(): Promise<IndexRow[]> {
         participants: Math.max(r2?.participants ?? 0, believers),
         believers,
         capitalUsd,
-        firstActivityAt: r2?.first ?? (r.market_created_at ? Date.parse(r.market_created_at) : null),
+        firstActivityAt:
+          r2?.first ?? (r.market_created_at ? Date.parse(r.market_created_at) : null),
         lastActivityAt: r2?.last ?? lastTrade,
         joined24h: num(r.new_believers_24h),
         // A soft 0–1 liveness weight: recent trades and standing conviction.
         interest: Math.min(
           1,
-          num(r.trade_count_24h) / 20 + participantsWeight(r2?.participants ?? 0) + Math.min(0.3, capitalUsd / 5_000),
+          num(r.trade_count_24h) / 20 +
+            participantsWeight(r2?.participants ?? 0) +
+            Math.min(0.3, capitalUsd / 5_000),
         ),
       } satisfies IndexRow;
     });
@@ -469,7 +573,12 @@ export const searchMarkets = createServerFn({ method: "GET" })
     const index = await searchIndex();
     const ranked = rankMarkets(
       term,
-      index.map((r) => ({ id: r.onchain_id, title: r.title, category: r.category, interest: r.interest })),
+      index.map((r) => ({
+        id: r.onchain_id,
+        title: r.title,
+        category: r.category,
+        interest: r.interest,
+      })),
       data.limit ?? 8,
     );
     const byId = new Map(index.map((r) => [r.onchain_id, r]));
@@ -478,7 +587,6 @@ export const searchMarkets = createServerFn({ method: "GET" })
       .filter((r): r is IndexRow => Boolean(r))
       .map(({ category: _c, interest: _i, ...hit }) => hit);
   });
-
 
 /**
  * A face in a search result: a real person who put money behind this question.
@@ -547,7 +655,8 @@ export const getMarketFaces = createServerFn({ method: "GET" })
     for (const r of (rows ?? []) as Array<Record<string, unknown>>) {
       const id = Number(r.onchain_id);
       const wallet = String(r.wallet).toLowerCase();
-      const value = Math.max(0, Number(r.yes_value_usd) || 0) + Math.max(0, Number(r.no_value_usd) || 0);
+      const value =
+        Math.max(0, Number(r.yes_value_usd) || 0) + Math.max(0, Number(r.no_value_usd) || 0);
       const list = byMarket.get(id) ?? [];
       list.push({ wallet, value, known: known.has(wallet) });
       byMarket.set(id, list);
@@ -586,8 +695,7 @@ export const getMarketFaces = createServerFn({ method: "GET" })
         });
         if (faces.length === 3) break;
       }
-      if (faces.length > 0)
-        out[id] = { faces, knownCount: faces.filter((f) => f.known).length };
+      if (faces.length > 0) out[id] = { faces, knownCount: faces.filter((f) => f.known).length };
     }
     return out;
   });

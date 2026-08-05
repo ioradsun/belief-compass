@@ -135,10 +135,7 @@ export interface SequenceResult {
  * only a labelled re-entry can re-enter, capped at one per REENTRY_EVERY cards.
  */
 export function sequenceFeed(input: SequenceInput): SequenceResult {
-  const limit = Math.min(
-    Math.max(1, input.limit ?? SEQUENCE.DEFAULT_LIMIT),
-    SEQUENCE.MAX_LIMIT,
-  );
+  const limit = Math.min(Math.max(1, input.limit ?? SEQUENCE.DEFAULT_LIMIT), SEQUENCE.MAX_LIMIT);
 
   const excluded: { onchainId: number; reason: ExclusionReason | null }[] = [];
   const pool: SequenceCandidate[] = [];
@@ -165,11 +162,7 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
   while (out.length < limit && (pool.length > 0 || reentryIdx < reentries.length)) {
     const slot = out.length;
     // Rare, evenly-spaced re-entry slots — never more than 1 in REENTRY_EVERY.
-    if (
-      slot > 0 &&
-      slot % SEQUENCE.REENTRY_EVERY === 0 &&
-      reentryIdx < reentries.length
-    ) {
+    if (slot > 0 && slot % SEQUENCE.REENTRY_EVERY === 0 && reentryIdx < reentries.length) {
       out.push({ c: reentries[reentryIdx]!, adjustments: [], intent: "reentry" });
       reentryIdx += 1;
       continue;
