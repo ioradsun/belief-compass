@@ -434,6 +434,8 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
       for (const [side, s] of sides) {
         const recent = s.recentCapitalUsd ?? s.capitalDeltaUsd;
         if (recent <= 0) continue;
+        // Same safeguard as the multiple path: money must actually have moved.
+        if (!capitalMoved(s)) continue;
         const multiple = recent / baseline.normalCapitalUsd;
         const bar = held(prev, "accelerating", side) ? ACCEL_EXIT : ACCEL_ENTER;
         if (multiple >= bar) {
