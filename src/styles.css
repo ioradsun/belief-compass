@@ -100,8 +100,16 @@
   --text: #f7f5ef;
   --text-secondary: #aaa79f;
   --text-muted: #8a877f;
-  --yes: #36b76a;
-  --no: #e45858;
+  /* Identity, not outcome: the two sides of a belief carry equal weight.
+     YES = Conviction Blue, NO = Conviction Amber. Never green/red. */
+  --yes: #4c73ff;
+  --no: #f5a623;
+  /* Readable foreground on a solid side fill. */
+  --yes-contrast: #ffffff;
+  --no-contrast: #241703;
+  /* Performance, and ONLY performance: a measured gain or loss. */
+  --gain: #22c55e;
+  --loss: #ef4444;
 
   --background: var(--bg);
   --foreground: var(--text);
