@@ -108,6 +108,8 @@ export function MarketMomentum({
   footer,
   dense,
   believersTotal,
+  capitalTotalUsd,
+
 }: {
   tape: TapeTrade[] | undefined;
   ethUsd: number;
