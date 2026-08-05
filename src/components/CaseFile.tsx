@@ -496,15 +496,18 @@ export function PctChip({ pct, muted = false }: { pct: number | null; muted?: bo
 }
 
 /**
- * One selectable lens. The whole row is the target (not a tiny icon); the active
- * lens brightens, grows its value, and gains an accent edge, while the others
- * stay muted but clearly tappable. Selection drives the single chart above.
+ * One selectable lens, read the same way as the Total Market instrument:
+ * the current total leads on the left, the window's % change is the big figure
+ * on the right (arrow trailing), the label sits beneath, and the EXACT absolute
+ * move states what actually happened — a % never travels alone. The active lens
+ * brightens and gains an accent edge; the others stay muted but tappable.
  */
 function MetricRow({
   icon,
   label,
   value,
   pct,
+  absolute,
   active,
   color,
   onSelect,
@@ -513,44 +516,65 @@ function MetricRow({
   label: string;
   value: string;
   pct: number | null;
+  /** The exact change in the metric's own unit, e.g. "+$12.40 committed over 24H". */
+  absolute?: string | null;
   active: boolean;
   color: string;
   onSelect: () => void;
 }) {
+  const flat = pct == null || Math.abs(pct) < 0.05;
+  const tone = flat ? "var(--text-muted)" : pct! > 0 ? "var(--yes)" : "var(--no)";
+  const arrow = flat ? "" : pct! > 0 ? "▲" : "▼";
+  const pctText =
+    pct == null ? "" : `${Math.abs(pct).toFixed(!flat && Math.abs(pct) < 10 ? 1 : 0)}%`;
   return (
     <button
       type="button"
       role="radio"
       aria-checked={active}
       onClick={onSelect}
-      className="flex w-full items-center gap-2.5 rounded-[10px] py-1.5 pr-2 text-left transition-colors hover:bg-[var(--surface-2)]"
+      className="w-full rounded-[10px] py-2 pr-2.5 text-left transition-colors hover:bg-[var(--surface-2)]"
       style={{
         paddingLeft: "8px",
         borderLeft: `2px solid ${active ? color : "transparent"}`,
         background: active ? `color-mix(in oklab, ${color} 7%, transparent)` : "transparent",
       }}
     >
-      <span className="text-[15px]" aria-hidden style={{ opacity: active ? 1 : 0.55 }}>
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div
-          className="text-[10px] uppercase tracking-[0.1em]"
-          style={{ color: active ? "var(--text-secondary)" : "var(--text-muted)" }}
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="shrink-0 text-[13px]" aria-hidden style={{ opacity: active ? 1 : 0.55 }}>
+            {icon}
+          </span>
+          <span
+            className={`num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] ${active ? "text-[22px]" : "text-[18px]"}`}
+            style={{ color: active ? "var(--text)" : "var(--text-muted)" }}
+          >
+            {value}
+          </span>
+        </span>
+        <span
+          className={`num shrink-0 font-semibold leading-none tabular-nums ${active ? "text-[19px]" : "text-[15px]"}`}
+          style={{ color: tone, opacity: active ? 1 : 0.6 }}
         >
-          {label}
-        </div>
-        <div
-          className={`num font-semibold leading-tight tracking-[-0.01em] ${active ? "text-[19px]" : "text-[16px]"}`}
-          style={{ color: active ? "var(--text)" : "var(--text-muted)" }}
-        >
-          {value}
-        </div>
+          {pctText}
+          {arrow && pctText ? <span className="ml-1 align-middle text-[0.6em]">{arrow}</span> : null}
+        </span>
       </div>
-      <PctChip pct={pct} muted={!active} />
+      <div
+        className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em]"
+        style={{ color: active ? "var(--text-secondary)" : "var(--text-muted)" }}
+      >
+        {label}
+      </div>
+      {absolute && (
+        <div className="num mt-0.5 text-[11px]" style={{ color: tone, opacity: active ? 1 : 0.6 }}>
+          {absolute}
+        </div>
+      )}
     </button>
   );
 }
+
 
 /** The people, as one ranked roster — name, amount, and shared DNA when there is any. */
 export function CaseRoster({
