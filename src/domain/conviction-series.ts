@@ -338,7 +338,11 @@ export interface ConvictionStory {
 export function convictionStory(
   side: "YES" | "NO",
   pts: SeriesPoint[],
-  opts: { capitalDust?: number } = {},
+  // `pricePct` lets the caller supply the AUTHORITATIVE window price move
+  // (snapshot at window open vs the price now). The series' own price track is
+  // built from each trade's post-trade mark, which spikes and collapses inside a
+  // single round-trip and would otherwise narrate a huge move on a flat market.
+  opts: { capitalDust?: number; pricePct?: number | null } = {},
 ): ConvictionStory | null {
   if (pts.length < 2) return null;
   const dust = Math.max(opts.capitalDust ?? 1e-9, 0);
@@ -348,7 +352,7 @@ export function convictionStory(
   const rawCap = z.capital - a.capital;
   // Below the dust floor there is no capital story to tell.
   const capitalDeltaEth = Math.abs(rawCap) < dust ? 0 : rawCap;
-  const pricePct = z.pricePct;
+  const pricePct = opts.pricePct !== undefined ? opts.pricePct : z.pricePct;
   const base: Omit<ConvictionStory, "shape" | "headline"> = {
     believerDelta,
     capitalDeltaEth,

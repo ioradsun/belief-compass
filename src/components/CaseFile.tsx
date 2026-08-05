@@ -168,10 +168,14 @@ export function CaseColumn({
   // Capital on this side means someone stands behind it — the market's initial
   // investment isn't an indexed position, so never show "0 believers, $13".
   const believersTotal = seededBelievers(rawBelievers, capitalUsd);
+  // PRICE IS AUTHORITATIVE, NOT TAPE-DERIVED. The tape carries each trade's
+  // post-trade `newPrice`, which spikes and collapses inside a single whale
+  // round-trip; reading it as "the price" makes a market that has been flat for
+  // hours report a huge fall. The market_state row (and its snapshots) is the
+  // price people actually see and trade at, so the panel reads that first.
+  const authPriceUsd = num(side === "YES" ? rr.yes_price_usd : rr.no_price_usd);
   const priceUsd =
-    summary?.priceEth != null
-      ? summary.priceEth * (ethUsd || 0)
-      : num(side === "YES" ? rr.yes_price_usd : rr.no_price_usd);
+    authPriceUsd ?? (summary?.priceEth != null ? summary.priceEth * (ethUsd || 0) : null);
 
   // ── The one chart, one lens ─────────────────────────────────────────────────
   // Believers is always the default lens — conviction.company is about people
@@ -185,18 +189,8 @@ export function CaseColumn({
   const coldStart = lensColdStart(metric, series);
   const meta = LENS_META[metric];
 
-  // THE PULSE — the same overall read the full timeline used to open with: one
-  // headline for the window plus the sentence that explains it, derived from the
-  // side's believers/capital/price series. It is the summary of the timeframe,
-  // so it leads the panel before any metric.
-  const pulse = useMemo(() => {
-    // Half a cent, expressed in ETH: anything smaller renders as $0.00, so it
-    // must not generate a capital story.
-    const capitalDust = ethUsd > 0 ? 0.005 / ethUsd : 1e-9;
-    const st = summary ? convictionStory(side, summary.series, { capitalDust }) : null;
-    if (!st) return null;
-    return { headline: st.headline, narrative: narrateStory(st, side, FLOW_WINDOW_PHRASE[win], money) };
-  }, [summary, side, win, money, ethUsd]);
+
+
 
 
 
@@ -209,10 +203,17 @@ export function CaseColumn({
   const authCapitalUsd = num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
   const belBase = side === "YES" ? bl?.believersYes : bl?.believersNo;
   const capBase = side === "YES" ? bl?.yesCapitalUsd : bl?.noCapitalUsd;
+  const priceBaseUsd = side === "YES" ? bl?.yesPriceUsd : bl?.noPriceUsd;
   const belChange =
     authBelievers != null && belBase != null ? windowChange(authBelievers, belBase) : null;
   const capChange =
     authCapitalUsd != null && capBase != null ? windowChange(authCapitalUsd, capBase) : null;
+  // Same rule for price: measure the snapshot at the window's open against the
+  // price now, never the tape's transient post-trade marks.
+  const priceChange =
+    authPriceUsd != null && priceBaseUsd != null && priceBaseUsd > 0
+      ? windowChange(authPriceUsd, priceBaseUsd)
+      : null;
 
   // The exact move, in the metric's own unit — never a percentage alone. This
   // mirrors the Total Market instrument: the total leads, the % is the big
@@ -221,10 +222,29 @@ export function CaseColumn({
   const belDelta = belChange?.delta ?? believerMetric?.delta ?? null;
   const capDelta =
     capChange?.delta ?? (capitalMetric != null ? capitalMetric.delta * (ethUsd || 0) : null);
+  const pricePct =
+    priceChange != null ? priceChange.pct : authPriceUsd != null ? null : (summary?.pricePct ?? null);
   const priceDelta =
-    priceUsd != null && summary?.pricePct != null && Number.isFinite(priceUsd)
-      ? priceUsd - priceUsd / (1 + summary.pricePct / 100)
+    priceChange != null
+      ? priceChange.delta
+      : priceUsd != null && pricePct != null && Number.isFinite(priceUsd)
+        ? priceUsd - priceUsd / (1 + pricePct / 100)
+        : null;
+
+  // THE PULSE — one headline for the window plus the sentence that explains it.
+  // It reads the same authoritative price move the metric row shows, so the
+  // summary can never contradict the numbers under it.
+  const pulse = useMemo(() => {
+    // Half a cent, expressed in ETH: anything smaller renders as $0.00, so it
+    // must not generate a capital story.
+    const capitalDust = ethUsd > 0 ? 0.005 / ethUsd : 1e-9;
+    const st = summary
+      ? convictionStory(side, summary.series, { capitalDust, pricePct })
       : null;
+    if (!st) return null;
+    return { headline: st.headline, narrative: narrateStory(st, side, FLOW_WINDOW_PHRASE[win], money) };
+  }, [summary, side, win, money, ethUsd, pricePct]);
+
 
   // Supporting copy only when something actually moved. "No change today" /
   // "Flat today" is filler — whitespace says it better.
@@ -296,7 +316,7 @@ export function CaseColumn({
       metric: "price",
       label: "Price",
       value: priceUsd != null ? format(priceUsd, "USD") : "—",
-      pct: summary?.pricePct ?? null,
+      pct: pricePct,
       absolute: priceAbs,
     },
   ];
