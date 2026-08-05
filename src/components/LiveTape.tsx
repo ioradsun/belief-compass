@@ -365,7 +365,7 @@ function SideText({ text, tone }: { text?: string | null; tone?: BeatTone }) {
   // A toned headline (e.g. "CAPITAL PULLED BACK") carries its direction; body text
   // stays neutral except the YES / NO words and any percentage.
   const toneColor =
-    tone === "yes" || tone === "hot" ? "var(--yes)" : tone === "no" ? "var(--no)" : undefined;
+    tone === "yes" ? "var(--yes)" : tone === "no" ? "var(--no)" : undefined;
   // A beat can arrive with a missing headline/body (older cached payload, or a
   // narrator that produced no sentence). Render nothing rather than crash the feed.
   if (typeof text !== "string" || text.length === 0) return null;

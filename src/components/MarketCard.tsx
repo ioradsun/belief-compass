@@ -20,7 +20,7 @@ import type { MarketStory } from "@/domain/story";
 import { formatMoney, type DisplayUnit } from "@/domain/money";
 
 // Pulse bar colour by aliveness. Amber for a living market (kept off the
-// YES-emerald / NO-rose axis so it never reads as a side), fading to muted as
+// YES-blue / NO-amber axis so it never reads as a side), fading to muted as
 // the market goes quiet. Green stays reserved for P&L, never for "alive".
 const PULSE_COLOR: Record<PulseLevel, string> = {
   alive: "#f59e0b",
@@ -147,19 +147,19 @@ function SideBlock({
   winLabel: string;
   badge: "Tribe" | "Opp" | null;
 }) {
-  const emerald = side === "YES";
+  const isYes = side === "YES";
   const up = chg != null && chg >= 0;
   const flash = useFlash(price);
   return (
     <div
       className={`rounded-lg border p-3 transition-colors duration-500 ${
-        emerald ? "border-emerald-500/25 bg-emerald-500/5" : "border-rose-500/25 bg-rose-500/5"
-      } ${flash ? (emerald ? "ring-2 ring-emerald-500/50" : "ring-2 ring-rose-500/50") : ""}`}
+        isYes ? "border-[var(--yes)]/25 bg-[var(--yes)]/5" : "border-[var(--no)]/25 bg-[var(--no)]/5"
+      } ${flash ? (isYes ? "ring-2 ring-[var(--yes)]/50" : "ring-2 ring-[var(--no)]/50") : ""}`}
     >
       <div className="flex items-center justify-between">
         <span
           className={`text-[10px] font-semibold uppercase tracking-wider ${
-            emerald ? "text-emerald-600" : "text-rose-600"
+            isYes ? "text-[var(--yes)]" : "text-[var(--no)]"
           }`}
         >
           {side}
@@ -195,7 +195,7 @@ function SideBlock({
       </div>
       <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className={`h-full transition-all duration-700 ${emerald ? "bg-emerald-500" : "bg-rose-500"}`}
+          className={`h-full transition-all duration-700 ${isYes ? "bg-[var(--yes)]" : "bg-[var(--no)]"}`}
           style={{ width: `${Math.max(2, sharePct)}%` }}
         />
       </div>
@@ -247,14 +247,14 @@ function MatchStrip({
 
       <span
         className={`shrink-0 font-semibold uppercase tracking-wide ${
-          tribe ? "text-violet-600" : "text-red-600"
+          tribe ? "text-violet-600" : "text-[var(--no)]"
         }`}
       >
         {tribe ? "Your tribe" : "Your opp"}
       </span>
       <span className="min-w-0 flex-1 truncate text-muted-foreground">
         <span className="text-foreground">{name}</span> is on{" "}
-        <span className={side === "YES" ? "text-emerald-600" : "text-rose-600"}>{side}</span>
+        <span className={side === "YES" ? "text-[var(--yes)]" : "text-[var(--no)]"}>{side}</span>
       </span>
       <span className="shrink-0 tabular-nums text-muted-foreground">{person.score}%</span>
     </div>
@@ -425,7 +425,7 @@ export function MarketCard({
       >
         <span
           className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
-            pulses.length ? "animate-pulse bg-emerald-500" : "bg-muted-foreground/40"
+            pulses.length ? "animate-pulse bg-[var(--yes)]" : "bg-muted-foreground/40"
           }`}
         />
         {pulses.length === 0 ? (
@@ -438,7 +438,7 @@ export function MarketCard({
             >
               {current && <Face p={current} />}
               <span className="min-w-0 flex-1 truncate">
-                <span className={current?.side === "YES" ? "text-emerald-600" : "text-rose-600"}>
+                <span className={current?.side === "YES" ? "text-[var(--yes)]" : "text-[var(--no)]"}>
                   {pulseLine(current!, ethUsd)}
                 </span>
                 <span className="text-muted-foreground"> · {ago(current!.at)} ago</span>
@@ -457,7 +457,7 @@ export function MarketCard({
             <li key={p.key} className="flex items-center gap-2 py-1">
               <span
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                  p.side === "YES" ? "bg-emerald-500" : "bg-rose-500"
+                  p.side === "YES" ? "bg-[var(--yes)]" : "bg-[var(--no)]"
                 }`}
               />
               <Face p={p} size={16} />

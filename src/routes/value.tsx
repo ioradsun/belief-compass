@@ -360,7 +360,7 @@ function ShareCard({
   return (
     <div className="rounded-2xl bg-[var(--surface)] p-4">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</div>
-      <div className="mt-1.5 text-[30px] font-semibold leading-none tabular-nums tracking-[-0.02em]" style={{ color: "var(--yes)" }}>
+      <div className="mt-1.5 text-[30px] font-semibold leading-none tabular-nums tracking-[-0.02em]" style={{ color: "var(--gain)" }}>
         {fmtPct(pct)}
       </div>
       <div className="mt-1.5 text-[12px] text-[var(--text-muted)]">
@@ -371,12 +371,12 @@ function ShareCard({
         <path d={`${ecoLine} L${w},${h} L0,${h} Z`} fill="var(--text-muted)" opacity="0.13" />
         <path d={ecoLine} fill="none" stroke="var(--text-muted)" strokeWidth="1.5" opacity="0.5" vectorEffect="non-scaling-stroke" />
         {/* our slice of it */}
-        <path d={`${convLine} L${w},${h} L0,${h} Z`} fill="var(--yes)" opacity="0.22" />
-        <path d={convLine} fill="none" stroke="var(--yes)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        <path d={`${convLine} L${w},${h} L0,${h} Z`} fill="var(--gain)" opacity="0.22" />
+        <path d={convLine} fill="none" stroke="var(--gain)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="mt-2.5 flex items-center justify-between text-[11.5px] tabular-nums">
         <span className="flex items-center gap-1.5 text-[var(--text)]">
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--yes)" }} />
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--gain)" }} />
           Conviction {format(convValue)}
         </span>
         <span className="text-[var(--text-muted)]">Ecosystem {format(ecoValue)}</span>
@@ -402,8 +402,8 @@ function GrowthChart({ growth }: { growth: EcosystemValue["growth"] }) {
         {fmtUsd(pts[pts.length - 1].volumeUsd)}
       </div>
       <svg viewBox={`0 0 ${w} ${h}`} className="mt-2 h-[160px] w-full" preserveAspectRatio="none">
-        <path d={area} fill="var(--yes)" opacity="0.12" />
-        <path d={line} fill="none" stroke="var(--yes)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        <path d={area} fill="var(--gain)" opacity="0.12" />
+        <path d={line} fill="none" stroke="var(--gain)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
       </svg>
     </div>
   );
@@ -415,7 +415,7 @@ function ActivityRow({ a }: { a: EcosystemValue["recentActivity"][number] }) {
     a.kind === "market_created"
       ? "New market created"
       : `${a.action === "SELL" ? "Sold" : "Backed"} ${a.side ?? ""}${usd > 0 ? ` · ${fmtUsd(usd)}` : ""}`;
-  const dot = a.kind === "market_created" ? "var(--text-secondary)" : a.side === "NO" ? "var(--no)" : "var(--yes)";
+  const dot = a.kind === "market_created" ? "var(--text-secondary)" : a.side === "NO" ? "var(--no)" : "var(--gain)";
   return (
     <div className="flex items-start gap-2.5 rounded-xl bg-[var(--surface)] px-3 py-2.5">
       <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: dot }} />
@@ -453,7 +453,7 @@ function Hero({
   return (
     <div className="bg-[var(--bg)] px-4 py-5">
       <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-        {live && <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--yes)" }} />}
+        {live && <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--gain)" }} />}
         {label}
       </div>
       <div className="mt-1.5 text-[26px] font-semibold tabular-nums tracking-[-0.02em] text-[var(--text)] sm:text-[30px]">
