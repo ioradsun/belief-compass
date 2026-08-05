@@ -213,10 +213,17 @@ export function CaseColumn({
   const authCapitalUsd = num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
   const belBase = side === "YES" ? bl?.believersYes : bl?.believersNo;
   const capBase = side === "YES" ? bl?.yesCapitalUsd : bl?.noCapitalUsd;
+  const priceBaseUsd = side === "YES" ? bl?.yesPriceUsd : bl?.noPriceUsd;
   const belChange =
     authBelievers != null && belBase != null ? windowChange(authBelievers, belBase) : null;
   const capChange =
     authCapitalUsd != null && capBase != null ? windowChange(authCapitalUsd, capBase) : null;
+  // Same rule for price: measure the snapshot at the window's open against the
+  // price now, never the tape's transient post-trade marks.
+  const priceChange =
+    authPriceUsd != null && priceBaseUsd != null && priceBaseUsd > 0
+      ? windowChange(authPriceUsd, priceBaseUsd)
+      : null;
 
   // The exact move, in the metric's own unit — never a percentage alone. This
   // mirrors the Total Market instrument: the total leads, the % is the big
@@ -225,10 +232,14 @@ export function CaseColumn({
   const belDelta = belChange?.delta ?? believerMetric?.delta ?? null;
   const capDelta =
     capChange?.delta ?? (capitalMetric != null ? capitalMetric.delta * (ethUsd || 0) : null);
+  const pricePct =
+    priceChange != null ? priceChange.pct : authPriceUsd != null ? null : (summary?.pricePct ?? null);
   const priceDelta =
-    priceUsd != null && summary?.pricePct != null && Number.isFinite(priceUsd)
-      ? priceUsd - priceUsd / (1 + summary.pricePct / 100)
-      : null;
+    priceChange != null
+      ? priceChange.delta
+      : priceUsd != null && pricePct != null && Number.isFinite(priceUsd)
+        ? priceUsd - priceUsd / (1 + pricePct / 100)
+        : null;
 
   // Supporting copy only when something actually moved. "No change today" /
   // "Flat today" is filler — whitespace says it better.
