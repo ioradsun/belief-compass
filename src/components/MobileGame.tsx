@@ -557,17 +557,6 @@ function BothSides({
               ? "No change today"
               : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "left"} today`,
       },
-      {
-        label: "Per share",
-        value: priceUsd == null ? "—" : format(priceUsd, "USD"),
-        pct: pricePct,
-        absolute:
-          priceDelta == null
-            ? null
-            : Math.abs(priceDelta) < 0.005
-              ? "Flat today"
-              : `${format(priceDelta, "USD", { signed: true })} per share today`,
-      },
     ];
   };
 
