@@ -91,8 +91,19 @@ type Built = {
 };
 
 /**
- * One conviction card. Question → side → worth+gain → market believers → personal
- * Pulse → the one dynamic story. No invested amount, no giant %, no raw price.
+ * ONE CONVICTION, ONE STORY.
+ *
+ * The card answers, in order: what do I believe (the question) → what is
+ * happening to my side (one plain sentence) → where do I stand (side, what it is
+ * worth, what it has done). Nothing else earns space:
+ *
+ *  • Pulse label — removed. "Accelerating / Capital-led" is a classification the
+ *    reader has to decode, and the story sentence already says it in words.
+ *  • Believers row — removed. The story sentence carries the count when it is the
+ *    news; a standing number with no movement is not a reason to look.
+ *  • Shares and entry → now — removed. Neither changes a decision; the worth and
+ *    the return already state the outcome, and this is a belief, not a brokerage.
+ *  • Dividers — removed. Spacing separates; lines only add noise.
  */
 function ConvictionCard({
   p,
@@ -106,7 +117,7 @@ function ConvictionCard({
   signedMoney: MoneyFmt;
 }) {
   const sideColor = p.side === "YES" ? "var(--yes)" : "var(--no)";
-  const { pulse, story } = p.signal;
+  const { story } = p.signal;
   // The personal outcome, by the one rule: value leads, P&L is the answer, the
   // return % is paired to it. Never a market price %. Null → no trusted cost basis.
   const ret = positionReturn({
@@ -114,7 +125,20 @@ function ConvictionCard({
     gainPct: p.gainPct,
     money: (v, signed) => (signed ? signedMoney(v) : money(v)),
   });
-  const sharesLabel = p.shares.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  // Without a cost basis the honest outcome is the selected window's move.
+  const windowMove =
+    !ret && p.deltaUsd != null && Math.abs(p.deltaUsd) >= 0.005 ? p.deltaUsd : null;
+  const outcomeTone = ret
+    ? ret.direction === "up"
+      ? "var(--gain)"
+      : ret.direction === "down"
+        ? "var(--loss)"
+        : "var(--text-secondary)"
+    : windowMove != null
+      ? windowMove > 0
+        ? "var(--gain)"
+        : "var(--loss)"
+      : "var(--text-muted)";
   return (
     <div
       role="button"
@@ -129,128 +153,68 @@ function ConvictionCard({
       className="block w-full cursor-pointer rounded-[14px] p-3.5 text-left transition-colors hover:bg-[var(--surface-2)]"
       style={{ background: "var(--surface)" }}
     >
-      {/* 1 — What do I believe? (largest). pr-9 reserves the corner for the
-        always-present "Stand on it" share control layered above the card. */}
+      {/* 1 — What do I believe? pr-9 reserves the corner for the "Stand on it"
+        share control layered above the card. */}
       <div className="pr-9 text-[14px] font-semibold leading-snug text-[var(--text)]">
         {p.title}
       </div>
 
-      {/* 2 — What side am I on? When the other side is held too, say so: this
-        question appears twice on purpose, once per position. */}
-      <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+      {/* 2 — What is happening to my side? The one sentence that is the reason to
+        open this market today. It leads the body: meaning before numbers. */}
+      <div className="mt-2 text-[12.5px] leading-snug text-[var(--text)]">{story.headline}</div>
+      {story.body && (
+        <div className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">{story.body}</div>
+      )}
+
+      {/* 3 — Where do I stand? One line, every number inside a phrase: which side
+        you are on, what your conviction is worth now, and what it has done. */}
+      <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span
           className="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide"
           style={{ color: sideColor, background: "var(--surface-2)" }}
         >
           {p.side}
         </span>
-        {p.paired && (
-          <span className="text-[10px] text-[var(--text-muted)]">
-            you hold {p.side === "YES" ? "NO" : "YES"} here too
-          </span>
-        )}
-      </div>
-
-      {/* 3 — How am I doing? Position value leads, then P&L · return% (the answer),
-        then the supporting facts (shares · entry → now). "Marked value" = shares ×
-        current price; the realizable amount on exit is quoted in the sell ticket.
-        With no trusted cost basis we fall back to the selected window's move. */}
-      <div className="mt-2.5 flex items-baseline gap-2">
-        <span className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-          Marked value
-        </span>
-        <span className="num text-[20px] font-semibold leading-none text-[var(--text)]">
+        <span className="num text-[15px] font-semibold leading-none text-[var(--text)]">
           {money(p.value)}
         </span>
-        {!ret &&
-          p.deltaUsd != null &&
-          (Math.abs(p.deltaUsd) >= 0.005 ? (
-            <span
-              className="num ml-auto text-[12px] font-semibold"
-              style={{ color: p.deltaUsd > 0 ? "var(--gain)" : "var(--loss)" }}
-            >
-              {signedMoney(p.deltaUsd)}
+        <span className="text-[11px] text-[var(--text-muted)]">backing this</span>
+        <span className="num ml-auto text-[12px] font-semibold" style={{ color: outcomeTone }}>
+          {ret ? (
+            <>
+              {ret.pnl}
+              {ret.pct && <span className="ml-1">· {ret.pct}</span>}
               <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">
-                {p.deltaLabel}
+                since you backed it
               </span>
-            </span>
+            </>
+          ) : windowMove != null ? (
+            <>
+              {signedMoney(windowMove)}
+              <span className="ml-1 text-[10px] font-normal text-[var(--text-muted)]">
+                {p.deltaLabel.toLowerCase()}
+              </span>
+            </>
           ) : (
-            <span className="ml-auto text-[11px] font-normal text-[var(--text-muted)]">
-              No change
+            <span className="text-[11px] font-normal text-[var(--text-muted)]">
+              unchanged {p.deltaLabel.toLowerCase()}
             </span>
-          ))}
-      </div>
-
-      {/* P&L · return% — the pair that answers "what did I make?" */}
-      {ret && (
-        <div className="mt-1.5 flex items-baseline gap-1.5">
-          <span
-            className="num text-[13px] font-semibold"
-            style={{
-              color:
-                ret.direction === "up"
-                  ? "var(--gain)"
-                  : ret.direction === "down"
-                    ? "var(--loss)"
-                    : "var(--text-secondary)",
-            }}
-          >
-            {ret.pnl}
-            {ret.pct && <span className="ml-1">· {ret.pct}</span>}
-          </span>
-          <span className="text-[10px] font-normal text-[var(--text-muted)]">your return</span>
-        </div>
-      )}
-
-      {/* Supporting facts — quiet, one line: efficiency of the outcome. */}
-      {p.entryPrice != null && p.currentPrice != null && p.shares > 0 && (
-        <div className="num mt-1 text-[10px] text-[var(--text-muted)]">
-          {sharesLabel} {p.side} share{p.shares === 1 ? "" : "s"} · entry {money(p.entryPrice)} →
-          now {money(p.currentPrice)}
-        </div>
-      )}
-
-      {/* 4 — How is the market reacting? Believers (scale + movement), then Pulse. */}
-      {p.believers != null && p.believers > 0 && (
-        <>
-          <Divider />
-          <div className="flex items-baseline gap-2">
-            <span className="num text-[13px] font-semibold text-[var(--text)]">
-              {p.believers.toLocaleString("en-US")}
-            </span>
-            <span className="text-[11px] text-[var(--text-muted)]">Believers</span>
-            {p.newInWindow != null && p.newInWindow > 0 && (
-              <span className="num ml-auto text-[11px] font-semibold text-[var(--gain)]">
-                +{p.newInWindow.toLocaleString("en-US")}
-                {p.believers != null && p.believers - p.newInWindow > 0
-                  ? ` (+${Math.round((p.newInWindow / (p.believers - p.newInWindow)) * 100)}%)`
-                  : ""}
-                <span className="ml-1 font-normal text-[var(--text-muted)]">{p.windowLabel}</span>
-              </span>
-            )}
-          </div>
-        </>
-      )}
-
-      <Divider />
-      <div className="flex items-baseline gap-2">
-        <span className="text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          Pulse
+          )}
         </span>
-        <span className="text-[12px] font-semibold text-[var(--text)]">{pulse}</span>
       </div>
 
-      {/* The one dynamic story — the reason to open this market today. */}
-      <Divider />
-      <div className="text-[12px] leading-snug text-[var(--text-secondary)]">{story.headline}</div>
-      {story.body && (
-        <div className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">{story.body}</div>
+      {/* The only other fact worth a line: you hold the other side of this same
+        question, so two cards under one belief read as deliberate. */}
+      {p.paired && (
+        <div className="mt-1.5 text-[10px] text-[var(--text-muted)]">
+          You also back {p.side === "YES" ? "NO" : "YES"} on this question.
+        </div>
       )}
     </div>
   );
 }
 
-const Divider = () => <div className="my-2.5" style={{ borderTop: "1px solid var(--hairline)" }} />;
+
 
 export function MyConvictions({
   wallet,
@@ -543,7 +507,7 @@ export function MyConvictions({
               </span>
             </div>
             <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-              Marked value
+              Backing {count} belief{count === 1 ? "" : "s"}
             </div>
             <div className="num mt-0.5 text-[12px]" style={{ color: tone }}>
               {move === 0 ? (

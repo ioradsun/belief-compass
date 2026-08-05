@@ -113,12 +113,14 @@ export function positionPulse(
 }
 
 /**
- * The one dynamic story for a card, chosen by priority. `money` formats the gain
- * for the everyday fallback; everything above it needs no currency.
+ * The one dynamic story for a card, chosen by priority. Every branch is plain
+ * language — the money on the card speaks for itself, so no branch spends the
+ * sentence restating a gain. `_money` is kept for callers (and future copy that
+ * needs a currency) and deliberately unused here.
  */
 export function positionStory(
   input: PositionStoryInput,
-  money: (n: number) => string,
+  _money?: (n: number) => string,
 ): PositionStory {
   const { side, believers, gainUsd } = input;
   const n = input.newToday ?? 0;
@@ -145,58 +147,68 @@ export function positionStory(
       tone: "up",
     };
 
-  // 5 — a surge of believers onto the held side.
+  // 5 — a surge of believers onto the held side. Say who joined and how many
+  // stand there now in ONE sentence: the card carries no separate believer row.
   if (n >= BELIEVER_SURGE)
     return {
       kind: "believer_surge",
-      headline: `${side} gained ${n} believers today.`,
+      headline: `${n} people joined ${side} today.`,
       body:
         believers != null
-          ? `${believers.toLocaleString("en-US")} people now back ${side}.`
+          ? `${believers.toLocaleString("en-US")} now back ${side}.`
           : undefined,
       tone: "up",
     };
 
-  // 6–7 — the pulse speaks: capital concentrating, or momentum turning.
+  // 6–7 — the state of the side, in plain words. Never a classification the
+  // reader has to decode ("Capital-led", "Accelerating", "Momentum"): say what
+  // people and money actually did.
   const pulse = positionPulse(input);
   if (pulse === "Capital-led")
-    return { kind: "capital", headline: `Capital is concentrating on ${side}.`, tone: "neutral" };
+    return {
+      kind: "capital",
+      headline: `Money is moving into ${side} without new believers.`,
+      tone: "neutral",
+    };
   if (pulse === "Accelerating")
-    return { kind: "momentum", headline: `Momentum shifted toward ${side}.`, tone: "up" };
+    return { kind: "momentum", headline: `${side} is getting stronger.`, tone: "up" };
   if (pulse === "Cooling")
-    return { kind: "momentum", headline: `Momentum is cooling on ${side}.`, tone: "down" };
+    return { kind: "momentum", headline: `${side} is losing ground.`, tone: "down" };
   if (pulse === "Mixed Momentum")
     return {
       kind: "momentum",
-      headline: `People and price are splitting on ${side}.`,
+      headline: `People are joining ${side}, but its price slipped.`,
       tone: "neutral",
     };
 
-  // 8 — the everyday: a trickle of believers, an early market, a plain gain, or quiet.
+  // 8 — the everyday: one person joined, an early market, or nothing moved.
   if (n >= 1)
     return {
       kind: "believers",
-      headline: `${side} gained ${n} believer${n === 1 ? "" : "s"} today.`,
+      headline:
+        believers != null
+          ? `${n} joined ${side} today — ${believers.toLocaleString("en-US")} now back it.`
+          : `${n} ${n === 1 ? "person" : "people"} joined ${side} today.`,
       tone: "up",
     };
   if (believers != null && believers < EARLY_BELIEVERS)
     return {
       kind: "early",
-      headline: "Still early.",
-      body: `Only ${believers.toLocaleString("en-US")} believers so far.`,
+      headline:
+        believers === 1
+          ? `You are the only believer on ${side} so far.`
+          : `Only ${believers.toLocaleString("en-US")} people back ${side} so far.`,
       tone: "muted",
     };
-  if (gainUsd != null && gainUsd !== 0)
+  if (believers != null && believers > 0)
     return {
-      kind: "gain",
-      headline:
-        gainUsd > 0
-          ? `Up ${money(gainUsd)} since you entered.`
-          : `Down ${money(-gainUsd)} since you entered.`,
-      tone: gainUsd > 0 ? "up" : "down",
+      kind: "quiet",
+      headline: `Nothing changed today — ${believers.toLocaleString("en-US")} still back ${side}.`,
+      tone: "muted",
     };
-  return { kind: "quiet", headline: "Quiet for now.", tone: "muted" };
+  return { kind: "quiet", headline: "Nothing has changed today.", tone: "muted" };
 }
+
 
 export interface PositionSignal {
   pulse: PositionPulse;

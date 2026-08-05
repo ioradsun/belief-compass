@@ -64,33 +64,35 @@ describe("positionStory — exactly one story, by priority", () => {
   it("a believer surge tells scale and movement", () => {
     const s = positionStory(base({ newToday: 6, believers: 35 }), money);
     expect(s.kind).toBe("believer_surge");
-    expect(s.headline).toBe("YES gained 6 believers today.");
-    expect(s.body).toBe("35 people now back YES.");
+    expect(s.headline).toBe("6 people joined YES today.");
+    expect(s.body).toBe("35 now back YES.");
   });
-  it("capital concentration when price leads and people are quiet", () => {
+  it("says money moved without people, never 'capital-led'", () => {
     const s = positionStory(base({ newToday: 0, chgPct: 5 }), money);
     expect(s.kind).toBe("capital");
-    expect(s.headline).toBe("Capital is concentrating on YES.");
+    expect(s.headline).toBe("Money is moving into YES without new believers.");
   });
-  it("momentum cooling on a falling, quiet side", () => {
+  it("says a falling, quiet side is losing ground — no 'momentum' jargon", () => {
     const s = positionStory(base({ newToday: 0, chgPct: -4, believers: 40 }), money);
     expect(s.kind).toBe("momentum");
-    expect(s.headline).toBe("Momentum is cooling on YES.");
+    expect(s.headline).toBe("YES is losing ground.");
+    expect(s.headline).not.toMatch(/momentum/i);
   });
   it("still early when a side is barely formed", () => {
     const s = positionStory(base({ newToday: 0, chgPct: 0, believers: 8 }), money);
     expect(s.kind).toBe("early");
-    expect(s.body).toBe("Only 8 believers so far.");
+    expect(s.headline).toBe("Only 8 people back YES so far.");
   });
-  it("falls back to plain gain when nothing else is happening", () => {
+  it("never restates the money — the card shows it", () => {
     const s = positionStory(base({ believers: 200, gainUsd: 4.18 }), money);
-    expect(s.kind).toBe("gain");
-    expect(s.headline).toBe("Up $4.18 since you entered.");
+    expect(s.kind).toBe("quiet");
+    expect(s.headline).toBe("Nothing changed today — 200 still back YES.");
   });
   it("is quiet as the last resort", () => {
     expect(positionStory(base({ believers: 200, gainUsd: 0 }), money).kind).toBe("quiet");
   });
 });
+
 
 describe("positionSignal — urgency ranks the list", () => {
   it("a Twin card ranks above a plain-gain card", () => {
