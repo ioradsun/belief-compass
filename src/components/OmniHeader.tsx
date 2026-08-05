@@ -256,6 +256,10 @@ export function OmniHeader({
   const peopleHits = net?.people ?? [];
 
   const showResults = open && term.length >= 2;
+  // Still typing (the debounced term trails the field) or still fetching: the
+  // list is unresolved, not empty.
+  const searching =
+    q.trim() !== term || marketsFetching || (Boolean(wallet) && peopleFetching);
 
   // One universal field, quick filters beneath it: the scope narrows the current
   // results in place rather than opening a different search.
