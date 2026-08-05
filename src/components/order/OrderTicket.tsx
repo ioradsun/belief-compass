@@ -226,13 +226,13 @@ export function OwnedLine({ yes, no }: { yes?: string | null; no?: string | null
         You own
       </span>
       {yes && (
-        <span className="num text-[12px] font-semibold" style={{ color: "var(--yes)" }}>
-          {yes} YES
+        <span className="num text-[12px] font-semibold text-[var(--text)]">
+          {yes} <span style={{ color: "var(--yes)" }}>YES</span>
         </span>
       )}
       {no && (
-        <span className="num text-[12px] font-semibold" style={{ color: "var(--no)" }}>
-          {no} NO
+        <span className="num text-[12px] font-semibold text-[var(--text)]">
+          {no} <span style={{ color: "var(--no)" }}>NO</span>
         </span>
       )}
     </div>
