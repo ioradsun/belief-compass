@@ -52,10 +52,21 @@ export function LandingExampleCard({
   onEnter?: () => void;
 }) {
   return (
-    <div
-      className="w-full max-w-[420px] rounded-[14px] bg-[var(--panel)] p-4 lg:p-5"
-      style={{ border: "1px solid var(--hairline)" }}
-    >
+    <div className="w-full max-w-[420px]">
+      {/* The whole idea in three beats, sitting as the example's heading. */}
+      <div className="mb-2.5">
+        <p className="text-[15px] font-semibold leading-snug tracking-[-0.01em] text-[var(--text)]">
+          Pick a side.
+        </p>
+        <p className="text-[13px] leading-snug text-[var(--text-secondary)]">
+          As conviction grows, so does your position. Sell whenever.
+        </p>
+      </div>
+
+      <div
+        className="rounded-[14px] bg-[var(--panel)] p-4 lg:p-5"
+        style={{ border: "1px solid var(--hairline)" }}
+      >
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
           Example
@@ -64,6 +75,7 @@ export function LandingExampleCard({
           No expiry
         </span>
       </div>
+
 
       <p className="mt-2.5 text-[16px] font-semibold leading-snug text-[var(--text)]">
         {example.question}
@@ -133,6 +145,8 @@ export function LandingExampleCard({
       <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
         Illustrative values only.
       </p>
+      </div>
     </div>
   );
+
 }
