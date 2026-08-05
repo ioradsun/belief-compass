@@ -480,6 +480,13 @@ function BothSides({
     queryFn: () => listMarketPulses({ data: { ids: [marketId] } }),
     staleTime: 15_000,
   });
+  // Authoritative window-open baselines — the same source the desktop case file
+  // uses, so mobile momentum can never disagree with it.
+  const { data: baselines } = useQuery({
+    queryKey: ["market-baselines", marketId],
+    queryFn: () => getMarketBaselines({ data: { id: marketId } }),
+    staleTime: 30_000,
+  });
 
   const believers = evidence?.believers ?? [];
   // Prefer the read-model's authoritative per-side capital; fall back to the
@@ -495,6 +502,56 @@ function BothSides({
     return Math.max(seen, rowCount ?? 0);
   };
   const events = pulses?.pulses?.[String(marketId)] ?? [];
+
+  const bl = baselines?.["24h"];
+  /** Believers / capital / price momentum for one side, read the Total Market way. */
+  const rows = (s: OrderSide) => {
+    const bel = count(s);
+    const cap = capital(s);
+    const belBase = s === "YES" ? bl?.believersYes : bl?.believersNo;
+    const capBase = s === "YES" ? bl?.yesCapitalUsd : bl?.noCapitalUsd;
+    const belChg = belBase != null ? windowChange(bel, belBase) : null;
+    const capChg = capBase != null ? windowChange(cap, capBase) : null;
+    const priceUsd = Number(s === "YES" ? row.yes_price_usd : row.no_price_usd) || null;
+    const pricePct = num(s === "YES" ? row.chg_24h_yes : row.chg_24h_no);
+    const priceDelta =
+      priceUsd != null && pricePct != null ? priceUsd - priceUsd / (1 + pricePct / 100) : null;
+    return [
+      {
+        label: "Believers",
+        value: bel.toLocaleString("en-US"),
+        pct: belChg?.pct ?? null,
+        absolute:
+          belChg == null
+            ? null
+            : belChg.delta === 0
+              ? "No change today"
+              : `${belChg.delta > 0 ? "+" : "−"}${Math.abs(belChg.delta)} believer${Math.abs(belChg.delta) === 1 ? "" : "s"} today`,
+      },
+      {
+        label: "Committed",
+        value: format(cap, "USD"),
+        pct: capChg?.pct ?? null,
+        absolute:
+          capChg == null
+            ? null
+            : Math.abs(capChg.delta) < 0.005
+              ? "No change today"
+              : `${format(capChg.delta, "USD", { signed: true })} ${capChg.delta > 0 ? "committed" : "withdrawn"} today`,
+      },
+      {
+        label: "Per share",
+        value: priceUsd == null ? "—" : format(priceUsd, "USD"),
+        pct: pricePct,
+        absolute:
+          priceDelta == null
+            ? null
+            : Math.abs(priceDelta) < 0.005
+              ? "Flat today"
+              : `${format(priceDelta, "USD", { signed: true })} per share today`,
+      },
+    ];
+  };
 
   return (
     <Screen>
@@ -517,18 +574,28 @@ function BothSides({
               className="w-full pt-5 text-left"
             >
               <div
-                className="text-[20px] font-semibold"
+                className="flex items-baseline justify-between text-[20px] font-semibold"
                 style={{ color: s === "YES" ? "var(--yes)" : "var(--no)" }}
               >
                 {s}
+                <span className="text-[12px] font-medium text-[var(--text-muted)]">
+                  {open === s ? "Hide" : "Details"}
+                </span>
               </div>
-              <div className="num mt-2 text-[16px] text-[var(--text)]">
-                {count(s)} believer{count(s) === 1 ? "" : "s"}
-              </div>
-              <div className="num mt-1 text-[16px] text-[var(--text-secondary)]">
-                {format(capital(s), "USD")} committed
+              <div className="mt-2 space-y-1.5">
+                {rows(s).map((m) => (
+                  <SideMetric
+                    key={m.label}
+                    label={m.label}
+                    value={m.value}
+                    pct={m.pct}
+                    absolute={m.absolute}
+                    color={s === "YES" ? "var(--yes)" : "var(--no)"}
+                  />
+                ))}
               </div>
             </button>
+
 
             {open === s && (
               <div className="mt-5 space-y-5">
