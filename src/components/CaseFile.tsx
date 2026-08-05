@@ -24,8 +24,6 @@ import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useMoney } from "@/lib/display-unit";
 import { PersonAvatar } from "@/components/PersonAvatar";
-import { sideFeed } from "@/domain/side-feed";
-import type { NetTag } from "@/domain/feed-event";
 
 import {
   LENS_META,
@@ -542,6 +540,9 @@ function MetricRow({
 }
 
 
+/** How many believers the panel previews before "+N more". */
+const PREVIEW = 5;
+
 /** The people, as one ranked roster — name, amount, and shared DNA when there is any. */
 export function CaseRoster({
   side,
@@ -567,9 +568,9 @@ export function CaseRoster({
   const relOf = useMemo(() => (w: string) => byWallet.get(w)?.relationship ?? null, [byWallet]);
   const roster = useMemo(() => rankBelievers(believers, relOf), [believers, relOf]);
 
-  const rows = (
+  const renderRows = (list: typeof roster) => (
     <ul className="space-y-0.5">
-      {roster.map(({ believer: b, relationship }) => {
+      {list.map(({ believer: b, relationship }) => {
         const p = byWallet.get(b.wallet.toLowerCase());
         // Only a real overlap earns a DNA line — no "unmapped", no filler.
         const dna =
@@ -607,11 +608,15 @@ export function CaseRoster({
     </ul>
   );
 
+  // The list variant previews the strongest few; "+N more" opens the rest.
+  const allRows = renderRows(roster);
+  const rows = variant === "compact" ? allRows : renderRows(roster.slice(0, PREVIEW));
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          Who backs {side}
+          Believers
         </span>
         {roster.length > 0 && (
           <span className="num text-[10px] text-[var(--text-muted)]">{roster.length}</span>
@@ -629,7 +634,23 @@ export function CaseRoster({
           )}
         </>
       ) : (
-        rows
+        <>
+          {rows}
+          {roster.length > PREVIEW && (
+            <button
+              type="button"
+              onClick={() => setOpenAll(true)}
+              className="px-1 text-[12px] text-[var(--text-secondary)] underline-offset-2 hover:underline"
+            >
+              +{roster.length - PREVIEW} more
+            </button>
+          )}
+          {openAll && (
+            <RosterSheet side={side} count={roster.length} onClose={() => setOpenAll(false)}>
+              {allRows}
+            </RosterSheet>
+          )}
+        </>
       )}
     </div>
   );
