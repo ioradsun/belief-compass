@@ -368,10 +368,23 @@ export function CaseColumn({
         </div>
       </div>
 
-      <div ref={scroller} className="min-h-0 flex-1 space-y-4 overflow-y-scroll pr-0.5">
-        {/* ACT 1 — THE LENSES: pick what to investigate. The three metrics ARE the
-          navigation — no tabs, no segmented control. Believers → Capital → Price
-          mirrors how conviction forms: people, then money, then price. */}
+      <div ref={scroller} className="min-h-0 flex-1 space-y-5 overflow-y-scroll pr-0.5">
+        {/* 1 — CURRENT STATE: what this side IS, in plain language, before any
+          metric. When something moved in the window, one sentence says what. */}
+        <div className="space-y-1">
+          <p className="text-[15px] font-semibold leading-snug tracking-[-0.01em] text-[var(--text)]">
+            <SideWords text={stateLine} />
+          </p>
+          {changeLine && (
+            <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+              <SideWords text={changeLine} />
+            </p>
+          )}
+        </div>
+
+        {/* 2 — SNAPSHOT: the three essential metrics. They double as the chart's
+          lens selector — no tabs, no segmented control. Supporting copy appears
+          only when the metric actually moved. */}
         <div
           className="space-y-0.5"
           role="radiogroup"
@@ -384,7 +397,6 @@ export function CaseColumn({
               value={r.value}
               pct={r.pct}
               absolute={r.absolute}
-
               active={metric === r.metric}
               color={color}
               onSelect={() => setDeckLens(r.metric)}
@@ -392,8 +404,6 @@ export function CaseColumn({
           ))}
         </div>
 
-        {/* ACT 2 — THE ONE CHART: titled, single-metric, with a sentence that always
-          matches what's drawn. Switching lens crossfades inside LensChart. */}
         <div className="space-y-2">
           <LensChart
             side={side}
@@ -411,30 +421,21 @@ export function CaseColumn({
           </p>
         </div>
 
-        {/* ACT 3 — WHAT'S HAPPENING TO {side}: the living stream of this belief.
-          This used to be a list of aggregated momentum beats — true, but it read
-          as a summary of a place rather than a place where things happen, and it
-          spent most of its life saying "Nothing significant yet".
-          Now the strongest beat leads as ONE line (that is what a summary is for)
-          and beneath it runs the same tape the app-wide feed runs, scoped to this
-          side: the people entering and leaving, what they did to their belief,
-          how long they had held it, and the conviction cohorts still standing.
-          Same engine, same grammar, same cadence — the column already says YES,
-          so the sentences do not repeat it (surface: "panel"). */}
+        {/* 3 — BELIEVERS: the people currently backing this side. */}
+        <CaseRoster
+          side={side}
+          believers={believers}
+          people={net?.people}
+          priceUsd={priceUsd}
+          variant={compactRoster ? "compact" : "list"}
+        />
+
+        {/* 4 — RECENT ACTIVITY: the same tape the app-wide feed runs, scoped to
+          this side. The column already says YES, so sentences don't repeat it. */}
         <div className="space-y-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-            What&rsquo;s happening to {side}
+            Recent activity
           </span>
-          {lead && (
-            <p className="px-0.5 text-[12px]">
-              <span
-                className={`leading-snug text-[var(--text)] ${lead.tier === 1 ? "font-semibold" : ""}`}
-              >
-                <SideWords text={lead.headline} />
-              </span>
-            </p>
-          )}
-
           <LiveTape
             marketIds={[marketId]}
             side={side}
@@ -446,29 +447,8 @@ export function CaseColumn({
             emptyText="No moves on this side yet."
           />
         </div>
-
-        {/* ACT 4 — THE PEOPLE: one roster, one relationship badge, one status. */}
-        <CaseRoster
-          side={side}
-          believers={believers}
-          people={net?.people}
-          priceUsd={priceUsd}
-          variant={compactRoster ? "compact" : "list"}
-        />
       </div>
 
-      {/* Optional deep-dive into the full center timeline (desktop investigation). */}
-      {onInvestigate && (
-        <button
-          type="button"
-          onClick={() => onInvestigate(side)}
-          aria-pressed={investigating}
-          className="mt-2 shrink-0 text-left text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors"
-          style={{ color }}
-        >
-          {investigating ? "Reading the full timeline ↗" : "Open the full timeline ↗"}
-        </button>
-      )}
     </div>
   );
 }
