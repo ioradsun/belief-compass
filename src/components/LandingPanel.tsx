@@ -150,17 +150,18 @@ export function LandingPanel({
                     Conviction needs company.
                   </h1>
 
-                  <p className="mt-3 text-[19px] leading-snug text-[var(--text)] sm:text-[23px]">
-                    Back what you believe. Find your tribe.
+                  <p className="mt-4 text-[19px] leading-snug text-[var(--text)] sm:text-[23px]">
+                    Back what you believe.
+                    <br />
+                    Find your tribe.
                   </p>
 
-                  <p className="mt-3 max-w-[46ch] text-[15px] leading-relaxed text-[var(--text-secondary)] sm:text-[17px]">
-                    Pick a side. As more capital backs it, your position can grow.
+                  <p className="mt-3 text-[15px] leading-snug text-[var(--text-secondary)] sm:text-[17px]">
+                    Traders make money.
+                    <br />
+                    Conviction builds wealth.
                   </p>
 
-                  <p className="mt-1.5 text-[13px] text-[var(--text-muted)]">
-                    No expiry. No resolution. Sell whenever you choose.
-                  </p>
 
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <button
