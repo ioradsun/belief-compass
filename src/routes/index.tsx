@@ -1009,6 +1009,9 @@ function Feed() {
                     wallet={selectedPerson}
                     viewer={wallet}
                     onSelectMarket={selectMarket}
+                    /* Person → conviction → market → another person: the loop
+                       only closes if a profile can open another profile. */
+                    onSelectPerson={selectPerson}
                   />
                 </Suspense>
               </div>

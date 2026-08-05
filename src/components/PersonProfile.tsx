@@ -42,15 +42,20 @@ import {
   type DefiningConviction,
   type DiscoverySuggestion,
 } from "@/domain/person-profile";
+import { peopleAround, type ConnectedPerson } from "@/domain/person-network";
+import { hueFor as personHue } from "@/lib/wallet-identity";
 
 export function PersonProfile({
   wallet,
   viewer,
   onSelectMarket,
+  onSelectPerson,
 }: {
   wallet: string;
   viewer?: string;
   onSelectMarket: (id: number) => void;
+  /** Person → conviction → market → another person. Absent = no onward path. */
+  onSelectPerson?: (wallet: string) => void;
 }) {
   const { data, isLoading } = useQuery({
     queryKey: ["person", wallet.toLowerCase(), viewer ?? null],
@@ -73,6 +78,7 @@ export function PersonProfile({
     viewerMedianDays: data.viewerMedianDays,
     personMedianDays: data.personMedianDays,
   });
+  const around = peopleAround(data.around);
   const explore = exploreThrough(defining, {
     agreed: data.sharedBoth.map((m) => ({ marketId: Number(m.marketId), title: m.title })),
     opposed: data.opposing.map((m) => ({
@@ -162,6 +168,25 @@ export function PersonProfile({
         </section>
       )}
 
+      {/* ── DISCOVER, part two: people ─────────────────────────────────────
+          Markets lead to more people. These are structurally connected to THE
+          PROFILE OWNER — everyone who keeps turning up in the same markets as
+          them — which is a different question from the viewer's own network and
+          answered by its own query. Omitted entirely when the overlap is too
+          thin to describe, never rendered as an empty shell. */}
+      {around.length > 0 && onSelectPerson && (
+        <section>
+          <SectionTitle>People around their convictions</SectionTitle>
+          <ul className="space-y-0.5">
+            {around.map((p) => (
+              <li key={p.wallet}>
+                <PersonRow p={p} onSelect={onSelectPerson} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* ── SUPPORTING ──────────────────────────────────────────────────────
           Evidence, not identity, so it sits last and stays quiet. */}
       <section className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)]">
@@ -227,6 +252,55 @@ function DefiningRow({ c, onSelect }: { c: DefiningConviction; onSelect: (id: nu
         {c.title}
       </span>
       <span className="num mt-1 block text-[12px] text-[var(--text-secondary)]">{c.detail}</span>
+    </button>
+  );
+}
+
+/**
+ * One connected person. The pattern colours the row and nothing else — it is a
+ * shape, not a badge, and turning "often opposed" into a permanent label is
+ * exactly the diminishing categorisation the profile avoids.
+ */
+function PersonRow({ p, onSelect }: { p: ConnectedPerson; onSelect: (w: string) => void }) {
+  const tone =
+    p.pattern === "aligned"
+      ? "var(--yes)"
+      : p.pattern === "opposed"
+        ? "var(--no)"
+        : "var(--text-muted)";
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(p.wallet)}
+      className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
+    >
+      {p.avatarUrl ? (
+        <img
+          src={p.avatarUrl}
+          alt=""
+          className="mt-0.5 h-7 w-7 shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <span
+          className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
+          style={{ background: `hsl(${personHue(p.wallet)} 45% 45%)` }}
+          aria-hidden
+        >
+          {initialsFor(p.name)}
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-medium text-[var(--text)]">{p.name}</span>
+        {p.lines.map((line, i) => (
+          <span
+            key={line}
+            className="block text-[11px] leading-snug"
+            style={{ color: i === 1 ? tone : "var(--text-muted)" }}
+          >
+            {line}
+          </span>
+        ))}
+      </span>
     </button>
   );
 }
