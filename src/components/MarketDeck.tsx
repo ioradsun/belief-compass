@@ -58,7 +58,6 @@ import { ExamineCta } from "@/components/order/ExamineRail";
 import { StandOnIt } from "@/components/StandOnIt";
 import { ShareImpact } from "@/components/ShareImpact";
 
-import { LensPicker, type Lens, type LensOption } from "@/components/OmniHeader";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
 
@@ -85,9 +84,6 @@ export function MarketDeck({
   ethUsd,
   onSkip,
   viewerWallet,
-  lens,
-  lenses,
-  onLens,
   caseOpen = false,
   mobileCaseOpen = false,
   onToggleCase,
@@ -97,10 +93,6 @@ export function MarketDeck({
   ethUsd: number;
   onSkip: () => void;
   viewerWallet?: string;
-  /** When provided, the momentum chip doubles as the deck's lens filter. */
-  lens?: Lens;
-  lenses?: LensOption[];
-  onLens?: (l: Lens) => void;
   /** Case File mode (desktop): the YES/NO evidence moves to the side columns. */
   caseOpen?: boolean;
   /** Case File mode (mobile): the center becomes a NO ← MARKET → YES carousel. */
@@ -180,7 +172,6 @@ export function MarketDeck({
   // The one on-screen timeframe — the center owns it, both cases follow it.
   const deckWin = useDeckWindow();
 
-
   // Escape closes the Case File — a disclosure, so it dismisses like one.
   useEffect(() => {
     if (!caseOpen || !onToggleCase) return;
@@ -233,7 +224,6 @@ export function MarketDeck({
     // Per-market key — see above: the House's read on the LAST market is not a
     // placeholder for this one, it is a wrong answer.
   });
-
 
   // The center's believer total must be the SAME source the YES and NO rails
   // headline (market_state per-side counts), or the two sides will not add up to
@@ -382,12 +372,14 @@ export function MarketDeck({
   }
 
   const momentum = MOMENTUM[(rr.opportunity_type as string | null) ?? ""] ?? null;
-  // One chip: the market's momentum tag when no lens is applied, the active lens
-  // once you pick one. Same vocabulary, same place — no duplicated row above.
-  const lensMomentum = lens && lens !== "all" ? MOMENTUM[lens] : null;
-  const chipTone = lensMomentum?.hue ?? momentum?.hue;
-  const chipLabel = lensMomentum?.label ?? momentum?.label;
-  const chipHint = lensMomentum?.hint ?? momentum?.hint;
+  // ONE chip, and it now says only one thing: this market's own momentum.
+  // It used to be polymorphic — same position, same colours, same shape for
+  // "this market is HOT" and "you are filtering by HOT" — two unrelated
+  // meanings in one control. The filter moved to the rail's Feed tab; the slot
+  // went back to being a fact about what you are looking at.
+  const chipTone = momentum?.hue;
+  const chipLabel = momentum?.label;
+  const chipHint = momentum?.hint;
 
   // The neutral market content — the middle of the mobile case carousel, and the
   // whole scroll area otherwise. Kept in one place so both paths render the same.
@@ -413,14 +405,10 @@ export function MarketDeck({
         ethUsd={ethUsd}
         win={deckWin}
         believersTotal={authBelieversTotal}
-          capitalTotalUsd={authCapitalUsd}
+        capitalTotalUsd={authCapitalUsd}
         footer={
           onToggleCase && !mobileCaseOpen ? (
-            <ExamineCta
-              open={caseOpen}
-              onToggle={onToggleCase}
-              houseRead={houseReadState_}
-            />
+            <ExamineCta open={caseOpen} onToggle={onToggleCase} houseRead={houseReadState_} />
           ) : null
         }
       />
@@ -461,37 +449,23 @@ export function MarketDeck({
               · Company exclusive
             </span>
           )}
-          {lens && lenses && onLens ? (
-            <span className="ml-auto">
-              <LensPicker
-                lens={lens}
-                lenses={lenses}
-                onLens={onLens}
-                tone={chipTone}
-                label={chipLabel}
-                title={chipHint}
-                align="right"
-              />
-            </span>
-          ) : (
-            momentum && (
+          {momentum && (
+            <span
+              title={chipHint}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
+              style={{
+                color: chipTone,
+                background: `color-mix(in oklab, ${chipTone} 13%, transparent)`,
+                border: `1px solid color-mix(in oklab, ${chipTone} 32%, transparent)`,
+              }}
+            >
               <span
-                title={momentum.hint}
-                className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
-                style={{
-                  color: momentum.hue,
-                  background: `color-mix(in oklab, ${momentum.hue} 13%, transparent)`,
-                  border: `1px solid color-mix(in oklab, ${momentum.hue} 32%, transparent)`,
-                }}
-              >
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ background: momentum.hue }}
-                  aria-hidden
-                />
-                {momentum.label}
-              </span>
-            )
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: chipTone }}
+                aria-hidden
+              />
+              {chipLabel}
+            </span>
           )}
         </div>
 

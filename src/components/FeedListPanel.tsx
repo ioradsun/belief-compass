@@ -26,6 +26,7 @@
  */
 import { useEffect, useRef } from "react";
 import { composeDiscoveryRow } from "@/domain/market-discovery";
+import { FEED_MODES, type FeedMode } from "@/domain/feed/mode";
 import type { MarketRow } from "@/components/MarketCard";
 
 const num = (v: unknown): number => {
@@ -74,6 +75,9 @@ export function FeedListPanel({
   arrivalCount,
   onSelect,
   onCommitArrivals,
+  mode,
+  modes,
+  onMode,
 }: {
   /** The visible running order, already sequenced by the server. */
   entries: FeedListEntry[];
@@ -84,6 +88,15 @@ export function FeedListPanel({
   arrivalCount: number;
   onSelect: (id: number) => void;
   onCommitArrivals: () => void;
+  /** The active perspective. */
+  mode: FeedMode;
+  /**
+   * The perspectives this viewer's network can seat — decided server-side by
+   * the evidence gate. One entry means no choice worth offering, and the strip
+   * does not render at all.
+   */
+  modes: FeedMode[];
+  onMode: (m: FeedMode) => void;
 }) {
   const listRef = useRef<HTMLOListElement | null>(null);
   const rowRefs = useRef(new Map<number, HTMLLIElement>());
@@ -98,6 +111,35 @@ export function FeedListPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* The perspective sits with the list it reorders. Rendered ONLY when the
+          viewer's network can seat more than one: a picker whose other options
+          would open onto "nothing here" teaches the reader that the
+          relationship model is decoration. */}
+      {modes.length > 1 && (
+        <div
+          className="mb-3 flex rounded-[10px] p-0.5"
+          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          role="tablist"
+          aria-label="Feed perspective"
+        >
+          {modes.map((m) => (
+            <button
+              key={m}
+              role="tab"
+              type="button"
+              aria-selected={mode === m}
+              onClick={() => onMode(m)}
+              title={FEED_MODES[m].question}
+              className={`flex-1 rounded-[8px] px-2 py-1 text-[12px] font-medium whitespace-nowrap transition-colors ${
+                mode === m ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
+              }`}
+            >
+              {FEED_MODES[m].label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="mb-3 flex items-baseline gap-2">
         <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-secondary)]">
           Up next
@@ -128,7 +170,14 @@ export function FeedListPanel({
 
       {entries.length === 0 ? (
         <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
-          The running order appears here once the feed loads.
+          {/* An empty Tribe or Rivals list is a TRUE answer — nobody you know
+              has taken a side in anything on the board — and saying so beats a
+              loading message that will never resolve. */}
+          {mode === "tribe"
+            ? "Nobody in your Tribe has taken a side in these markets yet."
+            : mode === "rivals"
+              ? "None of your Rivals have taken a side in these markets yet."
+              : "The running order appears here once the feed loads."}
         </p>
       ) : (
         <ol ref={listRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto">

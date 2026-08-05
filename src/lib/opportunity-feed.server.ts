@@ -16,6 +16,13 @@ import {
   type SequenceCandidate,
 } from "@/domain/feed/sequence";
 import { SEQUENCE } from "@/domain/feed/config";
+import {
+  orderForMode,
+  toFeedMode,
+  availableModes,
+  type FeedMode,
+  type ModeCandidate,
+} from "@/domain/feed/mode";
 import { shouldInsertSuggestion } from "@/domain/market-suggestion";
 import { listFeed, type VolumeWindow } from "@/lib/markets.functions";
 import {
@@ -39,8 +46,12 @@ export interface OpportunityFeedInput extends FeedSessionState {
   /** Signed wallet session — required before any personal idea is offered. */
   sessionToken?: string | null;
   window?: VolumeWindow;
-  /** Opportunity classification filter chosen by the viewer, or "all". */
-  lens?: string;
+  /**
+   * Which social perspective the viewer chose — "for_you" | "tribe" | "rivals".
+   * Replaces the old opportunity `lens`: unrecognised values (including saved
+   * `?lens=hot` links) fall back to For You rather than emptying the feed.
+   */
+  mode?: string;
   limit?: number;
 }
 
@@ -50,6 +61,12 @@ const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
+/** Epoch-ms → hours ago, or null when we were never told. */
+const hoursSince = (v: unknown, now: number): number | null => {
+  const t = Number(v);
+  return Number.isFinite(t) && t > 0 ? Math.max(0, (now - t) / 3_600_000) : null;
+};
+
 const numOrNull = (v: unknown): number | null => {
   if (v == null) return null;
   const n = Number(v);
@@ -173,6 +190,14 @@ export interface OpportunityFeedResult {
   historyFrom: string | null;
   tribe: FeedRowPayload | null;
   opp: FeedRowPayload | null;
+  /** The perspective this result was built for. */
+  mode: FeedMode;
+  /**
+   * The perspectives this viewer's network can actually seat. Always contains
+   * "for_you"; Tribe and Rivals appear only once the evidence exists to fill
+   * them, so the picker never offers a tab that would read "nothing here".
+   */
+  modes: FeedMode[];
   engineVersion: number;
   /** Why each dropped market was dropped — feed diagnostics, never rendered. */
   excluded: { onchainId: number; reason: string | null }[];
@@ -186,10 +211,9 @@ export async function buildOpportunityFeed(
   const wallet = input.wallet?.toLowerCase() ?? null;
   const now = Date.now();
 
+  const mode = toFeedMode(input.mode);
   const feed = await listFeed({ data: { window: win, ...(wallet ? { wallet } : {}) } });
-  const all = (feed.data ?? []) as unknown as Row[];
-  const lens = input.lens && input.lens !== "all" ? input.lens : null;
-  const rows = lens ? all.filter((r) => r["opportunity_type"] === lens) : all;
+  const rows = (feed.data ?? []) as unknown as Row[];
   const ids = rows.map((r) => Number(r.onchain_id));
 
   const [signals, analyses, ideaResult] = await Promise.all([
@@ -254,8 +278,37 @@ export async function buildOpportunityFeed(
     };
   });
 
+  // What each market looks like to a MODE. Kept parallel rather than folded
+  // into SequenceCandidate: sequencing is about rhythm and diversity and has no
+  // business knowing which social perspective produced its input.
+  const modeOf = new Map<number, ModeCandidate>();
+  for (const r of rows) {
+    const id = Number(r.onchain_id);
+    modeOf.set(id, {
+      onchainId: id,
+      score: candidates.find((c) => c.onchainId === id)?.scored.score ?? 0,
+      tribeCount: num(r["tribe_count"]),
+      oppCount: num(r["opp_count"]),
+      tribeOverlap: num(r["tribe_overlap"]),
+      oppOverlap: num(r["opp_overlap"]),
+      recencyHours: hoursSince(r["network_last_at"], now),
+    });
+  }
+
+  /**
+   * The mode re-orders and, for Tribe and Rivals, FILTERS — before sequencing,
+   * so the rhythm and diversity rules still apply to whatever survives. For You
+   * hands the list through untouched: it is a blend, not a perspective on a
+   * subset, and re-sorting it would undo the ranking that produced it.
+   */
+  const candidateById = new Map(candidates.map((c) => [c.onchainId, c]));
+  const ordered = orderForMode(
+    mode,
+    candidates.flatMap((c) => modeOf.get(c.onchainId) ?? []),
+  ).flatMap((m) => candidateById.get(m.onchainId) ?? []);
+
   const { items, engineVersion, excluded } = sequenceFeed({
-    candidates,
+    candidates: ordered,
     idea: ideaResult.idea,
     ...(input.limit ? { limit: input.limit } : { limit: SEQUENCE.DEFAULT_LIMIT }),
   });
@@ -277,6 +330,11 @@ export async function buildOpportunityFeed(
     historyFrom: feed.historyFrom ?? null,
     tribe: (feed.tribe as FeedRowPayload | null) ?? null,
     opp: (feed.opp as FeedRowPayload | null) ?? null,
+    mode,
+    // A viewer whose network shrank below the gate keeps whatever they chose
+    // for THIS response — the result says what it is, and the picker decides
+    // separately what to offer next.
+    modes: (feed as { modes?: FeedMode[] }).modes ?? ["for_you"],
     engineVersion,
     excluded,
     error: feed.error ?? null,

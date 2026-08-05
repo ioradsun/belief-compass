@@ -16,6 +16,7 @@ import { readSessionToken } from "@/lib/wallet-session";
 
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { FeedListPanel, type FeedListEntry } from "@/components/FeedListPanel";
+import type { FeedMode } from "@/domain/feed/mode";
 import {
   emptyQueue,
   receiveOrder,
@@ -62,39 +63,6 @@ const DnaOverview = lazyRetry(() =>
 const ConvictionDashboard = lazyRetry(() =>
   import("@/components/ConvictionDashboard").then((m) => ({ default: m.ConvictionDashboard })),
 );
-// Phase 5: the SERVER owns opportunity classification + score. The client only
-// filters by the canonical type and reads the precomputed order — no scoreFeed().
-type OppFilter = "all" | "hot" | "early" | "hidden" | "contested" | "conviction" | "new";
-const OPP_FILTERS: { key: OppFilter; emoji: string; label: string; question: string }[] = [
-  {
-    key: "all",
-    emoji: "✨",
-    label: "All",
-    question: "What's objectively worth attention right now?",
-  },
-  { key: "hot", emoji: "🔥", label: "Hot", question: "What is accelerating right now?" },
-  { key: "early", emoji: "🌱", label: "Early", question: "What's growing while still small?" },
-  {
-    key: "hidden",
-    emoji: "💎",
-    label: "Hidden",
-    question: "What's active beyond its visible size?",
-  },
-  {
-    key: "contested",
-    emoji: "⚖️",
-    label: "Contested",
-    question: "Where are both sides still active?",
-  },
-  {
-    key: "conviction",
-    emoji: "🧠",
-    label: "Conviction",
-    question: "Who has held through real challenge?",
-  },
-  { key: "new", emoji: "🆕", label: "New", question: "What is genuinely recent?" },
-];
-
 const CreateMarket = lazyRetry(() =>
   import("@/components/CreateMarket").then((m) => ({ default: m.CreateMarket })),
 );
@@ -134,17 +102,22 @@ const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
 
 // ONE authoritative feed call. The server sequences markets and market ideas
 // into a single ordered list; the client renders that order and never
-// re-scores, re-sorts or re-filters it. The lens is a server-side filter too.
-const feedQO = (wallet: string | undefined, window: VolumeWindow = "24h", lens = "all") =>
+// re-scores, re-sorts or re-filters it. The MODE is a server concept too — it
+// changes the ranking and, for Tribe/Rivals, what is admitted at all.
+const feedQO = (
+  wallet: string | undefined,
+  window: VolumeWindow = "24h",
+  mode: FeedMode = "for_you",
+) =>
   queryOptions({
-    queryKey: ["opp-feed", wallet ?? null, window, lens],
+    queryKey: ["opp-feed", wallet ?? null, window, mode],
     queryFn: async () => {
       const request = getOpportunityFeed({
         data: {
           wallet: wallet ?? null,
           sessionToken: wallet ? readSessionToken(wallet) : null,
           window,
-          lens,
+          mode,
           ...feedSession(),
         },
       });
@@ -159,7 +132,7 @@ const feedQO = (wallet: string | undefined, window: VolumeWindow = "24h", lens =
           ),
         ]);
       } catch {
-        return await getOpportunityFeed({ data: { window, lens } });
+        return await getOpportunityFeed({ data: { window, mode } });
       }
     },
     // The realtime coordinator (startRealtime) now moves each card's canonical
@@ -533,18 +506,19 @@ function Feed() {
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // The active lens is a SERVER filter on the one global classification: it is
-  // sent with the feed request, so the server still owns the whole sequence.
-  const [lens, setLens] = useState<OppFilter>("all");
+  // The active perspective. A SERVER concept, sent with the request, so the
+  // server still owns the whole sequence — the client never re-sorts a feed.
+  const [mode, setMode] = useState<FeedMode>("for_you");
 
   // The SSR loader prefetched the anonymous 24h feed; adopt it as initialData so
   // the very first render (server AND client) paints the real deck with no
   // round-trip. Only the anon 24h "all" query matches what the loader fetched —
-  // a wallet, window or lens falls through to a normal client fetch.
+  // a wallet, window or mode falls through to a normal client fetch.
   const loaderData = Route.useLoaderData();
-  const initialFeed = win === "24h" && lens === "all" ? (loaderData?.feed ?? undefined) : undefined;
+  const initialFeed =
+    win === "24h" && mode === "for_you" ? (loaderData?.feed ?? undefined) : undefined;
   const { data } = useQuery({
-    ...feedQO(wallet, win, lens),
+    ...feedQO(wallet, win, mode),
     // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
     // React Query ages it against staleTime instead of refetching on hydration.
     ...(initialFeed
@@ -667,6 +641,24 @@ function Feed() {
 
   /** The reader accepted the markets that arrived while they were reading. */
   const commitArrivals = () => setQueue((q) => commit(q));
+
+  /**
+   * Switching perspective is a new running order, not a re-sort of this one, so
+   * the queue starts clean rather than carrying the old mode's markets forward
+   * behind an arrivals notice that would claim they are "new".
+   */
+  const selectMode = (m: FeedMode) => {
+    if (m === mode) return;
+    setMode(m);
+    setQueue(emptyQueue);
+    setCaughtUp(false);
+  };
+  /**
+   * Which perspectives to offer. The server decides — it is the only place that
+   * has read the viewer's DNA — and the answer is remembered across the poll
+   * that lands while a request is in flight, so the strip cannot flicker.
+   */
+  const availableModes = stableFeed?.modes ?? ["for_you"];
 
   // Refresh the discovery feed: re-fetch (newly created markets may appear) and
   // leave the caught-up state. The held order is adopted here too — asking for a
@@ -914,6 +906,9 @@ function Feed() {
                     arrivalCount={waiting}
                     onSelect={selectMarket}
                     onCommitArrivals={commitArrivals}
+                    mode={mode}
+                    modes={availableModes}
+                    onMode={selectMode}
                   />
                 }
                 connectPrompt={
@@ -1047,9 +1042,6 @@ function Feed() {
                     ethUsd={stableFeed?.ethUsd ?? 0}
                     onSkip={nextMarket}
                     viewerWallet={wallet}
-                    lens={lens}
-                    lenses={OPP_FILTERS}
-                    onLens={setLens}
                     caseOpen={caseActive}
                     mobileCaseOpen={mobileCaseActive}
                     onToggleCase={toggleCase}
