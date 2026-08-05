@@ -246,7 +246,44 @@ export function CaseColumn({
   const capChange =
     authCapitalUsd != null && capBase != null ? windowChange(authCapitalUsd, capBase) : null;
 
-  const metricRows: { metric: LensMetric; label: string; value: string; pct: number | null }[] = [
+  // The exact move, in the metric's own unit — never a percentage alone. This
+  // mirrors the Total Market instrument: the total leads, the % is the big
+  // right-hand figure, and the absolute change states what actually happened.
+  const phrase = FLOW_WINDOW_PHRASE[win];
+  const belDelta = belChange?.delta ?? believerMetric?.delta ?? null;
+  const capDelta =
+    capChange?.delta ?? (capitalMetric != null ? capitalMetric.delta * (ethUsd || 0) : null);
+  const priceDelta =
+    priceUsd != null && summary?.pricePct != null && Number.isFinite(priceUsd)
+      ? priceUsd - priceUsd / (1 + summary.pricePct / 100)
+      : null;
+
+  const believerAbs =
+    belDelta == null
+      ? null
+      : belDelta === 0
+        ? `No change ${phrase}`
+        : `${belDelta > 0 ? "+" : "−"}${Math.abs(belDelta)} believer${Math.abs(belDelta) === 1 ? "" : "s"} ${phrase}`;
+  const capitalAbs =
+    capDelta == null
+      ? null
+      : Math.abs(capDelta) < 0.005
+        ? `No change ${phrase}`
+        : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "withdrawn"} ${phrase}`;
+  const priceAbs =
+    priceDelta == null
+      ? null
+      : Math.abs(priceDelta) < 0.005
+        ? `Flat ${phrase}`
+        : `${format(priceDelta, "USD", { signed: true })} per share ${phrase}`;
+
+  const metricRows: {
+    metric: LensMetric;
+    label: string;
+    value: string;
+    pct: number | null;
+    absolute: string | null;
+  }[] = [
     {
       metric: "believers",
       label: `${side} Believers`,
@@ -260,6 +297,7 @@ export function CaseColumn({
           : believerMetric
             ? metricPct(believerMetric)
             : (summary?.believersPct ?? null),
+      absolute: believerAbs,
     },
     {
       metric: "capital",
@@ -276,14 +314,17 @@ export function CaseColumn({
           : capitalMetric
             ? metricPct(capitalMetric)
             : (summary?.capitalPct ?? null),
+      absolute: capitalAbs,
     },
     {
       metric: "price",
       label: "Price",
       value: priceUsd != null ? format(priceUsd, "USD") : "—",
       pct: summary?.pricePct ?? null,
+      absolute: priceAbs,
     },
   ];
+
 
   return (
     <div className="flex h-full min-h-0 flex-col">
