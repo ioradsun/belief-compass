@@ -697,12 +697,12 @@ function SideMetric({
         background: `color-mix(in oklab, ${color} 7%, transparent)`,
       }}
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="num min-w-0 truncate text-[20px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="num min-w-0 truncate text-[18px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
           {value}
         </span>
         <span
-          className="num shrink-0 text-[18px] font-semibold leading-none tabular-nums"
+          className="num shrink-0 text-[14px] font-semibold leading-none tabular-nums"
           style={{ color: tone }}
         >
           {pctText}
