@@ -145,7 +145,8 @@ export function CurrentMarketActivity({
               />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>
