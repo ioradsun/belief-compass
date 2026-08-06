@@ -1231,28 +1231,33 @@ export const getWallet = createServerFn({ method: "GET" })
         });
     }
 
-    // Window-scoped price moves, from the SAME precomputed table the market
-    // cards read, so the panel and the cards always agree on the percentage.
+    // Window-scoped price moves, from the SAME single producer the market cards
+    // and the market panels use (src/lib/window-change.server), so no two
+    // surfaces can quote a different percentage for one market and window.
     const win: VolumeWindow = data.window ?? "24h";
     const chgYes = new Map<number, number>();
     const chgNo = new Map<number, number>();
     if (ids.length) {
-      const { data: chg } = await sb
-        .from("market_window_change")
-        .select("onchain_id, chg_yes, chg_no")
-        .eq("window_key", win)
-        .in("onchain_id", ids);
-      for (const c of (chg ?? []) as {
-        onchain_id: number;
-        chg_yes: number | null;
-        chg_no: number | null;
-      }[]) {
-        const id = Number(c.onchain_id);
-        if (c.chg_yes != null && Number.isFinite(Number(c.chg_yes)))
-          chgYes.set(id, Number(c.chg_yes));
-        if (c.chg_no != null && Number.isFinite(Number(c.chg_no))) chgNo.set(id, Number(c.chg_no));
+      const stateRows = ids.map((id) => {
+        const s = stateById.get(id);
+        return {
+          onchain_id: id,
+          believers_yes: s?.believers_yes ?? null,
+          believers_no: s?.believers_no ?? null,
+          yes_price_usd: s?.yes_price_usd ?? null,
+          no_price_usd: s?.no_price_usd ?? null,
+        };
+      });
+      const chg = await loadWindowChanges(sb, stateRows, win);
+      for (const id of ids) {
+        const c = chg.byId.get(id);
+        const y = pricePct(c, "YES");
+        const n = pricePct(c, "NO");
+        if (y != null) chgYes.set(id, y);
+        if (n != null) chgNo.set(id, n);
       }
     }
+
 
     // Window-scoped BELIEVER intake per held side. The read model only stores a
     // fixed 24h intake, so the selected timeframe is replayed off the canonical
