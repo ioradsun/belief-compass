@@ -14,7 +14,7 @@ import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { FeedListPanel, type FeedListEntry } from "@/components/FeedListPanel";
 import { toLens, type Lens } from "@/domain/feed/lens";
 import { DEFAULT_SENSITIVITY, type Sensitivity } from "@/domain/market-change";
-import { useFeedSensitivity, setFeedSensitivity } from "@/lib/feed-sensitivity";
+import { useFeedSensitivity } from "@/lib/feed-sensitivity";
 import {
   ALL as ALL_FILTERS,
   filterKey,
@@ -1117,8 +1117,6 @@ function Feed() {
                       lens={lens}
                       onLens={selectLens}
                       lensExhausted={lensExhausted}
-                      sensitivity={sensitivity}
-                      onSensitivity={setFeedSensitivity}
                       entries={feedEntries}
                       rows={knownRowsRef.current}
                       activeId={activeMarket}
