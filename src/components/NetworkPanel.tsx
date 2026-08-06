@@ -166,10 +166,10 @@ export function NetworkPanel({
     <div className="flex min-h-0 flex-1 flex-col">
       {mapped > 0 && (
         <p className="mb-3 text-[11px] leading-snug text-[var(--text-muted)]">
-          <span className="num">{mapped}</span> convictions mapped — every side you take sharpens
-          this.
+          Every conviction helps find your people.
         </p>
       )}
+
 
       {showSearch && (
         <div className="mb-2.5 flex items-center gap-1.5">
