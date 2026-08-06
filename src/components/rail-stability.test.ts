@@ -170,8 +170,10 @@ describe("market titles", () => {
   it("never stores an empty string as a title", () => {
     // `set(id, title ?? "")` made the map return a present-but-empty string,
     // which survives BOTH `?? null` here and `?? \`Market #\`` downstream — so
-    // the row rendered blank instead of either the title or the fallback.
-    expect(c).toMatch(/if \(title\) titleById\.set/);
+    // the row rendered blank instead of either the title or the fallback. The
+    // blank-check now lives in the shared lookup, which nulls empty titles.
+    expect(c).toMatch(/if \(m\.title\) titleById\.set/);
+    expect(c).toMatch(/fetchMarketNames\(sb, marketIds\)/);
   });
 
   it("says so when a title does not resolve, instead of shipping the id", () => {
