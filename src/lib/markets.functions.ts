@@ -1313,6 +1313,7 @@ export const getMarketOg = createServerFn({ method: "GET" })
  * Value the ETH cost basis at the current rate, matching how the rest of the app
  * prices ETH quantities. Null when the cost is unknown or we have no rate, so the
  * caller honestly shows "worth only" instead of an inflated gain.
+ */
 
 /**
  * The canonical live-line payload, narrowed to the fields any surface reads.
