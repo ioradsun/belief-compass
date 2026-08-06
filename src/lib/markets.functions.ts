@@ -840,7 +840,7 @@ export interface MarketChange {
 /**
  * One market's current per-share prices + its % price change over EVERY window
  * (1h / 24h / 7d / 30d / all), so the deck can offer an instant window selector
- * without refetching. The change is precomputed by cron in market_window_change
+ * without refetching. The change is derived by the one producer (window-change.server)
  * as the first snapshot inside the window vs the latest — the honest definition
  * traders expect.
  */

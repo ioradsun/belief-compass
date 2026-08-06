@@ -176,8 +176,8 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
 
           // ── MAINTENANCE TAIL ──────────────────────────────────────────────
           // Four independent steps. They used to run as a chain: the first one
-          // threw on failure, so a bad `recompute_price_changes` silently
-          // cancelled the three steps after it, and `snapshot_market_state` only
+          // threw on failure, so one bad step silently
+          // cancelled the ones after it, and `snapshot_market_state` only
           // console.error'd — invisible from outside the worker.
           //
           // That is how `market_state_snapshots` stayed at ZERO rows while this
@@ -193,25 +193,15 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
           const cutoff30d = new Date(Date.now() - 30 * 86_400_000).toISOString();
           const maintenance: Record<string, unknown> = {};
 
-          const chg = await sb.rpc("recompute_price_changes");
-          maintenance.price_changes_error = chg.error?.message ?? null;
-
-          // `market_window_change` was stale for eight days because NOTHING
-          // called refresh_market_window_change — it existed and was never
-          // invoked. It is wired in here, but one window at a time: all five
-          // windows in a single call take ~30s and PostgREST cuts the session
-          // off at the 8s statement_timeout inherited from `authenticator`.
-          // Rotating by wall clock refreshes every window within ~10 minutes
-          // at the poller's two-minute cadence.
-          const WINDOW_KEYS = ["1h", "24h", "7d", "30d", "all"] as const;
-          const windowKey =
-            WINDOW_KEYS[Math.floor(Date.now() / 120_000) % WINDOW_KEYS.length]!;
-          const win = await sb.rpc("refresh_market_window_change", { p_window: windowKey });
-          maintenance.window_change_key = windowKey;
-          maintenance.window_change_error = win.error?.message ?? null;
-          maintenance.window_change_rows = win.error ? null : Number(win.data ?? 0);
-
-
+          // The two SQL price-change jobs that used to run here
+          // (`recompute_price_changes` → market_state.chg_24h_*, and
+          // `refresh_market_window_change` → market_window_change) are RETIRED.
+          // They were a second and third answer to "what moved over this
+          // window", each on its own baseline, and the app now derives every
+          // window change in one place from `market_state_snapshots`
+          // (src/domain/market-change via src/lib/window-change.server). Two
+          // producers of one number is how the feed card and the position card
+          // came to disagree about the same market.
           const prunePrices = await sb
             .from("price_snapshots")
             .delete()

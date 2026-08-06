@@ -4,8 +4,8 @@
  * THE PROBLEM THIS EXISTS TO END. "How much did this market change over the
  * window?" had four independent answers, on three different tiers:
  *
- *   1. SQL          `recompute_price_changes` → market_state.chg_24h_yes/no, and
- *                   `market_change_window` → market_window_change.chg_yes/no.
+ *   1. RETIRED: the SQL jobs `recompute_price_changes` and
+ *      `refresh_market_window_change`, which each stored their own percentage.
  *                   Price only, price over price.
  *   2. Server TS    refresh-market.server subtracts a ~24h snapshot to store
  *                   yes_capital_delta_24h / no_capital_delta_24h.
