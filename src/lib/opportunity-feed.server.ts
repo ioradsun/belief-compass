@@ -371,6 +371,7 @@ export async function buildOpportunityFeed(
       eligibility,
       reason: reasonFor(s, scored, { category: s.category ?? ai?.category ?? null }),
       reentry,
+      poolSlices: Array.isArray(r["pool_slices"]) ? (r["pool_slices"] as string[]) : [],
     };
   });
 

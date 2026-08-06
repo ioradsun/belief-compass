@@ -27,6 +27,8 @@ export interface SequenceCandidate {
   reason: FeedReason | null;
   /** Set only when this is an already-acted market with a material update. */
   reentry: Reentry | null;
+  /** Candidate-pool provenance, for diagnostics. Empty when unknown. */
+  poolSlices?: string[];
 }
 
 export interface FeedIdeaCandidate {
@@ -50,6 +52,14 @@ export interface FeedDiagnostics {
   diversityAdjustments: string[];
   slotIntent: ScoreComponent | "reentry" | "fill";
   reasonCode: string | null;
+  /**
+   * Which candidate-pool slice(s) admitted this market — see @/domain/feed/pool.
+   *
+   * "Why is this ranked here" and "why is this in the feed at all" are different
+   * questions, and for most of this feed's life only the first was answerable.
+   * The pool was one ordering, so the second had one answer for every market.
+   */
+  poolSlices: string[];
 }
 
 export interface FeedMarketItem {
@@ -214,6 +224,7 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
       diversityAdjustments: p.adjustments,
       slotIntent: p.intent,
       reasonCode: p.c.reentry ? "reentry" : (p.c.reason?.code ?? null),
+      poolSlices: p.c.poolSlices ?? [],
     },
   }));
 
