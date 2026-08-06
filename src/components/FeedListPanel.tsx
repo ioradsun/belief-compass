@@ -80,6 +80,7 @@ export function FeedListPanel({
   entries,
   rows,
   activeId,
+  activeTitle,
   onSelect,
   filters,
   onFilters,
@@ -92,6 +93,14 @@ export function FeedListPanel({
   /** Read-model rows keyed by onchain id — the same map the centre panel uses. */
   rows: Record<number, MarketRow>;
   activeId: number | null;
+  /**
+   * The title of the market the centre panel is CURRENTLY showing — the same
+   * string that panel renders. The playlist only knows the markets in its own
+   * slice, so a market opened from a link or search has no row here; without
+   * this the pinned "Now reading" card printed the id while the reader was
+   * looking at the question two columns over.
+   */
+  activeTitle?: string | null;
   onSelect: (id: number) => void;
   filters: FeedFilters;
   onFilters: (f: FeedFilters) => void;
@@ -140,7 +149,7 @@ export function FeedListPanel({
             Now reading
           </p>
           <p className="text-[13px] font-semibold leading-snug text-[var(--text)]">
-            {activeFacts?.question ?? marketTitleFallback(activeId)}
+            {activeFacts?.question ?? activeTitle ?? marketTitleFallback(activeId)}
           </p>
           {(active?.reason ?? activeFacts?.discovery.story) && (
             <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
