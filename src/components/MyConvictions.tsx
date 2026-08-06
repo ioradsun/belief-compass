@@ -44,6 +44,7 @@ type Position = {
     live_line?: string | null;
     live_line_kind?: string | null;
     live_line_window?: string | null;
+    live_line_occurred_at?: string | null;
     live_line_payload?: {
       side?: string | null;
       wallets?: number | null;
@@ -316,6 +317,7 @@ export function MyConvictions({
             line: st.live_line ?? null,
             kind: st.live_line_kind ?? null,
             window: st.live_line_window ?? null,
+            occurredAt: st.live_line_occurred_at ?? null,
             payload: st.live_line_payload ?? null,
           }
         : null;

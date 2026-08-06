@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  isLineFresh,
   positionStory,
   positionSignal,
   STORY_RANK,
@@ -163,5 +164,40 @@ describe("copy discipline", () => {
       const s = positionStory(i);
       expect(`${s.headline} ${s.body ?? ""}`).not.toMatch(banned);
     }
+  });
+});
+
+describe("staleness — a line is only told while it is still true", () => {
+  const NOW = Date.parse("2026-08-06T12:00:00Z");
+  const at = (hoursAgo: number) => new Date(NOW - hoursAgo * 3_600_000).toISOString();
+
+  it("tells a fresh 24h line", () => {
+    const s = positionStory({
+      ...base(),
+      nowMs: NOW,
+      live: { ...live("new_believers", { wallets: 6, side: "YES" }), occurredAt: at(5) },
+    });
+    expect(s.kind).toBe("believers_your_side");
+  });
+
+  /** "6 people joined YES today" stops being true once today has passed. */
+  it("falls back to the standing state when the line has aged out", () => {
+    const s = positionStory({
+      ...base({ believers: 200 }),
+      nowMs: NOW,
+      live: { ...live("new_believers", { wallets: 6, side: "YES" }), occurredAt: at(72) },
+    });
+    expect(s.kind).toBe("quiet");
+  });
+
+  it("holds a 1h line to a much tighter clock than a 7d line", () => {
+    const oneHour = { ...live("capital_flow", {}, "1h"), occurredAt: at(12) };
+    const sevenDay = { ...live("capital_flow", {}, "7d"), occurredAt: at(12) };
+    expect(isLineFresh(oneHour, NOW)).toBe(false);
+    expect(isLineFresh(sevenDay, NOW)).toBe(true);
+  });
+
+  it("keeps telling a line whose timestamp is unknown", () => {
+    expect(isLineFresh(live("new_believers", { wallets: 2, side: "YES" }), NOW)).toBe(true);
   });
 });

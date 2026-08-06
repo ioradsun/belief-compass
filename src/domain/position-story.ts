@@ -78,6 +78,8 @@ export interface CanonicalLine {
   kind: string | null;
   window?: string | null;
   payload?: Record<string, unknown> | null;
+  /** When the read model observed it. Used only to refuse a stale line. */
+  occurredAt?: string | null;
 }
 
 export interface PositionStoryInput {
@@ -93,10 +95,42 @@ export interface PositionStoryInput {
   net?: { twin?: Side | true; tribe?: Side | true; opp?: Side | true };
   /** A believer milestone this market just crossed, from the tape (or null). */
   milestone?: number | null;
+  /** Now, for the staleness check. Defaults to the caller's clock. */
+  nowMs?: number;
 }
 
 /** Below this many believers a side is still forming — "still early". */
 export const EARLY_BELIEVERS = 10;
+
+const HOUR = 3_600_000;
+
+/**
+ * How long a canonical line may still be told on a position card, per the window
+ * it was measured over. The read model keeps the last line on the row until a new
+ * one wins, so a dormant market can carry a line for days — and "6 people joined
+ * YES today" is a lie the moment "today" has passed. Each window gets roughly
+ * twice its own span before the card falls back to the standing state.
+ */
+export const LINE_MAX_AGE_MS: Record<string, number> = {
+  "1h": 6 * HOUR,
+  "24h": 48 * HOUR,
+  "7d": 10 * 24 * HOUR,
+  all: 14 * 24 * HOUR,
+};
+const LINE_MAX_AGE_DEFAULT_MS = 48 * HOUR;
+
+/**
+ * Is the canonical line still true enough to tell? Unknown timestamps pass — the
+ * read model always writes one, so a missing value means an older row, not a
+ * stale story, and silencing every such card would be the worse failure.
+ */
+export function isLineFresh(live: CanonicalLine, nowMs: number = Date.now()): boolean {
+  if (!live.occurredAt) return true;
+  const t = new Date(live.occurredAt).getTime();
+  if (!Number.isFinite(t)) return true;
+  const max = LINE_MAX_AGE_MS[String(live.window ?? "")] ?? LINE_MAX_AGE_DEFAULT_MS;
+  return nowMs - t <= max;
+}
 
 const WINDOW_PHRASE: Record<string, string> = {
   "1h": "in the last hour",
@@ -271,8 +305,9 @@ export function positionStory(input: PositionStoryInput): PositionStory {
       tone: "up",
     };
 
-  // 5 — THE CANONICAL MARKET STORY, told from the owner's seat.
-  if (input.live) {
+  // 5 — THE CANONICAL MARKET STORY, told from the owner's seat — but only while
+  // it is still true. A stale line is worse than no line: it invents news.
+  if (input.live && isLineFresh(input.live, input.nowMs ?? Date.now())) {
     const s = ownerViewOfCanonical(side, input.live, believers);
     if (s) return s;
   }
