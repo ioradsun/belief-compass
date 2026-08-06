@@ -16,7 +16,6 @@ import { readSessionToken } from "@/lib/wallet-session";
 
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { FeedListPanel, type FeedListEntry } from "@/components/FeedListPanel";
-import type { FeedMode } from "@/domain/feed/mode";
 import {
   ALL as ALL_FILTERS,
   filterKey,
