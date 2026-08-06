@@ -37,7 +37,8 @@
  *    about. It now grows downward from where it sits, bounded and internally
  *    scrolled, and the tape below keeps whatever height is left.
  */
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { LiveTape } from "@/components/LiveTape";
