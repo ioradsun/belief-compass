@@ -119,7 +119,7 @@ export function LandingPanel({
                 }}
                 className="ml-auto hidden shrink-0 items-center gap-1 rounded-full bg-[var(--text)] px-3 py-1.5 text-[12px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] motion-reduce:transition-none lg:inline-flex"
               >
-                <span aria-hidden="true">+</span> Conviction Market
+                {showCreatePlus && <span aria-hidden="true">+</span>} {createLabel}
               </button>
             )}
 
