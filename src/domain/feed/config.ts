@@ -53,6 +53,29 @@ export const SEQUENCE = {
   MAX_SAME_CATEGORY_RUN: 2,
   /** No more than this many consecutive cards from one creator. */
   MAX_SAME_CREATOR_RUN: 1,
+  /**
+   * No more than this many consecutive cards explained by the same FAMILY.
+   *
+   * ADDED BECAUSE THE HARNESS MEASURED IT, not because it seemed prudent. Across
+   * nine archetypes the reason family was 70–90% MOMENTUM, and a brand-new
+   * viewer got a run of NINE consecutive momentum cards — a feed that says the
+   * same KIND of thing nine times running reads as one long sentence, whatever
+   * the individual facts are. Category and creator runs were already capped and
+   * measured at 2 and 1; family was uncapped and ran to 9.
+   *
+   * Three, not two: on a platform this quiet a viewer with no network HAS no
+   * people facts, so a tighter cap would either starve the queue or force a
+   * worse card into a slot to satisfy a rule about variety.
+   */
+  MAX_SAME_FAMILY_RUN: 3,
+  /**
+   * No more than this many consecutive cards moving the same WAY.
+   *
+   * Also measured: "down" was 50–70% of the feed in six of nine archetypes,
+   * running to four in a row. A column of falling markets is a mood, not a
+   * report, and it is the one clustering a reader would notice as bias.
+   */
+  MAX_SAME_DIRECTION_RUN: 2,
   /** Never place two markets from the same duplicate cluster this close. */
   MIN_CLUSTER_GAP: 5,
   /** Re-entry ("your position is moving") cards: at most 1 in this many. */

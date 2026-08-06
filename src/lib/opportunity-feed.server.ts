@@ -386,6 +386,10 @@ export async function buildOpportunityFeed(
       }),
       reentry,
       poolSlices: Array.isArray(r["pool_slices"]) ? (r["pool_slices"] as string[]) : [],
+      // Spacing input only — see SEQUENCE.MAX_SAME_DIRECTION_RUN.
+      moveDirection:
+        ((r["momentum"] ?? null) as { top?: { direction?: "up" | "down" } | null } | null)?.top
+          ?.direction ?? null,
     };
   });
 

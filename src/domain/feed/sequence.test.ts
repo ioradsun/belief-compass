@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { sequenceFeed, type SequenceCandidate } from "./sequence";
+import { sequenceFeed, MAX_DISPLACED, type SequenceCandidate } from "./sequence";
+import { familyOf, type ReasonCode } from "./reasons";
 import { SEQUENCE } from "./config";
 import type { ScoredMarket } from "./score";
 
@@ -146,5 +147,130 @@ describe("the House idea", () => {
   it("is absent when the feed is too short to earn one", () => {
     const { items } = sequenceFeed({ candidates: [cand(1)], idea });
     expect(items.some((i) => i.kind === "market_idea")).toBe(false);
+  });
+});
+
+/**
+ * Everything in this block was found by running `check:feed-archetypes` against
+ * the real pool and reading the output, not by reasoning about the rules.
+ */
+describe("diversity axes the archetype harness measured", () => {
+  const withReason = (
+    id: number,
+    code: ReasonCode,
+    o: Partial<SequenceCandidate> = {},
+  ): SequenceCandidate => ({
+    ...cand(id, { scored: scored(id, 100 - id) }),
+    reason: { code, text: `reason ${id}` },
+    ...o,
+  });
+
+  /**
+   * MEASURED: the reason family ran to NINE consecutive cards for a brand-new
+   * viewer while category was capped at 2 and creator at 1. A feed that says the
+   * same KIND of thing nine times reads as one long sentence.
+   */
+  it("caps a run of one reason family", () => {
+    const candidates = Array.from({ length: 12 }, (_, i) =>
+      withReason(i, i < 9 ? "momentum" : "tribe", { category: `c${i}`, creator: `w${i}` }),
+    );
+    const { items } = sequenceFeed({ candidates, limit: 10 });
+    const fams = items.flatMap((it) =>
+      it.kind === "market" ? [familyOf(it.reasonCode as ReasonCode)] : [],
+    );
+    let run = 1;
+    for (let i = 1; i < fams.length; i += 1) {
+      run = fams[i] === fams[i - 1] ? run + 1 : 1;
+      expect(run).toBeLessThanOrEqual(SEQUENCE.MAX_SAME_FAMILY_RUN);
+    }
+  });
+
+  /** MEASURED: "down" was 50–70% of the feed, running to four in a row. */
+  it("caps a run of one momentum direction", () => {
+    const candidates = Array.from({ length: 12 }, (_, i) =>
+      withReason(i, "momentum", {
+        category: `c${i}`,
+        creator: `w${i}`,
+        moveDirection: i < 8 ? "down" : "up",
+      }),
+    );
+    const { items } = sequenceFeed({ candidates, limit: 10 });
+    const dirs = items.flatMap((it) =>
+      it.kind === "market"
+        ? [candidates.find((c) => c.onchainId === it.onchainId)!.moveDirection]
+        : [],
+    );
+    let run = 1;
+    for (let i = 1; i < dirs.length; i += 1) {
+      run = dirs[i] === dirs[i - 1] ? run + 1 : 1;
+      expect(run).toBeLessThanOrEqual(SEQUENCE.MAX_SAME_DIRECTION_RUN);
+    }
+  });
+
+  /**
+   * THE REGRESSION THAT ADDING THEM CAUSED. With four competing rules and a thin
+   * pool, every remaining candidate can violate something — and the loop then
+   * placed whatever it was holding, which broke the CATEGORY cap that had been
+   * guaranteed and tested for far longer. Preferences yield; guarantees do not.
+   */
+  it("relaxes the new preferences before breaking the old guarantees", () => {
+    // The soft rules are UNSATISFIABLE — every candidate is the same family and
+    // the same direction — while the hard one is perfectly satisfiable, because
+    // the categories alternate. The hard cap must therefore still hold exactly.
+    const candidates = Array.from({ length: 10 }, (_, i) =>
+      withReason(i, "momentum", {
+        category: i % 2 === 0 ? "crypto" : "sports",
+        creator: `w${i}`,
+        moveDirection: "down",
+      }),
+    );
+    const { items } = sequenceFeed({ candidates, limit: 8 });
+    const placed = items.flatMap((it) =>
+      it.kind === "market" ? [candidates.find((c) => c.onchainId === it.onchainId)!] : [],
+    );
+    expect(placed.length).toBe(8);
+    let run = 1;
+    for (let i = 1; i < placed.length; i += 1) {
+      run = placed[i]!.category === placed[i - 1]!.category ? run + 1 : 1;
+      expect(run).toBeLessThanOrEqual(SEQUENCE.MAX_SAME_CATEGORY_RUN);
+    }
+    // …and the queue is still filled rather than truncated to satisfy a
+    // preference. A shorter feed is a worse outcome than a repetitive one.
+    const softBroken = items.some(
+      (it) => it.kind === "market" && it.diagnostics.diversityAdjustments.includes("soft_relaxed"),
+    );
+    expect(softBroken).toBe(true);
+  });
+});
+
+describe("why a card is in this slot and not a better-scoring one", () => {
+  it("names the candidates it displaced, and why", () => {
+    const candidates = [
+      { ...cand(1, { scored: scored(1, 90) }), category: "crypto", creator: "a" },
+      { ...cand(2, { scored: scored(2, 80) }), category: "crypto", creator: "a" },
+      { ...cand(3, { scored: scored(3, 70) }), category: "sports", creator: "b" },
+    ];
+    const { items } = sequenceFeed({ candidates, limit: 3 });
+    const all = items.flatMap((it) => (it.kind === "market" ? [it.diagnostics.displaced] : []));
+    // The first card displaces nothing; a later one must name what it passed.
+    expect(all[0]).toEqual([]);
+    expect(all.some((d) => d.length > 0)).toBe(true);
+    for (const d of all.flat()) {
+      expect(typeof d.onchainId).toBe("number");
+      expect(d.why.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("caps the list so diagnostics do not become the payload", () => {
+    const candidates = Array.from({ length: 30 }, (_, i) => ({
+      ...cand(i, { scored: scored(i, 100 - i) }),
+      category: "crypto",
+      creator: "a",
+    }));
+    const { items } = sequenceFeed({ candidates, limit: 10 });
+    for (const it of items) {
+      if (it.kind === "market")
+        expect(it.diagnostics.displaced.length).toBeLessThanOrEqual(MAX_DISPLACED);
+    }
   });
 });

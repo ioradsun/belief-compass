@@ -366,7 +366,70 @@ export const MATERIAL = {
    * "first capital" is a rounding artefact, not an event.
    */
   minOriginUsd: 1,
+  /**
+   * Where the DOLLAR half of significance saturates — beyond this, more money
+   * affected is not more news.
+   *
+   * Fifty, which is deliberately well above the typical market here (median
+   * total capital $0.96, p90 $5.38) and well below the largest ($14.7k). A cap
+   * at the median would flatten the term to 1.0 for anything ordinary and it
+   * would stop discriminating; a cap at the maximum would push every real
+   * market to nearly zero and reinstate the dollar-only ranking this exists to
+   * avoid. Fifty puts the platform's genuinely substantial books in the top
+   * half of the curve and leaves the dust at the bottom.
+   */
+  significantUsd: 50,
 } as const;
+
+/**
+ * Saturating 0..1 normaliser — diminishing returns, never dominated by one whale.
+ *
+ * Deliberately a local copy of the same shape as @/domain/feed/config#sat. This
+ * module is read by the market panels, which must not depend on the feed, and a
+ * three-line log curve is a smaller cost than that layering inversion.
+ */
+const saturate = (value: number, cap: number): number => {
+  if (!(value > 0) || !(cap > 0)) return 0;
+  return Math.log1p(Math.min(value, cap)) / Math.log1p(cap);
+};
+
+/**
+ * SIGNIFICANCE — the two proofs a move has to offer, combined.
+ *
+ * THE QUESTION THIS ANSWERS: should a dramatic percentage move in a tiny market
+ * outrank a smaller percentage move in a meaningfully larger one? The archetype
+ * harness made the failure concrete — a $2 market losing $1.90 outranked a $104
+ * market moving 9%, because `weight` was purely a percentage.
+ *
+ * Neither signal works alone:
+ *
+ *   PERCENTAGE ONLY  a platform whose median market holds under a dollar turns
+ *                    into a feed of five-cent moves wearing three-digit
+ *                    percentages.
+ *   DOLLARS ONLY     permanently buries every small market, which on this
+ *                    platform is almost all of them.
+ *
+ * So: the RELATIVE move proves it mattered to this market, and the ABSOLUTE
+ * capital affected proves enough really moved to be worth reporting. The
+ * geometric mean is the shape that says AND — both must be present, and
+ * strength in one only partly compensates for weakness in the other. A small
+ * market can still qualify, but it needs a truly exceptional move; a large one
+ * qualifies on a smaller relative move because more capital was affected.
+ *
+ * COUNTS ARE EXEMPT, and that is not an oversight. A believer count is already
+ * an absolute measure of itself — there is no second unit to weigh it in — and
+ * `gain` makes a believer percentage very nearly unreachable on purpose. Crowd
+ * moves weigh on |delta| directly, which is the same rule expressed in the only
+ * unit they have.
+ */
+export function significance(relativeMove: number, usdAffected: number): number {
+  // Both inputs come off nullable columns, and NaN survives Math.min/max
+  // untouched — it would sail through the clamp and out the other side as a
+  // NaN weight, which sorts unpredictably and silently scrambles an order.
+  const rel = Number.isFinite(relativeMove) ? Math.min(1, Math.max(0, relativeMove)) : 0;
+  const usd = Number.isFinite(usdAffected) ? usdAffected : 0;
+  return Math.sqrt(rel * saturate(usd, MATERIAL.significantUsd));
+}
 
 /**
  * The bar a move must clear. A POLICY, separate from the derivation.
@@ -440,10 +503,29 @@ function rate(
   side: Side | null,
   driftPct: number,
   bar: MoveBar,
+  /**
+   * The dollars this move actually put at stake.
+   *
+   * For CAPITAL it is the money that moved. For PRICE it is the side's capital,
+   * because a price is per-share and its own delta is cents by construction — a
+   * 9% re-rate of a $104 book moves more than a 9% re-rate of a $2 one, and the
+   * price delta alone cannot tell them apart.
+   */
+  usdAtStake: number,
 ): MaterialMove | null {
   if (!isRateMove(m, driftPct, bar) || m.pct == null || m.delta == null) return null;
   // Believers are a count and carry no currency; price and capital are dollars.
-  const net = metric === "believers" ? m.pct : m.pct - driftPct;
+  //
+  // AND THE RESULT IS FLOORED AT −100%, because a quantity that cannot go below
+  // zero cannot fall by more than all of itself. The drift subtraction is a
+  // real-terms adjustment and it happily walks past that boundary: a side that
+  // lost ALL its capital on a day the currency rose 1% computes to −101%, which
+  // the archetype harness printed sixteen times before this line existed. In
+  // real terms −101% is arguably correct and as a sentence shown to a person it
+  // is simply wrong, and being wrong in a checkable way is how a feed loses the
+  // reader it just spent a paragraph convincing.
+  const adjusted = metric === "believers" ? m.pct : m.pct - driftPct;
+  const net = Math.max(adjusted, -100);
   const abs = Math.abs(net);
   return {
     metric,
@@ -455,10 +537,15 @@ function rate(
     // would be the same number meaning two things.
     pct: net,
     delta: m.delta,
-    // The entry bar must not also be the top of the scale — a 5% move and a 60%
-    // move are not the same news. Saturating rather than clamping at the bar
-    // keeps the ordering meaningful.
-    weight: Math.min(1, 0.5 + (abs - bar.minPct) / 100),
+    // TWO SIGNALS, not one. The relative term is the old curve — the entry bar
+    // must not also be the top of the scale, so a 5% move and a 60% move are
+    // not the same news — and it is now weighed against the capital actually
+    // affected. See `significance`. Counts keep the relative term alone,
+    // because a count has no second unit.
+    weight:
+      metric === "believers"
+        ? Math.min(1, 0.5 + (abs - bar.minPct) / 100)
+        : significance(Math.min(1, 0.5 + (abs - bar.minPct) / 100), usdAtStake),
   };
 }
 
@@ -508,10 +595,14 @@ export function sideMaterialMoves(
   // twenty is both a 20% rate and a crowd of four; reporting both would announce
   // one event twice and let it outrank a market where two genuinely different
   // things happened.
+  // What this side has on the table — the absolute half of significance for a
+  // price move, whose own delta is per-share cents and says nothing about size.
+  const sideCapital = Math.abs(s.capital.current ?? 0);
   return [
-    rate(s.price, "price", side, driftPct, bar),
-    rate(s.capital, "capital", side, driftPct, bar) ?? arrival(s.capital, "capital", side, bar),
-    rate(s.believers, "believers", side, driftPct, bar) ??
+    rate(s.price, "price", side, driftPct, bar, sideCapital),
+    rate(s.capital, "capital", side, driftPct, bar, Math.abs(s.capital.delta ?? 0)) ??
+      arrival(s.capital, "capital", side, bar),
+    rate(s.believers, "believers", side, driftPct, bar, 0) ??
       crowd(s.believers, side, bar) ??
       arrival(s.believers, "believers", side, bar),
   ].filter((m): m is MaterialMove => m != null);

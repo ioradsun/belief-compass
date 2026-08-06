@@ -1,14 +1,18 @@
 import { describe, it, expect } from "vitest";
 import {
-  metricChange,
-  marketChange,
+  MATERIAL,
   changeFrom24hRow,
   changeFromBaseline,
-  materialMoves,
-  topMaterialMove,
-  isRateMove,
   currencyDrift,
-  MATERIAL,
+  isRateMove,
+  marketChange,
+  materialMoves,
+  metricChange,
+  sideChange,
+  sideMaterialMoves,
+  significance,
+  topMaterialMove,
+  type SideChange,
 } from "./market-change";
 
 const now = {
@@ -352,5 +356,103 @@ describe("a currency move is not a market move", () => {
   it("behaves exactly as before when no drift could be measured", () => {
     expect(materialMoves(drifted(14), null)).toEqual(materialMoves(drifted(14)));
     expect(isRateMove(drifted(14).yes.capital)).toBe(true);
+  });
+});
+
+/**
+ * The product question the archetype harness surfaced: should a dramatic
+ * percentage move in a tiny market outrank a smaller one in a much larger
+ * market? Neither signal answers it alone.
+ */
+describe("significance weighs the move against the money", () => {
+  const side = (nowCap: number, baseCap: number, nowPrice = 1.9, basePrice = 1.9): SideChange =>
+    sideChange(
+      { believers: 3, capitalUsd: nowCap, priceUsd: nowPrice },
+      { believers: 3, capitalUsd: baseCap, priceUsd: basePrice },
+    );
+
+  const capitalWeight = (nowCap: number, baseCap: number): number =>
+    sideMaterialMoves(side(nowCap, baseCap), "YES").find((m) => m.metric === "capital")?.weight ??
+    0;
+
+  it("ranks a big market's modest move above a tiny market's dramatic one", () => {
+    // The exact case from the harness: $2 losing $1.90 vs $104 moving ~9%.
+    const tinyButDramatic = capitalWeight(0.1, 2);
+    const largeButModest = capitalWeight(94.6, 104);
+    expect(tinyButDramatic).toBeGreaterThan(0);
+    expect(largeButModest).toBeGreaterThan(tinyButDramatic);
+  });
+
+  it("still lets a small market qualify on a truly exceptional move", () => {
+    // It must not be BURIED — dollar-only ranking would erase almost the whole
+    // platform, whose median market holds under a dollar.
+    const smallExceptional = capitalWeight(0.1, 8);
+    const largeMarginal = capitalWeight(97, 100);
+    expect(smallExceptional).toBeGreaterThan(0);
+    expect(smallExceptional).toBeGreaterThan(largeMarginal);
+  });
+
+  it("rises with the money when the percentage is held constant", () => {
+    const at = (base: number) => capitalWeight(base * 0.8, base);
+    const climb = [5, 20, 100, 400].map(at);
+    for (let i = 1; i < climb.length; i += 1) expect(climb[i]).toBeGreaterThan(climb[i - 1]!);
+  });
+
+  it("rises with the percentage when the money is held constant", () => {
+    const a = capitalWeight(90, 100);
+    const b = capitalWeight(50, 100);
+    expect(b).toBeGreaterThan(a);
+  });
+
+  it("saturates so one whale cannot own the scale", () => {
+    const big = capitalWeight(500, 1000);
+    const huge = capitalWeight(500_000, 1_000_000);
+    expect(huge).toBeLessThanOrEqual(1);
+    expect(huge - big).toBeLessThan(0.35);
+  });
+
+  /**
+   * A price is per-share, so its own delta is cents whatever the book is worth.
+   * The side's CAPITAL is the honest absolute term: a 9% re-rate of a $104 book
+   * moves more than a 9% re-rate of a $2 one, and the price delta alone cannot
+   * tell them apart.
+   */
+  it("judges a price move by the capital it re-rates, not by cents per share", () => {
+    const priceWeight = (cap: number) =>
+      sideMaterialMoves(side(cap, cap, 2.09, 1.9), "YES").find((m) => m.metric === "price")
+        ?.weight ?? 0;
+    expect(priceWeight(200)).toBeGreaterThan(priceWeight(2));
+  });
+
+  /**
+   * A believer count is already an absolute measure of itself — there is no
+   * second unit to weigh it in — so counts keep the relative term alone.
+   */
+  it("leaves counts out of it", () => {
+    const crowd = sideMaterialMoves(
+      sideChange(
+        { believers: 9, capitalUsd: 0.02, priceUsd: 1.9 },
+        { believers: 1, capitalUsd: 0.02, priceUsd: 1.9 },
+      ),
+      "YES",
+    ).find((m) => m.metric === "believers");
+    // Eight people arriving is news even though almost no money is involved.
+    expect(crowd?.weight ?? 0).toBeGreaterThan(0.5);
+  });
+
+  it("is bounded, whatever it is handed", () => {
+    for (const [rel, usd] of [
+      [0, 0],
+      [1, 0],
+      [0, 1e9],
+      [1, 1e9],
+      [-5, -5],
+      [Number.NaN, Number.NaN],
+    ]) {
+      const w = significance(rel!, usd!);
+      expect(Number.isFinite(w)).toBe(true);
+      expect(w).toBeGreaterThanOrEqual(0);
+      expect(w).toBeLessThanOrEqual(1);
+    }
   });
 });

@@ -296,6 +296,10 @@ export function momentumReason(m: MaterialMove, window: string): string {
       : `${side} lost ${people(m.delta)} ${win}`;
   }
   if (m.metric === "capital") {
+    // A total exit is a DEPARTURE, not a rate — the mirror image of an arrival,
+    // and the largest thing that can happen to a side in the other direction.
+    // "down 100%" is technically true and reads like a rounding artefact.
+    if ((m.pct ?? 0) <= -100) return `All capital left ${side}`;
     return m.direction === "up"
       ? `Capital into ${side} up ${pct(m.pct ?? 0)} ${win}`
       : `Capital leaving ${side} — down ${pct(m.pct ?? 0)} ${win}`;
