@@ -215,8 +215,7 @@ function PersonRow({
   const earned = label?.kind === "earned" ? label : null;
   const rival = rel.group === "rival";
   const tone = rival ? "var(--no)" : "var(--yes)";
-  const greenFrac =
-    rel.sharedConvictions > 0 ? rel.together / rel.sharedConvictions : rival ? 0 : 1;
+
 
   // The value: mature leads with the %, low shows the shared count.
   const value = rel.tier === "mature" ? `${rival ? rel.oppositionPct : rel.alignmentPct}%` : null;
