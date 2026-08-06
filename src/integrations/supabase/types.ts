@@ -1753,6 +1753,19 @@ export type Database = {
           yes_price_usd: number
         }[]
       }
+      market_window_baselines_bulk: {
+        Args: { p_ids: number[]; p_window: string }
+        Returns: {
+          believers_no: number
+          believers_yes: number
+          captured_at: string
+          no_capital_usd: number
+          no_price_usd: number
+          onchain_id: number
+          yes_capital_usd: number
+          yes_price_usd: number
+        }[]
+      }
       price_series_daily: {
         Args: { p_days: number; p_ids: number[] }
         Returns: {
