@@ -162,8 +162,13 @@ export function MediaStage({
       >
         {/* Page 1 — the market, exactly as it was. `overflow-y-scroll` (not auto)
           keeps the scrollbar gutter reserved, so a market whose body happens to
-          fit cannot widen the column relative to one that doesn't. */}
-        <div className="flex h-full w-full min-w-full shrink-0 flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
+          fit cannot widen the column relative to one that doesn't. The row gap
+          rides the deck's height-driven scale, so a short window tightens the
+          body instead of pushing it past the bottom of the column. */}
+        <div
+          className="flex h-full w-full min-w-full shrink-0 flex-col overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]"
+          style={{ gap: "var(--deck-gap, 12px)", justifyContent: "safe center" }}
+        >
           {/* The hint's row is reserved whether or not this market has evidence,
             so the body below it starts at the same y on every market. */}
           <div className="min-h-[17px] shrink-0">
@@ -178,7 +183,10 @@ export function MediaStage({
 
         {/* Page 2 — the evidence. Only exists when there is evidence. */}
         {media && (
-          <div className="flex h-full w-full min-w-full shrink-0 flex-col gap-3 overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]">
+          <div
+            className="flex h-full w-full min-w-full shrink-0 flex-col overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]"
+            style={{ gap: "var(--deck-gap, 12px)" }}
+          >
             <div className="min-h-[17px] shrink-0">
               <Hint side="left" onClick={() => setPage(0)}>
                 ← Market
@@ -187,6 +195,7 @@ export function MediaStage({
             <Evidence media={media} />
           </div>
         )}
+
       </div>
     </div>
   );

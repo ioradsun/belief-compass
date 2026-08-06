@@ -1148,10 +1148,14 @@ function Feed() {
         </aside>
 
         {/* CENTER — Belief. Fluid column, but the reading measure is capped at
-          920px and centered so the deck never stretches on wide monitors. */}
+          920px and centered so the deck never stretches on wide monitors. The
+          column's own top/bottom padding scales with the viewport height for the
+          same reason the deck's internals do: on a short window those 24px are
+          space the dock needs, and on a tall one they are too little. */}
         <main
-          className={`${show("belief")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-4 py-5 lg:col-start-2 lg:flex lg:px-8 lg:py-6`}
+          className={`${show("belief")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-4 py-[clamp(10px,2svh,20px)] lg:col-start-2 lg:flex lg:px-8 lg:py-[clamp(12px,2.4svh,24px)]`}
         >
+
           <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col">
             {/* Center focus: person profile, DNA overview, or the single-market deck.
               The deck owns its own internal scroll so its dock stays pinned. */}
