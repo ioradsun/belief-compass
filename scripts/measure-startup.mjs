@@ -6,15 +6,34 @@
  * whether that swap costs the tree.
  *
  * HOW THE REMOUNT IS DETECTED, without instrumenting React: capture a reference
- * to a deep element once the page has painted, then check later whether that
- * exact node is still in the document. React updating in place keeps the node.
- * React unmounting and rebuilding the subtree — which is what a changed `key`
- * on a provider does — detaches it. There is no ambiguity in the signal and
- * nothing in the app has to cooperate.
+ * to an element once the page has painted, then check later whether that exact
+ * node is still in the document. React updating in place keeps the node. React
+ * unmounting and rebuilding the subtree — which is what a changed `key` on a
+ * provider does — detaches it.
+ *
+ * ANCHOR SHALLOW, NOT DEEP. The first version of this took the DEEPEST node,
+ * on the theory that the more of the tree it sat under, the more its survival
+ * vouched for. That is exactly backwards on a route that loads data: the
+ * deepest node right after paint is usually inside a skeleton, and a skeleton
+ * being replaced by real content is the app working, not remounting. It
+ * reported a remount on `/` desktop and none on `/` mobile in the same run —
+ * an inconsistency that was the probe, not the app.
+ *
+ * The outermost element the app renders is the correct anchor: it is created
+ * once, it does not depend on any query resolving, and it is inside every
+ * provider — so it survives all normal rendering and is destroyed only if
+ * something above it tears the tree down.
  *
  * Also captured over the same window: layout shift after paint, long tasks, and
- * the request count (so a duplicate startup fetch shows up as a number rather
- * than an argument).
+ * every request WITH ITS RESPONSE STATUS.
+ *
+ * The status is not decoration. The query client retries three times with
+ * backoff, so a server function that FAILS fires four times and is
+ * indistinguishable, by URL alone, from four healthy components asking for the
+ * same thing. One is an environment artifact and the other is a real ownership
+ * bug, and counting URLs cannot tell them apart. Duplicates are therefore
+ * reported split by outcome: repeats that all succeeded, versus repeats that
+ * followed a failure.
  *
  * Any route works — every one of them mounts the root providers — so this drives
  * the fixture route and needs no database.
@@ -41,7 +60,18 @@ async function measure(browser, name, viewport) {
   const page = await context.newPage();
 
   const requests = [];
+  const status = new Map();
   page.on("request", (r) => requests.push(r.url()));
+  page.on("response", (r) => {
+    const list = status.get(r.url()) ?? [];
+    list.push(r.status());
+    status.set(r.url(), list);
+  });
+  page.on("requestfailed", (r) => {
+    const list = status.get(r.url()) ?? [];
+    list.push(0); // never answered
+    status.set(r.url(), list);
+  });
 
   await page.addInitScript(() => {
     const w = window;
@@ -70,23 +100,15 @@ async function measure(browser, name, viewport) {
   await page.waitForTimeout(300);
 
   const anchored = await page.evaluate(() => {
-    const all = document.querySelectorAll("body *");
-    // The deepest early node available — the further from <body>, the more of
-    // the tree its survival vouches for.
-    let deepest = null;
-    let best = -1;
-    for (const el of all) {
-      let d = 0;
-      for (let p = el; p; p = p.parentElement) d += 1;
-      if (d > best) {
-        best = d;
-        deepest = el;
-      }
-    }
-    window.__anchor = deepest;
-    window.__anchorDepth = best;
+    // The app's outermost element: inside every provider, created once, and
+    // never waiting on a query. Scripts injected by the framework are skipped.
+    const root =
+      [...document.body.children].find(
+        (el) => el.tagName !== "SCRIPT" && el.tagName !== "STYLE",
+      ) ?? null;
+    window.__anchor = root;
     window.__anchorAt = Math.round(performance.now());
-    return { depth: best, at: window.__anchorAt, tag: deepest?.tagName ?? null };
+    return { at: window.__anchorAt, tag: root?.tagName ?? null, id: root?.id || null };
   });
 
   const requestsAtAnchor = requests.length;
@@ -105,13 +127,24 @@ async function measure(browser, name, viewport) {
   for (const u of requests) counts.set(u, (counts.get(u) ?? 0) + 1);
   const duplicates = [...counts.entries()]
     .filter(([, n]) => n > 1)
-    .map(([u, n]) => ({ n, url: u.replace(BASE, "") }))
+    .map(([u, n]) => {
+      const codes = status.get(u) ?? [];
+      const failed = codes.filter((c) => c === 0 || c >= 400).length;
+      return {
+        n,
+        // A repeat that follows a failure is the retry policy doing its job.
+        // A repeat where everything succeeded is two callers asking twice.
+        kind: failed > 0 ? "retry-after-failure" : "duplicate-success",
+        codes,
+        url: u.replace(BASE, ""),
+      };
+    })
     .sort((a, b) => b.n - a.n);
 
   await context.close();
   return {
     viewport: name,
-    anchorDepth: anchored.depth,
+    anchor: anchored,
     treeRemounted: after.stillAttached === false,
     clsAfterPaint: after.cls,
     shifts: after.shifts,
@@ -120,6 +153,18 @@ async function measure(browser, name, viewport) {
     requestsAfterPaint: requests.length - requestsAtAnchor,
     duplicates: duplicates.slice(0, 8),
   };
+}
+
+/** Server-function URLs are base64 blobs; print the export name instead. */
+function label(url) {
+  const m = url.match(/^\/_serverFn\/([A-Za-z0-9_-]+)/);
+  if (!m) return url.length > 60 ? `${url.slice(0, 60)}…` : url;
+  try {
+    const json = JSON.parse(Buffer.from(m[1].replace(/-/g, "+").replace(/_/g, "/"), "base64"));
+    return String(json.export).replace("_createServerFn_handler", "");
+  } catch {
+    return url.slice(0, 40);
+  }
 }
 
 const browser = await chromium.launch();
@@ -137,9 +182,14 @@ for (const r of report.runs) {
   console.log(
     `  ${r.viewport.padEnd(8)} tree remounted after paint: ${r.treeRemounted ? "YES  ✗" : "no   ✓"}` +
       `   cls=${r.clsAfterPaint}  longTasks=${r.longTasks}` +
-      `  requests=${r.requestsTotal} (${r.requestsAfterPaint} after paint)` +
-      `  duplicates=${r.duplicates.length}`,
+      `  requests=${r.requestsTotal} (${r.requestsAfterPaint} after paint)`,
   );
-  for (const d of r.duplicates) console.log(`           ×${d.n}  ${d.url}`);
+  const real = r.duplicates.filter((d) => d.kind === "duplicate-success");
+  const retried = r.duplicates.filter((d) => d.kind === "retry-after-failure");
+  console.log(
+    `           repeats: ${real.length} genuine, ${retried.length} retry-after-failure`,
+  );
+  for (const d of real) console.log(`           ×${d.n} GENUINE  ${label(d.url)}`);
+  for (const d of retried) console.log(`           ×${d.n} retry    ${label(d.url)} ${d.codes.join(",")}`);
 }
 console.log(`\nwrote ${file}\n`);
