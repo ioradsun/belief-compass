@@ -315,29 +315,7 @@ export function MobileGame({
   // the single scroll column when there isn't (that layout is unchanged).
   const questionBlock = (
     <div>
-      {(category || createdAt || cm?.market || byline) && (
-        <div className="flex min-h-[16px] flex-wrap items-baseline gap-x-2 text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          <span>
-            {[
-              category,
-              createdAt ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()) : null,
-              cm?.market ? "Company exclusive" : null,
-            ]
-              .filter(Boolean)
-              .join(" • ")}
-          </span>
-          {cm?.creator?.name && (
-            <button
-              type="button"
-              onClick={() => cm?.creator && onSelectPerson?.(cm.creator.wallet)}
-              className="normal-case tracking-normal text-[12px] text-[var(--text-muted)]"
-            >
-              by {cm.creator.name}
-            </button>
-          )}
-        </div>
-      )}
-      <div className="mt-1.5 flex items-start gap-1.5">
+      <div className="flex items-start gap-1.5">
         {/* Two lines of reserved space, the same rule the desktop deck uses, so
           a longer question never pushes the stage or the dock down the screen —
           which on a phone is the difference between the controls being under
@@ -357,7 +335,39 @@ export function MobileGame({
           hasMedia={!!stageMedia}
         />
       </div>
+      {/* Creator + age under the question — and, for the POV-sourced markets
+          with no author on record, the age alone rather than nothing. */}
+      {cm?.creator ? (
+        <button
+          type="button"
+          onClick={() => cm.creator && onSelectPerson?.(cm.creator.wallet)}
+          className="mt-1.5 flex items-center gap-2 text-left"
+        >
+          {cm.creator.avatarUrl ? (
+            <img
+              src={cm.creator.avatarUrl}
+              alt=""
+              className="h-5 w-5 shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <span
+              className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[8px] font-semibold text-white"
+              style={{ background: `hsl(${hueFor(cm.creator.wallet)} 45% 45%)` }}
+              aria-hidden
+            >
+              {initialsFor(cm.creator.name)}
+            </span>
+          )}
+          <span className="min-w-0 truncate text-[12px] text-[var(--text-secondary)]">
+            <span className="font-semibold text-[var(--text)]">{cm.creator.name}</span>
+            {openedWhen && <span className="text-[var(--text-muted)]"> · {openedWhen}</span>}
+          </span>
+        </button>
+      ) : openedWhen ? (
+        <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">Opened · {openedWhen}</p>
+      ) : null}
     </div>
+
   );
 
   const marketBody = (
