@@ -10,7 +10,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
-import { getMarketChange, getPositionSummary } from "@/lib/markets.functions";
+import { getMarketChange, getPositionSummary, type VolumeWindow } from "@/lib/markets.functions";
+import { useMarketChange } from "@/lib/market-change-query";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getHouseRead } from "@/lib/house.functions";
 import { requestConnect } from "@/lib/connect-bridge";
@@ -219,26 +220,11 @@ export function MarketDeck({
     // placeholder for this one, it is a wrong answer.
   });
 
-  // The center's believer total must be the SAME source the YES and NO rails
-  // headline (market_state per-side counts), or the two sides will not add up to
-  // the total. Null when the row has no counts → the tape tally stands in.
-  const authBelieversTotal = useMemo(() => {
-    const r = row as Record<string, unknown>;
-    const y = Number(r["believers_yes"]);
-    const n = Number(r["believers_no"]);
-    if (!Number.isFinite(y) && !Number.isFinite(n)) return null;
-    return (Number.isFinite(y) ? y : 0) + (Number.isFinite(n) ? n : 0);
-  }, [row]);
-
-  // Capital must come from the SAME holders row the sides quote — the tape replay
-  // leaves float residue after full exits, which showed money on an empty market.
-  const authCapitalUsd = useMemo(() => {
-    const r = row as Record<string, unknown>;
-    const y = Number(r["yes_capital_usd"]);
-    const n = Number(r["no_capital_usd"]);
-    if (!Number.isFinite(y) && !Number.isFinite(n)) return null;
-    return (Number.isFinite(y) ? y : 0) + (Number.isFinite(n) ? n : 0);
-  }, [row]);
+  // WHAT MOVED — one object, shared with the YES and NO rails below, so the
+  // centre's total and the sides that make it up are the same arithmetic rather
+  // than two derivations. Its own totals are the per-side counts added, which is
+  // why they reconcile by construction instead of by care.
+  const marketChange = useMarketChange(Number(row.onchain_id), row, deckWin as VolumeWindow);
 
   // THE HOUSE READ — derived by the shared pure engine, so desktop and mobile
   // show the same state from the same data. Only a connected viewer has tells to
@@ -398,8 +384,7 @@ export function MarketDeck({
         tape={change?.tape}
         ethUsd={ethUsd}
         win={deckWin}
-        believersTotal={authBelieversTotal}
-        capitalTotalUsd={authCapitalUsd}
+        change={marketChange}
         footer={
           onToggleCase && !mobileCaseOpen ? (
             <ExamineCta open={caseOpen} onToggle={onToggleCase} houseRead={houseReadState_} />

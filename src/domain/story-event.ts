@@ -38,6 +38,7 @@
  */
 import { capitalTrigger, FEED_TRIGGERS } from "./feed-event";
 import { formatPct } from "./metric-display";
+import { MATERIAL, type MaterialMove } from "./market-change";
 
 export type Side = "YES" | "NO";
 
@@ -56,6 +57,8 @@ export type StoryEventType =
   // MOMENTUM
   | "accelerating"
   | "participation_broadening"
+  // MATERIAL — a move big enough that saying nothing would be the error.
+  | "material_move"
   // SOCIAL
   | "tribe_forming"
   // DECLINE
@@ -96,6 +99,19 @@ export interface StoryEventInput {
   no: SideWindow;
   baseline?: MarketBaseline | null;
   social?: MarketSocial | null;
+  /**
+   * Moves that cleared the product's materiality bar, heaviest first, already
+   * computed and ranked by src/domain/market-change.
+   *
+   * This is a FLOOR, not a lead. The storytellers above it describe moves that
+   * have a shape — an answer flipping, people arriving while money leaves — and
+   * every one of those is also a large move, so putting this first would replace
+   * meaning with a percentage. Its job is that a five-percent move can never
+   * pass unreported: before it existed, a market whose YES capital rose 12% with
+   * no other structure emitted NOTHING, because no storyteller was looking for
+   * a plain gain.
+   */
+  material?: MaterialMove[] | null;
   /** The previously-emitted transition, for hysteresis. */
   prev?: { type: StoryEventType; side?: Side } | null;
   /** USD → the viewer's display unit, for evidence/detail. Optional. */
@@ -130,6 +146,7 @@ const TIER: Record<StoryEventType, 1 | 2 | 3> = {
   price_conviction_divergence: 2,
   participation_broadening: 2,
   accelerating: 2,
+  material_move: 1,
   losing_conviction: 3,
 };
 
@@ -506,6 +523,55 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
    * changing its own answer outranks a contradiction, a contradiction outranks a
    * plain gain, and a plain gain outranks a decline that any chart already shows.
    */
+  /**
+   * THE FLOOR. Whatever else did or did not have a shape, a move this size is
+   * reported. The fingerprint carries the metric and the side, so a capital move
+   * and a price move on the same market are separate episodes and the dedup
+   * store cannot let one hide the other.
+   */
+  const material = (): StoryEvent | null => {
+    const m = (input.material ?? [])[0];
+    if (!m) return null;
+    const side = m.side ?? undefined;
+    const dir = m.direction === "up" ? "rose" : "fell";
+    const pct = m.pct == null ? null : formatPct(m.pct);
+    const where = side ?? "the market";
+
+    const headline =
+      m.kind === "arrival"
+        ? m.metric === "capital"
+          ? `First capital backs ${where}`
+          : `${where} has its first believers`
+        : m.kind === "crowd"
+          ? `${where} ${m.delta > 0 ? "gained" : "lost"} ${Math.abs(Math.round(m.delta))} ${plural(m.delta, "believer", "believers")}`
+          : m.metric === "price"
+            ? `${where} ${m.direction === "up" ? "got more expensive" : "got cheaper"}`
+            : m.metric === "capital"
+              ? `Capital on ${where} ${dir} ${pct ?? ""}`.trim()
+              : `Believers on ${where} ${dir} ${pct ?? ""}`.trim();
+
+    return {
+      type: "material_move",
+      side,
+      tier: TIER.material_move,
+      headline,
+      detail:
+        pct == null
+          ? undefined
+          : `${pct} over ${input.timeframeShort} — at or beyond the ${MATERIAL.minPct}% the feed treats as news.`,
+      evidence: [
+        {
+          label: m.metric === "capital" ? "Capital" : m.metric === "price" ? "Price" : "Believers",
+          value: pct ?? `${m.delta > 0 ? "+" : "−"}${Math.abs(Math.round(m.delta))}`,
+        },
+      ],
+      // The metric is part of the identity: without it, a capital move and a
+      // price move on the same side would collapse into one episode and the
+      // second would never be told.
+      fingerprint: `material_move:${m.metric}:${side ?? "market"}`,
+    };
+  };
+
   const tellers: Array<() => StoryEvent | null> = [
     majorityFlipped, //          the answer itself changed
     () => firstOf(peopleCapital), //  people in, money out
@@ -518,6 +584,7 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
     acceleration, //             faster than this market's own normal
     balanced, //                 genuine, settled disagreement
     () => firstOf(broadening), //     people and money rising together
+    material, //                 the floor: a 5% move is never silently dropped
     losing, //                   the last resort
   ];
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { emitStoryEvent, type StoryEventInput, type SideWindow } from "./story-event";
+import { changeFrom24hRow, materialMoves, MATERIAL } from "./market-change";
 
 const side = (over: Partial<SideWindow> = {}): SideWindow => ({
   believerDelta: 0,
@@ -363,5 +364,124 @@ describe("one engine, one voice", () => {
       if (!t) continue;
       expect(`${t.headline} ${t.detail ?? ""}`).not.toMatch(banned);
     }
+  });
+});
+
+/**
+ * THE FLOOR. Before this, a market whose YES capital rose twelve percent with no
+ * other structure emitted NOTHING — every storyteller was looking for a SHAPE
+ * (an answer flipping, people arriving while money leaves) and none was looking
+ * for a size. The feeds could not report news nobody had written down.
+ */
+describe("a material move is never silently dropped", () => {
+  /** The emitter's real path: market_state row → one change → ranked moves. */
+  const movesFor = (over: Parameters<typeof changeFrom24hRow>[0]) =>
+    materialMoves(changeFrom24hRow(over));
+
+  it("reports a plain capital rise that has no other shape", () => {
+    // Capital and believers move together, so no divergence storyteller fires.
+    const t = emitStoryEvent(
+      input({
+        yes: side({ believerDelta: 1, capitalDeltaUsd: 60, capitalBaseUsd: 500 }),
+        material: movesFor({
+          believersYes: 21,
+          newBelieversYes24h: 1,
+          yesCapitalUsd: 560,
+          yesCapitalDelta24h: 60,
+          believersNo: 20,
+          newBelieversNo24h: 0,
+          noCapitalUsd: 500,
+          noCapitalDelta24h: 0,
+        }),
+      }),
+    );
+    expect(t?.type).toBe("material_move");
+    expect(t?.side).toBe("YES");
+    expect(t?.headline).toBe("Capital on YES rose +12%");
+    expect(t?.tier).toBe(1);
+  });
+
+  it("keeps the metric in the fingerprint so one move cannot hide another", () => {
+    const t = emitStoryEvent(
+      input({
+        yes: side({ believerDelta: 1, capitalDeltaUsd: 60, capitalBaseUsd: 500 }),
+        material: movesFor({
+          believersYes: 21,
+          newBelieversYes24h: 1,
+          yesCapitalUsd: 560,
+          yesCapitalDelta24h: 60,
+          believersNo: 20,
+          newBelieversNo24h: 0,
+          noCapitalUsd: 500,
+          noCapitalDelta24h: 0,
+        }),
+      }),
+    );
+    expect(t?.fingerprint).toBe("material_move:capital:YES");
+  });
+
+  it("says nothing when nothing cleared the bar", () => {
+    expect(
+      emitStoryEvent(
+        input({
+          material: movesFor({
+            believersYes: 20,
+            newBelieversYes24h: 0,
+            yesCapitalUsd: 500,
+            yesCapitalDelta24h: 2,
+            believersNo: 20,
+            newBelieversNo24h: 0,
+            noCapitalUsd: 500,
+            noCapitalDelta24h: 0,
+          }),
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  /**
+   * A shaped story is also a large move, so the floor must not take its place —
+   * "more believers, less capital" tells the reader something a percentage
+   * cannot.
+   */
+  it("yields to a story that has a shape", () => {
+    const t = emitStoryEvent(
+      input({
+        yes: side({ believerDelta: 4, capitalDeltaUsd: -120 }),
+        material: movesFor({
+          believersYes: 24,
+          newBelieversYes24h: 4,
+          yesCapitalUsd: 380,
+          yesCapitalDelta24h: -120,
+          believersNo: 20,
+          newBelieversNo24h: 0,
+          noCapitalUsd: 500,
+          noCapitalDelta24h: 0,
+        }),
+      }),
+    );
+    expect(t?.type).toBe("people_capital_divergence");
+  });
+
+  it("never manufactures news from a dust base", () => {
+    // $0.004 → $2.70 is the market that started all of this.
+    const moves = movesFor({
+      yesCapitalUsd: 2.6959,
+      yesCapitalDelta24h: 2.6919,
+      believersYes: 3,
+      newBelieversYes24h: 2,
+      believersNo: 0,
+      newBelieversNo24h: 0,
+      noCapitalUsd: 0,
+      noCapitalDelta24h: 0,
+    });
+    expect(moves.every((m) => m.pct == null)).toBe(true);
+    const t = emitStoryEvent(input({ material: moves }));
+    // Whatever is said about it, it is never said as a rate.
+    expect(t?.detail ?? "").not.toMatch(/%/);
+  });
+
+  it("holds the product's five percent line", () => {
+    expect(MATERIAL.minPct).toBe(5);
   });
 });

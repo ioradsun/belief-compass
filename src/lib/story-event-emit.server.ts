@@ -16,6 +16,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emitStoryEvent, type Side, type StoryEventType } from "@/domain/story-event";
+import { changeFrom24hRow, currencyDrift, materialMoves } from "@/domain/market-change";
 import { scoreMarketTransition } from "@/domain/significance";
 import { decideTransitionEmit, type TransitionStore } from "@/domain/transition-emit";
 import { accelerationFrom } from "@/domain/feed/score";
@@ -28,9 +29,17 @@ const num = (v: unknown): number => Number(v ?? 0) || 0;
 const numOrNull = (v: unknown): number | null =>
   v == null || !Number.isFinite(Number(v)) ? null : Number(v);
 
-/** Recover the emitter's hysteresis hint from a stored "type:side" fingerprint. */
+/**
+ * Recover the emitter's hysteresis hint from a stored fingerprint.
+ *
+ * Most are "type:side". A material move is "material_move:metric:side", because
+ * a capital move and a price move on one side must be separate episodes — so the
+ * SIDE is the last segment, never the second.
+ */
 function parsePrev(fp: string): { type: StoryEventType; side?: Side } | null {
-  const [type, side] = fp.split(":");
+  const parts = fp.split(":");
+  const type = parts[0];
+  const side = parts[parts.length - 1];
   if (!type) return null;
   return {
     type: type as StoryEventType,
@@ -42,6 +51,27 @@ function parsePrev(fp: string): { type: StoryEventType; side?: Side } | null {
  *  types, and the events insert mirrors the believer-milestone RPC exactly. */
 interface Row {
   [k: string]: unknown;
+}
+/** The banded price-baseline read (see below) — chained, so it needs its own shape. */
+interface SnapshotQuery {
+  select: (cols: string) => {
+    in: (
+      col: string,
+      vals: number[],
+    ) => {
+      gte: (
+        col: string,
+        v: string,
+      ) => {
+        lte: (
+          col: string,
+          v: string,
+        ) => {
+          order: (col: string, o: { ascending: boolean }) => Promise<{ data: Row[] | null }>;
+        };
+      };
+    };
+  };
 }
 interface Query {
   select: (cols: string) => {
@@ -76,7 +106,7 @@ export async function emitStoryEvents(
       db
         .from("market_state")
         .select(
-          "onchain_id, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, chg_24h_yes, chg_24h_no, trade_count_1h, trade_count_24h, velocity_5m, yes_capital_usd, no_capital_usd, yes_capital_delta_24h, no_capital_delta_24h",
+          "onchain_id, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, chg_24h_yes, chg_24h_no, trade_count_1h, trade_count_24h, velocity_5m, yes_capital_usd, no_capital_usd, yes_capital_delta_24h, no_capital_delta_24h, yes_price_usd, no_price_usd",
         )
         .in("onchain_id", marketIds),
       db
@@ -94,6 +124,39 @@ export async function emitStoryEvents(
       `story events: market_transition_state read failed (${storeErr.message}). A missing table usually means a migration has not been applied.`,
     );
 
+  // THE PRICE BASELINE, from the table that is actually being written.
+  //
+  // The obvious source is `market_state.chg_24h_yes`, which the story input
+  // already carried. It is NULL ON ALL 2,762 MARKETS, and `market_window_change`
+  // — the other SQL price-change path — is empty. Both jobs produce nothing,
+  // while `market_state_snapshots` is current and holds 2.4M rows. Reading the
+  // dead column would have made the price arm of the news rule permanently
+  // silent and indistinguishable from a calm market.
+  //
+  // A narrow band rather than "everything older than 24h": snapshots are written
+  // on every refresh, so an open-ended range would pull an unbounded number of
+  // rows to find one per market. Newest-first inside the band, first row per
+  // market wins. No band, no baseline, no price claim.
+  const priceBase = new Map<number, { yes: number | null; no: number | null }>();
+  try {
+    const snapshots = sb as unknown as { from: (t: string) => SnapshotQuery };
+    const { data: snaps } = await snapshots
+      .from("market_state_snapshots")
+      .select("onchain_id, yes_price_usd, no_price_usd, captured_at")
+      .in("onchain_id", marketIds)
+      .gte("captured_at", new Date(nowMs - 26 * 3_600_000).toISOString())
+      .lte("captured_at", new Date(nowMs - 24 * 3_600_000).toISOString())
+      .order("captured_at", { ascending: false });
+    for (const row of snaps ?? []) {
+      const sid = num(row.onchain_id);
+      if (priceBase.has(sid)) continue; // newest in the band wins
+      priceBase.set(sid, { yes: numOrNull(row.yes_price_usd), no: numOrNull(row.no_price_usd) });
+    }
+  } catch {
+    // Best effort. Without it the price arm reports nothing, which is the
+    // honest reading of "no history at this boundary".
+  }
+
   const storedById = new Map<number, TransitionStore>();
   for (const s of storedRows ?? []) {
     storedById.set(num(s.onchain_id), {
@@ -104,6 +167,41 @@ export async function emitStoryEvents(
       seenCount: num(s.seen_count),
     });
   }
+
+  // WHAT MOVED, per market, through the one shared derivation — the identical
+  // module and thresholds the panels render from.
+  const changeById = new Map<number, ReturnType<typeof changeFrom24hRow>>();
+  for (const r of states ?? []) {
+    const id = num(r.onchain_id);
+    changeById.set(
+      id,
+      changeFrom24hRow({
+        believersYes: num(r.believers_yes),
+        believersNo: num(r.believers_no),
+        newBelieversYes24h: num(r.new_believers_yes_24h),
+        newBelieversNo24h: num(r.new_believers_no_24h),
+        yesCapitalUsd: num(r.yes_capital_usd),
+        noCapitalUsd: num(r.no_capital_usd),
+        yesCapitalDelta24h: numOrNull(r.yes_capital_delta_24h),
+        noCapitalDelta24h: numOrNull(r.no_capital_delta_24h),
+        yesPriceUsd: numOrNull(r.yes_price_usd),
+        noPriceUsd: numOrNull(r.no_price_usd),
+        yesPriceBaseUsd: priceBase.get(id)?.yes ?? null,
+        noPriceBaseUsd: priceBase.get(id)?.no ?? null,
+        chg24hYesPct: numOrNull(r.chg_24h_yes),
+        chg24hNoPct: numOrNull(r.chg_24h_no),
+      }),
+    );
+  }
+
+  // THE CURRENCY, MEASURED — see MATERIAL in src/domain/market-change. A share
+  // is worth a fixed 0.001 ETH until someone trades it, so the dollar value of
+  // every market moves together with the exchange rate having done nothing. The
+  // median of the batch is that shared move; subtracting it is what stops a five
+  // percent ETH day from declaring a major move on every market at once.
+  const drift = currencyDrift(
+    [...changeById.values()].flatMap((c) => [c.yes.price.pct, c.no.price.pct]),
+  );
 
   const events: Row[] = [];
   const upserts: Row[] = [];
@@ -137,6 +235,8 @@ export async function emitStoryEvents(
     const yesCapNow = num(r.yes_capital_usd);
     const noCapNow = num(r.no_capital_usd);
 
+    const moves = materialMoves(changeById.get(id) ?? changeFrom24hRow({}), drift);
+
     const transition = emitStoryEvent({
       timeframeShort: "24H",
       yes: {
@@ -154,6 +254,7 @@ export async function emitStoryEvents(
         pricePct: numOrNull(r.chg_24h_no),
       },
       baseline: { accelerationMultiple: accel },
+      material: moves,
       prev: prevStore ? parsePrev(prevStore.fingerprint) : null,
       money: (usd) => `$${Math.round(usd)}`,
     });

@@ -25,8 +25,8 @@ import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { useHouseFinalize } from "@/lib/house-round";
-import { getMarketChange, listMarketPulses, getMarketBaselines } from "@/lib/markets.functions";
-import { gain, METRIC_DISPLAY } from "@/domain/metric-display";
+import { getMarketChange, listMarketPulses, type VolumeWindow } from "@/lib/markets.functions";
+import { useMarketChange } from "@/lib/market-change-query";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 import { marketAgeCopy } from "@/domain/market-freshness";
@@ -121,6 +121,11 @@ export function MobileGame({
 
   // The one on-screen timeframe, shared with the desktop deck and both cases.
   const deckWin = useDeckWindow();
+
+  // WHAT MOVED — the one shared answer (src/domain/market-change), handed to the
+  // Total Market instrument instead of letting it derive its own delta from the
+  // trade replay. Same query key the Case File runs → a cache hit, no request.
+  const marketChange = useMarketChange(marketId, row, deckWin as VolumeWindow);
 
   const { data: change } = useQuery({
     queryKey: ["market-change", marketId],
@@ -347,8 +352,7 @@ export function MobileGame({
           tape={change?.tape}
           ethUsd={ethUsd}
           win={deckWin}
-          believersTotal={authBelieversTotal}
-          capitalTotalUsd={authCapitalUsd}
+          change={marketChange}
           footer={
             <CurrentMarketActivity
               embedded
@@ -490,13 +494,14 @@ function BothSides({
     queryFn: () => listMarketPulses({ data: { ids: [marketId] } }),
     staleTime: 15_000,
   });
-  // Authoritative window-open baselines — the same source the desktop case file
-  // uses, so mobile momentum can never disagree with it.
-  const { data: baselines } = useQuery({
-    queryKey: ["market-baselines", marketId],
-    queryFn: () => getMarketBaselines({ data: { id: marketId } }),
-    staleTime: 30_000,
-  });
+  // WHAT MOVED — the one shared answer, so this phone panel, the desktop Case
+  // File and the centre's total cannot disagree. Same query key as the panels
+  // above, so it is a cache hit rather than a request.
+  //
+  // 24h rather than the deck window: this screen has no timeframe control, and
+  // quoting a window the reader cannot see or change would be worse than
+  // quoting the one the copy below names ("today").
+  const marketChange = useMarketChange(marketId, row, "24h" as VolumeWindow);
 
   const believers = evidence?.believers ?? [];
   // Prefer the read-model's authoritative per-side capital; fall back to the
@@ -513,21 +518,18 @@ function BothSides({
   };
   const events = pulses?.pulses?.[String(marketId)] ?? [];
 
-  const bl = baselines?.["24h"];
   /** Believers / capital / price momentum for one side, read the Total Market way. */
   const rows = (s: OrderSide) => {
     const bel = count(s);
     const cap = capital(s);
-    const belBase = s === "YES" ? bl?.believersYes : bl?.believersNo;
-    const capBase = s === "YES" ? bl?.yesCapitalUsd : bl?.noCapitalUsd;
-    // Ranked before rendered. This panel is where "$2.70 COMMITTED · 67298%▲"
-    // came from: the window opened with $0.004 on the side — dust the app
-    // elsewhere refuses to call capital — and the ratio reported how empty the
-    // market had been rather than that $2.69 arrived. `gain` withholds a
-    // percentage that has no base worth dividing by, and names the first money
-    // in as an arrival. See METRIC_DISPLAY for the measured thresholds.
-    const belChg = gain(bel, belBase, METRIC_DISPLAY.believers);
-    const capChg = gain(cap, capBase, METRIC_DISPLAY.capitalUsd);
+    // This panel is where "$2.70 COMMITTED · 67298%▲" came from: the window
+    // opened with $0.004 on the side — dust the app elsewhere refuses to call
+    // capital — and the ratio reported how empty the market had been rather
+    // than that $2.69 arrived. The judgement now lives in one module for every
+    // surface (src/domain/market-change → gain), not in this function.
+    const sideChg = s === "YES" ? marketChange.yes : marketChange.no;
+    const belChg = sideChg.believers;
+    const capChg = sideChg.capital;
     const belDelta = belChg.delta;
     const capDelta = capChg.delta;
     const priceUsd = Number(s === "YES" ? row.yes_price_usd : row.no_price_usd) || null;

@@ -16,8 +16,8 @@ import { setDeckLens, useDeckLens } from "@/lib/deck-lens";
 import { useQuery } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
 import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
-import { getMarketChange, getMarketBaselines, type VolumeWindow } from "@/lib/markets.functions";
-import { gain, METRIC_DISPLAY, type Gain } from "@/domain/metric-display";
+import { getMarketChange, type VolumeWindow } from "@/lib/markets.functions";
+import { useMarketChange } from "@/lib/market-change-query";
 import { LiveTape } from "@/components/LiveTape";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
@@ -37,9 +37,6 @@ import { sideChangeLine, sideStateLine } from "@/domain/side-summary";
 import { convictionStory, narrateStory } from "@/domain/conviction-series";
 
 type Side = "YES" | "NO";
-
-/** No baseline at hand — say nothing about a change rather than invent one. */
-const NO_GAIN: Gain = { rank: "unknown", delta: null, pct: null };
 
 /** The relationship word's colour — the one primary badge. Status stays quiet. */
 const REL_TONE: Record<CaseRelationship, string> = {
@@ -117,15 +114,11 @@ export function CaseColumn({
     staleTime: 10_000,
     refetchInterval: 15_000,
   });
-  // Authoritative window-open baselines (D3): exact even when the tape is capped
-  // at 1000 trades. Absent (pre-migration / no old-enough snapshot) → tape fallback.
-  const { data: baselines } = useQuery({
-    queryKey: ["market-baselines", marketId],
-    queryFn: () => getMarketBaselines({ data: { id: marketId } }),
-    staleTime: 30_000,
-    refetchInterval: 60_000,
-    // Per-market key: see above.
-  });
+  // WHAT MOVED, from the one place that answers that (src/lib/market-change-query
+  // → src/domain/market-change). The centre panel reads the identical object, so
+  // this rail and the total above it are the same arithmetic rather than two
+  // derivations that happen to agree. Same query key as before → no new request.
+  const marketChange = useMarketChange(marketId, row, win as VolumeWindow);
 
   const tape = change?.tape;
   const summary = useMemo(
@@ -188,50 +181,19 @@ export function CaseColumn({
   const coldStart = lensColdStart(metric, series);
   const meta = LENS_META[metric];
 
-  // Prefer the AUTHORITATIVE current (market_state row) + the snapshot baseline for
-  // the selected window: correct even on a >1000-trade market where the tape can't
-  // reach the window's opening state. When either is unavailable, fall back to the
-  // tape-derived marketBook figures (identical on the ~all non-truncated markets).
-  const bl = baselines?.[win as VolumeWindow];
   const authBelievers = num(side === "YES" ? rr.believers_yes : rr.believers_no);
-  const authCapitalUsd = rowCapitalUsd;
 
-  const belBase = side === "YES" ? bl?.believersYes : bl?.believersNo;
-  const capBase = side === "YES" ? bl?.yesCapitalUsd : bl?.noCapitalUsd;
-  const priceBaseUsd = side === "YES" ? bl?.yesPriceUsd : bl?.noPriceUsd;
-
-  // EVERY PERCENTAGE ON THIS PANEL IS RANKED BEFORE IT IS SHOWN. The panel used
-  // to divide by whatever baseline it had, guarding only against zero — so a
-  // side whose window opened holding $0.004 and now holds $2.70 reported
-  // "67298%▲" beside the line "+$2.69 committed today". Both were true and only
-  // one was worth reading. `gain` (src/domain/metric-display) decides which
-  // moves have a base worth dividing by, and calls the first money in what it
-  // is: an arrival, not a rate. See METRIC_DISPLAY for the measured thresholds.
-  const belGain =
-    authBelievers != null && belBase != null
-      ? gain(authBelievers, belBase, METRIC_DISPLAY.believers)
-      : believerMetric != null
-        ? gain(believerMetric.current, believerMetric.base, METRIC_DISPLAY.believers)
-        : NO_GAIN;
-  // Judged in USD, which is also the unit the row totals arrive in. The tape
-  // fallback is ETH-native, so it converts before it is ranked — the thresholds
-  // are dollar amounts and must never be applied to an ETH number.
-  const capGain =
-    authCapitalUsd != null && capBase != null
-      ? gain(authCapitalUsd, capBase, METRIC_DISPLAY.capitalUsd)
-      : rowCapitalUsd != null || capitalMetric == null || !(ethUsd > 0)
-        ? NO_GAIN
-        : gain(
-            capitalMetric.current * ethUsd,
-            capitalMetric.base * ethUsd,
-            METRIC_DISPLAY.capitalUsd,
-          );
-  // Same rule for price: measure the snapshot at the window's open against the
-  // price now, never the tape's transient post-trade marks.
-  const priceGain =
-    authPriceUsd != null && priceBaseUsd != null
-      ? gain(authPriceUsd, priceBaseUsd, METRIC_DISPLAY.price)
-      : NO_GAIN;
+  // EVERY PERCENTAGE ON THIS PANEL IS RANKED BEFORE IT IS SHOWN, and none of
+  // that ranking happens here. The panel used to divide by whatever baseline it
+  // had, guarding only against zero — so a side whose window opened holding
+  // $0.004 and now holds $2.70 reported "67298%▲" beside the line "+$2.69
+  // committed today". Both were true and only one was worth reading.
+  // src/domain/market-change pairs each current with its window-open base and
+  // hands the whole judgement to `gain`; this rail only chooses words.
+  const sideNow = side === "YES" ? marketChange.yes : marketChange.no;
+  const belGain = sideNow.believers;
+  const capGain = sideNow.capital;
+  const priceGain = sideNow.price;
 
   // The exact move, in the metric's own unit — never a percentage alone. This
   // mirrors the Total Market instrument: the total leads, the % is the big
