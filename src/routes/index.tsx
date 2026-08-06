@@ -312,8 +312,6 @@ const CLEARED_CENTER: CenterView = {
   dash: undefined,
 };
 
-
-
 function Feed() {
   const {
     wallet: searchWallet,
@@ -512,7 +510,6 @@ function Feed() {
   const closeCase = () => {
     if (caseOpen) navigate({ search: (prev: Search) => ({ ...prev, case: undefined }) });
   };
-
 
   // ONE timeframe for the whole app. The center's WindowFilter publishes to the
   // deck-window store; the feed, the left rail and every metric read it here, so
@@ -1063,7 +1060,6 @@ function Feed() {
                   />
                 </Suspense>
               </div>
-
             ) : createOpen ? (
               <PanelBoundary label="Create market" onDismiss={closeCreate}>
                 <Suspense fallback={<DeckSkeleton />}>
