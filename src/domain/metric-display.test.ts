@@ -147,10 +147,13 @@ describe("gain — the first money in is not a gain", () => {
   it("is calibrated to the markets that exist", () => {
     expect(CAP.originMaxBase).toBe(0.01); // the app's own dust line
     expect(BEL.pctValidMinBase).toBe(BEL.pctHeadlineMinBase); // counts: shown or not, never half-shown
-    // Market-level participation (the Total Market tile) is the sum of both
-    // sides, so the p95-per-side floor of 10 silenced the % on nearly every
-    // market. Three is the smallest base where a ratio still says something.
-    expect(BEL.pctValidMinBase).toBeGreaterThanOrEqual(3);
+    // The floor was briefly lowered to three, on the reasoning that the Total
+    // Market tile sums both sides and needed a smaller base. Measured, most
+    // markets carry believers on ONE side, so the market total (p95 5, p99 9) is
+    // barely larger than a single side (p95 4, p99 7) — and at a base of three,
+    // "3 → 6 participants" prints "+100%". Ten stands.
+    expect(BEL.pctValidMinBase).toBeGreaterThanOrEqual(10);
+    expect(gain(6, 3, BEL).pct).toBeNull();
     expect(gain(0.95 + 5, 0.95, CAP).pct).toBeNull(); // the median funded side
   });
 });
@@ -315,5 +318,86 @@ describe("positionReturn — the P&L leads, the return % is paired", () => {
     const r = positionReturn({ gainUsd: 5, gainPct: null, money });
     expect(r!.pnl).toBe("+$5.00");
     expect(r!.pct).toBeNull();
+  });
+});
+
+/**
+ * A BLANK SLOT IS NOT A REASON TO LOOSEN A RULE.
+ *
+ * The Total Market tile leads with the percentage and left its headline empty
+ * when there was none — which is what argued the believer floor down from ten to
+ * three. `figure` closes that hole: the move in the metric's own unit is always
+ * available for the slot, so a surface never chooses between a meaningless ratio
+ * and empty space.
+ */
+describe("every move carries a figure a headline slot can show", () => {
+  // Capital is ETH-native; the formatter owns the conversion, exactly as the
+  // real callers do.
+  const money = (eth: number, signed?: boolean) => {
+    const v = eth * 2000;
+    const sign = signed ? (v >= 0 ? "+" : "−") : "";
+    return `${sign}$${Math.abs(v).toFixed(2)}`;
+  };
+  const usd = (eth: number) => eth * 2000;
+  const px = (v: number, signed?: boolean) => {
+    const sign = signed ? (v >= 0 ? "+" : "−") : "";
+    return `${sign}$${Math.abs(v).toFixed(2)}`;
+  };
+
+  it("gives the count when a believer ratio is withheld", () => {
+    const m = believerMove(6, 3, "over 1D");
+    expect(m.pct).toBeNull();
+    expect(m.figure).toBe("+3");
+  });
+
+  it("signs a loss", () => {
+    expect(believerMove(3, 6, "over 1D").figure).toBe("−3");
+  });
+
+  it("names an arrival rather than leaving the slot blank", () => {
+    expect(believerMove(4, 0, "over 1D").figure).toBe("+4");
+    expect(capitalMove({ currentEth: 0.05, baseEth: 0, since: "over 1D", usd, money }).figure).toBe(
+      "$100.00",
+    );
+  });
+
+  it("gives the amount when a capital ratio is withheld", () => {
+    // base $0.60 — real, but under the dollar floor `gain` will divide by.
+    const m = capitalMove({
+      currentEth: 40 / 2000,
+      baseEth: 0.6 / 2000,
+      since: "over 1D",
+      usd,
+      money,
+    });
+    expect(m.pct).toBeNull();
+    expect(m.figure).toBe("+$39.40");
+  });
+
+  it("is empty only when nothing moved", () => {
+    expect(believerMove(20, 20, "over 1D").figure).toBe("");
+    expect(
+      capitalMove({ currentEth: 100.1 / 2000, baseEth: 100 / 2000, since: "over 1D", usd, money })
+        .figure,
+    ).toBe("");
+  });
+
+  it("leads price with its ratio, which is the one metric that should", () => {
+    expect(priceMove({ pricePct: 12, priceDelta: 0.05, since: "over 1D", money: px }).figure).toBe(
+      "+12%",
+    );
+  });
+
+  /** Whatever else is true, a move that happened is never rendered as nothing. */
+  it("never leaves a real move with neither a percentage nor a figure", () => {
+    for (const m of [
+      believerMove(6, 3, "over 1D"),
+      believerMove(1, 0, "over 1D"),
+      believerMove(45, 30, "over 1D"),
+      capitalMove({ currentEth: 40 / 2000, baseEth: 0.6 / 2000, since: "x", usd, money }),
+      capitalMove({ currentEth: 35.04 / 2000, baseEth: 244.6 / 2000, since: "x", usd, money }),
+    ]) {
+      expect(m.pct ?? m.figure).toBeTruthy();
+    }
   });
 });

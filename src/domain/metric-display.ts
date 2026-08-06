@@ -65,11 +65,23 @@ export const METRIC_DISPLAY = {
   /**
    * Discrete people. `pctValidMinBase` is TEN, not one: with a median side of
    * one believer, a ratio below ten is just the count restated with worse
-   * precision — 1 → 3 people is "+2 believers", never "+200%". Only 1% of sides
-   * are large enough for the ratio to add anything, and those are exactly the
-   * ones where it does.
+   * precision — 1 → 3 people is "+2 believers", never "+200%".
+   *
+   * THIS FLOOR WAS BRIEFLY LOWERED TO THREE, on the reasoning that the Total
+   * Market tile sums both sides and so needed its own, smaller base. Measured,
+   * that premise is false: most markets carry believers on ONE side only, so the
+   * market total (p50 1 · p90 3 · p95 5 · p99 9) is barely larger than a single
+   * side (p50 1 · p90 3 · p95 4 · p99 7). A separate market rule would land on
+   * the same number, and at a base of three "3 → 6 participants" prints "+100%"
+   * — the exact family of figures this module exists to stop.
+   *
+   * What actually motivated lowering it was a HOLE IN THE TILE: when the
+   * percentage was withheld the big right-hand figure went blank. That is fixed
+   * where it belongs — `MetricMove.figure` below always carries the move in the
+   * metric's own unit, so a surface never has to choose between a meaningless
+   * ratio and an empty space.
    */
-  believers: { originMaxBase: 0, pctValidMinBase: 3, pctHeadlineMinBase: 3 },
+  believers: { originMaxBase: 0, pctValidMinBase: 10, pctHeadlineMinBase: 10 },
   /**
    * Capital, judged in USD so the display unit never changes what's "small".
    * `originMaxBase` is the app's own dust line: elsewhere it already refuses to
@@ -211,6 +223,15 @@ export interface MetricMove {
   pctQuiet: boolean;
   /** The exact change with its timeframe, e.g. "+1 believer over 1D". Always shown. */
   absolute: string;
+  /**
+   * The move alone, short enough for a headline slot: "+2", "−$209.56", "$100".
+   *
+   * A surface that leads with the percentage needs something to lead with when
+   * there is no honest percentage to print — and the honest answer is never a
+   * looser threshold, it is the change itself. Empty only when nothing moved and
+   * nothing can be said.
+   */
+  figure: string;
 }
 
 /**
@@ -228,6 +249,7 @@ export function believerMove(current: number, base: number, since: string): Metr
       pct: null,
       pctQuiet: false,
       absolute: current === 1 ? "First believer" : `+${current} believers ${since}`,
+      figure: `+${current}`,
     };
   }
 
@@ -235,7 +257,7 @@ export function believerMove(current: number, base: number, since: string): Metr
   const pctQuiet = g.rank === "quiet";
 
   if (delta === 0) {
-    return { direction: "flat", pct, pctQuiet, absolute: `No change ${since}` };
+    return { direction: "flat", pct, pctQuiet, absolute: `No change ${since}`, figure: "" };
   }
   const n = Math.abs(delta);
   return {
@@ -243,6 +265,7 @@ export function believerMove(current: number, base: number, since: string): Metr
     pct,
     pctQuiet,
     absolute: `${delta > 0 ? "+" : "−"}${n} believer${n === 1 ? "" : "s"} ${since}`,
+    figure: `${delta > 0 ? "+" : "−"}${n}`,
   };
 }
 
@@ -271,6 +294,7 @@ export function capitalMove(input: {
       pct: null,
       pctQuiet: false,
       absolute: `First capital · ${money(currentEth)}`,
+      figure: money(currentEth),
     };
   }
 
@@ -280,13 +304,14 @@ export function capitalMove(input: {
   // An immaterial move must not headline a percentage: "No change over 1D" beside
   // "+2.1%" is one metric contradicting itself. Flat is flat in both lines.
   if (direction === "flat") {
-    return { direction, pct: null, pctQuiet: false, absolute: `No change ${since}` };
+    return { direction, pct: null, pctQuiet: false, absolute: `No change ${since}`, figure: "" };
   }
   return {
     direction,
     pct,
     pctQuiet,
     absolute: `${money(delta, true)} ${direction === "down" ? "left" : "committed"} ${since}`,
+    figure: money(delta, true),
   };
 }
 
@@ -303,7 +328,7 @@ export function priceMove(input: {
 }): MetricMove {
   const { pricePct, priceDelta, since, money } = input;
   if (pricePct == null) {
-    return { direction: "flat", pct: null, pctQuiet: false, absolute: "" };
+    return { direction: "flat", pct: null, pctQuiet: false, absolute: "", figure: "" };
   }
   const direction: Direction =
     Math.abs(pricePct) < METRIC_DISPLAY.price.flatPct ? "flat" : pricePct > 0 ? "up" : "down";
@@ -314,7 +339,15 @@ export function priceMove(input: {
         ? `Flat ${since}`
         : ""
       : `${money(priceDelta, true)} ${since}`;
-  return { direction, pct, pctQuiet: false, absolute };
+  return {
+    direction,
+    pct,
+    pctQuiet: false,
+    absolute,
+    // Price is the one metric that genuinely leads with its ratio, so the
+    // fallback figure is the ratio too.
+    figure: pct,
+  };
 }
 
 /**
