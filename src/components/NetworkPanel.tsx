@@ -371,8 +371,9 @@ function PersonRow({
           </span>
           <span className="mt-1 flex items-baseline gap-1.5 text-[11.5px]">
             <span className="num shrink-0 font-semibold" style={{ color: tone }}>
-              {spot.matchPct}% match
+              {spot.matchPct}%
             </span>
+
             <span className="num truncate text-[var(--text-muted)]">· {shared} shared</span>
           </span>
         </span>
