@@ -1053,17 +1053,17 @@ function Feed() {
               </div>
             ) : dashOpen ? (
               <div className="min-h-0 flex-1 overflow-y-auto">
+                <BackLink onClick={closeDash} />
                 <Suspense fallback={<DeckSkeleton />}>
                   <ConvictionDashboard
                     wallet={wallet}
                     onSelectMarket={selectMarket}
                     onCreate={openCreate}
-                    onExplore={() =>
-                      onExplore={closeDash}
-                    }
+                    onExplore={closeDash}
                   />
                 </Suspense>
               </div>
+
             ) : createOpen ? (
               <PanelBoundary label="Create market" onDismiss={closeCreate}>
                 <Suspense fallback={<DeckSkeleton />}>
