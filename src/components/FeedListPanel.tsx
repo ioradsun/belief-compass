@@ -24,6 +24,7 @@ import { FeedFilterMenu } from "@/components/FeedFilterMenu";
 import type { FeedFilters, FeedNetwork } from "@/domain/feed/filters";
 import type { MarketRow } from "@/components/MarketCard";
 import type { Sensitivity } from "@/domain/market-change";
+import { marketTitle, marketTitleFallback } from "@/domain/market-title";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -47,7 +48,7 @@ function factsOf(row: MarketRow | undefined, nowMs: number) {
   const r = row as unknown as Record<string, unknown>;
   const capitalUsd = num(r.yes_capital_usd) + num(r.no_capital_usd);
   return {
-    question: row.markets?.title ?? `Market #${row.onchain_id}`,
+    question: marketTitle(row.markets?.title, row.onchain_id),
     discovery: composeDiscoveryRow({
       participants: num(r.participants),
       believers: num(row.believers_yes) + num(row.believers_no),
@@ -139,7 +140,7 @@ export function FeedListPanel({
             Now reading
           </p>
           <p className="text-[13px] font-semibold leading-snug text-[var(--text)]">
-            {activeFacts?.question ?? `Market #${activeId}`}
+            {activeFacts?.question ?? marketTitleFallback(activeId)}
           </p>
           {(active?.reason ?? activeFacts?.discovery.story) && (
             <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
@@ -180,7 +181,7 @@ export function FeedListPanel({
                   className="w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--surface)]"
                 >
                   <span className="block text-[13px] font-medium leading-snug text-[var(--text-secondary)]">
-                    {f?.question ?? `Market #${e.onchainId}`}
+                    {f?.question ?? marketTitleFallback(e.onchainId)}
                   </span>
                   {line && (
                     <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">

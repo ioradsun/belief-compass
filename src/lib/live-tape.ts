@@ -19,6 +19,7 @@ import type { StackPerson } from "@/domain/conviction-cohort";
 import type { MixCandidate } from "@/domain/feed-cadence";
 import { findWashTrades, WASH } from "@/domain/wash-trading";
 import type { Perishability } from "@/domain/feed-scheduler";
+import { marketTitle } from "@/domain/market-title";
 
 export interface LiveEventInput {
   source_key: string;
@@ -372,7 +373,7 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
       id: e.source_key,
       kind,
       marketId: e.market_id,
-      marketTitle: e.market_title ?? `Market #${e.market_id}`,
+      marketTitle: marketTitle(e.market_title, e.market_id),
       occurredAt: e.occurred_at,
       startedAt: e.occurred_at,
       side: e.side,
@@ -459,7 +460,7 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
         id: head.source_key,
         kind: isLargeSingle ? "large_trade" : "trade_burst",
         marketId: head.market_id,
-        marketTitle: head.market_title ?? `Market #${head.market_id}`,
+        marketTitle: marketTitle(head.market_title, head.market_id),
         occurredAt: head.occurred_at,
         startedAt: group[group.length - 1].occurred_at,
         side: head.side,
@@ -495,7 +496,7 @@ export function groupLiveRows(input: LiveEventInput[], ethUsd: number): LiveRow[
       id: e.source_key,
       kind: "round_trip",
       marketId: e.market_id,
-      marketTitle: e.market_title ?? `Market #${e.market_id}`,
+      marketTitle: marketTitle(e.market_title, e.market_id),
       occurredAt: e.occurred_at,
       startedAt: e.occurred_at,
       side: e.side,

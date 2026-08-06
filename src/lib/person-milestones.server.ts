@@ -21,6 +21,7 @@
 import { serviceClientOrNull } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { convictionMilestones, type Person, type PersonMilestone } from "@/domain/person-milestone";
+import { marketTitleFallback } from "@/domain/market-title";
 
 type Row = Record<string, unknown>;
 
@@ -84,7 +85,7 @@ export async function buildPersonMilestones(
       } satisfies Person);
     person.convictions.push({
       marketId,
-      title: input.titleById.get(marketId) ?? `Market #${marketId}`,
+      title: input.titleById.get(marketId) ?? marketTitleFallback(marketId),
       startedAt: (raw.first_backed_at as string | null) ?? null,
     });
     byWallet.set(wallet, person);

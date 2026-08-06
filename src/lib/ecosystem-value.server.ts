@@ -29,6 +29,7 @@ import {
   type ShareRpc,
   type SharePoint,
 } from "@/domain/ecosystem-share";
+import { marketTitle } from "@/domain/market-title";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -174,7 +175,7 @@ async function build(): Promise<EcosystemValue> {
       const meta = metaById.get(id);
       return {
         onchainId: id,
-        title: meta?.title ?? `Market #${id}`,
+        title: marketTitle(meta?.title, id),
         category: meta?.category ?? null,
         authorWallet: meta?.author_wallet ?? null,
         authorName: meta?.author_name ?? null,
@@ -228,7 +229,7 @@ async function build(): Promise<EcosystemValue> {
       side: r.side === "YES" || r.side === "NO" ? r.side : null,
       action: r.action === "BUY" || r.action === "SELL" ? r.action : null,
       marketId: mid,
-      title: metaById.get(mid)?.title ?? `Market #${mid}`,
+      title: marketTitle(metaById.get(mid)?.title, mid),
       ethUsd,
       amountEth: weiToEth(r.amountEth),
       at: r.at,

@@ -64,6 +64,7 @@ import {
   type ConvictionCohort,
   type HoldingRung,
 } from "@/domain/conviction-cohort";
+import { fetchMarketNames } from "@/lib/market-titles.server";
 
 type NetLabel = "twin" | "tribe" | "opp" | "inverse";
 

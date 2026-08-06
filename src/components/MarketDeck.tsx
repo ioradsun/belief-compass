@@ -63,6 +63,7 @@ import { ShareImpact } from "@/components/ShareImpact";
 
 import { getConvictionMarket } from "@/lib/market-create.functions";
 import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
+import { marketTitle } from "@/domain/market-title";
 
 /**
  * Momentum tags — the six canonical opportunity classifications from the
@@ -117,7 +118,7 @@ export function MarketDeck({
 }) {
   const rr = row as Record<string, unknown>;
   const marketId = Number(row.onchain_id);
-  const title = row.markets?.title ?? `Market #${marketId}`;
+  const title = marketTitle(row.markets?.title, marketId);
   const category = row.markets?.category ?? null;
   // POV hosts the same market; the slug comes from their API via the poller.
   const povSlug = row.markets?.pov_slug ?? null;
