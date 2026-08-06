@@ -151,9 +151,9 @@ describe("the update control never moves the feed", () => {
     expect(code("src/hooks/useTapeGate.ts")).toMatch(/!holdAlways && canAutoAdmit/);
   });
 
-  it("puts admitted rows on top, in the mixer's current order", () => {
+  it("puts the rows the reader asked for at the very top", () => {
     const gate = code("src/hooks/useTapeGate.ts");
-    expect(gate).toMatch(/collapse\(incomingRef\.current as T\[\]\), \.\.\.taking, \.\.\.prev/);
+    expect(gate).toMatch(/\.\.\.taking, \.\.\.collapse\(incomingRef\.current as T\[\]\), \.\.\.prev/);
   });
 });
 
