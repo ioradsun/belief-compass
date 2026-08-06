@@ -1,5 +1,5 @@
 /**
- * "Live activity" — the pinned scope of the Live feed.
+ * "In this market" — the pinned scope of the Live feed.
  *
  * This market's own activity feed, gently elevated above the global feed: a thin
  * accent rail, a faint tint, a tiny uppercase label. It does exactly ONE job —
@@ -12,7 +12,7 @@
  * already runs (React Query dedupes it). Collapsed, it leads with the latest beat
  * and a quiet unread count; tapping expands the bounded, internally-scrolled feed.
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAnchorRect, anchorStyle } from "@/hooks/useAnchorRect";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -52,18 +52,11 @@ export function CurrentMarketActivity({
   const count = rows.length;
   const latest = rows[0]?.text ?? "";
 
-  // Unread = beats that arrived since the viewer last opened this section, so the
-  // lead line stays put while the number quietly climbs. Opening marks all seen.
-  const [seenCount, setSeenCount] = useState<number | null>(null);
-  useEffect(() => {
-    if (seenCount == null && live) setSeenCount(count);
-  }, [live, count, seenCount]);
-  const unread = seenCount == null ? 0 : Math.max(0, count - seenCount);
-  const toggle = () =>
-    setOpen((v) => {
-      if (!v) setSeenCount(count);
-      return !v;
-    });
+  // No count is shown: the raw row count and what the expanded sheet renders
+  // (grouped beats) are different numbers, and a number that disagrees with the
+  // thing it opens is worse than no number at all.
+  const toggle = () => setOpen((v) => !v);
+
 
   // Nothing has happened yet → show nothing. The cold-start read lives on the
   // order bar; a "no activity" placeholder here would just repeat it.
@@ -91,7 +84,7 @@ export function CurrentMarketActivity({
         aria-expanded={open}
       >
         <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-          Live activity
+          In this market
         </span>
         <span className="ml-auto text-[11px] text-[var(--text-muted)]" aria-hidden>
           {open ? "▲" : "▼"}
@@ -99,14 +92,12 @@ export function CurrentMarketActivity({
       </button>
 
       <button type="button" onClick={toggle} className="block w-full px-3 pb-2 pt-0.5 text-left">
-        {/* The latest beat leads; the count trails, quiet. */}
-        <span className="block truncate text-[13px] leading-snug text-[var(--text-secondary)]">
+        {/* The latest beat, in full — wrapped, never clipped mid-word. */}
+        <span className="line-clamp-2 block text-[13px] leading-snug break-words text-[var(--text-secondary)]">
           {latest}
         </span>
-        <span className="num mt-1 block text-right text-[12px] font-semibold text-[var(--text-muted)]">
-          {unread > 0 ? `+${unread} new` : `${count} update${count === 1 ? "" : "s"}`} ›
-        </span>
       </button>
+
 
       {/* EXPANDED = a layer, not a squeeze. A bounded panel inside an already
         tight column can only ever show three beats and pushes the order bar
@@ -131,7 +122,7 @@ export function CurrentMarketActivity({
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[16px] border-t border-[var(--border)] bg-[var(--surface-1,var(--background))] shadow-2xl">
             <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-3">
               <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-                Live activity
+                In this market
               </span>
               <button
                 type="button"
