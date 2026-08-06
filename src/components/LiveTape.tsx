@@ -142,8 +142,8 @@ export function LiveTape({
         if (res.error) return { rows: prev, standing: prevStanding, error: res.error };
         return {
           rows: mergeLiveRows(prev, res.rows, sinceIso, limit ?? 120),
-          // Continuity does not change in thirty seconds, and re-deriving it on
-          // every delta would put a wallet_beliefs read on the fast path.
+          // Continuity is a slow-moving fact, and re-deriving it on every delta
+          // would put a wallet_beliefs read on the fast path.
           standing: prevStanding,
           error: null,
         };
@@ -152,10 +152,24 @@ export function LiveTape({
         data: { wallet, marketIds: scopeKey ?? undefined, side, limit },
       })) as LiveResult;
     },
-    // The realtime coordinator refetches this tape the instant a trade lands
-    // (events stream), so this interval is now only a slow safety reconcile for a
-    // dropped socket — not the primary freshness path.
-    refetchInterval: 30_000,
+    /**
+     * NO POLL. The realtime coordinator invalidates `["live-tape"]` on every
+     * trade event — coalesced to at most one refetch per 1.5s — and again on
+     * reconnect and on a hidden tab becoming visible. A 30-second timer was
+     * therefore both SLOWER than the socket (up to 30s behind a trade the
+     * coordinator already knew about) and redundant with it.
+     *
+     * Two mechanisms for one job, and the slower one was setting how fresh the
+     * tape FELT while the faster one paid for it. This codebase has been here
+     * before: see network-query.ts, where one observer's interval put the whole
+     * app's network on a poll.
+     *
+     * `staleTime` replaces it. The tape is authoritative until something says
+     * otherwise, and the coordinator is what says otherwise. A remount inside
+     * the window reuses the cache instead of refetching — which is why moving
+     * between markets no longer costs a request.
+     */
+    staleTime: 60_000,
     placeholderData: (prev) => prev,
   });
   // Sticky: the tape holds its rows until fresh ones arrive.
