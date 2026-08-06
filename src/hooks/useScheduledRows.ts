@@ -190,6 +190,37 @@ export function useScheduledRows<T extends SchedulableRow>(
     pump();
   }, [reserve, pump]);
 
+  // THE READER ASKED. Everything known — queued, held back, just merged — is
+  // released in one commit, and each newly visible row is given the major
+  // entrance so the answer to "where did they go?" is a thing you can watch.
+  const allRef = useRef(all);
+  allRef.current = all;
+  const revealed = useRef(revealKey);
+  useEffect(() => {
+    if (revealed.current === revealKey) return;
+    revealed.current = revealKey;
+    const rows = allRef.current;
+    if (rows.length === 0) return;
+    setShown((prev) => {
+      const next = new Set(prev);
+      for (const r of rows) {
+        known.current.add(r.id);
+        if (!next.has(r.id)) {
+          next.add(r.id);
+          entrances.current.set(r.id, 1);
+        }
+      }
+      return next;
+    });
+    if (timer.current != null) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    state.current = createScheduleState(Date.now());
+    setPending(0);
+  }, [revealKey]);
+
+
   useEffect(
     () => () => {
       if (timer.current != null) clearTimeout(timer.current);
