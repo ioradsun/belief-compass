@@ -360,36 +360,56 @@ async function cooldownState(sb: SupabaseClient, wallet: string): Promise<Cooldo
   };
 }
 
+/** Why a wallet produced no suggestion — so a silent job run can be read. */
+export type SuggestionSkipReason =
+  | "has-ready"
+  | "dismiss-cooldown"
+  | "created-cooldown"
+  | "not-enough-history"
+  | "no-category"
+  | "no-candidates"
+  | "all-rejected"
+  | "insert-failed";
+
+export interface SuggestionOutcome {
+  /** The stored suggestion id, or null when nothing was stored. */
+  id: string | null;
+  reason: SuggestionSkipReason | null;
+}
+
 /**
  * The whole pipeline for one wallet, run by the background job. Returns the id
- * of the stored suggestion, or null when the person is not eligible, the model
- * failed, or every candidate was a duplicate. Never throws into the job loop.
+ * of the stored suggestion, or the reason nothing was stored (not eligible,
+ * model failure, every candidate a duplicate). Never throws into the job loop.
  */
-export async function generateSuggestionFor(wallet: string): Promise<string | null> {
+export async function generateSuggestionFor(wallet: string): Promise<SuggestionOutcome> {
   const sb = serviceClient();
   const w = norm(wallet);
+  const skip = (reason: SuggestionSkipReason): SuggestionOutcome => ({ id: null, reason });
 
   const state = await cooldownState(sb, w);
   const now = Date.now();
-  if (state.hasReady) return null;
-  if (withinDays(state.dismissedAt, SUGGESTION.DISMISS_COOLDOWN_DAYS, now)) return null;
-  if (withinDays(state.createdAt, SUGGESTION.CREATED_COOLDOWN_DAYS, now)) return null;
+  if (state.hasReady) return skip("has-ready");
+  if (withinDays(state.dismissedAt, SUGGESTION.DISMISS_COOLDOWN_DAYS, now))
+    return skip("dismiss-cooldown");
+  if (withinDays(state.createdAt, SUGGESTION.CREATED_COOLDOWN_DAYS, now))
+    return skip("created-cooldown");
 
   const { interest, signals } = await buildInterest(sb, w);
-  if (!isParticipationEligible(participationOf(signals))) return null;
+  if (!isParticipationEligible(participationOf(signals))) return skip("not-enough-history");
 
   const categories = interest.topCategories.slice(0, 2).map((c) => c.category);
   const draftOpp = buildOpportunity(interest, []);
-  if (!draftOpp) return null;
+  if (!draftOpp) return skip("no-category");
   const existing = await relatedMarketTitles(sb, categories, draftOpp.relevantTopics);
   const opp = buildOpportunity(interest, existing)!;
 
   const candidates = await generateIdeas(opp);
-  if (!candidates.length) return null;
+  if (!candidates.length) return skip("no-candidates");
 
   const blocked = [...existing, ...interest.previouslyCreatedTitles];
   const best = selectBestCandidate(candidates, opp, CATEGORIES, blocked);
-  if (!best) return null;
+  if (!best) return skip("all-rejected");
 
   const topics = [opp.primaryCategory, opp.secondaryCategory].filter((t): t is string => !!t);
   const { data, error } = await sb
@@ -409,15 +429,16 @@ export async function generateSuggestionFor(wallet: string): Promise<string | nu
     })
     .select("id")
     .single();
-  if (error || !data) return null;
+  if (error || !data) return skip("insert-failed");
 
   await logSuggestionEvent(sb, "suggestion_generated", data.id as string, w, {
     category: opp.primaryCategory,
     score: best.score,
     candidates: candidates.length,
   });
-  return data.id as string;
+  return { id: data.id as string, reason: null };
 }
+
 
 /** The ready idea for this wallet, if the participation gate passes. */
 export async function readySuggestionFor(wallet: string): Promise<ReadySuggestion | null> {
