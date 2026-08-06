@@ -40,6 +40,8 @@ declare global {
       setLongBeat: (on: boolean) => void;
       /** Render the OLD behaviour — instant mount/unmount, unreserved text. */
       setLegacy: (on: boolean) => void;
+      /** Updates are waiting (the "N new" control). */
+      setPending: (on: boolean) => void;
       state: () => Record<string, boolean>;
     };
   }
@@ -57,14 +59,23 @@ function RailHarness() {
   // The pre-fix behaviour, so the probe can measure both and the difference is
   // a number rather than a claim.
   const [legacy, setLegacy] = useState(false);
+  const [pending, setPending] = useState(false);
 
   const state = useCallback(
-    () => ({ welcome, activity, expanded, longBeat, legacy }),
-    [welcome, activity, expanded, longBeat, legacy],
+    () => ({ welcome, activity, expanded, longBeat, legacy, pending }),
+    [welcome, activity, expanded, longBeat, legacy, pending],
   );
 
   useEffect(() => {
-    window.__rail = { setWelcome, setActivity, setExpanded, setLongBeat, setLegacy, state };
+    window.__rail = {
+      setWelcome,
+      setActivity,
+      setExpanded,
+      setLongBeat,
+      setLegacy,
+      setPending,
+      state,
+    };
   }, [state]);
 
   if (!import.meta.env.DEV) {
@@ -156,13 +167,46 @@ function RailHarness() {
 
         {/* THE ANCHOR. This heading is what must not move: everything above it
           is optional and everything below it is the tape. */}
-        <div
-          data-probe="now"
-          className="mb-4 shrink-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]"
-        >
-          Now
-        </div>
+        {legacy ? (
+          <div
+            data-probe="now"
+            className="mb-4 shrink-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]"
+          >
+            Now
+          </div>
+        ) : (
+          // The heading and the update control share ONE fixed-height row, so
+          // the control arriving costs the list nothing.
+          <div data-probe="now" className="mb-4 flex h-[22px] shrink-0 items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              Now
+            </span>
+            <button
+              type="button"
+              className="ml-auto rounded-full px-2.5 py-[3px] text-[11px] font-semibold transition-[opacity,transform] duration-200 ease-out"
+              style={{
+                background: "var(--text)",
+                color: "var(--bg)",
+                opacity: pending ? 1 : 0,
+                transform: pending ? "scale(1)" : "scale(0.9)",
+                pointerEvents: pending ? "auto" : "none",
+              }}
+            >
+              ↑ 3 new
+            </button>
+          </div>
+        )}
         <div data-probe="tape" className="min-h-0 flex-1 overflow-hidden">
+          {/* The OLD control: sticky inside the scroller, pushing every row down
+            when it appears and snapping them back on the tap. */}
+          {legacy && pending && (
+            <div
+              className="sticky top-0 z-10 mb-2 w-full rounded-[10px] px-3 py-1.5 text-[11px]"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
+              ↑ 3 new
+            </div>
+          )}
           {Array.from({ length: 12 }).map((_, i) => (
             <div key={i} className="border-t border-[var(--hairline)] py-3 text-[12px]">
               Tape row {i + 1}

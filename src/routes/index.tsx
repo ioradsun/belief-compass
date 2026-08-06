@@ -1209,15 +1209,17 @@ function Feed() {
               {shownId != null && (
                 <CurrentMarketActivity marketId={shownId} wallet={wallet} onSelect={selectMarket} />
               )}
-              <div className="mb-4 shrink-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                Now
-              </div>
+              {/* The heading belongs to the tape now, so the update control can
+                share its line. It used to be a sticky button INSIDE the
+                scroller, which pushed every row down when activity arrived and
+                snapped them back on the tap meant to be the calm act. */}
               <div className="min-h-0 flex-1 overflow-hidden">
                 <LiveTape
                   wallet={wallet}
                   onSelect={selectMarket}
                   excludeMarketId={shownId ?? undefined}
                   holdUpdates
+                  label="Now"
                 />
               </div>
             </>

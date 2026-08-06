@@ -106,3 +106,75 @@ describe("the collapse primitive", () => {
     expect(COLLAPSE_MS).toBeLessThanOrEqual(320);
   });
 });
+
+/**
+ * THE UPDATE CONTROL SHARES THE HEADING'S LINE.
+ *
+ * It used to be `sticky top-0 mb-2` INSIDE the tape's scroller, so it pushed
+ * every row down ~38px when activity arrived and the rows snapped back the
+ * instant it was tapped — a jump on arrival, and a second one on the very tap
+ * that was meant to be the calm, deliberate act. The reader's own click moved
+ * the thing they were aiming at.
+ *
+ * Measured on /dev/rail, before → after:
+ *   update control appears   38px in 1 step → 0px, 0 CLS
+ *   update control is tapped 38px in 1 step → 0px, 0 CLS
+ */
+describe("the update control never moves the feed", () => {
+  const c = code("src/components/LiveTape.tsx");
+
+  it("lives in a fixed-height header beside the label, not in the scroller", () => {
+    expect(c).toMatch(/label\?: string/);
+    // A fixed-height row: the slot exists whether or not the control does.
+    expect(c).toMatch(/h-\[22px\]/);
+    expect(c).not.toMatch(/sticky top-0/);
+  });
+
+  it("fades rather than mounting, so the slot never reflows", () => {
+    expect(c).toMatch(/opacity: gate\.pending > 0/);
+    expect(c).toMatch(/pointerEvents/);
+  });
+
+  it("is unreachable by keyboard when there is nothing to admit", () => {
+    expect(c).toMatch(/tabIndex=\{gate\.pending === 0 \? -1/);
+    expect(c).toMatch(/aria-hidden=\{gate\.pending === 0/);
+  });
+
+  it("the rail hands the heading to the tape rather than rendering its own", () => {
+    const idx = code("src/routes/index.tsx");
+    expect(idx).toMatch(/label="Now"/);
+  });
+
+  it("still holds every update until the reader asks", () => {
+    // holdUpdates → useTapeGate(holdAlways), which admits only on first paint.
+    expect(code("src/routes/index.tsx")).toMatch(/holdUpdates/);
+    expect(code("src/hooks/useTapeGate.ts")).toMatch(/!holdAlways && canAutoAdmit/);
+  });
+
+  it("puts admitted rows on top, in the mixer's current order", () => {
+    const gate = code("src/hooks/useTapeGate.ts");
+    expect(gate).toMatch(
+      /groupArrivals\(incomingRef\.current as T\[\]\), \.\.\.taking, \.\.\.prev/,
+    );
+  });
+});
+
+/**
+ * A MARKET'S NAME IS NOT ITS ID. "Market #123" reads as a deliberate
+ * placeholder and is indistinguishable from a market that genuinely has no
+ * title — it is neither, it is a failed join.
+ */
+describe("market titles", () => {
+  const c = code("src/lib/live.functions.ts");
+
+  it("never stores an empty string as a title", () => {
+    // `set(id, title ?? "")` made the map return a present-but-empty string,
+    // which survives BOTH `?? null` here and `?? \`Market #\`` downstream — so
+    // the row rendered blank instead of either the title or the fallback.
+    expect(c).toMatch(/if \(title\) titleById\.set/);
+  });
+
+  it("says so when a title does not resolve, instead of shipping the id", () => {
+    expect(c).toMatch(/market titles did not resolve/);
+  });
+});

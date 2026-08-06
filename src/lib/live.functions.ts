@@ -212,7 +212,13 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       ]);
       for (const m of mk.data ?? []) {
         const id = Number(m.onchain_id);
-        titleById.set(id, (m.title as string) ?? "");
+        // ONLY A REAL TITLE GOES IN. Storing "" for a missing one made the map
+        // return a present-but-empty string, which survives BOTH `?? null` here
+        // and `?? \`Market #\`` in live-tape — so the row rendered a blank
+        // instead of either the title or the fallback. An empty sentinel that
+        // defeats two layers of null-coalescing is worse than no entry.
+        const title = typeof m.title === "string" ? m.title.trim() : "";
+        if (title) titleById.set(id, title);
         const creator = String((m as Record<string, unknown>).creator_wallet ?? "").toLowerCase();
         if (creator) creatorByMarket.set(id, creator);
       }
@@ -247,6 +253,25 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     // policy, so the public read returned 200 with zero rows for months while
     // the stored value was perfectly fine. A present-but-null value is the other
     // case: the calibration itself returns NULL when no market has volume.
+    /**
+     * A MISSED TITLE IS A BUG, NOT A DEFAULT.
+     *
+     * `events.market_id` is text and `markets.onchain_id` is numeric, so every
+     * lookup here crosses a type boundary via Number(). A row whose market_id is
+     * not numeric — or a market the join simply did not return — misses the map
+     * and renders as "Market #123", which looks like a deliberate placeholder
+     * and is indistinguishable from a market that genuinely has no title. It is
+     * neither. Say so once per request rather than shipping the id as a name.
+     */
+    const missing = marketIds.filter((id) => !titleById.has(id));
+    if (missing.length > 0)
+      console.warn(
+        `[feed] ${missing.length}/${marketIds.length} market titles did not resolve ` +
+          `(ids ${missing.slice(0, 5).join(",")}${missing.length > 5 ? "…" : ""}). ` +
+          `Rows for these render as "Market #<id>". Check that events.market_id ` +
+          `values are numeric onchain ids and that markets rows exist for them.`,
+      );
+
     const ethUsd = Number((cal as { value?: number } | null)?.value ?? 0) || 0;
     if (!(ethUsd > 0))
       console.warn(
@@ -260,6 +285,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       kind: r.kind as string,
       market_id: String(r.market_id),
       market_title: titleById.get(Number(r.market_id)) ?? null,
+
       occurred_at: r.occurred_at as string,
       block_number: r.block_number as number | null,
       log_index: r.log_index as number | null,
