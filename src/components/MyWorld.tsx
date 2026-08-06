@@ -148,8 +148,10 @@ export function MyWorld({
 
   // The playlist tab carries no count: how many markets are queued is an
   // implementation detail, and no reader decides anything differently for it.
+  // Signed out there is no "your" anything to count, so the strip shows nothing
+  // rather than a stale zero (or a leftover count from the last connection).
   const tabCount = (t: Tab): number | null =>
-    t === "feed"
+    t === "feed" || !wallet
       ? null
       : t === "positions"
         ? (convictionCount ?? positionCount)
