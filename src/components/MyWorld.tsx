@@ -61,7 +61,6 @@ export function MyWorld({
   onSelectMarket,
   selectedPerson,
   onSelectPerson,
-  onOpenDna,
   onOpenDashboard,
   initialNetwork,
   feedList,
@@ -77,7 +76,6 @@ export function MyWorld({
   onSelectMarket: (id: number) => void;
   selectedPerson?: string;
   onSelectPerson: (wallet: string) => void;
-  onOpenDna: () => void;
   /** Open the full Conviction Dashboard (P&L) in the center. */
   onOpenDashboard?: () => void;
   /** Force a people tab when a person/DNA view is active in the center. */
