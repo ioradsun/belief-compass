@@ -293,19 +293,21 @@ export const listFeed = createServerFn({ method: "GET" })
       const focus = [...new Set([...alignedBy.keys(), ...opposedBy.keys()])];
       if (focus.length) {
         const ids = rows.map((r) => Number(r.onchain_id));
+        for (const w of alignedBy.keys()) tribeWallets.add(w);
+        for (const w of opposedBy.keys()) oppWallets.add(w);
         const [{ data: beliefs }, profiles] = await Promise.all([
           sb
             .from("wallet_beliefs")
             // `last_trade_at` is THEIR recency, which is what a Tribe or Rivals
             // ordering means by "recent" — not the market's own last trade,
             // which could be anyone.
+            // No stance filter: a belief row at all means they traded here, and
+            // "where has my Tribe been" has to include the ones who have since
+            // gone flat. The face piles below still take directional stances
+            // only, so wash activity cannot put anyone in a sentence.
             .select("wallet, onchain_id, stance_side, last_trade_at")
             .in("wallet", focus)
-            .in("onchain_id", ids)
-            // A directional stance only. A wallet that churned its way to flat
-            // has no side, so wash activity cannot make someone look present —
-            // the stance filter already does what an is_wash join would.
-            .in("stance_side", ["YES", "NO"]),
+            .in("onchain_id", ids),
           import("@/lib/profiles.server").then((m) => m.resolveProfiles(focus, focus.length)),
         ]);
 
@@ -322,33 +324,41 @@ export const listFeed = createServerFn({ method: "GET" })
         for (const b of beliefs ?? []) {
           const w = String(b.wallet).toLowerCase();
           const id = Number(b.onchain_id);
-          const side = b.stance_side as "YES" | "NO";
+          const raw = b.stance_side;
+          const side = raw === "YES" || raw === "NO" ? (raw as "YES" | "NO") : null;
           const at = b.last_trade_at ? Date.parse(String(b.last_trade_at)) : NaN;
           if (Number.isFinite(at)) netRecency.set(id, Math.max(netRecency.get(id) ?? 0, at));
           const a = alignedBy.get(w);
           if (a) {
-            const list = tribeHere.get(id) ?? [];
-            list.push({ ...person(w, a.agreement), side });
-            tribeHere.set(id, list);
-            // The lead's side stays the group's headline side, so the existing
-            // "your Tribe is backing X" copy keeps meaning what it meant.
-            if (!tribeBySide.has(id) || w === aligned[0]?.wallet.toLowerCase())
-              tribeBySide.set(id, side);
-            // Depth of the relationship, summed over the people actually here.
-            // Same-side history for allies, opposite-side for rivals: the honest
-            // measure of each, and what Tribe/Rivals rank on.
-            tribeOverlap.set(id, (tribeOverlap.get(id) ?? 0) + (a.sameSideBeliefs ?? 0));
+            tribeTouched.add(id);
+            if (side) {
+              const list = tribeHere.get(id) ?? [];
+              list.push({ ...person(w, a.agreement), side });
+              tribeHere.set(id, list);
+              // The lead's side stays the group's headline side, so the existing
+              // "your Tribe is backing X" copy keeps meaning what it meant.
+              if (!tribeBySide.has(id) || w === aligned[0]?.wallet.toLowerCase())
+                tribeBySide.set(id, side);
+              // Depth of the relationship, summed over the people actually here.
+              // Same-side history for allies, opposite-side for rivals: the honest
+              // measure of each, and what Tribe/Rivals rank on.
+              tribeOverlap.set(id, (tribeOverlap.get(id) ?? 0) + (a.sameSideBeliefs ?? 0));
+            }
           }
           const o = opposedBy.get(w);
           if (o) {
-            const list = oppHere.get(id) ?? [];
-            list.push({ ...person(w, o.agreement), side });
-            oppHere.set(id, list);
-            if (!oppBySide.has(id) || w === opposed[0]?.wallet.toLowerCase())
-              oppBySide.set(id, side);
-            oppOverlap.set(id, (oppOverlap.get(id) ?? 0) + (o.oppositeSideBeliefs ?? 0));
+            oppTouched.add(id);
+            if (side) {
+              const list = oppHere.get(id) ?? [];
+              list.push({ ...person(w, o.agreement), side });
+              oppHere.set(id, list);
+              if (!oppBySide.has(id) || w === opposed[0]?.wallet.toLowerCase())
+                oppBySide.set(id, side);
+              oppOverlap.set(id, (oppOverlap.get(id) ?? 0) + (o.oppositeSideBeliefs ?? 0));
+            }
           }
         }
+
         // Strongest first within each market, so a face pile or a named sentence
         // leads with the person the viewer has the clearest relationship to.
         for (const list of tribeHere.values()) list.sort((x, y) => y.score - x.score);
