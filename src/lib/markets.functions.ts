@@ -1375,16 +1375,21 @@ export const getWallet = createServerFn({ method: "GET" })
         new_believers_no_24h: number | null;
         // The GLOBAL factual live line from the read model — attached to each
         // owned position via THIS set-based join (never a per-position query).
+        // This is the CANONICAL market narrative every surface reads; the
+        // position card only re-tells it from the owner's seat, so the window
+        // and the structured payload travel with it.
         live_line: string | null;
         live_line_kind: string | null;
+        live_line_window: string | null;
         live_line_occurred_at: string | null;
+        live_line_payload: Record<string, unknown> | null;
       }
     >();
     if (ids.length) {
       const { data: st } = await sb
         .from("market_state")
         .select(
-          "onchain_id, yes_price_usd, no_price_usd, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, live_line, live_line_kind, live_line_occurred_at",
+          "onchain_id, yes_price_usd, no_price_usd, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, live_line, live_line_kind, live_line_window, live_line_occurred_at, live_line_payload",
         )
         .in("onchain_id", ids);
       for (const s of st ?? [])
@@ -1399,7 +1404,10 @@ export const getWallet = createServerFn({ method: "GET" })
             s.new_believers_no_24h == null ? null : Number(s.new_believers_no_24h),
           live_line: (s.live_line as string | null) ?? null,
           live_line_kind: (s.live_line_kind as string | null) ?? null,
+          live_line_window: (s.live_line_window as string | null) ?? null,
           live_line_occurred_at: (s.live_line_occurred_at as string | null) ?? null,
+          live_line_payload:
+            (s.live_line_payload as Record<string, unknown> | null) ?? null,
         });
     }
 
