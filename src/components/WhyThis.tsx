@@ -55,7 +55,7 @@ export function WhyThis({
   if (lead) {
     return (
       <p
-        className={`truncate text-[13.5px] leading-[20px] tracking-[-0.005em] ${className}`}
+        className={`truncate text-[13px] leading-[20px] tracking-[-0.005em] ${className}`}
         style={{ color: REL }}
       >
         {reason}
