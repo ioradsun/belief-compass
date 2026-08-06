@@ -37,7 +37,8 @@
  *    about. It now grows downward from where it sits, bounded and internally
  *    scrolled, and the tape below keeps whatever height is left.
  */
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { LiveTape } from "@/components/LiveTape";
@@ -118,6 +119,36 @@ export function CurrentMarketActivity({
   // reader was sent to for a reason still deserves its reason.
   const hasSomething = hasActivity || Boolean(why);
 
+  // OPENS OVER EVERYTHING. The expanded feed used to grow inside the rail,
+  // where ancestor `overflow` and stacking contexts clipped it — so the panel
+  // was only ever half visible. It now mounts to <body> as a fixed dropdown
+  // anchored to this card's column, above all app chrome.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [anchor, setAnchor] = useState<{ left: number; width: number; top: number } | null>(null);
+
+  const measure = useCallback(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setAnchor({ left: r.left, width: r.width, top: r.bottom });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [open, measure]);
+
+  // A market change must not leave a dropdown hanging over the next one.
+  useEffect(() => {
+    setOpen(false);
+  }, [marketId]);
+
   // No count is shown: the raw row count and what the expanded feed renders
   // (grouped beats) are different numbers, and a number that disagrees with the
   // thing it opens is worse than no number at all.
@@ -125,12 +156,14 @@ export function CurrentMarketActivity({
     if (hasActivity) setOpen((v) => !v);
   };
 
+
   return (
     // NOT `return null` when quiet. The card collapses to zero height instead,
     // so a market with nothing to say gives its space back smoothly and takes
     // it back the same way when the first event lands.
     <Collapsible open={hasSomething} probe="market-activity" className={embedded ? "" : "mb-3"}>
       <div
+        ref={cardRef}
         className={embedded ? "overflow-hidden" : "overflow-hidden rounded-[12px]"}
         style={
           embedded
@@ -182,35 +215,57 @@ export function CurrentMarketActivity({
             </button>
           )}
         </div>
-
-
-        {/* EXPANDS DOWNWARD, IN PLACE. Same primitive as the card itself, so
-          opening is the same continuous movement as arriving — and the market
-          stays readable beside its own activity instead of behind a scrim. */}
-        <Collapsible open={open} probe="market-activity-body">
-          <div
-            className="overflow-y-auto px-3 pb-2"
-            style={{ maxHeight: EXPANDED_MAX }}
-            // The scroll lives here, so a flick inside the feed never chains up
-            // and starts scrolling the rail behind it.
-            onWheel={(e) => e.stopPropagation()}
-          >
-            <LiveTape
-              wallet={wallet}
-              onSelect={onSelect}
-              marketIds={[marketId]}
-              showTitles={false}
-              limit={200}
-              skeletonRows={4}
-              emptyText="Quiet for three days."
-              scroll={false}
-              // The reader opened this deliberately and is looking straight at
-              // it; new rows wait rather than rearranging what they are reading.
-              holdUpdates
-            />
-          </div>
-        </Collapsible>
       </div>
+
+      {/* DROPS DOWN OVER EVERYTHING. Portalled to <body> and fixed to this
+        card's column, so no ancestor overflow or stacking context can clip it
+        and the whole panel is visible. A transparent catcher behind it closes
+        on an outside tap. */}
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <>
+              <div className="fixed inset-0 z-[1200]" onClick={() => setOpen(false)} aria-hidden />
+              <div
+                className="fixed z-[1201] overflow-hidden rounded-[12px] border border-[var(--hairline)] shadow-2xl"
+                style={{
+                  left: anchor?.left ?? 0,
+                  width: anchor?.width ?? "100%",
+                  top: (anchor?.top ?? 0) + 4,
+                  background: "var(--surface-raised, var(--surface, #101014))",
+                }}
+                role="dialog"
+                aria-label="Activity in this market"
+              >
+                <div
+                  className="overflow-y-auto px-3 py-2"
+                  style={{
+                    maxHeight: `min(${EXPANDED_MAX}, calc(100vh - ${(anchor?.top ?? 0) + 20}px))`,
+                  }}
+                  onWheel={(e) => e.stopPropagation()}
+                >
+                  <LiveTape
+                    wallet={wallet}
+                    onSelect={(id) => {
+                      setOpen(false);
+                      onSelect(id);
+                    }}
+                    marketIds={[marketId]}
+                    showTitles={false}
+                    limit={200}
+                    skeletonRows={4}
+                    emptyText="Quiet for three days."
+                    scroll={false}
+                    // The reader opened this deliberately and is looking straight
+                    // at it; new rows wait rather than rearranging it.
+                    holdUpdates
+                  />
+                </div>
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
     </Collapsible>
+
   );
 }
