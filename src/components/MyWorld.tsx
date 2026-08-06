@@ -144,11 +144,13 @@ export function MyWorld({
   );
 
   const tabName = (t: Tab): string =>
-    t === "feed" ? "Feed" : t === "positions" ? "Convictions" : t === "tribe" ? "Tribe" : "Rivals";
+    t === "feed" ? "For You" : t === "positions" ? "Convictions" : t === "tribe" ? "Tribe" : "Rivals";
 
-  const tabCount = (t: Tab): number =>
+  // The playlist tab carries no count: how many markets are queued is an
+  // implementation detail, and no reader decides anything differently for it.
+  const tabCount = (t: Tab): number | null =>
     t === "feed"
-      ? feedCount
+      ? null
       : t === "positions"
         ? (convictionCount ?? positionCount)
         : t === "tribe"
@@ -169,7 +171,7 @@ export function MyWorld({
         className="mb-4 flex overflow-x-auto rounded-[10px] p-0.5"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
         role="tablist"
-        aria-label="Feed, Convictions, Tribe, or Rivals"
+        aria-label="For You, Convictions, Tribe, or Rivals"
       >
         {TABS.map((t) => (
           <button
@@ -183,7 +185,9 @@ export function MyWorld({
             }`}
           >
             <span className="text-[12px] font-medium whitespace-nowrap">{tabName(t)}</span>
-            <span className="text-[11px] tabular-nums opacity-70">{tabCount(t)}</span>
+            {tabCount(t) != null && (
+              <span className="text-[11px] tabular-nums opacity-70">{tabCount(t)}</span>
+            )}
           </button>
         ))}
       </div>
