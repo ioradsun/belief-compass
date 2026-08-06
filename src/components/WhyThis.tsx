@@ -44,7 +44,13 @@ export function WhyThis({
 }) {
   if (!reason) return null;
   return (
-    <p className={`truncate text-[11.5px] leading-[18px] ${className}`} style={{ color: REL }}>
+    // The centre keeps the discovery accent (it is labelled "WHY THIS" and sits
+    // alone above the question). In the rail every row carries one, so a column
+    // of purple reads as decoration — those stay muted, like the facts beneath.
+    <p
+      className={`truncate text-[11.5px] leading-[18px] ${className}`}
+      style={{ color: lead ? REL : "var(--text-muted)" }}
+    >
       {lead && (
         <>
           <span className="font-semibold uppercase tracking-[0.08em]">Why this</span>
