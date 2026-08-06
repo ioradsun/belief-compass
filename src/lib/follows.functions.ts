@@ -4,11 +4,11 @@
  * The table's reasoning lives in the migration; this file is the door. Two
  * things worth knowing about the shape:
  *
- * READS ARE PUBLIC, WRITES ARE PROVEN. Who follows whom is not a secret —
- * every position behind it is on-chain — so `getFollows` needs no session and
- * a profile can show its own follower count to anyone. `setFollow` goes through
- * `assertWalletOwnership`, the same gate an expressed belief goes through,
- * because otherwise anyone could stuff a stranger's feed with their own markets.
+ * READS AND WRITES ARE UNSIGNED. Who follows whom is not a secret — every
+ * position behind it is on-chain — so neither `getFollows` nor `setFollow` asks
+ * the viewer to sign. A follow grants no access and is instantly reversible;
+ * making a free action cost a wallet prompt is the surest way to kill it.
+
  *
  * FOLLOWING IS IDEMPOTENT. Tapping Follow twice is one follow; tapping Unfollow
  * on someone you never followed is not an error. The button reflects a state,
