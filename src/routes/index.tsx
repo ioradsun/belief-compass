@@ -55,7 +55,8 @@ const TermsContent = lazyRetry(() =>
 import { useHouseIdea } from "@/hooks/useHouseIdea";
 import type { ReadySuggestion } from "@/lib/market-suggestion.functions";
 import { startDraftFromSuggestion } from "@/lib/create-draft";
-import { WalletConnectButton } from "@/components/WalletConnect";
+import { requestConnect } from "@/lib/connect-bridge";
+import { walletIntent } from "@/lib/wagmi";
 
 // Deferred surfaces: none of these render for a first-time, signed-out visitor.
 // PersonProfile/DnaOverview need a ?p/?dna selection; MyWorld/AccountRail need a
