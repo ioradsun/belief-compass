@@ -13,6 +13,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { type VolumeWindow } from "@/lib/markets.functions";
+import { positionValueUsd } from "@/domain/position-value";
 import { myConvictionsQO } from "@/lib/positions-query";
 import { type MarketRow } from "@/components/MarketCard";
 import { positionPnl } from "@/domain/position";
@@ -277,20 +278,37 @@ export function MyConvictions({
       const m = byId.get(id);
       const st = p.state ?? null;
       const shares = Number((side === "YES" ? p.yes_shares : p.no_shares) ?? 0);
-      const price = Number(
+      // Null, not 0. A market the read model has no price for cannot be marked
+      // live — and `shares x 0` would call the holding worthless.
+      const priceRaw =
         (side === "YES" ? m?.yes_price_usd : m?.no_price_usd) ??
-          (side === "YES" ? st?.yes_price_usd : st?.no_price_usd) ??
-          0,
-      );
-      // A stale marked value is not trusted as a live mark: fall through to a
-      // fresh shares×price mark instead, so worth stays current and any gain is
-      // never a stale value minus a fresh cost basis.
+        (side === "YES" ? st?.yes_price_usd : st?.no_price_usd) ??
+        null;
+      // The ranking that used to live here — fresh mark, else fresh shares×price
+      // — now lives in @/domain/position-value, alongside the stale-mark and
+      // cost-basis ranks it was missing. One order, tested, shared with cohorts
+      // and the dashboard.
       const stale = side === "YES" ? p.yes_value_stale : p.no_value_stale;
       const reported = side === "YES" ? p.yes_value_usd : p.no_value_usd;
-      const marked =
-        !stale && reported != null && Number.isFinite(Number(reported)) && Number(reported) > 0;
-      const value = marked ? Number(reported) : shares * price;
-      if (!(value > 0)) return null;
+      const valuation = positionValueUsd({
+        valueUsd: reported,
+        // The server already decided staleness against the one canonical rule;
+        // re-deriving an age here would be a second answer to that question.
+        valueUpdatedAt: stale ? null : Date.now(),
+        shares,
+        priceUsd: priceRaw,
+        // `yes_cost` arrives from getWallet ALREADY IN USD (it runs
+        // costBasisUsd server-side), so it is handed in as a rate of 1 rather
+        // than converted twice.
+        costEth: side === "YES" ? p.yes_cost : p.no_cost,
+        ethUsd: 1,
+      });
+      const value = valuation.usd;
+      // OWNERSHIP, NOT PRICEABILITY. This filter used to read `!(value > 0)`,
+      // which conflated "you do not hold this side" with "we could not price
+      // what you hold" — and silently removed a real holding from the holder's
+      // own list whenever the second was true. Holding is the question here.
+      if (!(shares > 0)) return null;
       const rawChg =
         (side === "YES" ? m?.chg_window_yes : m?.chg_window_no) ??
         (side === "YES" ? p.chg_window_yes : p.chg_window_no) ??
@@ -336,7 +354,7 @@ export function MyConvictions({
         gainPct: pnl.gainPct,
         shares,
         entryPrice,
-        currentPrice: price > 0 ? price : null,
+        currentPrice: priceRaw == null || !(Number(priceRaw) > 0) ? null : Number(priceRaw),
         title: p.markets?.title ?? `Market #${id}`,
         believers: believersRaw == null ? null : Number(believersRaw),
         newToday: newTodayRaw == null ? null : Number(newTodayRaw),

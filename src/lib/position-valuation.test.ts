@@ -144,3 +144,28 @@ describe("no surface converts ETH to USD with a fabricated rate", () => {
     }
   });
 });
+
+/**
+ * ONE VALUATION ORDER. `MyConvictions` ranked positions its own way inline —
+ * fresh mark, else shares x price — with neither the stale-mark nor the
+ * cost-basis rank, and a price chain ending `?? 0`.
+ */
+describe("the Positions list does not rank worth on its own", () => {
+  const MY = code("src/components/MyConvictions.tsx");
+
+  it("values through the canonical module", () => {
+    expect(MY).toMatch(/positionValueUsd/);
+  });
+
+  it("no longer ends its price chain at a fabricated zero", () => {
+    // `?? 0` on the price made `shares * price` zero for an unpriced market.
+    expect(MY).not.toMatch(/no_price_usd\)\s*\?\?\s*\n?\s*0,/);
+  });
+
+  it("filters on OWNERSHIP, not on whether we could price it", () => {
+    // `!(value > 0)` conflated "you do not hold this side" with "we could not
+    // price what you hold", and removed real holdings from the holder's list.
+    expect(MY).not.toMatch(/if \(!\(value > 0\)\) return null/);
+    expect(MY).toMatch(/if \(!\(shares > 0\)\) return null/);
+  });
+});
