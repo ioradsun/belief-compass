@@ -172,16 +172,19 @@ function MomentumMetric({
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
           {label}
         </span>
-        {faces && faces.length > 0 && (
-          <FaceRow faces={faces} total={facesTotal ?? faces.length} />
-        )}
       </div>
-      <div
-        className={`num mt-0.5 ${dense ? "text-[11px]" : "text-[12px]"}`}
-        style={{ color: tone }}
-      >
-        {copy.absolute}
-      </div>
+      {/* People before statistics: when this metric has faces, the space under
+      the label belongs to them, not to a restatement of the move. */}
+      {faces ? (
+        <ParticipantProof faces={faces} total={facesTotal ?? faces.length} dense={dense} />
+      ) : (
+        <div
+          className={`num mt-0.5 ${dense ? "text-[11px]" : "text-[12px]"}`}
+          style={{ color: tone }}
+        >
+          {copy.absolute}
+        </div>
+      )}
     </div>
   );
 }
