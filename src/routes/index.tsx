@@ -18,6 +18,13 @@ import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { FeedListPanel, type FeedListEntry } from "@/components/FeedListPanel";
 import type { FeedMode } from "@/domain/feed/mode";
 import {
+  ALL as ALL_FILTERS,
+  filterKey,
+  orderingMode,
+  type FeedFilters,
+  type FeedNetwork,
+} from "@/domain/feed/filters";
+import {
   emptyQueue,
   receiveOrder,
   jumpTo,
@@ -107,18 +114,20 @@ const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
 const feedQO = (
   wallet: string | undefined,
   window: VolumeWindow = "24h",
-  mode: FeedMode = "for_you",
+  filters: FeedFilters = ALL_FILTERS,
   originMarketId: number | null = null,
 ) =>
   queryOptions({
-    queryKey: ["opp-feed", wallet ?? null, window, mode, originMarketId],
+    queryKey: ["opp-feed", wallet ?? null, window, filterKey(filters), originMarketId],
     queryFn: async () => {
       const request = getOpportunityFeed({
         data: {
           wallet: wallet ?? null,
           sessionToken: wallet ? readSessionToken(wallet) : null,
           window,
-          mode,
+          mode: orderingMode(filters),
+          networks: filters.networks,
+          topics: filters.topics,
           originMarketId,
           ...feedSession(),
         },
@@ -134,7 +143,15 @@ const feedQO = (
           ),
         ]);
       } catch {
-        return await getOpportunityFeed({ data: { window, mode, originMarketId } });
+        return await getOpportunityFeed({
+          data: {
+            window,
+            mode: orderingMode(filters),
+            networks: filters.networks,
+            topics: filters.topics,
+            originMarketId,
+          },
+        });
       }
     },
     // The realtime coordinator (startRealtime) now moves each card's canonical
@@ -508,9 +525,12 @@ function Feed() {
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // The active perspective. A SERVER concept, sent with the request, so the
-  // server still owns the whole sequence — the client never re-sorts a feed.
-  const [mode, setMode] = useState<FeedMode>("for_you");
+  /**
+   * The reader's own lens — network groups and topics, combined. A SERVER
+   * concept, sent with the request, so the server still owns the whole
+   * sequence: the client never re-sorts or re-filters a feed it was given.
+   */
+  const [filters, setFilters] = useState<FeedFilters>(ALL_FILTERS);
 
   /**
    * The market the reader arrived at from OUTSIDE the running order — opened
@@ -529,11 +549,11 @@ function Feed() {
   // a wallet, window or mode falls through to a normal client fetch.
   const loaderData = Route.useLoaderData();
   const initialFeed =
-    win === "24h" && mode === "for_you" && originMarket == null
+    win === "24h" && filterKey(filters) === filterKey(ALL_FILTERS) && originMarket == null
       ? (loaderData?.feed ?? undefined)
       : undefined;
   const { data } = useQuery({
-    ...feedQO(wallet, win, mode, originMarket),
+    ...feedQO(wallet, win, filters, originMarket),
     // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
     // React Query ages it against staleTime instead of refetching on hydration.
     ...(initialFeed
@@ -597,7 +617,12 @@ function Feed() {
   for (const [id, row] of Object.entries(rowsById)) {
     if (row) knownRowsRef.current[Number(id)] = row as unknown as MarketRow;
   }
-  const waiting = arrivalCount(queue);
+  /**
+   * FRESHNESS WITHOUT A NOTICE. A re-rank is still never applied under the
+   * reader's eyes — but instead of asking permission with a "1 new market"
+   * button, the held order is adopted the moment the reader moves on to another
+   * market. A playlist does not interrupt to announce that it grew.
+   */
   const feedEntries: FeedListEntry[] = queue.order.map((id) => ({
     onchainId: id,
     reason: reasonByMarket[id] ?? null,
@@ -638,6 +663,8 @@ function Feed() {
     if (activeMarket == null) return;
     setQueue((q) => {
       if (q.activeId === activeMarket) return q;
+      // Moving is the safe moment to adopt whatever arrived while they read.
+      q = arrivalCount(q) > 0 ? commit(q) : q;
       // Not in the order yet = they came from somewhere else. That is the whole
       // definition of an origin, and `jumpTo` is about to splice it in.
       if (q.order.length > 0 && !q.order.includes(activeMarket)) setOriginMarket(activeMarket);
@@ -660,26 +687,33 @@ function Feed() {
     setCaughtUp(true);
   };
 
-  /** The reader accepted the markets that arrived while they were reading. */
-  const commitArrivals = () => setQueue((q) => commit(q));
+  /**
+   * Changing the lens is a NEW running order, not a re-sort of this one, so the
+   * queue starts clean and the centre panel moves to the first market of the
+   * new playlist — the two must never describe different feeds.
+   */
+  const selectFilters = (f: FeedFilters) => {
+    if (filterKey(f) === filterKey(filters)) return;
+    setFilters(f);
+    setQueue(emptyQueue);
+    setPinnedId(null);
+    setOriginMarket(null);
+    setCaughtUp(false);
+    navigate({ search: (prev: Search) => ({ ...prev, m: undefined }) });
+  };
 
   /**
-   * Switching perspective is a new running order, not a re-sort of this one, so
-   * the queue starts clean rather than carrying the old mode's markets forward
-   * behind an arrivals notice that would claim they are "new".
+   * Which network groups to offer. The server decides — it is the only place
+   * that has read the viewer's DNA — so Tribe and Rivals appear only once the
+   * evidence exists to fill them. Everyone and Following always work.
    */
-  const selectMode = (m: FeedMode) => {
-    if (m === mode) return;
-    setMode(m);
-    setQueue(emptyQueue);
-    setCaughtUp(false);
-  };
-  /**
-   * Which perspectives to offer. The server decides — it is the only place that
-   * has read the viewer's DNA — and the answer is remembered across the poll
-   * that lands while a request is in flight, so the strip cannot flicker.
-   */
-  const availableModes = stableFeed?.modes ?? ["for_you"];
+  const serverModes = stableFeed?.modes ?? ["for_you"];
+  const availableNetworks: FeedNetwork[] = [
+    "everyone",
+    ...(serverModes.includes("tribe") ? (["tribe"] as const) : []),
+    ...(serverModes.includes("rivals") ? (["rivals"] as const) : []),
+    ...(wallet ? (["following"] as const) : []),
+  ];
 
   // Refresh the discovery feed: re-fetch (newly created markets may appear) and
   // leave the caught-up state. The held order is adopted here too — asking for a
@@ -928,12 +962,10 @@ function Feed() {
                     entries={feedEntries}
                     rows={knownRowsRef.current}
                     activeId={activeMarket}
-                    arrivalCount={waiting}
                     onSelect={selectMarket}
-                    onCommitArrivals={commitArrivals}
-                    mode={mode}
-                    modes={availableModes}
-                    onMode={selectMode}
+                    filters={filters}
+                    onFilters={selectFilters}
+                    availableNetworks={availableNetworks}
                   />
                 }
                 connectPrompt={
