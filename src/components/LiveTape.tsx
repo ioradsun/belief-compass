@@ -19,7 +19,7 @@
  * highlight. Clicking a row selects that market; clicking a face opens that
  * person.
  */
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PersonStack } from "@/components/PersonStack";
 import { listLiveEvents } from "@/lib/live.functions";
@@ -239,6 +239,16 @@ export function LiveTape({
   // happens to render it.
   const gate = useTapeGate(rows, JSON.stringify(key), holdUpdates);
 
+  // The 0 → N edge, counted. Increments only when the pill goes from absent to
+  // present, so the entrance animation plays once per waiting batch.
+  const [pulseKey, setPulseKey] = useState(0);
+  const wasWaiting = useRef(false);
+  useEffect(() => {
+    const waiting = gate.pending > 0;
+    if (waiting && !wasWaiting.current) setPulseKey((n) => n + 1);
+    wasWaiting.current = waiting;
+  }, [gate.pending]);
+
   const { fresh, remember } = useStandingMemory();
   const standing = useMemo(
     () => (data?.standing ?? []).filter((r) => fresh(r.id)),
@@ -293,17 +303,30 @@ export function LiveTape({
         <button
           type="button"
           onClick={gate.admit}
+          /**
+           * ONE PULSE, ON ARRIVAL, THEN STILLNESS.
+           *
+           * Remounting on the 0 → N edge (and only that edge) lets the CSS
+           * animation play exactly once. Every later increment is just a number
+           * changing inside a pill that is already sitting there, so the control
+           * never nags: it announces itself once and then waits.
+           */
+          key={`pill-${pulseKey}`}
           // Present but inert at zero pending: the slot is always occupied, so
           // nothing reflows when it becomes available.
           aria-hidden={gate.pending === 0 || undefined}
           tabIndex={gate.pending === 0 ? -1 : undefined}
-          className="ml-auto rounded-full px-2.5 py-[3px] text-[11px] font-semibold transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none"
+          className="ml-auto rounded-full border px-2.5 py-[3px] text-[11px] font-semibold backdrop-blur-sm transition-[opacity,transform,background-color] duration-200 ease-out motion-reduce:transition-none motion-reduce:animate-none"
           style={{
-            background: "var(--text)",
-            color: "var(--bg)",
+            // A quiet system indicator, not a call to action: the filled white
+            // button is reserved for Connect Wallet and Back YES/NO.
+            background: "color-mix(in oklab, var(--yes) 12%, transparent)",
+            borderColor: "color-mix(in oklab, var(--yes) 42%, transparent)",
+            color: "var(--yes)",
             opacity: gate.pending > 0 ? 1 : 0,
-            transform: gate.pending > 0 ? "scale(1)" : "scale(0.9)",
+            transform: gate.pending > 0 ? "scale(1)" : "scale(0.98)",
             pointerEvents: gate.pending > 0 ? "auto" : "none",
+            animation: gate.pending > 0 ? "tape-pill-in 640ms ease-out 1" : undefined,
           }}
         >
           ↑ {arrivalLabel(gate.pending)}
