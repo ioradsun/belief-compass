@@ -103,27 +103,43 @@ if (nodeProcess && typeof nodeProcess.on === "function") {
   // capture callback runs before that event is broadcast, so expected client
   // disconnects never reach the runtime-error reporter. Keep the prior behavior
   // for genuine failures by recording and logging them here.
-  if (
-    typeof nodeProcess.setUncaughtExceptionCaptureCallback === "function" &&
-    !nodeProcess.hasUncaughtExceptionCaptureCallback?.()
-  ) {
-    nodeProcess.setUncaughtExceptionCaptureCallback((error: unknown) => {
-      if (isAbortError(error)) return;
-      record(error);
-      originalConsoleError(describeError(error));
-    });
-  } else {
-    nodeProcess.on("uncaughtException", (error: unknown) => {
-      if (isAbortError(error)) return;
-      record(error);
-      originalConsoleError(describeError(error));
-    });
+  // The Worker runtime stubs these process methods: merely CALLING
+  // hasUncaughtExceptionCaptureCallback throws "not implemented", which would
+  // 500 every request. Probe defensively and fall back to plain listeners.
+  let installedCaptureCallback = false;
+  try {
+    if (
+      typeof nodeProcess.setUncaughtExceptionCaptureCallback === "function" &&
+      typeof nodeProcess.hasUncaughtExceptionCaptureCallback === "function" &&
+      !nodeProcess.hasUncaughtExceptionCaptureCallback()
+    ) {
+      nodeProcess.setUncaughtExceptionCaptureCallback((error: unknown) => {
+        if (isAbortError(error)) return;
+        record(error);
+        originalConsoleError(describeError(error));
+      });
+      installedCaptureCallback = true;
+    }
+  } catch {
+    installedCaptureCallback = false;
   }
-  nodeProcess.on("unhandledRejection", (reason: unknown) => {
-    if (isAbortError(reason)) return;
-    record(reason);
-    originalConsoleError(describeError(reason));
-  });
+
+  try {
+    if (!installedCaptureCallback) {
+      nodeProcess.on("uncaughtException", (error: unknown) => {
+        if (isAbortError(error)) return;
+        record(error);
+        originalConsoleError(describeError(error));
+      });
+    }
+    nodeProcess.on("unhandledRejection", (reason: unknown) => {
+      if (isAbortError(reason)) return;
+      record(reason);
+      originalConsoleError(describeError(reason));
+    });
+  } catch {
+    // Runtime doesn't support process event listeners — globalThis listeners above suffice.
+  }
 }
 
 export function consumeLastCapturedError(): unknown {
