@@ -21,7 +21,8 @@
     "check:schema": "tsx scripts/check-schema.ts",
     "check:ownership": "tsx scripts/check-ownership.ts",
     "check:start-here": "tsx scripts/check-start-here.ts",
-    "check:connection": "tsx scripts/check-connection.ts"
+    "check:connection": "tsx scripts/check-connection.ts",
+    "check:startup": "node scripts/measure-startup.mjs"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.11",
