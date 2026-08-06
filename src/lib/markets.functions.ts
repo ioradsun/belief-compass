@@ -379,6 +379,10 @@ export const listFeed = createServerFn({ method: "GET" })
       // Narrative layer: your network active in THIS market → named faces. Only
       // the viewer's OWN people are ever named; the crowd stays a count.
       const rr = r as Record<string, unknown>;
+      /** Who wrote the question — a connection in its own right. */
+      const author = String(
+        ((rr["markets"] ?? null) as { author_wallet?: string | null } | null)?.author_wallet ?? "",
+      ).toLowerCase();
       const network: NetworkFace[] = [];
       // Everyone present, not just the lead — `composeMarketStory` caps the pile
       // itself, and handing it one face when four are here was the reason a card
