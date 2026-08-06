@@ -24,11 +24,20 @@ import { marketBook } from "./market-book";
 export interface SideCaseSummary {
   /** Directional believers on this side, now (net stance — matches the headline). */
   believers: number;
-  /** % change in believers over the window, or null when the base is zero. */
-  believersPct: number | null;
+  /**
+   * Believers on this side when the window OPENED — the base, not a ratio.
+   *
+   * This used to be `believersPct`, computed here and then discarded: every
+   * surface preferred the authoritative snapshot baseline, and the one that did
+   * fall through to it printed the raw ratio unranked. A percentage cannot be
+   * judged without its denominator, so the summary hands over the denominator
+   * and `gain` (src/domain/metric-display) decides whether a ratio is honest.
+   */
+  believersBase: number;
   /** Capital backing this side now, in ETH (caller × USD rate). */
   capitalEth: number;
-  capitalPct: number | null;
+  /** Capital on this side when the window opened, in ETH. See believersBase. */
+  capitalBaseEth: number;
   /** Last per-share price on this side, in ETH; null before the first trade. */
   priceEth: number | null;
   pricePct: number | null;
@@ -37,10 +46,6 @@ export interface SideCaseSummary {
   /** One honest sentence about the window's move ("YES is gaining believers"). */
   headline: string | null;
 }
-
-/** delta/base %, or null when there is no positive base to measure against. */
-const windowPct = (base: number, current: number): number | null =>
-  base > 0 ? ((current - base) / base) * 100 : null;
 
 /** Growth from a positive base; a base<=0 becomes +100% (any → something) for the shape. */
 const shapePct = (from: number, to: number): number =>
@@ -154,9 +159,9 @@ export function sideCaseSummary(
 
   return {
     believers: bel.current,
-    believersPct: windowPct(bel.base, bel.current),
+    believersBase: bel.base,
     capitalEth: cap.current,
-    capitalPct: windowPct(cap.base, cap.current),
+    capitalBaseEth: cap.base,
     priceEth: last?.price ?? null,
     pricePct: last?.pricePct ?? null,
     series,

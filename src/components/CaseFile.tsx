@@ -17,7 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
 import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
 import { getMarketChange, getMarketBaselines, type VolumeWindow } from "@/lib/markets.functions";
-import { windowChange } from "@/domain/window-change";
+import { gain, METRIC_DISPLAY, type Gain } from "@/domain/metric-display";
 import { LiveTape } from "@/components/LiveTape";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
@@ -30,16 +30,16 @@ import { LENS_META, lensColdStart, type LensMetric } from "@/domain/side-lens";
 import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT } from "@/domain/market-flow";
 export { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow } from "@/lib/deck-window";
-import { marketBook, type BookMetric } from "@/domain/market-book";
+import { marketBook } from "@/domain/market-book";
 import { seededBelievers } from "@/lib/market-state/read-model";
 import { rankBelievers, sideCaseSummary, type CaseRelationship } from "@/domain/case-file";
 import { sideChangeLine, sideStateLine } from "@/domain/side-summary";
 import { convictionStory, narrateStory } from "@/domain/conviction-series";
 
-/** Window-relative % for a book metric, or null when the base is too small. */
-const metricPct = (m: BookMetric): number | null => (m.base > 0 ? (m.delta / m.base) * 100 : null);
-
 type Side = "YES" | "NO";
+
+/** No baseline at hand — say nothing about a change rather than invent one. */
+const NO_GAIN: Gain = { rank: "unknown", delta: null, pct: null };
 
 /** The relationship word's colour — the one primary badge. Status stays quiet. */
 const REL_TONE: Record<CaseRelationship, string> = {
@@ -199,39 +199,56 @@ export function CaseColumn({
   const belBase = side === "YES" ? bl?.believersYes : bl?.believersNo;
   const capBase = side === "YES" ? bl?.yesCapitalUsd : bl?.noCapitalUsd;
   const priceBaseUsd = side === "YES" ? bl?.yesPriceUsd : bl?.noPriceUsd;
-  const belChange =
-    authBelievers != null && belBase != null ? windowChange(authBelievers, belBase) : null;
-  const capChange =
-    authCapitalUsd != null && capBase != null ? windowChange(authCapitalUsd, capBase) : null;
+
+  // EVERY PERCENTAGE ON THIS PANEL IS RANKED BEFORE IT IS SHOWN. The panel used
+  // to divide by whatever baseline it had, guarding only against zero — so a
+  // side whose window opened holding $0.004 and now holds $2.70 reported
+  // "67298%▲" beside the line "+$2.69 committed today". Both were true and only
+  // one was worth reading. `gain` (src/domain/metric-display) decides which
+  // moves have a base worth dividing by, and calls the first money in what it
+  // is: an arrival, not a rate. See METRIC_DISPLAY for the measured thresholds.
+  const belGain =
+    authBelievers != null && belBase != null
+      ? gain(authBelievers, belBase, METRIC_DISPLAY.believers)
+      : believerMetric != null
+        ? gain(believerMetric.current, believerMetric.base, METRIC_DISPLAY.believers)
+        : NO_GAIN;
+  // Judged in USD, which is also the unit the row totals arrive in. The tape
+  // fallback is ETH-native, so it converts before it is ranked — the thresholds
+  // are dollar amounts and must never be applied to an ETH number.
+  const capGain =
+    authCapitalUsd != null && capBase != null
+      ? gain(authCapitalUsd, capBase, METRIC_DISPLAY.capitalUsd)
+      : rowCapitalUsd != null || capitalMetric == null || !(ethUsd > 0)
+        ? NO_GAIN
+        : gain(
+            capitalMetric.current * ethUsd,
+            capitalMetric.base * ethUsd,
+            METRIC_DISPLAY.capitalUsd,
+          );
   // Same rule for price: measure the snapshot at the window's open against the
   // price now, never the tape's transient post-trade marks.
-  const priceChange =
-    authPriceUsd != null && priceBaseUsd != null && priceBaseUsd > 0
-      ? windowChange(authPriceUsd, priceBaseUsd)
-      : null;
+  const priceGain =
+    authPriceUsd != null && priceBaseUsd != null
+      ? gain(authPriceUsd, priceBaseUsd, METRIC_DISPLAY.price)
+      : NO_GAIN;
 
   // The exact move, in the metric's own unit — never a percentage alone. This
   // mirrors the Total Market instrument: the total leads, the % is the big
   // right-hand figure, and the absolute change states what actually happened.
   const phrase = FLOW_WINDOW_PHRASE[win];
-  const belDelta = belChange?.delta ?? believerMetric?.delta ?? null;
-  const capDelta =
-    capChange?.delta ??
-    (rowCapitalUsd != null
-      ? null
-      : capitalMetric != null
-        ? capitalMetric.delta * (ethUsd || 0)
-        : null);
+  const belDelta = belGain.delta;
+  const capDelta = capGain.delta;
 
   const pricePct =
-    priceChange != null
-      ? priceChange.pct
+    priceGain.rank !== "unknown"
+      ? priceGain.pct
       : authPriceUsd != null
         ? null
         : (summary?.pricePct ?? null);
   const priceDelta =
-    priceChange != null
-      ? priceChange.delta
+    priceGain.delta != null
+      ? priceGain.delta
       : priceUsd != null && pricePct != null && Number.isFinite(priceUsd)
         ? priceUsd - priceUsd / (1 + pricePct / 100)
         : null;
@@ -253,14 +270,24 @@ export function CaseColumn({
 
   // Supporting copy only when something actually moved. "No change today" /
   // "Flat today" is filler — whitespace says it better.
+  //
+  // An ORIGIN says so in words. When a side had nobody and no money at the
+  // window's open, "+2 believers" understates it and a percentage misrepresents
+  // it; the honest sentence is that this is where the side began.
   const believerAbs =
-    belDelta == null || belDelta === 0
-      ? null
-      : `${belDelta > 0 ? "+" : "−"}${Math.abs(belDelta)} believer${Math.abs(belDelta) === 1 ? "" : "s"} ${phrase}`;
+    belGain.rank === "origin"
+      ? believersTotal === 1
+        ? "First believer"
+        : `First ${Math.abs(Math.round(belDelta ?? 0))} believers ${phrase}`
+      : belDelta == null || belDelta === 0
+        ? null
+        : `${belDelta > 0 ? "+" : "−"}${Math.abs(belDelta)} believer${Math.abs(belDelta) === 1 ? "" : "s"} ${phrase}`;
   const capitalAbs =
-    capDelta == null || Math.abs(capDelta) < 0.005
-      ? null
-      : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "left"} ${phrase}`;
+    capGain.rank === "origin" && capitalUsd != null
+      ? `First capital ${phrase} · ${format(capitalUsd, "USD")}`
+      : capDelta == null || Math.abs(capDelta) < 0.005
+        ? null
+        : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "left"} ${phrase}`;
   const priceAbs =
     priceDelta == null || Math.abs(priceDelta) < 0.005
       ? null
@@ -282,6 +309,8 @@ export function CaseColumn({
     label: string;
     value: string;
     pct: number | null;
+    /** A real base, but a thin one — show the % small, never as the figure. */
+    quiet: boolean;
     absolute: string | null;
   }[] = [
     {
@@ -291,12 +320,8 @@ export function CaseColumn({
       // we actually list. Never the tape-derived tally — it can drift from the
       // holder table and make the headline disagree with the names below it.
       value: (authBelievers ?? believers.length).toLocaleString("en-US"),
-      pct:
-        belChange != null
-          ? belChange.pct
-          : believerMetric
-            ? metricPct(believerMetric)
-            : (summary?.believersPct ?? null),
+      pct: belGain.pct,
+      quiet: belGain.rank === "quiet",
       absolute: believerAbs,
     },
     {
@@ -305,14 +330,8 @@ export function CaseColumn({
       // One source of capital: the holders' committed value (auth), else the
       // tape only while the row is missing. Never the replayed residue.
       value: capitalUsd != null ? format(capitalUsd, "USD") : "—",
-      pct:
-        capChange != null
-          ? capChange.pct
-          : rowCapitalUsd != null
-            ? null
-            : capitalMetric
-              ? metricPct(capitalMetric)
-              : (summary?.capitalPct ?? null),
+      pct: capGain.pct,
+      quiet: capGain.rank === "quiet",
       absolute: capitalAbs,
     },
 
@@ -321,6 +340,7 @@ export function CaseColumn({
       label: "Price",
       value: priceUsd != null ? format(priceUsd, "USD") : "—",
       pct: pricePct,
+      quiet: priceGain.rank === "quiet",
       absolute: priceAbs,
     },
   ];
@@ -382,6 +402,7 @@ export function CaseColumn({
               label={r.label}
               value={r.value}
               pct={r.pct}
+              quiet={r.quiet}
               absolute={r.absolute}
               active={metric === r.metric}
               color={color}
@@ -485,6 +506,7 @@ function MetricRow({
   label,
   value,
   pct,
+  quiet = false,
   absolute,
   active,
   color,
@@ -492,7 +514,13 @@ function MetricRow({
 }: {
   label: string;
   value: string;
+  /** Already ranked by `gain` — null means no base worth dividing by. */
   pct: number | null;
+  /**
+   * The base is real but thin. The percentage is arithmetically sound and still
+   * not what the reader should look at, so it never takes the headline size.
+   */
+  quiet?: boolean;
   /** The exact change in the metric's own unit, e.g. "+$12.40 committed over 24H". */
   absolute?: string | null;
   active: boolean;
@@ -504,6 +532,9 @@ function MetricRow({
   const arrow = flat ? "" : pct! > 0 ? "▲" : "▼";
   const pctText =
     pct == null ? "" : `${Math.abs(pct).toFixed(!flat && Math.abs(pct) < 10 ? 1 : 0)}%`;
+  // When the percentage is withheld the absolute change becomes the movement
+  // figure, so it steps up out of the supporting size.
+  const leadAbsolute = pct == null;
   return (
     <button
       type="button"
@@ -527,8 +558,10 @@ function MetricRow({
           </span>
         </span>
         <span
-          className={`num shrink-0 font-semibold leading-none tabular-nums ${active ? "text-[19px]" : "text-[15px]"}`}
-          style={{ color: tone, opacity: active ? 1 : 0.6 }}
+          className={`num shrink-0 font-semibold leading-none tabular-nums ${
+            quiet ? "text-[13px]" : active ? "text-[19px]" : "text-[15px]"
+          }`}
+          style={{ color: tone, opacity: quiet ? 0.55 : active ? 1 : 0.6 }}
         >
           {pctText}
           {arrow && pctText ? (
@@ -544,7 +577,7 @@ function MetricRow({
       </div>
       {absolute && (
         <div
-          className="num mt-0.5 text-[11px]"
+          className={`num mt-0.5 ${leadAbsolute ? "text-[12.5px] font-medium" : "text-[11px]"}`}
           style={{ color: "var(--text-muted)", opacity: active ? 1 : 0.6 }}
         >
           <span style={{ color: tone }}>{absolute.split(" ")[0]}</span>

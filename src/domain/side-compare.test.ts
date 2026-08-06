@@ -5,7 +5,7 @@ const side = (o: Partial<SideSnapshot> = {}): SideSnapshot => ({
   believers: 10,
   capitalUsd: 500,
   joined: 0,
-  capitalChangePct: 0,
+  priceChangePct: 0,
   ...o,
 });
 
@@ -55,12 +55,12 @@ describe("no trend is manufactured from noise", () => {
     expect(c.story).not.toMatch(/joined/);
   });
 
-  it("ignores a capital move too small to mean anything", () => {
+  it("ignores a price move too small to mean anything", () => {
     const c = compareSides(
-      side({ capitalChangePct: COMPARE.minCapitalMovePct - 1 }),
-      side({ capitalChangePct: 0 }),
+      side({ priceChangePct: COMPARE.minPriceMovePct - 1 }),
+      side({ priceChangePct: 0 }),
     );
-    expect(c.story).not.toMatch(/Capital/);
+    expect(c.story).not.toMatch(/costs|cheaper/);
   });
 
   it("falls back to the honest dull answer", () => {
@@ -68,19 +68,34 @@ describe("no trend is manufactured from noise", () => {
   });
 });
 
-describe("capital speaks only when nobody arrived", () => {
+describe("price speaks only when nobody arrived", () => {
   it("names the direction it moved", () => {
-    const c = compareSides(side({ capitalChangePct: 30 }), side());
-    expect(c).toEqual({ story: "Capital moved toward YES.", focus: "YES" });
+    const c = compareSides(side({ priceChangePct: 30 }), side());
+    expect(c).toEqual({ story: "Backing YES costs more now.", focus: "YES" });
   });
 
-  it("names a withdrawal as a withdrawal", () => {
-    const c = compareSides(side({ capitalChangePct: -30 }), side());
-    expect(c).toEqual({ story: "Capital pulled back from YES.", focus: "YES" });
+  it("names a fall as a fall", () => {
+    const c = compareSides(side({ priceChangePct: -30 }), side());
+    expect(c).toEqual({ story: "Backing YES got cheaper.", focus: "YES" });
+  });
+
+  /**
+   * The number in this field comes from `market_change_window`, which divides a
+   * price by a price. Saying "capital" over it would state a figure in a unit it
+   * was never computed in — the mislabel this rename removes.
+   */
+  it("never describes a price move as capital moving", () => {
+    const stories = [
+      compareSides(side({ priceChangePct: 30 }), side()).story,
+      compareSides(side({ priceChangePct: -30 }), side()).story,
+      compareSides(side(), side({ priceChangePct: 30 })).story,
+      compareSides(side(), side({ priceChangePct: -30 })).story,
+    ].join(" ");
+    expect(stories).not.toMatch(/capital|money|\$/i);
   });
 
   it("yields to people — an arrival outranks any amount of money", () => {
-    const c = compareSides(side({ capitalChangePct: 400 }), side({ joined: 5 }));
+    const c = compareSides(side({ priceChangePct: 400 }), side({ joined: 5 }));
     expect(c.story).toBe("5 believers joined NO.");
   });
 });
@@ -101,7 +116,7 @@ describe("the standing balance, when nothing moved", () => {
     const stories = [
       compareSides(side({ believers: 30 }), side({ believers: 6 })).story,
       compareSides(side({ joined: 9 }), side()).story,
-      compareSides(side({ capitalChangePct: 40 }), side()).story,
+      compareSides(side({ priceChangePct: 40 }), side()).story,
     ].join(" ");
     expect(stories).not.toMatch(/should|winning|better|right|smart|safe/i);
   });

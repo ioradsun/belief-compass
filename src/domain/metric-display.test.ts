@@ -8,6 +8,7 @@ import {
   capitalMove,
   priceMove,
   positionReturn,
+  gain,
   METRIC_DISPLAY,
 } from "./metric-display";
 
@@ -37,9 +38,10 @@ describe("pctOf", () => {
 });
 
 describe("pctRank — small-number protection", () => {
-  const { pctValidMinBase, pctHeadlineMinBase } = METRIC_DISPLAY.believers;
+  const { pctValidMinBase, pctHeadlineMinBase } = METRIC_DISPLAY.capitalUsd;
   it("hides below the valid floor", () => {
     expect(pctRank(0, pctValidMinBase, pctHeadlineMinBase)).toBe("none");
+    expect(pctRank(0.9, pctValidMinBase, pctHeadlineMinBase)).toBe("none");
   });
   it("stays quiet between valid and headline", () => {
     expect(pctRank(1, pctValidMinBase, pctHeadlineMinBase)).toBe("quiet");
@@ -48,6 +50,105 @@ describe("pctRank — small-number protection", () => {
   it("headlines once the base is large enough", () => {
     expect(pctRank(10, pctValidMinBase, pctHeadlineMinBase)).toBe("headline");
     expect(pctRank(100, pctValidMinBase, pctHeadlineMinBase)).toBe("headline");
+  });
+});
+
+/**
+ * THE BUG THAT PROMPTED THIS MODULE'S SECOND HALF.
+ *
+ * A live market's mobile panel read:
+ *
+ *   3 BELIEVERS   200%▲    +2 believers today
+ *   $2.70 COMMITTED  67298%▲   +$2.69 committed today
+ *
+ * Every figure was arithmetically correct. Neither percentage was information:
+ * one divided by a single person, the other by four tenths of a cent.
+ */
+describe("gain — the first money in is not a gain", () => {
+  const CAP = METRIC_DISPLAY.capitalUsd;
+  const BEL = METRIC_DISPLAY.believers;
+
+  it("refuses to rate the exact move that started this", () => {
+    // base $0.004 → $2.6959 is the screenshot, to the cent.
+    const g = gain(2.6959, 0.004, CAP);
+    expect(g.rank).toBe("origin");
+    expect(g.pct).toBeNull();
+    expect(g.delta).toBeCloseTo(2.6919, 4);
+  });
+
+  it("refuses to rate 1 → 3 believers", () => {
+    const g = gain(3, 1, BEL);
+    expect(g.pct).toBeNull();
+    expect(g.delta).toBe(2);
+  });
+
+  it("never divides by an amount the app already calls dust", () => {
+    // The believer-seeding rule elsewhere ignores capital under a cent; this
+    // must not turn the same amount into a denominator.
+    for (const base of [0, 0.0001, 0.004, 0.009, 0.01]) {
+      expect(gain(5, base, CAP).pct).toBeNull();
+    }
+  });
+
+  it("separates 'no baseline' from 'nothing was here'", () => {
+    // No snapshot at the boundary: we cannot claim a change of any kind.
+    expect(gain(5, null, CAP)).toEqual({ rank: "unknown", delta: null, pct: null });
+    expect(gain(5, undefined, CAP).rank).toBe("unknown");
+    expect(gain(NaN, 10, CAP).rank).toBe("unknown");
+    expect(gain(8, Number.POSITIVE_INFINITY, CAP).rank).toBe("unknown");
+    // A real, empty baseline: the arrival is a fact, the rate is not.
+    expect(gain(5, 0, CAP)).toEqual({ rank: "origin", delta: 5, pct: null });
+  });
+
+  it("still states the absolute change whenever a percentage is withheld", () => {
+    for (const [current, base] of [
+      [2.6959, 0.004], // origin
+      [0.8, 0.5], // real base, too thin to divide by
+      [0.002, 0.008], // dust shrinking
+    ] as const) {
+      const g = gain(current, base, CAP);
+      expect(g.pct).toBeNull();
+      expect(g.delta).not.toBeNull();
+    }
+    expect(gain(3, 1, BEL).pct).toBeNull();
+    expect(gain(3, 1, BEL).delta).toBe(2);
+  });
+
+  it("does not call a shrinking dust position an origin", () => {
+    // Both ends below the line — nothing arrived, so there is nothing to name.
+    expect(gain(0.002, 0.008, CAP).rank).toBe("none");
+    expect(gain(0.002, 0.008, CAP).delta).toBeCloseTo(-0.006, 6);
+  });
+
+  it("keeps a thin but real base quiet", () => {
+    const g = gain(8, 5, CAP);
+    expect(g.rank).toBe("quiet");
+    expect(g.pct).toBe(60);
+  });
+
+  it("lets an established base speak", () => {
+    const g = gain(35.04, 244.6, CAP);
+    expect(g.rank).toBe("headline");
+    expect(g.pct).toBeCloseTo(-85.67, 2);
+  });
+
+  it("lets a real crowd's ratio through", () => {
+    const g = gain(45, 30, BEL);
+    expect(g.rank).toBe("headline");
+    expect(g.pct).toBe(50);
+  });
+
+  /**
+   * Calibration, not taste. Measured over 1,000 market_state rows: 22% of funded
+   * sides hold under a cent, 67% under a dollar, and only 1% of sides have ten
+   * or more believers. These assertions pin the thresholds to that reality so a
+   * later edit has to argue with the data.
+   */
+  it("is calibrated to the markets that exist", () => {
+    expect(CAP.originMaxBase).toBe(0.01); // the app's own dust line
+    expect(BEL.pctValidMinBase).toBe(BEL.pctHeadlineMinBase); // counts: shown or not, never half-shown
+    expect(BEL.pctValidMinBase).toBeGreaterThanOrEqual(10); // above p95 (5) of side sizes
+    expect(gain(0.95 + 5, 0.95, CAP).pct).toBeNull(); // the median funded side
   });
 });
 
@@ -81,12 +182,14 @@ describe("believerMove — the count leads", () => {
     expect(m.absolute).toBe("+4 believers over 1D");
     expect(m.pct).toBeNull();
   });
-  it("does NOT headline a % off a tiny base, but keeps the count", () => {
-    // 2 → 3 believers is +50%, but off a base of 2 that must stay quiet.
+  it("shows no % off a tiny base, and keeps the count", () => {
+    // 2 → 3 believers is arithmetically +50%. It is also one person arriving,
+    // and the median side on this platform holds exactly one believer, so the
+    // ratio is the count restated with worse precision.
     const m = believerMove(3, 2, "over 1D");
     expect(m.absolute).toBe("+1 believer over 1D");
-    expect(m.pct).toBe("+50%");
-    expect(m.pctQuiet).toBe(true);
+    expect(m.pct).toBeNull();
+    expect(m.pctQuiet).toBe(false);
   });
   it("headlines the % once the crowd is real", () => {
     const m = believerMove(16, 17, "over 1D");
