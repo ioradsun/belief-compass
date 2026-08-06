@@ -39,6 +39,34 @@ const heldLabel = (d?: number | null): string | null => {
   return `${Math.round(d)}d`;
 };
 
+/** A face with a relationship ring — the ring is the whole vocabulary. */
+export function RingedAvatar({
+  wallet,
+  name,
+  avatarUrl,
+  size,
+  ring,
+}: {
+  wallet: string;
+  name?: string | null;
+  avatarUrl?: string | null;
+  size: number;
+  ring: string | null;
+}) {
+  return (
+    <span
+      className="inline-grid shrink-0 place-items-center rounded-full"
+      style={{
+        padding: ring ? 2 : 0,
+        background: ring ?? "transparent",
+        boxShadow: "0 0 0 1.5px var(--surface)",
+      }}
+    >
+      <PersonAvatar wallet={wallet} name={name} avatarUrl={avatarUrl} size={size} />
+    </span>
+  );
+}
+
 const GROUPS: { key: ParticipantRelation; title: string }[] = [
   { key: "tribe", title: "Tribe" },
   { key: "rival", title: "Rivals" },
@@ -73,13 +101,12 @@ export function ParticipantSheet({
         : null;
     return (
       <li key={p.wallet} className="flex items-center gap-3 px-4 py-2">
-        <PersonAvatar
+        <RingedAvatar
           wallet={p.wallet}
           name={p.name}
           avatarUrl={p.avatarUrl}
           size={34}
-          className={ring ? "ring-2" : ""}
-          {...(ring ? { style: undefined } : {})}
+          ring={ring}
         />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] text-[var(--text)]">
