@@ -222,47 +222,68 @@ function plural(n: number, one: string, many: string): string {
 
 
 /**
- * The one line at the top of the room. Its job is to say WHY these faces are
- * here, and the reason is always the same one: they took the side you already
- * hold. So the verb carries it ("joined your side" / "crossed to your side"),
- * the rarest group leads, and everyone else folds into a "+N more" — one line,
- * two clauses at most, no report-style prefix.
+ * The one line at the top of the room. It answers "why should I care about this
+ * person?", so the RELATIONSHIP is the headline, not the activity: who they are
+ * to you (Tribe / Rival / closest match / new to Conviction), led by a name when
+ * there is one. The rarest relationship leads; everyone else folds into "+N more".
  */
 export function roomHeadline(sections: RoomSection[], hasVisitedBefore: boolean): string {
   const total = sections.reduce((n, s) => n + s.people.length, 0);
-  if (total === 0) return "Nobody new in the room";
+  if (total === 0) return "No new people in your circle";
 
   const freshTotal = sections.reduce((n, s) => n + s.fresh, 0);
-  const scope = hasVisitedBefore ? sections.filter((s) => s.fresh > 0) : sections;
-  const count = (s: RoomSection) => (hasVisitedBefore ? s.fresh : s.people.length);
+  const useFresh = hasVisitedBefore && freshTotal > 0;
 
-  // Nobody new since last time, but people are still unwelcomed.
-  if (hasVisitedBefore && freshTotal === 0) {
-    return `${total} waiting on a hello`;
+  const counted = sections
+    .map((s) => ({
+      group: s.group,
+      people: useFresh ? s.people.filter((p) => p.isNew) : s.people,
+    }))
+    .filter((x) => x.people.length > 0);
+
+  if (counted.length === 0) {
+    // Nothing new since last time, but these people are still unmet.
+    return total === 1 ? "1 person is still waiting to meet you" : `${total} people are still waiting to meet you`;
   }
 
-  const counted = scope.map((s) => ({ s, n: count(s) })).filter((x) => x.n > 0);
-  if (counted.length === 0) return `${total} waiting on a hello`;
-
-  const [{ s: lead, n }] = counted;
-  const rest = counted.slice(1).reduce((sum, x) => sum + x.n, 0);
-  const head = leadClause(lead.group, n);
+  const lead = counted[0];
+  const rest = counted.slice(1).reduce((sum, x) => sum + x.people.length, 0);
+  const head = leadClause(lead.group, lead.people[0]?.name ?? "", lead.people.length);
   return rest > 0 ? `${head} · +${rest} more` : head;
 }
 
-/** The lead clause: who joined, and the fact that they joined YOUR side. */
-function leadClause(group: RoomGroup, n: number): string {
+/**
+ * Relationship-first copy. One person = named and specific; several = the name
+ * still leads ("and N others") so the line stays a discovery, not a tally.
+ */
+function leadClause(group: RoomGroup, name: string, n: number): string {
+  const named = name.trim().length > 0;
+  const others = n - 1;
+  const withOthers = (verbOne: string, verbMany: string) =>
+    named
+      ? n === 1
+        ? `${name} ${verbOne}`
+        : `${name} and ${others} ${others === 1 ? "other" : "others"} ${verbMany}`
+      : `${n} people ${verbMany}`;
+
   switch (group) {
     case "crossing":
-      return n === 1 ? "An Opp crossed to your side" : `${n} Opps crossed to your side`;
+      return named
+        ? n === 1
+          ? `${name}, one of your Rivals, just crossed to your side`
+          : `${name} and ${others} ${others === 1 ? "other Rival" : "other Rivals"} just crossed to your side`
+        : `${n} Rivals just crossed to your side`;
     case "twin":
-      return n === 1 ? "Your Twin joined your side" : `${n} Twins joined your side`;
+      return named
+        ? n === 1
+          ? `${name} is one of your closest conviction matches`
+          : `${name} and ${others} ${others === 1 ? "other" : "others"} are among your closest conviction matches`
+        : `${n} of your closest conviction matches showed up`;
     case "tribe":
-      return n === 1
-        ? "1 from your Tribe joined your side"
-        : `${n} from your Tribe joined your side`;
+      return withOthers("just became part of your Tribe", "just became part of your Tribe");
     default:
-      return n === 1 ? "1 new believer joined your side" : `${n} new believers joined your side`;
+      return withOthers("now shares one of your convictions", "now share your convictions");
   }
 }
+
 
