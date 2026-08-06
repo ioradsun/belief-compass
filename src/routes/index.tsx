@@ -390,20 +390,6 @@ function Feed() {
   };
   // Universal behaviour: any avatar anywhere opens that profile in the center.
   useEffect(() => registerPersonFocus(selectPerson));
-  const openDna = () => {
-    navigate({
-      search: (prev: Search) => ({
-        ...prev,
-        dna: true,
-        p: undefined,
-        m: undefined,
-        create: undefined,
-        terms: undefined,
-      }),
-    });
-    setTab("belief");
-    enterProduct();
-  };
   // The Conviction Dashboard is a center-panel destination (never a modal): it
   // deep-links, survives refresh, and back returns you to the deck.
   const openDashboard = () => {
