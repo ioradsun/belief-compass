@@ -1,0 +1,158 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { LENSES } from "@/domain/feed/lens";
+
+const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+/** Comments stripped: these files EXPLAIN the rules they follow. */
+const code = (p: string) =>
+  read(p)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
+/**
+ * EXPLORE IS ONE CONTROL AND THREE LINES PER ROW.
+ *
+ *   the question          what is being asked
+ *   why it is here        the lens's hero — a reason, or the measure it ranked on
+ *   the scale             believers and capital, minus whatever the hero said
+ *
+ * The rules live in @/domain/feed/lens and are tested there. This file only
+ * holds the WIRING to them, because every one of these is the kind of thing a
+ * later edit re-implements inline without noticing.
+ */
+describe("the playlist row", () => {
+  const feed = code("src/components/FeedListPanel.tsx");
+
+  it("composes the hero and the scale from the shared module, not inline", () => {
+    expect(feed).toMatch(/lensHero\(lens, f\.scale, f\.ageHours\)/);
+    expect(feed).toMatch(/scaleLine\(lens, f\.scale\)/);
+  });
+
+  it("reads believers and capital off the row the feed already shipped", () => {
+    // No second query, no second cache, no second definition of either measure.
+    expect(feed).toMatch(/believers_yes\) \+ num\(row\.believers_no\)/);
+    expect(feed).toMatch(/yes_capital_usd\) \+ num\(r\.no_capital_usd\)/);
+    expect(feed).not.toMatch(/useQuery/);
+  });
+
+  it("never prints a reason sentence beside a ranked hero", () => {
+    // Two headlines is no headline. A lens that states its measure has already
+    // answered "why is this here".
+    expect(feed).toMatch(/const line = hero \? null :/);
+  });
+
+  it("keeps the discovery accent for reasons only", () => {
+    // `--rel` means "this one is about you" everywhere in the product. "$505
+    // committed" is a fact about the market, so it takes text weight instead.
+    const heroBlock = feed.slice(
+      feed.indexOf("{hero && ("),
+      feed.indexOf("<WhyThis reason={line}"),
+    );
+    expect(heroBlock).not.toMatch(/--rel/);
+    expect(heroBlock).toMatch(/text-\[var\(--text\)\]/);
+  });
+});
+
+describe("the lens control", () => {
+  const feed = code("src/components/FeedListPanel.tsx");
+
+  it("offers every lens the domain defines, and no hand-written list", () => {
+    expect(feed).toMatch(/LENSES\.map/);
+    expect(feed).toMatch(/LENS_LABELS\[l\]/);
+    expect(LENSES).toHaveLength(5);
+  });
+
+  it("reserves its own height so choosing a lens cannot move the list", () => {
+    expect(feed).toMatch(/h-\[26px\]/);
+  });
+
+  it("did not delete the filter grammar it sits above", () => {
+    // Thin lens/topic combinations are evidence, not yet a decision to remove a
+    // capability. The menu stays until that call is made deliberately.
+    expect(feed).toMatch(/<FeedFilterMenu/);
+  });
+});
+
+describe("the lens is a server concept", () => {
+  const idx = code("src/routes/index.tsx");
+
+  it("is part of the query key — two lenses are two playlists", () => {
+    const key = idx.slice(idx.indexOf("queryKey: ["), idx.indexOf("queryFn"));
+    expect(key).toMatch(/lens,/);
+  });
+
+  it("is sent with the request rather than applied on the client", () => {
+    expect((idx.match(/\n\s+lens,\n/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // The client renders the order it was given; it never re-sorts one.
+    expect(idx).not.toMatch(/\.sort\(/);
+  });
+
+  it("restarts the playlist exactly the way a filter change does", () => {
+    expect(idx).toMatch(/const restartPlaylist = \(\) => \{/);
+    expect(idx).toMatch(/const selectLens = \(l: Lens\) => \{/);
+  });
+
+  it("does not adopt the SSR snapshot under a lens it was not fetched for", () => {
+    // The loader fetched the anonymous 24h For You feed. Painting it under
+    // "Most Capital" would show the wrong order on first frame.
+    expect(idx).toMatch(/lens === "for_you"\n?\s*\? \(loaderData\?\.feed/);
+  });
+});
+
+/**
+ * THE VALIDATOR IS A CONTRACT. `momentum` and `sensitivity` were absent from
+ * the feed's input schema while the client sent both on every request — and
+ * zod's `.parse` strips unknown keys silently, so ten of the filter menu's rows
+ * did nothing at all. Nothing errored and no test failed.
+ */
+describe("the feed request schema accepts everything the client sends", () => {
+  const fn = code("src/lib/opportunity-feed.functions.ts");
+  const idx = code("src/routes/index.tsx");
+
+  it("declares every field the route puts in the request", () => {
+    for (const field of ["lens", "momentum", "sensitivity", "networks", "topics", "window"]) {
+      expect(fn, field).toMatch(new RegExp(`\\b${field}:\\s*z\\.`));
+    }
+  });
+
+  it("has no client field without a schema entry", () => {
+    /**
+     * Every key of every `data: { … }` the route hands `getOpportunityFeed`.
+     *
+     * Brace-counted rather than matched by indentation: a first attempt at this
+     * scraped by leading whitespace and picked up `request` out of a
+     * `Promise.race([request, …])`, which is a local and not a request field. A
+     * guard that reports a field nobody sends is a guard nobody will keep.
+     */
+    const sent = new Set<string>();
+    for (let at = idx.indexOf("getOpportunityFeed({"); at >= 0; ) {
+      const start = idx.indexOf("data: {", at);
+      if (start < 0) break;
+      let depth = 0;
+      let end = start + "data: ".length;
+      for (; end < idx.length; end += 1) {
+        if (idx[end] === "{") depth += 1;
+        else if (idx[end] === "}" && (depth -= 1) === 0) break;
+      }
+      const body = idx.slice(start, end);
+      // The trailing delimiter is a LOOKAHEAD. Consuming it made every second
+      // key invisible: `sensitivity,` ate the comma that `lens,` needed as its
+      // own prefix, so the scraper silently reported half the object — a guard
+      // that passes by not looking is the failure mode this whole file exists
+      // to catch.
+      for (const m of body.matchAll(/[{,]\s*([a-zA-Z][a-zA-Z0-9]*)\s*(?=[,:])/g)) {
+        sent.add(m[1]!);
+      }
+      at = idx.indexOf("getOpportunityFeed({", end);
+    }
+
+    expect(sent.size).toBeGreaterThan(4);
+    expect(sent.has("lens")).toBe(true);
+    expect(sent.has("momentum")).toBe(true);
+    for (const k of sent) {
+      if (k === "data" || k === "feedSession") continue;
+      expect(fn, `${k} is sent but not in the schema`).toMatch(new RegExp(`\\b${k}:\\s*z\\.`));
+    }
+  });
+});

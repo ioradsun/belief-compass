@@ -12,6 +12,7 @@ import { readSessionToken } from "@/lib/wallet-session";
 
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { FeedListPanel, type FeedListEntry } from "@/components/FeedListPanel";
+import { toLens, type Lens } from "@/domain/feed/lens";
 import { DEFAULT_SENSITIVITY, type Sensitivity } from "@/domain/market-change";
 import { useFeedSensitivity, setFeedSensitivity } from "@/lib/feed-sensitivity";
 import {
@@ -116,11 +117,23 @@ const feedQO = (
   filters: FeedFilters = ALL_FILTERS,
   originMarketId: number | null = null,
   sensitivity: Sensitivity = DEFAULT_SENSITIVITY,
+  lens: Lens = "for_you",
 ) =>
   queryOptions({
     // The reader's floor is part of the key: it changes what the server admits,
     // so two floors are two different feeds and must not share a cache entry.
-    queryKey: ["opp-feed", wallet ?? null, window, filterKey(filters), originMarketId, sensitivity],
+    // The LENS is in the key for the same reason and a stronger one: it changes
+    // both which markets are admitted and their order, so two lenses are two
+    // different playlists and must never share a cache entry.
+    queryKey: [
+      "opp-feed",
+      wallet ?? null,
+      window,
+      filterKey(filters),
+      originMarketId,
+      sensitivity,
+      lens,
+    ],
     queryFn: async () => {
       const request = getOpportunityFeed({
         data: {
@@ -132,6 +145,7 @@ const feedQO = (
           topics: filters.topics,
           momentum: filters.momentum ?? [],
           sensitivity,
+          lens,
           originMarketId,
           ...feedSession(),
         },
@@ -155,6 +169,7 @@ const feedQO = (
             topics: filters.topics,
             momentum: filters.momentum ?? [],
             sensitivity,
+            lens,
             originMarketId,
           },
         });
@@ -527,6 +542,14 @@ function Feed() {
   const [filters, setFilters] = useState<FeedFilters>(ALL_FILTERS);
 
   /**
+   * WHICH QUESTION THE READER ASKED — For You, Moving, Most Capital, Most
+   * Believers, Fresh. A SERVER concept like the filters above: it changes both
+   * what is admitted and the order, so the client never re-sorts what it is
+   * given. See @/domain/feed/lens.
+   */
+  const [lens, setLens] = useState<Lens>("for_you");
+
+  /**
    * How much has to happen before a market is worth showing. A row in the one
    * bar table — see @/domain/market-change#BARS. Kept in a small external store
    * rather than route state because it is a PREFERENCE that outlives the
@@ -550,12 +573,17 @@ function Feed() {
   // round-trip. Only the anon 24h "all" query matches what the loader fetched —
   // a wallet, window or mode falls through to a normal client fetch.
   const loaderData = Route.useLoaderData();
+  // The loader fetched the anonymous 24h FOR YOU feed. A lens is a different
+  // playlist, so adopting the snapshot under one would paint the wrong order.
   const initialFeed =
-    win === "24h" && filterKey(filters) === filterKey(ALL_FILTERS) && originMarket == null
+    win === "24h" &&
+    filterKey(filters) === filterKey(ALL_FILTERS) &&
+    originMarket == null &&
+    lens === "for_you"
       ? (loaderData?.feed ?? undefined)
       : undefined;
   const { data } = useQuery({
-    ...feedQO(wallet, win, filters, originMarket, sensitivity),
+    ...feedQO(wallet, win, filters, originMarket, sensitivity, lens),
     // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
     // React Query ages it against staleTime instead of refetching on hydration.
     ...(initialFeed
@@ -718,15 +746,32 @@ function Feed() {
    * queue starts clean and the centre panel moves to the first market of the
    * new playlist — the two must never describe different feeds.
    */
-  const selectFilters = (f: FeedFilters) => {
-    if (filterKey(f) === filterKey(filters)) return;
-    setFilters(f);
+  /**
+   * Start a new playlist. The queue empties, the centre unpins, and the re-pin
+   * WAITS for the response belonging to the new request — the old feed is still
+   * on screen at the moment of the tap, so pinning its head would move the
+   * centre to a market that is about to be replaced.
+   */
+  const restartPlaylist = () => {
     setQueue(emptyQueue);
     setPinnedId(null);
     repinRef.current = true;
     setOriginMarket(null);
     setCaughtUp(false);
     navigate({ search: (prev: Search) => ({ ...prev, m: undefined }) });
+  };
+
+  const selectFilters = (f: FeedFilters) => {
+    if (filterKey(f) === filterKey(filters)) return;
+    setFilters(f);
+    restartPlaylist();
+  };
+
+  /** Changing the lens is a new playlist, by exactly the same rules. */
+  const selectLens = (l: Lens) => {
+    if (l === lens) return;
+    setLens(toLens(l));
+    restartPlaylist();
   };
 
   /**
@@ -1012,12 +1057,12 @@ function Feed() {
                         marketId={shownId}
                         wallet={wallet}
                         onSelect={selectMarket}
-                        reason={
-                          feedEntries.find((e) => e.onchainId === shownId)?.reason ?? null
-                        }
+                        reason={feedEntries.find((e) => e.onchainId === shownId)?.reason ?? null}
                       />
                     )}
                     <FeedListPanel
+                      lens={lens}
+                      onLens={selectLens}
                       sensitivity={sensitivity}
                       onSensitivity={setFeedSensitivity}
                       entries={feedEntries}
@@ -1030,7 +1075,6 @@ function Feed() {
                     />
                   </div>
                 }
-
                 connectPrompt={
                   walletResolving ? (
                     /* Still reconnecting — hold neutral space rather than flash
@@ -1327,7 +1371,7 @@ function CaughtUp({
           className="rounded-full px-5 py-2.5 text-[13px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
           style={{ border: "1px solid var(--border)" }}
         >
-          View Your Convictions
+          View Your Positions
         </button>
         {onCreate && (
           <button

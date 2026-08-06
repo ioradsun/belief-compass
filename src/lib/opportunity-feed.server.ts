@@ -36,6 +36,7 @@ import {
   type MomentumFacts,
   type MomentumLens,
 } from "@/domain/feed/momentum";
+import { orderForLens, toLens, type Lens, type LensCandidate } from "@/domain/feed/lens";
 import { shouldInsertSuggestion } from "@/domain/market-suggestion";
 import { listFeed, type VolumeWindow } from "@/lib/markets.functions";
 import {
@@ -67,6 +68,16 @@ export interface OpportunityFeedInput extends FeedSessionState {
    * `?lens=hot` links) fall back to For You rather than emptying the feed.
    */
   mode?: string;
+  /**
+   * WHICH QUESTION THE READER ASKED — see @/domain/feed/lens.
+   *
+   * "for_you" is the blend and the default, and it leaves every line below this
+   * one behaving exactly as it always has. The other four are RANKINGS: they
+   * admit only markets they can speak about and order strictly on their own
+   * measure, so the sequencer's rhythm and diversity rules are skipped for them.
+   * Unrecognised values fall back to For You rather than emptying the feed.
+   */
+  lens?: string;
   /**
    * The reader's own lens: network groups and topics. OR within a group, AND
    * across groups (see @/domain/feed/filters). Empty means "All", which is the
@@ -249,6 +260,8 @@ export interface OpportunityFeedResult {
   opp: FeedRowPayload | null;
   /** The perspective this result was built for. */
   mode: FeedMode;
+  /** The lens this result was RANKED by — what the playlist should explain. */
+  lens: Lens;
   /** The canonical filter selection this result was built for. */
   filters: FeedFilters;
   /**
@@ -278,9 +291,14 @@ export async function buildOpportunityFeed(
   // A single network chosen IS a perspective, so the Tribe / Rivals rankings
   // still apply; everything else keeps the blend the ranker produced.
   const mode = input.mode ? toFeedMode(input.mode) : toFeedMode(orderingMode(filters));
+  // Which question the reader asked. Declared here because it also decides what
+  // the card's one sentence leads on, not only the order — see `preferMomentum`.
+  const lens: Lens = toLens(input.lens);
   const feed = await listFeed({ data: { window: win, ...(wallet ? { wallet } : {}) } });
   const rows = (feed.data ?? []) as unknown as Row[];
   const ids = rows.map((r) => Number(r.onchain_id));
+  /** The read-model row by id — the lens ranks off the same rows the client renders. */
+  const byOnchainId = new Map(rows.map((r) => [Number(r.onchain_id), r]));
 
   const origin =
     typeof input.originMarketId === "number" && Number.isFinite(input.originMarketId)
@@ -324,9 +342,18 @@ export async function buildOpportunityFeed(
    * filters rather than recomputing — which is what keeps one cache per window
    * instead of one per window per sensitivity.
    */
+  const momentumCache = new Map<number, MomentumFacts>();
   const momentumFor = (r: Row): MomentumFacts => {
+    // MEMOISED. Both the candidate map and the lens ranking need this, and
+    // narrowing the same classification twice would be two answers waiting to
+    // disagree the day one caller passes a different floor.
+    const id = Number(r.onchain_id);
+    const hit = momentumCache.get(id);
+    if (hit) return hit;
     const raw = (r["momentum"] ?? null) as MomentumFacts | null;
-    return raw ? atSensitivity(raw, input.sensitivity as never, win) : NO_MOMENTUM;
+    const out = raw ? atSensitivity(raw, input.sensitivity as never, win) : NO_MOMENTUM;
+    momentumCache.set(id, out);
+    return out;
   };
 
   const candidates: SequenceCandidate[] = rows.map((r) => {
@@ -420,6 +447,9 @@ export async function buildOpportunityFeed(
         category: s.category ?? ai?.category ?? null,
         momentum: mo,
         window: win,
+        // Under the Moving lens the reader asked what is CHANGING, so the move
+        // leads even when it is too small to be a headline in a blended feed.
+        preferMomentum: lens === "moving",
       }),
       reentry,
       poolSlices: Array.isArray(r["pool_slices"]) ? (r["pool_slices"] as string[]) : [],
@@ -461,14 +491,53 @@ export async function buildOpportunityFeed(
   });
 
   const candidateById = new Map(kept.map((c) => [c.onchainId, c]));
-  const ordered = orderForMode(
-    mode,
-    kept.flatMap((c) => modeOf.get(c.onchainId) ?? []),
-  ).flatMap((m) => candidateById.get(m.onchainId) ?? []);
+
+  /**
+   * THE LENS RANKS. For You is the blend and keeps every line of the existing
+   * behaviour — the mode ordering, then the sequencer's rhythm and diversity.
+   * The other four are RANKINGS on one measure, so they order themselves and
+   * tell the sequencer to leave that order alone.
+   *
+   * BELIEVERS ARE COUNTED THE WAY THE ROW PRINTS THEM — `believers_yes +
+   * believers_no`, which is what `FeedListPanel` shows — and NOT
+   * `directional_believers`, which the pool slice and `signalsOf` use. The two
+   * agree on 2,769 of 2,779 markets and disagree on ten, always with
+   * `directional_believers` higher; market #101 carries 2 there while holding
+   * zero believers on both sides. Ranking on the counter and printing the sum
+   * would put a market at the top of "Most Believers" above a row saying it has
+   * none. One number, one meaning, even where the read model has drifted.
+   */
+  const ordered =
+    lens === "for_you"
+      ? orderForMode(
+          mode,
+          kept.flatMap((c) => modeOf.get(c.onchainId) ?? []),
+        ).flatMap((m) => candidateById.get(m.onchainId) ?? [])
+      : orderForLens(
+          lens,
+          kept.flatMap((c) => {
+            const r = byOnchainId.get(c.onchainId);
+            if (!r) return [];
+            const created = Date.parse(String(r["market_created_at"] ?? ""));
+            const mo = momentumFor(r);
+            const lc: LensCandidate & { onchainId: number } = {
+              onchainId: c.onchainId,
+              capitalUsd: Math.max(0, num(r["yes_capital_usd"]) + num(r["no_capital_usd"])),
+              believers: Math.max(0, num(r["believers_yes"]) + num(r["believers_no"])),
+              createdAtMs: Number.isFinite(created) ? created : null,
+              momentumWeight: mo.weight,
+              moving: mo.lenses.includes("moving"),
+              score: c.scored.score,
+            };
+            return [lc];
+          }),
+        ).flatMap((m) => candidateById.get(m.onchainId) ?? []);
 
   const { items, engineVersion, excluded } = sequenceFeed({
     candidates: ordered,
     idea: ideaResult.idea,
+    // A ranking is taken as given; a blend is sequenced. See sequence.ts.
+    preserveOrder: lens !== "for_you",
     ...(input.limit ? { limit: input.limit } : { limit: SEQUENCE.DEFAULT_LIMIT }),
   });
 
@@ -490,6 +559,7 @@ export async function buildOpportunityFeed(
     tribe: (feed.tribe as FeedRowPayload | null) ?? null,
     opp: (feed.opp as FeedRowPayload | null) ?? null,
     mode,
+    lens,
     filters,
     // A viewer whose network shrank below the gate keeps whatever they chose
     // for THIS response — the result says what it is, and the picker decides

@@ -19,9 +19,21 @@ const input = z.object({
   window: z.enum(["1h", "24h", "7d", "30d", "all"]).optional(),
   lens: z.string().max(32).optional(),
   mode: z.string().max(32).optional(),
-  // The reader's own lens. Bounded so a crafted request cannot widen the query.
+  // The reader's own filter grammar. Bounded so a crafted request cannot widen
+  // the query.
+  //
+  // `momentum` AND `sensitivity` WERE MISSING FROM THIS OBJECT, and zod's
+  // `.parse` strips unknown keys silently rather than throwing. The client has
+  // been sending both on every request (see routes/index.tsx) and the server has
+  // been receiving neither — so the seven Momentum checkboxes and the three
+  // "How much matters" rows in the filter menu did nothing at all. No error, no
+  // type failure, no test: ten of the menu's ~24 rows were inert. A validator is
+  // a CONTRACT, and a field the caller sends but the schema omits is the one
+  // shape of breakage nothing downstream can detect.
   networks: z.array(z.string().max(20)).max(8).optional(),
   topics: z.array(z.string().max(24)).max(24).optional(),
+  momentum: z.array(z.string().max(20)).max(12).optional(),
+  sensitivity: z.string().max(20).optional(),
   originMarketId: z.number().int().nonnegative().nullish(),
   seenIds: z.array(z.number().int().nonnegative()).max(200).optional(),
   queuedIds: z.array(z.number().int().nonnegative()).max(200).optional(),

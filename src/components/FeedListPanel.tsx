@@ -26,6 +26,7 @@ import type { MarketRow } from "@/components/MarketCard";
 import type { Sensitivity } from "@/domain/market-change";
 import { marketTitle, marketTitleFallback } from "@/domain/market-title";
 import { WhyThis } from "@/components/WhyThis";
+import { LENSES, LENS_LABELS, lensHero, scaleLine, type Lens } from "@/domain/feed/lens";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -48,7 +49,16 @@ function factsOf(row: MarketRow | undefined, nowMs: number) {
   if (!row) return null;
   const r = row as unknown as Record<string, unknown>;
   const capitalUsd = num(r.yes_capital_usd) + num(r.no_capital_usd);
+  // THE TWO UNIVERSAL MEASURES OF SCALE. Every market gets them under every
+  // lens: they are how a reader tells a real question from an empty one, and no
+  // lens replaces them. Both come off the row the feed already shipped — no
+  // second query, no second cache, no second definition.
+  const believers = num(row.believers_yes) + num(row.believers_no);
+  const createdAt = Date.parse(String(r.market_created_at ?? ""));
+  const ageHours = Number.isFinite(createdAt) ? Math.max(0, (nowMs - createdAt) / 3_600_000) : null;
   return {
+    scale: { believers, capitalUsd },
+    ageHours,
     // A ROW WITHOUT A TITLE HAS NO QUESTION — it must NOT manufacture one.
     // Resolving the placeholder here made `?? activeTitle` unreachable, so the
     // pinned card printed "Market #2618" while the centre panel, holding the
@@ -68,11 +78,53 @@ function factsOf(row: MarketRow | undefined, nowMs: number) {
   };
 }
 
+/**
+ * THE LENS ROW — the one control, and the only thing above the running order.
+ *
+ * Text, not chips: five words in a row that scrolls, in the same weight the rest
+ * of this column uses. A pill per lens would put five filled shapes at the top of
+ * a 320px rail and make choosing a lens look heavier than reading the list it
+ * chooses. The selected one is `--rel`, the accent this product already uses for
+ * "this one is about you".
+ */
+function LensRow({ value, onChange }: { value: Lens; onChange: (l: Lens) => void }) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Explore by"
+      // A fixed height, so switching lenses cannot change the row's own size and
+      // move the list underneath it.
+      className="mb-2 flex h-[26px] shrink-0 items-center gap-3 overflow-x-auto"
+    >
+      {LENSES.map((l) => {
+        const on = l === value;
+        return (
+          <button
+            key={l}
+            role="tab"
+            aria-selected={on}
+            type="button"
+            onClick={() => onChange(l)}
+            className={`shrink-0 whitespace-nowrap text-[12px] transition-colors ${
+              on ? "font-semibold" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+            }`}
+            style={on ? { color: "var(--rel,#9b87f5)" } : undefined}
+          >
+            {LENS_LABELS[l]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function FeedListPanel({
   entries,
   rows,
   activeId,
   onSelect,
+  lens,
+  onLens,
   filters,
   onFilters,
   availableNetworks,
@@ -86,6 +138,9 @@ export function FeedListPanel({
   activeId: number | null;
 
   onSelect: (id: number) => void;
+  /** Which question the reader asked — see @/domain/feed/lens. */
+  lens: Lens;
+  onLens: (l: Lens) => void;
   filters: FeedFilters;
   onFilters: (f: FeedFilters) => void;
   /** Network groups this viewer's evidence can fill. Always includes everyone. */
@@ -107,6 +162,8 @@ export function FeedListPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <LensRow value={lens} onChange={onLens} />
+
       <div className="mb-2">
         <FeedFilterMenu
           filters={filters}
@@ -116,8 +173,6 @@ export function FeedListPanel({
           onSensitivity={onSensitivity}
         />
       </div>
-
-
 
       {upcoming.length === 0 ? (
         <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
@@ -131,10 +186,26 @@ export function FeedListPanel({
         <ol className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
           {upcoming.map((e) => {
             const f = factsOf(rows[e.onchainId], nowMs);
-            // The reason the feed picked this market outranks the market's own
-            // momentum sentence: one is about the reader, the other about the
-            // market. Only when there is no reason does the story stand in.
-            const line = e.reason ?? f?.discovery.story ?? null;
+            /**
+             * THREE LINES, IN ONE HIERARCHY: the question, why it is here, and
+             * the scale of the market.
+             *
+             * WHY IT IS HERE depends on the lens, and on one rule. Most Capital,
+             * Most Believers and Fresh rank on a WHOLE-MARKET total, so their
+             * hero is that total and it never names a side — turning "Most
+             * Capital" into "YES has $505" would describe a side while ranking
+             * on the sum. For You and Moving rank on something that genuinely is
+             * about a side, so their hero is the sentence the canonical engines
+             * already wrote ("Your Tribe is backing YES", "YES moved up 8.4%
+             * today") and it may say so.
+             */
+            const hero = f ? lensHero(lens, f.scale, f.ageHours) : null;
+            // Only the reason-led lenses fall back to the market's own story: a
+            // ranked lens with no hero has nothing to claim, and the discovery
+            // sentence would be answering a question the reader did not ask.
+            const line = hero ? null : (e.reason ?? f?.discovery.story ?? null);
+            // The quiet grounding, minus whatever the hero just said out loud.
+            const scale = f ? scaleLine(lens, f.scale) : null;
             return (
               <li
                 key={e.onchainId}
@@ -151,7 +222,23 @@ export function FeedListPanel({
                   <span className="block text-[13px] font-medium leading-snug text-[var(--text-secondary)]">
                     {f?.question ?? marketTitleFallback(e.onchainId)}
                   </span>
+                  {/* The hero of a ranked lens is a FACT ABOUT THE MARKET, so it
+                    is not painted in the discovery purple — that accent means
+                    "this one is about you" everywhere else in the product, and
+                    "$505 committed" is not. It takes the text weight instead. */}
+                  {hero && (
+                    <span className="num mt-0.5 block text-[12px] font-semibold text-[var(--text)]">
+                      {hero}
+                    </span>
+                  )}
                   <WhyThis reason={line} className="mt-0.5 whitespace-normal" />
+                  {/* Believers and capital ground every market under every lens.
+                    The quietest line on the row, and never a repeat of the hero. */}
+                  {scale && (
+                    <span className="num mt-0.5 block text-[11px] text-[var(--text-muted)]">
+                      {scale}
+                    </span>
+                  )}
                 </button>
               </li>
             );
