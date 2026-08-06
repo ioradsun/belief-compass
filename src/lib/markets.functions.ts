@@ -4,9 +4,8 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { fetchPovPositions } from "@/lib/pov.server";
 import { publicClient, serviceClient } from "@/lib/supabase-clients";
-import { costBasisUsd } from "@/domain/position-value";
+import { costBasisUsd, VALUE } from "@/domain/position-value";
 import { aliasFor } from "@/lib/wallet-identity";
 import { readLatestTradesPerMarket, readLatestTradeEvents } from "@/lib/events.functions";
 import type { TapeTrade } from "@/domain/conviction-series";
@@ -1341,6 +1340,48 @@ function pickLinePayload(raw: unknown): {
 }
 
 
+/**
+ * EVERY POSITION THE WALLET HOLDS, valued from our own numbers.
+ *
+ * WHAT THIS NO LONGER DOES. It used to call out to pov.co on every request and
+ * let that answer override both the marked value AND the share count:
+ *
+ *     yes_shares:    pov?.yesShares ?? r.yes_shares
+ *     yes_value_usd: pov?.yes       ?? r.yes_value_usd
+ *
+ * The comment above it said POV was "the authority on what a position is worth
+ * right now", with the stored value as a fallback. That was TRUE ONCE — when
+ * `wallet_beliefs.yes_value_usd` had six readers and no writer at all, and every
+ * one of them did `Number(null) || 0` and carried on with a confident zero. It
+ * silently emptied conviction cohorts, the standing-fact pool, whale detection
+ * and the dashboard's held count (see 20260805_cohort_catchup_rerun.sql).
+ *
+ * That was fixed. `belief-rollup` now writes the marked value EVERY MINUTE from
+ * `market_state` prices, tagged with `value_source` and `value_updated_at`. So
+ * the external call stopped being a live refresh over a stale store and became a
+ * second, slower, third-party path to a number we already recompute constantly —
+ * and the less consistent one, since the deck, the feed, the Case File, cohorts
+ * and whale detection all value positions from `market_state` while only this
+ * screen valued them from POV. Two authorities for one number.
+ *
+ * THE SHARE OVERRIDE WAS THE SHARPER PROBLEM. `yes_shares` comes from our own
+ * on-chain reducer, so POV silently patched our ledger on the one screen a
+ * reader would notice a discrepancy — meaning real drift would be hidden here
+ * and left standing everywhere else. That check is not lost by removing it; it
+ * already exists in two better places:
+ *
+ *   • `position-reconcile` (nightly) refolds canonical chain events, compares
+ *     `reducerStateHash` — which hashes yes_shares/no_shares/costs — and REPAIRS
+ *     drift. Chain events are a stronger authority than a third-party API.
+ *   • `npm run verify:reducer` diffs the reducer against POV /positions on
+ *     demand, which is where a POV comparison belongs: a diagnostic that reports,
+ *     not a request-time patch that conceals.
+ *
+ * IT WAS ALSO NOT ONE CALL. `fetchPovPositions` paginated SERIALLY — up to 40
+ * sequential round-trips at 50 positions a page — plus a batched `markets`
+ * lookup to map POV uuids to onchain ids, all on the critical path of a screen
+ * that (until recently) two components polled every 30 seconds.
+ */
 export const getWallet = createServerFn({ method: "GET" })
   .inputValidator((d: { wallet: string; window?: VolumeWindow }) =>
     z
@@ -1514,76 +1555,42 @@ export const getWallet = createServerFn({ method: "GET" })
       }
     }
 
-    // POV is the authority on what a position is worth right now (it prices the
-    // wallet's own tokens). Refresh live, best-effort: if POV is slow or down we
-    // fall back to the stored value, and only then to shares x market price.
-    const povValue = new Map<
-      number,
-      { yes: number; no: number; yesShares: number; noShares: number }
-    >();
-    try {
-      const pov = await fetchPovPositions(wallet, 4000);
-      if (pov.length) {
-        const uuids = [...new Set(pov.map((p) => p.marketId))];
-        const idByUuid = new Map<string, number>();
-        for (let i = 0; i < uuids.length; i += 500) {
-          const { data: mk } = await sb
-            .from("markets")
-            .select("onchain_id, pov_uuid")
-            .in("pov_uuid", uuids.slice(i, i + 500));
-          for (const m of mk ?? [])
-            if (m.pov_uuid) idByUuid.set(String(m.pov_uuid), Number(m.onchain_id));
-        }
-        for (const p of pov) {
-          const id = idByUuid.get(p.marketId);
-          if (id == null) continue;
-          const a = povValue.get(id) ?? { yes: 0, no: 0, yesShares: 0, noShares: 0 };
-          if (p.side === "YES") {
-            a.yes += p.currentValueUsd;
-            a.yesShares += p.tokenBalance;
-          } else {
-            a.no += p.currentValueUsd;
-            a.noShares += p.tokenBalance;
-          }
-          povValue.set(id, a);
-        }
-      }
-    } catch {
-      /* best-effort: stored values still render */
-    }
-
     // Cost basis is stored in ETH; value it in USD so gain compares like with like.
     const ethUsd = await ethUsdRate(sb);
 
-    // Staleness: the POV poller re-prices every ~2 min, so a stored marked value
-    // older than this — with no live POV value this cycle — is not a trustworthy
-    // mark. A never-priced row (null timestamp) is stale by definition. Callers
-    // prefer a fresh shares×price mark and suppress gain rather than subtract a
-    // stale value from a fresh cost basis.
-    const STALE_MS = 60 * 60 * 1000; // 1 hour
+    // Staleness, from the one module that defines it. `belief-rollup` re-marks
+    // every minute, so VALUE.staleAfterMs is set at the point where silence means
+    // the WRITER is down rather than the market being quiet. This used to carry
+    // its own 60-minute constant — a second threshold for one concept, and the
+    // looser of the two, so this screen called a value trustworthy for half an
+    // hour after the canonical rule had given up on it.
+    //
+    // A never-priced row (null timestamp) is stale by definition. Callers prefer
+    // a fresh shares x price mark and suppress gain rather than subtract a stale
+    // value from a fresh cost basis.
     const nowMs = Date.now();
     const staleAt = (ts: unknown): boolean => {
       if (ts == null) return true;
       const t = new Date(String(ts)).getTime();
-      return !Number.isFinite(t) || nowMs - t > STALE_MS;
+      return !Number.isFinite(t) || nowMs - t > VALUE.staleAfterMs;
     };
 
     const positions = (rows ?? []).map((r) => {
-      const pov = povValue.get(Number(r.onchain_id));
       const stale = staleAt(r.value_updated_at);
       return {
         ...r,
         // The honest "invested": the ETH acquisition cost, valued at the current rate.
         yes_cost: costBasisUsd(r.yes_cost, ethUsd),
         no_cost: costBasisUsd(r.no_cost, ethUsd),
-        yes_shares: pov?.yesShares ?? r.yes_shares,
-        no_shares: pov?.noShares ?? r.no_shares,
-        yes_value_usd: pov?.yes ?? (r.yes_value_usd == null ? null : Number(r.yes_value_usd)),
-        no_value_usd: pov?.no ?? (r.no_value_usd == null ? null : Number(r.no_value_usd)),
-        // A live POV value this cycle is fresh; otherwise trust the stored mark
-        // only if its timestamp is recent.
-        yes_value_stale: pov?.yes == null && stale,
-        no_value_stale: pov?.no == null && stale,
+        yes_shares: r.yes_shares,
+        no_shares: r.no_shares,
+        yes_value_usd: r.yes_value_usd == null ? null : Number(r.yes_value_usd),
+        no_value_usd: r.no_value_usd == null ? null : Number(r.no_value_usd),
+        // Honest now. This used to read `pov?.yes == null && stale`, so any POV
+        // answer suppressed the flag outright — a second opinion silenced the
+        // freshness warning instead of confirming it.
+        yes_value_stale: stale,
+        no_value_stale: stale,
         markets: metaById.get(Number(r.onchain_id)) ?? null,
         state: stateById.get(Number(r.onchain_id)) ?? null,
         chg_window_yes: chgYes.get(Number(r.onchain_id)) ?? null,

@@ -1,0 +1,112 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { VALUE, positionValueUsd } from "@/domain/position-value";
+
+const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+/**
+ * Comments stripped before asserting. These files EXPLAIN what was removed, and
+ * an assertion that cannot tell prose from code fails on its own rationale —
+ * the same trap `network-freshness.test.ts` documents.
+ */
+const code = (p: string) =>
+  read(p)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
+const MARKETS = code("src/lib/markets.functions.ts");
+const POV = code("src/lib/pov.server.ts");
+
+/**
+ * ONE AUTHORITY ON WHAT A POSITION IS WORTH — as executable notes.
+ *
+ * `getWallet` used to call pov.co on every request and let it override both the
+ * marked value and the SHARE COUNT. That made sense when
+ * `wallet_beliefs.yes_value_usd` had six readers and no writer; `belief-rollup`
+ * now writes it every minute from `market_state`, so the external call became a
+ * second authority for a number the rest of the app already agrees on.
+ *
+ * The drift check that override was accidentally performing is not lost — it
+ * lives in `position-reconcile` (nightly, against canonical chain events) and in
+ * `npm run verify:reducer` (on demand, against POV). Both REPORT or REPAIR;
+ * neither conceals.
+ */
+describe("the portfolio is valued from our own numbers", () => {
+  it("does not call pov.co on the read path", () => {
+    // The regression: a request-time external dependency on a screen that shows
+    // a person their money.
+    expect(MARKETS).not.toMatch(/fetchPovPositions/);
+  });
+
+  it("keeps the POV positions fetcher deleted rather than merely unused", () => {
+    // An exported helper with no callers is an invitation. Identity lookups
+    // (fetchPovUser) are a different concern and stay.
+    expect(POV).not.toMatch(/fetchPovPositions/);
+    expect(POV).toMatch(/export async function fetchPovUser/);
+  });
+
+  it("still has the drift check, in the two places it belongs", () => {
+    // Nightly, against canonical chain events — a stronger authority than POV,
+    // and it repairs rather than papering over.
+    const reconcile = read("src/lib/positions/reconcile.server.ts");
+    expect(reconcile).toMatch(/reducerStateHash/);
+    expect(reconcile).toMatch(/rebuildPosition/);
+    // And a POV comparison on demand, as a diagnostic.
+    expect(read("package.json")).toMatch(/verify:reducer/);
+  });
+
+  it("uses the one staleness threshold rather than a second local copy", () => {
+    // getWallet carried its own 60-minute constant while the canonical rule was
+    // 30 — the looser of the two, so this screen called a value trustworthy for
+    // half an hour after the shared rule had given up on it.
+    expect(MARKETS).toMatch(/VALUE\.staleAfterMs/);
+    expect(MARKETS).not.toMatch(/const STALE_MS/);
+  });
+
+  it("reports staleness honestly instead of letting a second opinion mute it", () => {
+    // Was `pov?.yes == null && stale` — any POV answer suppressed the flag
+    // outright, so a stale mark could render as fresh.
+    expect(MARKETS).not.toMatch(/yes_value_stale:\s*pov/);
+  });
+});
+
+describe("the valuation fallback chain still holds", () => {
+  it("prefers a fresh marked value and says it is current", () => {
+    const now = Date.parse("2026-08-06T12:00:00Z");
+    const v = positionValueUsd({
+      valueUsd: 42,
+      valueUpdatedAt: new Date(now - 60_000).toISOString(),
+      nowMs: now,
+    });
+    expect(v).toEqual({ usd: 42, source: "marked", freshness: "current" });
+  });
+
+  it("still renders an old mark, labelled stale rather than hidden", () => {
+    // The number is the last true thing we knew; suppressing it would be worse
+    // than showing it with its age.
+    const now = Date.parse("2026-08-06T12:00:00Z");
+    const v = positionValueUsd({
+      valueUsd: 42,
+      valueUpdatedAt: new Date(now - VALUE.staleAfterMs - 1).toISOString(),
+      nowMs: now,
+    });
+    expect(v.usd).toBe(42);
+    expect(v.freshness).toBe("stale");
+  });
+
+  it("falls back to cost basis when nothing has ever marked the position", () => {
+    // This is what now catches a wallet whose markets the rollup could not
+    // price — the case POV used to cover, handled without an external call.
+    const v = positionValueUsd({ valueUsd: null, costEth: 0.01, ethUsd: 3000 });
+    expect(v).toEqual({ usd: 30, source: "cost", freshness: "fallback" });
+  });
+
+  it("says unknown rather than zero when it cannot know", () => {
+    // A confident zero is the exact bug that emptied the cohorts.
+    expect(positionValueUsd({ valueUsd: null, costEth: null, ethUsd: null })).toEqual({
+      usd: 0,
+      source: "unknown",
+      freshness: "unknown",
+    });
+  });
+});
