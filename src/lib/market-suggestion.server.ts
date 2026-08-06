@@ -60,6 +60,13 @@ function canonicalCategory(raw: string | null | undefined): string | null {
 /**
  * The last ~30 meaningful things this wallet did, newest first, joined to the
  * market titles and categories they happened on.
+ *
+ * Three real sources are unioned, newest first, one signal per market:
+ *   • money-backed positions (wallet_beliefs) — the strongest evidence
+ *   • tapped / calibration answers (expressed_beliefs) — a stated side
+ *   • answered House predictions (house_predictions) — includes PASS
+ * A market backed with money always wins over a lighter signal on the same
+ * market, so the profile never under-counts real conviction.
  */
 export async function buildInterest(
   sb: SupabaseClient,
@@ -68,7 +75,7 @@ export async function buildInterest(
   const w = norm(wallet);
   const limit = SUGGESTION.HISTORY_WINDOW;
 
-  const [decisions, positions, created] = await Promise.all([
+  const [decisions, positions, expressed, created] = await Promise.all([
     sb
       .from("house_predictions")
       .select("onchain_id, category, actual_action, revealed_at, created_at")
@@ -84,6 +91,12 @@ export async function buildInterest(
       .order("last_trade_at", { ascending: false })
       .limit(limit),
     sb
+      .from("expressed_beliefs")
+      .select("onchain_id, side, updated_at")
+      .eq("wallet", w)
+      .order("updated_at", { ascending: false })
+      .limit(limit),
+    sb
       .from("conviction_markets")
       .select("question")
       .eq("creator_wallet", w)
@@ -91,16 +104,49 @@ export async function buildInterest(
       .limit(20),
   ]);
 
-  const backed = new Set(
-    ((positions.data ?? []) as { onchain_id: number }[]).map((p) => Number(p.onchain_id)),
-  );
-  const rows = ((decisions.data ?? []) as {
+  const sideOf = (raw: string | null | undefined): "YES" | "NO" | null =>
+    raw === "YES" || raw === "NO" ? raw : null;
+
+  // Newest-first union, strongest evidence per market.
+  type Draft = { id: number; action: "YES" | "NO" | "PASS"; backed: boolean; category: string | null };
+  const drafts: Draft[] = [];
+
+  for (const p of (positions.data ?? []) as { onchain_id: number; expressed_side: string | null }[]) {
+    const side = sideOf(p.expressed_side);
+    if (!side) continue;
+    drafts.push({ id: Number(p.onchain_id), action: side, backed: true, category: null });
+  }
+  for (const e of (expressed.data ?? []) as { onchain_id: number; side: string | null }[]) {
+    const side = sideOf(e.side);
+    if (!side) continue;
+    drafts.push({ id: Number(e.onchain_id), action: side, backed: false, category: null });
+  }
+  for (const r of (decisions.data ?? []) as {
     onchain_id: number;
     category: string | null;
     actual_action: string | null;
-  }[]).filter((r) => r.actual_action);
+  }[]) {
+    if (!r.actual_action) continue;
+    drafts.push({
+      id: Number(r.onchain_id),
+      action: sideOf(r.actual_action) ?? "PASS",
+      backed: false,
+      category: r.category,
+    });
+  }
 
-  const ids = [...new Set(rows.map((r) => Number(r.onchain_id)))];
+  const byMarket = new Map<number, Draft>();
+  for (const d of drafts) {
+    const prev = byMarket.get(d.id);
+    // First writer wins per source order (backed first); a backed signal still
+    // upgrades an earlier lighter one on the same market.
+    if (!prev) byMarket.set(d.id, d);
+    else if (d.backed && !prev.backed) byMarket.set(d.id, { ...prev, ...d });
+    else if (!prev.category && d.category) byMarket.set(d.id, { ...prev, category: d.category });
+  }
+  const rows = [...byMarket.values()].slice(0, limit);
+
+  const ids = rows.map((r) => r.id);
   const titleOf = new Map<number, string>();
   const catOf = new Map<number, string | null>();
   if (ids.length) {
@@ -111,17 +157,14 @@ export async function buildInterest(
     }
   }
 
-  const signals: InterestSignal[] = rows.map((r) => {
-    const id = Number(r.onchain_id);
-    const action = r.actual_action === "YES" || r.actual_action === "NO" ? r.actual_action : "PASS";
-    return {
-      marketId: String(id),
-      category: canonicalCategory(r.category ?? catOf.get(id) ?? null),
-      action,
-      backed: backed.has(id) && action !== "PASS",
-      title: titleOf.get(id) ?? null,
-    };
-  });
+  const signals: InterestSignal[] = rows.map((r) => ({
+    marketId: String(r.id),
+    category: canonicalCategory(r.category ?? catOf.get(r.id) ?? null),
+    action: r.action,
+    backed: r.backed && r.action !== "PASS",
+    title: titleOf.get(r.id) ?? null,
+  }));
+
 
   const interest: UserMarketInterest = {
     viewerId: w,
@@ -317,36 +360,56 @@ async function cooldownState(sb: SupabaseClient, wallet: string): Promise<Cooldo
   };
 }
 
+/** Why a wallet produced no suggestion — so a silent job run can be read. */
+export type SuggestionSkipReason =
+  | "has-ready"
+  | "dismiss-cooldown"
+  | "created-cooldown"
+  | "not-enough-history"
+  | "no-category"
+  | "no-candidates"
+  | "all-rejected"
+  | "insert-failed";
+
+export interface SuggestionOutcome {
+  /** The stored suggestion id, or null when nothing was stored. */
+  id: string | null;
+  reason: SuggestionSkipReason | null;
+}
+
 /**
  * The whole pipeline for one wallet, run by the background job. Returns the id
- * of the stored suggestion, or null when the person is not eligible, the model
- * failed, or every candidate was a duplicate. Never throws into the job loop.
+ * of the stored suggestion, or the reason nothing was stored (not eligible,
+ * model failure, every candidate a duplicate). Never throws into the job loop.
  */
-export async function generateSuggestionFor(wallet: string): Promise<string | null> {
+export async function generateSuggestionFor(wallet: string): Promise<SuggestionOutcome> {
   const sb = serviceClient();
   const w = norm(wallet);
+  const skip = (reason: SuggestionSkipReason): SuggestionOutcome => ({ id: null, reason });
 
   const state = await cooldownState(sb, w);
   const now = Date.now();
-  if (state.hasReady) return null;
-  if (withinDays(state.dismissedAt, SUGGESTION.DISMISS_COOLDOWN_DAYS, now)) return null;
-  if (withinDays(state.createdAt, SUGGESTION.CREATED_COOLDOWN_DAYS, now)) return null;
+  if (state.hasReady) return skip("has-ready");
+  if (withinDays(state.dismissedAt, SUGGESTION.DISMISS_COOLDOWN_DAYS, now))
+    return skip("dismiss-cooldown");
+  if (withinDays(state.createdAt, SUGGESTION.CREATED_COOLDOWN_DAYS, now))
+    return skip("created-cooldown");
 
   const { interest, signals } = await buildInterest(sb, w);
-  if (!isParticipationEligible(participationOf(signals))) return null;
+  if (!isParticipationEligible(participationOf(signals))) return skip("not-enough-history");
 
   const categories = interest.topCategories.slice(0, 2).map((c) => c.category);
   const draftOpp = buildOpportunity(interest, []);
-  if (!draftOpp) return null;
+  if (!draftOpp) return skip("no-category");
   const existing = await relatedMarketTitles(sb, categories, draftOpp.relevantTopics);
   const opp = buildOpportunity(interest, existing)!;
 
   const candidates = await generateIdeas(opp);
-  if (!candidates.length) return null;
+  if (!candidates.length) return skip("no-candidates");
 
   const blocked = [...existing, ...interest.previouslyCreatedTitles];
   const best = selectBestCandidate(candidates, opp, CATEGORIES, blocked);
-  if (!best) return null;
+  if (!best) return skip("all-rejected");
 
   const topics = [opp.primaryCategory, opp.secondaryCategory].filter((t): t is string => !!t);
   const { data, error } = await sb
@@ -366,15 +429,16 @@ export async function generateSuggestionFor(wallet: string): Promise<string | nu
     })
     .select("id")
     .single();
-  if (error || !data) return null;
+  if (error || !data) return skip("insert-failed");
 
   await logSuggestionEvent(sb, "suggestion_generated", data.id as string, w, {
     category: opp.primaryCategory,
     score: best.score,
     candidates: candidates.length,
   });
-  return data.id as string;
+  return { id: data.id as string, reason: null };
 }
+
 
 /** The ready idea for this wallet, if the participation gate passes. */
 export async function readySuggestionFor(wallet: string): Promise<ReadySuggestion | null> {
@@ -505,20 +569,46 @@ export async function attachCreatedMarket(
 
 
 /**
- * Wallets worth generating for: they answered something recently and have no
+ * Wallets worth generating for: they made a real decision recently — money
+ * behind a side, a tapped answer, or an answered House prediction — and have no
  * live idea waiting. Bounded so one job run can never fan out unboundedly.
  */
 export async function walletsNeedingSuggestions(limit = 15): Promise<string[]> {
   const sb = serviceClient();
-  const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
-  const { data } = await sb
-    .from("house_predictions")
-    .select("wallet")
-    .not("actual_action", "is", null)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(400);
-  const wallets = [...new Set(((data ?? []) as { wallet: string }[]).map((r) => norm(r.wallet)))];
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+
+  const [traded, tapped, answered] = await Promise.all([
+    sb
+      .from("wallet_beliefs")
+      .select("wallet, last_trade_at")
+      .neq("expressed_side", "INACTIVE")
+      .gte("last_trade_at", since)
+      .order("last_trade_at", { ascending: false })
+      .limit(400),
+    sb
+      .from("expressed_beliefs")
+      .select("wallet, updated_at")
+      .gte("updated_at", since)
+      .order("updated_at", { ascending: false })
+      .limit(400),
+    sb
+      .from("house_predictions")
+      .select("wallet, created_at")
+      .not("actual_action", "is", null)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(400),
+  ]);
+
+  const wallets = [
+    ...new Set(
+      [
+        ...((traded.data ?? []) as { wallet: string }[]),
+        ...((tapped.data ?? []) as { wallet: string }[]),
+        ...((answered.data ?? []) as { wallet: string }[]),
+      ].map((r) => norm(r.wallet)),
+    ),
+  ];
 
   const out: string[] = [];
   for (const w of wallets) {
@@ -532,3 +622,4 @@ export async function walletsNeedingSuggestions(limit = 15): Promise<string[]> {
   }
   return out;
 }
+
