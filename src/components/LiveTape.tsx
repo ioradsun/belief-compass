@@ -85,6 +85,7 @@ export function LiveTape({
   emptyText = "Nothing yet.",
   skeletonRows = 8,
   holdUpdates = false,
+  label,
 }: {
   wallet?: string;
   /**
@@ -114,6 +115,12 @@ export function LiveTape({
    * arrivals queue, and the banner is the only thing that moves the list.
    */
   holdUpdates?: boolean;
+  /**
+   * The tape's own heading ("Now"). Given here rather than rendered by the
+   * parent so the UPDATE CONTROL can sit on the same line — see the header
+   * below for why that placement is the whole point.
+   */
+  label?: string;
 }) {
   const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
   const qc = useQueryClient();
@@ -263,7 +270,48 @@ export function LiveTape({
     return undefined;
   };
 
-  return (
+  const header =
+    label == null ? null : (
+      /**
+       * THE HEADING AND THE UPDATE CONTROL SHARE ONE LINE, AND THAT LINE NEVER
+       * CHANGES HEIGHT.
+       *
+       * The control used to be `sticky top-0 mb-2` INSIDE the scroller. So it
+       * pushed every row down by ~34px the moment activity arrived, and the rows
+       * snapped back up the instant it was tapped — a jump on arrival and a
+       * second one on the tap that was supposed to be the calm, deliberate act.
+       * The reader's own click moved the thing they were aiming at.
+       *
+       * Out here it is a sibling of the label in a fixed-height row, so appearing
+       * and disappearing costs the list nothing. It fades rather than popping,
+       * and the row reserves its height whether or not it is there.
+       */
+      <div className="mb-4 flex h-[22px] shrink-0 items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          {label}
+        </span>
+        <button
+          type="button"
+          onClick={gate.admit}
+          // Present but inert at zero pending: the slot is always occupied, so
+          // nothing reflows when it becomes available.
+          aria-hidden={gate.pending === 0 || undefined}
+          tabIndex={gate.pending === 0 ? -1 : undefined}
+          className="ml-auto rounded-full px-2.5 py-[3px] text-[11px] font-semibold transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none"
+          style={{
+            background: "var(--text)",
+            color: "var(--bg)",
+            opacity: gate.pending > 0 ? 1 : 0,
+            transform: gate.pending > 0 ? "scale(1)" : "scale(0.9)",
+            pointerEvents: gate.pending > 0 ? "auto" : "none",
+          }}
+        >
+          ↑ {arrivalLabel(gate.pending)}
+        </button>
+      </div>
+    );
+
+  const body = (
     <div
       ref={gate.scrollRef}
       {...gate.pointerProps}
@@ -273,24 +321,6 @@ export function LiveTape({
           : ""
       }
     >
-      {/* Announced, never injected. The tape stays where the reader left it and
-          this is the one control that moves it — always their tap. Sticky so it
-          is reachable from wherever they have scrolled to. */}
-      {gate.pending > 0 && (
-        <button
-          type="button"
-          onClick={gate.admit}
-          className="sticky top-0 z-10 mb-2 w-full rounded-[10px] px-3 py-1.5 text-[11px] font-medium backdrop-blur transition-colors hover:brightness-110"
-          style={{
-            background: "color-mix(in srgb, var(--surface) 88%, transparent)",
-            border: "1px solid var(--border)",
-            color: "var(--text)",
-          }}
-        >
-          ↑ {arrivalLabel(gate.pending)}
-        </button>
-      )}
-
       {isLoading && released.length === 0 ? (
         <ul className="space-y-2" aria-hidden>
           {Array.from({ length: skeletonRows }).map((_, i) => (
@@ -403,6 +433,16 @@ export function LiveTape({
           })}
         </ul>
       )}
+    </div>
+  );
+
+  // No label: the tape is embedded and the parent owns the heading (and there is
+  // nothing to hold, because embedded tapes stream).
+  if (header == null) return body;
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {header}
+      {body}
     </div>
   );
 }

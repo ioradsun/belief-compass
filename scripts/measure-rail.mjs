@@ -46,12 +46,14 @@ window.__watch = (ms) => new Promise((res) => {
   const tick = () => {
     const now = document.querySelector('[data-probe="now"]');
     const tape = document.querySelector('[data-probe="tape"]');
+    const row = tape && tape.querySelector('div:last-of-type');
     const nr = now && now.getBoundingClientRect();
     const tr = tape && tape.getBoundingClientRect();
     frames.push({
       t: Math.round(performance.now() - t0),
       nowY: nr ? Math.round(nr.top) : null,
       tapeH: tr ? Math.round(tr.height) : null,
+      rowY: row ? Math.round(row.getBoundingClientRect().top) : null,
     });
     if (performance.now() - t0 < ms) requestAnimationFrame(tick);
     else res(frames);
@@ -87,7 +89,13 @@ function settleMs(frames, key) {
  * nothing. A harness that can report success for an interaction that did not
  * happen is worse than no harness.
  */
-const ALL_OFF = { welcome: false, activity: false, expanded: false, longBeat: false };
+const ALL_OFF = {
+  welcome: false,
+  activity: false,
+  expanded: false,
+  longBeat: false,
+  pending: false,
+};
 const setAll = (p, s) =>
   p.evaluate(
     (v) => {
@@ -121,6 +129,18 @@ const CASES = [
     act: (p) => p.evaluate(() => window.__rail.setWelcome(false)),
   },
   {
+    name: "update control appears (activity arrives)",
+    setup: (p) => setAll(p, { welcome: true, activity: true }),
+    act: (p) => p.evaluate(() => window.__rail.setPending(true)),
+    anchor: "rowY",
+  },
+  {
+    name: "update control is tapped (it goes away)",
+    setup: (p) => setAll(p, { welcome: true, activity: true, pending: true }),
+    act: (p) => p.evaluate(() => window.__rail.setPending(false)),
+    anchor: "rowY",
+  },
+  {
     name: "expand 'In this market'",
     setup: (p) => setAll(p, { welcome: true, activity: true }),
     act: (p) => p.evaluate(() => window.__rail.setExpanded(true)),
@@ -145,14 +165,15 @@ async function runMode(page, legacy) {
     await c.act(page);
     const frames = await watching;
     const shifts = await page.evaluate(() => window.__p.shifts);
-    const nowYs = uniq(frames.map((f) => f.nowY));
+    const anchorKey = c.anchor ?? "nowY";
+    const nowYs = uniq(frames.map((f) => f[anchorKey]));
     const tapeHs = uniq(frames.map((f) => f.tapeH));
     out.push({
       name: c.name,
       cls: Number(sum(shifts.map((s) => s.v)).toFixed(5)),
       nowMovedPx: nowYs.length > 1 ? Math.max(...nowYs) - Math.min(...nowYs) : 0,
       tapeHeights: tapeHs.length,
-      ...settleMs(frames, "nowY"),
+      ...settleMs(frames, c.anchor ?? "nowY"),
     });
     await page.waitForTimeout(250);
   }
