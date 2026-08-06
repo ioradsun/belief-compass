@@ -110,3 +110,37 @@ describe("the valuation fallback chain still holds", () => {
     });
   });
 });
+
+/**
+ * THE CLIENT HALF OF THE SAME RULE.
+ *
+ * `domain/money#convertMoney` is documented as the single place a number crosses
+ * between units, and it returns null when it cannot — "callers render '—' rather
+ * than a fabricated figure." Several components bypassed it with their own
+ * multiplication and a `: 0` or `|| 0` fallback, which is the same confident
+ * zero the server had (see lib/eth-usd.server).
+ */
+describe("no surface converts ETH to USD with a fabricated rate", () => {
+  const surfaces = [
+    "src/components/CaseFile.tsx",
+    "src/components/MarketVitality.tsx",
+    "src/components/ConvictionDashboard.tsx",
+  ];
+
+  it("does not fall back to a zero rate", () => {
+    const offenders = surfaces.filter((f) => /\*\s*\(ethUsd\s*\|\|\s*0\)/.test(code(f)));
+    expect(offenders).toEqual([]);
+  });
+
+  it("does not substitute zero for a missing rate before multiplying", () => {
+    // `eth * (ethUsd > 0 ? ethUsd : 0)` reads as a guard and behaves as a lie.
+    const offenders = surfaces.filter((f) => /ethUsd\s*>\s*0\s*\?\s*ethUsd\s*:\s*0/.test(code(f)));
+    expect(offenders).toEqual([]);
+  });
+
+  it("routes the conversions that remain through the canonical converter", () => {
+    for (const f of ["src/components/CaseFile.tsx", "src/components/MarketVitality.tsx"]) {
+      expect(code(f), f).toMatch(/convertMoney/);
+    }
+  });
+});

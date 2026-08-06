@@ -18,7 +18,7 @@ import { ParticipantSheet, RingedAvatar, RELATION_RING } from "@/components/Part
 import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
 import type { TapeTrade } from "@/domain/conviction-series";
 import type { FlowWindow } from "@/domain/market-flow";
-import { formatMoney } from "@/domain/money";
+import { formatMoney, convertMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
 import { believerMove, capitalMove, type MetricMove } from "@/domain/metric-display";
 import type { MarketChange, MetricChange } from "@/domain/market-change";
@@ -60,7 +60,7 @@ const believerCopy = (m: { current: number; base: number }, w: BookWindow): Metr
 const capitalCopy = (
   m: { current: number; base: number },
   w: BookWindow,
-  usd: (eth: number) => number,
+  usd: (eth: number) => number | null,
   money: CapFmt,
 ): MetricMove =>
   capitalMove({ currentEth: m.current, baseEth: m.base, since: w.since, usd, money });
@@ -298,7 +298,9 @@ export function MarketMomentum({
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs, win), [tape, nowMs, win]);
   const { unit } = useDisplayUnit();
-  const usd = (eth: number) => eth * (ethUsd > 0 ? ethUsd : 0);
+  // Null, not zero. A zero here told `capitalMove` that nothing moved — see the
+  // unpriced branch in @/domain/metric-display.
+  const usd = (eth: number) => convertMoney(eth, "ETH", "USD", ethUsd);
   // Capital is ETH-native; one rate takes it to the viewer's chosen display unit.
   const money: CapFmt = (eth, signed) =>
     formatMoney(eth, { from: "ETH", to: unit, ethUsd, signed });

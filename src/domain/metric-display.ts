@@ -278,16 +278,47 @@ export function capitalMove(input: {
   currentEth: number;
   baseEth: number;
   since: string;
-  usd: (eth: number) => number;
+  /** Null when there is no ETH/USD rate — see the unpriced branch below. */
+  usd: (eth: number) => number | null;
   money: (eth: number, signed?: boolean) => string;
 }): MetricMove {
   const { currentEth, baseEth, since, usd, money } = input;
   const delta = currentEth - baseEth;
   const cfg = METRIC_DISPLAY.capitalUsd;
   const deltaUsd = usd(delta);
+
+  /**
+   * NO RATE, NO MATERIALITY CLAIM — but the change is still real.
+   *
+   * Every threshold below (`flatEps`, `pctValidMinBase`, `originMaxBase`) is
+   * denominated in USD, so without a rate none of them can be applied. The
+   * caller used to pass a `usd` that returned 0 for everything in that case,
+   * which made `deltaUsd` zero, `metricDirection` say "flat", and every market
+   * in the app report "No change" — a confident claim about movement, produced
+   * by the absence of a rate rather than by any market being still.
+   *
+   * Capital is ETH-NATIVE, so the delta itself is known regardless. We state it,
+   * and we state its direction, and we say nothing about whether it was big
+   * enough to matter — because that is the only part we cannot know.
+   */
+  if (deltaUsd == null) {
+    const dir = metricDirection(delta);
+    return {
+      direction: dir,
+      pct: null,
+      pctQuiet: false,
+      absolute:
+        dir === "flat"
+          ? `No change ${since}`
+          : `${money(delta, true)} ${dir === "down" ? "left" : "committed"} ${since}`,
+      figure: dir === "flat" ? "" : money(delta, true),
+    };
+  }
   const direction = metricDirection(deltaUsd, cfg.flatEps);
 
-  const g = gain(usd(currentEth), usd(baseEth), cfg);
+  // Both are non-null here: `usd` is a single rate multiplication, so if the
+  // delta priced then these do too.
+  const g = gain(usd(currentEth) ?? 0, usd(baseEth) ?? 0, cfg);
   if (g.rank === "origin") {
     return {
       direction: "up",
