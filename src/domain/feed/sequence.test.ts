@@ -335,3 +335,84 @@ describe("preserveOrder", () => {
     expect(items.map((i) => (i.kind === "market" ? i.onchainId : null))).toEqual([6, 5]);
   });
 });
+
+/**
+ * TRUE END vs TEMPORARY END.
+ *
+ * The feed pages implicitly: `seenIds` are excluded server-side and the poll
+ * returns what the last response could not fit. So "fewer rows than the limit"
+ * is the only honest signal that a lens has run out, and it has to come from
+ * the side that can see the leftovers.
+ */
+describe("exhausted", () => {
+  it("is true when the ranking ran out before the limit did", () => {
+    const { exhausted, items } = sequenceFeed({
+      preserveOrder: true,
+      limit: 10,
+      candidates: [cand(1), cand(2), cand(3)],
+    });
+    expect(items).toHaveLength(3);
+    expect(exhausted).toBe(true);
+  });
+
+  it("is FALSE when candidates were left behind", () => {
+    // The failure this prevents: telling a reader they are caught up while the
+    // next poll is about to hand them twenty more markets.
+    const { exhausted, items } = sequenceFeed({
+      preserveOrder: true,
+      limit: 2,
+      candidates: [cand(1), cand(2), cand(3)],
+    });
+    expect(items).toHaveLength(2);
+    expect(exhausted).toBe(false);
+  });
+
+  it("is exactly false at the boundary where one candidate remains", () => {
+    expect(
+      sequenceFeed({ preserveOrder: true, limit: 2, candidates: [cand(1), cand(2)] }).exhausted,
+    ).toBe(true);
+    expect(
+      sequenceFeed({ preserveOrder: true, limit: 2, candidates: [cand(1), cand(2), cand(3)] })
+        .exhausted,
+    ).toBe(false);
+  });
+
+  it("does not count markets the gate removed as leftovers", () => {
+    // An ineligible market is not a next page — it is never coming back.
+    const { exhausted } = sequenceFeed({
+      preserveOrder: true,
+      limit: 2,
+      candidates: [
+        cand(1),
+        cand(2),
+        cand(3, { eligibility: { eligible: false, reason: "hidden", availableAt: null } }),
+      ],
+    });
+    expect(exhausted).toBe(true);
+  });
+
+  it("reports the same way for the blended feed", () => {
+    expect(sequenceFeed({ limit: 10, candidates: [cand(1), cand(2)] }).exhausted).toBe(true);
+    expect(sequenceFeed({ limit: 1, candidates: [cand(1), cand(2)] }).exhausted).toBe(false);
+  });
+
+  it("is false while re-entry cards are still waiting", () => {
+    // A re-entry is a market the blended feed can still place, so the line has
+    // not ended even though the main pool is empty.
+    const { exhausted } = sequenceFeed({
+      limit: 1,
+      candidates: [
+        cand(1),
+        cand(2, {
+          eligibility: { eligible: false, reason: "passed", availableAt: null },
+          reentry: { label: "Your position is moving", detail: "YES moved up" },
+        }),
+      ],
+    });
+    expect(exhausted).toBe(false);
+  });
+
+  it("an empty feed is exhausted, not pending", () => {
+    expect(sequenceFeed({ candidates: [] }).exhausted).toBe(true);
+  });
+});

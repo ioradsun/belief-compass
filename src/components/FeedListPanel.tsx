@@ -135,6 +135,7 @@ export function FeedListPanel({
   onSelect,
   lens,
   onLens,
+  lensExhausted = false,
   filters,
   onFilters,
   availableNetworks,
@@ -151,6 +152,12 @@ export function FeedListPanel({
   /** Which question the reader asked — see @/domain/feed/lens. */
   lens: Lens;
   onLens: (l: Lens) => void;
+  /**
+   * The chosen lens has genuinely run out — not loading, not a short batch, not
+   * a failed request. Computed in the route, where the query's own state is;
+   * this panel renders the verdict and never infers one from `entries.length`.
+   */
+  lensExhausted?: boolean;
   filters: FeedFilters;
   onFilters: (f: FeedFilters) => void;
   /** Network groups this viewer's evidence can fill. Always includes everyone. */
@@ -184,7 +191,7 @@ export function FeedListPanel({
         />
       </div>
 
-      {upcoming.length === 0 ? (
+      {upcoming.length === 0 && !lensExhausted ? (
         <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
           {/* An empty result under a filter is a TRUE answer, and saying it
               plainly beats a loading state that will never resolve. */}
@@ -253,8 +260,42 @@ export function FeedListPanel({
               </li>
             );
           })}
+          {/* THE LAST ITEM IN THE PLAYLIST, not a modal, a banner or a takeover.
+            The reader chose this lens and finished it; the market they are on
+            stays in the centre and this is simply what follows the final row. */}
+          {lensExhausted && <Continuation onContinue={() => onLens("for_you")} />}
         </ol>
       )}
     </div>
+  );
+}
+
+/**
+ * THE END OF A CHOSEN LENS.
+ *
+ * The alternative was to quietly serve For You markets once a finite lens ran
+ * dry, which is the one thing this must not do: the control would still read
+ * "Fresh" while the playlist had stopped being fresh markets, and nothing on
+ * screen would ever say so. Reaching the end of something you picked is worth
+ * one line; being moved somewhere else without being told is not.
+ *
+ * ONE MOVE, and it is the same `onLens` every chip calls — so the lens row
+ * updates, the playlist restarts through the canonical path, and the label can
+ * never disagree with the ranking behind it. There is no second button, no
+ * countdown and no automatic navigation.
+ */
+function Continuation({ onContinue }: { onContinue: () => void }) {
+  return (
+    <li className="px-3 pb-1 pt-4">
+      <p className="text-[12px] leading-snug text-[var(--text-muted)]">You&rsquo;re caught up.</p>
+      <button
+        type="button"
+        onClick={onContinue}
+        className="mt-1 text-[12px] font-semibold transition-opacity hover:opacity-80"
+        style={{ color: "var(--rel,#9b87f5)" }}
+      >
+        Continue with For You <span aria-hidden>&rarr;</span>
+      </button>
+    </li>
   );
 }

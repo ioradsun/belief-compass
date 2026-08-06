@@ -582,7 +582,7 @@ function Feed() {
     lens === "for_you"
       ? (loaderData?.feed ?? undefined)
       : undefined;
-  const { data } = useQuery({
+  const { data, isError: isFeedError } = useQuery({
     ...feedQO(wallet, win, filters, originMarket, sensitivity, lens),
     // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
     // React Query ages it against staleTime instead of refetching on hydration.
@@ -607,7 +607,25 @@ function Feed() {
   if (data && Object.keys(data.rows ?? {}).length > 0 && data.items?.length > 0) {
     stableFeedRef.current = data;
   }
-  const stableFeed = stableFeedRef.current ?? data;
+  /**
+   * THE STICKY FEED MUST BELONG TO THE LENS ON SCREEN.
+   *
+   * Two mechanisms exist to stop the playlist blanking — this ref, which holds
+   * the last non-empty response, and `placeholderData: (prev) => prev`, which
+   * carries a result ACROSS a query-key change. Both predate the lens and
+   * neither knew about it, so a lens that legitimately returns nothing (Moving
+   * on a quiet day admits only markets that moved) fell through to the previous
+   * lens's markets — the chip would read "Moving" over a list of Fresh ones,
+   * with nothing on screen admitting it.
+   *
+   * A response carries the lens it was built for, so the fix is to require it.
+   * The cost is a brief empty playlist while a new lens loads, which is the
+   * honest thing to show: the centre still holds the market being read (see
+   * `shownRow`), so nothing the reader is looking at goes anywhere.
+   */
+  const forThisLens = (f: typeof data): typeof data =>
+    f && (f.lens ?? "for_you") === lens ? f : undefined;
+  const stableFeed = forThisLens(stableFeedRef.current) ?? forThisLens(data);
 
   // The server returned a finished sequence: market / market_idea items in
   // order, plus the read-model row behind each market item. The client's only
@@ -682,6 +700,33 @@ function Feed() {
     reason: reasonByMarket[id] ?? null,
   }));
 
+  /**
+   * HAS THE CHOSEN LENS GENUINELY RUN OUT?
+   *
+   * Three things have to be true, and each rules out a way of being wrong:
+   *
+   *   the server SAID so     `exhausted` is a fact about the ranked pool. A
+   *                          short batch is not — the feed pages implicitly,
+   *                          since `seenIds` are excluded server-side and the
+   *                          60s poll returns what the last response could not.
+   *   about THIS lens        a response describes the lens it was built for.
+   *                          `stableFeed` deliberately holds the previous feed
+   *                          on screen while a new one is in flight, so without
+   *                          this a switch from an exhausted Fresh to Moving
+   *                          would carry Fresh's verdict onto Moving's playlist.
+   *   nothing FAILED         a query that errored tells us nothing about how
+   *                          much is left. Loading, error and exhaustion are
+   *                          three states and only the third earns the notice.
+   *
+   * For You is excluded here because it is the continuation DESTINATION; its own
+   * end-of-feed behaviour (CaughtUp) is untouched.
+   */
+  const lensExhausted =
+    lens !== "for_you" &&
+    !isFeedError &&
+    stableFeed?.lens === lens &&
+    stableFeed.exhausted === true;
+
   const ids = rows.map((r) => Number(r.onchain_id));
   const { data: pulseData } = useQuery(pulsesQO(ids));
   const stickyPulses = useSticky(pulseData?.pulses, (p) => !p || Object.keys(p).length === 0);
@@ -738,7 +783,15 @@ function Feed() {
       return;
     }
     if (moved !== queue) setQueue(moved);
-    setCaughtUp(true);
+    /**
+     * "Caught up" TAKES OVER THE CENTRE, and that is only right for For You,
+     * where running out means every market the reader could be shown has been
+     * decided on. Under a chosen lens it would say "you've made a call on every
+     * market currently in your feed" — which is false, and it would throw away
+     * the market they are reading to say it. The playlist's own continuation
+     * row carries that news instead, and the market stays put.
+     */
+    if (lens === "for_you") setCaughtUp(true);
   };
 
   /**
@@ -1063,6 +1116,7 @@ function Feed() {
                     <FeedListPanel
                       lens={lens}
                       onLens={selectLens}
+                      lensExhausted={lensExhausted}
                       sensitivity={sensitivity}
                       onSensitivity={setFeedSensitivity}
                       entries={feedEntries}

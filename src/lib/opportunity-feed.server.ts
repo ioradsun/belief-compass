@@ -272,6 +272,14 @@ export interface OpportunityFeedResult {
    */
   modes: FeedMode[];
   engineVersion: number;
+  /**
+   * The lens has nothing further to offer — see `SequenceResult.exhausted`.
+   *
+   * Read together with `lens` above and never on its own: a response is only
+   * evidence about the lens it was BUILT for, and the client holds the previous
+   * feed on screen while a new one is in flight.
+   */
+  exhausted: boolean;
   /** Why each dropped market was dropped — feed diagnostics, never rendered. */
   excluded: { onchainId: number; reason: string | null }[];
   error: string | null;
@@ -538,7 +546,7 @@ export async function buildOpportunityFeed(
           }),
         ).flatMap((m) => candidateById.get(m.onchainId) ?? []);
 
-  const { items, engineVersion, excluded } = sequenceFeed({
+  const { items, engineVersion, excluded, exhausted } = sequenceFeed({
     candidates: ordered,
     idea: ideaResult.idea,
     // A ranking is taken as given; a blend is sequenced. See sequence.ts.
@@ -571,6 +579,7 @@ export async function buildOpportunityFeed(
     // separately what to offer next.
     modes: (feed as { modes?: FeedMode[] }).modes ?? ["for_you"],
     engineVersion,
+    exhausted,
     excluded,
     error: feed.error ?? null,
   };
