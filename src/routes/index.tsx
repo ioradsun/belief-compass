@@ -1190,13 +1190,14 @@ function Feed() {
                 <CurrentMarketActivity marketId={shownId} wallet={wallet} onSelect={selectMarket} />
               )}
               <div className="mb-4 shrink-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                Live
+                Now
               </div>
               <div className="min-h-0 flex-1 overflow-hidden">
                 <LiveTape
                   wallet={wallet}
                   onSelect={selectMarket}
                   excludeMarketId={shownId ?? undefined}
+                  holdUpdates
                 />
               </div>
             </>
