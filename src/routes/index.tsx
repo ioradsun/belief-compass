@@ -587,6 +587,7 @@ function Feed() {
   const freshFirstId =
     data?.items?.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []))[0] ?? null;
   useEffect(() => {
+    console.log("[repin]", repinRef.current, freshFirstId);
     if (!repinRef.current || freshFirstId == null) return;
     repinRef.current = false;
     setPinnedId(freshFirstId);
