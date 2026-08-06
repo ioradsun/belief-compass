@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
 import { getPositionSummary, type VolumeWindow } from "@/lib/markets.functions";
+import { WhyThis } from "@/components/WhyThis";
 import { marketChangeQO, evidenceQO } from "@/lib/market-queries";
 import { useMarketChange } from "@/lib/market-change-query";
 import { getHouseRead } from "@/lib/house.functions";
@@ -73,15 +74,6 @@ const signedPct = (n: number | null) =>
   n == null || !Number.isFinite(n)
     ? "—"
     : `${n < 0 ? "−" : "+"}${Math.abs(n).toFixed(Math.abs(n) > 0 && Math.abs(n) < 10 ? 1 : 0)}%`;
-
-const MOMENTUM: Record<string, { label: string; hue: string; hint: string }> = {
-  hot: { label: "Hot", hue: "#f97316", hint: "Activity is accelerating right now" },
-  early: { label: "Early", hue: "#22d3ee", hint: "Real growth, still small and immature" },
-  hidden: { label: "Hidden", hue: "#a78bfa", hint: "Heavy turnover for its visible size" },
-  contested: { label: "Contested", hue: "#f43f5e", hint: "Both sides balanced and active" },
-  conviction: { label: "Conviction", hue: "#34d399", hint: "Holders persisting under challenge" },
-  new: { label: "New", hue: "#94a3b8", hint: "Opened in the last 72 hours" },
-};
 
 export function MarketDeck({
   row,
@@ -376,16 +368,6 @@ export function MarketDeck({
     );
   }
 
-  const momentum = MOMENTUM[(rr.opportunity_type as string | null) ?? ""] ?? null;
-  // ONE chip, and it now says only one thing: this market's own momentum.
-  // It used to be polymorphic — same position, same colours, same shape for
-  // "this market is HOT" and "you are filtering by HOT" — two unrelated
-  // meanings in one control. The filter moved to the rail's Feed tab; the slot
-  // went back to being a fact about what you are looking at.
-  const chipTone = momentum?.hue;
-  const chipLabel = momentum?.label;
-  const chipHint = momentum?.hint;
-
   // The neutral market content — the middle of the mobile case carousel, and the
   // whole scroll area otherwise. Kept in one place so both paths render the same.
   // The Judge — the neutral balance sheet, identical whether the Case is open or
@@ -439,9 +421,12 @@ export function MarketDeck({
         {/* Meta row — its height is RESERVED. Category, age, the exclusivity
           note and the lens chip all arrive asynchronously and are individually
           optional; without a floor here a market that has none of them sits the
-          title (and therefore the whole body and the dock) 26px higher than a
-          market that has all of them. */}
-        <div className="mb-1 flex min-h-[26px] items-center gap-2">
+          title (and therefore the whole body and the dock) higher than a market
+          that has all of them. The momentum chip that used to occupy the right
+          of this row is gone — it described the MARKET's temperature in the
+          loudest corner of the card, while the reader's actual question ("why
+          am I looking at this?") sat muted underneath. See components/WhyThis. */}
+        <div className="mb-1 flex min-h-[22px] items-center gap-2">
           {(category || freshToken) && (
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
               {[category, freshToken].filter(Boolean).join(" · ")}
@@ -455,24 +440,6 @@ export function MarketDeck({
               · Company exclusive
             </span>
           )}
-          {momentum && (
-            <span
-              title={chipHint}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
-              style={{
-                color: chipTone,
-                background: `color-mix(in oklab, ${chipTone} 13%, transparent)`,
-                border: `1px solid color-mix(in oklab, ${chipTone} 32%, transparent)`,
-              }}
-            >
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: chipTone }}
-                aria-hidden
-              />
-              {chipLabel}
-            </span>
-          )}
         </div>
 
         {/* WHY THIS MARKET — the sentence the card was chosen on, carried in.
@@ -480,13 +447,7 @@ export function MarketDeck({
             not a claim competing with it. The row is always reserved so a market
             with no reason does not shift the question up 18px. */}
         <div className="min-h-[18px]">
-          {reason && (
-            <p className="truncate text-[11.5px] leading-[18px] text-[var(--text-muted)]">
-              <span className="font-semibold uppercase tracking-[0.08em] opacity-70">Why this</span>
-              <span aria-hidden> · </span>
-              {reason}
-            </p>
-          )}
+          <WhyThis reason={reason} lead />
         </div>
         <div className="flex items-start gap-1.5">
           {/* A DELIBERATE TITLE RULE: exactly two lines of space, always.
