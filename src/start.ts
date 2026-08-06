@@ -10,12 +10,25 @@ import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 // into the first-paint bundle for nothing.
 
 
-const errorMiddleware = createMiddleware().server(async ({ next }) => {
+// A client that navigates away or reloads mid-render aborts the socket, which
+// surfaces here as `Error: aborted` from node:_http_server. That is not an app
+// error: there is nobody left to send a response to, so don't log it and don't
+// render the error page (which would be reported as a blank-screen runtime error).
+const isAbortError = (error: unknown) =>
+  error instanceof Error &&
+  (error.name === "AbortError" ||
+    error.message === "aborted" ||
+    (error as { code?: string }).code === "ECONNRESET");
+
+const errorMiddleware = createMiddleware().server(async ({ next, request }) => {
   try {
     return await next();
   } catch (error) {
     if (error != null && typeof error === "object" && "statusCode" in error) {
       throw error;
+    }
+    if (isAbortError(error) || request?.signal?.aborted) {
+      return new Response(null, { status: 499 });
     }
     console.error(error);
     return new Response(renderErrorPage(), {
@@ -24,6 +37,7 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
     });
   }
 });
+
 
 // Start installs this automatically when src/start.ts is absent; defining the
 // file opts out, so re-add it explicitly to keep server functions protected
