@@ -142,7 +142,13 @@ export function MyWorld({
   );
 
   const tabName = (t: Tab): string =>
-    t === "feed" ? "For You" : t === "positions" ? "Convictions" : t === "tribe" ? "Tribe" : "Rivals";
+    t === "feed"
+      ? "For You"
+      : t === "positions"
+        ? "Convictions"
+        : t === "tribe"
+          ? "Tribe"
+          : "Rivals";
 
   // The playlist tab carries no count: how many markets are queued is an
   // implementation detail, and no reader decides anything differently for it.
