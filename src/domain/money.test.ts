@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { convertMoney, formatMoney, formatRate, formatUsdPrice, isRateStale } from "./money";
+import {
+  convertMoney,
+  formatMoney,
+  formatRate,
+  formatUsdPrice,
+  isRateStale,
+  weiToEth,
+} from "./money";
 
 const RATE = 2000; // 1 ETH = $2,000
 
@@ -100,5 +107,34 @@ describe("isRateStale", () => {
     expect(isRateStale(null, now)).toBe(true);
     expect(isRateStale(undefined, now)).toBe(true);
     expect(isRateStale(Number.NaN, now)).toBe(true);
+  });
+});
+
+/**
+ * ONE wei→ETH. There were five shadowed helpers across two names: `weiToEth` in
+ * `domain/order.ts` (bigint), `lib/ecosystem-value.server.ts` and
+ * `domain/ecosystem-share.ts` (string|null), plus `weiToUsd` in
+ * `domain/order.ts` and locally inside `ConvictionDashboard`. The split was not
+ * carelessness — the canonical one only took `bigint`, so anyone holding a
+ * PostgREST numeric wrote their own. A signature too narrow for its callers is
+ * how a single source of truth fragments.
+ */
+describe("weiToEth", () => {
+  it("accepts every shape wei actually arrives in", () => {
+    expect(weiToEth(1_000_000_000_000_000_000n)).toBe(1);
+    expect(weiToEth("1000000000000000000")).toBe(1);
+    expect(weiToEth(1e18)).toBe(1);
+  });
+
+  it("reads a missing amount as zero, not NaN", () => {
+    // A NaN propagates silently through every sum it touches; zero wei really
+    // is zero ETH, so this one is a fact rather than a fabrication.
+    expect(weiToEth(null)).toBe(0);
+    expect(weiToEth(undefined)).toBe(0);
+    expect(weiToEth("not a number")).toBe(0);
+  });
+
+  it("handles sub-ETH amounts", () => {
+    expect(weiToEth(10n ** 15n)).toBeCloseTo(0.001, 12);
   });
 });

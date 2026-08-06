@@ -10,6 +10,8 @@
  * are parsed here and scaled once.
  */
 
+import { weiToEth } from "@/domain/money";
+
 export interface ShareTotals {
   ecoBuyWei: string;
   convBuyWei: string;
@@ -50,8 +52,6 @@ const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
-
-const weiToEth = (wei: string | null | undefined): number => num(wei) / 1e18;
 
 /** Share as a percentage; an empty ecosystem is 0, never NaN or Infinity. */
 export function sharePct(part: number, whole: number): number {

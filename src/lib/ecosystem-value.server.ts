@@ -22,6 +22,7 @@
 import { serviceClient } from "@/lib/supabase-clients";
 import { readEthUsd } from "@/lib/eth-usd.server";
 import { swrCache } from "@/lib/server-cache";
+import { weiToEth } from "@/domain/money";
 import {
   buildShare,
   type EcosystemShare,
@@ -109,8 +110,6 @@ interface AttributedValue {
   byDay: Array<{ day: string; trades: number; buyWei: string }>;
   recent: Array<{ marketId: string; wallet: string; side: string | null; action: string | null; amountEth: string; at: string }>;
 }
-
-const weiToEth = (wei: string | null | undefined): number => num(wei) / 1e18;
 
 const SHARE_DAYS = 90;
 

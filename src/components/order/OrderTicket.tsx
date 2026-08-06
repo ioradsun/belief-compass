@@ -16,15 +16,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useAccount, useBalance } from "wagmi";
 import { CHAIN_ID } from "@/chain/decoder";
-import {
-  avgPriceUsd,
-  fmtShares,
-  fmtUsd,
-  sharesForPct,
-  weiToEth,
-  type OrderSide,
-} from "@/domain/order";
-import { formatMoney, type DisplayUnit } from "@/domain/money";
+import { avgPriceUsd, fmtShares, fmtUsd, sharesForPct, type OrderSide } from "@/domain/order";
+import { formatMoney, type DisplayUnit, weiToEth, convertMoney } from "@/domain/money";
 import { affordability, affordabilityCopy } from "@/domain/affordability";
 import { useDisplayUnit } from "@/lib/display-unit";
 import type { useTrade } from "@/lib/chain-trade";
@@ -52,7 +45,7 @@ export function useSpendableBalance() {
     query: { enabled: !!address, refetchInterval: 20_000 },
   });
   const wei = data?.value ?? null;
-  const eth = wei != null ? Number(wei) / 1e18 : null;
+  const eth = wei != null ? weiToEth(wei) : null;
   return { wei, eth, isConnected, isLoading };
 }
 
@@ -267,8 +260,8 @@ export function BalanceLine({
   onMax?: () => void;
 }) {
   const { wei, isConnected } = useSpendableBalance();
-  const availUsd = wei != null && ethUsd > 0 ? (Number(wei) / 1e18) * ethUsd : null;
-  const minUsd = minWei != null && ethUsd > 0 ? (Number(minWei) / 1e18) * ethUsd : null;
+  const availUsd = wei == null ? null : convertMoney(weiToEth(wei), "ETH", "USD", ethUsd);
+  const minUsd = minWei == null ? null : convertMoney(weiToEth(minWei), "ETH", "USD", ethUsd);
   return (
     <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
       <span>{minUsd != null ? `Min ${fmtUsd(minUsd)}` : " "}</span>
@@ -487,6 +480,11 @@ function BuyTicket({
   const busy = trade.isSubmitting || trade.isMining;
   const [details, setDetails] = useState(false);
   const { eth: availEth } = useSpendableBalance();
+  // One binding for both places this ticket shows it — including the receipt,
+  // which returns early above the form. Null when there is no quote or no rate:
+  // "$0.00 avg" on a real trade is a claim about the price, and a missing rate
+  // is not one.
+  const avgPrice = quote ? avgPriceUsd(ethWei, quote.tokens, ethUsd) : null;
 
   // Escape dismisses the order surface, like any other disclosure.
   useEffect(() => {
@@ -513,8 +511,8 @@ function BuyTicket({
             <div className="text-[14px] font-semibold text-[var(--text)]">Backed {side}</div>
             {quote && (
               <div className="num text-[11px] text-[var(--text-muted)]">
-                {fmtShares(quote.tokens)} shares at $
-                {avgPriceUsd(ethWei, quote.tokens, ethUsd).toFixed(2)} avg
+                {fmtShares(quote.tokens)} shares
+                {avgPrice == null ? "" : ` at $${avgPrice.toFixed(2)} avg`}
               </div>
             )}
           </div>
@@ -641,12 +639,9 @@ function BuyTicket({
         <div id="order-details" className="mt-3 space-y-1.5">
           <QuoteRow k="Amount invested" v={money(amount)} />
           <QuoteRow k="Estimated shares" v={quote ? fmtShares(quote.tokens) : "—"} />
-          <QuoteRow
-            k="Avg execution"
-            v={quote ? `$${avgPriceUsd(ethWei, quote.tokens, ethUsd).toFixed(2)}` : "—"}
-          />
+          <QuoteRow k="Avg execution" v={avgPrice == null ? "—" : `$${avgPrice.toFixed(2)}`} />
           <QuoteRow k="Protocol fee" v={quote ? fromEth(weiToEth(quote.fee)) : "—"} />
-          <QuoteRow k="Total paid" v={fromEth(Number(ethWei) / 1e18)} />
+          <QuoteRow k="Total paid" v={fromEth(weiToEth(ethWei))} />
           <QuoteRow k="Network" v="Base" />
         </div>
       )}

@@ -12,6 +12,7 @@
  * behavioral source of truth — it NEVER reimplements share/cost math. ZERO IO.
  */
 import { applyTrade, emptyRow, type BeliefRow, type Trade } from "@/domain/domain";
+import { weiToEth } from "@/domain/money";
 
 // ── Event shape the applier consumes (a canonical kind='trade' event) ────────
 export interface TradeEventForApply {
@@ -127,8 +128,8 @@ export function toTrade(ev: TradeEventForApply): Trade {
   return {
     side: ev.side,
     direction: ev.action,
-    token_amount: Number(ev.shares) / 1e18,
-    eth_amount: Number(ev.amount_eth) / 1e18,
+    token_amount: weiToEth(ev.shares),
+    eth_amount: weiToEth(ev.amount_eth),
     ts: new Date(ev.occurred_at),
   };
 }

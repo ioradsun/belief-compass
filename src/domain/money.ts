@@ -18,6 +18,34 @@
 export type DisplayUnit = "USD" | "ETH";
 
 /**
+ * WEI → ETH. The chain's native integer, in the unit people read.
+ *
+ * ONE IMPLEMENTATION, because there were FIVE. `weiToEth` was declared three
+ * times — `domain/order.ts` (taking `bigint`), `lib/ecosystem-value.server.ts`
+ * and `domain/ecosystem-share.ts` (each taking `string | null`) — and `weiToUsd`
+ * twice, in `domain/order.ts` and locally inside `ConvictionDashboard`. Same
+ * names, different contracts, one codebase: a reader seeing `weiToEth(x)` had to
+ * work out which one they were looking at.
+ *
+ * The split was not carelessness. The canonical helper only accepted `bigint`,
+ * so every caller holding a PostgREST numeric (a string) had to write their own.
+ * A signature too narrow for its callers is how a single source of truth
+ * fragments, so this one takes every shape wei actually arrives in.
+ *
+ * PRECISION, since the codebase is careful about this elsewhere: `Number(wei)`
+ * on a value above 2^53 rounds, giving ~1e-16 relative error. That matters when
+ * BUILDING an exact wei integer for a transaction — which is why `usdToWei`
+ * routes through gwei — and not at all when reading one for display, which is
+ * all this does. Non-numeric input reads as 0 rather than NaN, because a NaN
+ * propagates silently through every sum it touches.
+ */
+export function weiToEth(wei: bigint | string | number | null | undefined): number {
+  if (wei == null) return 0;
+  const n = Number(wei);
+  return Number.isFinite(n) ? n / 1e18 : 0;
+}
+
+/**
  * Convert a plain amount between USD and ETH at the current rate. Returns null
  * when the conversion is impossible (no positive rate) or the input is not a
  * finite number — callers render "—" rather than a fabricated figure.

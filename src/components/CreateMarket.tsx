@@ -39,6 +39,7 @@ import { clearDraft, getDraft, setDraft, setProbe } from "@/lib/create-draft";
 import { rewardLine } from "@/domain/market-suggestion";
 import { completeSuggestion, trackSuggestion } from "@/lib/market-suggestion.functions";
 import { DEFAULT_CURVE, useCreateEconomics, useCreateMarket } from "@/chain/market-create";
+import { weiToEth } from "@/domain/money";
 import {
   AmountField,
   
@@ -91,7 +92,7 @@ export function CreateMarket({
 
 
 
-  const minSeedEth = econ.minSeedWei != null ? Number(econ.minSeedWei) / 1e18 : null;
+  const minSeedEth = econ.minSeedWei == null ? null : weiToEth(econ.minSeedWei);
   const minUsd = minSeedEth != null && ethUsd > 0 ? minSeedEth * ethUsd : null;
 
   // Seed defaults to the contract minimum the moment we know it — never invented.
