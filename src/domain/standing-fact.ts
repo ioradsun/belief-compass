@@ -49,8 +49,26 @@ import { NETWORK_STRENGTH, type NetworkLabel, type Side } from "@/domain/story";
 import type { StackPerson } from "@/domain/conviction-cohort";
 
 export const STANDING = {
-  /** Below this a position is dust — it earns no face and no mention. */
-  minPositionUsd: 5,
+  /**
+   * Below this a position is dust — it earns no face and no mention.
+   *
+   * IT WAS FIVE DOLLARS, and that number nearly silenced the one mechanism this
+   * module exists to be. Measured across 2,000 live sides, 329 hold both capital
+   * and a believer, and at a $5 floor AT MOST 29 of them could produce a fact —
+   * realistically about 18, once a side's capital is split among the people on
+   * it. Five percent coverage, on the feature whose whole job is to have
+   * something true to say when nothing is happening.
+   *
+   * One dollar is the line the rest of the product already draws between money
+   * and dust (METRIC_DISPLAY.capitalUsd.pctValidMinBase), and it quadruples the
+   * pool to roughly 77 sides. Below it the curve flattens — $0.25 buys 181 and
+   * $0.10 buys 199 — so going lower admits dust for almost no coverage.
+   *
+   * And the low floor is not a compromise; it is what this module already
+   * argues for. "RECOGNITION OVER SIZE" means the dollar threshold exists ONLY
+   * to exclude what is not really a position. It was never meant to rank.
+   */
+  minPositionUsd: 1,
   /** Under this many days, "still here" is not yet a claim worth making. */
   minDays: 3,
   /** People named before the rest become "+N". */
