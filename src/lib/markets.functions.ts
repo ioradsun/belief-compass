@@ -232,6 +232,18 @@ export const listFeed = createServerFn({ method: "GET" })
      */
     const tribeOverlap = new Map<number, number>();
     const oppOverlap = new Map<number, number>();
+    /**
+     * TOUCHED — every market one of the viewer's people CREATED or traded in,
+     * whether or not they still hold a side. The face piles stay a statement
+     * about live conviction; "show me my Tribe" is a question about where those
+     * people have been, and a market someone wrote or since exited is still
+     * theirs. Filter-only: nothing renders off these.
+     */
+    const tribeTouched = new Set<number>();
+    const oppTouched = new Set<number>();
+    /** Group membership, hoisted so creator authorship can be judged below. */
+    const tribeWallets = new Set<string>();
+    const oppWallets = new Set<string>();
     /** When one of the viewer's people last traded here — THEIR recency. */
     const netRecency = new Map<number, number>();
     let tribePerson: MatchPerson | null = null;
@@ -281,19 +293,21 @@ export const listFeed = createServerFn({ method: "GET" })
       const focus = [...new Set([...alignedBy.keys(), ...opposedBy.keys()])];
       if (focus.length) {
         const ids = rows.map((r) => Number(r.onchain_id));
+        for (const w of alignedBy.keys()) tribeWallets.add(w);
+        for (const w of opposedBy.keys()) oppWallets.add(w);
         const [{ data: beliefs }, profiles] = await Promise.all([
           sb
             .from("wallet_beliefs")
             // `last_trade_at` is THEIR recency, which is what a Tribe or Rivals
             // ordering means by "recent" — not the market's own last trade,
             // which could be anyone.
+            // No stance filter: a belief row at all means they traded here, and
+            // "where has my Tribe been" has to include the ones who have since
+            // gone flat. The face piles below still take directional stances
+            // only, so wash activity cannot put anyone in a sentence.
             .select("wallet, onchain_id, stance_side, last_trade_at")
             .in("wallet", focus)
-            .in("onchain_id", ids)
-            // A directional stance only. A wallet that churned its way to flat
-            // has no side, so wash activity cannot make someone look present —
-            // the stance filter already does what an is_wash join would.
-            .in("stance_side", ["YES", "NO"]),
+            .in("onchain_id", ids),
           import("@/lib/profiles.server").then((m) => m.resolveProfiles(focus, focus.length)),
         ]);
 
@@ -310,33 +324,41 @@ export const listFeed = createServerFn({ method: "GET" })
         for (const b of beliefs ?? []) {
           const w = String(b.wallet).toLowerCase();
           const id = Number(b.onchain_id);
-          const side = b.stance_side as "YES" | "NO";
+          const raw = b.stance_side;
+          const side = raw === "YES" || raw === "NO" ? (raw as "YES" | "NO") : null;
           const at = b.last_trade_at ? Date.parse(String(b.last_trade_at)) : NaN;
           if (Number.isFinite(at)) netRecency.set(id, Math.max(netRecency.get(id) ?? 0, at));
           const a = alignedBy.get(w);
           if (a) {
-            const list = tribeHere.get(id) ?? [];
-            list.push({ ...person(w, a.agreement), side });
-            tribeHere.set(id, list);
-            // The lead's side stays the group's headline side, so the existing
-            // "your Tribe is backing X" copy keeps meaning what it meant.
-            if (!tribeBySide.has(id) || w === aligned[0]?.wallet.toLowerCase())
-              tribeBySide.set(id, side);
-            // Depth of the relationship, summed over the people actually here.
-            // Same-side history for allies, opposite-side for rivals: the honest
-            // measure of each, and what Tribe/Rivals rank on.
-            tribeOverlap.set(id, (tribeOverlap.get(id) ?? 0) + (a.sameSideBeliefs ?? 0));
+            tribeTouched.add(id);
+            if (side) {
+              const list = tribeHere.get(id) ?? [];
+              list.push({ ...person(w, a.agreement), side });
+              tribeHere.set(id, list);
+              // The lead's side stays the group's headline side, so the existing
+              // "your Tribe is backing X" copy keeps meaning what it meant.
+              if (!tribeBySide.has(id) || w === aligned[0]?.wallet.toLowerCase())
+                tribeBySide.set(id, side);
+              // Depth of the relationship, summed over the people actually here.
+              // Same-side history for allies, opposite-side for rivals: the honest
+              // measure of each, and what Tribe/Rivals rank on.
+              tribeOverlap.set(id, (tribeOverlap.get(id) ?? 0) + (a.sameSideBeliefs ?? 0));
+            }
           }
           const o = opposedBy.get(w);
           if (o) {
-            const list = oppHere.get(id) ?? [];
-            list.push({ ...person(w, o.agreement), side });
-            oppHere.set(id, list);
-            if (!oppBySide.has(id) || w === opposed[0]?.wallet.toLowerCase())
-              oppBySide.set(id, side);
-            oppOverlap.set(id, (oppOverlap.get(id) ?? 0) + (o.oppositeSideBeliefs ?? 0));
+            oppTouched.add(id);
+            if (side) {
+              const list = oppHere.get(id) ?? [];
+              list.push({ ...person(w, o.agreement), side });
+              oppHere.set(id, list);
+              if (!oppBySide.has(id) || w === opposed[0]?.wallet.toLowerCase())
+                oppBySide.set(id, side);
+              oppOverlap.set(id, (oppOverlap.get(id) ?? 0) + (o.oppositeSideBeliefs ?? 0));
+            }
           }
         }
+
         // Strongest first within each market, so a face pile or a named sentence
         // leads with the person the viewer has the clearest relationship to.
         for (const list of tribeHere.values()) list.sort((x, y) => y.score - x.score);
@@ -357,6 +379,10 @@ export const listFeed = createServerFn({ method: "GET" })
       // Narrative layer: your network active in THIS market → named faces. Only
       // the viewer's OWN people are ever named; the crowd stays a count.
       const rr = r as Record<string, unknown>;
+      /** Who wrote the question — a connection in its own right. */
+      const author = String(
+        ((rr["markets"] ?? null) as { author_wallet?: string | null } | null)?.author_wallet ?? "",
+      ).toLowerCase();
       const network: NetworkFace[] = [];
       // Everyone present, not just the lead — `composeMarketStory` caps the pile
       // itself, and handing it one face when four are here was the reason a card
@@ -414,6 +440,11 @@ export const listFeed = createServerFn({ method: "GET" })
         // it had no way to say.
         tribe_count: tribeHere.get(id)?.length ?? 0,
         opp_count: oppHere.get(id)?.length ?? 0,
+        // Filter-only: has one of these people been here AT ALL — traded, or
+        // written the question. Authorship counts even with no position, which
+        // is the whole point of "markets they created or interacted with".
+        tribe_touched: tribeTouched.has(id) || (!!author && tribeWallets.has(author)),
+        opp_touched: oppTouched.has(id) || (!!author && oppWallets.has(author)),
         tribe_overlap: tribeOverlap.get(id) ?? 0,
         opp_overlap: oppOverlap.get(id) ?? 0,
         network_last_at: netRecency.get(id) ?? null,

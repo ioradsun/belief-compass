@@ -22,8 +22,8 @@ export type FeedNetwork = "everyone" | "tribe" | "rivals" | "following";
 
 export const NETWORK_OPTIONS: { key: FeedNetwork; label: string; blurb: string }[] = [
   { key: "everyone", label: "Everyone", blurb: "The whole board." },
-  { key: "tribe", label: "My Tribe", blurb: "What people you align with are backing." },
-  { key: "rivals", label: "Rivals", blurb: "Where people who disagree with you are active." },
+  { key: "tribe", label: "My Tribe", blurb: "Markets people you align with created or traded." },
+  { key: "rivals", label: "Rivals", blurb: "Markets people who disagree with you created or traded." },
   { key: "following", label: "Following", blurb: "People you chose to follow." },
 ];
 
@@ -110,6 +110,17 @@ export interface FilterCandidate {
   tribeCount: number;
   /** People the viewer is opposed to holding a side here. */
   oppCount: number;
+  /**
+   * Did anyone from that group CREATE or trade this market, side or not?
+   *
+   * Holding a side is a stricter thing than having been here, and the network
+   * filter asks the looser question: "show me where my people have been".
+   * A rival who wrote the question, or a tribesman who has since sold out, is
+   * still a reason the market belongs in that lens — the face piles stay
+   * about live conviction and are unaffected.
+   */
+  tribeTouched?: boolean;
+  oppTouched?: boolean;
   /** Followed people connected here (creator or holder). */
   followedHere: number;
 }
@@ -126,8 +137,8 @@ export function matches(f: FeedFilters, c: FilterCandidate): boolean {
   if (n.networks.length === 0) return true;
   return n.networks.some((k) => {
     if (k === "everyone") return true;
-    if (k === "tribe") return c.tribeCount > 0;
-    if (k === "rivals") return c.oppCount > 0;
+    if (k === "tribe") return c.tribeCount > 0 || c.tribeTouched === true;
+    if (k === "rivals") return c.oppCount > 0 || c.oppTouched === true;
     return c.followedHere > 0;
   });
 }
