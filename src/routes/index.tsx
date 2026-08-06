@@ -599,10 +599,21 @@ function Feed() {
   // URL — one source of truth for "what is in the centre" — and the queue is
   // told about it, never the reverse.
   const [queue, setQueue] = useState<FeedQueue>(emptyQueue);
+  /**
+   * A lens change asks for a different playlist, so the centre must move to the
+   * head of it. The old feed is still on screen when the filter is chosen, so
+   * the re-pin has to WAIT for the new order to arrive — pinning immediately
+   * would just re-pin the market the reader was already on.
+   */
+  const repinRef = useRef(false);
   const serverOrder = items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
   const serverOrderKey = serverOrder.join(",");
   useEffect(() => {
     if (serverOrder.length === 0) return;
+    if (repinRef.current) {
+      repinRef.current = false;
+      setPinnedId(serverOrder[0] ?? null);
+    }
     setQueue((q) => receiveOrder(q, serverOrder));
     // serverOrderKey identifies the order by value: a poll that returns the same
     // sequence must not re-enter this, or every 8s tick becomes a render.
@@ -696,6 +707,7 @@ function Feed() {
     setFilters(f);
     setQueue(emptyQueue);
     setPinnedId(null);
+    repinRef.current = true;
     setOriginMarket(null);
     setCaughtUp(false);
     navigate({ search: (prev: Search) => ({ ...prev, m: undefined }) });
