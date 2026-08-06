@@ -57,7 +57,6 @@ export function MyWorld({
   onOpenDashboard,
   initialNetwork,
   feedList,
-  feedCount = 0,
   onOpenFeedTab,
   connectPrompt,
 }: {
@@ -82,7 +81,6 @@ export function MyWorld({
    */
   feedList?: ReactNode;
   /** How many markets are in the running order — the tab's count. */
-  feedCount?: number;
   /** What the route does when the Feed tab is chosen (closing the Case File). */
   onOpenFeedTab?: () => void;
   /** Shown inside the three personal tabs when there is no wallet. */

@@ -955,7 +955,6 @@ function Feed() {
                 onOpenDna={openDna}
                 onOpenDashboard={openDashboard}
                 initialNetwork={Boolean(selectedPerson || dnaOpen)}
-                feedCount={queue.order.length}
                 onOpenFeedTab={closeCase}
                 feedList={
                   <FeedListPanel
