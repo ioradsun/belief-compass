@@ -1,0 +1,200 @@
+import { describe, it, expect } from "vitest";
+import {
+  place,
+  bandFor,
+  bandLabel,
+  compareSpectrum,
+  spectrumColor,
+  needsSearch,
+  SPECTRUM,
+} from "./relationship-spectrum";
+import { confidenceFor, EARNED_LABELS } from "./dna/config";
+
+/** A person, described the way the engine describes one. */
+const person = (alignmentPct: number, shared: number, earned: "twin" | "opp" | null = null) =>
+  place({ alignmentPct, confidence: confidenceFor(shared), earned });
+
+describe("one continuum, not two tabs", () => {
+  /**
+   * The defect the redesign exists to fix: 56% and 44% lived in different tabs
+   * twelve points apart, while 56% and 96% shared one, forty points apart.
+   */
+  it("puts neighbours next to each other and strangers far apart", () => {
+    const near = person(56, 20).position;
+    const alsoNear = person(44, 20).position;
+    const far = person(96, 20).position;
+    expect(Math.abs(near - alsoNear)).toBeLessThan(Math.abs(near - far));
+  });
+
+  it("orders everyone by one key, aligned first", () => {
+    const people = [person(20, 20), person(96, 20), person(50, 20), person(70, 20)];
+    const sorted = [...people]
+      .map((p, i) => ({ ...p, sharedConvictions: 20, wallet: `0x${i}` }))
+      .sort(compareSpectrum);
+    expect(sorted.map((p) => p.matchPct)).toEqual([96, 70, 50, 20]);
+  });
+});
+
+describe("the one number is MATCH, never flipped", () => {
+  /**
+   * The Tribe list printed alignment and the Rivals list printed opposition, so
+   * "70%" meant opposite things depending on which tab you were on. In one list
+   * that is a lie, so an opposed person's card still shows how often you AGREE.
+   */
+  it("shows how often you agree, even for the most opposed person", () => {
+    expect(person(8, 30, "opp").matchPct).toBe(8);
+    expect(person(8, 30, "opp").matchPct).not.toBe(92);
+  });
+
+  it("rounds rather than inventing precision, and never leaves 0–100", () => {
+    expect(person(87.4, 20).matchPct).toBe(87);
+    expect(place({ alignmentPct: 140, confidence: 1 }).matchPct).toBe(100);
+    expect(place({ alignmentPct: -20, confidence: 1 }).matchPct).toBe(0);
+  });
+});
+
+describe("confidence shrinks you toward the middle", () => {
+  /**
+   * THE WHOLE DESIGN. A perfect score on almost no evidence is not a strong
+   * relationship, and the list's own shape has to say so.
+   */
+  it("cannot let a perfect score on thin evidence outrank a proven one", () => {
+    const thin = person(100, 2);
+    const proven = person(92, 30);
+    expect(thin.position).toBeLessThan(proven.position);
+  });
+
+  it("leaves a person seen once in the neutral middle, however extreme the raw %", () => {
+    expect(person(100, 1).band).toBe("neutral");
+    expect(person(0, 1).band).toBe("neutral");
+    expect(Math.abs(person(100, 1).position)).toBeLessThanOrEqual(SPECTRUM.neutral);
+  });
+
+  it("moves the same person outward as the evidence accumulates", () => {
+    const growth = [1, 3, 8, 20, 50].map((n) => person(90, n).position);
+    for (let i = 1; i < growth.length; i++) expect(growth[i]).toBeGreaterThan(growth[i - 1]);
+  });
+
+  it("places a split relationship at dead centre no matter how well known", () => {
+    expect(person(50, 100).position).toBe(0);
+    expect(person(50, 100).band).toBe("neutral");
+  });
+});
+
+describe("the rare words stay earned", () => {
+  /**
+   * A cutoff on position alone hands out "Twin" at 90%-over-8-shared and at
+   * 80%-over-15, while EARNED_LABELS.twin demands 90% AND 15 shared AND three
+   * topics. This is the regression guard for that: strong-but-unearned reads
+   * "Tribe", and no arithmetic can promote it.
+   */
+  it("does not mint a Twin from alignment and evidence alone", () => {
+    expect(person(90, 8).band).toBe("tribe");
+    expect(person(80, 15).band).toBe("tribe");
+    expect(person(100, 60).band).toBe("tribe");
+  });
+
+  it("does not mint an Opponent from alignment and evidence alone", () => {
+    expect(person(10, 8).band).toBe("rival");
+    expect(person(0, 60).band).toBe("rival");
+  });
+
+  it("uses the earned badge the model already computes", () => {
+    expect(person(EARNED_LABELS.twin.minStrength, EARNED_LABELS.twin.minShared, "twin").band).toBe(
+      "twin",
+    );
+    expect(
+      person(100 - EARNED_LABELS.opp.minStrength, EARNED_LABELS.opp.minShared, "opp").band,
+    ).toBe("opponent");
+  });
+
+  /**
+   * The badge names a direction as well as a strength. An "opp" badge attached
+   * to an aligned position must not print "Opponent" over a positive match.
+   */
+  it("never lets a badge contradict the side of the continuum", () => {
+    expect(bandFor(0.6, "opp")).toBe("tribe");
+    expect(bandFor(-0.6, "twin")).toBe("rival");
+    expect(bandFor(0, "twin")).toBe("neutral");
+  });
+});
+
+describe("a person we cannot place gets no word", () => {
+  it("says nothing rather than saying 'neutral'", () => {
+    expect(bandLabel("neutral")).toBeNull();
+  });
+
+  it("names every band it can name", () => {
+    expect(bandLabel("twin")).toBe("Twin");
+    expect(bandLabel("tribe")).toBe("Tribe");
+    expect(bandLabel("rival")).toBe("Rival");
+    expect(bandLabel("opponent")).toBe("Opponent");
+  });
+});
+
+describe("the ordering is stable under a re-poll", () => {
+  it("breaks ties on evidence, then on wallet", () => {
+    const tie = (sharedConvictions: number, wallet: string) => ({
+      position: 0.4,
+      sharedConvictions,
+      wallet,
+    });
+    expect([tie(4, "0xb"), tie(9, "0xa")].sort(compareSpectrum)[0].sharedConvictions).toBe(9);
+    expect([tie(4, "0xb"), tie(4, "0xa")].sort(compareSpectrum)[0].wallet).toBe("0xa");
+  });
+
+  it("produces the same order from a shuffled input", () => {
+    const rows = ["0xa", "0xb", "0xc", "0xd"].map((wallet, i) => ({
+      position: 0.4,
+      sharedConvictions: 4 + (i % 2),
+      wallet,
+    }));
+    const once = [...rows].sort(compareSpectrum).map((r) => r.wallet);
+    const twice = [...rows]
+      .reverse()
+      .sort(compareSpectrum)
+      .map((r) => r.wallet);
+    expect(twice).toEqual(once);
+  });
+});
+
+describe("the colour is the product's own language", () => {
+  it("commits to blue only when aligned and amber only when opposed", () => {
+    expect(spectrumColor(0.7)).toContain("var(--yes)");
+    expect(spectrumColor(-0.7)).toContain("var(--no)");
+  });
+
+  it("stays neutral for anyone the evidence cannot place", () => {
+    expect(spectrumColor(person(100, 1).position)).toContain("var(--text-muted)");
+    expect(spectrumColor(0)).toBe("var(--text-muted)");
+  });
+
+  /**
+   * The mix IS the signal. If a weak relationship were painted the same blue as
+   * a strong one, the colour would mean "aligned" rather than "how aligned".
+   */
+  it("deepens monotonically with the strength of the relationship", () => {
+    const strengths = [0.15, 0.3, 0.6, 0.95].map((p) =>
+      Number(/(\d+)%/.exec(spectrumColor(p))?.[1] ?? 0),
+    );
+    for (let i = 1; i < strengths.length; i++)
+      expect(strengths[i]).toBeGreaterThan(strengths[i - 1]);
+    expect(strengths.at(-1)).toBeLessThanOrEqual(100);
+  });
+
+  it("uses no hex values — the palette stays in CSS where the themes are", () => {
+    for (const p of [-1, -0.5, 0, 0.5, 1]) expect(spectrumColor(p)).not.toMatch(/#[0-9a-f]/i);
+  });
+});
+
+describe("search appears because the list got long", () => {
+  it("costs a short list nothing", () => {
+    expect(needsSearch(0)).toBe(false);
+    expect(needsSearch(SPECTRUM.searchAt - 1)).toBe(false);
+  });
+
+  it("arrives once scanning stops being viable", () => {
+    expect(needsSearch(SPECTRUM.searchAt)).toBe(true);
+    expect(needsSearch(500)).toBe(true);
+  });
+});
