@@ -190,11 +190,8 @@ export function MarketDeck({
   });
   // Evidence, when the creator attached any. Null keeps the layout untouched.
   const stageMedia = useMemo(() => stageMediaFrom(cm), [cm]);
-  const createdAt = cm?.createdAt ?? cm?.creator?.createdAt ?? null;
 
-  const freshToken = createdAt
-    ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()).toUpperCase()
-    : null;
+
 
   const connected = useEffectiveWallet();
   const viewer = viewerWallet ?? connected;
