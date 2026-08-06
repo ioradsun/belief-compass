@@ -214,6 +214,14 @@ function MomentumMetric({
   // of three "3 → 6 participants" prints "+100%". The gap was the bug. Believers
   // and capital both read faster as a count and an amount anyway — that is this
   // module's own stated rule — so the fallback is not a compromise.
+  // ATTENTION IS RANKED, NOT SHARED. The question is the only thing on this
+  // panel a reader must decide about; the counts are the evidence they consult
+  // *after* reading it. At 30px these totals matched the headline exactly, so
+  // the eye had two equal entry points and picked the number — the cheaper
+  // read — first. Sizing them a clear step below the question (20/22 against
+  // the title's 20–30) restores one obvious first stop without making the
+  // evidence any harder to find: they keep the same weight, tabular figures
+  // and position, so they are still the strongest thing under the headline.
   const headlinePct =
     copy.pct && !copy.pctQuiet
       ? copy.pct
@@ -224,7 +232,7 @@ function MomentumMetric({
         <span className="min-w-0">
           <span className="flex min-w-0 items-baseline gap-2">
             <span
-              className={`num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] text-[var(--text)] ${dense ? "text-[21px]" : "text-[26px] sm:text-[30px]"}`}
+              className={`num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] text-[var(--text)] ${dense ? "text-[18px]" : "text-[20px] sm:text-[22px]"}`}
             >
               {total}
             </span>
