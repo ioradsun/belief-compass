@@ -296,7 +296,7 @@ export function LiveTape({
        * and disappearing costs the list nothing. It fades rather than popping,
        * and the row reserves its height whether or not it is there.
        */
-      <div className="mb-4 flex h-[22px] shrink-0 items-center gap-2">
+      <div className="mb-4 flex h-[26px] shrink-0 items-center gap-2 overflow-visible">
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
           {label}
         </span>
@@ -316,13 +316,13 @@ export function LiveTape({
           // nothing reflows when it becomes available.
           aria-hidden={gate.pending === 0 || undefined}
           tabIndex={gate.pending === 0 ? -1 : undefined}
-          className="ml-auto rounded-full border px-2.5 py-[3px] text-[11px] font-semibold backdrop-blur-sm transition-[opacity,transform,background-color] duration-200 ease-out motion-reduce:transition-none motion-reduce:animate-none"
+          className="ml-auto rounded-full border px-2.5 py-[3px] text-[11px] font-semibold leading-[14px] backdrop-blur-sm transition-[opacity,transform,background-color] duration-200 ease-out motion-reduce:transition-none motion-reduce:animate-none"
           style={{
             // A quiet system indicator, not a call to action: the filled white
             // button is reserved for Connect Wallet and Back YES/NO.
-            background: "color-mix(in oklab, var(--yes) 12%, transparent)",
-            borderColor: "color-mix(in oklab, var(--yes) 42%, transparent)",
-            color: "var(--yes)",
+            background: "color-mix(in oklab, var(--notice) 12%, transparent)",
+            borderColor: "color-mix(in oklab, var(--notice) 45%, transparent)",
+            color: "var(--notice)",
             opacity: gate.pending > 0 ? 1 : 0,
             transform: gate.pending > 0 ? "scale(1)" : "scale(0.98)",
             pointerEvents: gate.pending > 0 ? "auto" : "none",
