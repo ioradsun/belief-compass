@@ -510,8 +510,9 @@ export function MarketDeck({
         so hover/touch/focus here starts the wallet chunks before the click. */}
       <div
         data-probe="dock"
-        className="shrink-0 space-y-3 pb-[env(safe-area-inset-bottom)]"
-        {...walletIntent}
+        className="shrink-0 pb-[env(safe-area-inset-bottom)]"
+        style={{ display: "grid", gap: "var(--deck-gap, 12px)" }}
+
       >
         {/* The controls. The analysis rail now lives inside the Total Market
           instrument above, so the dock is only the order surface. */}
