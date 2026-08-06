@@ -866,13 +866,24 @@ function Feed() {
             onSelectPerson={selectPerson}
             onOpenMenu={() => setMenuOpen(true)}
             center={
-              <button
-                type="button"
-                onClick={openCreate}
-                className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
-              >
-                <span aria-hidden="true">+</span> Conviction
-              </button>
+              wallet ? (
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
+                >
+                  <span aria-hidden="true">+</span> Conviction
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  {...walletIntent}
+                  onClick={() => requestConnect()}
+                  className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
+                >
+                  Connect wallet
+                </button>
+              )
             }
           />
         }
