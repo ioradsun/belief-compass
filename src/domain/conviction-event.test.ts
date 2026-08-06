@@ -285,9 +285,22 @@ describe("an unknowable tenure never reads as a precise one", () => {
 describe("thresholds are centralized", () => {
   it("long-held and big mean one thing everywhere", () => {
     expect(CONVICTION_EVENT.longHeldDays).toBe(30);
-    expect(CONVICTION_EVENT.bigUsd).toBe(1_000);
+    expect(CONVICTION_EVENT.bigUsd).toBe(100);
     // Just under the line stays an ordinary move.
     expect(classifyConvictionEvent(ev({ action: "exit", context: { daysHeld: 29 } }))).toBe("left");
-    expect(classifyConvictionEvent(ev({ context: { amountUsd: 999 } }))).toBe("joined");
+    expect(classifyConvictionEvent(ev({ context: { amountUsd: 99 } }))).toBe("joined");
+  });
+
+  /**
+   * The threshold was $1,000 on a platform whose largest market has ever held
+   * $197. `big_backing` is on the celebration list, so one of the moments the
+   * feed is meant to celebrate was unreachable by two orders of magnitude.
+   */
+  it("is a size this platform can actually reach", () => {
+    // The largest market total ever observed.
+    expect(CONVICTION_EVENT.bigUsd).toBeLessThan(197);
+    // …and still far above the median market's average trade of $1.95.
+    expect(CONVICTION_EVENT.bigUsd).toBeGreaterThan(50);
+    expect(classifyConvictionEvent(ev({ context: { amountUsd: 150 } }))).toBe("big_backing");
   });
 });

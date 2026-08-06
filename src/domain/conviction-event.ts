@@ -130,8 +130,22 @@ export interface ConvictionEvent {
 export const CONVICTION_EVENT = {
   /** Held this long and leaving is a story about giving up, not about selling. */
   longHeldDays: 30,
-  /** Money large enough that the size IS the news. */
-  bigUsd: 1_000,
+  /**
+   * Money large enough that the size IS the news.
+   *
+   * IT WAS A THOUSAND DOLLARS, on a platform whose LARGEST market has ever held
+   * $197 and where no market's average trade exceeds $298. `big_backing` and
+   * `big_exit` could not fire — and `big_backing` is on the celebration list, so
+   * one of the moments the feed is supposed to celebrate was unreachable by two
+   * orders of magnitude.
+   *
+   * Measured over 7 days: 175 trades, $5,768 of volume, a median market average
+   * trade of $1.95 and a p90 of $82. A hundred dollars is roughly fifty times
+   * the typical trade and comfortably inside the observed range, so "the size is
+   * the news" becomes a claim this platform can actually make — while still
+   * meaning something, which $5 would not.
+   */
+  bigUsd: 100,
   /** Ranks that earn "biggest believer" language. */
   topRank: 1,
 } as const;

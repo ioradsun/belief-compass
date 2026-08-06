@@ -32,11 +32,13 @@ const minutesBefore = (iso: string, m: number) =>
 describe("trade burst grouping", () => {
   it("groups consecutive same-market/side/action trades within the window", () => {
     const t = "2026-02-01T12:00:00.000Z";
+    // Ordinary-sized trades: the median market's average trade here is $1.95,
+    // and this test is about GROUPING, not about the size classification.
     const rows = groupLiveRows(
       [
-        ev({ wallet: "0xa", occurred_at: t }),
-        ev({ wallet: "0xb", occurred_at: minutesBefore(t, 2) }),
-        ev({ wallet: "0xc", occurred_at: minutesBefore(t, 4) }),
+        ev({ wallet: "0xa", occurred_at: t, amount_eth: 0.001 }),
+        ev({ wallet: "0xb", occurred_at: minutesBefore(t, 2), amount_eth: 0.001 }),
+        ev({ wallet: "0xc", occurred_at: minutesBefore(t, 4), amount_eth: 0.001 }),
       ],
       1000,
     );
@@ -141,7 +143,9 @@ describe("factual copy only", () => {
     walletCount: 4,
     tradeCount: 4,
     amountEth: 1,
-    amountUsd: 500,
+    // Below CONVICTION_EVENT.bigUsd — these tests are about the ORDINARY
+    // sentence, and a big exit is a different (also tested) story.
+    amountUsd: 50,
     wallet: null,
     payload: { action: "SELL" },
     ...o,
@@ -151,7 +155,7 @@ describe("factual copy only", () => {
     const s = liveRowStory(rowBase());
     expect(s.category).toBe("shrinking");
     expect(s.headline).toBe("BELIEVER LEFT");
-    expect(s.body).toBe("4 people left NO with $500.");
+    expect(s.body).toBe("4 people left NO with $50.");
   });
   it("liveRowStory: a milestone shows its threshold", () => {
     const s = liveRowStory(

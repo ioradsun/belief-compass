@@ -10,7 +10,11 @@
  */
 import type { JsonValue } from "@/lib/events";
 import type { LiveStory } from "@/domain/story";
-import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
+import {
+  tellConvictionStory,
+  CONVICTION_EVENT,
+  type ConvictionAction,
+} from "@/domain/conviction-event";
 import type { StackPerson } from "@/domain/conviction-cohort";
 import type { MixCandidate } from "@/domain/feed-cadence";
 import { findWashTrades, WASH } from "@/domain/wash-trading";
@@ -263,7 +267,16 @@ function collapseRoundTrips(events: LiveEventInput[]): {
   return { kept: events.filter((e) => !drop.has(e.source_key)), roundTrip };
 }
 
-const LARGE_TRADE_USD = 1000;
+/**
+ * A single trade big enough to stand alone rather than join a burst.
+ *
+ * This was its own `1000`, duplicating `CONVICTION_EVENT.bigUsd` — the same
+ * judgement ("this trade is big") written twice, so the two could drift and one
+ * could be re-tuned without the other. They are one thing, and the grammar owns
+ * the definition. Both were unreachable: no market here has ever averaged a
+ * trade above $298.
+ */
+const LARGE_TRADE_USD = CONVICTION_EVENT.bigUsd;
 
 /**
  * How many of a burst's participants travel with the row. Instagram shows a few

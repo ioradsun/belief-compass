@@ -33,7 +33,22 @@ export type NetTag = "twin" | "tribe" | "opp" | "inverse";
  */
 export const FEED_TRIGGERS = {
   believers: { minAbs: 3, minGrowthPct: 20, minGrowthBase: 10 },
-  capital: { minUsd: 25, minRelPct: 15, spikeMultiple: 3 },
+  /**
+   * `minUsd` was TWENTY-FIVE DOLLARS, and it is the binding gate on every
+   * capital story: the relative bar is trivially cleared on a small market, so
+   * the absolute floor decides alone. Measured, only EIGHT of a thousand markets
+   * hold $25 in total — so a capital move of that size was confined to those
+   * eight, and "money is concentrating here" could not be said anywhere else.
+   *
+   * Five dollars is a little over twice the median market's average trade
+   * ($1.95 over 175 trades in 7 days), so an above-average move can become a
+   * story while dust still cannot. The relative bar is untouched and still does
+   * the work it was written for — stopping a small move in a huge market.
+   *
+   * The comment above this block says to tune these against live distributions.
+   * This is that.
+   */
+  capital: { minUsd: 5, minRelPct: 15, spikeMultiple: 3 },
   price: { minPct: 8 },
   switch: { minWallets: 2 },
   social: { minClusterWallets: 2 },
