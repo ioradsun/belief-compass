@@ -112,8 +112,11 @@ export const CADENCE = {
 } as const;
 
 /**
- * Pacing guidance, not quotas. Read as "roughly this much of a healthy feed",
+ * Pacing guidance, not quotas. Read as "roughly this much of a HEALTHY feed",
  * and only ever used to break near-ties between events of comparable quality.
+ *
+ * These are the shares to aim for on a busy day. What to do on a quiet one is
+ * `familyTargets` below — because most days here are quiet ones.
  */
 export const FAMILY_TARGET: Record<EventFamily, number> = {
   live_action: 0.475, // 40–55%
@@ -185,20 +188,98 @@ function dominancePenalty(
   return p;
 }
 
+const FAMILIES = Object.keys(FAMILY_TARGET) as EventFamily[];
+
+/**
+ * THE BUDGET FOR THE DAY THAT ACTUALLY HAPPENED.
+ *
+ * `FAMILY_TARGET` describes a healthy feed — roughly half live action, a fifth
+ * celebration, and so on. It was applied as a constant, which is right exactly
+ * once a day and wrong the rest of the time. Measured, NINE OF A THOUSAND
+ * markets traded in the last 24 hours: live action is not half of what happened
+ * here, it is a handful of rows, and holding 47.5% of the budget for it starves
+ * the families that DO have something to say.
+ *
+ * There was already a guard for the extreme case — a family with no candidates
+ * at all earns no nudge — but a family with ONE candidate still held its whole
+ * share, and the freed budget went nowhere. So the feed's own pacing worked
+ * against it on precisely the days it was needed.
+ *
+ * Two rules, and no new constant to tune:
+ *
+ *   A FAMILY IS NEVER ASKED FOR MORE THAN IT HAS. Its ceiling is its share of
+ *   the supply. One live action among twenty rows is asked to be one row, not
+ *   half the feed.
+ *
+ *   WHAT CANNOT BE SUPPLIED IS SHARED OUT, by preference, among the families
+ *   that can fill it — so on a quiet day the celebrations, the collective
+ *   stories and the long-held convictions inherit the space the trades left
+ *   behind, and the feed leans toward them without anyone deciding a "quiet
+ *   mode" threshold.
+ *
+ * The two rules interact, so one pass is not enough: hand a capped family's
+ * share to the others and one of THEM may now exceed its own ceiling. This is
+ * water-filling — pour the budget out by preference, freeze whoever overflows,
+ * pour the rest again. Five families, so it settles in at most five passes and
+ * is fully deterministic.
+ *
+ * On a busy day supply exceeds every ceiling and this returns FAMILY_TARGET
+ * unchanged, which is the point: one rule, and the healthy mix is its own
+ * special case.
+ */
+export function familyTargets(candidates: readonly MixCandidate[]): Record<EventFamily, number> {
+  const out = {} as Record<EventFamily, number>;
+  for (const f of FAMILIES) out[f] = 0;
+  if (candidates.length === 0) return out;
+
+  const ceiling = {} as Record<EventFamily, number>;
+  for (const f of FAMILIES) ceiling[f] = 0;
+  for (const c of candidates) ceiling[c.family] += 1 / candidates.length;
+
+  let open = FAMILIES.filter((f) => ceiling[f] > 0);
+  let budget = 1;
+  // At most one family freezes per pass, so this cannot run longer than FAMILIES.
+  for (let pass = 0; pass < FAMILIES.length && open.length > 0 && budget > 1e-9; pass += 1) {
+    const weight = open.reduce((sum, f) => sum + FAMILY_TARGET[f], 0);
+    if (weight <= 0) break;
+    const overflow: EventFamily[] = [];
+    for (const f of open) {
+      const share = (budget * FAMILY_TARGET[f]) / weight;
+      if (share >= ceiling[f]) overflow.push(f);
+    }
+    if (overflow.length === 0) {
+      for (const f of open) out[f] += (budget * FAMILY_TARGET[f]) / weight;
+      budget = 0;
+      break;
+    }
+    for (const f of overflow) {
+      out[f] = ceiling[f];
+      budget -= ceiling[f];
+    }
+    open = open.filter((f) => !overflow.includes(f));
+  }
+  return out;
+}
+
 /**
  * Nudge toward a family the feed is short of — bounded, and never applied to an
  * event that isn't good enough to be there on its own merits.
  */
-function targetBonus(c: MixCandidate, picked: MixCandidate[], available: Set<EventFamily>): number {
+function targetBonus(
+  c: MixCandidate,
+  picked: MixCandidate[],
+  want: Record<EventFamily, number>,
+): number {
   if (c.significance < CADENCE.minQuality) return 0;
-  // A target for a family with nothing to offer would starve every other family.
-  if (!available.has(c.family)) return 0;
   const total = picked.length;
   if (total === 0) return 0;
+  const target = want[c.family];
+  // A family with nothing to offer scores zero above, so this also covers the
+  // case the old `available` set was guarding.
+  if (target <= 0) return 0;
   const have = picked.filter((p) => p.family === c.family).length / total;
-  const want = FAMILY_TARGET[c.family];
-  const gap = want - have;
-  return gap <= 0 ? 0 : CADENCE.targetNudge * Math.min(1, gap / Math.max(want, 0.01));
+  const gap = target - have;
+  return gap <= 0 ? 0 : CADENCE.targetNudge * Math.min(1, gap / Math.max(target, 0.01));
 }
 
 /**
@@ -212,7 +293,8 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
   const times = candidates.map((c) => Date.parse(c.occurredAt)).filter(Number.isFinite);
   const newest = times.length ? Math.max(...times) : 0;
   const oldest = times.length ? Math.min(...times) : 0;
-  const available = new Set(candidates.map((c) => c.family));
+  // The budget for THIS set, not for an imagined healthy day. See familyTargets.
+  const want = familyTargets(candidates);
 
   const pool = [...candidates];
   const picked: MixCandidate[] = [];
@@ -237,7 +319,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
           : base -
             adjacencyPenalty(c, recent) -
             dominancePenalty(c, walletCount, marketCount) +
-            targetBonus(c, picked, available) +
+            targetBonus(c, picked, want) +
             noveltyBonus(c, walletCount);
 
       // Deterministic tie-break: newer first, then id. No randomness, ever.
@@ -278,16 +360,47 @@ export function familyMix(events: MixCandidate[]): Record<EventFamily, number> {
 }
 
 /**
- * Which family an event belongs to, from the vocabulary that already exists.
- * `personal` is the viewer-relationship flag the renderer already sets, so a
- * relationship story is recognised without a second event ever being written.
+ * Which family an event belongs to.
+ *
+ * TWO BUGS LIVED HERE, and between them they emptied the two most interesting
+ * families in the feed.
+ *
+ * 1. THE FAMILY WAS READ FROM THE EVENT KIND. Every conviction celebration the
+ *    grammar writes — a first believer, someone doubling down, someone changing
+ *    their mind after months — arrives as a `trade`, so all of them fell to
+ *    `live_action`. `FAMILY_TARGET.conviction_celebration` reserves 18% of a
+ *    healthy feed and NOTHING COULD ENTER IT. Worse, a celebration sitting in
+ *    `live_action` is penalised by the adjacency rule for following an ordinary
+ *    buy, so the mixer pushed down exactly the rows it should have lifted. That
+ *    is the "Sarah backed… Mike backed… Emily backed…" feed.
+ *
+ *    The signature already accepted `category` and the call site never passed
+ *    it. The classification input existed and was discarded.
+ *
+ * 2. `personal` OVERRODE EVERYTHING. A Tribe member being the first believer in
+ *    a market was a `relationship_story` competing for a 7.5% slot, and the fact
+ *    that it was a first believer was lost. Personalization and story type are
+ *    two different axes; collapsing them meant the rows a reader cares about
+ *    most were the ones the mixer knew least about.
+ *
+ *    Who an event is about is already carried — and already bounded — by the
+ *    DISCOVERY lift, which is the mechanism built for it. `relationship_story`
+ *    now means what its name says: a row whose subject IS the relationship,
+ *    with no stronger story of its own.
  */
 export function familyOf(input: {
   kind: string;
+  /** The composed story's category (src/domain/story#LiveCategory). */
   category?: string | null;
+  /**
+   * True when the row's classified story is a celebration — a moment rather
+   * than a transaction. Set from `isCelebration` (src/domain/conviction-event)
+   * for trades, and from the story-event type for market-wide rows.
+   */
+  celebration?: boolean | null;
   personal?: boolean | null;
 }): EventFamily {
-  if (input.personal) return "relationship_story";
+  if (input.celebration) return "conviction_celebration";
   switch (input.kind) {
     case "conviction_cohort":
       return "collective_story";
@@ -295,7 +408,14 @@ export function familyOf(input: {
     case "believer_milestone":
     case "tribe_doubled":
       return "market_transition";
+    case "discovery_moment":
+    case "standing_fact":
+      return "relationship_story";
     default:
-      return "live_action";
+      // A market opening, or a milestone crossed, is a moment however it was
+      // recorded — the category says so even when the kind cannot.
+      if (input.category === "fresh_market" || input.category === "milestone")
+        return "conviction_celebration";
+      return input.personal ? "relationship_story" : "live_action";
   }
 }

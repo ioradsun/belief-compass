@@ -4,6 +4,8 @@ import {
   familyMix,
   familyOf,
   CADENCE,
+  FAMILY_TARGET,
+  familyTargets,
   type MixCandidate,
   type EventFamily,
 } from "./feed-cadence";
@@ -294,7 +296,148 @@ describe("families come from the vocabulary that already exists", () => {
     for (const [input, expected] of cases) expect(familyOf(input)).toBe(expected);
   });
 
-  it("a viewer relationship makes any event a relationship story", () => {
-    expect(familyOf({ kind: "conviction_cohort", personal: true })).toBe("relationship_story");
+  /**
+   * Personalization is no longer a family. A Tribe member's first-believer row
+   * used to become a `relationship_story` — competing for a 7.5% slot, with the
+   * fact that it was a FIRST BELIEVER discarded. Who a row is about is carried
+   * by the discovery lift, which is the bounded mechanism built for it; WHAT
+   * happened decides the family.
+   */
+  it("does not let a relationship overwrite a stronger story", () => {
+    expect(familyOf({ kind: "conviction_cohort", personal: true })).toBe("collective_story");
+    expect(familyOf({ kind: "trade", celebration: true, personal: true })).toBe(
+      "conviction_celebration",
+    );
+    expect(familyOf({ kind: "market_transition", personal: true })).toBe("market_transition");
+  });
+
+  it("still files a plain personal row as a relationship story", () => {
+    expect(familyOf({ kind: "trade", personal: true })).toBe("relationship_story");
+    expect(familyOf({ kind: "discovery_moment" })).toBe("relationship_story");
+  });
+
+  /**
+   * The 18% the mixer reserves for celebrations was unreachable: every one of
+   * them arrives as a `trade`, and the family was read from the kind.
+   */
+  it("lets a celebration reach the family that was reserved for it", () => {
+    expect(familyOf({ kind: "trade", celebration: true })).toBe("conviction_celebration");
+    expect(familyOf({ kind: "trade" })).toBe("live_action");
+    expect(FAMILY_TARGET.conviction_celebration).toBeGreaterThan(0);
+  });
+
+  it("treats a market opening and a milestone as moments, whatever the kind", () => {
+    expect(familyOf({ kind: "trade", category: "fresh_market" })).toBe("conviction_celebration");
+    expect(familyOf({ kind: "trade", category: "milestone" })).toBe("conviction_celebration");
+  });
+});
+
+/**
+ * THE BUDGET FOR THE DAY THAT ACTUALLY HAPPENED.
+ *
+ * `FAMILY_TARGET` describes a healthy feed. It was applied as a constant, which
+ * is right exactly once a day. Measured, nine of a thousand markets traded in
+ * the last 24 hours — so holding 47.5% of the budget for live action starved the
+ * families that had something to say, on precisely the days it mattered.
+ */
+describe("the pacing budget follows what actually happened", () => {
+  const many = (family: EventFamily, n: number) => Array.from({ length: n }, () => c({ family }));
+
+  it("hands a quiet day's freed budget to the families that can fill it", () => {
+    const t = familyTargets([...many("conviction_celebration", 8), ...many("collective_story", 4)]);
+    // Nothing traded, so live action asks for nothing.
+    expect(t.live_action).toBe(0);
+    // Preference alone would want 60/40 (0.18 vs 0.12), but collective can only
+    // fill a third of the rows — so it gets exactly its third and celebrations
+    // take the rest. Both rules at once, which is why one pass is not enough.
+    expect(t.collective_story).toBeCloseTo(4 / 12, 6);
+    expect(t.conviction_celebration).toBeCloseTo(8 / 12, 6);
+  });
+
+  it("settles rather than oscillating when several families are supply-bound", () => {
+    const t = familyTargets([
+      ...many("live_action", 1),
+      ...many("conviction_celebration", 1),
+      ...many("collective_story", 8),
+    ]);
+    // Each capped family gets exactly what it has; the rest goes to the one that
+    // can absorb it. No family ever exceeds its own supply.
+    expect(t.live_action).toBeCloseTo(0.1, 6);
+    expect(t.conviction_celebration).toBeCloseTo(0.1, 6);
+    expect(t.collective_story).toBeCloseTo(0.8, 6);
+  });
+
+  it("never asks a family for more than it has", () => {
+    // One live action among twenty rows is asked to be one row, not half a feed.
+    const t = familyTargets([...many("live_action", 1), ...many("conviction_celebration", 19)]);
+    expect(t.live_action).toBeCloseTo(0.05, 6); // exactly the one row it has
+    expect(t.conviction_celebration).toBeCloseTo(0.95, 6);
+  });
+
+  /** One rule, and the healthy mix is its own special case. */
+  it("returns the healthy mix unchanged when supply exceeds every cap", () => {
+    const busy = [
+      ...many("live_action", 48),
+      ...many("conviction_celebration", 18),
+      ...many("collective_story", 12),
+      ...many("market_transition", 15),
+      ...many("relationship_story", 7),
+    ];
+    const t = familyTargets(busy);
+    for (const f of Object.keys(FAMILY_TARGET) as EventFamily[]) {
+      expect(t[f]).toBeCloseTo(FAMILY_TARGET[f], 2);
+    }
+  });
+
+  it("always spends the whole budget, or none of it", () => {
+    for (const set of [
+      [...many("live_action", 3)],
+      [...many("conviction_celebration", 2), ...many("market_transition", 9)],
+      [...many("relationship_story", 1)],
+    ]) {
+      const t = familyTargets(set);
+      const total = Object.values(t).reduce((a, b) => a + b, 0);
+      expect(total).toBeCloseTo(1, 6);
+    }
+    expect(Object.values(familyTargets([])).reduce((a, b) => a + b, 0)).toBe(0);
+  });
+
+  it("lifts a celebration over a live action on a quiet day, all else equal", () => {
+    const at = new Date(Date.UTC(2026, 0, 1, 12)).toISOString();
+    const rows = mixFeed([
+      c({ id: "TRADE", family: "live_action", significance: 0.5, marketId: "1", occurredAt: at }),
+      c({
+        id: "PARTY",
+        family: "conviction_celebration",
+        significance: 0.5,
+        marketId: "2",
+        occurredAt: at,
+      }),
+      c({
+        id: "PARTY2",
+        family: "conviction_celebration",
+        significance: 0.5,
+        marketId: "3",
+        occurredAt: at,
+      }),
+      c({
+        id: "PARTY3",
+        family: "conviction_celebration",
+        significance: 0.5,
+        marketId: "4",
+        occurredAt: at,
+      }),
+    ]);
+    expect(rows[0].family).toBe("conviction_celebration");
+  });
+
+  /** Pacing never outranks news — the bound this all sits under is unchanged. */
+  it("still cannot promote a weak row or outrank breaking news", () => {
+    const rows = mixFeed([
+      c({ id: "WEAK", family: "conviction_celebration", significance: 0.05 }),
+      c({ id: "BREAK", family: "live_action", significance: 0.95, marketId: "9" }),
+    ]);
+    expect(rows[0].id).toBe("BREAK");
+    expect(CADENCE.targetNudge).toBeLessThan(CADENCE.breakingAt - CADENCE.minQuality);
   });
 });

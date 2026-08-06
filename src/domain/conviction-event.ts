@@ -214,6 +214,43 @@ const REL_WHO: Record<NetworkLabel, string> = {
   inverse: "Someone who mirrors you",
 };
 
+/**
+ * WHICH OF THESE ARE CELEBRATIONS — moments, not transactions.
+ *
+ * The grammar has always known the difference. Somebody being the FIRST to back
+ * a question, somebody doubling down, somebody changing their mind after months
+ * — these are not "a trade happened", and a feed that files them beside an
+ * ordinary $3 buy is throwing away the only rows that make a young platform feel
+ * alive.
+ *
+ * The mixer already reserves 18% of a healthy feed for `conviction_celebration`
+ * (see FAMILY_TARGET in src/domain/feed-cadence). Nothing could ever enter that
+ * family, because the family was decided from the EVENT KIND — and every one of
+ * these arrives as a `trade`. The slot has been reserved and empty since it was
+ * written, and worse: a celebration sitting in `live_action` is penalised by the
+ * adjacency rule for following an ordinary buy, so the mixer actively pushed
+ * DOWN the rows it should have been lifting.
+ *
+ * Exits and reductions are deliberately not here. "A believer of 43 days gave
+ * up" is a real and important story, but it is not a celebration, and a feed
+ * that called it one would be lying about its own community.
+ */
+export const CELEBRATION_TYPES: ReadonlySet<ConvictionEventType> = new Set<ConvictionEventType>([
+  "first_believer",
+  "doubled_down",
+  "big_backing",
+  "changed_mind",
+  "swept_in",
+  "milestone",
+  "surging",
+  "new_market",
+]);
+
+/** True when this event is a moment worth celebrating rather than reporting. */
+export function isCelebration(type: ConvictionEventType): boolean {
+  return CELEBRATION_TYPES.has(type);
+}
+
 const CATEGORY: Record<ConvictionEventType, LiveCategory> = {
   swept_out: "capital_out",
   swept_in: "capital_in",
