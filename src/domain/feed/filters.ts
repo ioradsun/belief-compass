@@ -22,8 +22,8 @@ export type FeedNetwork = "everyone" | "tribe" | "rivals" | "following";
 
 export const NETWORK_OPTIONS: { key: FeedNetwork; label: string; blurb: string }[] = [
   { key: "everyone", label: "Everyone", blurb: "The whole board." },
-  { key: "tribe", label: "My Tribe", blurb: "What people you align with are backing." },
-  { key: "rivals", label: "Rivals", blurb: "Where people who disagree with you are active." },
+  { key: "tribe", label: "My Tribe", blurb: "Markets people you align with created or traded." },
+  { key: "rivals", label: "Rivals", blurb: "Markets people who disagree with you created or traded." },
   { key: "following", label: "Following", blurb: "People you chose to follow." },
 ];
 
