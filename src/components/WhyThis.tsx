@@ -30,10 +30,9 @@ const REL = "var(--rel,#9b87f5)";
 export function WhyThis({
   reason,
   /**
-   * `lead` prints the "WHY THIS ·" label — the centre, where the sentence sits
-   * above a large title and needs naming. The feed list omits it: every row
-   * carries one, so a label on each would be six words of chrome per row saying
-   * what the column already says.
+   * `lead` is the centre, where the sentence sits alone above the question and
+   * gets full weight. The feed list uses the muted, smaller variant: every row
+   * carries one, so a column of purple reads as decoration.
    */
   lead = false,
   className = "",
@@ -43,21 +42,34 @@ export function WhyThis({
   className?: string;
 }) {
   if (!reason) return null;
+
+  // NO LABEL. "WHY THIS ·" named a thing that names itself — "Your Tribe is
+  // backing YES" is self-evidently a reason, so the label was six words of
+  // chrome in front of the sentence it described. Removing it and giving the
+  // sentence the size it lost to the label is the whole trade.
+  //
+  // NOT CAPS. Caps are for labels — short, glanced, not read. This is a
+  // sentence with names and numbers in it; capitalising it slows reading and
+  // makes a reason look like a warning. Size, weight and the discovery purple
+  // carry the emphasis instead, which is what they are for.
+  if (lead) {
+    return (
+      <p
+        className={`truncate text-[13.5px] font-semibold leading-[20px] tracking-[-0.005em] ${className}`}
+        style={{ color: REL }}
+      >
+        {reason}
+      </p>
+    );
+  }
+
   return (
-    // The centre keeps the discovery accent (it is labelled "WHY THIS" and sits
-    // alone above the question). In the rail every row carries one, so a column
-    // of purple reads as decoration — those stay muted, like the facts beneath.
     <p
       className={`truncate text-[11.5px] leading-[18px] ${className}`}
-      style={{ color: lead ? REL : "var(--text-muted)" }}
+      style={{ color: "var(--text-muted)" }}
     >
-      {lead && (
-        <>
-          <span className="font-semibold uppercase tracking-[0.08em]">Why this</span>
-          <span aria-hidden> · </span>
-        </>
-      )}
       {reason}
     </p>
   );
 }
+
