@@ -212,6 +212,19 @@ export function MarketDeck({
   // The reveal needs the viewer's network (for Tribe / Opps / Twin faces) and the
   // House read (its pick + surprise streak). Both cached, both used elsewhere.
   const { data: net } = useQuery(networkQO(viewer));
+
+  // Participants, tagged with how the viewer knows them. The tile orders the
+  // familiar faces first — one list, no separate Tribe/Rival sections.
+  const participantFaces = useMemo(() => {
+    const rel = new Map<string, string>();
+    for (const p of net?.people ?? []) rel.set(p.wallet.toLowerCase(), p.relationship);
+    return holders.map((h) => ({
+      wallet: h.wallet,
+      name: h.name,
+      avatarUrl: h.avatarUrl,
+      relation: relationFromLabel(rel.get(h.wallet.toLowerCase())),
+    }));
+  }, [holders, net]);
   const { data: houseRead } = useQuery({
     queryKey: houseKey(viewer, marketId),
     queryFn: () => getHouseRead({ data: { wallet: viewer ?? null, marketId } }),
