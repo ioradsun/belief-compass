@@ -1221,12 +1221,10 @@ function Feed() {
               {/* Duplicate suggestions sit above the feed while creating; the feed
                 below keeps running and is never replaced. */}
               <DuplicateSuggestions onSelect={selectMarket} />
-              {/* THIS MARKET — the pinned scope of the feed: the current market's
-                story (House + activity), collapsible. Excluded from the global feed
-                below so nothing is shown twice. Same LiveTape, two scopes. */}
-              {shownId != null && (
-                <CurrentMarketActivity marketId={shownId} wallet={wallet} onSelect={selectMarket} />
-              )}
+              {/* "In this market" moved to the top of the For You rail, next to
+                the running order. The global tape below still excludes the
+                current market, so its activity is told in exactly one place. */}
+
               {/* The heading belongs to the tape now, so the update control can
                 share its line. It used to be a sticky button INSIDE the
                 scroller, which pushed every row down when activity arrived and
