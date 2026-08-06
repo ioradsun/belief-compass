@@ -5,6 +5,8 @@ import {
   pendingCount,
   arrivalLabel,
   unseen,
+  partitionArrivals,
+  newestAt,
   TAPE,
   type Arrival,
 } from "./tape-arrivals";
@@ -122,5 +124,29 @@ describe("the batching window is calmer than the event stream", () => {
 
   it("is still short enough to feel live", () => {
     expect(TAPE.batchMs).toBeLessThanOrEqual(3_000);
+  });
+});
+
+describe("partitionArrivals", () => {
+  const row = (id: string, occurredAt: string) => ({ id, marketId: "1", occurredAt });
+
+  it("announces only rows newer than what is on screen", () => {
+    const { arrivals, backfill } = partitionArrivals(
+      [row("new", "2026-08-06T20:00:00Z"), row("old", "2026-08-06T18:00:00Z")],
+      Date.parse("2026-08-06T19:00:00Z"),
+    );
+    expect(arrivals.map((r) => r.id)).toEqual(["new"]);
+    expect(backfill.map((r) => r.id)).toEqual(["old"]);
+  });
+
+  it("treats everything as an arrival on an empty tape", () => {
+    const { arrivals } = partitionArrivals([row("a", "2026-08-06T18:00:00Z")], newestAt([]));
+    expect(arrivals).toHaveLength(1);
+  });
+
+  it("reads the newest timestamp on screen", () => {
+    expect(newestAt([row("a", "2026-08-06T18:00:00Z"), row("b", "2026-08-06T20:00:00Z")])).toBe(
+      Date.parse("2026-08-06T20:00:00Z"),
+    );
   });
 });
