@@ -998,10 +998,8 @@ function Feed() {
                   ) : (
                     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
                       <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
-                        Connect a wallet to see your convictions.
+                        Connect a wallet in the header to see your convictions.
                       </p>
-                      <WalletConnectButton />
-                    </div>
                   )
                 }
               />
