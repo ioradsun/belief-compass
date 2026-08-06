@@ -19,6 +19,7 @@
  * tuning the feed means editing one config, not the engine.
  */
 import { sat, clamp01 } from "./feed/config";
+import { BARS } from "./market-change";
 
 export type FeedDimension = "people" | "capital" | "price" | "social";
 /** 1 Breaking · 2 Notable · 3 Context · 4 Raw (ledger only, out of the feed). */
@@ -32,24 +33,35 @@ export type NetTag = "twin" | "tribe" | "opp" | "inverse";
  * can also use the exported predicates below directly.
  */
 export const FEED_TRIGGERS = {
-  believers: { minAbs: 3, minGrowthPct: 20, minGrowthBase: 10 },
   /**
-   * `minUsd` was TWENTY-FIVE DOLLARS, and it is the binding gate on every
-   * capital story: the relative bar is trivially cleared on a small market, so
-   * the absolute floor decides alone. Measured, only EIGHT of a thousand markets
-   * hold $25 in total — so a capital move of that size was confined to those
-   * eight, and "money is concentrating here" could not be said anywhere else.
+   * DERIVED, NOT DECLARED. These three rows used to be literals here, and they
+   * were a THIRD independent answer to questions `market-change` and the
+   * momentum lens were already answering — with different numbers. Price
+   * disagreed outright: 8% here against the 5% the product had settled on and
+   * the data supported. A user control on top of three copies would have let a
+   * reader move a setting and watch the feed half-respond.
    *
-   * Five dollars is a little over twice the median market's average trade
-   * ($1.95 over 175 trades in 7 days), so an above-average move can become a
-   * story while dust still cannot. The relative bar is untouched and still does
-   * the work it was written for — stopping a small move in a huge market.
-   *
-   * The comment above this block says to tune these against live distributions.
-   * This is that.
+   * They now read the one bar table (@/domain/market-change#BARS). The activity
+   * feed uses the NOTABLE row, which is what "worth emitting as an event" has
+   * always meant here — see `barFor` for the reader-tunable version.
    */
-  capital: { minUsd: 5, minRelPct: 15, spikeMultiple: 3 },
-  price: { minPct: 8 },
+  believers: {
+    minAbs: BARS.notable.minBelieverDelta,
+    minGrowthPct: 20,
+    minGrowthBase: 10,
+  },
+  capital: {
+    minUsd: BARS.notable.minUsd,
+    minRelPct: BARS.notable.minRelPct,
+    spikeMultiple: 3,
+  },
+  price: { minPct: BARS.notable.minPct },
+  /**
+   * STRUCTURAL, and deliberately not part of the bar. "How many wallets make a
+   * cluster" is a question about what constitutes a group, not about how much
+   * movement is worth reporting — a reader tuning sensitivity is not asking for
+   * two people to stop being two people.
+   */
   switch: { minWallets: 2 },
   social: { minClusterWallets: 2 },
 } as const;

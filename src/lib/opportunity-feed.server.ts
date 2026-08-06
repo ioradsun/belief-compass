@@ -30,7 +30,12 @@ import {
   type FeedFilters,
   type FeedNetwork,
 } from "@/domain/feed/filters";
-import type { MomentumLens } from "@/domain/feed/momentum";
+import {
+  atSensitivity,
+  NO_MOMENTUM,
+  type MomentumFacts,
+  type MomentumLens,
+} from "@/domain/feed/momentum";
 import { shouldInsertSuggestion } from "@/domain/market-suggestion";
 import { listFeed, type VolumeWindow } from "@/lib/markets.functions";
 import {
@@ -71,6 +76,12 @@ export interface OpportunityFeedInput extends FeedSessionState {
   topics?: string[];
   /** Momentum lenses — see @/domain/feed/momentum. Empty means "any". */
   momentum?: string[];
+  /**
+   * The reader's floor: how much has to happen before it is worth showing.
+   * A row in the one bar table (@/domain/market-change#BARS). Unrecognised
+   * values fall back to the default rather than emptying the feed.
+   */
+  sensitivity?: string;
   /**
    * The market the viewer arrived at from OUTSIDE the running order — a search
    * result, a Live row, one of their positions. Its people become a weak signal
@@ -119,8 +130,9 @@ function signalsOf(
   r: Row,
   followed: FollowedPresence = NO_FOLLOWS,
   connectedToOrigin = 0,
+  /** Already narrowed to the reader's floor by the caller. */
+  mo: { weight?: number } | null = null,
 ): FeedMarketSignals {
-  const mo = (r["momentum"] ?? null) as { weight?: number } | null;
   const meta = (r["markets"] ?? null) as {
     category?: string | null;
     author_wallet?: string | null;
@@ -261,7 +273,7 @@ export async function buildOpportunityFeed(
   const filters: FeedFilters = normalizeFilters({
     networks: (input.networks ?? []) as FeedNetwork[],
     topics: input.topics ?? [],
-    momentum: (input.momentum ?? []) as MomentumLens[],
+    momentum: (input.momentum ?? []) as never,
   });
   // A single network chosen IS a perspective, so the Tribe / Rivals rankings
   // still apply; everything else keeps the blend the ranker produced.
@@ -300,8 +312,22 @@ export async function buildOpportunityFeed(
       tribeTouched: boolean;
       oppTouched: boolean;
       momentum: MomentumLens[];
+      mine: boolean;
     }
   >();
+
+  /**
+   * THE READER'S FLOOR, applied to a classification computed ONCE.
+   *
+   * `listFeed` classifies momentum in its viewer-independent, SWR-cached block
+   * at the most permissive bar. Every reader's view is a subset of that, so this
+   * filters rather than recomputing — which is what keeps one cache per window
+   * instead of one per window per sensitivity.
+   */
+  const momentumFor = (r: Row): MomentumFacts => {
+    const raw = (r["momentum"] ?? null) as MomentumFacts | null;
+    return raw ? atSensitivity(raw, input.sensitivity as never, win) : NO_MOMENTUM;
+  };
 
   const candidates: SequenceCandidate[] = rows.map((r) => {
     // Followed people connected to this market: the ones holding a position,
@@ -328,10 +354,12 @@ export async function buildOpportunityFeed(
       const n = signals.followedNames.get(w);
       if (n) names.push(n);
     }
+    const mo = momentumFor(r);
     const s = signalsOf(
       r,
       { here: here.size, yes, no, names },
       originOverlap.get(Number(r.onchain_id)) ?? 0,
+      mo,
     );
     filterFacts.set(s.onchainId, {
       category: s.category,
@@ -344,7 +372,16 @@ export async function buildOpportunityFeed(
       oppTouched: Boolean(r["opp_touched"]),
       // Which momentum lenses this market belongs in, from the shared,
       // drift-corrected classifier — never re-derived here.
-      momentum: ((r["momentum"] ?? null) as { lenses?: MomentumLens[] } | null)?.lenses ?? [],
+      momentum: mo.lenses,
+      // Created it, or holding a side. One relationship to a market, not two —
+      // the same rule `stakesIn` applies, and the interface never distinguishes.
+      mine:
+        signals.held.has(Number(r.onchain_id)) ||
+        (!!wallet &&
+          String(
+            ((r["markets"] ?? null) as { author_wallet?: string | null } | null)?.author_wallet ??
+              "",
+          ).toLowerCase() === wallet),
     });
     const ai = aiOf(analyses.get(s.onchainId));
     const state: ViewerMarketState | undefined = signals.states.get(s.onchainId);
@@ -381,15 +418,13 @@ export async function buildOpportunityFeed(
       eligibility,
       reason: reasonFor(s, scored, {
         category: s.category ?? ai?.category ?? null,
-        momentum: (r["momentum"] ?? null) as never,
+        momentum: mo,
         window: win,
       }),
       reentry,
       poolSlices: Array.isArray(r["pool_slices"]) ? (r["pool_slices"] as string[]) : [],
       // Spacing input only — see SEQUENCE.MAX_SAME_DIRECTION_RUN.
-      moveDirection:
-        ((r["momentum"] ?? null) as { top?: { direction?: "up" | "down" } | null } | null)?.top
-          ?.direction ?? null,
+      moveDirection: mo.top?.direction ?? null,
     };
   });
 

@@ -3,6 +3,7 @@ import {
   classifyMomentum,
   momentumReason,
   momentumBar,
+  atSensitivity,
   MOMENTUM,
   MOMENTUM_LENSES,
   MOMENTUM_LABELS,
@@ -13,6 +14,7 @@ import {
   marketChange,
   materialMoves,
   MATERIAL,
+  BARS,
   type ChangeNow,
   type ChangeBase,
 } from "@/domain/market-change";
@@ -84,7 +86,7 @@ describe("the lens bar is reachable, which is the whole trap", () => {
         priceUsd: 1.9,
       },
     );
-    expect(MOMENTUM.minBelieverDelta).toBeLessThan(MATERIAL.minBelieverDelta);
+    expect(BARS.everything.minBelieverDelta).toBeLessThan(MATERIAL.minBelieverDelta);
     expect(materialMoves(c).some((m) => m.metric === "believers")).toBe(false);
     expect(classifyMomentum(c, ctx()).lenses).toContain("believers");
   });
@@ -191,7 +193,7 @@ describe("dust never becomes momentum", () => {
     );
     const f = classifyMomentum(c, ctx());
     expect(f.top?.metric).toBe("price");
-    expect(Math.abs(f.top!.delta)).toBeLessThan(MOMENTUM.minCapitalUsd);
+    expect(Math.abs(f.top!.delta)).toBeLessThan(BARS.everything.minUsd);
     expect(f.lenses).toContain("moving");
   });
 });
@@ -335,5 +337,59 @@ describe("the vocabulary is complete and labelled", () => {
     const f = classifyMomentum(c, ctx({ believersYes: 4, believersNo: 2, moneyYesShare: 0.5 }));
     const order = f.lenses.map((l) => MOMENTUM_LENSES.indexOf(l));
     expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+});
+
+describe("a stricter reader is served by filtering, never by recomputing", () => {
+  const busy = () =>
+    classifyMomentum(
+      change(
+        { believers: 5, capitalUsd: 160, priceUsd: 2.3 },
+        { believers: 1, capitalUsd: 100, priceUsd: 1.9 },
+      ),
+      ctx(),
+    );
+
+  it("keeps every move at the permissive bar so a subset is always derivable", () => {
+    const all = busy();
+    expect(all.moves.length).toBeGreaterThan(1);
+    expect(all.top).toBe(all.moves[0]);
+  });
+
+  it("narrows as the reader asks for more, and never widens", () => {
+    const all = busy();
+    const notable = atSensitivity(all, "notable", "24h");
+    const major = atSensitivity(all, "major", "24h");
+    expect(notable.moves.length).toBeLessThanOrEqual(all.moves.length);
+    expect(major.moves.length).toBeLessThanOrEqual(notable.moves.length);
+  });
+
+  it("returns the identical object when nothing is filtered out", () => {
+    const all = busy();
+    expect(atSensitivity(all, "everything", "24h")).toBe(all);
+  });
+
+  /**
+   * The heaviest move is not always the one that clears a given bar — a believer
+   * crowd can rank below a capital move and still be the only survivor of a
+   * believer threshold. Reducing to `top` before filtering would lose it.
+   */
+  it("can promote a lighter move when the heavier one fails the bar", () => {
+    const c = change(
+      { believers: 6, capitalUsd: 100.6, priceUsd: 1.9 },
+      { believers: 1, capitalUsd: 100, priceUsd: 1.9 },
+    );
+    const all = classifyMomentum(c, ctx());
+    const strict = atSensitivity(all, "major", "24h");
+    if (strict.top) expect(strict.moves).toContain(strict.top);
+    expect(strict.moves.every((m) => m.metric !== "capital" || Math.abs(m.delta) >= 25)).toBe(true);
+  });
+
+  it("never strips a state a threshold cannot judge", () => {
+    const woke = classifyMomentum(
+      null,
+      ctx({ tradedInWindow: true, inactiveForSeconds: (MOMENTUM.quietHours + 1) * 3600 }),
+    );
+    expect(atSensitivity(woke, "major", "24h").lenses).toContain("waking");
   });
 });

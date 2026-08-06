@@ -303,6 +303,105 @@ export function changeFromBaseline(
 // ---------------------------------------------------------------------------
 
 /**
+ * The bar a move must clear. A POLICY, separate from the derivation.
+ *
+ * `MATERIAL` is one setting of it — the news bar, for interrupting a reader.
+ * "Is this moving?" is a different question asked by a reader who came looking,
+ * and it deserves a lower bar (see @/domain/feed/momentum). Both must come out
+ * of ONE derivation or the two answers drift apart, so the bar is passed in
+ * rather than read from a constant inside.
+ *
+ * This was very nearly shipped the other way: the momentum lens declared a 3%
+ * threshold while calling `materialMoves`, which had already dropped everything
+ * under 5% — a lower threshold that could never be reached, which is the exact
+ * shape of bug this codebase keeps producing.
+ */
+export interface MoveBar {
+  /** Percentage move that counts, net of currency drift. Price and capital. */
+  minPct: number;
+  /** Believers arriving on one side that counts. Counts carry no currency. */
+  minBelieverDelta: number;
+  /** Dollars that must actually move before a capital story is worth telling. */
+  minUsd: number;
+  /**
+   * Relative capital move, for the large market where `minUsd` is trivially
+   * cleared and the absolute floor stops discriminating.
+   */
+  minRelPct: number;
+  /** First money into a side below this is a rounding artefact, not an arrival. */
+  minOriginUsd: number;
+}
+
+/**
+ * HOW MUCH HAS TO HAPPEN BEFORE IT IS WORTH SAYING — one table, three rows.
+ *
+ * THE CONSOLIDATION THIS PERFORMS. Three modules independently answered the
+ * same three questions with different numbers:
+ *
+ *   question    feed-event.ts        market-change.ts     feed/momentum.ts
+ *   price       minPct 8             minPct 5             minPct 3
+ *   capital     minUsd 5, rel 15%    minOriginUsd 1       minCapitalUsd 1
+ *   believers   minAbs 3             minBelieverDelta 3   minBelieverDelta 1
+ *
+ * The last two were never really duplicates — one derivation, two policies,
+ * which is what `MoveBar` was introduced for. `FEED_TRIGGERS` was a genuine
+ * third implementation, and its price bar of 8% disagreed with the 5% the
+ * product had already settled on and the data already supported (5 of 180
+ * markets clear 5% over 24h). Exposing a user control on top of three copies
+ * would have let a reader move a setting and watch the feed half-respond.
+ *
+ * So the rows below ARE the three bars, named once. `MATERIAL` and the momentum
+ * lens are now names for rows in this table rather than tables of their own.
+ *
+ * THE ROWS ARE CALIBRATED, NOT INVENTED:
+ *   everything  today's momentum-lens bar — a reader who asked what is moving
+ *   notable     today's news bar, plus the capital floors feed-event already had
+ *   major       stricter still, for a reader who only wants the big ones
+ */
+export type Sensitivity = "everything" | "notable" | "major";
+
+export const SENSITIVITY_ORDER: Sensitivity[] = ["everything", "notable", "major"];
+
+export const BARS: Record<Sensitivity, MoveBar> = {
+  // One new believer is movement; a dollar is roughly the median side ($0.95).
+  everything: { minPct: 3, minBelieverDelta: 1, minUsd: 1, minRelPct: 5, minOriginUsd: 1 },
+  // Five percent is the line the product asked for. Three arrivals on one side
+  // is above the 90th percentile of side size. Five dollars is a little over
+  // twice the median market's average trade ($1.95).
+  notable: { minPct: 5, minBelieverDelta: 3, minUsd: 5, minRelPct: 15, minOriginUsd: 1 },
+  // Rare by construction: measured over 24h, one market cleared 10% on price.
+  major: { minPct: 10, minBelieverDelta: 5, minUsd: 25, minRelPct: 25, minOriginUsd: 5 },
+};
+
+/**
+ * The DEFAULT, and it is "everything" so that changing nothing changes nothing.
+ *
+ * A reader who never opens the control gets precisely the feed they had: the
+ * momentum lens admitted on the low bar, headlines earned on the next one up.
+ */
+export const DEFAULT_SENSITIVITY: Sensitivity = "everything";
+
+const asSensitivity = (v: unknown): Sensitivity =>
+  SENSITIVITY_ORDER.includes(v as Sensitivity) ? (v as Sensitivity) : DEFAULT_SENSITIVITY;
+
+/** What a reader has to clear to APPEAR at all. */
+export function barFor(s: unknown): MoveBar {
+  return BARS[asSensitivity(s)];
+}
+
+/**
+ * What a move has to clear to take the HEADLINE — one notch above admission.
+ *
+ * Two bars, always, and the gap between them is the whole editorial idea: being
+ * in the feed and being the sentence on the card are different achievements. At
+ * the strictest setting the two converge, because there is nothing above major.
+ */
+export function headlineBarFor(s: unknown): MoveBar {
+  const i = SENSITIVITY_ORDER.indexOf(asSensitivity(s));
+  return BARS[SENSITIVITY_ORDER[Math.min(i + 1, SENSITIVITY_ORDER.length - 1)]!];
+}
+
+/**
  * A move of five percent or more is news, and the feeds must say so.
  *
  * WHY IT IS GATED ON `rank` AND NOT ON THE NUMBER. Five percent of nothing is
@@ -351,21 +450,11 @@ export function changeFromBaseline(
  * Counts are exempt — a believer is not denominated in anything.
  */
 export const MATERIAL = {
-  /** The line the product asked for: five percent, where a percent is real. */
-  minPct: 5,
+  // The news bar IS a row in the table above — see BARS. Spread rather than
+  // restated, so there is no second place for these three numbers to live.
+  ...BARS.notable,
   /** Below this many observations the cross-section cannot measure a drift. */
   minDriftSamples: 8,
-  /**
-   * Believers move in whole people, so the absolute path needs its own bar.
-   * Three arrivals on one side inside a window is above the 90th percentile of
-   * side size on this platform — a real crowd forming, not a trade.
-   */
-  minBelieverDelta: 3,
-  /**
-   * An origin only counts once the arrival is worth naming. Below this the
-   * "first capital" is a rounding artefact, not an event.
-   */
-  minOriginUsd: 1,
   /**
    * Where the DOLLAR half of significance saturates — beyond this, more money
    * affected is not more news.
@@ -429,26 +518,6 @@ export function significance(relativeMove: number, usdAffected: number): number 
   const rel = Number.isFinite(relativeMove) ? Math.min(1, Math.max(0, relativeMove)) : 0;
   const usd = Number.isFinite(usdAffected) ? usdAffected : 0;
   return Math.sqrt(rel * saturate(usd, MATERIAL.significantUsd));
-}
-
-/**
- * The bar a move must clear. A POLICY, separate from the derivation.
- *
- * `MATERIAL` is one setting of it — the news bar, for interrupting a reader.
- * "Is this moving?" is a different question asked by a reader who came looking,
- * and it deserves a lower bar (see @/domain/feed/momentum). Both must come out
- * of ONE derivation or the two answers drift apart, so the bar is passed in
- * rather than read from a constant inside.
- *
- * This was very nearly shipped the other way: the momentum lens declared a 3%
- * threshold while calling `materialMoves`, which had already dropped everything
- * under 5% — a lower threshold that could never be reached, which is the exact
- * shape of bug this codebase keeps producing.
- */
-export interface MoveBar {
-  minPct: number;
-  minBelieverDelta: number;
-  minOriginUsd: number;
 }
 
 export type MoveKind = "rate" | "arrival" | "crowd";

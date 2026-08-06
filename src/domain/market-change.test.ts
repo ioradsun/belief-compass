@@ -1,9 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
+  BARS,
+  DEFAULT_SENSITIVITY,
   MATERIAL,
+  SENSITIVITY_ORDER,
+  barFor,
   changeFrom24hRow,
   changeFromBaseline,
   currencyDrift,
+  headlineBarFor,
   isRateMove,
   marketChange,
   materialMoves,
@@ -14,6 +19,7 @@ import {
   topMaterialMove,
   type SideChange,
 } from "./market-change";
+import { FEED_TRIGGERS } from "./feed-event";
 
 const now = {
   yes: { believers: 20, capitalUsd: 100, priceUsd: 2 },
@@ -453,6 +459,71 @@ describe("significance weighs the move against the money", () => {
       expect(Number.isFinite(w)).toBe(true);
       expect(w).toBeGreaterThanOrEqual(0);
       expect(w).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+/**
+ * The consolidation. Three modules used to answer the same three questions with
+ * different numbers — price 8 / 5 / 3 across feed-event, market-change and the
+ * momentum lens. These tests exist so a fourth copy cannot quietly appear.
+ */
+describe("one bar table, and every threshold is a row in it", () => {
+  it("orders the rows from most permissive to strictest, on every axis", () => {
+    const axes = ["minPct", "minBelieverDelta", "minUsd", "minRelPct"] as const;
+    for (const axis of axes) {
+      expect(BARS.everything[axis]).toBeLessThan(BARS.notable[axis]);
+      expect(BARS.notable[axis]).toBeLessThan(BARS.major[axis]);
+    }
+  });
+
+  it("makes the news bar a row rather than a table of its own", () => {
+    expect(MATERIAL.minPct).toBe(BARS.notable.minPct);
+    expect(MATERIAL.minBelieverDelta).toBe(BARS.notable.minBelieverDelta);
+    expect(MATERIAL.minOriginUsd).toBe(BARS.notable.minOriginUsd);
+  });
+
+  /**
+   * The activity feed's triggers were the third implementation, and its price
+   * bar of 8% disagreed with the 5% both the product and the data had settled
+   * on. It reads the table now.
+   */
+  it("makes the activity feed's triggers a view onto the same row", () => {
+    expect(FEED_TRIGGERS.price.minPct).toBe(BARS.notable.minPct);
+    expect(FEED_TRIGGERS.capital.minUsd).toBe(BARS.notable.minUsd);
+    expect(FEED_TRIGGERS.capital.minRelPct).toBe(BARS.notable.minRelPct);
+    expect(FEED_TRIGGERS.believers.minAbs).toBe(BARS.notable.minBelieverDelta);
+  });
+
+  /**
+   * Being IN the feed and being the SENTENCE on the card are different
+   * achievements, so the two bars must never be the same one — except at the
+   * strictest setting, where there is nothing above it to climb to.
+   */
+  it("keeps the headline bar above the admission bar", () => {
+    expect(headlineBarFor("everything").minPct).toBeGreaterThan(barFor("everything").minPct);
+    expect(headlineBarFor("notable").minPct).toBeGreaterThan(barFor("notable").minPct);
+    expect(headlineBarFor("major")).toEqual(barFor("major"));
+  });
+
+  /** A reader who never opens the control must get precisely today's feed. */
+  it("defaults to the behaviour that already shipped", () => {
+    expect(DEFAULT_SENSITIVITY).toBe("everything");
+    expect(headlineBarFor(DEFAULT_SENSITIVITY)).toEqual(BARS.notable);
+    expect(headlineBarFor(DEFAULT_SENSITIVITY).minPct).toBe(MATERIAL.minPct);
+  });
+
+  it("falls back to the default rather than throwing on anything unrecognised", () => {
+    for (const junk of [null, undefined, "", "loud", 7, {}]) {
+      expect(barFor(junk)).toEqual(BARS[DEFAULT_SENSITIVITY]);
+    }
+  });
+
+  it("raises every bar as the reader asks for less", () => {
+    const quieter = SENSITIVITY_ORDER.map((s) => barFor(s));
+    for (let i = 1; i < quieter.length; i += 1) {
+      expect(quieter[i]!.minPct).toBeGreaterThan(quieter[i - 1]!.minPct);
+      expect(quieter[i]!.minUsd).toBeGreaterThan(quieter[i - 1]!.minUsd);
     }
   });
 });

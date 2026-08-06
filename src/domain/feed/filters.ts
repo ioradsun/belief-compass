@@ -19,10 +19,16 @@
  */
 import { MOMENTUM_LENSES, MOMENTUM_LABELS, type MomentumLens } from "./momentum";
 
-export type FeedNetwork = "everyone" | "tribe" | "rivals" | "following";
+export type FeedNetwork = "everyone" | "mine" | "tribe" | "rivals" | "following";
 
 export const NETWORK_OPTIONS: { key: FeedNetwork; label: string; blurb: string }[] = [
   { key: "everyone", label: "Everyone", blurb: "The whole board." },
+  /**
+   * The one gap the review found in Focus. `viewer-stake` already knows what
+   * created and holding mean, and the feed row already carries the author and
+   * the viewer's positions — so this needed wiring, not building.
+   */
+  { key: "mine", label: "My Markets", blurb: "Questions you asked, or have money on." },
   { key: "tribe", label: "My Tribe", blurb: "Markets people you align with created or traded." },
   {
     key: "rivals",
@@ -166,6 +172,8 @@ export interface FilterCandidate {
   followedHere: number;
   /** Every momentum lens this market belongs in — see @/domain/feed/momentum. */
   momentum?: readonly MomentumLens[];
+  /** The viewer created this market or holds a side in it — see viewer-stake. */
+  mine?: boolean;
 }
 
 const topicOf = (category: string | null): string => {
@@ -186,6 +194,7 @@ export function matches(f: FeedFilters, c: FilterCandidate): boolean {
   if (n.networks.length === 0) return true;
   return n.networks.some((k) => {
     if (k === "everyone") return true;
+    if (k === "mine") return c.mine === true;
     if (k === "tribe") return c.tribeCount > 0 || c.tribeTouched === true;
     if (k === "rivals") return c.oppCount > 0 || c.oppTouched === true;
     return c.followedHere > 0;
