@@ -49,11 +49,28 @@ function isErrorLike(value: unknown): value is Error {
   return value instanceof Error;
 }
 
+// A client that navigates away/reloads mid-render aborts the socket. Node and
+// srvx surface that as AbortError / "aborted" / ECONNRESET. Nobody is left to
+// receive a response, so it is not an app error and must not be logged or
+// reported (it would show up as a blank-screen runtime error).
+export function isAbortError(value: unknown): boolean {
+  if (value == null || typeof value !== "object") return false;
+  const err = value as { name?: unknown; message?: unknown; code?: unknown };
+  return (
+    err.name === "AbortError" ||
+    err.message === "aborted" ||
+    err.message === "This operation was aborted" ||
+    err.code === "ECONNRESET" ||
+    err.code === "ABORT_ERR"
+  );
+}
+
 // Wrap console.error so errors logged by any layer — including h3's internal
 // unhandled-error logging, which this file cannot hook directly — are both
 // recorded for consumeLastCapturedError and expanded before serialization.
 const originalConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
+  if (args.some(isAbortError)) return;
   const expanded = args.map((arg) => {
     if (!isErrorLike(arg)) return arg;
     record(arg);
@@ -63,10 +80,16 @@ console.error = (...args: unknown[]) => {
 };
 
 if (typeof globalThis.addEventListener === "function") {
-  globalThis.addEventListener("error", (event) => record((event as ErrorEvent).error ?? event));
-  globalThis.addEventListener("unhandledrejection", (event) =>
-    record((event as PromiseRejectionEvent).reason),
-  );
+  globalThis.addEventListener("error", (event) => {
+    const error = (event as ErrorEvent).error ?? event;
+    if (isAbortError(error)) return;
+    record(error);
+  });
+  globalThis.addEventListener("unhandledrejection", (event) => {
+    const reason = (event as PromiseRejectionEvent).reason;
+    if (isAbortError(reason)) return;
+    record(reason);
+  });
 }
 
 export function consumeLastCapturedError(): unknown {

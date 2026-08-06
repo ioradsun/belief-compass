@@ -1,6 +1,7 @@
 import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
+import { isAbortError } from "./lib/error-capture";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 
 // NOTE: no Supabase bearer middleware here on purpose. This app authenticates
@@ -14,11 +15,6 @@ import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 // surfaces here as `Error: aborted` from node:_http_server. That is not an app
 // error: there is nobody left to send a response to, so don't log it and don't
 // render the error page (which would be reported as a blank-screen runtime error).
-const isAbortError = (error: unknown) =>
-  error instanceof Error &&
-  (error.name === "AbortError" ||
-    error.message === "aborted" ||
-    (error as { code?: string }).code === "ECONNRESET");
 
 const errorMiddleware = createMiddleware().server(async ({ next, request }) => {
   try {
