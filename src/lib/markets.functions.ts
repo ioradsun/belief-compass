@@ -16,6 +16,7 @@ import { accelerationFrom } from "@/domain/feed/score";
 import { swrCache } from "@/lib/server-cache";
 import { rankMarkets } from "@/domain/market-search";
 import { availableModes, type FeedMode } from "@/domain/feed/mode";
+import { loadWindowChanges, pricePct } from "@/lib/window-change.server";
 
 /** SSR/anon feed snapshots live this long before a background refresh. */
 const ANON_FEED_TTL_MS = 5_000;

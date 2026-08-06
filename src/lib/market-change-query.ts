@@ -24,7 +24,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketBaselines, type VolumeWindow } from "@/lib/markets.functions";
-import { changeFromBaseline, type ChangeNow, type MarketChange } from "@/domain/market-change";
+import { changeFromBaseline, nowFromRow, type MarketChange } from "@/domain/market-change";
 
 export const BASELINES_STALE_MS = 30_000;
 export const BASELINES_REFETCH_MS = 60_000;

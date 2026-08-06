@@ -16,8 +16,7 @@
  * (`changeFromBaseline` → `gain`). The stored percentages are no longer read
  * anywhere; the facts are stored once and the ratio is computed once.
  */
-import { changeFromBaseline, type MarketChange } from "@/domain/market-change";
-import { nowFromRow } from "@/lib/market-change-query";
+import { changeFromBaseline, nowFromRow, type MarketChange } from "@/domain/market-change";
 import type { WindowBaseline } from "@/lib/markets.functions";
 
 type RpcClient = {
