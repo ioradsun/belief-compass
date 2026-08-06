@@ -84,6 +84,7 @@ export function LiveTape({
   showTitles = true,
   emptyText = "Nothing yet.",
   skeletonRows = 8,
+  holdUpdates = false,
 }: {
   wallet?: string;
   /**
@@ -108,6 +109,11 @@ export function LiveTape({
   showTitles?: boolean;
   emptyText?: string;
   skeletonRows?: number;
+  /**
+   * X-style: never insert new rows on their own. The mixer keeps running, the
+   * arrivals queue, and the banner is the only thing that moves the list.
+   */
+  holdUpdates?: boolean;
 }) {
   const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
   const qc = useQueryClient();
@@ -210,7 +216,7 @@ export function LiveTape({
   // behaviour for a short inline block rather than a gap — reaching up to a
   // parent scroller to fake the signal would couple this component to whoever
   // happens to render it.
-  const gate = useTapeGate(rows, JSON.stringify(key));
+  const gate = useTapeGate(rows, JSON.stringify(key), holdUpdates);
 
   const { fresh, remember } = useStandingMemory();
   const standing = useMemo(
