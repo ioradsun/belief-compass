@@ -8,7 +8,7 @@
  *
  * Source of truth for address + chain: src/chain (same pin the indexer reads).
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { parseAbi } from "viem";
 import {
   useAccount,
@@ -20,6 +20,7 @@ import {
 import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
 import { CONVICTION_TAG } from "@/chain/attribution";
 import { minOut } from "@/domain/order";
+import { writePending, readPending, clearPending } from "@/lib/pending-trade";
 import { recordConvictionTrade } from "@/lib/conviction-trades.functions";
 
 export const TRADE_ABI = parseAbi([
@@ -120,7 +121,14 @@ type TradeMeta = { marketId: number; side: "YES" | "NO"; action: "BUY" | "SELL" 
 function tagConvictionTrade(txHash: string, wallet: string | undefined, meta: TradeMeta) {
   if (!wallet) return;
   void recordConvictionTrade({
-    data: { txHash, wallet, marketId: meta.marketId, side: meta.side, action: meta.action, chainId: CHAIN_ID },
+    data: {
+      txHash,
+      wallet,
+      marketId: meta.marketId,
+      side: meta.side,
+      action: meta.action,
+      chainId: CHAIN_ID,
+    },
   }).catch(() => {});
 }
 
@@ -128,6 +136,17 @@ export function useTrade() {
   const { address } = useAccount();
   const { writeContractAsync, isPending, error, reset } = useWriteContract();
   const [hash, setHash] = useState<`0x${string}` | undefined>(undefined);
+  /**
+   * SYNCHRONOUS RE-ENTRY LATCH.
+   *
+   * `submitting` below is React state, and React state updates are async: two
+   * taps inside one frame both read it as false and both reach
+   * `writeContractAsync`. The call sites guard on the same async flags, so the
+   * guard has the same hole. A ref is written and read in the same tick, which
+   * is the only thing that actually closes it — an on-chain duplicate is
+   * irreversible, so this cannot be left to a re-render.
+   */
+  const inFlight = useRef(false);
   // Own submit flag: some wallets (smart-wallet popups) never settle wagmi's
   // isPending if the window is dismissed, which would freeze the dock forever.
   const [submitting, setSubmitting] = useState(false);
@@ -135,11 +154,26 @@ export function useTrade() {
   const receipt = useWaitForTransactionReceipt({ hash, chainId: CHAIN_ID });
 
   async function send(fn: () => Promise<`0x${string}`>, meta: TradeMeta) {
+    if (inFlight.current) throw new Error("A transaction is already being submitted.");
+    inFlight.current = true;
     setLocalError(null);
     setSubmitting(true);
     try {
       const h = await fn();
       setHash(h);
+      // Persist BEFORE anything can unmount us. A refresh between the hash
+      // arriving and this line is exactly the window that produced duplicate
+      // signatures, so nothing may sit between them.
+      if (address) {
+        writePending({
+          hash: h,
+          wallet: address.toLowerCase(),
+          marketId: meta.marketId,
+          side: meta.side,
+          action: meta.action,
+          submittedAt: Date.now(),
+        });
+      }
       // Tag at submit time, before the block lands: /value requires the record to
       // predate the block, which is what stops a replayed public hash counting.
       tagConvictionTrade(h, address, meta);
@@ -156,6 +190,7 @@ export function useTrade() {
       throw e;
     } finally {
       setSubmitting(false);
+      inFlight.current = false;
     }
   }
 
@@ -190,6 +225,32 @@ export function useTrade() {
     );
   }
 
+  /**
+   * RESUME A TRANSACTION THE PAGE FORGOT.
+   *
+   * On mount, adopt any stored hash belonging to this wallet so
+   * `useWaitForTransactionReceipt` picks up where the previous page left off.
+   * This is the half of the fix that matters: persisting was pointless if
+   * nothing read it back.
+   */
+  useEffect(() => {
+    if (hash || !address) return;
+    const stored = readPending();
+    if (stored && stored.wallet === address.toLowerCase()) {
+      setHash(stored.hash as `0x${string}`);
+    }
+  }, [address, hash]);
+
+  /**
+   * The record is cleared ONLY when the chain has answered — success or
+   * revert. A timeout must never clear it: "we stopped waiting" and "it did not
+   * happen" are different facts, and conflating them is what puts a reader back
+   * in front of a button that can submit the same trade again.
+   */
+  useEffect(() => {
+    if (receipt.isSuccess || receipt.isError) clearPending();
+  }, [receipt.isSuccess, receipt.isError]);
+
   const combinedError = localError ?? error ?? receipt.error ?? null;
 
   return {
@@ -201,10 +262,17 @@ export function useTrade() {
     isSuccess: receipt.isSuccess,
     isError: !!combinedError || receipt.isError,
     error: combinedError,
+    /**
+     * Dismiss a transaction the reader has decided about. Clears the stored
+     * record too — this is the deliberate act that resolves an `unresolved`
+     * one, and the only thing that should.
+     */
     reset: () => {
       setHash(undefined);
       setLocalError(null);
       setSubmitting(false);
+      inFlight.current = false;
+      clearPending();
       reset();
     },
   };
