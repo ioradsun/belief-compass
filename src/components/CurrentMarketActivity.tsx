@@ -112,17 +112,23 @@ export function CurrentMarketActivity({
   const rows = live?.rows ?? [];
   const hasActivity = rows.length > 0;
   const latest = rows[0]?.text ?? "";
+  const why = reason?.trim() ? reason.trim() : null;
+  // The card has something to say if EITHER half is true. A quiet market the
+  // reader was sent to for a reason still deserves its reason.
+  const hasSomething = hasActivity || Boolean(why);
 
   // No count is shown: the raw row count and what the expanded feed renders
   // (grouped beats) are different numbers, and a number that disagrees with the
   // thing it opens is worse than no number at all.
-  const toggle = () => setOpen((v) => !v);
+  const toggle = () => {
+    if (hasActivity) setOpen((v) => !v);
+  };
 
   return (
     // NOT `return null` when quiet. The card collapses to zero height instead,
     // so a market with nothing to say gives its space back smoothly and takes
     // it back the same way when the first event lands.
-    <Collapsible open={hasActivity} probe="market-activity" className={embedded ? "" : "mb-3"}>
+    <Collapsible open={hasSomething} probe="market-activity" className={embedded ? "" : "mb-3"}>
       <div
         className={embedded ? "overflow-hidden" : "overflow-hidden rounded-[12px]"}
         style={
@@ -143,25 +149,39 @@ export function CurrentMarketActivity({
           <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
             In this market
           </span>
-          <span
-            className="ml-auto text-[11px] text-[var(--text-muted)] transition-transform duration-200 ease-out motion-reduce:transition-none"
-            style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
-            aria-hidden
-          >
-            ▾
-          </span>
+          {hasActivity && (
+            <span
+              className="ml-auto text-[11px] text-[var(--text-muted)] transition-transform duration-200 ease-out motion-reduce:transition-none"
+              style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+              aria-hidden
+            >
+              ▾
+            </span>
+          )}
         </button>
 
-        {/* The latest beat, in a slot that is always two lines tall — so the
-          text can change under a reader without the card resizing. */}
-        <button type="button" onClick={toggle} className="block w-full px-3 pb-2 pt-0.5 text-left">
-          <span
-            className="line-clamp-2 break-words text-[13px] leading-snug text-[var(--text-secondary)]"
-            style={{ minHeight: BEAT_MIN_H }}
-          >
-            {latest}
-          </span>
-        </button>
+        {/* ONE STORY, IN THE READER'S ORDER.
+          First WHY this market reached them — the discovery sentence, in the
+          discovery purple it carries everywhere else. Then WHAT is happening in
+          it right now. Two sentences about the same market, stacked, instead of
+          two cards in two columns saying half of it each. */}
+        <div className="px-3 pb-2 pt-0.5">
+          <WhyThis reason={why} lead className="mb-0.5 whitespace-normal" />
+          {/* The latest beat, in a slot that is always two lines tall — so the
+            text can change under a reader without the card resizing. Only
+            reserved when there IS a beat; a quiet market shouldn't hold air. */}
+          {hasActivity && (
+            <button type="button" onClick={toggle} className="block w-full text-left">
+              <span
+                className="line-clamp-2 break-words text-[13px] leading-snug text-[var(--text-secondary)]"
+                style={{ minHeight: BEAT_MIN_H }}
+              >
+                {latest}
+              </span>
+            </button>
+          )}
+        </div>
+
 
         {/* EXPANDS DOWNWARD, IN PLACE. Same primitive as the card itself, so
           opening is the same continuous movement as arriving — and the market
