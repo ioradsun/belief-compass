@@ -676,6 +676,10 @@ function Feed() {
     if (pinnedId == null && selectedMarket == null && firstId != null) setPinnedId(firstId);
   }, [pinnedId, selectedMarket, firstId]);
   const activeMarket = selectedMarket ?? pinnedId ?? firstId;
+  if (typeof window !== "undefined")
+    ((window as unknown as { __dbg: string[] }).__dbg ??= []).push(
+      `active sel=${selectedMarket} pin=${pinnedId} first=${firstId} active=${activeMarket}`,
+    );
 
   const foundIdx =
     activeMarket == null ? -1 : marketRows.findIndex((r) => Number(r.onchain_id) === activeMarket);
