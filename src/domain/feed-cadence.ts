@@ -278,16 +278,47 @@ export function familyMix(events: MixCandidate[]): Record<EventFamily, number> {
 }
 
 /**
- * Which family an event belongs to, from the vocabulary that already exists.
- * `personal` is the viewer-relationship flag the renderer already sets, so a
- * relationship story is recognised without a second event ever being written.
+ * Which family an event belongs to.
+ *
+ * TWO BUGS LIVED HERE, and between them they emptied the two most interesting
+ * families in the feed.
+ *
+ * 1. THE FAMILY WAS READ FROM THE EVENT KIND. Every conviction celebration the
+ *    grammar writes — a first believer, someone doubling down, someone changing
+ *    their mind after months — arrives as a `trade`, so all of them fell to
+ *    `live_action`. `FAMILY_TARGET.conviction_celebration` reserves 18% of a
+ *    healthy feed and NOTHING COULD ENTER IT. Worse, a celebration sitting in
+ *    `live_action` is penalised by the adjacency rule for following an ordinary
+ *    buy, so the mixer pushed down exactly the rows it should have lifted. That
+ *    is the "Sarah backed… Mike backed… Emily backed…" feed.
+ *
+ *    The signature already accepted `category` and the call site never passed
+ *    it. The classification input existed and was discarded.
+ *
+ * 2. `personal` OVERRODE EVERYTHING. A Tribe member being the first believer in
+ *    a market was a `relationship_story` competing for a 7.5% slot, and the fact
+ *    that it was a first believer was lost. Personalization and story type are
+ *    two different axes; collapsing them meant the rows a reader cares about
+ *    most were the ones the mixer knew least about.
+ *
+ *    Who an event is about is already carried — and already bounded — by the
+ *    DISCOVERY lift, which is the mechanism built for it. `relationship_story`
+ *    now means what its name says: a row whose subject IS the relationship,
+ *    with no stronger story of its own.
  */
 export function familyOf(input: {
   kind: string;
+  /** The composed story's category (src/domain/story#LiveCategory). */
   category?: string | null;
+  /**
+   * True when the row's classified story is a celebration — a moment rather
+   * than a transaction. Set from `isCelebration` (src/domain/conviction-event)
+   * for trades, and from the story-event type for market-wide rows.
+   */
+  celebration?: boolean | null;
   personal?: boolean | null;
 }): EventFamily {
-  if (input.personal) return "relationship_story";
+  if (input.celebration) return "conviction_celebration";
   switch (input.kind) {
     case "conviction_cohort":
       return "collective_story";
@@ -295,7 +326,14 @@ export function familyOf(input: {
     case "believer_milestone":
     case "tribe_doubled":
       return "market_transition";
+    case "discovery_moment":
+    case "standing_fact":
+      return "relationship_story";
     default:
-      return "live_action";
+      // A market opening, or a milestone crossed, is a moment however it was
+      // recorded — the category says so even when the kind cannot.
+      if (input.category === "fresh_market" || input.category === "milestone")
+        return "conviction_celebration";
+      return input.personal ? "relationship_story" : "live_action";
   }
 }

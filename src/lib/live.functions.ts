@@ -24,7 +24,12 @@ import {
   type LiveFace,
   type LiveRow,
 } from "@/lib/live-tape";
-import { tellConvictionStory, type ConvictionAction } from "@/domain/conviction-event";
+import {
+  classifyConvictionEvent,
+  isCelebration,
+  tellConvictionStory,
+  type ConvictionAction,
+} from "@/domain/conviction-event";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
 import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
 import {
@@ -69,6 +74,24 @@ const BELIEF_ACTIONS = new Set(["enter", "add", "reduce", "exit", "flip", "round
 function beliefAction(a: ConvictionAction | undefined) {
   return a && BELIEF_ACTIONS.has(a) ? (a as "enter" | "add" | "reduce" | "exit" | "flip") : null;
 }
+
+/**
+ * Market-wide story types that are moments rather than reports.
+ *
+ * The story engine (src/domain/story-event) already names what it noticed and
+ * the emitter persists that name in the payload. A side doubling, a crowd
+ * crossing a round number, a Tribe forming — these are the community growing,
+ * and they belong beside the personal celebrations rather than beside a decline.
+ * `losing_conviction` and `material_move` deliberately are not here: a fall and
+ * a five-percent move are news, not causes for celebration.
+ */
+const CELEBRATION_TRANSITIONS = new Set([
+  "side_doubled",
+  "believer_milestone",
+  "tribe_forming",
+  "participation_broadening",
+  "market_dividing",
+]);
 
 const LIVE_KINDS = [
   "trade",
@@ -451,6 +474,8 @@ export const listLiveEvents = createServerFn({ method: "GET" })
      * score that let it through can never disagree about what happened.
      */
     const actionById = new Map<string, ConvictionAction>();
+    /** Which rows the grammar classified as a moment rather than a transaction. */
+    const celebrationById = new Map<string, boolean>();
 
     for (const r of live) {
       const w = r.wallet?.toLowerCase();
@@ -621,7 +646,11 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       const sideBelievers =
         r.side === "YES" ? market?.believersYes : r.side === "NO" ? market?.believersNo : null;
 
-      r.story = tellConvictionStory({
+      // ONE CLASSIFICATION, USED TWICE. The grammar already decides whether this
+      // is a moment or a transaction; the mixer needed to know and was never
+      // told, so every celebration competed as an ordinary buy. See
+      // `familyOf` (src/domain/feed-cadence) for what that cost.
+      const convictionEvent = {
         action,
         side: r.side,
         actor,
@@ -639,7 +668,9 @@ export const listLiveEvents = createServerFn({ method: "GET" })
               ? Number((r.payload as { threshold?: number }).threshold ?? 0)
               : null,
         },
-      });
+      };
+      celebrationById.set(r.id, isCelebration(classifyConvictionEvent(convictionEvent)));
+      r.story = tellConvictionStory(convictionEvent);
       r.text = flattenStory(r.story);
     }
 
@@ -836,7 +867,19 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       if (r.kind === "discovery_moment") continue; // already carries its own inputs
       r.mix = {
         id: r.id,
-        family: familyOf({ kind: r.kind, personal: r.story.personal }),
+        family: familyOf({
+          kind: r.kind,
+          category: r.story.category,
+          // A market-wide story names its own type in the payload; a trade's
+          // comes from the grammar above. Either way the mixer now learns WHAT
+          // happened, not merely which table the row came from.
+          celebration:
+            celebrationById.get(r.id) ??
+            CELEBRATION_TRANSITIONS.has(
+              String((r.payload as { type?: string } | null)?.type ?? ""),
+            ),
+          personal: r.story.personal,
+        }),
         discovery: discovery.get(r.id) ?? 0,
         // Emitted (our own emitters persist it) → derived (scored just above)
         // → fallback, which is now only reachable by a legacy or unknown kind.

@@ -4,6 +4,7 @@ import {
   familyMix,
   familyOf,
   CADENCE,
+  FAMILY_TARGET,
   type MixCandidate,
   type EventFamily,
 } from "./feed-cadence";
@@ -294,7 +295,38 @@ describe("families come from the vocabulary that already exists", () => {
     for (const [input, expected] of cases) expect(familyOf(input)).toBe(expected);
   });
 
-  it("a viewer relationship makes any event a relationship story", () => {
-    expect(familyOf({ kind: "conviction_cohort", personal: true })).toBe("relationship_story");
+  /**
+   * Personalization is no longer a family. A Tribe member's first-believer row
+   * used to become a `relationship_story` — competing for a 7.5% slot, with the
+   * fact that it was a FIRST BELIEVER discarded. Who a row is about is carried
+   * by the discovery lift, which is the bounded mechanism built for it; WHAT
+   * happened decides the family.
+   */
+  it("does not let a relationship overwrite a stronger story", () => {
+    expect(familyOf({ kind: "conviction_cohort", personal: true })).toBe("collective_story");
+    expect(familyOf({ kind: "trade", celebration: true, personal: true })).toBe(
+      "conviction_celebration",
+    );
+    expect(familyOf({ kind: "market_transition", personal: true })).toBe("market_transition");
+  });
+
+  it("still files a plain personal row as a relationship story", () => {
+    expect(familyOf({ kind: "trade", personal: true })).toBe("relationship_story");
+    expect(familyOf({ kind: "discovery_moment" })).toBe("relationship_story");
+  });
+
+  /**
+   * The 18% the mixer reserves for celebrations was unreachable: every one of
+   * them arrives as a `trade`, and the family was read from the kind.
+   */
+  it("lets a celebration reach the family that was reserved for it", () => {
+    expect(familyOf({ kind: "trade", celebration: true })).toBe("conviction_celebration");
+    expect(familyOf({ kind: "trade" })).toBe("live_action");
+    expect(FAMILY_TARGET.conviction_celebration).toBeGreaterThan(0);
+  });
+
+  it("treats a market opening and a milestone as moments, whatever the kind", () => {
+    expect(familyOf({ kind: "trade", category: "fresh_market" })).toBe("conviction_celebration");
+    expect(familyOf({ kind: "trade", category: "milestone" })).toBe("conviction_celebration");
   });
 });
