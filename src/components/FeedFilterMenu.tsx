@@ -19,6 +19,8 @@ import {
   isAll,
   toggleNetwork,
   toggleTopic,
+  toggleMomentum,
+  MOMENTUM_OPTIONS,
   type FeedFilters,
   type FeedNetwork,
 } from "@/domain/feed/filters";
@@ -123,6 +125,21 @@ export function FeedFilterMenu({
               ))}
             </>
           )}
+
+          {/* MOMENTUM — "what is changing", the question the grammar could not
+              be asked before. Above Topics because it is the more perishable
+              answer: a topic is true forever, a move is true today. */}
+          <p className="mt-2 px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            Momentum
+          </p>
+          {MOMENTUM_OPTIONS.map((m) => (
+            <Row
+              key={m.key}
+              label={m.label}
+              checked={(filters.momentum ?? []).includes(m.key)}
+              onClick={() => onChange(toggleMomentum(filters, m.key))}
+            />
+          ))}
 
           <p className="mt-2 px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Topics

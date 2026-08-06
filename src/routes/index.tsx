@@ -128,6 +128,7 @@ const feedQO = (
           mode: orderingMode(filters),
           networks: filters.networks,
           topics: filters.topics,
+          momentum: filters.momentum ?? [],
           originMarketId,
           ...feedSession(),
         },
@@ -149,6 +150,7 @@ const feedQO = (
             mode: orderingMode(filters),
             networks: filters.networks,
             topics: filters.topics,
+            momentum: filters.momentum ?? [],
             originMarketId,
           },
         });
@@ -591,10 +593,17 @@ function Feed() {
   // Every card carries the reason the SERVER surfaced it (personal fact first,
   // global classification otherwise). The Feed List shows it under the question:
   // this map was built and read by nothing for as long as it has existed.
-  const reasonByMarket: Record<number, string> = {};
+  // Accumulated, like `knownRowsRef` below and for the same reason: a market
+  // that has left the running order is still readable, and its reason has to
+  // outlive the response that carried it or the centre panel loses the
+  // explanation the moment a re-rank drops the market from the queue.
+  const reasonsRef = useRef<Record<number, string>>({});
   for (const it of items) {
-    if (it.kind === "market" && it.primaryReason) reasonByMarket[it.onchainId] = it.primaryReason;
+    if (it.kind === "market" && it.primaryReason) {
+      reasonsRef.current[it.onchainId] = it.primaryReason;
+    }
   }
+  const reasonByMarket = reasonsRef.current;
 
   // ── The running order ──────────────────────────────────────────────────────
   // The queue owns what the reader SEES, which is not the same as the latest
@@ -713,7 +722,6 @@ function Feed() {
    */
   const availableNetworks: FeedNetwork[] = ["everyone", "tribe", "rivals", "following"];
 
-
   // Refresh the discovery feed: re-fetch (newly created markets may appear) and
   // leave the caught-up state. The held order is adopted here too — asking for a
   // refresh is the clearest possible statement that a rearrangement is welcome.
@@ -807,7 +815,6 @@ function Feed() {
   // Same for the freshly-fetched solo row: available a frame before it is
   // promoted into the scene, and already the truth about that market's title.
   if (liveRow) knownRowsRef.current[Number(liveRow.onchain_id)] = liveRow;
-
 
   // "The House has an idea" — the SERVER decided whether an idea belongs in
   // this sequence and at which slot. The hook only owns the funnel calls.
@@ -1124,6 +1131,7 @@ function Feed() {
                     mobileCaseOpen={mobileCaseActive}
                     onToggleCase={toggleCase}
                     onSelectPerson={selectPerson}
+                    reason={reasonByMarket[Number(currentRow.onchain_id)] ?? null}
                   />
                 )}
               </MarketScene>

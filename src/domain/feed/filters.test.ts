@@ -8,8 +8,12 @@ import {
   orderingMode,
   toggleNetwork,
   toggleTopic,
+  filterKey,
+  MOMENTUM_OPTIONS,
+  type FeedFilters,
   type FilterCandidate,
 } from "./filters";
+import { MOMENTUM_LENSES } from "./momentum";
 
 const m = (o: Partial<FilterCandidate> = {}): FilterCandidate => ({
   category: "ai",
@@ -106,5 +110,68 @@ describe("normalisation", () => {
 
   it("toggling twice returns to All", () => {
     expect(isAll(toggleTopic(toggleTopic(ALL, "ai"), "ai"))).toBe(true);
+  });
+});
+
+describe("momentum is the third dimension", () => {
+  const market = (o: Partial<FilterCandidate> = {}): FilterCandidate => ({
+    category: "crypto",
+    tribeCount: 0,
+    oppCount: 0,
+    followedHere: 0,
+    ...o,
+  });
+
+  it("ORs within the group", () => {
+    const f = normalize({ networks: [], topics: [], momentum: ["gaining", "waking"] });
+    expect(matches(f, market({ momentum: ["waking"] }))).toBe(true);
+    expect(matches(f, market({ momentum: ["gaining", "moving"] }))).toBe(true);
+    expect(matches(f, market({ momentum: ["dropping"] }))).toBe(false);
+    expect(matches(f, market({ momentum: [] }))).toBe(false);
+  });
+
+  it("ANDs across the groups", () => {
+    const f = normalize({ networks: ["tribe"], topics: ["ai"], momentum: ["moving"] });
+    const hit = market({ category: "ai", tribeCount: 1, momentum: ["moving"] });
+    expect(matches(f, hit)).toBe(true);
+    // Each group, failed one at a time.
+    expect(matches(f, { ...hit, category: "sports" })).toBe(false);
+    expect(matches(f, { ...hit, tribeCount: 0 })).toBe(false);
+    expect(matches(f, { ...hit, momentum: ["waking"] })).toBe(false);
+  });
+
+  it("says nothing when nothing is chosen", () => {
+    const f = normalize({ networks: [], topics: [], momentum: [] });
+    expect(matches(f, market({ momentum: [] }))).toBe(true);
+    expect(isAll(f)).toBe(true);
+  });
+
+  /**
+   * A saved link or a client that predates this dimension sends two groups. It
+   * must parse into a valid selection rather than throwing or silently matching
+   * nothing.
+   */
+  it("tolerates a selection made before momentum existed", () => {
+    const old = { networks: ["tribe"], topics: ["ai"] } as FeedFilters;
+    expect(normalize(old).momentum).toEqual([]);
+    expect(isAll({ networks: [], topics: [] } as FeedFilters)).toBe(true);
+    expect(matches(old, market({ category: "ai", tribeCount: 1 }))).toBe(true);
+  });
+
+  it("keeps the cache key distinct per momentum selection", () => {
+    const a = normalize({ networks: [], topics: [], momentum: ["gaining"] });
+    const b = normalize({ networks: [], topics: [], momentum: ["dropping"] });
+    expect(filterKey(a)).not.toBe(filterKey(b));
+    expect(filterKey(a)).toBe(filterKey({ ...a }));
+  });
+
+  it("offers no lens the classifier cannot produce", () => {
+    for (const o of MOMENTUM_OPTIONS) expect(MOMENTUM_LENSES).toContain(o.key);
+    expect(MOMENTUM_OPTIONS).toHaveLength(MOMENTUM_LENSES.length);
+  });
+
+  it("names every chosen lens in the title", () => {
+    const f = normalize({ networks: [], topics: [], momentum: ["waking"] });
+    expect(filterTitle(f)).toContain("Waking up");
   });
 });

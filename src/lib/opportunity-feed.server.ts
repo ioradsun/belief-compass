@@ -30,6 +30,7 @@ import {
   type FeedFilters,
   type FeedNetwork,
 } from "@/domain/feed/filters";
+import type { MomentumLens } from "@/domain/feed/momentum";
 import { shouldInsertSuggestion } from "@/domain/market-suggestion";
 import { listFeed, type VolumeWindow } from "@/lib/markets.functions";
 import {
@@ -68,6 +69,8 @@ export interface OpportunityFeedInput extends FeedSessionState {
    */
   networks?: string[];
   topics?: string[];
+  /** Momentum lenses — see @/domain/feed/momentum. Empty means "any". */
+  momentum?: string[];
   /**
    * The market the viewer arrived at from OUTSIDE the running order — a search
    * result, a Live row, one of their positions. Its people become a weak signal
@@ -258,6 +261,7 @@ export async function buildOpportunityFeed(
   const filters: FeedFilters = normalizeFilters({
     networks: (input.networks ?? []) as FeedNetwork[],
     topics: input.topics ?? [],
+    momentum: (input.momentum ?? []) as MomentumLens[],
   });
   // A single network chosen IS a perspective, so the Tribe / Rivals rankings
   // still apply; everything else keeps the blend the ranker produced.
@@ -295,6 +299,7 @@ export async function buildOpportunityFeed(
       followedHere: number;
       tribeTouched: boolean;
       oppTouched: boolean;
+      momentum: MomentumLens[];
     }
   >();
 
@@ -337,6 +342,9 @@ export async function buildOpportunityFeed(
       // actually asks about (see @/domain/feed/filters).
       tribeTouched: Boolean(r["tribe_touched"]),
       oppTouched: Boolean(r["opp_touched"]),
+      // Which momentum lenses this market belongs in, from the shared,
+      // drift-corrected classifier — never re-derived here.
+      momentum: ((r["momentum"] ?? null) as { lenses?: MomentumLens[] } | null)?.lenses ?? [],
     });
     const ai = aiOf(analyses.get(s.onchainId));
     const state: ViewerMarketState | undefined = signals.states.get(s.onchainId);

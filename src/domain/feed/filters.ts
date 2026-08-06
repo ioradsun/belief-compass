@@ -17,13 +17,18 @@
  * Pure and zero-IO: the server filters with it, the client titles with it, and
  * they can never disagree about what a selection means.
  */
+import { MOMENTUM_LENSES, MOMENTUM_LABELS, type MomentumLens } from "./momentum";
 
 export type FeedNetwork = "everyone" | "tribe" | "rivals" | "following";
 
 export const NETWORK_OPTIONS: { key: FeedNetwork; label: string; blurb: string }[] = [
   { key: "everyone", label: "Everyone", blurb: "The whole board." },
   { key: "tribe", label: "My Tribe", blurb: "Markets people you align with created or traded." },
-  { key: "rivals", label: "Rivals", blurb: "Markets people who disagree with you created or traded." },
+  {
+    key: "rivals",
+    label: "Rivals",
+    blurb: "Markets people who disagree with you created or traded.",
+  },
   { key: "following", label: "Following", blurb: "People you chose to follow." },
 ];
 
@@ -38,15 +43,39 @@ export const TOPIC_OPTIONS: { key: string; label: string }[] = [
   { key: "other", label: "Other" },
 ];
 
+/**
+ * MOMENTUM — the third dimension, and the one the grammar was missing.
+ *
+ * People and topics answer "who" and "what about". Neither can answer "what is
+ * CHANGING", which is the question a reader asks most often and the one the feed
+ * had no way to be asked. Same grammar as the other two: OR within, AND across,
+ * so "Crypto + Moving now + My Tribe" is one selection rather than three
+ * unrelated modes.
+ *
+ * The keys are `MomentumLens` values — this list exists so the filter never
+ * offers a lens the classifier cannot produce.
+ */
+export const MOMENTUM_OPTIONS: { key: MomentumLens; label: string }[] = MOMENTUM_LENSES.map(
+  (key) => ({ key, label: MOMENTUM_LABELS[key] }),
+);
+
 const KNOWN_TOPICS = new Set(TOPIC_OPTIONS.map((t) => t.key).filter((k) => k !== "other"));
 const KNOWN_NETWORKS = new Set<string>(NETWORK_OPTIONS.map((n) => n.key));
+const KNOWN_MOMENTUM = new Set<string>(MOMENTUM_LENSES);
 
 export interface FeedFilters {
   networks: FeedNetwork[];
   topics: string[];
+  /**
+   * Momentum lenses. Empty (or absent) means "however it is moving, or not at
+   * all". OPTIONAL so a saved link or a client that predates this dimension
+   * still parses into a valid selection instead of failing — `normalize` always
+   * returns it populated.
+   */
+  momentum?: MomentumLens[];
 }
 
-export const ALL: FeedFilters = { networks: [], topics: [] };
+export const ALL: FeedFilters = { networks: [], topics: [], momentum: [] };
 
 /**
  * Canonical form. "Everyone" alone says nothing the empty set does not already
@@ -58,14 +87,19 @@ export function normalize(f: FeedFilters): FeedFilters {
     (k) => f.networks.includes(k) && KNOWN_NETWORKS.has(k),
   );
   const topics = TOPIC_OPTIONS.map((t) => t.key).filter((k) => f.topics.includes(k));
+  // Tolerate a caller that predates the momentum dimension rather than throwing:
+  // a saved link or an older client sends two groups, and the third is empty.
+  const momentum = MOMENTUM_LENSES.filter(
+    (k) => (f.momentum ?? []).includes(k) && KNOWN_MOMENTUM.has(k),
+  );
   const collapsed =
     networks.length === 1 && networks[0] === "everyone" ? ([] as FeedNetwork[]) : networks;
-  return { networks: collapsed.includes("everyone") ? collapsed : collapsed, topics };
+  return { networks: collapsed, topics, momentum };
 }
 
 export function isAll(f: FeedFilters): boolean {
   const n = normalize(f);
-  return n.networks.length === 0 && n.topics.length === 0;
+  return n.networks.length === 0 && n.topics.length === 0 && (n.momentum ?? []).length === 0;
 }
 
 /** Flip one option on or off, always returning a canonical selection. */
@@ -82,10 +116,17 @@ export function toggleTopic(f: FeedFilters, key: string): FeedFilters {
   return normalize({ ...f, topics: has ? f.topics.filter((t) => t !== key) : [...f.topics, key] });
 }
 
+export function toggleMomentum(f: FeedFilters, key: MomentumLens): FeedFilters {
+  const cur = f.momentum ?? [];
+  const has = cur.includes(key);
+  return normalize({ ...f, momentum: has ? cur.filter((m) => m !== key) : [...cur, key] });
+}
+
 const labelOf = (f: FeedFilters): string[] => {
   const n = normalize(f);
   return [
     ...n.topics.map((t) => TOPIC_OPTIONS.find((o) => o.key === t)?.label ?? t),
+    ...(n.momentum ?? []).map((m) => MOMENTUM_LABELS[m]),
     ...n.networks
       .filter((k) => k !== "everyone")
       .map((k) => NETWORK_OPTIONS.find((o) => o.key === k)?.label ?? k),
@@ -123,6 +164,8 @@ export interface FilterCandidate {
   oppTouched?: boolean;
   /** Followed people connected here (creator or holder). */
   followedHere: number;
+  /** Every momentum lens this market belongs in — see @/domain/feed/momentum. */
+  momentum?: readonly MomentumLens[];
 }
 
 const topicOf = (category: string | null): string => {
@@ -134,6 +177,12 @@ const topicOf = (category: string | null): string => {
 export function matches(f: FeedFilters, c: FilterCandidate): boolean {
   const n = normalize(f);
   if (n.topics.length > 0 && !n.topics.includes(topicOf(c.category))) return false;
+  // OR within the group: "Biggest gains + Waking up" is either, not both.
+  const wantMomentum = n.momentum ?? [];
+  if (wantMomentum.length > 0) {
+    const mine = c.momentum ?? [];
+    if (!wantMomentum.some((m) => mine.includes(m))) return false;
+  }
   if (n.networks.length === 0) return true;
   return n.networks.some((k) => {
     if (k === "everyone") return true;
@@ -157,5 +206,5 @@ export function orderingMode(f: FeedFilters): "for_you" | "tribe" | "rivals" {
 /** Stable key for caching — the same selection must always produce the same key. */
 export function filterKey(f: FeedFilters): string {
   const n = normalize(f);
-  return `${n.networks.join("|")}#${n.topics.join("|")}`;
+  return `${n.networks.join("|")}#${n.topics.join("|")}#${(n.momentum ?? []).join("|")}`;
 }
