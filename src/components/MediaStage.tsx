@@ -167,7 +167,7 @@ export function MediaStage({
           body instead of pushing it past the bottom of the column. */}
         <div
           className="flex h-full w-full min-w-full shrink-0 flex-col overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]"
-          style={{ gap: "var(--deck-gap, 12px)" }}
+          style={{ gap: "var(--deck-gap, 12px)", justifyContent: "safe center" }}
         >
           {/* The hint's row is reserved whether or not this market has evidence,
             so the body below it starts at the same y on every market. */}
