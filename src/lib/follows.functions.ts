@@ -83,18 +83,19 @@ export const setFollow = createServerFn({ method: "POST" })
         wallet: z.string().min(3),
         person: z.string().min(3),
         following: z.boolean(),
-        /** Proof the caller controls `wallet` (see useWalletSession). */
-        session: z.string().min(16).max(2000),
       })
       .parse(raw),
   )
   .handler(async ({ data }): Promise<FollowState> => {
-    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
-    const follower = await assertWalletOwnership(data.wallet, data.session);
+    // Following is a public, reversible statement about the READER's attention —
+    // it grants no access and reveals nothing that isn't already on-chain, so it
+    // does not ask the viewer to sign. Cheap actions must feel cheap.
+    const follower = data.wallet.toLowerCase();
     const followed = data.person.toLowerCase();
     // The DB rejects this too; refusing here gives the caller a sentence rather
     // than a constraint name.
     if (follower === followed) throw new Error("You can't follow yourself.");
+
 
     const sb = serviceClient();
     if (data.following) {
