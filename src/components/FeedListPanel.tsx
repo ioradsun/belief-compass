@@ -126,9 +126,7 @@ export function FeedListPanel({
     rowRefs.current.get(activeId)?.scrollIntoView({ block: "nearest" });
   }, [activeId]);
 
-  const active = activeId == null ? null : (entries.find((e) => e.onchainId === activeId) ?? null);
   const upcoming = entries.filter((e) => e.onchainId !== activeId);
-  const activeFacts = activeId == null ? null : factsOf(rows[activeId], nowMs);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -142,8 +140,7 @@ export function FeedListPanel({
         />
       </div>
 
-      {/* NOW READING — pinned, always visible, unmistakably the current one. */}
-      {activeId != null && (
+
         <div
           className="mb-3 rounded-[12px] px-3 py-2.5"
           style={{
