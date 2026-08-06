@@ -25,12 +25,12 @@ import { ORIGIN } from "@/domain/feed/config";
  * origin, so the ordinary case of reading down the feed costs nothing.
  */
 export async function loadOriginOverlap(
-  sb: ReturnType<typeof serviceClient>,
+  sb: ReturnType<typeof serviceClient> | null,
   originMarketId: number | null,
   marketIds: number[],
 ): Promise<Map<number, number>> {
   const out = new Map<number, number>();
-  if (originMarketId == null || marketIds.length === 0) return out;
+  if (!sb || originMarketId == null || marketIds.length === 0) return out;
 
   const { data: theirs } = await sb
     .from("wallet_beliefs")
