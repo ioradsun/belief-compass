@@ -5,6 +5,8 @@ import {
   pendingCount,
   arrivalLabel,
   unseen,
+  partitionArrivals,
+  newestAt,
   TAPE,
   type Arrival,
 } from "./tape-arrivals";
