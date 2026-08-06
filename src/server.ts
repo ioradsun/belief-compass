@@ -1,6 +1,6 @@
 import "./lib/error-capture";
 
-import { consumeLastCapturedError } from "./lib/error-capture";
+import { consumeLastCapturedError, isAbortError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
 type ServerEntry = {
@@ -51,6 +51,9 @@ export default {
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
+      if (isAbortError(error) || request.signal.aborted) {
+        return new Response(null, { status: 499 });
+      }
       console.error(error);
       return new Response(renderErrorPage(), {
         status: 500,

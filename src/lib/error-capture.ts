@@ -98,11 +98,27 @@ if (typeof globalThis.addEventListener === "function") {
 // navigates away mid-render doesn't get reported as a runtime error.
 const nodeProcess = (globalThis as { process?: NodeJS.Process }).process;
 if (nodeProcess && typeof nodeProcess.on === "function") {
-  nodeProcess.on("uncaughtException", (error: unknown) => {
-    if (isAbortError(error)) return;
-    record(error);
-    originalConsoleError(describeError(error));
-  });
+  // An `uncaughtException` listener is too late for preview instrumentation:
+  // every listener receives the socket abort, even when ours ignores it. Node's
+  // capture callback runs before that event is broadcast, so expected client
+  // disconnects never reach the runtime-error reporter. Keep the prior behavior
+  // for genuine failures by recording and logging them here.
+  if (
+    typeof nodeProcess.setUncaughtExceptionCaptureCallback === "function" &&
+    !nodeProcess.hasUncaughtExceptionCaptureCallback?.()
+  ) {
+    nodeProcess.setUncaughtExceptionCaptureCallback((error: unknown) => {
+      if (isAbortError(error)) return;
+      record(error);
+      originalConsoleError(describeError(error));
+    });
+  } else {
+    nodeProcess.on("uncaughtException", (error: unknown) => {
+      if (isAbortError(error)) return;
+      record(error);
+      originalConsoleError(describeError(error));
+    });
+  }
   nodeProcess.on("unhandledRejection", (reason: unknown) => {
     if (isAbortError(reason)) return;
     record(reason);
