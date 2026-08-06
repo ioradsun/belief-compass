@@ -256,12 +256,12 @@ export function MobileGame({
 
   const stageMedia = stageMediaFrom(cm);
   const createdAt = cm?.createdAt ?? cm?.creator?.createdAt ?? null;
-  const byline = [
-    cm?.creator?.name ? `by ${cm.creator.name}` : null,
-    createdAt ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()).toLowerCase() : null,
-  ]
-    .filter(Boolean)
-    .join(" • ");
+  // The same byline the desktop deck prints: who opened the question and how
+  // old it reads — under the title, never a category strip above it.
+  const openedWhen = createdAt
+    ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()).toLowerCase()
+    : null;
+
 
   // A completed buy takes over the screen with the Conviction Reveal — the same
   // engine + component desktop uses. The trade was only the unlock.
