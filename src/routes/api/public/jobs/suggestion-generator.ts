@@ -24,17 +24,28 @@ export const Route = createFileRoute("/api/public/jobs/suggestion-generator")({
 
         const wallets = await walletsNeedingSuggestions(BATCH);
         let stored = 0;
-        let skipped = 0;
+        const skipped: Record<string, number> = {};
+        const note = (reason: string) => {
+          skipped[reason] = (skipped[reason] ?? 0) + 1;
+        };
+
         for (const wallet of wallets) {
           try {
-            const id = await generateSuggestionFor(wallet);
+            const { id, reason } = await generateSuggestionFor(wallet);
             if (id) stored++;
-            else skipped++;
+            else note(reason ?? "unknown");
           } catch {
-            skipped++;
+            note("threw");
           }
         }
-        return Response.json({ ok: true, considered: wallets.length, stored, skipped });
+        return Response.json({
+          ok: true,
+          considered: wallets.length,
+          stored,
+          skipped: Object.values(skipped).reduce((a, b) => a + b, 0),
+          skippedBy: skipped,
+        });
+
       },
     },
   },
