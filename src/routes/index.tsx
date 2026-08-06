@@ -584,6 +584,7 @@ function Feed() {
   // A lens change is only honoured once the response for THAT lens lands: `data`
   // is undefined while the new query is in flight, so the freshly-filtered order
   // is read from it directly rather than from the sticky (still old) feed.
+  if (typeof window !== "undefined") console.log("[render] data?", !!data);
   const freshFirstId =
     data?.items?.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []))[0] ?? null;
   useEffect(() => {
