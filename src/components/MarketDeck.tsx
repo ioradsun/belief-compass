@@ -9,9 +9,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { networkQO } from "@/lib/network-query";
 import { getMarketChange, getPositionSummary } from "@/lib/markets.functions";
 import { getMarketEvidence } from "@/lib/evidence.functions";
-import { getNetwork } from "@/lib/dna.functions";
 import { getHouseRead } from "@/lib/house.functions";
 import { requestConnect } from "@/lib/connect-bridge";
 import { walletIntent } from "@/lib/wagmi";
@@ -210,13 +210,7 @@ export function MarketDeck({
 
   // The reveal needs the viewer's network (for Tribe / Opps / Twin faces) and the
   // House read (its pick + surprise streak). Both cached, both used elsewhere.
-  const { data: net } = useQuery({
-    queryKey: ["network", viewer ?? null, "all", "relevant", ""],
-    queryFn: () => getNetwork({ data: { wallet: viewer, limit: 60 } }),
-    enabled: !!viewer,
-    staleTime: 60_000,
-    placeholderData: (prev) => prev,
-  });
+  const { data: net } = useQuery(networkQO(viewer));
   const { data: houseRead } = useQuery({
     queryKey: houseKey(viewer, marketId),
     queryFn: () => getHouseRead({ data: { wallet: viewer ?? null, marketId } }),
@@ -616,12 +610,7 @@ function MarketByline({
     staleTime: 5 * 60_000,
   });
   // Reuses the deck's existing network query — no extra request.
-  const { data: net } = useQuery({
-    queryKey: ["network", viewerWallet ?? null, "all", "relevant", ""],
-    queryFn: () => getNetwork({ data: { wallet: viewerWallet, limit: 60 } }),
-    enabled: !!viewerWallet,
-    staleTime: 60_000,
-  });
+  const { data: net } = useQuery(networkQO(viewerWallet));
 
   const c = data?.creator ?? null;
   const createdAt = data?.createdAt ?? c?.createdAt ?? null;

@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { networkQO } from "@/lib/network-query";
 import { useSwitchChain } from "wagmi";
 
 import type { MarketRow } from "@/components/MarketCard";
@@ -27,7 +28,6 @@ import { useHouseFinalize } from "@/lib/house-round";
 import { getMarketChange, listMarketPulses, getMarketBaselines } from "@/lib/markets.functions";
 import { windowChange } from "@/domain/window-change";
 import { getMarketEvidence } from "@/lib/evidence.functions";
-import { getNetwork } from "@/lib/dna.functions";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 import { marketAgeCopy } from "@/domain/market-freshness";
 import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
@@ -145,12 +145,7 @@ export function MobileGame({
     queryFn: () => getMarketEvidence({ data: { marketId } }),
     staleTime: 30_000,
   });
-  const { data: revealNet } = useQuery({
-    queryKey: ["network", viewerWallet ?? null, "all", "relevant", ""],
-    queryFn: () => getNetwork({ data: { wallet: viewerWallet, limit: 60 } }),
-    enabled: !!viewerWallet,
-    staleTime: 60_000,
-  });
+  const { data: revealNet } = useQuery(networkQO(viewerWallet));
 
   const choose = useCallback(
     (s: OrderSide) => {
@@ -590,7 +585,6 @@ function BothSides({
                 </span>
               </div>
               <div className="mt-2 grid grid-cols-2 gap-2">
-
                 {rows(s).map((m) => (
                   <SideMetric
                     key={m.label}
@@ -603,7 +597,6 @@ function BothSides({
                 ))}
               </div>
             </button>
-
 
             {/* WHO BACKS THIS SIDE — always visible face pile; tap it to open
                 the full roster without the list eating the screen. */}
@@ -706,7 +699,9 @@ function SideMetric({
           style={{ color: tone }}
         >
           {pctText}
-          {arrow && pctText ? <span className="ml-1 align-middle text-[0.6em]">{arrow}</span> : null}
+          {arrow && pctText ? (
+            <span className="ml-1 align-middle text-[0.6em]">{arrow}</span>
+          ) : null}
         </span>
       </div>
       <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
@@ -718,7 +713,6 @@ function SideMetric({
           {absolute.slice(absolute.split(" ")[0].length)}
         </div>
       )}
-
     </div>
   );
 }

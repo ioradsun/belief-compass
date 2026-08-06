@@ -23,9 +23,9 @@
  */
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { networkQO } from "@/lib/network-query";
 import { MyConvictions } from "@/components/MyConvictions";
 import { NetworkPanel } from "@/components/NetworkPanel";
-import { getNetwork } from "@/lib/dna.functions";
 import { presentRelationship } from "@/domain/relationship";
 import { type MarketRow } from "@/components/MarketCard";
 import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
@@ -104,16 +104,7 @@ export function MyWorld({
   // Counts must be on the tab strip whether or not that tab has ever been opened,
   // so the strip reads the same cached queries the panels use (React Query dedupes)
   // and only defers to a mounted panel's own, richer count when it has reported one.
-  const { data: netData } = useQuery({
-    queryKey: ["network", wallet ?? null, "all", "relevant", ""],
-    queryFn: () =>
-      getNetwork({
-        data: { wallet, relationship: "all", sort: "relevant", query: "", limit: 60 },
-      }),
-    enabled: !!wallet,
-    placeholderData: (prev) => prev,
-    refetchInterval: 60_000,
-  });
+  const { data: netData } = useQuery(networkQO(wallet));
   const netCounts = useMemo(() => {
     let tribe = 0;
     let rivals = 0;
