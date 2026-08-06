@@ -69,23 +69,23 @@ describe("one update per market", () => {
 
 describe("the banner counts in words a person would use", () => {
   it("keeps the singular honest", () => {
-    expect(arrivalLabel(1)).toBe("1 Update");
+    expect(arrivalLabel(1)).toBe("1 New");
   });
 
   it("counts plainly in the middle", () => {
-    expect(arrivalLabel(8)).toBe("8 Updates");
-    expect(arrivalLabel(25)).toBe("25 Updates");
+    expect(arrivalLabel(8)).toBe("8 New");
+    expect(arrivalLabel(25)).toBe("25 New");
   });
 
   it("stops counting past the cap rather than printing a number nobody reads", () => {
-    expect(arrivalLabel(TAPE.displayCap)).toBe("99 Updates");
-    expect(arrivalLabel(TAPE.displayCap + 1)).toBe("99+ Updates");
-    expect(arrivalLabel(4_000)).toBe("99+ Updates");
+    expect(arrivalLabel(TAPE.displayCap)).toBe("99 New");
+    expect(arrivalLabel(TAPE.displayCap + 1)).toBe("99+ New");
+    expect(arrivalLabel(4_000)).toBe("99+ New");
   });
 
   it("does not invent a count from nonsense", () => {
-    expect(arrivalLabel(0)).toBe("0 Updates");
-    expect(arrivalLabel(-3)).toBe("0 Updates");
+    expect(arrivalLabel(0)).toBe("0 New");
+    expect(arrivalLabel(-3)).toBe("0 New");
   });
 });
 
