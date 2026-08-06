@@ -859,7 +859,9 @@ function Feed() {
         onEnter={enterProduct}
         onCollapse={landing.collapse}
         onExpand={landing.expand}
-        onCreate={openCreate}
+        onCreate={wallet ? openCreate : () => requestConnect()}
+        createLabel={wallet ? "Conviction Market" : "Connect wallet"}
+        showCreatePlus={!!wallet}
         search={
           <OmniHeader
             wallet={wallet}
