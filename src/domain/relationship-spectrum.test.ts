@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   place,
@@ -5,7 +7,6 @@ import {
   bandLabel,
   compareSpectrum,
   spectrumColor,
-  needsSearch,
   SPECTRUM,
 } from "./relationship-spectrum";
 import { confidenceFor, EARNED_LABELS } from "./dna/config";
@@ -187,14 +188,27 @@ describe("the colour is the product's own language", () => {
   });
 });
 
-describe("search appears because the list got long", () => {
-  it("costs a short list nothing", () => {
-    expect(needsSearch(0)).toBe(false);
-    expect(needsSearch(SPECTRUM.searchAt - 1)).toBe(false);
+/**
+ * THE PANEL HAS ONE CONTROL, AND IT IS ALWAYS THERE.
+ *
+ * `needsSearch(listSize)` and `SPECTRUM.searchAt` are gone with the search box
+ * they gated. The box duplicated the header's people search — the same
+ * `getNetwork(query)` call — and, because the spectrum filter shared its
+ * threshold, a reader with fewer than twenty people was shown NEITHER control.
+ */
+describe("the list exposes no search", () => {
+  it("keeps no list-length threshold to gate a control on", () => {
+    expect(SPECTRUM).not.toHaveProperty("searchAt");
   });
 
-  it("arrives once scanning stops being viable", () => {
-    expect(needsSearch(SPECTRUM.searchAt)).toBe(true);
-    expect(needsSearch(500)).toBe(true);
+  it("is not what the panel imports", () => {
+    // Comments stripped: the panel EXPLAINS what it removed and why.
+    const panel = readFileSync(join(process.cwd(), "src/components/NetworkPanel.tsx"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+    expect(panel).not.toMatch(/needsSearch/);
+    // The one control, mounted unconditionally rather than behind a size gate.
+    expect(panel).toMatch(/<SpectrumFilterControl value=\{filter\}/);
+    expect(panel).not.toMatch(/placeholder="Search people/);
   });
 });

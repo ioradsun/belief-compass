@@ -118,19 +118,21 @@ export const SPECTRUM = {
    * Tribe, which is the exact failure this module was written to end.
    */
   neutral: confidenceFor(NEUTRAL_MAX_SHARED),
-  /**
-   * Below this many people, a search box costs more than it saves: reading a
-   * short list is faster than deciding what to type. Above it, scanning stops
-   * being viable.
-   *
-   * TWENTY, and I could not measure the real distribution of network sizes from
-   * here — `viewer_dna_cache` is service-role only. It is a guess wearing a
-   * constant's clothes, and it should be checked against live data before it is
-   * trusted. What is NOT a guess is the shape: the control appears because the
-   * list got long, never because the page loaded.
-   */
-  searchAt: 20,
 } as const;
+/**
+ * WHAT WAS HERE. `searchAt: 20` — the list length past which the panel grew a
+ * search box — and its own comment admitted it was "a guess wearing a
+ * constant's clothes", unmeasurable from the client because `viewer_dna_cache`
+ * is service-role only.
+ *
+ * It is gone with the box. Two reasons, and the second is the one that mattered:
+ * the header already searches people across the whole platform through the same
+ * `getNetwork(query)` call, so the panel's box was a second answer to a question
+ * that had one; and the box and the spectrum filter shared the threshold, so a
+ * reader with eight people got NEITHER — the filter was withheld from exactly
+ * the reader whose list was short enough for it to be the only control they
+ * needed. Removing the box is what let the filter be unconditional.
+ */
 
 const clamp = (v: number, lo: number, hi: number): number =>
   !Number.isFinite(v) ? lo : v < lo ? lo : v > hi ? hi : v;
@@ -247,15 +249,4 @@ export const SPECTRUM_FILTERS: readonly { id: SpectrumFilter; label: string }[] 
 
 export function matchesFilter(band: SpectrumBand, filter: SpectrumFilter): boolean {
   return filter === "all" || band === filter;
-}
-
-/**
- * Does the list need a search box yet?
- *
- * The rule is about the READER's cost, not ours: with a handful of people,
- * reading every row is faster than deciding what to type, and the box is a
- * permanent tax paid for a rare need.
- */
-export function needsSearch(listSize: number): boolean {
-  return listSize >= SPECTRUM.searchAt;
 }
