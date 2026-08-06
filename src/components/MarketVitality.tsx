@@ -240,7 +240,7 @@ function MomentumMetric({
         </span>
         <span className="shrink-0 text-right">
           <span
-            className={`num block font-semibold leading-none tabular-nums ${dense ? "text-[18px]" : "text-[22px] sm:text-[26px]"}`}
+            className={`num block font-semibold leading-none tabular-nums ${dense ? "text-[14px]" : "text-[16px] sm:text-[18px]"}`}
             style={{ color: tone }}
           >
             {headlinePct}
