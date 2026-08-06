@@ -454,15 +454,15 @@ function Feed() {
   // Universal behaviour: any avatar anywhere opens that profile in the center.
   useEffect(() => registerPersonFocus(selectPerson));
   // The Conviction Dashboard is a center-panel destination (never a modal): it
-  // deep-links, survives refresh, and back returns you to the deck.
+  // deep-links, survives refresh, and back returns you to where you opened it.
   const openDashboard = () => {
+    pushCenter();
     navigate({
       search: (prev: Search) => ({
         ...prev,
         dash: true,
         dna: undefined,
         p: undefined,
-        m: undefined,
         create: undefined,
         terms: undefined,
       }),
@@ -471,101 +471,48 @@ function Feed() {
     enterProduct();
   };
   // Creating a market is a first-class center-column destination, not a modal:
-  // it deep-links, survives refresh, and back returns you to the deck.
+  // it deep-links, survives refresh, and back returns you to where you were.
   const openCreate = () => {
+    pushCenter();
     navigate({
-      search: (prev: {
-        wallet?: string;
-        m?: number;
-        p?: string;
-        dna?: boolean;
-        create?: boolean;
-        terms?: boolean;
-      }) => ({
+      search: (prev: Search) => ({
         ...prev,
         create: true,
         terms: undefined,
         dna: undefined,
         p: undefined,
-        m: undefined,
+        dash: undefined,
       }),
     });
     setTab("belief");
     enterProduct();
   };
-  const closeCreate = () => {
-    navigate({
-      search: (prev: {
-        wallet?: string;
-        m?: number;
-        p?: string;
-        dna?: boolean;
-        create?: boolean;
-        terms?: boolean;
-      }) => ({
-        ...prev,
-        create: undefined,
-        terms: undefined,
-      }),
-    });
-  };
+  const closeCreate = () => backToPrevious();
   // Terms read in the center column, so leaving the create form is never
   // required to read what you're agreeing to. Back returns to the form.
   const openTerms = () => {
-    navigate({
-      search: (prev: {
-        wallet?: string;
-        m?: number;
-        p?: string;
-        dna?: boolean;
-        create?: boolean;
-        terms?: boolean;
-      }) => ({
-        ...prev,
-        terms: true,
-      }),
-    });
+    pushCenter();
+    navigate({ search: (prev: Search) => ({ ...prev, terms: true }) });
     setTab("belief");
     enterProduct();
   };
-  const closeTerms = () => {
-    navigate({
-      search: (prev: {
-        wallet?: string;
-        m?: number;
-        p?: string;
-        dna?: boolean;
-        create?: boolean;
-        terms?: boolean;
-      }) => ({
-        ...prev,
-        terms: undefined,
-      }),
-    });
-  };
-  // The way home. Every center destination (market, person, DNA, create, terms,
-  // dashboard, case) is a search param, so returning to the feed is simply
-  // dropping them — one predictable exit from anywhere in the app.
+  // Terms are always entered from somewhere; the form is the honest fallback.
+  const closeTerms = () => backToPrevious({ ...centerNow, terms: undefined });
   /**
-   * The way back to a market from a centre takeover.
+   * Every centre takeover leaves the same way: back to the view it covered.
    *
-   * This used to be one global header button that dropped EVERY search param,
-   * and it was the only exit two of those takeovers had. Each panel now clears
-   * its own — so leaving a person profile no longer also closes the Case File
-   * you had open, and the exit sits where the thing being exited is.
+   * These used to drop their own param and let whatever remained decide the
+   * screen — which is why closing a profile could land you on the top of the
+   * feed instead of the market you had been reading.
    */
-  const closePerson = () => {
-    navigate({ search: (prev: Search) => ({ ...prev, p: undefined }) });
-    enterProduct();
-  };
-  const closeDna = () => {
-    navigate({ search: (prev: Search) => ({ ...prev, dna: undefined }) });
-    enterProduct();
-  };
+  const closePerson = () => backToPrevious({ ...centerNow, p: undefined });
+  const closeDna = () => backToPrevious({ ...centerNow, dna: undefined });
+  const closeDash = () => backToPrevious({ ...centerNow, dash: undefined });
   /** The Case File spans BOTH rails, so the running order displaces it. */
   const closeCase = () => {
     if (caseOpen) navigate({ search: (prev: Search) => ({ ...prev, case: undefined }) });
   };
+
 
   // ONE timeframe for the whole app. The center's WindowFilter publishes to the
   // deck-window store; the feed, the left rail and every metric read it here, so
