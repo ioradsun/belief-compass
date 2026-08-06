@@ -111,7 +111,7 @@ describe("houseReadCopy — the voice", () => {
   it("writes the default learning line", () => {
     const c = houseReadCopy({ status: "learning" });
     expect(c.label).toBe(HOUSE_READ_LABEL);
-    expect(c.body).toBe("Learning your tells. Soon, we’ll call your move.");
+    expect(c.body).toBe("Learning you…");
     expect(c.side).toBeNull();
   });
 

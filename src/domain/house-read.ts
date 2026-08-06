@@ -7,7 +7,7 @@
  * the House: playful, competitive, a little mysterious, never a lecture.
  *
  * Four states, one sentence each:
- *   learning   → "Learning your tells. Soon, we'll call your move."
+ *   learning   → "Learning you…"
  *   predicted  → "We think you'll back YES"
  *   correct    → "The House called it."
  *   incorrect  → "You beat the House."
@@ -143,7 +143,7 @@ export function houseReadCopy(state: HouseReadState): HouseReadCopy {
       const body =
         n != null && n > 0
           ? `${n} more pick${n === 1 ? "" : "s"} and we’ll call your move.`
-          : "Learning your tells. Soon, we’ll call your move.";
+          : "Learning you…";
       return { label: HOUSE_READ_LABEL, body, side: null, suffix: "", tone: "neutral" };
     }
   }
