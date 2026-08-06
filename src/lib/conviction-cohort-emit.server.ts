@@ -44,6 +44,7 @@
 import { serviceClient } from "@/lib/supabase-clients";
 import { positionValueUsd } from "@/domain/position-value";
 import { aliasFor } from "@/lib/wallet-identity";
+import { readEthUsd } from "@/lib/eth-usd.server";
 import {
   findCohorts,
   selectCohortsForRun,
@@ -61,11 +62,6 @@ const num = (v: unknown): number => (v == null || !Number.isFinite(Number(v)) ? 
 
 /** The cron-refreshed ETH→USD rate. 0 when unknown, which disables the fallback
  *  rather than pricing every position at nothing. */
-async function ethUsdRate(db: Db): Promise<number> {
-  const { data } = await db.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle();
-  return Number((data as { value?: number } | null)?.value ?? 0) || 0;
-}
-
 /**
  * How much of a day's crossings this run is responsible for. The refresher runs
  * more than once a day, so a window of exactly 1 day would report the same
@@ -191,7 +187,7 @@ async function cohortsFrom(
   scan: CohortScan,
 ): Promise<CohortCandidate[]> {
   if (beliefs.length === 0) return [];
-  const ethUsd = await ethUsdRate(db);
+  const ethUsd = await readEthUsd(db);
   const touched = [...new Set(beliefs.map((b) => Number(b.onchain_id)))];
   const [{ data: markets }, { data: states }] = await Promise.all([
     db.from("markets").select("onchain_id, created_at").in("onchain_id", touched),

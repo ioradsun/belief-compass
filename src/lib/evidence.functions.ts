@@ -13,6 +13,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { serviceClient } from "@/lib/supabase-clients";
+import { readEthUsd } from "@/lib/eth-usd.server";
 import { positionValueUsd } from "@/domain/position-value";
 import { aliasFor } from "@/lib/wallet-identity";
 import { whaleWallets, type SidePosition } from "@/domain/conviction";
@@ -87,8 +88,8 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
     const sb = serviceClient();
     const id = data.marketId;
 
-    const [rateRes, beliefsRes, seriesRes, marketRes] = await Promise.all([
-      sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
+    const [ethUsd, beliefsRes, seriesRes, marketRes] = await Promise.all([
+      readEthUsd(sb),
       sb
         .from("wallet_beliefs")
         .select(
@@ -128,7 +129,9 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
     // Whale = big money on the line, judged relative to each side of THIS market.
     // `*_value_usd` is a column nothing writes, so every position valued at $0
     // and whaleWallets ranked a field of zeros — no whale was ever found.
-    const ethUsd = Number((rateRes.data as { value?: number } | null)?.value ?? 0) || 0;
+    // Null, not zero: a believer whose position cannot be priced must not be
+    // ranked as dust. `positionValueUsd` falls back to cost basis, then reports
+    // "unknown" — it never invents a figure.
     const valueOf = (r: (typeof rows)[number], side: "YES" | "NO") =>
       Math.max(
         0,

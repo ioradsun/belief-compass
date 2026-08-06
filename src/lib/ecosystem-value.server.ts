@@ -20,6 +20,7 @@
  * (markets.source = 'conviction'), which is unambiguously Conviction's own.
  */
 import { serviceClient } from "@/lib/supabase-clients";
+import { readEthUsd } from "@/lib/eth-usd.server";
 import { swrCache } from "@/lib/server-cache";
 import {
   buildShare,
@@ -61,7 +62,8 @@ export interface ActivityItem {
   action: "BUY" | "SELL" | null;
   marketId: number;
   title: string;
-  ethUsd: number;
+  /** The rate this row was priced at. Null when unpriced — never 0. */
+  ethUsd: number | null;
   amountEth: number;
   at: string;
 }
@@ -69,7 +71,12 @@ export interface ActivityItem {
 export type { SharePoint, EcosystemShare };
 
 export interface EcosystemValue {
-  ethUsd: number;
+  /**
+   * The rate every USD figure here was computed with — NULL when we could not
+   * price. A whole-payload signal, because these figures are all this one number
+   * times an ETH figure; they are one unknown, not many.
+   */
+  ethUsd: number | null;
   /** When trade attribution started; null before the first recorded trade. */
   since: string | null;
   /** The headline story: how much of the whole market Conviction accounts for. */
@@ -110,15 +117,25 @@ const SHARE_DAYS = 90;
 async function build(): Promise<EcosystemValue> {
   const sb = serviceClient();
 
-  const [{ data: ethRow }, rpc, shareRpc, { count: convictionMarkets }] = await Promise.all([
-    sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
+  const [ethUsdRate, rpc, shareRpc, { count: convictionMarkets }] = await Promise.all([
+    readEthUsd(sb),
     sb.rpc("conviction_attributed_value", { p_growth_days: GROWTH_DAYS }),
     sb.rpc("conviction_ecosystem_share", { p_days: SHARE_DAYS }),
     // "Markets Created" — the one supply-side figure: markets born on conviction.company.
     sb.from("markets").select("onchain_id", { count: "exact", head: true }).eq("source", "conviction"),
   ]);
-  const ethUsd = num((ethRow as { value?: number } | null)?.value);
-  const share = buildShare((shareRpc.data ?? null) as ShareRpc | null, ethUsd, Date.now(), SHARE_DAYS);
+  // Null when unpriced. Every USD figure on the report card is this rate times
+  // an ETH figure, so a zero here would publish "the ecosystem is worth $0".
+  /**
+   * Null when unpriced. Every USD figure on this report card is this one rate
+   * times an ETH figure, so a zero would publish "the ecosystem is worth $0" —
+   * a page-level state, not a field-level unknown. `ethUsd: null` in the payload
+   * is the signal; the zero below is the one documented place it enters and is
+   * never rendered on its own.
+   */
+  const ethUsd = ethUsdRate;
+  const rate = ethUsdRate ?? 0;
+  const share = buildShare((shareRpc.data ?? null) as ShareRpc | null, rate, Date.now(), SHARE_DAYS);
 
   // If the RPC isn't present yet (migration not applied), degrade to honest zeros
   // rather than crash or fall back to numbers we can't attribute.
@@ -136,7 +153,7 @@ async function build(): Promise<EcosystemValue> {
     };
   }
 
-  const volumeUsd = weiToEth(cv.buyWei) * ethUsd;
+  const volumeUsd = weiToEth(cv.buyWei) * rate;
 
   // Market metadata (title/category/author) for every market we routed a trade on —
   // works for pov- and conviction-born markets alike, since `markets` holds both.
@@ -162,7 +179,7 @@ async function build(): Promise<EcosystemValue> {
         category: meta?.category ?? null,
         authorWallet: meta?.author_wallet ?? null,
         authorName: meta?.author_name ?? null,
-        volumeUsd: weiToEth(p.buyWei) * ethUsd,
+        volumeUsd: weiToEth(p.buyWei) * rate,
         trades: num(p.trades),
       };
     })
@@ -185,7 +202,7 @@ async function build(): Promise<EcosystemValue> {
 
   // Growth — cumulative buy volume + trades per UTC day over the window.
   const byDay = new Map<string, { vol: number; trades: number }>();
-  for (const d of cv.byDay) byDay.set(d.day, { vol: weiToEth(d.buyWei) * ethUsd, trades: num(d.trades) });
+  for (const d of cv.byDay) byDay.set(d.day, { vol: weiToEth(d.buyWei) * rate, trades: num(d.trades) });
   const growth: GrowthPoint[] = [];
   {
     let cumV = 0;
