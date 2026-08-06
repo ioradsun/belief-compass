@@ -293,17 +293,30 @@ export function LiveTape({
         <button
           type="button"
           onClick={gate.admit}
+          /**
+           * ONE PULSE, ON ARRIVAL, THEN STILLNESS.
+           *
+           * Remounting on the 0 → N edge (and only that edge) lets the CSS
+           * animation play exactly once. Every later increment is just a number
+           * changing inside a pill that is already sitting there, so the control
+           * never nags: it announces itself once and then waits.
+           */
+          key={`pill-${pulseKey}`}
           // Present but inert at zero pending: the slot is always occupied, so
           // nothing reflows when it becomes available.
           aria-hidden={gate.pending === 0 || undefined}
           tabIndex={gate.pending === 0 ? -1 : undefined}
-          className="ml-auto rounded-full px-2.5 py-[3px] text-[11px] font-semibold transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none"
+          className="ml-auto rounded-full border px-2.5 py-[3px] text-[11px] font-semibold backdrop-blur-sm transition-[opacity,transform,background-color] duration-200 ease-out motion-reduce:transition-none motion-reduce:animate-none"
           style={{
-            background: "var(--text)",
-            color: "var(--bg)",
+            // A quiet system indicator, not a call to action: the filled white
+            // button is reserved for Connect Wallet and Back YES/NO.
+            background: "color-mix(in oklab, var(--yes) 12%, transparent)",
+            borderColor: "color-mix(in oklab, var(--yes) 42%, transparent)",
+            color: "var(--yes)",
             opacity: gate.pending > 0 ? 1 : 0,
-            transform: gate.pending > 0 ? "scale(1)" : "scale(0.9)",
+            transform: gate.pending > 0 ? "scale(1)" : "scale(0.98)",
             pointerEvents: gate.pending > 0 ? "auto" : "none",
+            animation: gate.pending > 0 ? "tape-pill-in 640ms ease-out 1" : undefined,
           }}
         >
           ↑ {arrivalLabel(gate.pending)}
