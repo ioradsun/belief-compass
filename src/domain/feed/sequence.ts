@@ -238,6 +238,20 @@ export interface SequenceResult {
   engineVersion: number;
   /** Markets the gate removed, with the reason — feed diagnostics. */
   excluded: { onchainId: number; reason: ExclusionReason | null }[];
+  /**
+   * EVERYTHING ELIGIBLE WAS PLACED — there is no next page.
+   *
+   * The distinction this exists to make: a response that returns `limit` items
+   * has almost certainly left candidates behind, while a response that empties
+   * its pool has genuinely run out. The client cannot tell those apart by
+   * counting rows, and inferring "the end" from a short batch is exactly how an
+   * interface tells someone they are caught up one poll before more arrives.
+   *
+   * Scoped to what the feed can see: the candidate pool, minus this session's
+   * already-seen markets. It is the end of the LENS as the reader experiences
+   * it, not a claim about every market on the platform.
+   */
+  exhausted: boolean;
 }
 
 /**
@@ -271,10 +285,13 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
   // wholesale — they would replace that ordering with a different one. Note this
   // is not a hypothetical risk: it is precisely what happens to `orderForMode`
   // on every request today. See `preserveOrder`.
+  let exhausted: boolean;
   if (input.preserveOrder) {
     for (const c of pool.slice(0, limit)) {
       out.push({ c, adjustments: [], intent: "fill", displaced: [] });
     }
+    // Nothing left over: the ranking ran out before the limit did.
+    exhausted = pool.length <= limit;
   } else {
     pool.sort((a, b) => b.scored.score - a.scored.score || a.onchainId - b.onchainId);
     reentries.sort((a, b) => b.scored.score - a.scored.score || a.onchainId - b.onchainId);
@@ -355,6 +372,9 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
       const [chosen] = pool.splice(cursor, 1);
       out.push({ c: chosen!, adjustments, intent, displaced });
     }
+    // The blended loop SPLICES what it places, so an empty pool with no
+    // re-entries waiting is the honest end of the line.
+    exhausted = pool.length === 0 && reentryIdx >= reentries.length;
   }
 
   const items: OpportunityFeedItem[] = out.map((p, i) => ({
@@ -402,7 +422,7 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
     });
   }
 
-  return { items, engineVersion: FEED_ENGINE_VERSION, excluded };
+  return { items, engineVersion: FEED_ENGINE_VERSION, excluded, exhausted };
 }
 
 /** Forward-only: the id after `currentIdx`, or null when the queue is done. */

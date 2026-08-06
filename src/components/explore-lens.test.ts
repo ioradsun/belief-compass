@@ -176,3 +176,76 @@ describe("the feed request schema accepts everything the client sends", () => {
     }
   });
 });
+
+/**
+ * THE END OF A CHOSEN LENS.
+ *
+ * The failure mode this exists to prevent is silent substitution: a finite lens
+ * runs dry, For You markets start arriving, and the control still reads "Fresh".
+ * The reader picked the lens; finishing it is worth one line, and being moved
+ * without being told is not acceptable at all.
+ */
+describe("the continuation state", () => {
+  const feed = code("src/components/FeedListPanel.tsx");
+  const idx = code("src/routes/index.tsx");
+
+  it("is the last item of the playlist, not a takeover", () => {
+    // A modal, banner or centre-stage replacement would interrupt the market
+    // the reader is still looking at.
+    expect(feed).toMatch(/<Continuation onContinue=/);
+    expect(feed).toMatch(/<li className=/);
+    expect(feed).not.toMatch(/createPortal|aria-modal|role="dialog"/);
+  });
+
+  it("offers exactly one move, and it is the canonical lens change", () => {
+    expect(feed).toMatch(/onContinue=\{\(\) => onLens\("for_you"\)\}/);
+    // One button. No countdown, no second action, no automatic navigation.
+    const block = feed.slice(feed.indexOf("function Continuation"));
+    expect((block.match(/<button/g) ?? []).length).toBe(1);
+    expect(block).not.toMatch(/setTimeout|setInterval|navigate\(/);
+  });
+
+  it("says the two lines and nothing more", () => {
+    expect(feed).toMatch(/You&rsquo;re caught up\./);
+    expect(feed).toMatch(/Continue with For You/);
+  });
+
+  it("renders only on a real verdict, never inferred from an empty list", () => {
+    // `entries.length === 0` means the client consumed its batch, which is not
+    // the same as the lens running out — the feed pages implicitly.
+    expect(feed).toMatch(/lensExhausted\?: boolean/);
+    expect(feed).toMatch(/\{lensExhausted && <Continuation/);
+  });
+
+  it("requires the server's verdict, the right lens, and no error", () => {
+    const guard = idx.slice(idx.indexOf("const lensExhausted ="), idx.indexOf("const ids ="));
+    // Not For You — it is the destination, and its own end-state is untouched.
+    expect(guard).toMatch(/lens !== "for_you"/);
+    // A failed request tells us nothing about how much is left.
+    expect(guard).toMatch(/!isFeedError/);
+    // A response is only evidence about the lens it was built for.
+    expect(guard).toMatch(/stableFeed\?\.lens === lens/);
+    expect(guard).toMatch(/stableFeed\.exhausted === true/);
+  });
+
+  it("keeps the market on screen when a chosen lens ends", () => {
+    // "Caught up" takes over the centre, and its copy is only true for For You.
+    expect(idx).toMatch(/if \(lens === "for_you"\) setCaughtUp\(true\)/);
+  });
+
+  it("cannot fire twice or restart the playlist twice on repeated clicks", () => {
+    // The button is still mounted for the frame after the tap. `selectLens`
+    // early-returns on the lens it is already showing, so a second click is a
+    // no-op rather than a second request and a second queue reset — and once
+    // the lens IS For You the continuation stops rendering at all.
+    expect(idx).toMatch(/const selectLens = \(l: Lens\) => \{\s*if \(l === lens\) return;/);
+    expect(feed).toMatch(/lens !== "for_you"|lensExhausted/);
+  });
+
+  it("cannot serve one lens's markets under another lens's label", () => {
+    // The sticky feed and placeholderData both carry a result across a lens
+    // change; a response now has to belong to the lens on screen.
+    expect(idx).toMatch(/const forThisLens = /);
+    expect(idx).toMatch(/forThisLens\(stableFeedRef\.current\) \?\? forThisLens\(data\)/);
+  });
+});
