@@ -566,6 +566,12 @@ function Feed() {
   // browser, it is durable for this page lifetime. Query retries, wallet
   // reconnection, POV outages and empty enrichment responses may update it, but
   // can never replace it with undefined/empty and put the user back on a loader.
+  /**
+   * A lens change asks for a different playlist, so the centre must move to the
+   * head of it. The old feed is still on screen when the filter is chosen, so
+   * the re-pin WAITS for the response belonging to the new lens.
+   */
+  const repinRef = useRef(false);
   const stableFeedRef = useRef<typeof data>(initialFeed);
   if (data && Object.keys(data.rows ?? {}).length > 0 && data.items?.length > 0) {
     stableFeedRef.current = data;
@@ -575,6 +581,17 @@ function Feed() {
   // The server returned a finished sequence: market / market_idea items in
   // order, plus the read-model row behind each market item. The client's only
   // job is to project that order into rows — no scoring, sorting or filtering.
+  // A lens change is only honoured once the response for THAT lens lands: `data`
+  // is undefined while the new query is in flight, so the freshly-filtered order
+  // is read from it directly rather than from the sticky (still old) feed.
+  const freshFirstId =
+    data?.items?.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []))[0] ?? null;
+  useEffect(() => {
+    if (!repinRef.current || freshFirstId == null) return;
+    repinRef.current = false;
+    setPinnedId(freshFirstId);
+  }, [freshFirstId]);
+
   const items = stableFeed?.items ?? [];
   const rowsById = stableFeed?.rows ?? {};
   const orderedRows = items.flatMap((it) =>
@@ -599,21 +616,10 @@ function Feed() {
   // URL — one source of truth for "what is in the centre" — and the queue is
   // told about it, never the reverse.
   const [queue, setQueue] = useState<FeedQueue>(emptyQueue);
-  /**
-   * A lens change asks for a different playlist, so the centre must move to the
-   * head of it. The old feed is still on screen when the filter is chosen, so
-   * the re-pin has to WAIT for the new order to arrive — pinning immediately
-   * would just re-pin the market the reader was already on.
-   */
-  const repinRef = useRef(false);
   const serverOrder = items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
   const serverOrderKey = serverOrder.join(",");
   useEffect(() => {
     if (serverOrder.length === 0) return;
-    if (repinRef.current) {
-      repinRef.current = false;
-      setPinnedId(serverOrder[0] ?? null);
-    }
     setQueue((q) => receiveOrder(q, serverOrder));
     // serverOrderKey identifies the order by value: a poll that returns the same
     // sequence must not re-enter this, or every 8s tick becomes a render.
