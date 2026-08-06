@@ -13,13 +13,16 @@ import { parseAbi } from "viem";
 import {
   useAccount,
   useChainId,
+  useConfig,
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
+import { readContract } from "wagmi/actions";
 import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
 import { CONVICTION_TAG } from "@/chain/attribution";
 import { minOut } from "@/domain/order";
+import { checkQuote, quoteMovedMessage } from "@/domain/quote-freshness";
 import { writePending, readPending, clearPending } from "@/lib/pending-trade";
 import { recordConvictionTrade } from "@/lib/conviction-trades.functions";
 
@@ -134,6 +137,7 @@ function tagConvictionTrade(txHash: string, wallet: string | undefined, meta: Tr
 
 export function useTrade() {
   const { address } = useAccount();
+  const config = useConfig();
   const { writeContractAsync, isPending, error, reset } = useWriteContract();
   const [hash, setHash] = useState<`0x${string}` | undefined>(undefined);
   /**
@@ -194,33 +198,82 @@ export function useTrade() {
     }
   }
 
+  /**
+   * RE-READ THE QUOTE AT SIGNING TIME, and refuse to sign if it moved past the
+   * tolerance the reader accepted.
+   *
+   * The quote the ticket displays has no refresh of its own — it is read once
+   * when the amount settles and then sits while the reader reads the evidence
+   * and thinks. The 2% floor was sized for sign-to-inclusion, not for that gap,
+   * so a stale quote either reverts the transaction or quietly delivers a
+   * different number of shares than the screen promised.
+   *
+   * Returns the value to build the floor from, or throws with copy that never
+   * calls a price move a failure. A failed read throws too — a floor we could
+   * not verify is not one to sign (see domain/quote-freshness).
+   */
+  async function freshQuote(shown: bigint, read: () => Promise<bigint | null>): Promise<bigint> {
+    let fresh: bigint | null = null;
+    try {
+      fresh = await read();
+    } catch {
+      /* checkQuote treats a null as "unavailable", which BLOCKS */
+    }
+    const check = checkQuote(shown, fresh);
+    if (check.ok) return check.use;
+    throw new Error(quoteMovedMessage(check) ?? "Couldn't confirm the current price.");
+  }
+
+  // The re-read runs INSIDE `send`, which is what puts it behind the re-entry
+  // latch and the submitting flag. Outside, the RPC round-trip would be a window
+  // with the Confirm button still live and nothing on screen saying otherwise.
   async function buy(marketId: number, yes: boolean, ethWei: bigint, quotedTokens: bigint) {
     return send(
-      () =>
-        writeContractAsync({
+      async () => {
+        const tokens = await freshQuote(quotedTokens, async () => {
+          const r = (await readContract(config, {
+            ...CONTRACT,
+            functionName: "getTokensForETH",
+            args: [BigInt(marketId), yes, ethWei],
+            chainId: CHAIN_ID,
+          })) as readonly [bigint, bigint, bigint];
+          return r?.[0] ?? null;
+        });
+        return writeContractAsync({
           ...CONTRACT,
           functionName: "buy",
-          args: [BigInt(marketId), yes, minOut(quotedTokens)],
+          args: [BigInt(marketId), yes, minOut(tokens)],
           value: ethWei,
           chainId: CHAIN_ID,
           // Appended to the calldata; the contract ignores trailing bytes. Makes
           // this trade attributable to Conviction from public chain data alone.
           dataSuffix: CONVICTION_TAG,
-        }),
+        });
+      },
       { marketId, side: yes ? "YES" : "NO", action: "BUY" },
     );
   }
 
   async function sell(marketId: number, yes: boolean, tokenAmount: bigint, quotedProceeds: bigint) {
     return send(
-      () =>
-        writeContractAsync({
+      async () => {
+        const proceeds = await freshQuote(quotedProceeds, async () => {
+          const r = (await readContract(config, {
+            ...CONTRACT,
+            functionName: "getSellProceeds",
+            args: [BigInt(marketId), yes, tokenAmount],
+            chainId: CHAIN_ID,
+          })) as bigint;
+          return r ?? null;
+        });
+        return writeContractAsync({
           ...CONTRACT,
           functionName: "sell",
-          args: [BigInt(marketId), yes, tokenAmount, minOut(quotedProceeds)],
+          args: [BigInt(marketId), yes, tokenAmount, minOut(proceeds)],
           chainId: CHAIN_ID,
           dataSuffix: CONVICTION_TAG,
-        }),
+        });
+      },
       { marketId, side: yes ? "YES" : "NO", action: "SELL" },
     );
   }
