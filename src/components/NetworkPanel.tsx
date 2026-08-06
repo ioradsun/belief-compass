@@ -43,7 +43,11 @@ import {
   bandLabel,
   compareSpectrum,
   spectrumColor,
+  spectrumRing,
+  matchesFilter,
   needsSearch,
+  SPECTRUM_FILTERS,
+  type SpectrumFilter,
   type SpectrumPlace,
 } from "@/domain/relationship-spectrum";
 
