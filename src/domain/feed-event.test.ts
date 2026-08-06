@@ -8,6 +8,7 @@ import {
   switchTrigger,
   socialTrigger,
   compositeSignal,
+  FEED_TRIGGERS,
   type FeedCandidate,
 } from "./feed-event";
 
@@ -56,12 +57,12 @@ describe("structural transitions always rank", () => {
     expect(scoreFeedEvent(trade({ kind: "tribe_doubled", amountUsd: null })).tier).toBe(1);
   });
   it("a lone side flip is Context, a multi-wallet flip is Breaking", () => {
-    expect(scoreFeedEvent(trade({ kind: "side_shift", amountUsd: null, walletCount: 1 })).tier).toBe(
-      2,
-    );
-    expect(scoreFeedEvent(trade({ kind: "side_shift", amountUsd: null, walletCount: 3 })).tier).toBe(
-      1,
-    );
+    expect(
+      scoreFeedEvent(trade({ kind: "side_shift", amountUsd: null, walletCount: 1 })).tier,
+    ).toBe(2);
+    expect(
+      scoreFeedEvent(trade({ kind: "side_shift", amountUsd: null, walletCount: 3 })).tier,
+    ).toBe(1);
   });
   it("all structural rows are included in the feed", () => {
     for (const kind of ["market_created", "believer_milestone", "tribe_doubled", "side_shift"]) {
@@ -124,10 +125,15 @@ describe("section-10 trigger predicates", () => {
   it("capitalTrigger: material + relative, or a spike", () => {
     expect(capitalTrigger({ deltaUsd: 100, priorUsd: 500 })).toBe(true); // $100, 20%
     expect(capitalTrigger({ deltaUsd: 100, priorUsd: 5000 })).toBe(false); // 2% of a big pool
-    expect(capitalTrigger({ deltaUsd: 10, priorUsd: 20 })).toBe(false); // below the USD floor
-    expect(
-      capitalTrigger({ deltaUsd: 30, priorUsd: 10000, recentUsd: 90, baselineUsd: 20 }),
-    ).toBe(true); // 4.5× baseline spike
+    // Below the USD floor. Expressed FROM the constant: this assertion is about
+    // the floor existing, not about the number it happens to be, and writing the
+    // number twice is how a fixture silently stops testing what it names.
+    expect(capitalTrigger({ deltaUsd: FEED_TRIGGERS.capital.minUsd / 2, priorUsd: 20 })).toBe(
+      false,
+    );
+    expect(capitalTrigger({ deltaUsd: 30, priorUsd: 10000, recentUsd: 90, baselineUsd: 20 })).toBe(
+      true,
+    ); // 4.5× baseline spike
   });
   it("priceTrigger: past the 8% bar", () => {
     expect(priceTrigger(8)).toBe(true);
@@ -148,9 +154,9 @@ describe("section-10 trigger predicates", () => {
 
 describe("composite contradictions", () => {
   it("more believers, less capital", () => {
-    expect(
-      compositeSignal({ believerDelta: 4, capitalDeltaUsd: -60, pricePct: null }),
-    ).toBe("people-up-capital-down");
+    expect(compositeSignal({ believerDelta: 4, capitalDeltaUsd: -60, pricePct: null })).toBe(
+      "people-up-capital-down",
+    );
   });
   it("capital up, people flat", () => {
     expect(compositeSignal({ believerDelta: 0, capitalDeltaUsd: 200, pricePct: null })).toBe(
@@ -158,9 +164,14 @@ describe("composite contradictions", () => {
     );
   });
   it("price up, people flat", () => {
-    expect(compositeSignal({ believerDelta: 0, capitalDeltaUsd: 5, pricePct: 12 })).toBe(
-      "price-up-people-flat",
-    );
+    // Capital deliberately below the floor, so PRICE is the only live signal.
+    expect(
+      compositeSignal({
+        believerDelta: 0,
+        capitalDeltaUsd: FEED_TRIGGERS.capital.minUsd / 2,
+        pricePct: 12,
+      }),
+    ).toBe("price-up-people-flat");
   });
   it("aligned growth is not a contradiction", () => {
     expect(compositeSignal({ believerDelta: 5, capitalDeltaUsd: 200, pricePct: 10 })).toBeNull();

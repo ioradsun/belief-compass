@@ -9,6 +9,7 @@ import {
   type StandingHolder,
   type StandingInput,
 } from "./standing-fact";
+import { METRIC_DISPLAY } from "./metric-display";
 
 const h = (o: Partial<StandingHolder> & { wallet: string }): StandingHolder => ({
   name: `n${o.wallet}`,
@@ -33,8 +34,25 @@ describe("nothing is invented", () => {
   });
 
   it("says nothing about dust", () => {
-    const dust = h({ wallet: "0xa", positionUsd: STANDING.minPositionUsd - 1 });
+    const dust = h({ wallet: "0xa", positionUsd: STANDING.minPositionUsd / 2 });
     expect(findStandingFacts(input({ holders: [dust] }))).toEqual([]);
+  });
+
+  /**
+   * The floor was five dollars, which nearly silenced the one mechanism this
+   * module exists to be: of 329 live sides holding both capital and a believer,
+   * at most 29 could have produced a fact — about 18 in practice. The threshold
+   * exists to exclude what is not really a position, never to rank by size
+   * ("RECOGNITION OVER SIZE"), so it sits on the line the rest of the product
+   * already draws between money and dust.
+   */
+  it("keeps the dust line where the rest of the product draws it", () => {
+    expect(STANDING.minPositionUsd).toBe(METRIC_DISPLAY.capitalUsd.pctValidMinBase);
+    // A typical position on this platform is well under five dollars; a floor
+    // there is a size gate wearing a dust gate's name.
+    expect(
+      findStandingFacts(input({ holders: [h({ wallet: "0xa", positionUsd: 2 })] })),
+    ).not.toEqual([]);
   });
 
   it("says nothing about a belief too young to be a continuity", () => {

@@ -42,6 +42,7 @@ import {
 import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
 import { discoveryValue, markSeen, type DiscoverySubject } from "@/domain/discovery";
+import { stakeBoost, NO_STAKES } from "@/domain/viewer-stake";
 import { firstBackedIsFloor } from "@/domain/tenure";
 import { classifyPace } from "@/domain/feed-scheduler";
 import { buildStandingFacts } from "@/lib/standing-facts.server";
@@ -192,10 +193,15 @@ export const listLiveEvents = createServerFn({ method: "GET" })
 
     const marketIds = [...new Set((rows ?? []).map((r) => Number(r.market_id)))];
     const titleById = new Map<number, string>();
+    /** Who asked each question — the strongest stake a reader can have in one. */
+    const creatorByMarket = new Map<number, string>();
     const momentumById = new Map<number, Momentum>();
     if (marketIds.length > 0) {
       const [mk, ms] = await Promise.all([
-        sb.from("markets").select("onchain_id, title").in("onchain_id", marketIds),
+        // `creator_wallet` is here so a reader's OWN questions can outrank a
+        // stranger's — see the viewer-stake block below for why that was
+        // impossible until now.
+        sb.from("markets").select("onchain_id, title, creator_wallet").in("onchain_id", marketIds),
         sb
           .from("market_state")
           .select(
@@ -203,7 +209,12 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           )
           .in("onchain_id", marketIds),
       ]);
-      for (const m of mk.data ?? []) titleById.set(Number(m.onchain_id), (m.title as string) ?? "");
+      for (const m of mk.data ?? []) {
+        const id = Number(m.onchain_id);
+        titleById.set(id, (m.title as string) ?? "");
+        const creator = String((m as Record<string, unknown>).creator_wallet ?? "").toLowerCase();
+        if (creator) creatorByMarket.set(id, creator);
+      }
       for (const s of ms.data ?? []) {
         const r = s as Record<string, unknown>;
         momentumById.set(Number(r.onchain_id), {
@@ -356,7 +367,14 @@ export const listLiveEvents = createServerFn({ method: "GET" })
      * feed reads the same rows the People page does instead of a thin label map.
      */
     const relByWallet = new Map<string, CachedRelationship>();
-    /** Read-time, viewer-relative score bump per row. Never persisted. */
+    /**
+     * Read-time, viewer-relative score bump per row. Never persisted.
+     *
+     * This existed and was populated for ONE row kind (conviction cohorts), so
+     * a market transition in the question you created, a celebration in the
+     * market you are holding, and an anonymous trade in a market you have never
+     * seen were ranked identically. See src/domain/viewer-stake.
+     */
     const viewerBoost = new Map<string, number>();
     let moments: DiscoveryMoment[] = [];
     if (viewer) {
@@ -748,6 +766,42 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         return r;
       });
 
+    // ── YOUR OWN STAKE ───────────────────────────────────────────────────────
+    // The ranker knew about PEOPLE the reader is connected to and nothing about
+    // their own MARKETS: a transition in the question you opened was ranked
+    // exactly like one in a market you have never seen. The mechanism existed —
+    // `viewerBoost` — and was populated for a single row kind.
+    //
+    // Bounded by the same ceiling relationship personalization uses, so the two
+    // axes cannot outbid each other, and neither can lift a dust trade into the
+    // breaking band. See src/domain/viewer-stake.
+    let stakes = NO_STAKES;
+    if (viewer && marketIds.length > 0) {
+      const created = new Set<number>();
+      for (const [id, w] of creatorByMarket) if (w === viewer) created.add(id);
+      const holding = new Set<number>();
+      try {
+        const { serviceClientOrNull } = await import("@/lib/supabase-clients");
+        const svc = serviceClientOrNull();
+        if (svc) {
+          const { data: mine } = await svc
+            .from("wallet_beliefs")
+            .select("onchain_id, yes_shares, no_shares")
+            .eq("wallet", viewer)
+            .in("onchain_id", marketIds);
+          for (const b of (mine ?? []) as Record<string, unknown>[]) {
+            // A closed position is not a stake. Holding nothing here is the same
+            // as never having been here, for the purpose of what to show you.
+            if (Number(b.yes_shares ?? 0) > 0 || Number(b.no_shares ?? 0) > 0)
+              holding.add(Number(b.onchain_id));
+          }
+        }
+      } catch {
+        // No key, no stake. The feed is impersonal rather than absent.
+      }
+      stakes = { created, holding };
+    }
+
     // ── PERSON MILESTONES: the second story one action tells ────────────────
     // Every other family reports what happened to a MARKET. "Sarah backed AI"
     // and "AI welcomed a new believer" are both here; "Sarah now backs five
@@ -952,7 +1006,11 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           1,
           (typeof (r.payload as { significance?: number }).significance === "number"
             ? (r.payload as { significance: number }).significance
-            : (derived.get(r.id) ?? SIGNIFICANCE.fallback)) + (viewerBoost.get(r.id) ?? 0),
+            : (derived.get(r.id) ?? SIGNIFICANCE.fallback)) +
+            (viewerBoost.get(r.id) ?? 0) +
+            // Your own question, or one your money is in. Never both added —
+            // stakeBoost takes the strongest, not the sum.
+            stakeBoost(Number(r.marketId), stakes),
         ),
         occurredAt: r.occurredAt,
         marketId: String(r.marketId),

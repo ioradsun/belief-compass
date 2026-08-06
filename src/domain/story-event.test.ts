@@ -6,6 +6,7 @@ import {
   type SideWindow,
 } from "./story-event";
 import { changeFrom24hRow, materialMoves, MATERIAL } from "./market-change";
+import { FEED_TRIGGERS } from "./feed-event";
 
 const side = (over: Partial<SideWindow> = {}): SideWindow => ({
   believerDelta: 0,
@@ -58,9 +59,16 @@ describe("contradictions carry the most information", () => {
 
 describe("capital safeguards — no drama from noise", () => {
   it("ignores a capital move below the absolute floor (tiny market)", () => {
-    // −$10 is under the $25 floor even though it's a big fraction of a $30 book.
+    // Under the absolute floor even though it is a big fraction of a $30 book.
+    // Taken FROM the constant so the fixture cannot quietly drift above it.
     const t = emitStoryEvent(
-      input({ yes: side({ believerDelta: 4, capitalDeltaUsd: -10, capitalBaseUsd: 30 }) }),
+      input({
+        yes: side({
+          believerDelta: 4,
+          capitalDeltaUsd: -FEED_TRIGGERS.capital.minUsd / 2,
+          capitalBaseUsd: 30,
+        }),
+      }),
     );
     expect(t?.type).not.toBe("people_capital_divergence");
   });
