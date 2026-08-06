@@ -11,9 +11,34 @@ export const DISCONNECT_EVENT = "conviction:sign-out";
 // claim it the moment it mounts.
 let pendingConnect = false;
 
+/**
+ * A WALLET SESSION IS NEVER RESTORED WITHOUT INTENT.
+ *
+ * wagmi's `reconnect()` used to run unconditionally once the real connectors
+ * loaded, so every visitor's wallet was woken on every page load — before they
+ * had chosen a market, entered an amount, or asked for anything. That is a
+ * silent session restore, and on some wallets it surfaces a prompt, for a
+ * reader who came to look at questions.
+ *
+ * The rule is now: the wallet is touched only when the reader is doing
+ * something that needs it. This flag is the gate, and it is set only by
+ * `requestConnect` — which is called from the trade confirm, the create flow,
+ * and an explicit tap on a Connect control. Never on load.
+ *
+ * A returning reader therefore taps once before their positions appear. That is
+ * the intended cost: browsing is anonymous, and the wallet is a thing you reach
+ * for when you are about to commit, not a toll on arrival.
+ */
+let connectIntended = false;
+
+export function hasConnectIntent(): boolean {
+  return connectIntended;
+}
+
 export function requestConnect() {
   if (typeof window === "undefined") return;
   pendingConnect = true;
+  connectIntended = true;
   window.dispatchEvent(new Event(CONNECT_EVENT));
 }
 
@@ -29,9 +54,11 @@ export function clearPendingConnect() {
   pendingConnect = false;
 }
 
-
 export function requestDisconnect() {
   if (typeof window === "undefined") return;
+  // Signing out withdraws the intent too, or the next connector swap would
+  // silently restore the session the reader just ended.
+  connectIntended = false;
   window.dispatchEvent(new Event(DISCONNECT_EVENT));
 }
 

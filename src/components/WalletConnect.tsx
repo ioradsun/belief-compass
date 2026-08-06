@@ -5,7 +5,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Config } from "wagmi";
 
 import { wagmiConfig, loadWalletConfig, walletIntent } from "@/lib/wagmi";
-import { requestConnect, requestDisconnect } from "@/lib/connect-bridge";
+import {
+  requestConnect,
+  requestDisconnect,
+  hasConnectIntent,
+  CONNECT_EVENT,
+} from "@/lib/connect-bridge";
 
 // Isolated query client for wagmi to avoid interfering with the app's router-level client.
 const wagmiQueryClient = new QueryClient();
@@ -32,7 +37,18 @@ const RainbowKitLayer = lazyRetry(() => import("@/components/wallet/RainbowKitLa
 function ReconnectOnConnectors({ ready }: { ready: boolean }) {
   const { reconnect } = useReconnect();
   useEffect(() => {
-    if (ready) reconnect();
+    if (!ready) return;
+    // GATED ON INTENT, not on readiness. This effect used to fire on every load,
+    // waking the wallet session of every visitor before they had asked for
+    // anything. See connect-bridge#hasConnectIntent: a session is restored only
+    // once the reader does something that needs one.
+    if (hasConnectIntent()) {
+      reconnect();
+      return;
+    }
+    const onIntent = () => reconnect();
+    window.addEventListener(CONNECT_EVENT, onIntent);
+    return () => window.removeEventListener(CONNECT_EVENT, onIntent);
   }, [ready, reconnect]);
   return null;
 }
