@@ -45,8 +45,6 @@ export type MarketRow = {
   volume_total_usd: number | null;
   yes_capital_usd?: number | null;
   no_capital_usd?: number | null;
-  chg_24h_yes?: number | null;
-  chg_24h_no?: number | null;
   chg_window_yes?: number | null;
   chg_window_no?: number | null;
   yes_volume_usd?: number | null;

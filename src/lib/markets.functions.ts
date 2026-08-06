@@ -66,7 +66,7 @@ async function sharedFeedData(win: VolumeWindow) {
       `
     onchain_id, yes_price_usd, no_price_usd, money_yes_pct, people_yes_pct, people_no_pct,
     believers_yes, believers_no, believers_mixed, directional_believers, divergence,
-    volume_total_usd, trending_score, chg_1h, chg_24h, chg_24h_yes, chg_24h_no,
+    volume_total_usd, trending_score,
     yes_capital_usd, no_capital_usd,
     new_believers_1h, new_believers_24h, unique_wallets_24h, circulation_24h,
     last_trade_at, velocity_5m,
@@ -490,7 +490,7 @@ export const listFeed = createServerFn({ method: "GET" })
 const MARKET_ROW_SELECT = `
   onchain_id, yes_price_usd, no_price_usd, money_yes_pct, people_yes_pct, people_no_pct,
   believers_yes, believers_no, believers_mixed, directional_believers, divergence,
-  volume_total_usd, trending_score, chg_1h, chg_24h, chg_24h_yes, chg_24h_no,
+  volume_total_usd, trending_score,
   yes_capital_usd, no_capital_usd, new_believers_1h, new_believers_24h,
   new_believers_yes_24h, new_believers_no_24h,
   unique_wallets_24h, circulation_24h, last_trade_at, velocity_5m,
@@ -1191,8 +1191,6 @@ export const getWallet = createServerFn({ method: "GET" })
       {
         yes_price_usd: number | null;
         no_price_usd: number | null;
-        chg_24h_yes: number | null;
-        chg_24h_no: number | null;
         // Quiet tribe health for the position card: side believer counts + the
         // per-side new-believers-today intake (all read-model, no extra query).
         believers_yes: number | null;
@@ -1210,15 +1208,13 @@ export const getWallet = createServerFn({ method: "GET" })
       const { data: st } = await sb
         .from("market_state")
         .select(
-          "onchain_id, yes_price_usd, no_price_usd, chg_24h_yes, chg_24h_no, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, live_line, live_line_kind, live_line_occurred_at",
+          "onchain_id, yes_price_usd, no_price_usd, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, live_line, live_line_kind, live_line_occurred_at",
         )
         .in("onchain_id", ids);
       for (const s of st ?? [])
         stateById.set(Number(s.onchain_id), {
           yes_price_usd: s.yes_price_usd == null ? null : Number(s.yes_price_usd),
           no_price_usd: s.no_price_usd == null ? null : Number(s.no_price_usd),
-          chg_24h_yes: s.chg_24h_yes == null ? null : Number(s.chg_24h_yes),
-          chg_24h_no: s.chg_24h_no == null ? null : Number(s.chg_24h_no),
           believers_yes: s.believers_yes == null ? null : Number(s.believers_yes),
           believers_no: s.believers_no == null ? null : Number(s.believers_no),
           new_believers_yes_24h:

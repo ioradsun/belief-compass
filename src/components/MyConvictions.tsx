@@ -31,8 +31,6 @@ type Position = {
   state?: {
     yes_price_usd: number | null;
     no_price_usd: number | null;
-    chg_24h_yes: number | null;
-    chg_24h_no: number | null;
     believers_yes?: number | null;
     believers_no?: number | null;
     new_believers_yes_24h?: number | null;
