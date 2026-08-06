@@ -37,7 +37,7 @@ export interface ParticipantSocial {
   faces: SocialParticipant[];
   /** How many participants are not shown as a face. */
   overflow: number;
-  /** "2 Tribe · 1 Rival · 14 Others" — or just "17 participants". */
+  /** "2 Tribe · 1 Rival · 14 Others" — or just "17 Participants". */
   summary: string;
 }
 
@@ -84,7 +84,7 @@ export function participantSocial(
     parts.length > 0
       ? parts.join(" · ")
       : count > 0
-        ? `${count.toLocaleString("en-US")} ${plural(count, "participant", "participants")}`
+        ? `${count.toLocaleString("en-US")} ${plural(count, "Participant", "Participants")}`
         : "";
 
   return { faces, overflow, summary };

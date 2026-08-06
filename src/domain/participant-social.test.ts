@@ -15,7 +15,7 @@ describe("participantSocial", () => {
 
   it("falls back to a plain count when nobody is familiar", () => {
     const r = participantSocial([p("a"), p("b")], 17);
-    expect(r.summary).toBe("17 participants");
+    expect(r.summary).toBe("17 Participants");
     expect(r.overflow).toBe(15);
   });
 
