@@ -138,7 +138,14 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       // log is pure over-the-wire weight for limit*3 rows. We select only the one
       // JSON sub-field a milestone row needs (its threshold), which is tiny.
       .select(
-        "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index, milestone_threshold:payload->>threshold, transition_headline:payload->>headline, transition_detail:payload->>detail",
+        // `transition_significance` and `transition_type` are not decoration.
+        // The emitter computes a universal significance at emission and stores
+        // it "so the mixer compares this against every other family on the one
+        // shared scale" — and until they were selected here, the reader never
+        // saw them, so every market signal fell through to the derived score or
+        // the 0.5 fallback. The number existed on disk and was thrown away on
+        // the way to the only place it mattered.
+        "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index, milestone_threshold:payload->>threshold, transition_headline:payload->>headline, transition_detail:payload->>detail, transition_type:payload->>type, transition_significance:payload->>significance",
       )
       .eq("is_canonical", true)
       .in("kind", LIVE_KINDS);
@@ -230,6 +237,13 @@ export const listLiveEvents = createServerFn({ method: "GET" })
             ? {
                 headline: ((r as Record<string, unknown>).transition_headline as string) ?? "",
                 detail: ((r as Record<string, unknown>).transition_detail as string | null) ?? null,
+                type: ((r as Record<string, unknown>).transition_type as string | null) ?? null,
+                // Stored as text by `payload->>`; a malformed value stays absent
+                // so the mixer falls back rather than ranking on a NaN.
+                significance: (() => {
+                  const v = Number((r as Record<string, unknown>).transition_significance);
+                  return Number.isFinite(v) ? v : undefined;
+                })(),
               }
             : null,
     }));
@@ -307,7 +321,6 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       }
     }
 
-
     const labelByWallet = new Map<string, NetLabel>();
     /**
      * The viewer's relationships in full, not just their names. Discovery asks
@@ -356,7 +369,6 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         ...moments.flatMap((m) => m.people.map((p) => p.wallet)),
         ...[...burstStakes.values()].flatMap((l) => l.map((s) => s.wallet)),
         ...[...believersByMarket.values()].flat(),
-
       ]),
     ];
 
@@ -501,10 +513,6 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         }
       }
 
-
-
-
-
       // A CONVICTION COHORT — the people still holding. The event stored PEOPLE,
       // not prose, precisely so the sentence can be written for where it is
       // being read: this request knows whether it is the app-wide tape or one
@@ -559,10 +567,14 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       // Market-wide transitions carry their own composed copy in the payload
       // (the emitter already ran the interpretation + dedup) — render it directly.
       if (r.kind === "market_transition") {
-        const p = r.payload as { headline?: string; detail?: string | null };
+        const p = r.payload as { headline?: string; detail?: string | null; type?: string | null };
         r.story = {
           category: "momentum",
-          headline: "MARKET SIGNAL",
+          // A material move is the product's own news line — a change of five
+          // percent or more in believers, capital or price. Labelling it the
+          // same as every other signal would hide the one the reader was
+          // promised would always be reported.
+          headline: p.type === "material_move" ? "MAJOR MOVE" : "MARKET SIGNAL",
           body: p.headline ?? "",
           attribution: p.detail ?? null,
           tone: r.side === "YES" ? "yes" : r.side === "NO" ? "no" : "neutral",

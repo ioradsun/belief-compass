@@ -39,16 +39,21 @@ export interface SideSnapshot {
   /** People who took this side during the window. */
   joined: number;
   /**
+   * Capital change over the window, in percent — RANKED, so null means either
+   * nothing moved or the base was not worth dividing by. Comes from the one
+   * shared change source (src/domain/market-change), never from a price column.
+   */
+  capitalChangePct: number | null;
+  /**
    * Per-share PRICE change over the window, in percent, or null when unknown.
    *
-   * This used to be called `capitalChangePct`, and the caller filled it from
-   * `chg_window_yes` — which `market_change_window` computes as
-   * `(yes_price_usd − base_price) / base_price`, a price move. So the panel was
-   * saying "Capital moved toward YES" on the strength of a re-rate. On a bonding
-   * curve the DIRECTION is fair (YES gets more expensive when YES is bought),
-   * but the MAGNITUDE is not a capital figure at all, and the threshold below is
-   * read against it. The field now says what it holds; the copy says what it
-   * measures.
+   * There used to be only one field here, called `capitalChangePct`, and the
+   * caller filled it from `chg_window_yes` — which `market_change_window`
+   * computes as `(yes_price_usd − base_price) / base_price`, a price move. So
+   * the panel said "Capital moved toward YES" on the strength of a re-rate. On a
+   * bonding curve the DIRECTION is fair (YES gets more expensive when YES is
+   * bought), but the MAGNITUDE is not a capital figure at all. Both facts are
+   * now carried, each in its own name, and each sentence says what it measured.
    */
   priceChangePct: number | null;
 }
@@ -57,12 +62,15 @@ export const COMPARE = {
   /** Below this, arrivals are people rather than momentum. */
   minJoined: 2,
   /**
-   * Price moves smaller than this are noise, not a shift. Measured across 2,000
-   * live sides, the 95th percentile share price sits about 2.9% above the seed
-   * price — so five percent is deliberately above almost all of the noise, and
-   * this branch stays quiet on a market that has barely traded.
+   * Moves smaller than this are noise, not a shift — and it is the same five
+   * percent the product treats as major news everywhere else (see MATERIAL in
+   * src/domain/market-change). Measured across 2,000 live sides, the 95th
+   * percentile share price sits about 2.9% above the seed price, so five percent
+   * is deliberately above almost all of the noise and this branch stays quiet on
+   * a market that has barely traded.
    */
   minPriceMovePct: 5,
+  minCapitalMovePct: 5,
   /**
    * How lopsided the believer count must be before one side is described as
    * leading. Anything closer reads as evenly matched, which is itself the
@@ -85,6 +93,27 @@ const n = (v: number | null | undefined): number =>
   typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0;
 
 const plural = (c: number, word: string) => `${c} ${word}${c === 1 ? "" : "s"}`;
+
+/**
+ * Which side moved more on one metric, or null when neither cleared the bar.
+ * A null percentage is not a zero — it means the change was not divisible — so
+ * it can never win, and it can never suppress the other side either.
+ */
+function leader(
+  yesPct: number | null,
+  noPct: number | null,
+  minPct: number,
+): { side: Side; up: boolean } | null {
+  const y = yesPct != null && Math.abs(yesPct) >= minPct ? yesPct : 0;
+  const n = noPct != null && Math.abs(noPct) >= minPct ? noPct : 0;
+  if (y === 0 && n === 0) return null;
+  // A rise on either side outranks a fall: gaining ground is the story, and
+  // "capital left NO" and "capital moved toward YES" describe the same trade.
+  if (y > 0 && y >= Math.abs(n)) return { side: "YES", up: true };
+  if (n > 0 && n >= Math.abs(y)) return { side: "NO", up: true };
+  if (Math.abs(y) > Math.abs(n)) return { side: "YES", up: false };
+  return { side: "NO", up: false };
+}
 
 /**
  * What is happening between the two sides, in one sentence.
@@ -117,20 +146,24 @@ export function compareSides(yes: SideSnapshot, no: SideSnapshot): Comparison {
     return { story: "Both sides are gaining believers.", focus: null };
   }
 
-  // PRICE. Weaker than people — it is one person's decision restated as a rate —
-  // so it only speaks when nobody arrived. The sentence says price, because
-  // price is what was measured; calling a re-rate "capital moved" would be
+  // CAPITAL. Weaker than people — it is one person's decision restated in
+  // dollars — so it only speaks when nobody arrived. Money moving is a stronger
+  // claim than a re-rate, so it is asked first.
+  const cap = leader(yes.capitalChangePct, no.capitalChangePct, COMPARE.minCapitalMovePct);
+  if (cap) {
+    const verb = cap.up ? "moved toward" : "pulled back from";
+    return { story: `Capital ${verb} ${cap.side}.`, focus: cap.side };
+  }
+
+  // PRICE. Last, and named as price: calling a re-rate "capital moved" would be
   // stating a number in a unit it was never computed in.
-  const yc = yes.priceChangePct;
-  const nc = no.priceChangePct;
-  const ym = yc != null && Math.abs(yc) >= COMPARE.minPriceMovePct ? yc : 0;
-  const nm = nc != null && Math.abs(nc) >= COMPARE.minPriceMovePct ? nc : 0;
-  if (ym > 0 && ym >= Math.abs(nm)) return { story: "Backing YES costs more now.", focus: "YES" };
-  if (nm > 0 && nm >= Math.abs(ym)) return { story: "Backing NO costs more now.", focus: "NO" };
-  if (ym < 0 && Math.abs(ym) > Math.abs(nm))
-    return { story: "Backing YES got cheaper.", focus: "YES" };
-  if (nm < 0 && Math.abs(nm) > Math.abs(ym))
-    return { story: "Backing NO got cheaper.", focus: "NO" };
+  const px = leader(yes.priceChangePct, no.priceChangePct, COMPARE.minPriceMovePct);
+  if (px) {
+    return {
+      story: px.up ? `Backing ${px.side} costs more now.` : `Backing ${px.side} got cheaper.`,
+      focus: px.side,
+    };
+  }
 
   // STANDING BALANCE — nothing moved, so describe what is rather than what
   // changed. This is the honest dull answer, and most markets most of the time.

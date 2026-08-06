@@ -48,6 +48,8 @@ import type { MarketRow } from "@/components/MarketCard";
 import type { OrderSide } from "@/domain/order";
 import { useMoney } from "@/lib/display-unit";
 import { compareSides, comparisonStrip, type Side, type StripSide } from "@/domain/side-compare";
+import { useMarketChange } from "@/lib/market-change-query";
+import type { VolumeWindow } from "@/lib/markets.functions";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -87,19 +89,25 @@ export function MobileCaseView({
   const { format } = useMoney();
 
   const r = row as unknown as Record<string, unknown>;
+  // The one shared change source, so the comparison at the top of this screen
+  // and the metrics inside each side are the same arithmetic. It also gives the
+  // strip a REAL capital percentage: `chg_window_*` is a per-share price change,
+  // and reading it as capital is what made this panel say "Capital moved toward
+  // YES" on the strength of a re-rate.
+  const marketChange = useMarketChange(marketId, row, "24h" as VolumeWindow);
   const yes = {
     believers: num(r.believers_yes),
     capitalUsd: numOrNull(r.yes_capital_usd),
     joined: num(r.new_believers_yes_24h),
-    // `chg_window_*` is a per-share PRICE change, not a capital one — see
-    // SideSnapshot.priceChangePct for why the distinction matters.
-    priceChangePct: numOrNull(r.chg_window_yes ?? r.chg_24h_yes),
+    capitalChangePct: marketChange.yes.capital.pct,
+    priceChangePct: marketChange.yes.price.pct,
   };
   const no = {
     believers: num(r.believers_no),
     capitalUsd: numOrNull(r.no_capital_usd),
     joined: num(r.new_believers_no_24h),
-    priceChangePct: numOrNull(r.chg_window_no ?? r.chg_24h_no),
+    capitalChangePct: marketChange.no.capital.pct,
+    priceChangePct: marketChange.no.price.pct,
   };
   const { story, focus } = compareSides(yes, no);
   const strip = comparisonStrip(yes, no);

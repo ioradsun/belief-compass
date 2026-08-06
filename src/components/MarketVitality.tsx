@@ -19,6 +19,25 @@ import type { FlowWindow } from "@/domain/market-flow";
 import { formatMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
 import { believerMove, capitalMove, type MetricMove } from "@/domain/metric-display";
+import type { MarketChange, MetricChange } from "@/domain/market-change";
+
+/**
+ * A shared MetricChange in the shape believerMove/capitalMove expect.
+ *
+ * `divisor` converts a USD-denominated change back into the metric's own unit
+ * (capital is quoted to those functions in ETH so the viewer's display unit can
+ * be applied; believers pass through at 1). Null means we have no rate and
+ * cannot convert, so the tape fallback stands.
+ */
+function fromChange(
+  m: MetricChange | undefined,
+  fallback: BookMetric,
+  divisor: number | null,
+): { current: number; base: number } {
+  if (m == null || m.current == null || divisor == null || divisor === 0) return fallback;
+  const current = m.current / divisor;
+  return { current, base: m.base == null ? current : m.base / divisor };
+}
 
 const dirTone = (d: "up" | "down" | "flat"): string =>
   d === "up" ? "var(--gain)" : d === "down" ? "var(--loss)" : "var(--text-muted)";
@@ -30,13 +49,13 @@ type CapFmt = (eth: number, signed?: boolean) => string;
 // metric-display rule (src/domain/metric-display): the count/money leads, the %
 // is paired, and a % off a tiny base is kept quiet or dropped. These adapters just
 // feed the canonical book metric into that rule.
-const believerCopy = (m: BookMetric, w: BookWindow): MetricMove =>
+const believerCopy = (m: { current: number; base: number }, w: BookWindow): MetricMove =>
   believerMove(m.current, m.base, w.since);
 
 // Materiality (direction, the percentage floor) is judged in USD so a display in
 // ETH never changes what counts as a real move; only the shown figure converts.
 const capitalCopy = (
-  m: BookMetric,
+  m: { current: number; base: number },
   w: BookWindow,
   usd: (eth: number) => number,
   money: CapFmt,
@@ -102,16 +121,27 @@ function MomentumMetric({
 
 export function MarketMomentum({
   tape,
+  change,
   ethUsd,
   win,
   nowMs = Date.now(),
   footer,
   dense,
-  believersTotal,
-  capitalTotalUsd,
-
 }: {
+  /** Still needed for the window phrase and the cold-start read. Never for a delta. */
   tape: TapeTrade[] | undefined;
+  /**
+   * WHAT MOVED — the one shared answer (src/domain/market-change), the same
+   * object the YES and NO rails read.
+   *
+   * This used to be two props (an authoritative total) plus a delta lifted off
+   * the tape replay: `base: believersTotal − raw.delta`. The totals reconciled
+   * with the rails and the MOVEMENT did not, because the rails measured against
+   * a snapshot baseline while this measured against a 1000-row trade replay. On
+   * a busy market the centre and its own two sides disagreed about the same
+   * window, and the comment above the code said so and shipped anyway.
+   */
+  change?: MarketChange | null;
   ethUsd: number;
   /** The one on-screen timeframe — every total, delta and spark quotes it. */
   win?: FlowWindow;
@@ -120,21 +150,6 @@ export function MarketMomentum({
   footer?: ReactNode;
   /** Phone: believers and capital sit side by side so the market fits one screen. */
   dense?: boolean;
-  /**
-   * The AUTHORITATIVE market-wide believer count (market_state: YES + NO) — the
-   * exact same source the YES and NO rails headline. The tape-derived tally can
-   * drift from the holder table on markets whose tape is capped or partially
-   * indexed, which is what made the center disagree with its own two sides.
-   * The window delta still comes from the tape, so the % stays consistent.
-   */
-  believersTotal?: number | null;
-  /**
-   * The AUTHORITATIVE market-wide capital in USD (market_state: YES + NO), the
-   * same holders-table source the side rails quote. The tape replay leaves float
-   * residue behind after full exits, which is what showed capital on a market
-   * nobody is in. The window delta still comes from the tape.
-   */
-  capitalTotalUsd?: number | null;
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs, win), [tape, nowMs, win]);
   const { unit } = useDisplayUnit();
@@ -143,20 +158,12 @@ export function MarketMomentum({
   const money: CapFmt = (eth, signed) =>
     formatMoney(eth, { from: "ETH", to: unit, ethUsd, signed });
 
-  const raw = book.believers.market;
-  // Authoritative total when we have it; keep the tape's delta so the copy and
-  // percentage still describe the selected window.
-  const b: BookMetric =
-    believersTotal != null && Number.isFinite(believersTotal)
-      ? { ...raw, current: believersTotal, base: believersTotal - raw.delta }
-      : raw;
-  const rawC = book.capitalEth.market;
-  const authCapEth =
-    capitalTotalUsd != null && Number.isFinite(capitalTotalUsd) && ethUsd > 0
-      ? capitalTotalUsd / ethUsd
-      : null;
-  const c: BookMetric =
-    authCapEth != null ? { ...rawC, current: authCapEth, base: authCapEth - rawC.delta } : rawC;
+  // The shared answer where we have it; the tape replay only while it is still
+  // in flight, so the panel never opens blank. `base` falling back to `current`
+  // means "no history yet" — believerMove/capitalMove then say nothing about a
+  // change rather than reporting a fabricated zero.
+  const b = fromChange(change?.market.believers, book.believers.market, 1);
+  const c = fromChange(change?.market.capital, book.capitalEth.market, ethUsd > 0 ? ethUsd : null);
 
   // ONE analytical container: heading → believers → cap → insight → Case File.
   // No floating typography, no nested cards — a single market instrument.
@@ -184,7 +191,6 @@ export function MarketMomentum({
         label="Capital"
         copy={capitalCopy(c, book.window, usd, money)}
       />
-
 
       {footer && (
         <>

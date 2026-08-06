@@ -5,6 +5,7 @@ const side = (o: Partial<SideSnapshot> = {}): SideSnapshot => ({
   believers: 10,
   capitalUsd: 500,
   joined: 0,
+  capitalChangePct: 0,
   priceChangePct: 0,
   ...o,
 });
@@ -65,6 +66,38 @@ describe("no trend is manufactured from noise", () => {
 
   it("falls back to the honest dull answer", () => {
     expect(compareSides(side(), side()).story).toBe("Both sides are evenly matched.");
+  });
+});
+
+describe("capital speaks before price, and each says what it measured", () => {
+  it("names capital moving toward a side", () => {
+    const c = compareSides(side({ capitalChangePct: 30 }), side());
+    expect(c).toEqual({ story: "Capital moved toward YES.", focus: "YES" });
+  });
+
+  it("names a withdrawal as a withdrawal", () => {
+    const c = compareSides(side({ capitalChangePct: -30 }), side());
+    expect(c).toEqual({ story: "Capital pulled back from YES.", focus: "YES" });
+  });
+
+  /** Money moving is a stronger claim than a re-rate, so it is asked first. */
+  it("prefers a real capital move over a price move", () => {
+    const c = compareSides(side({ capitalChangePct: 20, priceChangePct: 40 }), side());
+    expect(c.story).toBe("Capital moved toward YES.");
+  });
+
+  /**
+   * A null percentage means the change was not divisible (a dust base), not that
+   * nothing happened. It must not win, and it must not silence the other side.
+   */
+  it("lets the other side speak when this one's percentage was withheld", () => {
+    const c = compareSides(side({ capitalChangePct: null }), side({ capitalChangePct: 30 }));
+    expect(c).toEqual({ story: "Capital moved toward NO.", focus: "NO" });
+  });
+
+  it("holds the same five percent the rest of the product treats as news", () => {
+    expect(COMPARE.minCapitalMovePct).toBe(5);
+    expect(COMPARE.minPriceMovePct).toBe(5);
   });
 });
 
