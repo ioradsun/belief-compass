@@ -9,6 +9,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { serviceClient } from "@/lib/supabase-clients";
+import { readEthUsd } from "@/lib/eth-usd.server";
 import { composeShareImpact, type ShareImpact } from "@/domain/share-impact";
 
 const WALLET = /^0x[a-fA-F0-9]{40}$/;
@@ -147,19 +148,14 @@ export const bindShareVisit = createServerFn({ method: "POST" })
     return { bound: bindIds.length };
   });
 
-/** The latest ETH→USD rate from the cron-refreshed snapshot (0 when unknown). */
-async function rate(sb: ReturnType<typeof serviceClient>): Promise<number> {
-  const { data } = await sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle();
-  return Number((data as { value?: number } | null)?.value ?? 0) || 0;
-}
-
 export interface ShareImpactResult {
   /** Distinct visitors who opened the sharer's links. */
   opens: number;
   /** Attributed wallets that took a directional position (real believers). */
   believers: number;
   /** Capital those believers committed, in USD (cost basis, best-effort). */
-  capitalUsd: number;
+  /** Null when we could not price — never 0, which would read as "moved nothing". */
+  capitalUsd: number | null;
   /** The composed, honest impact line. */
   impact: ShareImpact;
 }
@@ -247,8 +243,10 @@ export const getShareImpact = createServerFn({ method: "GET" })
       }
     }
 
-    const ethUsd = await rate(sb);
-    const capitalUsd = ethUsd > 0 ? ethCost * ethUsd : 0;
+    const ethUsd = await readEthUsd(sb);
+    // Null rather than 0: "they moved no capital" and "we could not price what
+    // they moved" are different claims, and only one is a fact about the sharer.
+    const capitalUsd = ethUsd == null ? null : ethCost * ethUsd;
     const impact = composeShareImpact({ opens, believers, capitalUsd, scope });
     return { opens, believers, capitalUsd, impact };
   });

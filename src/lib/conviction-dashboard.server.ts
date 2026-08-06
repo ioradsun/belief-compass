@@ -12,6 +12,7 @@ import { loadWindowChanges, pricePct } from "@/lib/window-change.server";
 import { positionValueUsd } from "@/domain/position-value";
 import { readWalletTradesAscending } from "@/lib/conviction-dashboard.trades.server";
 import { decodeBuyCreatorFeeWei, decodeBuyTotalFeeWei } from "@/chain/decoder";
+import { readEthUsd } from "@/lib/eth-usd.server";
 import {
   realizedTradingEth,
   bucketCreatorFees,
@@ -30,7 +31,14 @@ export interface DashboardBestMarket {
 
 export interface ConvictionDashboardData {
   wallet: string;
-  ethUsd: number;
+  /**
+   * The rate every USD figure below was computed with — NULL when we could not
+   * price at all. This is a whole-payload signal rather than a per-field one
+   * because these figures are perfectly correlated: they are all this single
+   * number times an ETH figure. When it is null the dashboard must show its
+   * unpriced state rather than a page of confident zeros.
+   */
+  ethUsd: number | null;
   holdings: {
     /** POV valuation of currently-held tokens (USD). */
     worthUsd: number;
@@ -90,11 +98,6 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-async function ethUsdRate(sb: ReturnType<typeof serviceClient>): Promise<number> {
-  const { data } = await sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle();
-  return num((data as { value?: number } | null)?.value) || 0;
-}
-
 /** ETH cost basis → USD (0 when unknown), matching the rest of the app. */
 const costUsd = (ethCost: unknown, ethUsd: number): number => {
   const eth = num(ethCost);
@@ -106,7 +109,12 @@ export async function buildConvictionDashboard(
 ): Promise<ConvictionDashboardData> {
   const wallet = walletRaw.toLowerCase();
   const sb = serviceClient();
-  const ethUsd = await ethUsdRate(sb);
+  const ethUsd = await readEthUsd(sb);
+  // THE ONE PLACE A ZERO ENTERS, and only because the payload carries
+  // `ethUsd: null` alongside it so the UI never renders what follows. Every USD
+  // figure in this builder is `rate x <an ETH figure>`; with no rate they are all
+  // equally meaningless, which is a page-level state, not fourteen empty fields.
+  const rate = ethUsd ?? 0;
 
   // --- Holdings (unrealized) + today's portfolio move -----------------------
   const { data: beliefsData } = await sb
@@ -183,7 +191,7 @@ export async function buildConvictionDashboard(
       ethUsd,
     });
     const w = yes.usd + no.usd;
-    const c = costUsd(b.yes_cost, ethUsd) + costUsd(b.no_cost, ethUsd);
+    const c = costUsd(b.yes_cost, rate) + costUsd(b.no_cost, rate);
     // A GAIN needs a real valuation on both sides of the subtraction. Where the
     // worth fell back to the cost basis, "worth − cost" is a guaranteed zero
     // wearing the costume of a measurement, so no gain is claimed at all.
@@ -236,8 +244,8 @@ export async function buildConvictionDashboard(
   const startOfDayIso = startOfDay.toISOString();
   const beforeToday = trades.filter((t) => t.occurred_at < startOfDayIso);
   const realizedBeforeEth = realizedTradingEth(asDash(beforeToday));
-  const realizedUsd = realizedEth * ethUsd;
-  const realizedTodayUsd = (realizedEth - realizedBeforeEth) * ethUsd;
+  const realizedUsd = realizedEth * rate;
+  const realizedTodayUsd = (realizedEth - realizedBeforeEth) * rate;
 
   // Lifetime money-flow story + today's trade count (viewer).
   const flows = moneyFlows(dashTrades);
@@ -316,9 +324,9 @@ export async function buildConvictionDashboard(
       if (Number.isFinite(at)) entries.push({ at, eth: Number(feeWei) / 1e18 });
     }
     const w = bucketCreatorFees(entries, Date.now());
-    creatorEarnedTodayUsd = w.todayEth * ethUsd;
-    creatorThisWeekUsd = w.weekEth * ethUsd;
-    creatorLastWeekUsd = w.prevWeekEth * ethUsd;
+    creatorEarnedTodayUsd = w.todayEth * rate;
+    creatorThisWeekUsd = w.weekEth * rate;
+    creatorLastWeekUsd = w.prevWeekEth * rate;
   }
 
   // How many distinct people traded this creator's markets — today, and ever.
@@ -382,9 +390,9 @@ export async function buildConvictionDashboard(
     today: { portfolioUsd: portfolioTodayUsd, creatorEarnedUsd: creatorEarnedTodayUsd },
     creatorWindows: { thisWeekUsd: creatorThisWeekUsd, lastWeekUsd: creatorLastWeekUsd },
     progress: {
-      putInUsd: flows.putInEth * ethUsd,
-      cashedOutUsd: flows.cashedOutEth * ethUsd,
-      tradingFeesUsd: tradingFeesEth * ethUsd,
+      putInUsd: flows.putInEth * rate,
+      cashedOutUsd: flows.cashedOutEth * rate,
+      tradingFeesUsd: tradingFeesEth * rate,
     },
     activity: { tradesTodayCount, uniqueTradersTodayCount },
     peopleReached,

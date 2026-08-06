@@ -118,8 +118,9 @@ export function positionValueUsd(input: {
  * a caller comparing worth against cost must be able to tell "they put in
  * nothing" from "we have no rate", and only one of those is a fact.
  */
-export function costBasisUsd(ethCost: unknown, ethUsd: number): number | null {
+export function costBasisUsd(ethCost: unknown, ethUsd: number | null | undefined): number | null {
   const eth = finite(ethCost);
-  if (eth == null || eth <= 0 || !(ethUsd > 0)) return null;
-  return eth * ethUsd;
+  const rate = finite(ethUsd);
+  if (eth == null || eth <= 0 || rate == null || rate <= 0) return null;
+  return eth * rate;
 }

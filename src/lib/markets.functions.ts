@@ -6,6 +6,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { publicClient, serviceClient } from "@/lib/supabase-clients";
 import { costBasisUsd, VALUE } from "@/domain/position-value";
+import { readEthUsd } from "@/lib/eth-usd.server";
 import { aliasFor } from "@/lib/wallet-identity";
 import { readLatestTradesPerMarket, readLatestTradeEvents } from "@/lib/events.functions";
 import type { TapeTrade } from "@/domain/conviction-series";
@@ -176,7 +177,9 @@ async function sharedFeedData(win: VolumeWindow) {
   const noEth = new Map<number, number>();
   const yesTrades = new Map<number, number>();
   const noTrades = new Map<number, number>();
-  let ethUsd = 0;
+  // Null until read, and null STAYS null when there is no rate — the feed's USD
+  // figures are omitted rather than published as zero (see lib/eth-usd.server).
+  let ethUsd: number | null = null;
   const chgYes = new Map<number, number>();
   const chgNo = new Map<number, number>();
   const momentumById = new Map<number, MomentumFacts>();
@@ -202,7 +205,7 @@ async function sharedFeedData(win: VolumeWindow) {
     // opens can never disagree about the same window.
     const [vol, cal, part, chg] = await Promise.all([
       sb.rpc("market_volume_window", { p_ids: ids, p_since: since }),
-      sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
+      readEthUsd(sb),
       sb.rpc("market_participation"),
       loadWindowChanges(sb, rows as unknown as Array<Record<string, unknown>>, win),
     ]);
@@ -235,7 +238,7 @@ async function sharedFeedData(win: VolumeWindow) {
         yesTrades.set(id, (yesTrades.get(id) ?? 0) + Number(t.trade_count ?? 0));
       }
     }
-    ethUsd = Number((cal.data as { value?: number } | null)?.value ?? 0) || 0;
+    ethUsd = cal;
     for (const id of ids) {
       const c = chg.byId.get(id);
       const y = pricePct(c, "YES");
@@ -537,8 +540,10 @@ export const listFeed = createServerFn({ method: "GET" })
       const id = Number(r.onchain_id);
       const y = yesEth.get(id) ?? 0;
       const n = noEth.get(id) ?? 0;
-      const yesUsd = ethUsd > 0 ? y * ethUsd : null;
-      const noUsd = ethUsd > 0 ? n * ethUsd : null;
+      // Already the honest shape — null, not 0 — and now the null can actually
+      // reach here instead of being pre-empted by a fabricated rate of zero.
+      const yesUsd = ethUsd == null ? null : y * ethUsd;
+      const noUsd = ethUsd == null ? null : n * ethUsd;
 
       // Narrative layer: your network active in THIS market → named faces. Only
       // the viewer's OWN people are ever named; the crowd stays a count.
@@ -986,7 +991,7 @@ export const getPositionSummary = createServerFn({ method: "GET" })
     const fin = (v: unknown): number | null =>
       v == null || !Number.isFinite(Number(v)) ? null : Number(v);
     // Cost basis is stored in ETH; value it in USD so it compares with USD worth.
-    const ethUsd = await ethUsdRate(sb);
+    const ethUsd = await readEthUsd(sb);
     return {
       yes: { invested: costBasisUsd(row.yes_cost, ethUsd), worth: fin(row.yes_value_usd) },
       no: { invested: costBasisUsd(row.no_cost, ethUsd), worth: fin(row.no_value_usd) },
@@ -1200,12 +1205,6 @@ export type Pulse = {
   eth: number;
   at: string;
 };
-
-/** Current ETH→USD rate from the cron-refreshed snapshot (0 when unknown). */
-async function ethUsdRate(sb: ReturnType<typeof serviceClient>): Promise<number> {
-  const { data } = await sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle();
-  return Number((data as { value?: number } | null)?.value ?? 0) || 0;
-}
 
 /**
  * The live ETH/USD rate + when it was last refreshed — the ONE shared rate the
@@ -1556,7 +1555,7 @@ export const getWallet = createServerFn({ method: "GET" })
     }
 
     // Cost basis is stored in ETH; value it in USD so gain compares like with like.
-    const ethUsd = await ethUsdRate(sb);
+    const ethUsd = await readEthUsd(sb);
 
     // Staleness, from the one module that defines it. `belief-rollup` re-marks
     // every minute, so VALUE.staleAfterMs is set at the point where silence means

@@ -414,11 +414,13 @@ function GrowthChart({ growth }: { growth: EcosystemValue["growth"] }) {
 }
 
 function ActivityRow({ a }: { a: EcosystemValue["recentActivity"][number] }) {
-  const usd = a.amountEth * a.ethUsd;
+  // Null rather than 0 when the row could not be priced — the amount is still
+  // true in ETH, and the renderer below shows that instead of "$0".
+  const usd = a.ethUsd == null ? null : a.amountEth * a.ethUsd;
   const text =
     a.kind === "market_created"
       ? "New market created"
-      : `${a.action === "SELL" ? "Sold" : "Backed"} ${a.side ?? ""}${usd > 0 ? ` · ${fmtUsd(usd)}` : ""}`;
+      : `${a.action === "SELL" ? "Sold" : "Backed"} ${a.side ?? ""}${usd != null && usd > 0 ? ` · ${fmtUsd(usd)}` : ""}`;
   const dot = a.kind === "market_created" ? "var(--text-secondary)" : a.side === "NO" ? "var(--no)" : "var(--gain)";
   return (
     <div className="flex items-start gap-2.5 rounded-xl bg-[var(--surface)] px-3 py-2.5">

@@ -26,6 +26,11 @@ import {
 
 const fmtPct = (n: number): string =>
   `${n < 0 ? "−" : "+"}${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+/**
+ * Creator fees are read from the contract in wei, so they are priced here rather
+ * than on the server. Reached only after the `ethUsd == null` guard above, which
+ * is what makes the zero unreachable rather than merely unlikely.
+ */
 const weiToUsd = (wei: bigint | null | undefined, ethUsd: number): number =>
   wei == null || !(ethUsd > 0) ? 0 : Number(formatEther(wei)) * ethUsd;
 
@@ -297,6 +302,25 @@ export function ConvictionDashboard({
 
   if (!wallet) return <Centered>Connect a wallet to see your Conviction.</Centered>;
   if (isLoading && !data) return <Centered>Loading your Conviction…</Centered>;
+  /**
+   * NO RATE, NO DOLLARS.
+   *
+   * Every figure on this page is one ETH/USD rate times an ETH figure, so when
+   * that rate is missing they are not fourteen unknown numbers — they are one
+   * unknown, fourteen times. The server sends `ethUsd: null` to say so.
+   *
+   * Rendering anyway would fill the page with $0.00: "you put in nothing, you
+   * are worth nothing, you earned nothing." That is not a degraded view of
+   * someone's money, it is a false one, and this table has already been
+   * unreadable in production for months (see lib/eth-usd.server).
+   */
+  if (data && data.ethUsd == null)
+    return (
+      <Centered>
+        We can&rsquo;t price your Conviction right now — the ETH/USD rate is unavailable. Your
+        positions are safe; this is our side. Try again in a moment.
+      </Centered>
+    );
 
   return (
     <div ref={rootRef} className="mx-auto w-full max-w-[860px] px-1">
