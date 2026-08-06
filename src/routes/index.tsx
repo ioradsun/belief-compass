@@ -720,17 +720,12 @@ function Feed() {
   };
 
   /**
-   * Which network groups to offer. The server decides — it is the only place
-   * that has read the viewer's DNA — so Tribe and Rivals appear only once the
-   * evidence exists to fill them. Everyone and Following always work.
+   * Which network groups to offer. All four are always listed so the lens is
+   * discoverable; a lens with no evidence yet simply returns nothing, which is
+   * a clearer answer than an option that silently does not exist.
    */
-  const serverModes = stableFeed?.modes ?? ["for_you"];
-  const availableNetworks: FeedNetwork[] = [
-    "everyone",
-    ...(serverModes.includes("tribe") ? (["tribe"] as const) : []),
-    ...(serverModes.includes("rivals") ? (["rivals"] as const) : []),
-    ...(wallet ? (["following"] as const) : []),
-  ];
+  const availableNetworks: FeedNetwork[] = ["everyone", "tribe", "rivals", "following"];
+
 
   // Refresh the discovery feed: re-fetch (newly created markets may appear) and
   // leave the caught-up state. The held order is adopted here too — asking for a
