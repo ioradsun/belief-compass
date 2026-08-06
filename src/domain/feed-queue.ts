@@ -35,6 +35,20 @@
  *      running order from that point instead of abandoning it — the queue is
  *      the session, and search is an entry point into it, not a detour out.
  *
+ * SEEDED VS INVENTED. Holding a new order is only a kindness when the reader
+ * HAS an order to be disturbed. There is one state where they do not, and it is
+ * the common one: the page mounts with `?m=` in the URL, the active market is
+ * known before any feed response, and `jumpTo` splices it into an empty queue.
+ * The order is now one market long — and the first real server order was then
+ * treated as a re-rank to be held, so the panel showed the market you arrived on
+ * under "Now reading" and "You're at the end of this feed" beneath it. The rest
+ * of the feed was fetched, sequenced, and never shown.
+ *
+ * So the queue records whether its order came FROM THE SERVER (`seeded`). An
+ * unseeded order is a placeholder, not a reading position: the first server
+ * order is adopted straight away, with the market the reader arrived on kept at
+ * the head. Nothing is disturbed, because nothing was there to disturb.
+ *
  * A PURE REORDER (same ids, new sequence) is held too, and shows no notice:
  * there is nothing new to announce, and rearranging the list under a reader is
  * exactly what this module refuses to do. It is adopted at the next commit,
@@ -53,6 +67,14 @@ export interface FeedQueue {
    * waiting — either none has arrived, or it agreed with what is on screen.
    */
   readonly incoming: readonly number[] | null;
+  /**
+   * True once a SERVER order has been adopted.
+   *
+   * False means whatever is in `order` was invented locally — the single market
+   * the URL named before the feed arrived. The distinction is what stops a
+   * placeholder of one from being defended as though it were a reading position.
+   */
+  readonly seeded: boolean;
 }
 
 const EMPTY: readonly number[] = [];
@@ -83,7 +105,7 @@ export function initQueue(order: readonly number[], activeId: number | null = nu
   // An active market outside the first order still belongs in it — the same
   // splice `jumpTo` performs, applied at the boundary where nothing precedes it.
   const withActive = active != null && !ids.includes(active) ? [active, ...ids] : ids;
-  return { order: withActive, activeId: active, incoming: null };
+  return { order: withActive, activeId: active, incoming: null, seeded: true };
 }
 
 /**
@@ -96,7 +118,9 @@ export function initQueue(order: readonly number[], activeId: number | null = nu
 export function receiveOrder(q: FeedQueue, latest: readonly number[]): FeedQueue {
   const ids = unique(latest);
   if (ids.length === 0) return q;
-  if (q.order.length === 0) return initQueue(ids, q.activeId);
+  // Nothing the reader chose is on screen yet — either the queue is empty, or it
+  // holds only the market the URL named. Adopt, keeping that market at the head.
+  if (!q.seeded) return initQueue(ids, q.activeId);
   if (same(ids, q.order)) return q.incoming ? { ...q, incoming: null } : q;
   return { ...q, incoming: ids };
 }
@@ -130,7 +154,7 @@ export function commit(q: FeedQueue): FeedQueue {
     const wasAt = q.order.indexOf(active);
     next.splice(wasAt < 0 ? next.length : Math.min(wasAt, next.length), 0, active);
   }
-  return { order: next, activeId: active, incoming: null };
+  return { order: next, activeId: active, incoming: null, seeded: true };
 }
 
 /** Where the active market sits in the visible order; -1 when it is not in it. */
@@ -195,4 +219,9 @@ export function isCaughtUp(q: FeedQueue): boolean {
 }
 
 /** A queue with nothing in it — the pre-feed state. */
-export const emptyQueue: FeedQueue = { order: EMPTY, activeId: null, incoming: null };
+export const emptyQueue: FeedQueue = {
+  order: EMPTY,
+  activeId: null,
+  incoming: null,
+  seeded: false,
+};
