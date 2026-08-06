@@ -23,6 +23,7 @@ import { composeDiscoveryRow } from "@/domain/market-discovery";
 import { FeedFilterMenu } from "@/components/FeedFilterMenu";
 import type { FeedFilters, FeedNetwork } from "@/domain/feed/filters";
 import type { MarketRow } from "@/components/MarketCard";
+import type { Sensitivity } from "@/domain/market-change";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -82,6 +83,8 @@ export function FeedListPanel({
   filters,
   onFilters,
   availableNetworks,
+  sensitivity,
+  onSensitivity,
 }: {
   /** The visible running order, already sequenced by the server. */
   entries: FeedListEntry[];
@@ -93,6 +96,8 @@ export function FeedListPanel({
   onFilters: (f: FeedFilters) => void;
   /** Network groups this viewer's evidence can fill. Always includes everyone. */
   availableNetworks: FeedNetwork[];
+  sensitivity?: Sensitivity;
+  onSensitivity?: (s: Sensitivity) => void;
 }) {
   const rowRefs = useRef(new Map<number, HTMLLIElement>());
   const nowMs = Date.now();
@@ -115,6 +120,8 @@ export function FeedListPanel({
           filters={filters}
           onChange={onFilters}
           availableNetworks={availableNetworks}
+          sensitivity={sensitivity}
+          onSensitivity={onSensitivity}
         />
       </div>
 

@@ -145,6 +145,18 @@ export interface MomentumFacts {
   /** The single most significant move, or null. Drives the reason. */
   top: MaterialMove | null;
   /**
+   * Every move that cleared the bar, heaviest first.
+   *
+   * Kept — not reduced to `top` — so a stricter reader can be served by
+   * FILTERING this rather than by recomputing the change. See `atSensitivity`:
+   * the classification is done once, in the shared cached block, at the most
+   * permissive bar, and every reader's view is a subset of it. Reducing to
+   * `top` here would break that, because the heaviest move is not always the
+   * one that clears a given bar — a believer crowd can rank below a capital
+   * move and still be the only thing that survives a believer threshold.
+   */
+  moves: MaterialMove[];
+  /**
    * 0..1 significance, for the ranker. Zero when nothing moved — which is the
    * honest reading and is what lets a quiet market lose to a live one instead of
    * both scoring on volume.
@@ -152,7 +164,7 @@ export interface MomentumFacts {
   weight: number;
 }
 
-export const NO_MOMENTUM: MomentumFacts = { lenses: [], top: null, weight: 0 };
+export const NO_MOMENTUM: MomentumFacts = { lenses: [], top: null, moves: [], weight: 0 };
 
 const scale = (window: string): number => MOMENTUM.windowScale[window] ?? 1;
 
@@ -240,6 +252,7 @@ export function classifyMomentum(
   return {
     lenses: MOMENTUM_LENSES.filter((l) => lenses.has(l)),
     top,
+    moves,
     weight: Math.max(base, woke),
   };
 }
@@ -299,3 +312,54 @@ export const WAKING_REASON = "This market just woke up";
 
 /** The sentence for a contested market. */
 export const CONTESTED_REASON = "Both sides are live and neither is winning";
+
+/**
+ * The same facts, seen through a stricter reader's floor.
+ *
+ * WHY THIS EXISTS RATHER THAN A SECOND CLASSIFICATION. `classifyMomentum` runs
+ * in the viewer-independent block every reader shares through one SWR cache.
+ * Passing a per-reader threshold in there would split that cache three ways per
+ * window and recompute the same market changes for each — to produce an answer
+ * that is always a SUBSET of the permissive one. So the change is classified
+ * once, at the lowest bar, and this filters what survives.
+ *
+ * THE STATES ARE NOT FILTERED. `contested` describes a market that is evenly
+ * held; `waking` describes a silence that broke. Neither has a magnitude for a
+ * threshold to act on, and a reader asking for bigger MOVES is not asking to
+ * stop being told that a market woke up.
+ */
+export function atSensitivity(
+  facts: MomentumFacts,
+  sensitivity: Sensitivity | undefined,
+  window: string,
+): MomentumFacts {
+  const bar = momentumBar(window, sensitivity);
+  const kept = facts.moves.filter((m) => clears(m, bar));
+  if (kept.length === facts.moves.length) return facts;
+
+  const lenses = new Set<MomentumLens>();
+  if (facts.lenses.includes("contested")) lenses.add("contested");
+  if (facts.lenses.includes("waking")) lenses.add("waking");
+  for (const m of kept) {
+    lenses.add("moving");
+    if (m.metric === "capital") lenses.add("capital");
+    if (m.metric === "believers") lenses.add("believers");
+    lenses.add(m.direction === "up" ? "gaining" : "dropping");
+  }
+  const woke = lenses.has("waking") ? 0.45 : 0;
+  return {
+    lenses: MOMENTUM_LENSES.filter((l) => lenses.has(l)),
+    top: kept[0] ?? null,
+    moves: kept,
+    weight: Math.max(kept[0]?.weight ?? 0, woke),
+  };
+}
+
+/** Does an already-derived move clear `bar`? The same rule `rate`/`crowd` applied. */
+function clears(m: MaterialMove, bar: MoveBar): boolean {
+  if (m.metric === "believers") return Math.abs(m.delta) >= bar.minBelieverDelta;
+  if (m.kind === "arrival") return Math.abs(m.delta) >= bar.minOriginUsd;
+  if (m.pct == null) return false;
+  if (Math.abs(m.pct) < bar.minPct) return false;
+  return m.metric !== "capital" || Math.abs(m.delta) >= bar.minUsd;
+}

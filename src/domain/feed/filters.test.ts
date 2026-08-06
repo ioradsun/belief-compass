@@ -175,3 +175,52 @@ describe("momentum is the third dimension", () => {
     expect(filterTitle(f)).toContain("Waking up");
   });
 });
+
+describe("a stricter floor narrows what is said, never what is shown", () => {
+  /**
+   * THE GRACEFUL-FALLBACK GUARANTEE, and it is structural rather than a rescue
+   * path. Sensitivity changes what momentum SAYS about a market — its lenses,
+   * its headline, its weight — and the filter only consults momentum when the
+   * reader has asked for a momentum lens. So raising the floor cannot empty a
+   * feed on its own; it reorders one. There is no "fall back to other stories"
+   * branch because there is no cliff to fall off.
+   */
+  it("keeps a market that no longer moves, as long as no momentum lens is chosen", () => {
+    const f = normalize({ networks: [], topics: [], momentum: [] });
+    const stillMoving = { category: "ai", tribeCount: 0, oppCount: 0, followedHere: 0 };
+    expect(matches(f, { ...stillMoving, momentum: ["moving", "gaining"] })).toBe(true);
+    // Same market, now below the reader's floor: momentum has nothing to say.
+    expect(matches(f, { ...stillMoving, momentum: [] })).toBe(true);
+  });
+
+  it("only lets the floor remove a market when the reader asked about movement", () => {
+    const f = normalize({ networks: [], topics: [], momentum: ["gaining"] });
+    const m = { category: "ai", tribeCount: 0, oppCount: 0, followedHere: 0 };
+    expect(matches(f, { ...m, momentum: ["gaining"] })).toBe(true);
+    expect(matches(f, { ...m, momentum: [] })).toBe(false);
+  });
+});
+
+describe("My Markets is the one Focus option that was missing", () => {
+  const m = (o: Partial<FilterCandidate> = {}): FilterCandidate => ({
+    category: "ai",
+    tribeCount: 0,
+    oppCount: 0,
+    followedHere: 0,
+    ...o,
+  });
+
+  it("matches a market the viewer created or holds", () => {
+    const f = normalize({ networks: ["mine"], topics: [], momentum: [] });
+    expect(matches(f, m({ mine: true }))).toBe(true);
+    expect(matches(f, m({ mine: false }))).toBe(false);
+    expect(matches(f, m())).toBe(false);
+  });
+
+  it("ORs with the other network groups rather than narrowing them", () => {
+    const f = normalize({ networks: ["mine", "tribe"], topics: [], momentum: [] });
+    expect(matches(f, m({ mine: true }))).toBe(true);
+    expect(matches(f, m({ tribeCount: 1 }))).toBe(true);
+    expect(matches(f, m())).toBe(false);
+  });
+});

@@ -16,6 +16,8 @@ import { readSessionToken } from "@/lib/wallet-session";
 
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
 import { FeedListPanel, type FeedListEntry } from "@/components/FeedListPanel";
+import { DEFAULT_SENSITIVITY, type Sensitivity } from "@/domain/market-change";
+import { useFeedSensitivity, setFeedSensitivity } from "@/lib/feed-sensitivity";
 import {
   ALL as ALL_FILTERS,
   filterKey,
@@ -116,9 +118,12 @@ const feedQO = (
   window: VolumeWindow = "24h",
   filters: FeedFilters = ALL_FILTERS,
   originMarketId: number | null = null,
+  sensitivity: Sensitivity = DEFAULT_SENSITIVITY,
 ) =>
   queryOptions({
-    queryKey: ["opp-feed", wallet ?? null, window, filterKey(filters), originMarketId],
+    // The reader's floor is part of the key: it changes what the server admits,
+    // so two floors are two different feeds and must not share a cache entry.
+    queryKey: ["opp-feed", wallet ?? null, window, filterKey(filters), originMarketId, sensitivity],
     queryFn: async () => {
       const request = getOpportunityFeed({
         data: {
@@ -129,6 +134,7 @@ const feedQO = (
           networks: filters.networks,
           topics: filters.topics,
           momentum: filters.momentum ?? [],
+          sensitivity,
           originMarketId,
           ...feedSession(),
         },
@@ -151,6 +157,7 @@ const feedQO = (
             networks: filters.networks,
             topics: filters.topics,
             momentum: filters.momentum ?? [],
+            sensitivity,
             originMarketId,
           },
         });
@@ -521,6 +528,14 @@ function Feed() {
   const [filters, setFilters] = useState<FeedFilters>(ALL_FILTERS);
 
   /**
+   * How much has to happen before a market is worth showing. A row in the one
+   * bar table — see @/domain/market-change#BARS. Kept in a small external store
+   * rather than route state because it is a PREFERENCE that outlives the
+   * session, and because the server has to be told about it.
+   */
+  const sensitivity = useFeedSensitivity();
+
+  /**
    * The market the reader arrived at from OUTSIDE the running order — opened
    * from search, a Live row or one of their positions. Its people become a weak
    * signal for what the feed offers next, which is what makes a search an entry
@@ -541,7 +556,7 @@ function Feed() {
       ? (loaderData?.feed ?? undefined)
       : undefined;
   const { data } = useQuery({
-    ...feedQO(wallet, win, filters, originMarket),
+    ...feedQO(wallet, win, filters, originMarket, sensitivity),
     // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
     // React Query ages it against staleTime instead of refetching on hydration.
     ...(initialFeed
@@ -720,7 +735,12 @@ function Feed() {
    * discoverable; a lens with no evidence yet simply returns nothing, which is
    * a clearer answer than an option that silently does not exist.
    */
-  const availableNetworks: FeedNetwork[] = ["everyone", "tribe", "rivals", "following"];
+  // "My Markets" needs a wallet to mean anything — an anonymous reader has no
+  // markets to have created or to be holding, and offering the option would be
+  // offering an empty feed.
+  const availableNetworks: FeedNetwork[] = wallet
+    ? ["everyone", "mine", "tribe", "rivals", "following"]
+    : ["everyone"];
 
   // Refresh the discovery feed: re-fetch (newly created markets may appear) and
   // leave the caught-up state. The held order is adopted here too — asking for a
@@ -985,6 +1005,8 @@ function Feed() {
                 onOpenFeedTab={closeCase}
                 feedList={
                   <FeedListPanel
+                    sensitivity={sensitivity}
+                    onSensitivity={setFeedSensitivity}
                     entries={feedEntries}
                     rows={knownRowsRef.current}
                     activeId={activeMarket}

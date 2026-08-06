@@ -1,5 +1,16 @@
 /**
- * FEED FILTER MENU — one control that builds the reader's own feed.
+ * TUNE FEED — one control that builds the reader's own feed.
+ *
+ * THE BRIEF ASKED FOR A SECOND SURFACE — a "Tune Feed" icon beside Now, opening
+ * a bottom sheet — and the review declined it. This menu already sits at the top
+ * of the playlist, already summarises its own state in its title, and already
+ * exists to answer "what do I want in my feed". A second control an inch away,
+ * answering the same question in a different shape, is two things to find and
+ * two mental models to hold. Sensitivity became its FIRST section instead.
+ *
+ * The sections are ordered by how often the answer changes: how much matters
+ * (rarely, and it is the strongest lever), then who, then what is moving, then
+ * what it is about.
  *
  * It replaces a three-tab perspective strip. A strip can only ever say "one of
  * these"; a reader who wants "AI, from my tribe" has to be able to say both.
@@ -24,13 +35,31 @@ import {
   type FeedFilters,
   type FeedNetwork,
 } from "@/domain/feed/filters";
+import { SENSITIVITY_ORDER, type Sensitivity } from "@/domain/market-change";
+
+/**
+ * What each floor means, in the reader's terms rather than the engine's.
+ *
+ * NO NUMBERS, deliberately. A row in the bar table sets three thresholds at
+ * once — percent, dollars and people — and each is scaled again by the window.
+ * Printing "5%" would be true of one of those three and misleading about the
+ * others, and it would teach a reader a model of the feed they should never
+ * need to hold.
+ */
+const SENSITIVITY_COPY: Record<Sensitivity, { label: string; hint: string }> = {
+  everything: { label: "Everything", hint: "Every move, however small" },
+  notable: { label: "Notable", hint: "Skip the small stuff" },
+  major: { label: "Major only", hint: "Just the big moves" },
+};
 
 function Row({
   label,
+  hint,
   checked,
   onClick,
 }: {
   label: string;
+  hint?: string;
   checked: boolean;
   onClick: () => void;
 }) {
@@ -45,8 +74,15 @@ function Row({
       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
         {checked && <Check size={13} className="text-[var(--text)]" aria-hidden />}
       </span>
-      <span className={checked ? "text-[var(--text)]" : "text-[var(--text-secondary)]"}>
-        {label}
+      <span className="min-w-0">
+        <span
+          className={`block ${checked ? "text-[var(--text)]" : "text-[var(--text-secondary)]"}`}
+        >
+          {label}
+        </span>
+        {hint && (
+          <span className="block text-[11px] leading-snug text-[var(--text-muted)]">{hint}</span>
+        )}
       </span>
     </button>
   );
@@ -57,10 +93,15 @@ export function FeedFilterMenu({
   onChange,
   /** Network options the viewer's evidence can actually fill. */
   availableNetworks,
+  sensitivity,
+  onSensitivity,
 }: {
   filters: FeedFilters;
   onChange: (f: FeedFilters) => void;
   availableNetworks: FeedNetwork[];
+  /** The reader's floor. See @/lib/feed-sensitivity. */
+  sensitivity?: Sensitivity;
+  onSensitivity?: (s: Sensitivity) => void;
 }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement | null>(null);
@@ -109,6 +150,22 @@ export function FeedFilterMenu({
           style={{ background: "var(--bg)", border: "1px solid var(--border-strong)" }}
         >
           <Row label="All" checked={isAll(filters)} onClick={() => onChange(ALL)} />
+
+          {/* HOW MUCH MATTERS — the reader's floor. Named steps, not numbers:
+              the honest number differs per metric AND per window, so "$5" would
+              be true of one of three things and teach a model nobody needs. */}
+          <p className="mt-2 px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            How much matters
+          </p>
+          {SENSITIVITY_ORDER.map((s) => (
+            <Row
+              key={s}
+              label={SENSITIVITY_COPY[s].label}
+              hint={SENSITIVITY_COPY[s].hint}
+              checked={sensitivity === s}
+              onClick={() => onSensitivity?.(s)}
+            />
+          ))}
 
           {networks.length > 0 && (
             <>
