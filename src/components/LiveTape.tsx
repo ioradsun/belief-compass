@@ -19,7 +19,7 @@
  * highlight. Clicking a row selects that market; clicking a face opens that
  * person.
  */
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PersonStack } from "@/components/PersonStack";
 import { listLiveEvents } from "@/lib/live.functions";
