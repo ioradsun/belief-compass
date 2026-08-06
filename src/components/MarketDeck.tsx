@@ -587,12 +587,21 @@ function MarketByline({
 
   const c = data?.creator ?? null;
   const createdAt = data?.createdAt ?? c?.createdAt ?? null;
-  if (!c) return null;
 
   const when = createdAt
     ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()).toLowerCase()
-    : "opened this market";
+    : null;
+
+  // EVERY market has a birthday, even the ~120 POV-sourced ones with no author
+  // on record. Returning null for those left the question with nothing under it
+  // while the rest of the feed carried a byline — so the age stands alone.
+  if (!c) {
+    if (!when) return null;
+    return <p className="mt-2 text-[12px] text-[var(--text-muted)]">Opened · {when}</p>;
+  }
+
   const clickable = !!onSelectPerson;
+
 
   const match =
     viewerWallet && viewerWallet.toLowerCase() !== c.wallet.toLowerCase()
