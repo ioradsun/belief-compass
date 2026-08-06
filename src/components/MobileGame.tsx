@@ -176,6 +176,10 @@ export function MobileGame({
       name: h.name,
       avatarUrl: h.avatarUrl,
       relation: relationFromGroup(rel.get(h.wallet.toLowerCase())),
+      // The phone card shows faces only; these ride along for the sheet.
+      side: h.side,
+      valueUsd: h.valueUsd,
+      daysHeld: h.daysHeld,
     }));
   }, [revealEvidence, revealNet]);
 
