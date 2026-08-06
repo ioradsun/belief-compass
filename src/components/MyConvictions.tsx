@@ -19,7 +19,12 @@ import { positionReturn, formatPct } from "@/domain/metric-display";
 import { formatMoney } from "@/domain/money";
 import { StandOnIt } from "@/components/StandOnIt";
 import { useDisplayUnit } from "@/lib/display-unit";
-import { positionSignal, type PositionSignal, type Side } from "@/domain/position-story";
+import {
+  positionSignal,
+  type CanonicalLine,
+  type PositionSignal,
+  type Side,
+} from "@/domain/position-story";
 
 type Position = {
   onchain_id: number;
@@ -35,6 +40,17 @@ type Position = {
     believers_no?: number | null;
     new_believers_yes_24h?: number | null;
     new_believers_no_24h?: number | null;
+    /** The CANONICAL market narrative (read model) — re-told, never recomputed. */
+    live_line?: string | null;
+    live_line_kind?: string | null;
+    live_line_window?: string | null;
+    live_line_payload?: {
+      side?: string | null;
+      wallets?: number | null;
+      milestone?: number | null;
+      crossed?: string | null;
+      sell_rate?: number | null;
+    } | null;
   } | null;
   chg_window_yes?: number | null;
   chg_window_no?: number | null;
@@ -293,6 +309,16 @@ export function MyConvictions({
         null;
       const newTodayRaw =
         (side === "YES" ? st?.new_believers_yes_24h : st?.new_believers_no_24h) ?? null;
+      // The canonical line for this market, straight off the read model. The
+      // card re-tells it from the owner's seat; it never derives its own story.
+      const live = st?.live_line_kind
+        ? {
+            line: st.live_line ?? null,
+            kind: st.live_line_kind ?? null,
+            window: st.live_line_window ?? null,
+            payload: st.live_line_payload ?? null,
+          }
+        : null;
       // Intake over the SELECTED window (server-replayed); on 24h the read-model
       // number is the same measure, so it's the natural fallback.
       const newWinRaw =
@@ -320,6 +346,7 @@ export function MyConvictions({
         title: p.markets?.title ?? `Market #${id}`,
         believers: believersRaw == null ? null : Number(believersRaw),
         newToday: newTodayRaw == null ? null : Number(newTodayRaw),
+        live,
         newInWindow: newWinRaw == null ? null : Number(newWinRaw),
       };
     })
@@ -339,6 +366,7 @@ export function MyConvictions({
     believers: number | null;
     newToday: number | null;
     newInWindow: number | null;
+    live: CanonicalLine | null;
   }[];
 
   // Per-market network signal: pass the wallet so the tape tags Twin/Tribe/Opp
@@ -401,18 +429,13 @@ export function MyConvictions({
   // Second pass: attach the story + pulse, then rank by urgency.
   const built: Built[] = facts.map((f) => {
     const net = netByMarket.get(f.id);
-    const signal = positionSignal(
-      {
-        side: f.side,
-        believers: f.believers,
-        newToday: f.newToday,
-        gainUsd: f.gainUsd,
-        chgPct: f.chg,
-        net,
-        milestone: net?.milestone ?? null,
-      },
-      (n) => money(n),
-    );
+    const signal = positionSignal({
+      side: f.side,
+      believers: f.believers,
+      live: f.live,
+      net,
+      milestone: net?.milestone ?? null,
+    });
     return {
       key: f.key,
       id: f.id,
