@@ -92,6 +92,24 @@ if (typeof globalThis.addEventListener === "function") {
   });
 }
 
+// Node (dev server / SSR on Node) does not route socket aborts through
+// globalThis error events — they arrive as process-level uncaught exceptions
+// from node:_http_server. Swallow only the abort case so a client that
+// navigates away mid-render doesn't get reported as a runtime error.
+const nodeProcess = (globalThis as { process?: NodeJS.Process }).process;
+if (nodeProcess && typeof nodeProcess.on === "function") {
+  nodeProcess.on("uncaughtException", (error: unknown) => {
+    if (isAbortError(error)) return;
+    record(error);
+    originalConsoleError(describeError(error));
+  });
+  nodeProcess.on("unhandledRejection", (reason: unknown) => {
+    if (isAbortError(reason)) return;
+    record(reason);
+    originalConsoleError(describeError(reason));
+  });
+}
+
 export function consumeLastCapturedError(): unknown {
   if (!lastCapturedError) return undefined;
   if (Date.now() - lastCapturedError.at > TTL_MS) {
