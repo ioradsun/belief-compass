@@ -69,7 +69,7 @@ export const METRIC_DISPLAY = {
    * are large enough for the ratio to add anything, and those are exactly the
    * ones where it does.
    */
-  believers: { originMaxBase: 0, pctValidMinBase: 10, pctHeadlineMinBase: 10 },
+  believers: { originMaxBase: 0, pctValidMinBase: 3, pctHeadlineMinBase: 3 },
   /**
    * Capital, judged in USD so the display unit never changes what's "small".
    * `originMaxBase` is the app's own dust line: elsewhere it already refuses to
@@ -277,8 +277,10 @@ export function capitalMove(input: {
   const pct = g.pct == null ? null : formatPct(g.pct);
   const pctQuiet = g.rank === "quiet";
 
+  // An immaterial move must not headline a percentage: "No change over 1D" beside
+  // "+2.1%" is one metric contradicting itself. Flat is flat in both lines.
   if (direction === "flat") {
-    return { direction, pct, pctQuiet, absolute: `No change ${since}` };
+    return { direction, pct: null, pctQuiet: false, absolute: `No change ${since}` };
   }
   return {
     direction,
