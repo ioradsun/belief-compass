@@ -169,15 +169,11 @@ export function WelcomePrompt({
   const selectedCount = selected.size;
   const headline = data?.headline ?? "";
 
-  /** "Say Hi to Amber Fox" / "Say Hi to Amber Fox +3" — the room has faces, so does the button. */
-  const hiLabel = (names: string[]) => {
-    if (names.length === 0) return "Say Hi";
-    const [first, ...rest] = names;
-    return rest.length === 0 ? `Say Hi to ${first}` : `Say Hi to ${first} +${rest.length}`;
-  };
-  const cardLabel = hiLabel(ordered.map((p) => p.name));
+  /** The headline already names them — the button is just the next step. */
+  const cardLabel = "Say Hi";
   const selectedNames = people.filter((p) => selected.has(keyOf(p))).map((p) => p.name);
-  const sheetLabel = hiLabel([...new Set(selectedNames)]);
+  const sheetLabel = selectedNames.length > 1 ? `Say Hi to ${selectedNames.length}` : "Say Hi";
+
 
 
   return (
