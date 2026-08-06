@@ -5,16 +5,13 @@ The playlist's pinned "Now reading" card and the right rail's "In this market" c
 ## Changes
 
 1. **Drop the "Now reading" card** from the For You playlist. The playlist becomes filter bar + running order only. The active market stays excluded from the list (it's the one on screen), and the "You're at the end of this feed" message keeps working.
-
 2. **Move "In this market" to the top of the For You tab**, above the filter menu. Same card, same behaviour: collapses when the market is quiet, shows the latest beat, expands downward in place.
-
 3. **Remove "In this market" from the right rail.** The right rail becomes Welcome prompt → duplicate suggestions → the global "Now" tape, which keeps excluding the current market so nothing is shown twice.
-
 4. Mobile keeps its existing placement (it renders the same card in the mobile game view) — no change there.
 
 ## Note on what's lost
 
-"Now reading" also carried the *why this market was surfaced* line and its metrics. With the card gone, that reason only appears on the market's own row in the running order and in the centre panel. If you want the reason kept in the rail, say so and I'll pin a one-line reason strip in its place instead.
+"Now reading" also carried the *why this market was surfaced* line and its metrics. With the card gone, that reason only appears on the market's own row in the running order and in the centre panel. If you want the reason kept in the rail, say so and I'll pin a one-line reason strip in its place instead. Yes we need to take a first principals copy edit of the combined version of what the In this market shows and the reason.  I'm not sure how they are different...but combine them in whatever creates the best story from storytelling principals.
 
 ## Technical
 
