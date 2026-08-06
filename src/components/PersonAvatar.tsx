@@ -5,6 +5,7 @@
  * person's profile in the center panel (universal behaviour, via person-focus).
  * Falls back to a deterministic colour + initials when there's no picture.
  */
+import { useState } from "react";
 import { focusPerson } from "@/lib/person-focus";
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 
