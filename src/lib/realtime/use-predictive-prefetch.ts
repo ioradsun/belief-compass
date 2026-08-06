@@ -13,8 +13,7 @@
  */
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getMarketChange } from "@/lib/markets.functions";
-import { getMarketEvidence } from "@/lib/evidence.functions";
+import { marketChangeQO, evidenceQO } from "@/lib/market-queries";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 
 /** Immediate neighbors to warm, in likelihood order: next, next+1, previous.
@@ -47,19 +46,11 @@ export function usePredictivePrefetch(ids: number[], activeIdx: number): void {
       if (cancelled) return;
       targets.forEach((id, i) => {
         // Deck-core for every neighbor; prefetchQuery no-ops when already fresh.
-        void qc.prefetchQuery({
-          queryKey: ["market-change", id],
-          queryFn: () => getMarketChange({ data: { id } }),
-          staleTime: 10_000,
-        });
+        void qc.prefetchQuery(marketChangeQO(id));
         // The full trio only for the likely-next market — keep neighbor warming
         // cheap (no whole-catalog preload).
         if (i === 0) {
-          void qc.prefetchQuery({
-            queryKey: ["evidence", id],
-            queryFn: () => getMarketEvidence({ data: { marketId: id } }),
-            staleTime: 30_000,
-          });
+          void qc.prefetchQuery(evidenceQO(id));
           void qc.prefetchQuery({
             queryKey: ["conviction-market", id],
             queryFn: () => getConvictionMarket({ data: { onchainId: id } }),

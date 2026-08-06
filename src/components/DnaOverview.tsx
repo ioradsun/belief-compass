@@ -5,6 +5,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { getDnaOverview } from "@/lib/dna.functions";
+import { dnaPollInterval } from "@/domain/dna-freshness";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
@@ -19,7 +20,11 @@ export function DnaOverview({
     queryKey: ["dna-overview", wallet ?? null],
     queryFn: () => getDnaOverview({ data: { wallet } }),
     enabled: !!wallet,
-    refetchInterval: 60_000,
+    // A bounded wait on the worker, not a standing poll. This read asks for the
+    // DNA to be computed when the cache is missing, so there IS something to
+    // wait for on a first visit — and nothing at all once it is fresh, which is
+    // when the old 60s interval kept going anyway. See @/domain/dna-freshness.
+    refetchInterval: (q) => dnaPollInterval(q.state.data?.freshness, q.state.dataUpdateCount),
   });
 
   if (!wallet)

@@ -81,7 +81,10 @@ export function ConvictionDashboard({
     queryKey: ["conviction-dashboard", wallet ?? null],
     queryFn: async () => await getConvictionDashboard({ data: { wallet: wallet as string } }),
     enabled: !!wallet,
-    refetchInterval: 30_000,
+    // Same as the person profile: computed on read, no worker to wait for, and
+    // a dashboard the reader is looking at. Focus and reconnect refetching
+    // cover the return; the timer only re-ran the build.
+    staleTime: 60_000,
     placeholderData: (prev) => prev,
   });
 

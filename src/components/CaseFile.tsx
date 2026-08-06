@@ -15,8 +15,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { setDeckLens, useDeckLens } from "@/lib/deck-lens";
 import { useQuery } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
-import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
-import { getMarketChange, type VolumeWindow } from "@/lib/markets.functions";
+import { type Believer } from "@/lib/evidence.functions";
+import { marketChangeQO, evidenceQO } from "@/lib/market-queries";
+import { type VolumeWindow } from "@/lib/markets.functions";
 import { useMarketChange } from "@/lib/market-change-query";
 import { LiveTape } from "@/components/LiveTape";
 import { LensChart } from "@/components/LensChart";
@@ -99,21 +100,11 @@ export function CaseColumn({
     if (scroller.current) scroller.current.scrollTop = 0;
   }, [marketId]);
 
-  // Same query keys the deck already runs → React Query dedupes, no new requests.
-  const { data: evidence } = useQuery({
-    queryKey: ["evidence", marketId],
-    queryFn: () => getMarketEvidence({ data: { marketId } }),
-    refetchInterval: 60_000,
-    staleTime: 30_000,
-    // Per-market key: never bridge the previous market's believers into this one.
-  });
+  // The same shared definitions the deck runs → one request, one policy, and no
+  // chance of this mount re-timing the deck's.
+  const { data: evidence } = useQuery(evidenceQO(marketId));
   const { data: net } = useQuery(networkQO(viewerWallet));
-  const { data: change } = useQuery({
-    queryKey: ["market-change", marketId],
-    queryFn: () => getMarketChange({ data: { id: marketId } }),
-    staleTime: 10_000,
-    refetchInterval: 15_000,
-  });
+  const { data: change } = useQuery(marketChangeQO(marketId));
   // WHAT MOVED, from the one place that answers that (src/lib/market-change-query
   // → src/domain/market-change). The centre panel reads the identical object, so
   // this rail and the total above it are the same arithmetic rather than two

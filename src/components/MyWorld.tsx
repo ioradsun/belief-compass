@@ -33,7 +33,8 @@ import { MyConvictions } from "@/components/MyConvictions";
 import { NetworkPanel } from "@/components/NetworkPanel";
 import { presentRelationship } from "@/domain/relationship";
 import { type MarketRow } from "@/components/MarketCard";
-import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
+import { type VolumeWindow } from "@/lib/markets.functions";
+import { myConvictionsQO } from "@/lib/positions-query";
 
 type Tab = "feed" | "positions" | "people";
 const TABS: Tab[] = ["feed", "positions", "people"];
@@ -130,14 +131,7 @@ export function MyWorld({
     [netData],
   );
 
-  const { data: walletData } = useQuery({
-    queryKey: ["my-convictions", wallet ?? null, win ?? "24h"],
-    queryFn: async () =>
-      await getWallet({ data: { wallet: wallet as string, window: win ?? "24h" } }),
-    enabled: !!wallet,
-    placeholderData: (prev) => prev,
-    refetchInterval: 30_000,
-  });
+  const { data: walletData } = useQuery(myConvictionsQO(wallet, win ?? "24h"));
   const positionCount = useMemo(
     () =>
       (walletData?.positions ?? []).filter((p) => {

@@ -5,6 +5,8 @@ import {
   applyMarketStateBatch,
   affectedPulseKeys,
   affectedPositionsTapeKeys,
+  affectedMarketKeys,
+  affectedViewerValuationKeys,
   viewerPositionKeys,
   liveFieldsOf,
   versionOf,
@@ -190,5 +192,72 @@ describe("versionOf", () => {
   it("treats a missing version as 0 (always applies)", () => {
     expect(versionOf({ onchain_id: 1 })).toBe(0);
     expect(versionOf({ onchain_id: 1, read_model_version: "8" })).toBe(8);
+  });
+});
+
+describe("affectedMarketKeys", () => {
+  // The two per-market reads that used to poll to discover a trade the socket
+  // had already delivered. See lib/market-queries.ts.
+  it("returns the change and evidence keys for markets that traded", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["market-change", 42], { yesPrice: 0.5 });
+    qc.setQueryData(["evidence", 42], { believers: [] });
+    qc.setQueryData(["market-change", 99], { yesPrice: 0.7 });
+    const keys = affectedMarketKeys(qc, new Set([42]));
+    expect(keys).toContainEqual(["market-change", 42]);
+    expect(keys).toContainEqual(["evidence", 42]);
+    // A market nobody traded is never refetched, however deep the cache is.
+    expect(keys).not.toContainEqual(["market-change", 99]);
+  });
+
+  it("costs nothing for a market that is not cached", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["market-change", 42], { yesPrice: 0.5 });
+    // The busiest market on the platform trades ~3 times an hour; the other
+    // 2,700 do not trade at all. Invalidating what is not held would put those
+    // back on the fetch path the poll removal took them off.
+    expect(affectedMarketKeys(qc, new Set([7]))).toEqual([]);
+    expect(affectedMarketKeys(qc, new Set())).toEqual([]);
+  });
+});
+
+describe("affectedViewerValuationKeys", () => {
+  // usePositionStream covers the viewer trading. This covers everyone else
+  // trading a market the viewer holds — the other half of what their shares are
+  // worth, and the only thing the 30s/20s portfolio polls were watching for.
+  it("matches a position summary by the market id in its key", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["position-summary", "0xab", 42], { yesShares: 3 });
+    qc.setQueryData(["position-summary", "0xab", 99], { yesShares: 1 });
+    const keys = affectedViewerValuationKeys(qc, new Set([42]));
+    expect(keys).toEqual([["position-summary", "0xab", 42]]);
+  });
+
+  it("matches a portfolio by the markets inside its data", () => {
+    const qc = new QueryClient();
+    // The window is in the key; the holdings are only in the payload, so this
+    // is the one place the viewer's actual positions can be read from.
+    qc.setQueryData(["my-convictions", "0xab", "24h"], {
+      wallet: "0xab",
+      positions: [{ onchain_id: 42 }, { onchain_id: 7 }],
+    });
+    expect(affectedViewerValuationKeys(qc, new Set([7]))).toEqual([
+      ["my-convictions", "0xab", "24h"],
+    ]);
+  });
+
+  it("refetches nothing for a reader who holds none of the traded markets", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["position-summary", "0xab", 42], { yesShares: 3 });
+    qc.setQueryData(["my-convictions", "0xab", "24h"], { positions: [{ onchain_id: 42 }] });
+    expect(affectedViewerValuationKeys(qc, new Set([1234]))).toEqual([]);
+    expect(affectedViewerValuationKeys(qc, new Set())).toEqual([]);
+  });
+
+  it("survives a portfolio that has not loaded, or loaded empty", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["my-convictions", "0xab", "24h"], undefined);
+    qc.setQueryData(["my-convictions", "0xcd", "7d"], { positions: [] });
+    expect(affectedViewerValuationKeys(qc, new Set([42]))).toEqual([]);
   });
 });

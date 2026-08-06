@@ -227,6 +227,69 @@ export function affectedPositionsTapeKeys(qc: QueryClient, affected: Set<number>
 }
 
 /**
+ * Which per-market caches a trade on one of `affected` invalidates.
+ *
+ * `["market-change", id]` is a replay of that market's trade tape and
+ * `["evidence", id]` is its believer roster plus price series — both are
+ * functions of "has this market traded", and nothing else moves them. They used
+ * to poll (15s and 60s) to DISCOVER a trade the socket had already delivered;
+ * these keys are how the socket tells them instead. See lib/market-queries.ts.
+ *
+ * Only ids the cache actually holds are returned, so a trade on a market nobody
+ * is looking at costs nothing. Pure — the coordinator does the invalidating.
+ */
+export function affectedMarketKeys(qc: QueryClient, affected: Set<number>): unknown[][] {
+  if (affected.size === 0) return [];
+  const out: unknown[][] = [];
+  for (const family of ["market-change", "evidence"] as const) {
+    for (const q of qc.getQueryCache().findAll({ queryKey: [family] })) {
+      const id = Number(q.queryKey[1]);
+      if (Number.isFinite(id) && affected.has(id)) out.push(q.queryKey as unknown[]);
+    }
+  }
+  return out;
+}
+
+/**
+ * Which of the viewer's VALUATION caches a trade on one of `affected` moves.
+ *
+ * `usePositionStream` already covers the viewer trading: their `wallet_beliefs`
+ * rows change and the position families refetch. What it cannot see is SOMEONE
+ * ELSE trading a market the viewer holds — which moves the price, and therefore
+ * what the viewer's shares are worth. That gap is what the 30s and 20s polls on
+ * `["my-convictions"]` and `["position-summary"]` were covering, blindly and
+ * continuously, for an event that happens ~151 times a day platform-wide.
+ *
+ * The trade stream carries the exact signal. Matching it needs the viewer's
+ * holdings, and both caches already state them:
+ *
+ *   ["position-summary", wallet, marketId]  — the market is in the KEY.
+ *   ["my-convictions", wallet, window]      — the markets are in the DATA
+ *                                             (`positions[].onchain_id`).
+ *
+ * So nothing has to be tracked or guessed: a reader holding none of the traded
+ * markets refetches nothing, and a reader holding one refetches only that. Pure
+ * — the coordinator does the invalidating.
+ */
+export function affectedViewerValuationKeys(qc: QueryClient, affected: Set<number>): unknown[][] {
+  if (affected.size === 0) return [];
+  const out: unknown[][] = [];
+  for (const q of qc.getQueryCache().findAll({ queryKey: ["position-summary"] })) {
+    const id = Number(q.queryKey[2]);
+    if (Number.isFinite(id) && affected.has(id)) out.push(q.queryKey as unknown[]);
+  }
+  for (const q of qc.getQueryCache().findAll({ queryKey: ["my-convictions"] })) {
+    const data = q.state.data as { positions?: Array<{ onchain_id?: unknown }> } | undefined;
+    const positions = data?.positions;
+    if (!Array.isArray(positions)) continue;
+    if (positions.some((p) => affected.has(Number(p?.onchain_id)))) {
+      out.push(q.queryKey as unknown[]);
+    }
+  }
+  return out;
+}
+
+/**
  * The viewer's position cache families, as partial key prefixes to invalidate
  * when their `wallet_beliefs` changes. Partial match covers every window/market
  * variant (`["my-convictions", w, win]`, `["position-summary", w, id]`, …);

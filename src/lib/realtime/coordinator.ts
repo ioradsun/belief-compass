@@ -21,6 +21,8 @@ import {
   applyMarketStateBatch,
   affectedPulseKeys,
   affectedPositionsTapeKeys,
+  affectedMarketKeys,
+  affectedViewerValuationKeys,
   type MarketStateRow,
 } from "./reduce";
 
@@ -96,6 +98,20 @@ export function startRealtime(qc: QueryClient): () => void {
     }
     for (const key of affectedPositionsTapeKeys(qc, ids)) {
       void qc.invalidateQueries({ queryKey: key, exact: true });
+    }
+    // The traded market's own two expensive reads — the tape replay behind the
+    // deck's numbers, and the believer roster behind the Case File. Both are
+    // functions of "did this market trade", which is exactly the event in hand,
+    // so this replaces the 15s and 60s polls that used to go looking for it.
+    for (const key of affectedMarketKeys(qc, ids)) {
+      void qc.invalidateQueries({ queryKey: key, exact: true, refetchType: "active" });
+    }
+    // What the viewer's shares are WORTH. usePositionStream covers the viewer
+    // trading; this covers everyone else trading a market they hold, which is
+    // the other half of the same number and the only thing the portfolio polls
+    // were watching for.
+    for (const key of affectedViewerValuationKeys(qc, ids)) {
+      void qc.invalidateQueries({ queryKey: key, exact: true, refetchType: "active" });
     }
     // The live tape is chronological across all markets, so any trade can change
     // it; refetch only the mounted (active) tapes, never the whole family.

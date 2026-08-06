@@ -27,9 +27,9 @@ import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { useHouseFinalize } from "@/lib/house-round";
-import { getMarketChange, listMarketPulses, type VolumeWindow } from "@/lib/markets.functions";
+import { listMarketPulses, type VolumeWindow } from "@/lib/markets.functions";
+import { marketChangeQO, evidenceQO } from "@/lib/market-queries";
 import { useMarketChange } from "@/lib/market-change-query";
-import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 import { marketAgeCopy } from "@/domain/market-freshness";
 import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
@@ -129,12 +129,7 @@ export function MobileGame({
   // trade replay. Same query key the Case File runs → a cache hit, no request.
   const marketChange = useMarketChange(marketId, row, deckWin as VolumeWindow);
 
-  const { data: change } = useQuery({
-    queryKey: ["market-change", marketId],
-    queryFn: () => getMarketChange({ data: { id: marketId } }),
-    staleTime: 10_000,
-    refetchInterval: 20_000,
-  });
+  const { data: change } = useQuery(marketChangeQO(marketId));
   const { data: cm } = useQuery({
     queryKey: ["conviction-market", marketId],
     queryFn: () => getConvictionMarket({ data: { onchainId: marketId } }),
@@ -147,11 +142,7 @@ export function MobileGame({
   });
   // For the Conviction Reveal after a completed buy (same keys the Reveal screen
   // uses, so React Query dedupes — no extra fetch).
-  const { data: revealEvidence } = useQuery({
-    queryKey: ["evidence", marketId],
-    queryFn: () => getMarketEvidence({ data: { marketId } }),
-    staleTime: 30_000,
-  });
+  const { data: revealEvidence } = useQuery(evidenceQO(marketId));
   const { data: revealNet } = useQuery(networkQO(viewerWallet));
 
   // Participants with the viewer's relationship attached — the tile shows the
@@ -516,11 +507,7 @@ function BothSides({
 }) {
   const [open, setOpen] = useState<OrderSide | null>(null);
   const { unit, format } = useMoney();
-  const { data: evidence } = useQuery({
-    queryKey: ["evidence", marketId],
-    queryFn: () => getMarketEvidence({ data: { marketId } }),
-    staleTime: 30_000,
-  });
+  const { data: evidence } = useQuery(evidenceQO(marketId));
   const { data: pulses } = useQuery({
     queryKey: ["market-pulses", String(marketId)],
     queryFn: () => listMarketPulses({ data: { ids: [marketId] } }),

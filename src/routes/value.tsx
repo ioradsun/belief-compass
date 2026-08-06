@@ -88,7 +88,11 @@ function ValuePage() {
     queryKey: ["ecosystem-value"],
     queryFn: () => getEcosystemValue(),
     initialData: seed ?? undefined,
-    refetchInterval: 10_000, // stays alive
+    // Matched to the server's cache, not guessed. `buildEcosystemValue` is
+    // wrapped in `swrCache("ecosystem:value", { ttlMs: 15_000 })`, so at 10s two
+    // of every three requests could only ever return the snapshot the last one
+    // already had. Above the TTL, every poll can actually carry news.
+    refetchInterval: 20_000,
     placeholderData: (p) => p,
   });
   const data = query.data as EcosystemValue | undefined;

@@ -12,7 +12,8 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
-import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
+import { type VolumeWindow } from "@/lib/markets.functions";
+import { myConvictionsQO } from "@/lib/positions-query";
 import { type MarketRow } from "@/components/MarketCard";
 import { positionPnl } from "@/domain/position";
 import { positionReturn, formatPct } from "@/domain/metric-display";
@@ -255,16 +256,7 @@ export function MyConvictions({
   const signedMoney: MoneyFmt = (n) =>
     formatMoney(n, { from: "USD", to: unit, ethUsd, signed: true });
 
-  const { data } = useQuery({
-    queryKey: ["my-convictions", wallet ?? null, win],
-    queryFn: async () => await getWallet({ data: { wallet: wallet as string, window: win } }),
-    enabled: !!wallet,
-    // usePositionStream refetches this the moment the viewer's beliefs change;
-    // the interval is now a slow safety reconcile (POV worth also drifts with
-    // price between belief changes, so a periodic re-value is still healthy).
-    refetchInterval: 30_000,
-    placeholderData: (prev) => prev,
-  });
+  const { data } = useQuery(myConvictionsQO(wallet, win));
 
   const byId = new Map<number, MarketRow>();
   for (const r of rows) byId.set(Number(r.onchain_id), r);
@@ -379,9 +371,10 @@ export function MyConvictions({
     queryKey: ["positions-tape", wallet ?? null, [...tapeIds].sort((a, b) => a - b)],
     queryFn: () => listLiveEvents({ data: { wallet, marketIds: tapeIds, limit: 120 } }),
     enabled: tapeIds.length > 0,
-    // The events stream refetches this the moment one of these markets trades;
-    // the interval is now a slow safety reconcile.
-    refetchInterval: 30_000,
+    // NO INTERVAL — same reason as the pulses. `affectedPositionsTapeKeys` matches
+    // this key's id array against the markets that just traded and invalidates it
+    // precisely, so the tape is refreshed by the trade rather than by the clock.
+    staleTime: 60_000,
     placeholderData: (prev) => prev,
   });
   const netByMarket = new Map<
