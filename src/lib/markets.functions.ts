@@ -1382,7 +1382,13 @@ export const getWallet = createServerFn({ method: "GET" })
         live_line_kind: string | null;
         live_line_window: string | null;
         live_line_occurred_at: string | null;
-        live_line_payload: Record<string, unknown> | null;
+        live_line_payload: {
+          side?: string | null;
+          wallets?: number | null;
+          milestone?: number | null;
+          crossed?: string | null;
+          sell_rate?: number | null;
+        } | null;
       }
     >();
     if (ids.length) {
@@ -1406,8 +1412,7 @@ export const getWallet = createServerFn({ method: "GET" })
           live_line_kind: (s.live_line_kind as string | null) ?? null,
           live_line_window: (s.live_line_window as string | null) ?? null,
           live_line_occurred_at: (s.live_line_occurred_at as string | null) ?? null,
-          live_line_payload:
-            (s.live_line_payload as Record<string, unknown> | null) ?? null,
+          live_line_payload: pickLinePayload(s.live_line_payload),
         });
     }
 
