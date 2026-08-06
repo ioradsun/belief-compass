@@ -353,6 +353,7 @@ export function MobileGame({
           ethUsd={ethUsd}
           win={deckWin}
           change={marketChange}
+          faces={revealEvidence?.believers ?? []}
           footer={
             <CurrentMarketActivity
               embedded

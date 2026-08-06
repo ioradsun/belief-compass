@@ -13,6 +13,7 @@
  * mobile; only the layout changes.
  */
 import { useMemo, type ReactNode } from "react";
+import { PersonAvatar } from "@/components/PersonAvatar";
 import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
 import type { TapeTrade } from "@/domain/conviction-series";
 import type { FlowWindow } from "@/domain/market-flow";
@@ -62,6 +63,45 @@ const capitalCopy = (
 ): MetricMove =>
   capitalMove({ currentEth: m.current, baseEth: m.base, since: w.since, usd, money });
 
+/** A face the Participants row can show — the smallest shape an avatar needs. */
+export interface MomentumFace {
+  wallet: string;
+  name?: string | null;
+  avatarUrl?: string | null;
+}
+
+/**
+ * The faces behind a count. Placed on the LABEL line, right side — the one
+ * consistent slot in this instrument for "who": the top line is always
+ * magnitude (total · %), the label line is always identity, the line under it
+ * is always the move. Capital has no faces, so that slot simply stays empty and
+ * the two rows still read down the same columns.
+ */
+function FaceRow({ faces, total }: { faces: MomentumFace[]; total: number }) {
+  const shown = faces.slice(0, 3);
+  const rest = Math.max(0, total - shown.length);
+  if (shown.length === 0) return null;
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex -space-x-1.5">
+        {shown.map((f) => (
+          <PersonAvatar
+            key={f.wallet}
+            wallet={f.wallet}
+            name={f.name}
+            avatarUrl={f.avatarUrl}
+            size={20}
+            className="ring-1 ring-[var(--surface)]"
+          />
+        ))}
+      </div>
+      {rest > 0 && (
+        <span className="num text-[11px] text-[var(--text-muted)]">+{rest}</span>
+      )}
+    </div>
+  );
+}
+
 /**
  * One full-width metric row inside the Total Market instrument: the current
  * total in large type on the left, the percentage change in large type on the
@@ -73,12 +113,17 @@ function MomentumMetric({
   label,
   copy,
   dense,
+  faces,
+  facesTotal,
 }: {
   total: string;
   label: string;
   copy: MetricMove;
   /** Phone-tight rhythm so the whole market fits one screen without scrolling. */
   dense?: boolean;
+  /** Optional identity for this metric — rendered opposite the label. */
+  faces?: MomentumFace[];
+  facesTotal?: number;
 }) {
   const tone = dirTone(copy.direction);
   const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
@@ -104,10 +149,13 @@ function MomentumMetric({
           ) : null}
         </span>
       </div>
-      <div
-        className={`${dense ? "mt-1" : "mt-1.5"} text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]`}
-      >
-        {label}
+      <div className={`${dense ? "mt-1" : "mt-1.5"} flex items-center justify-between gap-3`}>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          {label}
+        </span>
+        {faces && faces.length > 0 && (
+          <FaceRow faces={faces} total={facesTotal ?? faces.length} />
+        )}
       </div>
       <div
         className={`num mt-0.5 ${dense ? "text-[11px]" : "text-[12px]"}`}
@@ -119,6 +167,7 @@ function MomentumMetric({
   );
 }
 
+
 export function MarketMomentum({
   tape,
   change,
@@ -127,6 +176,7 @@ export function MarketMomentum({
   nowMs = Date.now(),
   footer,
   dense,
+  faces,
 }: {
   /** Still needed for the window phrase and the cold-start read. Never for a delta. */
   tape: TapeTrade[] | undefined;
@@ -150,6 +200,8 @@ export function MarketMomentum({
   footer?: ReactNode;
   /** Phone: believers and capital sit side by side so the market fits one screen. */
   dense?: boolean;
+  /** Who the participant count is made of — faces beside the Participants label. */
+  faces?: MomentumFace[];
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs, win), [tape, nowMs, win]);
   const { unit } = useDisplayUnit();
@@ -183,6 +235,8 @@ export function MarketMomentum({
         total={b.current.toLocaleString("en-US")}
         label="Participants"
         copy={believerCopy(b, book.window)}
+        faces={faces}
+        facesTotal={Math.max(faces?.length ?? 0, Math.round(b.current))}
       />
       <div className="border-t border-[var(--hairline)]" aria-hidden />
       <MomentumMetric
