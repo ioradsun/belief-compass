@@ -156,40 +156,44 @@ function MomentumMetric({
   const headlinePct = copy.pct ?? (copy.direction === "flat" ? "0%" : "");
   return (
     <div className={dense ? "px-4 py-2" : "px-4 py-3 sm:px-5"}>
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="flex min-w-0 items-baseline gap-2">
-          <span
-            className={`num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] text-[var(--text)] ${dense ? "text-[21px]" : "text-[26px] sm:text-[30px]"}`}
-          >
-            {total}
+      <div className="flex items-start justify-between gap-3">
+        <span className="min-w-0">
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span
+              className={`num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] text-[var(--text)] ${dense ? "text-[21px]" : "text-[26px] sm:text-[30px]"}`}
+            >
+              {total}
+            </span>
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+              {label}
+            </span>
           </span>
-          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-            {label}
-          </span>
-        </span>
-        <span
-          className={`num shrink-0 font-semibold leading-none tabular-nums ${dense ? "text-[18px]" : "text-[22px] sm:text-[26px]"}`}
-          style={{ color: tone }}
-        >
-          {headlinePct}
-          {arrow && headlinePct ? (
-            <span className="ml-1.5 text-[0.6em] align-middle">{arrow}</span>
+          {/* People before statistics: when this metric has faces, the space
+          under the count belongs to them. */}
+          {faces ? (
+            <ParticipantProof faces={faces} total={facesTotal ?? faces.length} dense={dense} />
           ) : null}
         </span>
+        <span className="shrink-0 text-right">
+          <span
+            className={`num block font-semibold leading-none tabular-nums ${dense ? "text-[18px]" : "text-[22px] sm:text-[26px]"}`}
+            style={{ color: tone }}
+          >
+            {headlinePct}
+            {arrow && headlinePct ? (
+              <span className="ml-1.5 text-[0.6em] align-middle">{arrow}</span>
+            ) : null}
+          </span>
+          {/* The exact move sits directly under its percentage — one column,
+          one story, for both participants and capital. */}
+          <span
+            className={`num mt-1 block whitespace-nowrap ${dense ? "text-[11px]" : "text-[12px]"}`}
+            style={{ color: tone }}
+          >
+            {copy.absolute}
+          </span>
+        </span>
       </div>
-
-      {/* People before statistics: when this metric has faces, the space under
-      the label belongs to them, not to a restatement of the move. */}
-      {faces ? (
-        <ParticipantProof faces={faces} total={facesTotal ?? faces.length} dense={dense} />
-      ) : (
-        <div
-          className={`num mt-0.5 ${dense ? "text-[11px]" : "text-[12px]"}`}
-          style={{ color: tone }}
-        >
-          {copy.absolute}
-        </div>
-      )}
     </div>
   );
 }
