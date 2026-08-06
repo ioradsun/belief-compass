@@ -29,6 +29,8 @@ import { useStandingMemory } from "@/hooks/useStandingMemory";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { mergeLiveRows, LIVE_DELTA_OVERLAP_MS, type LiveRow } from "@/lib/live-tape";
+import { useTapeGate } from "@/hooks/useTapeGate";
+import { arrivalLabel } from "@/domain/tape-arrivals";
 import { mixFeed } from "@/domain/feed-cadence";
 import type { BeatTone } from "@/domain/story";
 
@@ -196,12 +198,30 @@ export function LiveTape({
   // must never be selected against events for a place in the window.
   // A fact this reader was told recently is dropped before it ever reaches the
   // scheduler — the cooldown is what stops a small pool reading as a loop.
+  // THE GATE. Everything above decides what the tape COULD show; this decides
+  // whether the reader gets it now or is offered it. The scheduler below then
+  // paces what was admitted — pacing an arrival the reader never asked for is
+  // still an interruption, just a prettier one.
+  //
+  // EMBEDDED TAPES (`scroll={false}`, inside a panel that scrolls for them)
+  // cannot observe their own scroll position, so `scrollTop` is always 0 and
+  // the gate falls back to the pointer alone: they hold updates while the
+  // reader's pointer is in them and stream otherwise. That is the honest
+  // behaviour for a short inline block rather than a gap — reaching up to a
+  // parent scroller to fake the signal would couple this component to whoever
+  // happens to render it.
+  const gate = useTapeGate(rows, JSON.stringify(key));
+
   const { fresh, remember } = useStandingMemory();
   const standing = useMemo(
     () => (data?.standing ?? []).filter((r) => fresh(r.id)),
     [data?.standing, fresh],
   );
-  const { rows: released, entranceWeight } = useScheduledRows(rows, JSON.stringify(key), standing);
+  const { rows: released, entranceWeight } = useScheduledRows(
+    gate.admitted,
+    JSON.stringify(key),
+    standing,
+  );
 
   // Once a standing fact has actually been shown, it goes on cooldown. Recorded
   // on RELEASE rather than on fetch, so a fact that was held and never drawn is
@@ -225,12 +245,32 @@ export function LiveTape({
 
   return (
     <div
+      ref={gate.scrollRef}
+      {...gate.pointerProps}
       className={
         scroll
           ? "h-full min-h-0 flex-1 touch-pan-y overflow-y-scroll overscroll-contain [-webkit-overflow-scrolling:touch]"
           : ""
       }
     >
+      {/* Announced, never injected. The tape stays where the reader left it and
+          this is the one control that moves it — always their tap. Sticky so it
+          is reachable from wherever they have scrolled to. */}
+      {gate.pending > 0 && (
+        <button
+          type="button"
+          onClick={gate.admit}
+          className="sticky top-0 z-10 mb-2 w-full rounded-[10px] px-3 py-1.5 text-[11px] font-medium backdrop-blur transition-colors hover:brightness-110"
+          style={{
+            background: "color-mix(in srgb, var(--surface) 88%, transparent)",
+            border: "1px solid var(--border)",
+            color: "var(--text)",
+          }}
+        >
+          ↑ {arrivalLabel(gate.pending)}
+        </button>
+      )}
+
       {isLoading && released.length === 0 ? (
         <ul className="space-y-2" aria-hidden>
           {Array.from({ length: skeletonRows }).map((_, i) => (
@@ -335,10 +375,8 @@ export function LiveTape({
                           traded
                         </span>
                       )}
-
                     </div>
                   )}
-
                 </div>
               </li>
             );
@@ -370,8 +408,7 @@ function AttributionFace({ r }: { r: LiveRow }) {
 function SideText({ text, tone }: { text?: string | null; tone?: BeatTone }) {
   // A toned headline (e.g. "CAPITAL PULLED BACK") carries its direction; body text
   // stays neutral except the YES / NO words and any percentage.
-  const toneColor =
-    tone === "yes" ? "var(--yes)" : tone === "no" ? "var(--no)" : undefined;
+  const toneColor = tone === "yes" ? "var(--yes)" : tone === "no" ? "var(--no)" : undefined;
   // A beat can arrive with a missing headline/body (older cached payload, or a
   // narrator that produced no sentence). Render nothing rather than crash the feed.
   if (typeof text !== "string" || text.length === 0) return null;
@@ -395,7 +432,9 @@ function SideText({ text, tone }: { text?: string | null; tone?: BeatTone }) {
             <span
               key={i}
               className="num font-semibold"
-              style={{ color: p.startsWith("−") || p.startsWith("-") ? "var(--loss)" : "var(--gain)" }}
+              style={{
+                color: p.startsWith("−") || p.startsWith("-") ? "var(--loss)" : "var(--gain)",
+              }}
             >
               {p}
             </span>
