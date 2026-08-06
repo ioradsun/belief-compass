@@ -52,18 +52,11 @@ export function CurrentMarketActivity({
   const count = rows.length;
   const latest = rows[0]?.text ?? "";
 
-  // Unread = beats that arrived since the viewer last opened this section, so the
-  // lead line stays put while the number quietly climbs. Opening marks all seen.
-  const [seenCount, setSeenCount] = useState<number | null>(null);
-  useEffect(() => {
-    if (seenCount == null && live) setSeenCount(count);
-  }, [live, count, seenCount]);
-  const unread = seenCount == null ? 0 : Math.max(0, count - seenCount);
-  const toggle = () =>
-    setOpen((v) => {
-      if (!v) setSeenCount(count);
-      return !v;
-    });
+  // No count is shown: the raw row count and what the expanded sheet renders
+  // (grouped beats) are different numbers, and a number that disagrees with the
+  // thing it opens is worse than no number at all.
+  const toggle = () => setOpen((v) => !v);
+
 
   // Nothing has happened yet → show nothing. The cold-start read lives on the
   // order bar; a "no activity" placeholder here would just repeat it.
