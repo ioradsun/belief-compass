@@ -23,6 +23,7 @@ import {
   seededBelievers,
   type LiveLineInput,
 } from "@/lib/market-state/read-model";
+import { metricChange } from "@/domain/market-change";
 import { evaluateOpportunity, type OpportunityType } from "@/domain/opportunity";
 import { OPP } from "@/domain/opportunity-config";
 import { buildOpportunityInput } from "@/lib/opportunity/build-input";
@@ -54,12 +55,12 @@ export async function refreshMarket(
     const nowIso = new Date().toISOString();
     const now = Date.now();
 
-    const [mkt, ms, ev, pos, tr, snap] = await Promise.all([
+    const [mkt, ms, ev, pos, tr, snap, snap1h] = await Promise.all([
       sb.from("markets").select("created_at").eq("onchain_id", market).maybeSingle(),
       sb
         .from("market_state")
         .select(
-          "read_model_version, money_yes_pct, yes_capital_usd, no_capital_usd, yes_price_usd, no_price_usd, chg_1h, chg_24h, chg_24h_yes, updated_at, opportunity_type, opportunity_type_since, opportunity_previous_type",
+          "read_model_version, money_yes_pct, yes_capital_usd, no_capital_usd, yes_price_usd, no_price_usd, updated_at, opportunity_type, opportunity_type_since, opportunity_previous_type",
         )
         .eq("onchain_id", market)
         .maybeSingle(),
@@ -71,9 +72,19 @@ export async function refreshMarket(
       // needs. Absent when no old-enough snapshot exists → delta stays null.
       sb
         .from("market_state_snapshots")
-        .select("yes_capital_usd, no_capital_usd")
+        .select("yes_capital_usd, no_capital_usd, yes_price_usd, no_price_usd")
         .eq("onchain_id", market)
         .lte("captured_at", new Date(now - 86_400_000).toISOString())
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      // The 1h boundary of the SAME history. Price moves are derived here, from
+      // these observations, and nowhere else — see the note at `yesChg1h`.
+      sb
+        .from("market_state_snapshots")
+        .select("yes_price_usd")
+        .eq("onchain_id", market)
+        .lte("captured_at", new Date(now - 3_600_000).toISOString())
         .order("captured_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
@@ -124,6 +135,8 @@ export async function refreshMarket(
     const snapBase = (snap.data ?? null) as {
       yes_capital_usd?: number;
       no_capital_usd?: number;
+      yes_price_usd?: number | null;
+      no_price_usd?: number | null;
     } | null;
     const yesCapitalDelta24h =
       snapBase == null ? null : num(state.yes_capital_usd) - num(snapBase.yes_capital_usd);
@@ -138,10 +151,22 @@ export async function refreshMarket(
     };
     const nbSide = (t.nb_side_24h as "YES" | "NO" | null) ?? null;
 
-    // Price changes: reuse the existing trustworthy snapshot-based figures; NULL
-    // when there is no prior observation (never treat missing history as zero).
-    const yesChg1h = numOrNull(state.chg_1h);
-    const yesChg24h = numOrNull(state.chg_24h_yes ?? state.chg_24h);
+    // PRICE MOVES ARE DERIVED HERE, ONCE.
+    //
+    // They used to be copied off `market_state.chg_1h` / `chg_24h_yes`, written
+    // by a separate SQL job over a separate history table — a second producer of
+    // the same fact, on a different baseline from the one the panels use. Now
+    // this row's own snapshot baselines (the same `market_state_snapshots` the
+    // window baselines and the feed cards read) are subtracted through the one
+    // shared derivation. NULL when there is no prior observation, so missing
+    // history is never a confident zero.
+    const pctMove = (current: number | null, base: number | null | undefined): number | null => {
+      const m = metricChange(current, base ?? null, "price");
+      return m.rank === "unknown" ? null : m.pct;
+    };
+    const snap1hBase = (snap1h.data ?? null) as { yes_price_usd?: number | null } | null;
+    const yesChg1h = pctMove(numOrNull(state.yes_price_usd), numOrNull(snap1hBase?.yes_price_usd));
+    const yesChg24h = pctMove(numOrNull(state.yes_price_usd), numOrNull(snapBase?.yes_price_usd));
 
     // Milestone: only when a believer threshold was crossed within the 24h window.
     const rung = believerMilestoneAtOrBelow(directional);
