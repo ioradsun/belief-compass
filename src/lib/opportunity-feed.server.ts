@@ -117,6 +117,7 @@ function signalsOf(
   followed: FollowedPresence = NO_FOLLOWS,
   connectedToOrigin = 0,
 ): FeedMarketSignals {
+  const mo = (r["momentum"] ?? null) as { weight?: number } | null;
   const meta = (r["markets"] ?? null) as {
     category?: string | null;
     author_wallet?: string | null;
@@ -137,6 +138,7 @@ function signalsOf(
     directionalBelievers: num(r["directional_believers"]),
     divergence: num(r["divergence"]),
     priceMovePct: Math.abs(num(r["chg_window_yes"])),
+    momentumWeight: num(mo?.weight),
     opportunityType: (r["opportunity_type"] as string | null) ?? null,
     opportunityReason: (r["opportunity_reason"] as string | null) ?? null,
     opportunityScore: numOrNull(r["opportunity_score"]),
@@ -369,7 +371,11 @@ export async function buildOpportunityFeed(
       clusterId: ai?.duplicateClusterId ?? null,
       scored,
       eligibility,
-      reason: reasonFor(s, scored, { category: s.category ?? ai?.category ?? null }),
+      reason: reasonFor(s, scored, {
+        category: s.category ?? ai?.category ?? null,
+        momentum: (r["momentum"] ?? null) as never,
+        window: win,
+      }),
       reentry,
       poolSlices: Array.isArray(r["pool_slices"]) ? (r["pool_slices"] as string[]) : [],
     };

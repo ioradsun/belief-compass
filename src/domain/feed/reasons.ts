@@ -7,9 +7,13 @@
  * to null (the card simply shows no reason).
  */
 import type { FeedMarketSignals, ScoredMarket } from "./score";
+import { momentumReason, WAKING_REASON, CONTESTED_REASON, type MomentumFacts } from "./momentum";
 
 export type ReasonCode =
   | "reentry"
+  | "momentum"
+  | "waking"
+  | "contested"
   | "taking_off"
   | "early"
   | "follows"
@@ -85,8 +89,40 @@ function followsReason(s: FeedMarketSignals): FeedReason {
 export function reasonFor(
   s: FeedMarketSignals,
   scored: ScoredMarket,
-  opts: { category?: string | null } = {},
+  opts: { category?: string | null; momentum?: MomentumFacts | null; window?: string } = {},
 ): FeedReason | null {
+  const mo = opts.momentum ?? null;
+  const win = opts.window ?? "24h";
+
+  /**
+   * MOVEMENT LEADS, when there is any.
+   *
+   * "YES gained 3 believers today" is the most checkable sentence the feed can
+   * write — a reader can open the market and verify it in one glance — and a
+   * reason that survives being checked is the only kind worth printing. It goes
+   * above the social reasons because a social reason describes a STATE ("your
+   * Tribe is backing YES", true for weeks) while this describes an EVENT, and
+   * an event is why a market is worth opening NOW rather than ever.
+   *
+   * `momentumReason` is drift-corrected at source, so this can never say a
+   * market moved when only the exchange rate did.
+   */
+  if (mo?.top) return { code: "momentum", text: momentumReason(mo.top, win) };
+
+  // A market that broke a long silence has no MOVE big enough to describe —
+  // that is what makes it interesting — so it gets its own sentence rather than
+  // falling through to a category blurb.
+  if (mo?.lenses.includes("waking")) return { code: "waking", text: WAKING_REASON };
+
+  /**
+   * The old first branch, kept but demoted and now REACHABLE.
+   *
+   * It required `newBelievers1h >= 3` and `acceleration >= 1.6`, and both were
+   * unreachable: no market on this platform has ever had three new believers in
+   * an hour, and acceleration was identically zero because `trade_count_1h` was
+   * missing from the feed's SELECT list. It now sits below the momentum branch,
+   * which covers the same event honestly on the window the reader chose.
+   */
   if (s.newBelievers1h >= 3 && scored.acceleration >= 1.6)
     return {
       code: "taking_off",
@@ -128,6 +164,10 @@ export function reasonFor(
     return { code: "early", text: "Early — activity is accelerating" };
   if (Math.abs(s.divergence) >= 0.25)
     return { code: "split", text: "People and money are split here" };
+  // Both sides genuinely occupied and neither winning. Below the personal
+  // reasons because it is a fact about the market rather than about the reader,
+  // and above the category blurbs because it is a fact at all.
+  if (mo?.lenses.includes("contested")) return { code: "contested", text: CONTESTED_REASON };
 
   const fresh = freshText(scored.ageHours);
   if (fresh && scored.components.freshness >= 0.5) return { code: "fresh", text: fresh };

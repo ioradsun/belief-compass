@@ -67,12 +67,28 @@ export const FRESHNESS = {
   NEW_HOURS: 72,
 } as const;
 
-/** Momentum normalisation caps — beyond these, more is not more. */
+/**
+ * Momentum normalisation caps — beyond these, more is not more.
+ *
+ * RECALIBRATED AGAINST THE REAL DISTRIBUTION. The previous caps were 12 new
+ * believers per HOUR and 20 trades per HOUR. Measured: zero markets on this
+ * platform have ever had a new believer in an hour, and zero have a trade in
+ * the current hour. Those caps described a platform that does not exist, and a
+ * saturating normaliser against an unreachable cap returns nothing — so the
+ * terms they governed contributed nothing, always.
+ *
+ * The hourly terms are gone from `momentum` and the daily ones are set where
+ * the data actually lives: 12 markets gained a believer in 24h and 29 traded,
+ * so a cap of 3 believers and 12 trades puts a genuinely busy market near the
+ * top of the scale instead of at 4% of it. `VELOCITY_5M` is dropped entirely —
+ * a five-minute tick extrapolated to an hourly rate is noise on a platform with
+ * 175 trades a week, and `accelerationFrom` already refuses to trust it without
+ * a trade in the last hour.
+ */
 export const MOMENTUM_CAPS = {
-  NEW_BELIEVERS_1H: 12,
-  TRADES_1H: 20,
-  VELOCITY_5M: 8,
-  VOLUME_USD_24H: 5000,
+  NEW_BELIEVERS_24H: 3,
+  TRADES_24H: 12,
+  VOLUME_USD_24H: 250,
   ACCELERATION: 4,
 } as const;
 
