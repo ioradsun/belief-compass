@@ -237,7 +237,9 @@ export function LiveTape({
   // behaviour for a short inline block rather than a gap — reaching up to a
   // parent scroller to fake the signal would couple this component to whoever
   // happens to render it.
-  const gate = useTapeGate(rows, JSON.stringify(key), holdUpdates);
+  // A single-market tape counts events; the global feed counts markets.
+  const singleMarket = (marketIds?.length ?? 0) === 1;
+  const gate = useTapeGate(rows, JSON.stringify(key), holdUpdates, !singleMarket);
 
   // The 0 → N edge, counted. Increments only when the pill goes from absent to
   // present, so the entrance animation plays once per waiting batch.

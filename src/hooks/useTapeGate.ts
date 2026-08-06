@@ -54,6 +54,16 @@ export function useTapeGate<T extends Arrival>(
    * calm feed, it is a broken one.
    */
   holdAlways = false,
+  /**
+   * Collapse held rows to one per market before counting.
+   *
+   * True for the global feed, where twelve trades in one market inside three
+   * seconds is one thing happening. FALSE for a tape already scoped to a single
+   * market: there every row shares the same market id, so grouping would pin
+   * the counter at "1 New" forever no matter how much activity arrived — the
+   * reader would watch a number that never moves and conclude the feed is dead.
+   */
+  groupByMarket = true,
 ): TapeGate<T> {
   const [admitted, setAdmitted] = useState<T[]>([]);
   const [pending, setPending] = useState(0);
@@ -89,10 +99,15 @@ export function useTapeGate<T extends Arrival>(
     detach.current = () => el.removeEventListener("scroll", read);
   }, []);
 
+  const collapse = useCallback(
+    <R extends Arrival>(rows: readonly R[]): R[] => (groupByMarket ? groupArrivals(rows) : [...rows]),
+    [groupByMarket],
+  );
+
   const flushCount = useCallback(() => {
     batchTimer.current = null;
-    setPending(pendingCount(heldRef.current));
-  }, []);
+    setPending(groupByMarket ? pendingCount(heldRef.current) : heldRef.current.length);
+  }, [groupByMarket]);
 
   // A different tape starts clean: no held rows to offer, no banner promising
   // the previous scope's activity, and the reader back at the top by definition.
@@ -120,7 +135,7 @@ export function useTapeGate<T extends Arrival>(
       const merged = [...fresh, ...heldRef.current];
       heldRef.current = [];
       setPending(0);
-      setAdmitted((prev) => dedupe([...groupArrivals(merged), ...prev]));
+      setAdmitted((prev) => dedupe([...collapse(merged), ...prev]));
       return;
     }
 
@@ -128,7 +143,7 @@ export function useTapeGate<T extends Arrival>(
     // The counter moves once per window, not once per event. A number ticking
     // 1 → 2 → 3 is movement too, and the reader is still being interrupted.
     if (batchTimer.current == null) batchTimer.current = setTimeout(flushCount, TAPE.batchMs);
-  }, [incoming, flushCount, holdAlways]);
+  }, [incoming, flushCount, holdAlways, collapse]);
 
   useEffect(
     () => () => {
@@ -143,16 +158,16 @@ export function useTapeGate<T extends Arrival>(
       clearTimeout(batchTimer.current);
       batchTimer.current = null;
     }
-    const taking = groupArrivals(heldRef.current);
+    const taking = collapse(heldRef.current);
     heldRef.current = [];
     setPending(0);
     if (taking.length === 0) return;
     setAdmitted((prev) =>
       // Re-rank: the mixer's current order wins, with anything it has since
       // dropped kept behind it so nothing the reader saw vanishes on a tap.
-      dedupe([...groupArrivals(incomingRef.current as T[]), ...taking, ...prev]),
+      dedupe([...collapse(incomingRef.current as T[]), ...taking, ...prev]),
     );
-  }, []);
+  }, [collapse]);
 
   return {
     admitted,
