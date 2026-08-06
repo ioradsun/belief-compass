@@ -75,14 +75,26 @@ export function CurrentMarketActivity({
   wallet,
   onSelect,
   embedded,
+  reason,
 }: {
   marketId: number;
   wallet?: string;
   onSelect: (id: number) => void;
   /** Rendered inside another instrument: drop the card chrome and outer margin. */
   embedded?: boolean;
+  /**
+   * WHY this market is in front of the reader — the same sentence `reasonFor`
+   * composes for the playlist row and the centre panel.
+   *
+   * It used to live in a second pinned card ("Now reading"), one column over
+   * from this one, both describing the market already filling the centre. Two
+   * cards, one subject. They are now told as one story in the reader's order:
+   *   WHY you're here  →  WHAT is happening here.
+   */
+  reason?: string | null;
 }) {
   const [open, setOpen] = useState(false);
+
 
   // The SAME scoped live query LiveTape runs, so what the header says and what
   // opens beneath it are the same rows, and React Query never double-fetches.
