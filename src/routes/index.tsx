@@ -363,11 +363,48 @@ function Feed() {
   // refreshing. Only meaningful for a connected viewer (anonymous never decides).
   const [caughtUp, setCaughtUp] = useState(false);
 
+  /**
+   * WHERE BACK GOES.
+   *
+   * Every center destination is a search param, so "close this panel" used to
+   * mean "drop my own param" — which lands you wherever the remaining params
+   * happen to point, not where you actually came from. Opening a person also
+   * cleared ?m, so Back from a profile dumped you on the top of the feed rather
+   * than the market you were reading.
+   *
+   * So the center keeps its own return stack: each open records the view being
+   * left, each Back restores it exactly. First principle — Back returns you to
+   * the view you left, always.
+   */
+  const centerNow: CenterView = {
+    m: selectedMarket,
+    p: selectedPerson,
+    dna: dnaOpen,
+    create: createOpen,
+    terms: termsOpen,
+    dash: dashOpen,
+  };
+  const centerRef = useRef<CenterView>(centerNow);
+  centerRef.current = centerNow;
+  const centerStack = useRef<CenterView[]>([]);
+  const pushCenter = () => {
+    centerStack.current.push(centerRef.current);
+    if (centerStack.current.length > 30) centerStack.current.shift();
+  };
+  /** Restore the view we came from; `fallback` covers a cold deep link. */
+  const backToPrevious = (fallback: CenterView = CLEARED_CENTER) => {
+    const prev = centerStack.current.pop();
+    navigate({ search: (s: Search) => ({ ...s, ...CLEARED_CENTER, ...(prev ?? fallback) }) });
+    setTab("belief");
+    enterProduct();
+  };
+
   // One selection flow for the whole app. Clicking a position/Live row sets ?m; a
   // person sets ?p; the DNA summary sets ?dna. Each clears the others and focuses
   // the center (mobile: the Belief column). Browser back/forward walks history.
   const selectMarket = (marketId: number) => {
     setCaughtUp(false);
+    pushCenter();
     navigate({
       search: (prev: Search) => ({
         ...prev,
@@ -376,25 +413,29 @@ function Feed() {
         dna: undefined,
         create: undefined,
         terms: undefined,
+        dash: undefined,
       }),
     });
     setTab("belief");
     enterProduct();
   };
   const selectPerson = (personWallet: string) => {
+    if (personWallet === selectedPerson) return;
+    pushCenter();
     navigate({
       search: (prev: Search) => ({
         ...prev,
         p: personWallet,
-        m: undefined,
         dna: undefined,
         create: undefined,
         terms: undefined,
+        dash: undefined,
       }),
     });
     setTab("belief");
     enterProduct();
   };
+
   // Universal behaviour: any avatar anywhere opens that profile in the center.
   useEffect(() => registerPersonFocus(selectPerson));
   // The Conviction Dashboard is a center-panel destination (never a modal): it
