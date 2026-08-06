@@ -28,6 +28,7 @@ import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
+import { relationFromLabel } from "@/domain/participant-social";
 import { SharedConviction } from "@/components/SharedConviction";
 import { marketAgeCopy } from "@/domain/market-freshness";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
@@ -398,7 +399,7 @@ export function MarketDeck({
         ethUsd={ethUsd}
         win={deckWin}
         change={marketChange}
-        faces={holders}
+        faces={participantFaces}
         footer={
           onToggleCase && !mobileCaseOpen ? (
             <ExamineCta open={caseOpen} onToggle={onToggleCase} houseRead={houseReadState_} />
