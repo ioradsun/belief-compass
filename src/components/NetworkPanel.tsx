@@ -143,16 +143,15 @@ export function NetworkPanel({
    * box away mid-search.
    */
   const fullSize = useRef(0);
-  if (!searching && !isLoading) fullSize.current = list.length;
+  if (!searching && !isLoading) fullSize.current = everyone.length;
   const showSearch = needsSearch(fullSize.current);
 
   useEffect(() => {
-    if (!searching) onCount?.(list.length);
-  }, [list.length, searching, onCount]);
+    if (!searching) onCount?.(everyone.length);
+  }, [everyone.length, searching, onCount]);
 
-  // The ONE line about your own DNA: how much of it exists, and a way in. No
-  // stage word, no second clause, no meter — the list below is already the
-  // honest picture of how well-formed this is.
+  // The ONE line about your own DNA: how much of it exists. No page to open, no
+  // stage word, no meter — just the honest count and why it is worth growing.
   const mapped = data?.summary?.expressedBeliefs ?? 0;
 
   if (!wallet) {
