@@ -156,11 +156,16 @@ function MomentumMetric({
   const headlinePct = copy.pct ?? (copy.direction === "flat" ? "0%" : "");
   return (
     <div className={dense ? "px-4 py-2" : "px-4 py-3 sm:px-5"}>
-      <div className="flex items-baseline justify-between gap-4">
-        <span
-          className={`num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] text-[var(--text)] ${dense ? "text-[21px]" : "text-[26px] sm:text-[30px]"}`}
-        >
-          {total}
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span
+            className={`num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] text-[var(--text)] ${dense ? "text-[21px]" : "text-[26px] sm:text-[30px]"}`}
+          >
+            {total}
+          </span>
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            {label}
+          </span>
         </span>
         <span
           className={`num shrink-0 font-semibold leading-none tabular-nums ${dense ? "text-[18px]" : "text-[22px] sm:text-[26px]"}`}
@@ -172,11 +177,7 @@ function MomentumMetric({
           ) : null}
         </span>
       </div>
-      <div className={`${dense ? "mt-1" : "mt-1.5"} flex items-center justify-between gap-3`}>
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          {label}
-        </span>
-      </div>
+
       {/* People before statistics: when this metric has faces, the space under
       the label belongs to them, not to a restatement of the move. */}
       {faces ? (
