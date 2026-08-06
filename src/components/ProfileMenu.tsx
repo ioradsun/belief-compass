@@ -32,6 +32,8 @@ import { requestDisconnect, requestSwitchAccount } from "@/lib/connect-bridge";
 import { useMoney } from "@/lib/display-unit";
 import { formatUsdPrice } from "@/domain/money";
 import { setTheme, useTheme } from "@/lib/theme";
+import { useFeedSensitivity, setFeedSensitivity } from "@/lib/feed-sensitivity";
+import { SENSITIVITY_ORDER, type Sensitivity } from "@/domain/market-change";
 
 /** Base is the one chain this app trades on. */
 const NETWORK = "Base";
@@ -362,6 +364,8 @@ function SettingsPanel({
       <Divider />
       <CurrencySetting />
       <Divider />
+      <SensitivitySetting />
+      <Divider />
 
       <a
         href="/how"
@@ -450,6 +454,75 @@ function CurrencySetting() {
     </div>
   );
 }
+
+/**
+ * HOW MUCH HAS TO HAPPEN before a market is worth putting in front of you.
+ *
+ * IT USED TO LIVE IN EXPLORE, at the top of the filter menu, beside topics and
+ * network groups. It does not belong there: those say WHAT to discover and this
+ * says how much movement counts as movement — a standing preference about the
+ * engine, not a decision anyone makes while browsing. Explore now asks one
+ * question and this sits with the other things you set once, next to currency
+ * and theme.
+ *
+ * THE SAME STORE, NOT A COPY. `useFeedSensitivity` / `setFeedSensitivity` is a
+ * persisted external store pinned to `globalThis` (see @/lib/feed-sensitivity);
+ * this is a second READER of it, never a second source. Changing it here changes
+ * the feed's query key, so the running order re-ranks exactly as it did when the
+ * control was inside Explore.
+ *
+ * NO NUMBERS, deliberately — the same rule the old menu followed. A row in the
+ * bar table sets a percentage, a dollar floor and a believer count at once, each
+ * scaled again by the reader's window, so printing "5%" would be true of one of
+ * them and misleading about the rest.
+ */
+function SensitivitySetting() {
+  const current = useFeedSensitivity();
+  return (
+    <div className="px-1 py-1.5">
+      <div className="mb-1.5 text-[13px] text-[var(--text)]">How much matters</div>
+      <div
+        className="flex items-center rounded-[10px] p-0.5"
+        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+        role="radiogroup"
+        aria-label="How much matters"
+      >
+        {SENSITIVITY_ORDER.map((s) => (
+          <button
+            key={s}
+            type="button"
+            role="radio"
+            aria-checked={current === s}
+            onClick={() => setFeedSensitivity(s)}
+            title={SENSITIVITY_HINT[s]}
+            className={`flex-1 rounded-[8px] px-2 py-1.5 text-center text-[12px] font-semibold transition-colors ${
+              current === s
+                ? "bg-[var(--panel)] text-[var(--text)] shadow-sm"
+                : "text-[var(--text-muted)]"
+            }`}
+          >
+            {SENSITIVITY_LABEL[s]}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[11px] leading-snug text-[var(--text-muted)]">
+        {SENSITIVITY_HINT[current]}
+      </p>
+    </div>
+  );
+}
+
+/** The reader's words for each floor — never the engine's thresholds. */
+const SENSITIVITY_LABEL: Record<Sensitivity, string> = {
+  everything: "Everything",
+  notable: "Notable",
+  major: "Major only",
+};
+const SENSITIVITY_HINT: Record<Sensitivity, string> = {
+  everything: "Every move, however small.",
+  notable: "Skip the small stuff.",
+  major: "Just the big moves.",
+};
 
 /**
  * Appearance — one segmented control, same shape as the currency toggle. Dark is

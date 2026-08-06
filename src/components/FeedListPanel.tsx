@@ -20,14 +20,13 @@
  */
 import { useEffect, useRef } from "react";
 import { composeDiscoveryRow } from "@/domain/market-discovery";
-import { FeedFilterMenu } from "@/components/FeedFilterMenu";
 import type { FeedFilters, FeedNetwork } from "@/domain/feed/filters";
 import type { MarketRow } from "@/components/MarketCard";
-import type { Sensitivity } from "@/domain/market-change";
 import { marketTitle, marketTitleFallback } from "@/domain/market-title";
 import { WhyThis } from "@/components/WhyThis";
 import { participantCount } from "@/domain/participants";
-import { LENSES, LENS_LABELS, lensHero, scaleLine, type Lens } from "@/domain/feed/lens";
+import { lensHero, scaleLine, type Lens } from "@/domain/feed/lens";
+import { ExploreSelector } from "@/components/ExploreSelector";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -88,46 +87,6 @@ function factsOf(row: MarketRow | undefined, nowMs: number) {
   };
 }
 
-/**
- * THE LENS ROW — the one control, and the only thing above the running order.
- *
- * Text, not chips: five words in a row that scrolls, in the same weight the rest
- * of this column uses. A pill per lens would put five filled shapes at the top of
- * a 320px rail and make choosing a lens look heavier than reading the list it
- * chooses. The selected one is `--rel`, the accent this product already uses for
- * "this one is about you".
- */
-function LensRow({ value, onChange }: { value: Lens; onChange: (l: Lens) => void }) {
-  return (
-    <div
-      role="tablist"
-      aria-label="Explore by"
-      // A fixed height, so switching lenses cannot change the row's own size and
-      // move the list underneath it.
-      className="mb-2 flex h-[26px] shrink-0 items-center gap-3 overflow-x-auto"
-    >
-      {LENSES.map((l) => {
-        const on = l === value;
-        return (
-          <button
-            key={l}
-            role="tab"
-            aria-selected={on}
-            type="button"
-            onClick={() => onChange(l)}
-            className={`shrink-0 whitespace-nowrap text-[12px] transition-colors ${
-              on ? "font-semibold" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-            }`}
-            style={on ? { color: "var(--rel,#9b87f5)" } : undefined}
-          >
-            {LENS_LABELS[l]}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 export function FeedListPanel({
   entries,
   rows,
@@ -139,8 +98,6 @@ export function FeedListPanel({
   filters,
   onFilters,
   availableNetworks,
-  sensitivity,
-  onSensitivity,
 }: {
   /** The visible running order, already sequenced by the server. */
   entries: FeedListEntry[];
@@ -162,8 +119,6 @@ export function FeedListPanel({
   onFilters: (f: FeedFilters) => void;
   /** Network groups this viewer's evidence can fill. Always includes everyone. */
   availableNetworks: FeedNetwork[];
-  sensitivity?: Sensitivity;
-  onSensitivity?: (s: Sensitivity) => void;
 }) {
   const rowRefs = useRef(new Map<number, HTMLLIElement>());
   const nowMs = Date.now();
@@ -179,17 +134,13 @@ export function FeedListPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <LensRow value={lens} onChange={onLens} />
-
-      <div className="mb-2">
-        <FeedFilterMenu
-          filters={filters}
-          onChange={onFilters}
-          availableNetworks={availableNetworks}
-          sensitivity={sensitivity}
-          onSensitivity={onSensitivity}
-        />
-      </div>
+      <ExploreSelector
+        lens={lens}
+        onLens={onLens}
+        filters={filters}
+        onFilters={onFilters}
+        availableNetworks={availableNetworks}
+      />
 
       {upcoming.length === 0 && !lensExhausted ? (
         <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">

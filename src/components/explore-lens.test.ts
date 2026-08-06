@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { LENSES, LENS_LABELS } from "@/domain/feed/lens";
+import { existsSync } from "node:fs";
+import { LENSES, LENS_LABELS, DISCOVER_LENSES, toLens } from "@/domain/feed/lens";
+import { MOMENTUM_LABELS } from "@/domain/feed/momentum";
+
+const MOMENTUM_LABELS_LIST = Object.values(MOMENTUM_LABELS);
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 /** Comments stripped: these files EXPLAIN the rules they follow. */
@@ -66,31 +70,80 @@ describe("the playlist row", () => {
   });
 });
 
-describe("the lens control", () => {
+/**
+ * ONE CONTROL, NOT TWENTY-FOUR.
+ *
+ * Explore had a five-chip lens row AND a dropdown holding an All row, three
+ * sensitivity levels, five network groups, seven momentum lenses, seven topics
+ * and a Reset — two competing surfaces above the playlist that is the actual
+ * product. It exposed the recommendation engine and asked the reader to operate
+ * it. What replaced it asks one question, and folds narrowing away until asked.
+ */
+describe("the Explore selector", () => {
+  const sel = code("src/components/ExploreSelector.tsx");
   const feed = code("src/components/FeedListPanel.tsx");
 
-  it("offers every lens the domain defines, and no hand-written list", () => {
-    expect(feed).toMatch(/LENSES\.map/);
-    expect(feed).toMatch(/LENS_LABELS\[l\]/);
-    expect(LENSES).toEqual(["for_you", "moving", "capital", "participants", "fresh"]);
+  it("is the only discovery control the playlist mounts", () => {
+    expect(feed).toMatch(/<ExploreSelector/);
+    expect((feed.match(/<ExploreSelector/g) ?? []).length).toBe(1);
+    // The lens row and the filter menu are both gone, not merely hidden.
+    expect(feed).not.toMatch(/LensRow|FeedFilterMenu/);
   });
 
-  it("names what it ranks, in words needing no interpretation", () => {
-    // "Most Believers" asked the reader a question instead of answering one:
-    // believers on YES, on NO, holding now, or everyone who ever traded? The
-    // lens ranks people in the market irrespective of side.
-    expect(LENS_LABELS.participants).toBe("Most Participants");
-    expect(Object.values(LENS_LABELS).join(" ")).not.toMatch(/Believer/i);
+  it("deleted the old filter menu rather than leaving it unmounted", () => {
+    expect(existsSync(join(process.cwd(), "src/components/FeedFilterMenu.tsx"))).toBe(false);
   });
 
-  it("reserves its own height so choosing a lens cannot move the list", () => {
-    expect(feed).toMatch(/h-\[26px\]/);
+  it("offers the four discovery choices, from the domain and not a local list", () => {
+    expect(sel).toMatch(/DISCOVER_LENSES\.map/);
+    expect(sel).toMatch(/LENS_LABELS\[l\]/);
+    expect(DISCOVER_LENSES).toEqual(["for_you", "capital", "participants", "fresh"]);
   });
 
-  it("did not delete the filter grammar it sits above", () => {
-    // Thin lens/topic combinations are evidence, not yet a decision to remove a
-    // capability. The menu stays until that call is made deliberately.
-    expect(feed).toMatch(/<FeedFilterMenu/);
+  it("no longer offers Moving, while keeping it a valid lens", () => {
+    // The permanent shelf space goes; the ranking and every saved link survive.
+    // 41 markets traded platform-wide in 24h, and the lens admits only markets
+    // that moved — a choice that is usually near-empty teaches readers not to
+    // press it.
+    expect(DISCOVER_LENSES).not.toContain("moving");
+    expect(LENSES).toContain("moving");
+    expect(toLens("moving")).toBe("moving");
+  });
+
+  it("exposes no momentum sub-lenses", () => {
+    // Moving now / Biggest gains / Biggest drops / Capital flow / New believers
+    // / Contested / Waking up — seven decisions that need the ranker explained.
+    for (const gone of MOMENTUM_LABELS_LIST) expect(sel, gone).not.toContain(gone);
+    expect(sel).not.toMatch(/MOMENTUM_OPTIONS|toggleMomentum/);
+  });
+
+  it("exposes no sensitivity control", () => {
+    expect(sel).not.toMatch(/How much matters|SENSITIVITY_ORDER|setFeedSensitivity/);
+    expect(feed).not.toMatch(/sensitivity/i);
+  });
+
+  it("folds topic and people away behind one level, never two", () => {
+    expect(sel).toMatch(/type Pane = "root" \| "topic" \| "people"/);
+    expect(sel).toMatch(/<Drill label="Topic"/);
+    expect(sel).toMatch(/<Drill label="People"/);
+  });
+
+  it("reuses the canonical topic and network grammar", () => {
+    // No second topic system, no invented relationship classes.
+    expect(sel).toMatch(/TOPIC_OPTIONS/);
+    expect(sel).toMatch(/NETWORK_OPTIONS/);
+    expect(sel).toMatch(/toggleTopic/);
+    expect(sel).toMatch(/toggleNetwork/);
+  });
+
+  it("never offers a network group the viewer's evidence cannot fill", () => {
+    expect(sel).toMatch(/availableNetworks\.includes\(n\.key\)/);
+  });
+
+  it("summarises narrowing quietly instead of growing a chip row", () => {
+    // `Most Capital ×` `Crypto ×` `Tribe ×` is the same complexity in a new shape.
+    expect(sel).toMatch(/const narrowed = isAll\(filters\)/);
+    expect(sel).toMatch(/selected`/);
   });
 });
 
@@ -247,5 +300,57 @@ describe("the continuation state", () => {
     // change; a response now has to belong to the lens on screen.
     expect(idx).toMatch(/const forThisLens = /);
     expect(idx).toMatch(/forThisLens\(stableFeedRef\.current\) \?\? forThisLens\(data\)/);
+  });
+});
+
+/**
+ * SENSITIVITY MOVED, ITS MEANING DID NOT.
+ *
+ * "How much matters" sat at the top of Explore's filter menu beside topics and
+ * network groups, which is the wrong shelf: those say WHAT to discover, this
+ * says how much movement counts as movement. It is a standing preference about
+ * the engine, so it now sits with the other things you set once.
+ *
+ * WHAT IT ACTUALLY AFFECTS, traced rather than assumed: `useFeedSensitivity` in
+ * the route → the feed query key → the request → `atSensitivity` narrowing the
+ * momentum classification, which feeds the `momentum` score component and the
+ * card's headline reason. It does NOT touch the live tape, the right rail, or
+ * Positions — nothing in those files reads it. The UI ownership moved; the
+ * semantics are untouched.
+ */
+describe("sensitivity has exactly one source of truth", () => {
+  const profile = code("src/components/ProfileMenu.tsx");
+  const idx = code("src/routes/index.tsx");
+
+  it("is set from Settings, reading the canonical store", () => {
+    expect(profile).toMatch(/<SensitivitySetting \/>/);
+    expect(profile).toMatch(/from "@\/lib\/feed-sensitivity"/);
+    expect(profile).toMatch(/setFeedSensitivity\(s\)/);
+  });
+
+  it("keeps no local copy of the value", () => {
+    // A `useState` here would be a second source that drifts from the store the
+    // feed query actually reads.
+    const block = profile.slice(profile.indexOf("function SensitivitySetting"));
+    const body = block.slice(0, block.indexOf("\n}"));
+    expect(body).not.toMatch(/useState|useRef/);
+    expect(body).toMatch(/useFeedSensitivity\(\)/);
+  });
+
+  it("still reaches the feed exactly as before", () => {
+    // The route remains the only place that puts it in the request, so the
+    // ranking cannot notice where the control lives.
+    expect(idx).toMatch(/const sensitivity = useFeedSensitivity\(\)/);
+    expect(idx).toMatch(/sensitivity,/);
+    // And the route no longer owns a setter it does not render.
+    expect(idx).not.toMatch(/setFeedSensitivity/);
+  });
+
+  it("names steps rather than thresholds", () => {
+    // One row of the bar table sets a percent, a dollar floor and a believer
+    // count at once, each scaled by the window — "5%" would be true of one and
+    // misleading about the others.
+    expect(profile).toMatch(/Everything|Notable|Major only/);
+    expect(profile).not.toMatch(/SENSITIVITY_COPY|minPct|minUsd/);
   });
 });

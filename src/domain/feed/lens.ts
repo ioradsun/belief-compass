@@ -57,8 +57,39 @@ import { participantsLabel } from "@/domain/participants";
 
 export type Lens = "for_you" | "moving" | "capital" | "participants" | "fresh";
 
-/** Display order — the personal question first, then the three public rankings. */
+/**
+ * Every lens the engine can rank by. Includes `moving`, which is no longer
+ * OFFERED — see `DISCOVER_LENSES`.
+ */
 export const LENSES: Lens[] = ["for_you", "moving", "capital", "participants", "fresh"];
+
+/**
+ * THE FOUR CHOICES EXPLORE ACTUALLY OFFERS.
+ *
+ * Moving was a fifth and is not one any more. Not because the signal is weak —
+ * it is the most sophisticated thing in the feed, drift-corrected against the
+ * exchange rate so a market only "moves" when it really did — but because it
+ * cannot fill a permanent destination: 41 markets traded platform-wide in the
+ * last 24 hours, and the lens admits only markets that moved. A discovery choice
+ * that is usually near-empty teaches the reader not to press it.
+ *
+ * NOTHING UNDERNEATH IT IS DELETED. `classifyMomentum` still runs on every
+ * market and still feeds the `momentum` scoring component, the headline reason
+ * on a card, the market stories, the live tape and the position stories. The
+ * intelligence stays; the permanent shelf space goes. `moving` also remains a
+ * valid `Lens`, so a saved link or an in-flight request still resolves rather
+ * than falling back and quietly showing a different feed.
+ */
+export const DISCOVER_LENSES: Lens[] = ["for_you", "capital", "participants", "fresh"];
+
+/** The one-line answer each choice gives. Shown once, in the open menu. */
+export const LENS_QUESTIONS: Record<Lens, string> = {
+  for_you: "What should I look at?",
+  moving: "What is changing?",
+  capital: "Where is the money?",
+  participants: "Where are the people?",
+  fresh: "Where can I be early?",
+};
 
 export const LENS_LABELS: Record<Lens, string> = {
   for_you: "For You",
