@@ -74,7 +74,7 @@ export function MobileGame({
 }) {
   const marketId = Number(row.onchain_id);
   const title = marketTitle(row.markets?.title, marketId);
-  const category = row.markets?.category ?? null;
+  
 
   const [phase, setPhase] = useState<Phase>("question");
   const [side, setSide] = useState<OrderSide | null>(null);
