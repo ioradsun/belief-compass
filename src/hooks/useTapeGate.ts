@@ -17,15 +17,7 @@
  * person asked.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  TAPE,
-  canAutoAdmit,
-  groupArrivals,
-  newestAt,
-  partitionArrivals,
-  pendingCount,
-  unseen,
-} from "@/domain/tape-arrivals";
+import { TAPE, canAutoAdmit, groupArrivals, pendingCount, unseen } from "@/domain/tape-arrivals";
 import type { Arrival } from "@/domain/tape-arrivals";
 
 export interface TapeGate<T extends Arrival> {
@@ -132,19 +124,16 @@ export function useTapeGate<T extends Arrival>(
   useEffect(() => {
     const visible = new Set(admittedRef.current.map((r) => r.id));
     const heldIds = new Set(heldRef.current.map((r) => r.id));
-    const unseenRows = unseen(incoming, visible).filter((r) => !heldIds.has(r.id));
-    if (unseenRows.length === 0) return;
-
-    // Only rows newer than everything on screen are announced. Backfill — an
-    // older row the mixer re-selected, or one a delta merge pulled in — is
-    // merged in place, so the counter always means "new activity, at the top".
-    const { arrivals: fresh, backfill } = partitionArrivals(
-      unseenRows,
-      newestAt(admittedRef.current),
-    );
-    if (backfill.length > 0) {
-      setAdmitted((prev) => dedupe([...prev, ...collapse(backfill)]));
-    }
+    /**
+     * AN UPDATE IS AN UPDATE.
+     *
+     * Anything the reader has not seen counts, whenever it happened. Timeline
+     * order is how a tape reads while it sits still; it is NOT how arrival
+     * works. When someone taps "N New" the rows they asked for go to the TOP —
+     * that is the only place a person can watch them land. Ranking them back
+     * into the past is what made the tap feel like nothing happened.
+     */
+    const fresh = unseen(incoming, visible).filter((r) => !heldIds.has(r.id));
     if (fresh.length === 0) return;
 
     const firstPaint = admittedRef.current.length === 0;
@@ -187,9 +176,10 @@ export function useTapeGate<T extends Arrival>(
     if (taking.length === 0) return;
     setAdmitNonce((n) => n + 1);
     setAdmitted((prev) =>
-      // Re-rank: the mixer's current order wins, with anything it has since
-      // dropped kept behind it so nothing the reader saw vanishes on a tap.
-      dedupe([...collapse(incomingRef.current as T[]), ...taking, ...prev]),
+      // WHAT THEY ASKED FOR, FIRST. The admitted rows lead, then the mixer's
+      // current ranking, then anything it has since dropped so nothing the
+      // reader already saw disappears on a tap.
+      dedupe([...taking, ...collapse(incomingRef.current as T[]), ...prev]),
     );
   }, [collapse]);
 

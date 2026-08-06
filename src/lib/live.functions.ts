@@ -148,8 +148,15 @@ type Momentum = {
   marketAgeDays: number | null;
 };
 
-/** How many standing facts one full fetch puts in reserve. */
-const STANDING_RESERVE = 6;
+/**
+ * How many standing facts one full fetch puts in reserve.
+ *
+ * Six was a reserve that ran dry inside one quiet stretch: the scheduler draws
+ * one every 15–30s of silence, so six is about two minutes of material for a
+ * feed that can be quiet for an hour. This is the cheap half of the fetch (one
+ * wallet_beliefs read the tape already needs), so the depth is close to free.
+ */
+const STANDING_RESERVE = 18;
 
 export const listLiveEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof input>) => input.parse(d ?? {}))
