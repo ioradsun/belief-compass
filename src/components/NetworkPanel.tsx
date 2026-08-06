@@ -159,27 +159,24 @@ export function NetworkPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {mapped > 0 && (
-        <button
-          type="button"
-          onClick={onOpenDna}
-          disabled={!onOpenDna}
-          className="mb-3 self-start rounded-[6px] px-1 py-0.5 text-[11px] text-[var(--text-muted)] transition-colors enabled:hover:text-[var(--text-secondary)] disabled:cursor-default"
-          aria-label="Open your Conviction DNA"
-        >
-          <span className="num">{mapped}</span> convictions mapped
-          {onOpenDna && <span aria-hidden> ›</span>}
-        </button>
+        <p className="mb-3 text-[11px] leading-snug text-[var(--text-muted)]">
+          <span className="num">{mapped}</span> convictions mapped — every side you take sharpens
+          this.
+        </p>
       )}
 
       {showSearch && (
-        <input
-          value={rawQuery}
-          onChange={(e) => setRawQuery(e.target.value)}
-          placeholder="Search people…"
-          aria-label="Search people"
-          className="mb-2.5 w-full rounded-md bg-[var(--surface)] px-2.5 py-1.5 text-[13px] outline-none"
-          style={{ border: "1px solid var(--border)" }}
-        />
+        <div className="mb-2.5 flex items-center gap-1.5">
+          <input
+            value={rawQuery}
+            onChange={(e) => setRawQuery(e.target.value)}
+            placeholder="Search people…"
+            aria-label="Search people"
+            className="min-w-0 flex-1 rounded-md bg-[var(--surface)] px-2.5 py-1.5 text-[13px] outline-none"
+            style={{ border: "1px solid var(--border)" }}
+          />
+          <SpectrumFilterControl value={filter} onChange={setFilter} />
+        </div>
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -190,10 +187,8 @@ export function NetworkPanel({
             ))}
           </ul>
         ) : list.length === 0 ? (
-          searching ? (
-            <p className="pt-3 text-[12.5px] text-[var(--text-muted)]">
-              No people match this search.
-            </p>
+          searching || filter !== "all" ? (
+            <p className="pt-3 text-[12.5px] text-[var(--text-muted)]">No people here yet.</p>
           ) : (
             <EmptyPeople onExplore={onExplore} />
           )
@@ -215,16 +210,107 @@ export function NetworkPanel({
 }
 
 /**
- * One person, three answers, in the order they are asked:
+ * The one control on this list: which region of the continuum to look at. It is
+ * a colour-led menu, not a row of words — the same blue→amber language the ring
+ * around every face already speaks.
+ */
+function SpectrumFilterControl({
+  value,
+  onChange,
+}: {
+  value: SpectrumFilter;
+  onChange: (f: SpectrumFilter) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [open]);
+
+  const current = SPECTRUM_FILTERS.find((f) => f.id === value) ?? SPECTRUM_FILTERS[0];
+
+  return (
+    <div ref={box} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Filter people: ${current.label}`}
+        className="flex items-center gap-1.5 rounded-md bg-[var(--surface)] px-2 py-1.5 text-[12px] text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
+        style={{ border: "1px solid var(--border)" }}
+      >
+        <span
+          aria-hidden
+          className="h-2.5 w-2.5 rounded-full"
+          style={{ background: FILTER_DOT[value] }}
+        />
+        <span aria-hidden className="text-[9px] leading-none">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <ul
+          role="listbox"
+          className="absolute right-0 z-30 mt-1 w-[150px] overflow-hidden rounded-[10px] py-1 shadow-lg"
+          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+        >
+          {SPECTRUM_FILTERS.map((f) => (
+            <li key={f.id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={f.id === value}
+                onClick={() => {
+                  onChange(f.id);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] transition-colors hover:bg-[var(--bg)] ${
+                  f.id === value ? "text-[var(--text)]" : "text-[var(--text-secondary)]"
+                }`}
+              >
+                <span
+                  aria-hidden
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ background: FILTER_DOT[f.id] }}
+                />
+                {f.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** The menu's dots are the continuum itself: deep blue → neutral → deep amber. */
+const FILTER_DOT: Record<SpectrumFilter, string> = {
+  all: "linear-gradient(90deg, var(--yes), var(--text-muted), var(--no))",
+  twin: spectrumColor(0.9),
+  tribe: spectrumColor(0.4),
+  neutral: "var(--text-muted)",
+  rival: spectrumColor(-0.4),
+  opponent: spectrumColor(-0.9),
+};
+
+/**
+ * One person, two answers:
  *
  *   WHO IS THIS?        the name
- *   HOW SIMILAR ARE WE? the match, and the word for it when there is one
- *   WHY SHOULD I CARE?  the shared convictions behind the match
+ *   HOW DO WE RELATE?   the ring around their face, and the match behind it
  *
- * The percentage NEVER stands alone — its evidence is on the same line, so
- * "100% match · 2 shared" reads as the thin thing it is rather than as a claim.
- * The colour carries the rest: damped by confidence, so a barely-known person is
- * grey however extreme their raw number.
+ * The relationship WORD is gone from the row. It was the widest thing on the
+ * line and the first thing to get cut off, and it said less than the colour it
+ * sat next to. The ring carries the whole continuum — deep blue through neutral
+ * to deep amber — so the text is left with only what colour cannot say: how
+ * often you agree, and on how much.
  */
 function PersonRow({
   v,
@@ -238,8 +324,8 @@ function PersonRow({
   const { row, rel, spot } = v;
   const word = bandLabel(spot.band);
   const tone = spectrumColor(spot.position);
+  const ring = spectrumRing(spot.position);
   const shared = rel.sharedConvictions;
-  const sharedText = `${shared} shared conviction${shared === 1 ? "" : "s"}`;
 
   return (
     <li>
@@ -247,21 +333,32 @@ function PersonRow({
         type="button"
         onClick={onSelect}
         aria-current={selected ? "true" : undefined}
-        aria-label={`${row.displayName}${word ? `, ${word}` : ""}. ${spot.matchPct}% match, ${sharedText}.`}
+        aria-label={`${row.displayName}${word ? `, ${word}` : ""}. ${spot.matchPct}% match, ${shared} shared conviction${shared === 1 ? "" : "s"}.`}
+        title={word ?? undefined}
         className="flex w-full items-center gap-3 rounded-[10px] px-2 py-2.5 text-left transition-colors hover:bg-[var(--surface)]"
         style={selected ? { background: "var(--surface)" } : undefined}
       >
-        {row.avatarUrl ? (
-          <img src={row.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
-        ) : (
-          <span
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-white"
-            style={{ background: `hsl(${hueFor(row.wallet)} 45% 45%)` }}
-            aria-hidden
-          >
-            {initialsFor(row.displayName)}
-          </span>
-        )}
+        <span
+          className="grid shrink-0 place-items-center rounded-full"
+          style={{ padding: ring.width, background: ring.color }}
+          aria-hidden
+        >
+          {row.avatarUrl ? (
+            <img
+              src={row.avatarUrl}
+              alt=""
+              className="h-9 w-9 rounded-full object-cover"
+              style={{ outline: "2px solid var(--bg)", outlineOffset: -1 }}
+            />
+          ) : (
+            <span
+              className="grid h-9 w-9 place-items-center rounded-full text-[11px] font-semibold text-white"
+              style={{ background: `hsl(${hueFor(row.wallet)} 45% 45%)` }}
+            >
+              {initialsFor(row.displayName)}
+            </span>
+          )}
+        </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13.5px] font-medium text-[var(--text)]">
             {row.displayName}
@@ -270,12 +367,7 @@ function PersonRow({
             <span className="num shrink-0 font-semibold" style={{ color: tone }}>
               {spot.matchPct}% match
             </span>
-            {word && (
-              <span className="shrink-0 font-medium" style={{ color: tone }}>
-                · {word}
-              </span>
-            )}
-            <span className="num truncate text-[var(--text-muted)]">· {sharedText}</span>
+            <span className="num truncate text-[var(--text-muted)]">· {shared} shared</span>
           </span>
         </span>
       </button>
