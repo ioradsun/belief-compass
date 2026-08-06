@@ -117,11 +117,16 @@ export function pendingCount(rows: readonly Arrival[]): number {
   return groupArrivals(rows).length;
 }
 
-/** "1 Update" · "8 Updates" · "99+ Updates" — X-style, counting only. */
+/**
+ * "1 New" · "8 New" · "99+ New" — counting only.
+ *
+ * "New" rather than "Updates": one syllable, no plural to conjugate, and it
+ * names the only thing the reader cares about — that the conversation moved on
+ * while they were reading.
+ */
 export function arrivalLabel(n: number): string {
   const c = Math.max(0, Math.floor(n));
-  if (c === 1) return "1 Update";
-  return `${c > TAPE.displayCap ? `${TAPE.displayCap}+` : c} Updates`;
+  return `${c > TAPE.displayCap ? `${TAPE.displayCap}+` : c} New`;
 }
 
 /**
