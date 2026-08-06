@@ -401,3 +401,66 @@ describe("every move carries a figure a headline slot can show", () => {
     }
   });
 });
+
+/**
+ * A MISSING ETH/USD RATE MUST NOT BE REPORTED AS A STILL MARKET.
+ *
+ * Every threshold in `METRIC_DISPLAY.capitalUsd` is denominated in USD, so
+ * without a rate none of them apply. The caller used to hand in a `usd` that
+ * returned 0 for everything — which made the delta zero, the direction "flat",
+ * and every market in the app say "No change" because we could not price it.
+ * Capital is ETH-native, so the change itself is known regardless.
+ */
+describe("capitalMove without a rate", () => {
+  const money = (eth: number, signed = false) =>
+    `${signed && eth > 0 ? "+" : ""}${eth.toFixed(4)} ETH`;
+  const noRate = () => null;
+
+  it("still reports a real rise, and its direction", () => {
+    const m = capitalMove({ currentEth: 1.5, baseEth: 1, since: "over 1D", usd: noRate, money });
+    expect(m.direction).toBe("up");
+    expect(m.absolute).toContain("committed");
+    expect(m.figure).not.toBe("");
+  });
+
+  it("still reports a real fall", () => {
+    const m = capitalMove({ currentEth: 1, baseEth: 1.5, since: "over 1D", usd: noRate, money });
+    expect(m.direction).toBe("down");
+    expect(m.absolute).toContain("left");
+  });
+
+  it("makes NO percentage claim, because the base cannot be judged", () => {
+    const m = capitalMove({ currentEth: 1.5, baseEth: 1, since: "over 1D", usd: noRate, money });
+    expect(m.pct).toBeNull();
+    expect(m.pctQuiet).toBe(false);
+  });
+
+  it("says 'No change' only when the ETH figure genuinely did not move", () => {
+    // The distinction that was lost: flat because nothing happened, versus flat
+    // because we multiplied by a rate of zero.
+    const m = capitalMove({ currentEth: 1, baseEth: 1, since: "over 1D", usd: noRate, money });
+    expect(m.direction).toBe("flat");
+    expect(m.absolute).toBe("No change over 1D");
+  });
+
+  it("does not go flat on a move a rate of zero would have erased", () => {
+    const withRate = capitalMove({
+      currentEth: 2,
+      baseEth: 1,
+      since: "over 1D",
+      usd: (eth) => eth * 3000,
+      money,
+    });
+    const without = capitalMove({
+      currentEth: 2,
+      baseEth: 1,
+      since: "over 1D",
+      usd: noRate,
+      money,
+    });
+    // Both know it went up. Only the priced one is allowed to say by what %.
+    expect(withRate.direction).toBe("up");
+    expect(without.direction).toBe("up");
+    expect(without.pct).toBeNull();
+  });
+});

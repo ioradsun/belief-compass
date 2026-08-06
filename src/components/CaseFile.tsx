@@ -36,6 +36,7 @@ import { seededBelievers } from "@/lib/market-state/read-model";
 import { rankBelievers, sideCaseSummary, type CaseRelationship } from "@/domain/case-file";
 import { sideChangeLine, sideStateLine } from "@/domain/side-summary";
 import { convictionStory, narrateStory } from "@/domain/conviction-series";
+import { convertMoney } from "@/domain/money";
 
 type Side = "YES" | "NO";
 
@@ -140,7 +141,11 @@ export function CaseColumn({
   // clamping), so a market everyone has fully exited can leave a few cents on
   // the tape. That produced "capital on YES, nobody backing it". The holders
   // table is the truth; the tape only fills in before it has loaded.
-  const tapeCapitalUsd = capitalMetric != null ? capitalMetric.current * (ethUsd || 0) : null;
+  // `(ethUsd || 0)` made an unpriced market read as "$0 capital" — and worse,
+  // fed a zero into `seededBelievers` below, so a missing rate quietly changed
+  // the believer count too. Null says "we cannot price this" and stops there.
+  const tapeCapitalUsd =
+    capitalMetric == null ? null : convertMoney(capitalMetric.current, "ETH", "USD", ethUsd);
   const rowCapitalUsd = num(side === "YES" ? rr.yes_capital_usd : rr.no_capital_usd);
   const capitalUsd = rowCapitalUsd ?? tapeCapitalUsd;
   // Capital on this side means someone stands behind it — the market's initial
@@ -158,7 +163,8 @@ export function CaseColumn({
   // price people actually see and trade at, so the panel reads that first.
   const authPriceUsd = num(side === "YES" ? rr.yes_price_usd : rr.no_price_usd);
   const priceUsd =
-    authPriceUsd ?? (summary?.priceEth != null ? summary.priceEth * (ethUsd || 0) : null);
+    authPriceUsd ??
+    (summary?.priceEth == null ? null : convertMoney(summary.priceEth, "ETH", "USD", ethUsd));
 
   // ── The one chart, one lens ─────────────────────────────────────────────────
   // Believers is always the default lens — conviction.company is about people
