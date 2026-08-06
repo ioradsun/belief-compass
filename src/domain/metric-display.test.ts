@@ -147,7 +147,10 @@ describe("gain — the first money in is not a gain", () => {
   it("is calibrated to the markets that exist", () => {
     expect(CAP.originMaxBase).toBe(0.01); // the app's own dust line
     expect(BEL.pctValidMinBase).toBe(BEL.pctHeadlineMinBase); // counts: shown or not, never half-shown
-    expect(BEL.pctValidMinBase).toBeGreaterThanOrEqual(10); // above p95 (5) of side sizes
+    // Market-level participation (the Total Market tile) is the sum of both
+    // sides, so the p95-per-side floor of 10 silenced the % on nearly every
+    // market. Three is the smallest base where a ratio still says something.
+    expect(BEL.pctValidMinBase).toBeGreaterThanOrEqual(3);
     expect(gain(0.95 + 5, 0.95, CAP).pct).toBeNull(); // the median funded side
   });
 });
