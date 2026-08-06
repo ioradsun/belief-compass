@@ -68,26 +68,10 @@ function factsOf(row: MarketRow | undefined, nowMs: number) {
   };
 }
 
-function Metrics({ metrics }: { metrics: { label: string; value: string }[] }) {
-  if (metrics.length === 0) return null;
-  return (
-    <span className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
-      {metrics.map((m, i) => (
-        <span key={m.label} className="flex items-center gap-1.5">
-          {i > 0 && <span aria-hidden>·</span>}
-          <span className="tabular-nums">{m.value}</span>
-          <span className="opacity-80">{m.label}</span>
-        </span>
-      ))}
-    </span>
-  );
-}
-
 export function FeedListPanel({
   entries,
   rows,
   activeId,
-  activeTitle,
   onSelect,
   filters,
   onFilters,
@@ -100,14 +84,7 @@ export function FeedListPanel({
   /** Read-model rows keyed by onchain id — the same map the centre panel uses. */
   rows: Record<number, MarketRow>;
   activeId: number | null;
-  /**
-   * The title of the market the centre panel is CURRENTLY showing — the same
-   * string that panel renders. The playlist only knows the markets in its own
-   * slice, so a market opened from a link or search has no row here; without
-   * this the pinned "Now reading" card printed the id while the reader was
-   * looking at the question two columns over.
-   */
-  activeTitle?: string | null;
+
   onSelect: (id: number) => void;
   filters: FeedFilters;
   onFilters: (f: FeedFilters) => void;
