@@ -21,6 +21,7 @@ import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { pulseLine } from "@/components/MarketCard";
 import { MarketMomentum } from "@/components/MarketVitality";
+import { relationFromLabel } from "@/domain/participant-social";
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
@@ -151,6 +152,19 @@ export function MobileGame({
     staleTime: 30_000,
   });
   const { data: revealNet } = useQuery(networkQO(viewerWallet));
+
+  // Participants with the viewer's relationship attached — the tile shows the
+  // people you know first, in one shared list.
+  const participantFaces = useMemo(() => {
+    const rel = new Map<string, string>();
+    for (const p of revealNet?.people ?? []) rel.set(p.wallet.toLowerCase(), p.relationship);
+    return (revealEvidence?.believers ?? []).map((h) => ({
+      wallet: h.wallet,
+      name: h.name,
+      avatarUrl: h.avatarUrl,
+      relation: relationFromLabel(rel.get(h.wallet.toLowerCase())),
+    }));
+  }, [revealEvidence, revealNet]);
 
   const choose = useCallback(
     (s: OrderSide) => {
@@ -353,7 +367,7 @@ export function MobileGame({
           ethUsd={ethUsd}
           win={deckWin}
           change={marketChange}
-          faces={revealEvidence?.believers ?? []}
+          faces={participantFaces}
           footer={
             <CurrentMarketActivity
               embedded

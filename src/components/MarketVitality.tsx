@@ -21,6 +21,10 @@ import { formatMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
 import { believerMove, capitalMove, type MetricMove } from "@/domain/metric-display";
 import type { MarketChange, MetricChange } from "@/domain/market-change";
+import {
+  participantSocial,
+  type ParticipantRelation,
+} from "@/domain/participant-social";
 
 /**
  * A shared MetricChange in the shape believerMove/capitalMove expect.
@@ -68,39 +72,58 @@ export interface MomentumFace {
   wallet: string;
   name?: string | null;
   avatarUrl?: string | null;
+  /** How the viewer relates to them — decides who is seen first. */
+  relation?: ParticipantRelation;
 }
 
 /**
- * The faces behind a count. Placed on the LABEL line, right side — the one
- * consistent slot in this instrument for "who": the top line is always
- * magnitude (total · %), the label line is always identity, the line under it
- * is always the move. Capital has no faces, so that slot simply stays empty and
- * the two rows still read down the same columns.
+ * SOCIAL PROOF — the answer to "do I know anyone here?", directly under the
+ * count. Up to six faces (tribe, then rivals, then everyone else) and one
+ * composition line. One list, never separate network sections, and never a
+ * message about absence: with nobody familiar it simply reads "17 participants".
  */
-function FaceRow({ faces, total }: { faces: MomentumFace[]; total: number }) {
-  const shown = faces.slice(0, 3);
-  const rest = Math.max(0, total - shown.length);
-  if (shown.length === 0) return null;
+function ParticipantProof({
+  faces,
+  total,
+  dense,
+}: {
+  faces: MomentumFace[];
+  total: number;
+  dense?: boolean;
+}) {
+  const { faces: shown, overflow, summary } = participantSocial(faces, total);
+  if (shown.length === 0 && !summary) return null;
+  const size = dense ? 22 : 26;
   return (
-    <div className="flex shrink-0 items-center gap-1.5">
-      <div className="flex -space-x-1.5">
-        {shown.map((f) => (
-          <PersonAvatar
-            key={f.wallet}
-            wallet={f.wallet}
-            name={f.name}
-            avatarUrl={f.avatarUrl}
-            size={20}
-            className="ring-1 ring-[var(--surface)]"
-          />
-        ))}
-      </div>
-      {rest > 0 && (
-        <span className="num text-[11px] text-[var(--text-muted)]">+{rest}</span>
+    <div className={dense ? "mt-1.5" : "mt-2"}>
+      {shown.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          <div className="flex -space-x-1.5">
+            {shown.map((f) => (
+              <PersonAvatar
+                key={f.wallet}
+                wallet={f.wallet}
+                name={f.name}
+                avatarUrl={f.avatarUrl}
+                size={size}
+                className="ring-1 ring-[var(--surface)]"
+              />
+            ))}
+          </div>
+          {overflow > 0 && (
+            <span className="num text-[11px] text-[var(--text-muted)]">+{overflow}</span>
+          )}
+        </div>
+      )}
+      {summary && (
+        <div className={`${shown.length > 0 ? "mt-1" : ""} text-[11px] text-[var(--text-muted)]`}>
+          {summary}
+        </div>
       )}
     </div>
   );
 }
+
 
 /**
  * One full-width metric row inside the Total Market instrument: the current
@@ -153,16 +176,19 @@ function MomentumMetric({
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
           {label}
         </span>
-        {faces && faces.length > 0 && (
-          <FaceRow faces={faces} total={facesTotal ?? faces.length} />
-        )}
       </div>
-      <div
-        className={`num mt-0.5 ${dense ? "text-[11px]" : "text-[12px]"}`}
-        style={{ color: tone }}
-      >
-        {copy.absolute}
-      </div>
+      {/* People before statistics: when this metric has faces, the space under
+      the label belongs to them, not to a restatement of the move. */}
+      {faces ? (
+        <ParticipantProof faces={faces} total={facesTotal ?? faces.length} dense={dense} />
+      ) : (
+        <div
+          className={`num mt-0.5 ${dense ? "text-[11px]" : "text-[12px]"}`}
+          style={{ color: tone }}
+        >
+          {copy.absolute}
+        </div>
+      )}
     </div>
   );
 }
