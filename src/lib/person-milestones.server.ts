@@ -65,6 +65,26 @@ export async function buildPersonMilestones(
     .limit(MAX_ROWS);
   if (error || !Array.isArray(data)) return [];
 
+  // TITLES ARE ONE LOOKUP, NOT ONE MAP PER CALLER. The tape hands us the titles
+  // it already resolved for the events in its window — a milestone's newest
+  // market is often OUTSIDE that window, which is exactly how "The 3rd is
+  // “Market #2737”" reached the feed. Anything the caller could not name we
+  // name here, through the same shared read.
+  const titles = new Map(input.titleById);
+  {
+    const need = [
+      ...new Set(
+        (data as Row[])
+          .map((r) => Number(r.onchain_id))
+          .filter((id) => Number.isFinite(id) && !titles.has(id)),
+      ),
+    ];
+    if (need.length > 0) {
+      const { fetchMarketTitles } = await import("@/lib/market-titles.server");
+      for (const [id, t] of await fetchMarketTitles(svc, need)) titles.set(id, t);
+    }
+  }
+
   const byWallet = new Map<string, Person>();
   const truncated = new Set<string>();
   for (const raw of data as Row[]) {
@@ -85,7 +105,7 @@ export async function buildPersonMilestones(
       } satisfies Person);
     person.convictions.push({
       marketId,
-      title: input.titleById.get(marketId) ?? marketTitleFallback(marketId),
+      title: titles.get(marketId) ?? marketTitleFallback(marketId),
       startedAt: (raw.first_backed_at as string | null) ?? null,
     });
     byWallet.set(wallet, person);
