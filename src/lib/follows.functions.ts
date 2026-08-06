@@ -127,7 +127,21 @@ export async function loadFollowing(
   viewer: string | null,
 ): Promise<ReadonlySet<string>> {
   if (!viewer) return new Set();
-  const { data } = await sb.from("follows").select("followed").eq("follower", viewer.toLowerCase());
+  const { data, error } = await sb
+    .from("follows")
+    .select("followed")
+    .eq("follower", viewer.toLowerCase());
+  // A missing or unreadable `follows` table returns data = null with an error
+  // set. Swallowing that turns a whole ranking axis off silently and forever,
+  // which is exactly how it went unnoticed before: log loudly, then degrade.
+  if (error) {
+    console.error("[follows] loadFollowing failed — follow ranking is inert", {
+      viewer: viewer.toLowerCase(),
+      code: error.code,
+      message: error.message,
+    });
+    return new Set();
+  }
   return new Set(
     ((data ?? []) as { followed: string }[]).map((r) => String(r.followed).toLowerCase()),
   );
