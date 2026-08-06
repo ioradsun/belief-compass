@@ -239,6 +239,16 @@ export function LiveTape({
   // happens to render it.
   const gate = useTapeGate(rows, JSON.stringify(key), holdUpdates);
 
+  // The 0 → N edge, counted. Increments only when the pill goes from absent to
+  // present, so the entrance animation plays once per waiting batch.
+  const [pulseKey, setPulseKey] = useState(0);
+  const wasWaiting = useRef(false);
+  useEffect(() => {
+    const waiting = gate.pending > 0;
+    if (waiting && !wasWaiting.current) setPulseKey((n) => n + 1);
+    wasWaiting.current = waiting;
+  }, [gate.pending]);
+
   const { fresh, remember } = useStandingMemory();
   const standing = useMemo(
     () => (data?.standing ?? []).filter((r) => fresh(r.id)),
