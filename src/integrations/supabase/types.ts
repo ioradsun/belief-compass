@@ -263,6 +263,24 @@ export type Database = {
         }
         Relationships: []
       }
+      follows: {
+        Row: {
+          created_at: string
+          followed: string
+          follower: string
+        }
+        Insert: {
+          created_at?: string
+          followed: string
+          follower: string
+        }
+        Update: {
+          created_at?: string
+          followed?: string
+          follower?: string
+        }
+        Relationships: []
+      }
       house_foundation_answers: {
         Row: {
           action: string
