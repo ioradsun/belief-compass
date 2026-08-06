@@ -5,6 +5,7 @@
  * person's profile in the center panel (universal behaviour, via person-focus).
  * Falls back to a deterministic colour + initials when there's no picture.
  */
+import { useState } from "react";
 import { focusPerson } from "@/lib/person-focus";
 import { aliasFor, hueFor, initialsFor } from "@/lib/wallet-identity";
 
@@ -26,6 +27,7 @@ export function PersonAvatar({
 }) {
   const label = name || aliasFor(wallet);
   const px = `${size}px`;
+  const [imgFailed, setImgFailed] = useState(false);
   return (
     <button
       type="button"
@@ -39,13 +41,14 @@ export function PersonAvatar({
       className={`shrink-0 overflow-hidden rounded-full transition-opacity ${interactive ? "hover:opacity-80" : "cursor-default"} focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--text-muted)] ${className}`}
       style={{ width: px, height: px }}
     >
-      {avatarUrl ? (
+      {avatarUrl && !imgFailed ? (
         <img
           src={avatarUrl}
           alt=""
           loading="lazy"
           width={size}
           height={size}
+          onError={() => setImgFailed(true)}
           className="h-full w-full rounded-full object-cover"
         />
       ) : (

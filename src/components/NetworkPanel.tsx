@@ -328,10 +328,12 @@ function PersonRow({
   onSelect: () => void;
 }) {
   const { row, rel, spot } = v;
-  const word = bandLabel(spot.band);
+  const word = bandLabel(spot.band) ?? "Neutral";
   const tone = spectrumColor(spot.position);
   const ring = spectrumRing(spot.position);
   const shared = rel.sharedConvictions;
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImg = Boolean(row.avatarUrl) && !imgFailed;
 
   return (
     <li>
@@ -339,8 +341,8 @@ function PersonRow({
         type="button"
         onClick={onSelect}
         aria-current={selected ? "true" : undefined}
-        aria-label={`${row.displayName}${word ? `, ${word}` : ""}. ${spot.matchPct}% match, ${shared} shared conviction${shared === 1 ? "" : "s"}.`}
-        title={word ?? undefined}
+        aria-label={`${row.displayName}, ${word}. ${shared} shared conviction${shared === 1 ? "" : "s"}.`}
+        title={word}
         className="flex w-full items-center gap-3 rounded-[10px] px-2 py-2.5 text-left transition-colors hover:bg-[var(--surface)]"
         style={selected ? { background: "var(--surface)" } : undefined}
       >
@@ -349,10 +351,11 @@ function PersonRow({
           style={{ padding: ring.width, background: ring.color }}
           aria-hidden
         >
-          {row.avatarUrl ? (
+          {showImg ? (
             <img
-              src={row.avatarUrl}
+              src={row.avatarUrl!}
               alt=""
+              onError={() => setImgFailed(true)}
               className="h-9 w-9 rounded-full object-cover"
               style={{ outline: "2px solid var(--bg)", outlineOffset: -1 }}
             />
@@ -370,11 +373,10 @@ function PersonRow({
             {row.displayName}
           </span>
           <span className="mt-1 flex items-baseline gap-1.5 text-[11.5px]">
-            <span className="num shrink-0 font-semibold" style={{ color: tone }}>
-              {spot.matchPct}%
+            <span className="shrink-0 font-semibold" style={{ color: tone }}>
+              {word}
             </span>
             <span className="num truncate text-[var(--text-muted)]">· {shared} shared</span>
-
           </span>
         </span>
       </button>
