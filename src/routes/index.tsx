@@ -55,7 +55,8 @@ const TermsContent = lazyRetry(() =>
 import { useHouseIdea } from "@/hooks/useHouseIdea";
 import type { ReadySuggestion } from "@/lib/market-suggestion.functions";
 import { startDraftFromSuggestion } from "@/lib/create-draft";
-import { WalletConnectButton } from "@/components/WalletConnect";
+import { requestConnect } from "@/lib/connect-bridge";
+import { walletIntent } from "@/lib/wagmi";
 
 // Deferred surfaces: none of these render for a first-time, signed-out visitor.
 // PersonProfile/DnaOverview need a ?p/?dna selection; MyWorld/AccountRail need a
@@ -866,13 +867,24 @@ function Feed() {
             onSelectPerson={selectPerson}
             onOpenMenu={() => setMenuOpen(true)}
             center={
-              <button
-                type="button"
-                onClick={openCreate}
-                className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
-              >
-                <span aria-hidden="true">+</span> Conviction
-              </button>
+              wallet ? (
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
+                >
+                  <span aria-hidden="true">+</span> Conviction
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  {...walletIntent}
+                  onClick={() => requestConnect()}
+                  className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
+                >
+                  Connect wallet
+                </button>
+              )
             }
           />
         }
@@ -987,9 +999,8 @@ function Feed() {
                   ) : (
                     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
                       <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
-                        Connect a wallet to see your convictions.
+                        Connect a wallet in the header to see your convictions.
                       </p>
-                      <WalletConnectButton />
                     </div>
                   )
                 }
