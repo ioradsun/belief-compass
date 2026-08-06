@@ -1,5 +1,5 @@
 /**
- * "Live activity" — the pinned scope of the Live feed.
+ * "In this market" — the pinned scope of the Live feed.
  *
  * This market's own activity feed, gently elevated above the global feed: a thin
  * accent rail, a faint tint, a tiny uppercase label. It does exactly ONE job —
@@ -12,7 +12,7 @@
  * already runs (React Query dedupes it). Collapsed, it leads with the latest beat
  * and a quiet unread count; tapping expands the bounded, internally-scrolled feed.
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAnchorRect, anchorStyle } from "@/hooks/useAnchorRect";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -122,7 +122,7 @@ export function CurrentMarketActivity({
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[16px] border-t border-[var(--border)] bg-[var(--surface-1,var(--background))] shadow-2xl">
             <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-3">
               <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-                Live activity
+                In this market
               </span>
               <button
                 type="button"
