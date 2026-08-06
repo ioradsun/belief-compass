@@ -144,39 +144,3 @@ export function unseen<T extends Arrival>(
   return incoming.filter((r) => !visibleIds.has(r.id));
 }
 
-/**
- * NOT EVERY UNSEEN ROW IS AN ARRIVAL.
- *
- * The tape's row set is re-selected on every fetch, so a row the mixer dropped
- * earlier — or an older event pulled in by a delta merge — can become unseen
- * again long after it happened. Counting those as "new" is what made the pill
- * feel like a lie: the reader taps, the counter clears, and nothing appears at
- * the top because the row belonged three screens down.
- *
- * An ARRIVAL is strictly newer than the newest row already on screen. Anything
- * older is BACKFILL: real, worth showing, but it must slot into its place in
- * time silently rather than be announced.
- */
-export function partitionArrivals<T extends Arrival>(
-  fresh: readonly T[],
-  newestShownAt: number,
-): { arrivals: T[]; backfill: T[] } {
-  const arrivals: T[] = [];
-  const backfill: T[] = [];
-  for (const r of fresh) {
-    const t = Date.parse(r.occurredAt);
-    if (!Number.isFinite(t) || t > newestShownAt) arrivals.push(r);
-    else backfill.push(r);
-  }
-  return { arrivals, backfill };
-}
-
-/** The timestamp of the newest row currently on screen, or -Infinity if empty. */
-export function newestAt(rows: readonly Arrival[]): number {
-  let max = Number.NEGATIVE_INFINITY;
-  for (const r of rows) {
-    const t = Date.parse(r.occurredAt);
-    if (Number.isFinite(t) && t > max) max = t;
-  }
-  return max;
-}
