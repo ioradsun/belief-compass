@@ -39,32 +39,12 @@ export function baselinesQO(marketId: number) {
   };
 }
 
-const num = (v: unknown): number | null =>
-  v == null || !Number.isFinite(Number(v)) ? null : Number(v);
-
 /**
- * The authoritative current state, per side, off the market row.
- *
- * These are the holders-table figures the rails already headline. The trade tape
- * is never consulted: replaying buys and sells accumulates float residue, and it
- * is capped at 1000 rows, so on a busy market it is not a second opinion — it is
- * a wrong one.
+ * The current state, per side, off the market row — defined once in
+ * src/domain/market-change and re-exported here for the existing call sites.
  */
-export function nowFromRow(row: unknown): ChangeNow {
-  const r = (row ?? {}) as Record<string, unknown>;
-  return {
-    yes: {
-      believers: num(r.believers_yes),
-      capitalUsd: num(r.yes_capital_usd),
-      priceUsd: num(r.yes_price_usd),
-    },
-    no: {
-      believers: num(r.believers_no),
-      capitalUsd: num(r.no_capital_usd),
-      priceUsd: num(r.no_price_usd),
-    },
-  };
-}
+export { nowFromRow } from "@/domain/market-change";
+
 
 /**
  * What moved on this market over the on-screen window.
