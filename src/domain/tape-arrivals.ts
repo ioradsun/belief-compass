@@ -117,11 +117,11 @@ export function pendingCount(rows: readonly Arrival[]): number {
   return groupArrivals(rows).length;
 }
 
-/** "1 new update" · "8 new updates" · "99+ new updates" */
+/** "1 Update" · "8 Updates" · "99+ Updates" — X-style, counting only. */
 export function arrivalLabel(n: number): string {
   const c = Math.max(0, Math.floor(n));
-  if (c === 1) return "1 new update";
-  return `${c > TAPE.displayCap ? `${TAPE.displayCap}+` : c} new updates`;
+  if (c === 1) return "1 Update";
+  return `${c > TAPE.displayCap ? `${TAPE.displayCap}+` : c} Updates`;
 }
 
 /**
