@@ -42,6 +42,7 @@ import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { LiveTape } from "@/components/LiveTape";
 import { Collapsible } from "@/components/Collapsible";
+import { WhyThis } from "@/components/WhyThis";
 
 /** The relationship accent — the same faint purple personal rows use in the feed. */
 const RAIL = "var(--rel,#9b87f5)";
