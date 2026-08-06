@@ -110,6 +110,9 @@
   /* Performance, and ONLY performance: a measured gain or loss. */
   --gain: #22c55e;
   --loss: #ef4444;
+  /* Notice, not outcome: the quiet purple used by system indicators such as
+     the "N New" update pill. Never a side, never a P&L. */
+  --notice: #a78bfa;
 
   --background: var(--bg);
   --foreground: var(--text);
@@ -168,6 +171,7 @@
   --no-contrast: #ffffff;
   --gain: #12864a;
   --loss: #c62828;
+  --notice: #6d40d6;
 
   --primary-foreground: #ffffff;
   --destructive-foreground: #ffffff;
@@ -196,6 +200,7 @@
   --color-text-muted: var(--text-muted);
   --color-yes: var(--yes);
   --color-no: var(--no);
+  --color-notice: var(--notice);
   --color-gain: var(--gain);
   --color-loss: var(--loss);
   --font-sans:
