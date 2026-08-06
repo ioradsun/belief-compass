@@ -10,7 +10,7 @@
  */
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getNetwork } from "@/lib/dna.functions";
+import { networkQO } from "@/lib/network-query";
 import { dnaStage, firstMeaningfulIndex } from "@/domain/conviction-dna";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
@@ -25,13 +25,7 @@ export function DnaFirstReveal({
   const viewer = viewerWallet?.toLowerCase();
   const [dismissed, setDismissed] = useState(false);
 
-  const { data } = useQuery({
-    // Share the Network cache so this is free while the panel is open.
-    queryKey: ["network", viewer ?? null, "all", "relevant", ""],
-    queryFn: () => getNetwork({ data: { wallet: viewer, limit: 60 } }),
-    enabled: !!viewer && !!onSelectPerson,
-    staleTime: 60_000,
-  });
+  const { data } = useQuery({ ...networkQO(viewer), enabled: !!viewer && !!onSelectPerson });
 
   const people = data?.people ?? [];
   const stage = dnaStage({

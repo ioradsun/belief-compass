@@ -14,8 +14,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { setDeckLens, useDeckLens } from "@/lib/deck-lens";
 import { useQuery } from "@tanstack/react-query";
+import { networkQO } from "@/lib/network-query";
 import { getMarketEvidence, type Believer } from "@/lib/evidence.functions";
-import { getNetwork } from "@/lib/dna.functions";
 import { getMarketChange, getMarketBaselines, type VolumeWindow } from "@/lib/markets.functions";
 import { windowChange } from "@/domain/window-change";
 import { LiveTape } from "@/components/LiveTape";
@@ -26,11 +26,7 @@ import { useMoney } from "@/lib/display-unit";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { Clock, DollarSign } from "lucide-react";
 
-import {
-  LENS_META,
-  lensColdStart,
-  type LensMetric,
-} from "@/domain/side-lens";
+import { LENS_META, lensColdStart, type LensMetric } from "@/domain/side-lens";
 import { FLOW_WINDOW_PHRASE, FLOW_WINDOW_SHORT } from "@/domain/market-flow";
 export { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow } from "@/lib/deck-window";
@@ -74,7 +70,6 @@ function SideWords({ text }: { text: string }) {
 const num = (v: unknown): number | null =>
   v == null || !Number.isFinite(Number(v)) ? null : Number(v);
 
-
 export function CaseColumn({
   side,
   marketId,
@@ -115,12 +110,7 @@ export function CaseColumn({
     staleTime: 30_000,
     // Per-market key: never bridge the previous market's believers into this one.
   });
-  const { data: net } = useQuery({
-    queryKey: ["network", viewerWallet ?? null, "all", "relevant", ""],
-    queryFn: () => getNetwork({ data: { wallet: viewerWallet, limit: 60 } }),
-    enabled: !!viewerWallet,
-    staleTime: 60_000,
-  });
+  const { data: net } = useQuery(networkQO(viewerWallet));
   const { data: change } = useQuery({
     queryKey: ["market-change", marketId],
     queryFn: () => getMarketChange({ data: { id: marketId } }),
@@ -198,11 +188,6 @@ export function CaseColumn({
   const coldStart = lensColdStart(metric, series);
   const meta = LENS_META[metric];
 
-
-
-
-
-
   // Prefer the AUTHORITATIVE current (market_state row) + the snapshot baseline for
   // the selected window: correct even on a >1000-trade market where the tape can't
   // reach the window's opening state. When either is unavailable, fall back to the
@@ -239,7 +224,11 @@ export function CaseColumn({
         : null);
 
   const pricePct =
-    priceChange != null ? priceChange.pct : authPriceUsd != null ? null : (summary?.pricePct ?? null);
+    priceChange != null
+      ? priceChange.pct
+      : authPriceUsd != null
+        ? null
+        : (summary?.pricePct ?? null);
   const priceDelta =
     priceChange != null
       ? priceChange.delta
@@ -254,13 +243,13 @@ export function CaseColumn({
     // Half a cent, expressed in ETH: anything smaller renders as $0.00, so it
     // must not generate a capital story.
     const capitalDust = ethUsd > 0 ? 0.005 / ethUsd : 1e-9;
-    const st = summary
-      ? convictionStory(side, summary.series, { capitalDust, pricePct })
-      : null;
+    const st = summary ? convictionStory(side, summary.series, { capitalDust, pricePct }) : null;
     if (!st) return null;
-    return { headline: st.headline, narrative: narrateStory(st, side, FLOW_WINDOW_PHRASE[win], money) };
+    return {
+      headline: st.headline,
+      narrative: narrateStory(st, side, FLOW_WINDOW_PHRASE[win], money),
+    };
   }, [summary, side, win, money, ethUsd, pricePct]);
-
 
   // Supporting copy only when something actually moved. "No change today" /
   // "Flat today" is filler — whitespace says it better.
@@ -287,7 +276,6 @@ export function CaseColumn({
     phrase,
     money: (usd) => format(usd, "USD"),
   });
-
 
   const metricRows: {
     metric: LensMetric;
@@ -337,7 +325,6 @@ export function CaseColumn({
     },
   ];
 
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Header IS the headline: the pulse for the window when there is one,
@@ -346,11 +333,7 @@ export function CaseColumn({
       <div className="mb-3 shrink-0">
         <div className="flex items-baseline gap-3">
           <h3 className="min-w-0 text-[15px] font-semibold leading-snug tracking-[-0.01em] text-[var(--text)]">
-            {pulse ? (
-              <SideWords text={pulse.headline} />
-            ) : (
-              <span style={{ color }}>{side}</span>
-            )}
+            {pulse ? <SideWords text={pulse.headline} /> : <span style={{ color }}>{side}</span>}
           </h3>
           <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
             {FLOW_WINDOW_SHORT[win]}
@@ -384,7 +367,6 @@ export function CaseColumn({
             </>
           )}
         </div>
-
 
         {/* 2 — SNAPSHOT: the three essential metrics. They double as the chart's
           lens selector — no tabs, no segmented control. Supporting copy appears
@@ -446,7 +428,6 @@ export function CaseColumn({
           />
         </div>
       </div>
-
     </div>
   );
 }
@@ -550,7 +531,9 @@ function MetricRow({
           style={{ color: tone, opacity: active ? 1 : 0.6 }}
         >
           {pctText}
-          {arrow && pctText ? <span className="ml-1 align-middle text-[0.6em]">{arrow}</span> : null}
+          {arrow && pctText ? (
+            <span className="ml-1 align-middle text-[0.6em]">{arrow}</span>
+          ) : null}
         </span>
       </div>
       <div
@@ -568,11 +551,9 @@ function MetricRow({
           {absolute.slice(absolute.split(" ")[0].length)}
         </div>
       )}
-
     </button>
   );
 }
-
 
 /** Time held, at a glance: hours until a day has passed, then whole days. */
 function heldLabel(daysHeld: number): string {
@@ -690,7 +671,12 @@ export function CaseRoster({
         <>
           <FacePile roster={roster} onOpenAll={() => setOpenAll(true)} />
           {openAll && (
-            <RosterSheet side={side} count={roster.length} onClose={() => setOpenAll(false)} anchor={anchorBox}>
+            <RosterSheet
+              side={side}
+              count={roster.length}
+              onClose={() => setOpenAll(false)}
+              anchor={anchorBox}
+            >
               {rows}
             </RosterSheet>
           )}
@@ -708,7 +694,12 @@ export function CaseRoster({
             </button>
           )}
           {openAll && (
-            <RosterSheet side={side} count={roster.length} onClose={() => setOpenAll(false)} anchor={anchorBox}>
+            <RosterSheet
+              side={side}
+              count={roster.length}
+              onClose={() => setOpenAll(false)}
+              anchor={anchorBox}
+            >
               {allRows}
             </RosterSheet>
           )}

@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { lazyRetry } from "@/lib/lazy-retry";
-import { WagmiProvider, useAccount } from "wagmi";
+import { WagmiProvider, useAccount, useReconnect } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Config } from "wagmi";
 
@@ -14,10 +14,37 @@ const wagmiQueryClient = new QueryClient();
 const RainbowKitLayer = lazyRetry(() => import("@/components/wallet/RainbowKitLayer"));
 
 /**
+ * RECONNECT WITHOUT REMOUNTING.
+ *
+ * wagmi's `Hydrate` runs its reconnect pass in a `useEffect` with `[]` deps —
+ * mount only. Swapping the config prop therefore updates every `useAccount`
+ * but never re-attempts a session restore, and the previous fix for that was a
+ * `key` on `WagmiProvider`.
+ *
+ * That key unmounted and remounted THE ENTIRE APPLICATION about 200ms after
+ * first paint, because `children` here is the whole tree. Every component's
+ * state reset, every effect re-ran, every query observer re-subscribed, and
+ * anything with a mount guard flashed back to its pre-mounted appearance —
+ * paid by every visitor on every cold load, whether or not they ever connect.
+ *
+ * A one-line mutation does what the remount was faking.
+ */
+function ReconnectOnConnectors({ ready }: { ready: boolean }) {
+  const { reconnect } = useReconnect();
+  useEffect(() => {
+    if (ready) reconnect();
+  }, [ready, reconnect]);
+  return null;
+}
+
+/**
  * wagmi wraps the app (every `useAccount` / `useSignMessage` call site depends
  * on it), but boots with a connector-free config so no wallet SDK is on the
  * first-paint path. Once the browser is idle we swap in the real connectors and
  * mount the RainbowKit UI layer, both from lazily imported chunks.
+ *
+ * The swap is now invisible: the provider is never re-keyed, so the tree below
+ * it survives, and the session restore happens through wagmi's own action.
  */
 export function WalletProviders({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<Config>(wagmiConfig);
@@ -43,8 +70,8 @@ export function WalletProviders({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={wagmiQueryClient}>
-      {/* keyed so wagmi re-runs its reconnect pass once real connectors exist */}
-      <WagmiProvider key={config === wagmiConfig ? "boot" : "full"} config={config}>
+      <WagmiProvider config={config}>
+        <ReconnectOnConnectors ready={config !== wagmiConfig} />
         {children}
         {walletUi && (
           <Suspense fallback={null}>
@@ -55,7 +82,6 @@ export function WalletProviders({ children }: { children: ReactNode }) {
     </QueryClientProvider>
   );
 }
-
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 

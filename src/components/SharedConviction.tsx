@@ -14,8 +14,8 @@
  */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { networkQO } from "@/lib/network-query";
 import { getMarketEvidence } from "@/lib/evidence.functions";
-import { getNetwork } from "@/lib/dna.functions";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { sharedConvictionLine, type PresentPerson } from "@/domain/shared-conviction";
 
@@ -49,12 +49,7 @@ export function SharedConviction({
     staleTime: 30_000,
     placeholderData: (prev) => prev,
   });
-  const { data: net } = useQuery({
-    queryKey: ["network", viewerWallet ?? null, "all", "relevant", ""],
-    queryFn: () => getNetwork({ data: { wallet: viewerWallet, limit: 60 } }),
-    enabled: !!viewerWallet,
-    staleTime: 60_000,
-  });
+  const { data: net } = useQuery(networkQO(viewerWallet));
 
   const here = useMemo<Person[]>(() => {
     if (!viewerWallet) return [];

@@ -124,6 +124,12 @@ export function startRealtime(qc: QueryClient): () => void {
       void qc.invalidateQueries({ queryKey: ["opp-feed"] });
       void qc.invalidateQueries({ queryKey: ["live-tape"], refetchType: "active" });
       void qc.invalidateQueries({ queryKey: ["market-pulses"], refetchType: "active" });
+      // The viewer's network. It has no event of its own to listen for — it is
+      // derived from `viewer_dna_cache`, which a background worker recomputes
+      // when positions change — so a reconnect is the honest moment to re-read
+      // it. `active` only: an unmounted rail does not need refetching to be
+      // correct, it will fetch when it mounts.
+      void qc.invalidateQueries({ queryKey: ["network"], refetchType: "active" });
     }, RECONCILE_DEBOUNCE_MS);
   };
 

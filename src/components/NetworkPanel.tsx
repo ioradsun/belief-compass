@@ -11,7 +11,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getNetwork, type NetworkPersonRow } from "@/lib/dna.functions";
+import { networkQO } from "@/lib/network-query";
+import { type NetworkPersonRow } from "@/lib/dna.functions";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { WalletConnectButton } from "@/components/WalletConnect";
 import {
@@ -78,14 +79,7 @@ export function NetworkPanel({
 
   // One call returns everyone with overlap; split client-side so the parent's
   // tab switch never refetches.
-  const { data, isLoading } = useQuery({
-    queryKey: ["network", wallet ?? null, "all", "relevant", query],
-    queryFn: () =>
-      getNetwork({ data: { wallet, relationship: "all", sort: "relevant", query, limit: 60 } }),
-    enabled: !!wallet,
-    placeholderData: (prev) => prev,
-    refetchInterval: 60_000,
-  });
+  const { data, isLoading } = useQuery(networkQO(wallet, query));
 
   const views = useMemo(() => (data?.people ?? []).map(present), [data]);
   const tribe = useMemo(
