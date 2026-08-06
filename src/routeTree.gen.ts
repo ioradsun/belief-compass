@@ -17,6 +17,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MMidRouteImport } from './routes/m.$mid'
 import { Route as DevTransitionsRouteImport } from './routes/dev.transitions'
+import { Route as DevRailRouteImport } from './routes/dev.rail'
 import { Route as OgMarketMidRouteImport } from './routes/og/market.$mid'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
 import { Route as ApiPublicJobsSuggestionGeneratorRouteImport } from './routes/api/public/jobs/suggestion-generator'
@@ -67,6 +68,11 @@ const MMidRoute = MMidRouteImport.update({
 const DevTransitionsRoute = DevTransitionsRouteImport.update({
   id: '/dev/transitions',
   path: '/dev/transitions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevRailRoute = DevRailRouteImport.update({
+  id: '/dev/rail',
+  path: '/dev/rail',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OgMarketMidRoute = OgMarketMidRouteImport.update({
@@ -140,6 +146,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/value': typeof ValueRoute
+  '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
   '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
@@ -161,6 +168,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/value': typeof ValueRoute
+  '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
   '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
@@ -183,6 +191,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
   '/value': typeof ValueRoute
+  '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
   '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
@@ -206,6 +215,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terms'
     | '/value'
+    | '/dev/rail'
     | '/dev/transitions'
     | '/m/$mid'
     | '/api/public/build-id'
@@ -227,6 +237,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terms'
     | '/value'
+    | '/dev/rail'
     | '/dev/transitions'
     | '/m/$mid'
     | '/api/public/build-id'
@@ -248,6 +259,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terms'
     | '/value'
+    | '/dev/rail'
     | '/dev/transitions'
     | '/m/$mid'
     | '/api/public/build-id'
@@ -270,6 +282,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsRoute: typeof TermsRoute
   ValueRoute: typeof ValueRoute
+  DevRailRoute: typeof DevRailRoute
   DevTransitionsRoute: typeof DevTransitionsRoute
   MMidRoute: typeof MMidRoute
   ApiPublicBuildIdRoute: typeof ApiPublicBuildIdRoute
@@ -341,6 +354,13 @@ declare module '@tanstack/react-router' {
       path: '/dev/transitions'
       fullPath: '/dev/transitions'
       preLoaderRoute: typeof DevTransitionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/rail': {
+      id: '/dev/rail'
+      path: '/dev/rail'
+      fullPath: '/dev/rail'
+      preLoaderRoute: typeof DevRailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/og/market/$mid': {
@@ -430,6 +450,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsRoute: TermsRoute,
   ValueRoute: ValueRoute,
+  DevRailRoute: DevRailRoute,
   DevTransitionsRoute: DevTransitionsRoute,
   MMidRoute: MMidRoute,
   ApiPublicBuildIdRoute: ApiPublicBuildIdRoute,
