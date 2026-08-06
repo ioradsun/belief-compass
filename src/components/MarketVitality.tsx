@@ -255,15 +255,10 @@ export function MarketMomentum({
       className="shrink-0 overflow-hidden rounded-[16px]"
       style={{ background: "var(--surface)", border: "1px solid var(--hairline)" }}
     >
-      <div
-        className={`${dense ? "px-4 pt-2" : "px-4 pt-3 sm:px-5"} text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]`}
-      >
-        Total market
-      </div>
       <MomentumMetric
         dense={dense}
         total={b.current.toLocaleString("en-US")}
-        label="Participants"
+        label="Total participants"
         copy={believerCopy(b, book.window)}
         faces={faces}
         facesTotal={Math.max(faces?.length ?? 0, Math.round(b.current))}
@@ -272,7 +267,7 @@ export function MarketMomentum({
       <MomentumMetric
         dense={dense}
         total={money(c.current)}
-        label="Capital"
+        label="Total capital"
         copy={capitalCopy(c, book.window, usd, money)}
       />
 
