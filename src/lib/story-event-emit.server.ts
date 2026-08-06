@@ -106,7 +106,7 @@ export async function emitStoryEvents(
       db
         .from("market_state")
         .select(
-          "onchain_id, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, chg_24h_yes, chg_24h_no, trade_count_1h, trade_count_24h, trade_count_7d, velocity_5m, yes_capital_usd, no_capital_usd, yes_capital_delta_24h, no_capital_delta_24h, yes_price_usd, no_price_usd",
+          "onchain_id, believers_yes, believers_no, new_believers_yes_24h, new_believers_no_24h, trade_count_1h, trade_count_24h, trade_count_7d, velocity_5m, yes_capital_usd, no_capital_usd, yes_capital_delta_24h, no_capital_delta_24h, yes_price_usd, no_price_usd",
         )
         .in("onchain_id", marketIds),
       db
@@ -188,8 +188,6 @@ export async function emitStoryEvents(
         noPriceUsd: numOrNull(r.no_price_usd),
         yesPriceBaseUsd: priceBase.get(id)?.yes ?? null,
         noPriceBaseUsd: priceBase.get(id)?.no ?? null,
-        chg24hYesPct: numOrNull(r.chg_24h_yes),
-        chg24hNoPct: numOrNull(r.chg_24h_no),
       }),
     );
   }
@@ -244,14 +242,14 @@ export async function emitStoryEvents(
         believerBase: Math.max(0, believersYes - dYes),
         capitalDeltaUsd: yesCapDelta ?? 0,
         capitalBaseUsd: yesCapDelta == null ? 0 : Math.max(0, yesCapNow - yesCapDelta),
-        pricePct: numOrNull(r.chg_24h_yes),
+        pricePct: changeById.get(id)?.yes.price.pct ?? null,
       },
       no: {
         believerDelta: dNo,
         believerBase: Math.max(0, believersNo - dNo),
         capitalDeltaUsd: noCapDelta ?? 0,
         capitalBaseUsd: noCapDelta == null ? 0 : Math.max(0, noCapNow - noCapDelta),
-        pricePct: numOrNull(r.chg_24h_no),
+        pricePct: changeById.get(id)?.no.price.pct ?? null,
       },
       baseline: { accelerationMultiple: accel },
       // Cumulative windows, straight off the row: when the week's count equals

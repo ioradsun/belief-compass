@@ -231,8 +231,6 @@ export interface State24hRow {
   /** Observed price ~24h ago (market_state_snapshots). Preferred — see above. */
   yesPriceBaseUsd?: number | null;
   noPriceBaseUsd?: number | null;
-  chg24hYesPct?: number | null;
-  chg24hNoPct?: number | null;
 }
 
 /** base = current − delta, but only when the delta is a real observation. */

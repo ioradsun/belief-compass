@@ -136,7 +136,7 @@ function signalsOf(
     volumeUsd24h: num(r["window_volume_usd"] ?? r["volume_24h_usd"]),
     directionalBelievers: num(r["directional_believers"]),
     divergence: num(r["divergence"]),
-    priceMovePct: Math.abs(num(r["chg_24h"])),
+    priceMovePct: Math.abs(num(r["chg_window_yes"])),
     opportunityType: (r["opportunity_type"] as string | null) ?? null,
     opportunityReason: (r["opportunity_reason"] as string | null) ?? null,
     opportunityScore: numOrNull(r["opportunity_score"]),
@@ -357,7 +357,7 @@ export async function buildOpportunityFeed(
             divergence: s.divergence,
             tribeEntered: Boolean(s.tribeSide),
             oppEntered: Boolean(s.oppSide),
-            positionMovePct: holds ? num(r["chg_24h"]) : 0,
+            positionMovePct: holds ? num(r["chg_window_yes"]) : 0,
           },
           { holdsPosition: holds, now },
         );
