@@ -84,7 +84,7 @@ export function CurrentMarketActivity({
         aria-expanded={open}
       >
         <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-          Live activity
+          In this market
         </span>
         <span className="ml-auto text-[11px] text-[var(--text-muted)]" aria-hidden>
           {open ? "▲" : "▼"}
@@ -92,14 +92,12 @@ export function CurrentMarketActivity({
       </button>
 
       <button type="button" onClick={toggle} className="block w-full px-3 pb-2 pt-0.5 text-left">
-        {/* The latest beat leads; the count trails, quiet. */}
-        <span className="block truncate text-[13px] leading-snug text-[var(--text-secondary)]">
+        {/* The latest beat, in full — wrapped, never clipped mid-word. */}
+        <span className="line-clamp-2 block text-[13px] leading-snug break-words text-[var(--text-secondary)]">
           {latest}
         </span>
-        <span className="num mt-1 block text-right text-[12px] font-semibold text-[var(--text-muted)]">
-          {unread > 0 ? `+${unread} new` : `${count} update${count === 1 ? "" : "s"}`} ›
-        </span>
       </button>
+
 
       {/* EXPANDED = a layer, not a squeeze. A bounded panel inside an already
         tight column can only ever show three beats and pushes the order bar
