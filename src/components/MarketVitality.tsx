@@ -12,8 +12,13 @@
  * unchanged. Side-blind by construction. The SAME component renders on desktop and
  * mobile; only the layout changes.
  */
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { PersonAvatar } from "@/components/PersonAvatar";
+import {
+  ParticipantSheet,
+  RingedAvatar,
+  RELATION_RING,
+} from "@/components/ParticipantSheet";
 import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
 import type { TapeTrade } from "@/domain/conviction-series";
 import type { FlowWindow } from "@/domain/market-flow";
@@ -74,6 +79,10 @@ export interface MomentumFace {
   avatarUrl?: string | null;
   /** How the viewer relates to them — decides who is seen first. */
   relation?: ParticipantRelation;
+  /** Sheet-only detail (mobile): which way, how much, how long. */
+  side?: "YES" | "NO" | null;
+  valueUsd?: number | null;
+  daysHeld?: number | null;
 }
 
 /**
@@ -92,10 +101,63 @@ function ParticipantProof({
   dense?: boolean;
 }) {
   const { faces: shown, overflow, summary } = participantSocial(faces, total);
+  const [sheet, setSheet] = useState(false);
   if (shown.length === 0 && !summary) return null;
-  const size = dense ? 22 : 26;
+
+  // MOBILE — recognition, not reading. Rings carry the tribe/rival story, the
+  // faces carry the social proof, and the whole row is one tap into the sheet
+  // where side, amount and time held finally have room.
+  if (dense) {
+    if (shown.length === 0) return null;
+    return (
+      <>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Open participants (${total})`}
+          onClick={() => setSheet(true)}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setSheet(true)}
+          className="mt-2 flex items-center gap-1.5"
+        >
+          <div className="flex -space-x-1.5">
+            {shown.map((f) => (
+              <RingedAvatar
+                key={f.wallet}
+                wallet={f.wallet}
+                name={f.name}
+                avatarUrl={f.avatarUrl}
+                size={26}
+                ring={RELATION_RING[f.relation ?? "other"]}
+              />
+            ))}
+          </div>
+          {overflow > 0 && (
+            <span className="num text-[12px] font-semibold text-[var(--text-muted)]">
+              +{overflow}
+            </span>
+          )}
+        </div>
+        {sheet && (
+          <ParticipantSheet
+            people={faces.map((f) => ({
+              wallet: f.wallet,
+              name: f.name,
+              avatarUrl: f.avatarUrl,
+              relation: f.relation,
+              side: f.side,
+              valueUsd: f.valueUsd,
+              daysHeld: f.daysHeld,
+            }))}
+            total={total}
+            onClose={() => setSheet(false)}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
-    <div className={dense ? "mt-1.5" : "mt-2"}>
+    <div className="mt-2">
       {shown.length > 0 && (
         <div className="flex items-center gap-1.5">
           <div className="flex -space-x-1.5">
@@ -105,7 +167,7 @@ function ParticipantProof({
                 wallet={f.wallet}
                 name={f.name}
                 avatarUrl={f.avatarUrl}
-                size={size}
+                size={26}
                 className="ring-1 ring-[var(--surface)]"
               />
             ))}
