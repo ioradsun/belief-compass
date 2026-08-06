@@ -222,9 +222,11 @@ function plural(n: number, one: string, many: string): string {
 
 
 /**
- * The one line at the top of the room. It reports CHANGE when the viewer has
- * been here before ("since you were last here"), and STATE on a first visit —
- * the same discipline the market Pulse uses.
+ * The one line at the top of the room. Its job is to say WHY these faces are
+ * here, and the reason is always the same one: they took the side you already
+ * hold. So the verb carries it ("joined your side" / "crossed to your side"),
+ * the rarest group leads, and everyone else folds into a "+N more" — one line,
+ * two clauses at most, no report-style prefix.
  */
 export function roomHeadline(sections: RoomSection[], hasVisitedBefore: boolean): string {
   const total = sections.reduce((n, s) => n + s.people.length, 0);
@@ -234,19 +236,33 @@ export function roomHeadline(sections: RoomSection[], hasVisitedBefore: boolean)
   const scope = hasVisitedBefore ? sections.filter((s) => s.fresh > 0) : sections;
   const count = (s: RoomSection) => (hasVisitedBefore ? s.fresh : s.people.length);
 
+  // Nobody new since last time, but people are still unwelcomed.
   if (hasVisitedBefore && freshTotal === 0) {
-    return `${plural(total, "person", "people")} still waiting on a hello`;
+    return `${total} waiting on a hello`;
   }
 
-  const parts: string[] = [];
-  for (const s of scope) {
-    const n = count(s);
-    if (n <= 0) continue;
-    if (s.group === "crossing") parts.push(`${plural(n, "Opp", "Opps")} crossed to your side`);
-    else if (s.group === "twin") parts.push(`${plural(n, "Twin", "Twins")}`);
-    else if (s.group === "tribe") parts.push(`${n} from your Tribe`);
-    else parts.push(`${plural(n, "first-timer", "first-timers")}`);
-  }
-  const body = parts.join(" · ");
-  return hasVisitedBefore ? `Since you were last here: ${body}` : `In the room: ${body}`;
+  const counted = scope.map((s) => ({ s, n: count(s) })).filter((x) => x.n > 0);
+  if (counted.length === 0) return `${total} waiting on a hello`;
+
+  const [{ s: lead, n }] = counted;
+  const rest = counted.slice(1).reduce((sum, x) => sum + x.n, 0);
+  const head = leadClause(lead.group, n);
+  return rest > 0 ? `${head} · +${rest} more` : head;
 }
+
+/** The lead clause: who joined, and the fact that they joined YOUR side. */
+function leadClause(group: RoomGroup, n: number): string {
+  switch (group) {
+    case "crossing":
+      return n === 1 ? "An Opp crossed to your side" : `${n} Opps crossed to your side`;
+    case "twin":
+      return n === 1 ? "Your Twin joined your side" : `${n} Twins joined your side`;
+    case "tribe":
+      return n === 1
+        ? "1 from your Tribe joined your side"
+        : `${n} from your Tribe joined your side`;
+    default:
+      return n === 1 ? "1 new believer joined your side" : `${n} new believers joined your side`;
+  }
+}
+
