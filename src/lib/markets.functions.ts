@@ -1313,7 +1313,32 @@ export const getMarketOg = createServerFn({ method: "GET" })
  * Value the ETH cost basis at the current rate, matching how the rest of the app
  * prices ETH quantities. Null when the cost is unknown or we have no rate, so the
  * caller honestly shows "worth only" instead of an inflated gain.
+
+/**
+ * The canonical live-line payload, narrowed to the fields any surface reads.
+ * Kept explicit (not `Record<string, unknown>`) so it crosses the server-fn
+ * boundary as a serializable DTO.
  */
+function pickLinePayload(raw: unknown): {
+  side?: string | null;
+  wallets?: number | null;
+  milestone?: number | null;
+  crossed?: string | null;
+  sell_rate?: number | null;
+} | null {
+  if (!raw || typeof raw !== "object") return null;
+  const p = raw as Record<string, unknown>;
+  const n = (v: unknown) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+  const s = (v: unknown) => (typeof v === "string" ? v : null);
+  return {
+    side: s(p.side),
+    wallets: n(p.wallets),
+    milestone: n(p.milestone),
+    crossed: s(p.crossed),
+    sell_rate: n(p.sell_rate),
+  };
+}
+
 
 export const getWallet = createServerFn({ method: "GET" })
   .inputValidator((d: { wallet: string; window?: VolumeWindow }) =>
