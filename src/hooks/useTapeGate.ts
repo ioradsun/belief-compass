@@ -45,11 +45,25 @@ export interface TapeGate<T extends Arrival> {
 export function useTapeGate<T extends Arrival>(
   incoming: readonly T[],
   resetKey?: string,
+  /**
+   * HOLD ALWAYS (the X model). New activity NEVER enters the visible list on
+   * its own — not even when the reader is parked at the top. The mixer keeps
+   * running in the background, arrivals queue, the counter climbs, and the
+   * banner is the single action that merges them. Only the very first paint
+   * admits itself, because a feed that starts empty behind a banner is not a
+   * calm feed, it is a broken one.
+   */
+  holdAlways = false,
 ): TapeGate<T> {
   const [admitted, setAdmitted] = useState<T[]>([]);
   const [pending, setPending] = useState(0);
 
   const heldRef = useRef<T[]>([]);
+  // The mixer's latest, complete, freshly ranked output. Admitting REPLACES the
+  // visible list with this rather than stitching queued rows on top, so the feed
+  // the reader asked for is the feed the mixer would have produced.
+  const incomingRef = useRef<readonly T[]>(incoming);
+  incomingRef.current = incoming;
   const admittedRef = useRef<T[]>([]);
   admittedRef.current = admitted;
 
@@ -95,7 +109,11 @@ export function useTapeGate<T extends Arrival>(
     const fresh = unseen(incoming, visible).filter((r) => !heldIds.has(r.id));
     if (fresh.length === 0) return;
 
-    if (canAutoAdmit({ atTop: atTop.current, pointerInside: pointerInside.current })) {
+    const firstPaint = admittedRef.current.length === 0;
+    const auto = firstPaint
+      ? true
+      : !holdAlways && canAutoAdmit({ atTop: atTop.current, pointerInside: pointerInside.current });
+    if (auto) {
       // Nobody is reading — this is the live conversation working. Held rows go
       // in with them, so a reader who scrolls back to the top is not left with
       // a stale banner for updates that already arrived.
@@ -110,7 +128,7 @@ export function useTapeGate<T extends Arrival>(
     // The counter moves once per window, not once per event. A number ticking
     // 1 → 2 → 3 is movement too, and the reader is still being interrupted.
     if (batchTimer.current == null) batchTimer.current = setTimeout(flushCount, TAPE.batchMs);
-  }, [incoming, flushCount]);
+  }, [incoming, flushCount, holdAlways]);
 
   useEffect(
     () => () => {
@@ -128,7 +146,12 @@ export function useTapeGate<T extends Arrival>(
     const taking = groupArrivals(heldRef.current);
     heldRef.current = [];
     setPending(0);
-    if (taking.length > 0) setAdmitted((prev) => dedupe([...taking, ...prev]));
+    if (taking.length === 0) return;
+    setAdmitted((prev) =>
+      // Re-rank: the mixer's current order wins, with anything it has since
+      // dropped kept behind it so nothing the reader saw vanishes on a tap.
+      dedupe([...groupArrivals(incomingRef.current as T[]), ...taking, ...prev]),
+    );
   }, []);
 
   return {
