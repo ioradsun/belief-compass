@@ -202,20 +202,13 @@ export function marketChange(now: ChangeNow, base: ChangeBase, window: string): 
  * them from the same snapshot history the per-window baselines come from. The
  * base is recovered by subtraction rather than stored twice.
  *
- * THE PRICE BASE HAS TWO SOURCES, AND THE ORDER MATTERS. `yesPriceBaseUsd` is a
- * real observed price from `market_state_snapshots` — the same healthy table the
- * per-window baselines come from. `chg24hPct` is the SQL-computed percentage
- * (`recompute_price_changes` → `market_state.chg_24h_yes`), from which a base can
- * be recovered by division.
+ * THE PRICE BASE IS AN OBSERVED PRICE, NOT A STORED PERCENTAGE. `yesPriceBaseUsd`
+ * comes from `market_state_snapshots` — the same history the per-window baselines
+ * read. The old alternative, recovering a base by dividing out
+ * `market_state.chg_24h_yes`, is gone: that column was a second producer of the
+ * same fact on a different baseline, and it was null on all 2,762 markets.
  *
- * The observed price is preferred because the percentage is NOT BEING WRITTEN. A
- * count over production found `market_state.chg_24h_yes` null on all 2,762
- * markets and `market_window_change` empty — both SQL price-change jobs are
- * producing nothing, while `market_state_snapshots` is current and holds 2.4M
- * rows. Reading the percentage first would have made the price arm of the news
- * rule permanently silent and looked like a quiet market.
- *
- * When neither is available the price change is unknown, which is not flat.
+ * With no baseline the price change is unknown, which is not flat.
  */
 export interface State24hRow {
   believersYes?: number | null;
@@ -237,13 +230,6 @@ export interface State24hRow {
 const backOut = (current: number | null, delta: number | null): number | null =>
   current == null || delta == null ? null : current - delta;
 
-/** base = current ÷ (1 + pct/100) — the price that produced this percentage. */
-const priceBase = (current: number | null, pct: number | null): number | null => {
-  if (current == null || pct == null) return null;
-  const f = 1 + pct / 100;
-  return f > 0 ? current / f : null;
-};
-
 export function changeFrom24hRow(r: State24hRow): MarketChange {
   const yesCap = fin(r.yesCapitalUsd);
   const noCap = fin(r.noCapitalUsd);
@@ -260,12 +246,12 @@ export function changeFrom24hRow(r: State24hRow): MarketChange {
       yes: {
         believers: backOut(yesBel, fin(r.newBelieversYes24h)),
         capitalUsd: backOut(yesCap, fin(r.yesCapitalDelta24h)),
-        priceUsd: fin(r.yesPriceBaseUsd) ?? priceBase(yesPrice, fin(r.chg24hYesPct)),
+        priceUsd: fin(r.yesPriceBaseUsd),
       },
       no: {
         believers: backOut(noBel, fin(r.newBelieversNo24h)),
         capitalUsd: backOut(noCap, fin(r.noCapitalDelta24h)),
-        priceUsd: fin(r.noPriceBaseUsd) ?? priceBase(noPrice, fin(r.chg24hNoPct)),
+        priceUsd: fin(r.noPriceBaseUsd),
       },
     },
     "24h",

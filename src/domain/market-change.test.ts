@@ -104,8 +104,7 @@ describe("two loaders, one shape", () => {
       noCapitalDelta24h: 0,
       yesPriceUsd: 2,
       noPriceUsd: 1,
-      chg24hYesPct: 10,
-      chg24hNoPct: 0,
+      yesPriceBaseUsd: 2 / 1.1,
     });
     expect(c.yes.believers.base).toBe(16);
     expect(c.yes.capital.base).toBe(80);
