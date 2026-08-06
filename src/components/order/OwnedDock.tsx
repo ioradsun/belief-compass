@@ -19,7 +19,7 @@
  */
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getPositionSummary } from "@/lib/markets.functions";
+import { positionSummaryQO } from "@/lib/positions-query";
 import { useSellQuote, type useTrade, type useTradeReady } from "@/lib/chain-trade";
 import { fmtShares, sharesForPct, weiToEth, type OrderSide } from "@/domain/order";
 import {
@@ -84,16 +84,7 @@ export function useOwnedDock({
   const [action, setAction] = useState<"buy" | "sell" | null>(null);
 
   // The viewer's honest ownership numbers on THIS market (cost basis + worth).
-  const { data: posSummary } = useQuery({
-    queryKey: ["position-summary", viewerWallet ?? null, marketId],
-    queryFn: () => getPositionSummary({ data: { wallet: viewerWallet as string, marketId } }),
-    enabled: !!viewerWallet,
-    staleTime: 15_000,
-    refetchInterval: 20_000,
-    // NOT bridged across markets: this key carries the market id, so keeping the
-    // previous result would show the last market's holding under this market's
-    // controls — "You own $234 YES" on a market you have never touched.
-  });
+  const { data: posSummary } = useQuery(positionSummaryQO(viewerWallet, marketId));
 
   // What each whole side would actually fetch right now, straight from the
   // contract. This is the LAST RESORT for a side's value — the read model's

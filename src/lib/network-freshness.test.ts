@@ -7,6 +7,7 @@ const COORDINATOR = read("src/lib/realtime/coordinator.ts");
 const ROUTER = read("src/router.tsx");
 const NETWORK_QO = read("src/lib/network-query.ts");
 const MARKET_QO = read("src/lib/market-queries.ts");
+const POSITIONS_QO = read("src/lib/positions-query.ts");
 
 /**
  * WHAT KEEPS THE VIEWER'S NETWORK FRESH — the event matrix, as executable notes.
@@ -147,5 +148,45 @@ describe("a market's expensive reads are driven by the trade, not a timer", () =
       expect(ms).toBeGreaterThan(0);
       expect(ms).toBeLessThanOrEqual(5 * 60_000);
     }
+  });
+});
+
+/**
+ * THE VIEWER'S MONEY. `getWallet` calls out to pov.co on every request to price
+ * the wallet's tokens live; two components polling it at 30s ran that external
+ * call twice a minute for the length of a session. What it was watching for —
+ * someone else trading a market the viewer holds — is now matched against their
+ * actual holdings from the trade stream.
+ */
+describe("the viewer's portfolio is revalued by the trade, not a timer", () => {
+  it("revalues the holdings of anyone holding a market that just traded", () => {
+    const drain = COORDINATOR.slice(
+      COORDINATOR.indexOf("const drainActivity"),
+      COORDINATOR.indexOf("const noteActivity"),
+    );
+    expect(drain).toMatch(/affectedViewerValuationKeys/);
+  });
+
+  it("still refetches when the viewer themselves trades", () => {
+    // The other half of the same number, and a different socket: this one is
+    // filtered to the viewer's own wallet_beliefs.
+    const stream = read("src/lib/realtime/use-position-stream.ts");
+    expect(stream).toMatch(/viewerPositionKeys/);
+    expect(read("src/lib/realtime/reduce.ts")).toMatch(/"my-convictions", w/);
+  });
+
+  it("has exactly one definition of each position query", () => {
+    const declarations = [
+      "src/components/MyConvictions.tsx",
+      "src/components/MyWorld.tsx",
+      "src/components/order/OwnedDock.tsx",
+      "src/components/MarketDeck.tsx",
+    ].filter((f) => /queryKey:\s*\["(my-convictions|position-summary)"/.test(read(f)));
+    expect(declarations).toEqual([]);
+  });
+
+  it("and those definitions set no interval of their own", () => {
+    const code = POSITIONS_QO.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    expect(code).not.toMatch(/refetchInterval/);
   });
 });

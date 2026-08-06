@@ -6,6 +6,7 @@ import {
   affectedPulseKeys,
   affectedPositionsTapeKeys,
   affectedMarketKeys,
+  affectedViewerValuationKeys,
   viewerPositionKeys,
   liveFieldsOf,
   versionOf,
@@ -217,5 +218,46 @@ describe("affectedMarketKeys", () => {
     // back on the fetch path the poll removal took them off.
     expect(affectedMarketKeys(qc, new Set([7]))).toEqual([]);
     expect(affectedMarketKeys(qc, new Set())).toEqual([]);
+  });
+});
+
+describe("affectedViewerValuationKeys", () => {
+  // usePositionStream covers the viewer trading. This covers everyone else
+  // trading a market the viewer holds — the other half of what their shares are
+  // worth, and the only thing the 30s/20s portfolio polls were watching for.
+  it("matches a position summary by the market id in its key", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["position-summary", "0xab", 42], { yesShares: 3 });
+    qc.setQueryData(["position-summary", "0xab", 99], { yesShares: 1 });
+    const keys = affectedViewerValuationKeys(qc, new Set([42]));
+    expect(keys).toEqual([["position-summary", "0xab", 42]]);
+  });
+
+  it("matches a portfolio by the markets inside its data", () => {
+    const qc = new QueryClient();
+    // The window is in the key; the holdings are only in the payload, so this
+    // is the one place the viewer's actual positions can be read from.
+    qc.setQueryData(["my-convictions", "0xab", "24h"], {
+      wallet: "0xab",
+      positions: [{ onchain_id: 42 }, { onchain_id: 7 }],
+    });
+    expect(affectedViewerValuationKeys(qc, new Set([7]))).toEqual([
+      ["my-convictions", "0xab", "24h"],
+    ]);
+  });
+
+  it("refetches nothing for a reader who holds none of the traded markets", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["position-summary", "0xab", 42], { yesShares: 3 });
+    qc.setQueryData(["my-convictions", "0xab", "24h"], { positions: [{ onchain_id: 42 }] });
+    expect(affectedViewerValuationKeys(qc, new Set([1234]))).toEqual([]);
+    expect(affectedViewerValuationKeys(qc, new Set())).toEqual([]);
+  });
+
+  it("survives a portfolio that has not loaded, or loaded empty", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["my-convictions", "0xab", "24h"], undefined);
+    qc.setQueryData(["my-convictions", "0xcd", "7d"], { positions: [] });
+    expect(affectedViewerValuationKeys(qc, new Set([42]))).toEqual([]);
   });
 });
