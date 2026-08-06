@@ -14,6 +14,8 @@
  */
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Collapsible } from "@/components/Collapsible";
+import { useSticky } from "@/hooks/useSticky";
 import {
   getWelcomable,
   getWelcomesReceived,
@@ -110,7 +112,11 @@ export function WelcomePrompt({
   const count = data?.count ?? 0;
   const sections = data?.sections ?? [];
 
-  const peeked = peek ? (people.find((p) => p.wallet === peek) ?? null) : null;
+  const peekedNow = peek ? (people.find((p) => p.wallet === peek) ?? null) : null;
+  // The panel stays mounted while it collapses, so it needs something to render
+  // on the way out. Without this the text disappears the instant the reader
+  // deselects and the box animates closed around nothing.
+  const peeked = useSticky(peekedNow ?? undefined, () => false) ?? null;
 
   // Rarest commonality first, one face per person; the stack tightens and then
   // spills into a "+N" so the row height is constant no matter how full it is.
@@ -164,8 +170,11 @@ export function WelcomePrompt({
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["welcomable", wallet ?? null] }),
   });
 
-
-  if (!wallet || count === 0) return null;
+  // NOT `return null` when the room is empty. This card sits above the live tape
+  // in a flex column, so removing it in one frame moves "Now" and every row
+  // below it — and the room fills and empties on its own while a reader is
+  // looking elsewhere. It collapses instead; see components/Collapsible.
+  const hasRoom = !!wallet && count > 0;
   const selectedCount = selected.size;
   const headline = data?.headline ?? "";
 
@@ -174,119 +183,131 @@ export function WelcomePrompt({
   const selectedNames = people.filter((p) => selected.has(keyOf(p))).map((p) => p.name);
   const sheetLabel = selectedNames.length > 1 ? `Say Hi to ${selectedNames.length}` : "Say Hi";
 
-
-
   return (
     <>
-      <div
-        className="mb-4 rounded-[14px] px-3.5 py-3"
-        style={{ background: "var(--surface)" }}
-      >
-        <div className="flex items-start gap-2.5">
-          <span className="mt-[1px] text-[17px] leading-none" aria-hidden>
-            👋
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-semibold break-words text-[var(--text)]">
-              {headline}
+      <Collapsible open={hasRoom} probe="welcome" className="mb-4">
+        <div className="rounded-[14px] px-3.5 py-3" style={{ background: "var(--surface)" }}>
+          <div className="flex items-start gap-2.5">
+            <span className="mt-[1px] text-[17px] leading-none" aria-hidden>
+              👋
+            </span>
+            <div className="min-w-0 flex-1">
+              {/* Two lines reserved: the headline is generated from who is in the
+              room, so it rewraps on its own and would otherwise resize the card
+              under a reader who is not touching anything. */}
+              <div
+                className="text-[13px] font-semibold break-words text-[var(--text)]"
+                style={{ minHeight: 36 }}
+              >
+                {headline}
+              </div>
             </div>
+            <button
+              type="button"
+              aria-label="Mark the room as seen"
+              onClick={() => seen.mutate()}
+              className="shrink-0 rounded-full px-1.5 text-[13px] leading-none text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+            >
+              ✕
+            </button>
           </div>
-          <button
-            type="button"
-            aria-label="Mark the room as seen"
-            onClick={() => seen.mutate()}
-            className="shrink-0 rounded-full px-1.5 text-[13px] leading-none text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-          >
-            ✕
-          </button>
-        </div>
 
-        {/* One line: the faces (rarest commonality first) and the action. The
+          {/* One line: the faces (rarest commonality first) and the action. The
             stack tightens as the room fills, so height never grows with it. */}
-        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-          <div className="flex min-w-0 items-center">
-            {shown.map((p, i) => {
-              const active = peek === p.wallet;
-              return (
+          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+            <div className="flex min-w-0 items-center">
+              {shown.map((p, i) => {
+                const active = peek === p.wallet;
+                return (
+                  <button
+                    key={p.wallet}
+                    type="button"
+                    onClick={() => setPeek(active ? null : p.wallet)}
+                    aria-expanded={active}
+                    aria-label={`Why this believer is in your room: ${roomReason(p).why}`}
+                    className="shrink-0 rounded-full p-[2px] transition-transform hover:-translate-y-0.5 hover:z-10"
+                    style={{
+                      background: p.side === "YES" ? "var(--yes)" : "var(--no)",
+                      marginLeft: i === 0 ? 0 : overlap,
+                      zIndex: active ? 20 : shown.length - i,
+                      outline: active ? "2px solid var(--text)" : "none",
+                      outlineOffset: "1px",
+                      opacity: p.isNew || active ? 1 : 0.78,
+                    }}
+                  >
+                    <span
+                      className="block rounded-full p-[1.5px]"
+                      style={{ background: "var(--surface)" }}
+                    >
+                      <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} size={28} />
+                    </span>
+                  </button>
+                );
+              })}
+              {hidden > 0 && (
                 <button
-                  key={p.wallet}
                   type="button"
-                  onClick={() => setPeek(active ? null : p.wallet)}
-                  aria-expanded={active}
-                  aria-label={`Why this believer is in your room: ${roomReason(p).why}`}
-                  className="shrink-0 rounded-full p-[2px] transition-transform hover:-translate-y-0.5 hover:z-10"
+                  onClick={openSheet}
+                  aria-label={`See ${hidden} more in the room`}
+                  className="grid h-[32px] shrink-0 place-items-center rounded-full px-2 text-[11px] font-semibold text-[var(--text-secondary)]"
                   style={{
-                    background: p.side === "YES" ? "var(--yes)" : "var(--no)",
-                    marginLeft: i === 0 ? 0 : overlap,
-                    zIndex: active ? 20 : shown.length - i,
-                    outline: active ? "2px solid var(--text)" : "none",
-                    outlineOffset: "1px",
-                    opacity: p.isNew || active ? 1 : 0.78,
+                    marginLeft: overlap,
+                    background: "var(--surface-2)",
                   }}
                 >
-                  <span className="block rounded-full p-[1.5px]" style={{ background: "var(--surface)" }}>
-                    <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} size={28} />
-                  </span>
+                  +{hidden}
                 </button>
-              );
-            })}
-            {hidden > 0 && (
-              <button
-                type="button"
-                onClick={openSheet}
-                aria-label={`See ${hidden} more in the room`}
-                className="grid h-[32px] shrink-0 place-items-center rounded-full px-2 text-[11px] font-semibold text-[var(--text-secondary)]"
-                style={{
-                  marginLeft: overlap,
-                  background: "var(--surface-2)",
-                }}
-              >
-                +{hidden}
-              </button>
-            )}
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={openSheet}
+              className="max-w-[190px] shrink-0 truncate rounded-[10px] px-3.5 py-2 text-[12.5px] font-semibold"
+              style={{ background: "var(--text)", color: "var(--bg)" }}
+            >
+              {cardLabel}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={openSheet}
-            className="max-w-[190px] shrink-0 truncate rounded-[10px] px-3.5 py-2 text-[12.5px] font-semibold"
-            style={{ background: "var(--text)", color: "var(--bg)" }}
-          >
-            {cardLabel}
-          </button>
 
+          {/* One face at a time: why they're here, then what you already share.
+          Tapping a face used to insert this block instantly, shoving the tape
+          below down by its full height — the reader's own tap, and still a jump.
+          It grows downward from the faces instead. `peeked` is kept mounted
+          through the close so the text does not vanish mid-collapse. */}
+          <Collapsible open={!!peekedNow} probe="welcome-peek">
+            <div
+              className="mt-2 rounded-[10px] px-2.5 py-2"
+              style={{ background: "var(--surface-2)" }}
+            >
+              {peeked && (
+                <>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+                      {ROOM_GROUP_LABEL[roomGroupFor(peeked.relationship)]}
+                    </span>
+                    <RelChip relationship={peeked.relationship} />
+                  </div>
+                  <div className="mt-0.5 text-[11.5px] leading-snug break-words text-[var(--text)]">
+                    {roomReason(peeked).why}
+                  </div>
+                  <div className="mt-0.5 text-[11px] leading-snug break-words text-[var(--text-muted)]">
+                    {roomReason(peeked).history}
+                  </div>
+                  {onSelectPerson && peeked && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectPerson(peeked.wallet)}
+                      className="mt-1.5 text-[11px] font-semibold text-[var(--text-secondary)] underline"
+                    >
+                      See who they are →
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </Collapsible>
         </div>
-
-        {/* One face at a time: why they're here, then what you already share. */}
-        {peeked && (
-          <div
-            className="mt-2 rounded-[10px] px-2.5 py-2"
-            style={{ background: "var(--surface-2)" }}
-          >
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-                {ROOM_GROUP_LABEL[roomGroupFor(peeked.relationship)]}
-              </span>
-              <RelChip relationship={peeked.relationship} />
-            </div>
-            <div className="mt-0.5 text-[11.5px] leading-snug break-words text-[var(--text)]">
-              {roomReason(peeked).why}
-            </div>
-            <div className="mt-0.5 text-[11px] leading-snug break-words text-[var(--text-muted)]">
-              {roomReason(peeked).history}
-            </div>
-            {onSelectPerson && (
-              <button
-                type="button"
-                onClick={() => onSelectPerson(peeked.wallet)}
-                className="mt-1.5 text-[11px] font-semibold text-[var(--text-secondary)] underline"
-              >
-                See who they are →
-              </button>
-            )}
-          </div>
-        )}
-
-      </div>
+      </Collapsible>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
@@ -298,7 +319,10 @@ export function WelcomePrompt({
           />
           <div
             className="relative z-10 flex max-h-[80vh] w-full max-w-[420px] flex-col rounded-t-[18px] sm:rounded-[18px]"
-            style={{ background: "var(--panel,var(--bg))", boxShadow: "0 -12px 40px rgba(0,0,0,.35)" }}
+            style={{
+              background: "var(--panel,var(--bg))",
+              boxShadow: "0 -12px 40px rgba(0,0,0,.35)",
+            }}
           >
             <div className="flex items-start gap-2 px-4 pb-2 pt-4">
               <div className="min-w-0 flex-1">
@@ -360,7 +384,10 @@ export function WelcomePrompt({
                         className="block shrink-0 rounded-full p-[2px]"
                         style={{ background: p.side === "YES" ? "var(--yes)" : "var(--no)" }}
                       >
-                        <span className="block rounded-full p-[1.5px]" style={{ background: "var(--surface)" }}>
+                        <span
+                          className="block rounded-full p-[1.5px]"
+                          style={{ background: "var(--surface)" }}
+                        >
                           <Avatar url={p.avatarUrl} name={p.name} seed={p.wallet} size={26} />
                         </span>
                       </span>
@@ -384,10 +411,7 @@ export function WelcomePrompt({
               })}
             </ul>
 
-            <div
-              className="px-4 py-3"
-              style={{ borderTop: "1px solid var(--hairline)" }}
-            >
+            <div className="px-4 py-3" style={{ borderTop: "1px solid var(--hairline)" }}>
               {send.isError && (
                 <div className="mb-2 text-[11.5px] text-[var(--no,#e5484d)]">
                   Couldn't say hi just now. Try again.
@@ -403,7 +427,6 @@ export function WelcomePrompt({
                 {send.isPending ? "Saying hi…" : sheetLabel}
               </button>
             </div>
-
           </div>
         </div>
       )}
