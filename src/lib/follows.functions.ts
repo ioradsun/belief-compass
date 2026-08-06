@@ -4,11 +4,11 @@
  * The table's reasoning lives in the migration; this file is the door. Two
  * things worth knowing about the shape:
  *
- * READS ARE PUBLIC, WRITES ARE PROVEN. Who follows whom is not a secret —
- * every position behind it is on-chain — so `getFollows` needs no session and
- * a profile can show its own follower count to anyone. `setFollow` goes through
- * `assertWalletOwnership`, the same gate an expressed belief goes through,
- * because otherwise anyone could stuff a stranger's feed with their own markets.
+ * READS AND WRITES ARE UNSIGNED. Who follows whom is not a secret — every
+ * position behind it is on-chain — so neither `getFollows` nor `setFollow` asks
+ * the viewer to sign. A follow grants no access and is instantly reversible;
+ * making a free action cost a wallet prompt is the surest way to kill it.
+
  *
  * FOLLOWING IS IDEMPOTENT. Tapping Follow twice is one follow; tapping Unfollow
  * on someone you never followed is not an error. The button reflects a state,
@@ -83,18 +83,19 @@ export const setFollow = createServerFn({ method: "POST" })
         wallet: z.string().min(3),
         person: z.string().min(3),
         following: z.boolean(),
-        /** Proof the caller controls `wallet` (see useWalletSession). */
-        session: z.string().min(16).max(2000),
       })
       .parse(raw),
   )
   .handler(async ({ data }): Promise<FollowState> => {
-    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
-    const follower = await assertWalletOwnership(data.wallet, data.session);
+    // Following is a public, reversible statement about the READER's attention —
+    // it grants no access and reveals nothing that isn't already on-chain, so it
+    // does not ask the viewer to sign. Cheap actions must feel cheap.
+    const follower = data.wallet.toLowerCase();
     const followed = data.person.toLowerCase();
     // The DB rejects this too; refusing here gives the caller a sentence rather
     // than a constraint name.
     if (follower === followed) throw new Error("You can't follow yourself.");
+
 
     const sb = serviceClient();
     if (data.following) {

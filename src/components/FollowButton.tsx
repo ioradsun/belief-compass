@@ -18,7 +18,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getFollows, setFollow } from "@/lib/follows.functions";
-import { useWalletSession } from "@/hooks/useWalletSession";
 
 export const followsQueryKey = (viewer: string | undefined, person: string) =>
   ["follows", viewer?.toLowerCase() ?? null, person.toLowerCase()] as const;
@@ -35,7 +34,6 @@ export function FollowButton({
   size?: "default" | "compact";
 }) {
   const qc = useQueryClient();
-  const { withSession } = useWalletSession();
   const [error, setError] = useState<string | null>(null);
 
   const self = !!viewer && viewer.toLowerCase() === person.toLowerCase();
@@ -50,9 +48,8 @@ export function FollowButton({
 
   const mutation = useMutation({
     mutationFn: (following: boolean) =>
-      withSession((session) =>
-        setFollow({ data: { wallet: viewer as string, person, following, session } }),
-      ),
+      setFollow({ data: { wallet: viewer as string, person, following } }),
+
     // Optimistic: paint the new state, keep the old one to fall back to.
     onMutate: async (following) => {
       setError(null);

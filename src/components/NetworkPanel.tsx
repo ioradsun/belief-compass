@@ -215,8 +215,7 @@ function PersonRow({
   const earned = label?.kind === "earned" ? label : null;
   const rival = rel.group === "rival";
   const tone = rival ? "var(--no)" : "var(--yes)";
-  const greenFrac =
-    rel.sharedConvictions > 0 ? rel.together / rel.sharedConvictions : rival ? 0 : 1;
+
 
   // The value: mature leads with the %, low shows the shared count.
   const value = rel.tier === "mature" ? `${rival ? rel.oppositionPct : rel.alignmentPct}%` : null;
@@ -259,26 +258,16 @@ function PersonRow({
             )}
           </span>
           <span className="mt-1 flex items-center gap-2">
-            {/* Alignment meter: green = together, red = apart. */}
-            <span
-              className="flex h-1.5 w-14 shrink-0 overflow-hidden rounded-full"
-              style={{ background: "color-mix(in oklab, var(--no) 45%, var(--surface))" }}
-              aria-hidden
-            >
-              <span
-                className="h-full"
-                style={{ width: `${Math.round(greenFrac * 100)}%`, background: "var(--yes)" }}
-              />
-            </span>
             {value && (
               <span className="num text-[12px] font-semibold" style={{ color: tone }}>
                 {value}
               </span>
             )}
             <span className="num truncate text-[11px] text-[var(--text-muted)]">
-              {rel.sharedConvictions} shared
+              {rel.sharedConvictions} Convictions Align
             </span>
           </span>
+
         </span>
       </button>
     </li>
