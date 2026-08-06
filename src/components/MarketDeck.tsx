@@ -28,7 +28,8 @@ import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
-import { relationFromLabel } from "@/domain/participant-social";
+import { relationFromGroup } from "@/domain/participant-social";
+import { presentRelationship } from "@/domain/relationship";
 import { SharedConviction } from "@/components/SharedConviction";
 import { marketAgeCopy } from "@/domain/market-freshness";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
@@ -218,12 +219,24 @@ export function MarketDeck({
   // familiar faces first — one list, no separate Tribe/Rival sections.
   const participantFaces = useMemo(() => {
     const rel = new Map<string, string>();
-    for (const p of net?.people ?? []) rel.set(p.wallet.toLowerCase(), p.relationship);
+    for (const p of net?.people ?? [])
+      rel.set(
+        p.wallet.toLowerCase(),
+        presentRelationship({
+          agreement: p.agreement,
+          sharedConvictions: p.sharedBeliefs,
+          together: p.together,
+          apart: p.apart,
+          topicCount: p.topicCount,
+          strongestAlignedTopic: p.strongestAlignedDomain?.name ?? null,
+          strongestOpposedTopic: p.strongestOpposedDomain?.name ?? null,
+        }).group,
+      );
     return holders.map((h) => ({
       wallet: h.wallet,
       name: h.name,
       avatarUrl: h.avatarUrl,
-      relation: relationFromLabel(rel.get(h.wallet.toLowerCase())),
+      relation: relationFromGroup(rel.get(h.wallet.toLowerCase())),
     }));
   }, [holders, net]);
   const { data: houseRead } = useQuery({

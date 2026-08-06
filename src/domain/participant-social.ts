@@ -100,3 +100,20 @@ export function relationFromLabel(label?: string | null): ParticipantRelation {
   if (label === "opp" || label === "inverse") return "rival";
   return "other";
 }
+
+/**
+ * The SAME grouping the Tribe/Rivals tabs use, reduced to this row's vocabulary.
+ *
+ * The stored DNA label is not what the app calls a Tribe member: everywhere else
+ * (left rail counts, Network panel, search) the group comes from
+ * `presentRelationship`, which reads agreement/shared beliefs rather than the
+ * cached label. Reading the raw label here made a market full of Tribe members
+ * summarise as "9 Participants". One rule, one answer.
+ */
+export function relationFromGroup(
+  group: "tribe" | "rival" | "neutral" | "insufficient" | string | null | undefined,
+): ParticipantRelation {
+  if (group === "tribe") return "tribe";
+  if (group === "rival") return "rival";
+  return "other";
+}

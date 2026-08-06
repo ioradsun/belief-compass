@@ -21,7 +21,8 @@ import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { pulseLine } from "@/components/MarketCard";
 import { MarketMomentum } from "@/components/MarketVitality";
-import { relationFromLabel } from "@/domain/participant-social";
+import { relationFromGroup } from "@/domain/participant-social";
+import { presentRelationship } from "@/domain/relationship";
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
@@ -157,12 +158,24 @@ export function MobileGame({
   // people you know first, in one shared list.
   const participantFaces = useMemo(() => {
     const rel = new Map<string, string>();
-    for (const p of revealNet?.people ?? []) rel.set(p.wallet.toLowerCase(), p.relationship);
+    for (const p of revealNet?.people ?? [])
+      rel.set(
+        p.wallet.toLowerCase(),
+        presentRelationship({
+          agreement: p.agreement,
+          sharedConvictions: p.sharedBeliefs,
+          together: p.together,
+          apart: p.apart,
+          topicCount: p.topicCount,
+          strongestAlignedTopic: p.strongestAlignedDomain?.name ?? null,
+          strongestOpposedTopic: p.strongestOpposedDomain?.name ?? null,
+        }).group,
+      );
     return (revealEvidence?.believers ?? []).map((h) => ({
       wallet: h.wallet,
       name: h.name,
       avatarUrl: h.avatarUrl,
-      relation: relationFromLabel(rel.get(h.wallet.toLowerCase())),
+      relation: relationFromGroup(rel.get(h.wallet.toLowerCase())),
     }));
   }, [revealEvidence, revealNet]);
 
