@@ -1059,7 +1059,7 @@ function Feed() {
                     onSelectMarket={selectMarket}
                     onCreate={openCreate}
                     onExplore={() =>
-                      navigate({ search: (prev: Search) => ({ ...prev, dash: undefined }) })
+                      onExplore={closeDash}
                     }
                   />
                 </Suspense>
