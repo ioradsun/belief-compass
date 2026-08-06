@@ -116,7 +116,7 @@ export function NetworkPanel({
    * Everyone with any shared history, in one order. `insufficient` is the only
    * exclusion, and it means zero overlap — there is no relationship to place.
    */
-  const list = useMemo(
+  const everyone = useMemo(
     () =>
       (data?.people ?? [])
         .map(present)
@@ -128,6 +128,11 @@ export function NetworkPanel({
           ),
         ),
     [data],
+  );
+
+  const list = useMemo(
+    () => everyone.filter((v) => matchesFilter(v.spot.band, filter)),
+    [everyone, filter],
   );
 
   const searching = query.length > 0;
