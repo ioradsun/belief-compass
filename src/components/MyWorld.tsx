@@ -150,7 +150,7 @@ export function MyWorld({
   );
 
   const tabName = (t: Tab): string =>
-    t === "feed" ? "For You" : t === "positions" ? "Your Convictions" : "Your People";
+    t === "feed" ? "For You" : t === "positions" ? "Convictions" : "People";
 
   // The playlist tab carries no count: how many markets are queued is an
   // implementation detail, and no reader decides anything differently for it.
@@ -175,7 +175,7 @@ export function MyWorld({
         className="mb-4 flex overflow-x-auto rounded-[10px] p-0.5"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
         role="tablist"
-        aria-label="For You, Your Convictions, or Your People"
+        aria-label="For You, Convictions, or People"
       >
         {TABS.map((t) => (
           <button
