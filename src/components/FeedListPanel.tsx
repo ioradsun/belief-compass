@@ -48,7 +48,13 @@ function factsOf(row: MarketRow | undefined, nowMs: number) {
   const r = row as unknown as Record<string, unknown>;
   const capitalUsd = num(r.yes_capital_usd) + num(r.no_capital_usd);
   return {
+    // A ROW WITHOUT A TITLE HAS NO QUESTION — it must NOT manufacture one.
+    // Resolving the placeholder here made `?? activeTitle` unreachable, so the
+    // pinned card printed "Market #2618" while the centre panel, holding the
+    // same market's full row, showed the question. Absence stays absent; the
+    // caller decides what to fall back to.
     question: marketTitle(row.markets?.title, row.onchain_id),
+    hasTitle: Boolean(row.markets?.title?.trim()),
     discovery: composeDiscoveryRow({
       participants: num(r.participants),
       believers: num(row.believers_yes) + num(row.believers_no),
@@ -149,7 +155,9 @@ export function FeedListPanel({
             Now reading
           </p>
           <p className="text-[13px] font-semibold leading-snug text-[var(--text)]">
-            {activeFacts?.question ?? activeTitle ?? marketTitleFallback(activeId)}
+            {(activeFacts?.hasTitle ? activeFacts.question : null) ??
+              activeTitle ??
+              marketTitleFallback(activeId)}
           </p>
           {(active?.reason ?? activeFacts?.discovery.story) && (
             <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
