@@ -20,11 +20,11 @@ const errorMiddleware = createMiddleware().server(async ({ next, request }) => {
   try {
     return await next();
   } catch (error) {
-    if (error != null && typeof error === "object" && "statusCode" in error) {
-      throw error;
-    }
     if (isAbortError(error) || request?.signal?.aborted) {
       return new Response(null, { status: 499 });
+    }
+    if (error != null && typeof error === "object" && "statusCode" in error) {
+      throw error;
     }
     console.error(error);
     return new Response(renderErrorPage(), {
