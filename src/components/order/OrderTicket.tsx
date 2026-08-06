@@ -25,6 +25,7 @@ import {
   type OrderSide,
 } from "@/domain/order";
 import { formatMoney, type DisplayUnit } from "@/domain/money";
+import { affordability, affordabilityCopy } from "@/domain/affordability";
 import { useDisplayUnit } from "@/lib/display-unit";
 import type { useTrade } from "@/lib/chain-trade";
 
@@ -554,8 +555,14 @@ function BuyTicket({
   }
 
   const availUnit = availEth == null ? null : unitAmountFromEth(availEth, unit, ethUsd);
-  const overBalance = availEth != null && ethUsd > 0 && amount > availEth * ethUsd + 1e-9;
-  const amountError = amount <= 0 ? null : overBalance ? "Insufficient balance" : null;
+  // One rule, and it fails closed — see @/domain/affordability. The check this
+  // replaces compared the amount to the FULL balance (no room for the network
+  // fee), said only "Insufficient balance", and switched itself off entirely
+  // when the ETH/USD rate was missing.
+  const afford = affordability({ amountUsd: amount, balanceEth: availEth, ethUsd });
+  const affordCopy = affordabilityCopy(afford);
+  const overBalance = !afford.ok;
+  const amountError = amount <= 0 ? null : (affordCopy?.detail ?? null);
 
   const label = !ready.connected
     ? "Connect wallet"
@@ -565,8 +572,8 @@ function BuyTicket({
         ? `Backing ${side}…`
         : amount <= 0
           ? "Enter an amount"
-          : overBalance
-            ? "Insufficient balance"
+          : affordCopy
+            ? affordCopy.label
             : `Back ${side} · ${money(amount)}`;
   const disabled =
     ready.connected &&
