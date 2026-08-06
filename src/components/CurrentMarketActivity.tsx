@@ -119,12 +119,43 @@ export function CurrentMarketActivity({
   // reader was sent to for a reason still deserves its reason.
   const hasSomething = hasActivity || Boolean(why);
 
+  // OPENS OVER EVERYTHING. The expanded feed used to grow inside the rail,
+  // where ancestor `overflow` and stacking contexts clipped it — so the panel
+  // was only ever half visible. It now mounts to <body> as a fixed dropdown
+  // anchored to this card's column, above all app chrome.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [anchor, setAnchor] = useState<{ left: number; width: number; top: number } | null>(null);
+
+  const measure = useCallback(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setAnchor({ left: r.left, width: r.width, top: r.bottom });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [open, measure]);
+
+  // A market change must not leave a dropdown hanging over the next one.
+  useEffect(() => {
+    setOpen(false);
+  }, [marketId]);
+
   // No count is shown: the raw row count and what the expanded feed renders
   // (grouped beats) are different numbers, and a number that disagrees with the
   // thing it opens is worse than no number at all.
   const toggle = () => {
     if (hasActivity) setOpen((v) => !v);
   };
+
 
   return (
     // NOT `return null` when quiet. The card collapses to zero height instead,
