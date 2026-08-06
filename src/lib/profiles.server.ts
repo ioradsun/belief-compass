@@ -7,7 +7,7 @@
  * no POV account. Callers fall back to the deterministic alias when a wallet
  * has no real identity.
  */
-import { publicClient, serviceClient } from "@/lib/supabase-clients";
+import { serviceClient, serviceClientOrNull } from "@/lib/supabase-clients";
 import type { WalletProfile } from "@/lib/wallet-identity";
 import { fetchPovUser } from "@/lib/pov.server";
 
@@ -22,11 +22,15 @@ export async function resolveProfiles(
   const list = [...new Set(wallets.filter(Boolean).map((w) => w.toLowerCase()))];
   if (list.length === 0) return map;
 
-  const sb = publicClient();
-  const { data: cached } = await sb
-    .from("profiles")
-    .select("wallet, display_name, pfp_url, not_found")
-    .in("wallet", list);
+  // PRIVILEGED READ, NARROW SELECT. `profiles` also caches `username` and
+  // `twitter_id` — a wallet→social mapping that deanonymises a person, which is
+  // not ours to publish. The table is therefore closed to anon/authenticated
+  // entirely and read here with the service key, selecting only the display
+  // name and picture the UI actually renders. Nothing else leaves this function.
+  const sb = serviceClientOrNull();
+  const { data: cached } = sb
+    ? await sb.from("profiles").select("wallet, display_name, pfp_url, not_found").in("wallet", list)
+    : { data: null };
   const known = new Set<string>();
   for (const p of cached ?? []) {
     const w = String(p.wallet).toLowerCase();
@@ -34,6 +38,7 @@ export async function resolveProfiles(
     if (!p.not_found)
       map.set(w, { displayName: p.display_name ?? null, pfpUrl: p.pfp_url ?? null });
   }
+
 
   const misses = list.filter((w) => !known.has(w)).slice(0, lazyCap);
   if (misses.length === 0) {
