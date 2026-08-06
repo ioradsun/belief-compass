@@ -85,7 +85,6 @@ export function NetworkPanel({
   selectedPerson,
   onSelectPerson,
   onCount,
-  onOpenDna,
   onExplore,
 }: {
   wallet?: string;
@@ -93,8 +92,6 @@ export function NetworkPanel({
   onSelectPerson: (wallet: string) => void;
   /** Reports the list size so the parent tab can show one count. */
   onCount?: (n: number) => void;
-  /** Opens the full Conviction DNA view — reached from the quiet DNA line. */
-  onOpenDna?: () => void;
   onExplore?: () => void;
 }) {
   const [rawQuery, setRawQuery] = useState("");

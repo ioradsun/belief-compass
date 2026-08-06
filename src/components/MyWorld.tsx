@@ -225,7 +225,6 @@ export function MyWorld({
           selectedPerson={selectedPerson}
           onSelectPerson={onSelectPerson}
           onCount={setPeopleCount}
-          onOpenDna={onOpenDna}
           onExplore={exploreMarkets}
         />
       )}
