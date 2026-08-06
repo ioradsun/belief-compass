@@ -222,6 +222,34 @@ export function spectrumColor(position: number): string {
 }
 
 /**
+ * The ring around a face — the SAME continuum as the text colour, so the border
+ * and the number can never tell different stories. Width grows with certainty:
+ * an unplaced person gets a hairline, an earned extreme gets a real ring.
+ */
+export function spectrumRing(position: number): { color: string; width: number } {
+  const p = clamp(position, -1, 1);
+  const m = Math.abs(p);
+  if (m < SPECTRUM.neutral) return { color: "var(--border-strong)", width: 1 };
+  return { color: spectrumColor(p), width: m >= 0.45 ? 2.5 : 2 };
+}
+
+/** The one filter the people list exposes: which region of the continuum. */
+export type SpectrumFilter = "all" | SpectrumBand;
+
+export const SPECTRUM_FILTERS: readonly { id: SpectrumFilter; label: string }[] = [
+  { id: "all", label: "Everyone" },
+  { id: "twin", label: "Twins" },
+  { id: "tribe", label: "Tribe" },
+  { id: "neutral", label: "Unplaced" },
+  { id: "rival", label: "Rivals" },
+  { id: "opponent", label: "Opponents" },
+] as const;
+
+export function matchesFilter(band: SpectrumBand, filter: SpectrumFilter): boolean {
+  return filter === "all" || band === filter;
+}
+
+/**
  * Does the list need a search box yet?
  *
  * The rule is about the READER's cost, not ours: with a handful of people,
