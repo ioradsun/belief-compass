@@ -196,6 +196,22 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
           const chg = await sb.rpc("recompute_price_changes");
           maintenance.price_changes_error = chg.error?.message ?? null;
 
+          // `market_window_change` was stale for eight days because NOTHING
+          // called refresh_market_window_change — it existed and was never
+          // invoked. It is wired in here, but one window at a time: all five
+          // windows in a single call take ~30s and PostgREST cuts the session
+          // off at the 8s statement_timeout inherited from `authenticator`.
+          // Rotating by wall clock refreshes every window within ~10 minutes
+          // at the poller's two-minute cadence.
+          const WINDOW_KEYS = ["1h", "24h", "7d", "30d", "all"] as const;
+          const windowKey =
+            WINDOW_KEYS[Math.floor(Date.now() / 120_000) % WINDOW_KEYS.length]!;
+          const win = await sb.rpc("refresh_market_window_change", { p_window: windowKey });
+          maintenance.window_change_key = windowKey;
+          maintenance.window_change_error = win.error?.message ?? null;
+          maintenance.window_change_rows = win.error ? null : Number(win.data ?? 0);
+
+
           const prunePrices = await sb
             .from("price_snapshots")
             .delete()

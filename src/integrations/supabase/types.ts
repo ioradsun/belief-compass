@@ -1779,7 +1779,10 @@ export type Database = {
         Returns: undefined
       }
       refresh_eth_usd_calibration: { Args: never; Returns: number }
-      refresh_market_window_change: { Args: never; Returns: undefined }
+      refresh_market_window_change: {
+        Args: { p_window?: string }
+        Returns: number
+      }
       request_viewer_match_refresh: {
         Args: { p_wallet: string }
         Returns: undefined
