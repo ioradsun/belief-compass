@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { buildPool, POOL, POOL_SLICES, sliceLabel, type PoolSlice } from "./pool";
 
 /** Markets numbered inside a band so each slice's ids are recognisable. */
@@ -200,5 +202,29 @@ describe("the pool can back every lens label", () => {
     for (const s of POOL_SLICES) {
       expect(claimed[s], s).toBeGreaterThanOrEqual(POOL.slices[s].quota);
     }
+  });
+});
+
+/**
+ * A DEGRADED POOL MUST NOT BE A SILENT ONE. Two slices are the only reason a
+ * lens LABEL is true, so losing one is a semantic failure wearing a working
+ * interface — measured, "Most Capital" drops from 20/20 to 14/20 and keeps
+ * rendering. The server says so out loud rather than quietly serving it.
+ */
+describe("a failed slice is reported, not swallowed", () => {
+  const code = readFileSync(join(process.cwd(), "src/lib/markets.functions.ts"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+
+  it("logs the slice that failed and what it costs", () => {
+    expect(code).toMatch(/candidate pool slice .* failed/);
+    expect(code).toMatch(/Most Capital.*incomplete pool/);
+    expect(code).toMatch(/Most Participants.*incomplete pool/);
+  });
+
+  it("still tolerates it rather than taking the feed down", () => {
+    // The whole read failing throws so it is never cached; one slice failing is
+    // a degraded pool, and a reader with a degraded feed beats a reader with none.
+    expect(code).toMatch(/errs\.length === Object\.keys\(results\)\.length/);
   });
 });

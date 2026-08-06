@@ -199,6 +199,27 @@ async function poolRows(
   if (errs.length === Object.keys(results).length) {
     throw new Error(errs[0]!.error!.message);
   }
+  /**
+   * A DEGRADED POOL MUST NOT BE A SILENT ONE.
+   *
+   * Tolerating a failed slice is right — a broken index should not take the feed
+   * down — but two of these slices are the only reason a LENS LABEL is true.
+   * Lose the capital slice and "Most Capital" keeps rendering while quietly
+   * ranking an incomplete universe: measured, 14 of the true top 20 instead of
+   * 20. That is a semantic failure wearing a working interface, and it is
+   * exactly the kind of thing graceful degradation hides. So it is said out
+   * loud, named, with the consequence attached.
+   */
+  for (const [slice, r] of Object.entries(results) as [PoolSlice, typeof active][]) {
+    if (!r.error) continue;
+    const backs =
+      slice === "capital"
+        ? ' — the Explore "Most Capital" lens is now ranking an incomplete pool'
+        : slice === "participants"
+          ? ' — the Explore "Most Participants" lens is now ranking an incomplete pool'
+          : "";
+    console.error(`[feed] candidate pool slice "${slice}" failed: ${r.error.message}${backs}`);
+  }
 
   type StateRow = NonNullable<(typeof active)["data"]>[number];
   const bySlice: Partial<Record<PoolSlice, (StateRow & { onchainId: number })[]>> = {};

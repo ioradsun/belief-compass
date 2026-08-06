@@ -33,3 +33,29 @@ those are checked exactly. It does **not** expose cost basis, realized P&L,
 oracle, so the tool **computes and prints** them (for trust) but never claims
 they're "verified." Verifying those requires the on-chain fill history the
 reducer already folds — which is what this tool reconstructs.
+
+## check:lens-coverage — the Explore lens truthfulness gate
+
+```
+npm run check:lens-coverage           # publishable key: partial, and says so
+SUPABASE_SERVICE_ROLE_KEY=... npm run check:lens-coverage   # the real number
+```
+
+**Run this after any migration that touches `market_state` columns the candidate
+pool orders on, and treat a non-zero exit as a failed deployment.**
+
+Explore's lens row promises "Most Capital" and "Most Participants". A ranking
+lens can only rank what the pool admits, so each of those measures needs its own
+ordering — `capital_usd` (a generated column, see
+`20260825000000_market_state_capital_usd.sql`) and the `market_participation()`
+ranking. Lose either and the lens keeps rendering while silently ranking an
+incomplete universe: measured, Most Capital drops from 20/20 to 14/20 of the
+platform's true top 20 and nothing in the interface says so.
+
+That is why the check exists and why the fallback is not enough on its own. The
+server also logs a named error per failed slice, but nobody reads logs on a
+deploy — this exits non-zero.
+
+Note it needs the service role to be complete: `market_participation` is
+service-role only, so a publishable-key run leaves the participants slice empty
+and prints a warning saying the number understates reality.
