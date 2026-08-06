@@ -21,7 +21,7 @@ import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { positionSummaryQO } from "@/lib/positions-query";
 import { useSellQuote, type useTrade, type useTradeReady } from "@/lib/chain-trade";
-import { fmtShares, sharesForPct, weiToEth, type OrderSide } from "@/domain/order";
+import { fmtShares, sharesForPct, type OrderSide } from "@/domain/order";
 import {
   ownedPositions,
   sellStep,
@@ -31,6 +31,7 @@ import {
 } from "@/domain/order-actions";
 import { useMoney } from "@/lib/display-unit";
 import { OrderTicket, OwnedLine, SideButton } from "@/components/order/OrderTicket";
+import { weiToEth } from "@/domain/money";
 
 type TradeApi = ReturnType<typeof useTrade>;
 type ReadyApi = ReturnType<typeof useTradeReady>;

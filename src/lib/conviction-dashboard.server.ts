@@ -13,6 +13,7 @@ import { positionValueUsd } from "@/domain/position-value";
 import { readWalletTradesAscending } from "@/lib/conviction-dashboard.trades.server";
 import { decodeBuyCreatorFeeWei, decodeBuyTotalFeeWei } from "@/chain/decoder";
 import { readEthUsd } from "@/lib/eth-usd.server";
+import { weiToEth } from "@/domain/money";
 import {
   realizedTradingEth,
   bucketCreatorFees,
@@ -233,7 +234,7 @@ export async function buildConvictionDashboard(
         market: t.market_id ?? "",
         side: t.side as "YES" | "NO",
         action: t.action as "BUY" | "SELL",
-        eth: num(t.amount_eth) / 1e18,
+        eth: weiToEth(t.amount_eth as string | null),
         tokens: num(t.shares),
       }));
 
@@ -321,7 +322,7 @@ export async function buildConvictionDashboard(
       const feeWei = decodeBuyCreatorFeeWei(rawLog);
       if (feeWei == null || feeWei <= 0n) continue;
       const at = Date.parse(row.occurred_at);
-      if (Number.isFinite(at)) entries.push({ at, eth: Number(feeWei) / 1e18 });
+      if (Number.isFinite(at)) entries.push({ at, eth: weiToEth(feeWei) });
     }
     const w = bucketCreatorFees(entries, Date.now());
     creatorEarnedTodayUsd = w.todayEth * rate;
@@ -373,7 +374,7 @@ export async function buildConvictionDashboard(
       .limit(5000);
     for (const row of (myBuys ?? []) as Array<{ payload: unknown }>) {
       const feeWei = decodeBuyTotalFeeWei((row.payload as { raw_log?: unknown } | null)?.raw_log);
-      if (feeWei != null && feeWei > 0n) tradingFeesEth += Number(feeWei) / 1e18;
+      if (feeWei != null && feeWei > 0n) tradingFeesEth += weiToEth(feeWei);
     }
   }
 

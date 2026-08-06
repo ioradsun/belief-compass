@@ -169,3 +169,27 @@ describe("the Positions list does not rank worth on its own", () => {
     expect(MY).toMatch(/if \(!\(shares > 0\)\) return null/);
   });
 });
+
+/**
+ * The unit crossing has ONE home. `domain/money` declares itself "the SINGLE
+ * place a number crosses between units"; wei→ETH is exactly that, and it was
+ * declared in three other files under two names.
+ */
+describe("wei conversion is not redeclared", () => {
+  it("has exactly one definition", () => {
+    const owners = [
+      "src/domain/money.ts",
+      "src/domain/order.ts",
+      "src/domain/ecosystem-share.ts",
+      "src/lib/ecosystem-value.server.ts",
+      "src/components/ConvictionDashboard.tsx",
+    ].filter((f) => /(const|function) weiToEth/.test(code(f)));
+    expect(owners).toEqual(["src/domain/money.ts"]);
+  });
+
+  it("is not bypassed with a literal 1e18 in the money modules", () => {
+    for (const f of ["src/domain/order.ts", "src/domain/ecosystem-share.ts"]) {
+      expect(code(f), f).not.toMatch(/\/ 1e18/);
+    }
+  });
+});

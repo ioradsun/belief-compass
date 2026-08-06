@@ -14,6 +14,7 @@ import { useAccount, usePublicClient, useReadContract, useWriteContract } from "
 import abi from "./abi.json" with { type: "json" };
 import { PROXY_ADDRESS, CHAIN_ID } from "./decoder";
 import { CONVICTION_TAG } from "./attribution";
+import { weiToEth } from "@/domain/money";
 
 const ABI = abi as unknown as Abi;
 const CONTRACT = { address: PROXY_ADDRESS, abi: ABI } as const;
@@ -194,7 +195,7 @@ export function useCreateMarket() {
         // The fee comes off the top before the contract compares to minSeedEth.
         const requiredWei = grossSeedWei(minSeed, Number(feeBps));
         if (seedWei < requiredWei) {
-          throw new Error(`Seed must be at least ${Number(requiredWei) / 1e18} ETH.`);
+          throw new Error(`Seed must be at least ${weiToEth(requiredWei)} ETH.`);
         }
 
         if (balance < seedWei) throw new Error("Insufficient balance for this seed.");

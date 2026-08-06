@@ -47,8 +47,19 @@ describe("avg price", () => {
     const shares = 500n * 10n ** 18n;
     expect(avgPriceUsd(eth, shares, 2000)).toBeCloseTo(2, 2);
   });
-  it("guards zero shares", () => {
-    expect(avgPriceUsd(1n, 0n, 2000)).toBe(0);
+  it("has no average to report for zero shares", () => {
+    // Was `toBe(0)`, which was the only sentinel available when this returned a
+    // bare number. The intent of that test was "do not divide by zero", not
+    // "the price is zero" — and $0.00 per share IS a price claim. Callers now
+    // render "—".
+    expect(avgPriceUsd(1n, 0n, 2000)).toBeNull();
+  });
+
+  it("has no average to report without a rate", () => {
+    // The same rule the rest of the app now follows: a missing ETH/USD rate
+    // means we cannot price it, not that it is free.
+    const shares = 500n * 10n ** 18n;
+    expect(avgPriceUsd(usdToWei(1000, 2000), shares, 0)).toBeNull();
   });
 });
 

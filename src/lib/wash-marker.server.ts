@@ -25,6 +25,7 @@
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { findWashTrades, type JudgeableTrade, type WashReason } from "@/domain/wash-trading";
+import { weiToEth } from "@/domain/money";
 
 type Db = ReturnType<typeof serviceClient>;
 type Row = Record<string, unknown>;
@@ -87,7 +88,7 @@ export async function markWashTrades(db: Db = serviceClient()): Promise<WashMark
     action: (r.action as "BUY" | "SELL" | null) ?? null,
     // The events log stores wei; the rule only needs a consistent unit, but
     // matching the aggregates' own conversion keeps the two comparable.
-    amountEth: Number(r.amount_eth ?? 0) / 1e18,
+    amountEth: weiToEth(r.amount_eth as string | null),
     occurredAt: String(r.occurred_at),
   }));
 

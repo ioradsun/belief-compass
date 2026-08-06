@@ -7,6 +7,8 @@
  * happens in a component.
  */
 
+import { convertMoney, weiToEth } from "@/domain/money";
+
 /** Default slippage tolerance for minTokensOut / minEthOut (basis points). */
 export const DEFAULT_SLIPPAGE_BPS = 200n; // 2%
 const WEI_PER_GWEI = 1_000_000_000n;
@@ -43,27 +45,36 @@ export function sharesForPct(tokens: bigint, pct: number): bigint {
 }
 
 
-export function weiToEth(wei: bigint): number {
-  return Number(wei) / 1e18;
+/**
+ * Wei in USD, or null when there is no rate to cross with.
+ *
+ * Was `weiToEth(wei) * ethUsd`, which returned 0 for every amount when the rate
+ * was missing — the confident zero this codebase has now removed from the server
+ * (lib/eth-usd.server) and the display surfaces (domain/money#convertMoney).
+ */
+export function weiToUsd(wei: bigint, ethUsd: number): number | null {
+  return convertMoney(weiToEth(wei), "ETH", "USD", ethUsd);
 }
 
-export function weiToUsd(wei: bigint, ethUsd: number): number {
-  return weiToEth(wei) * ethUsd;
-}
-
-/** Average execution price in USD per share, from the ETH spent and shares out. */
-export function avgPriceUsd(ethWei: bigint, sharesWei: bigint, ethUsd: number): number {
-  if (sharesWei <= 0n) return 0;
-  const shares = Number(sharesWei) / 1e18;
-  if (!(shares > 0)) return 0;
-  return weiToUsd(ethWei, ethUsd) / shares;
+/**
+ * Average execution price in USD per share, from the ETH spent and shares out.
+ *
+ * Null rather than 0 when it cannot be computed: "$0.00 avg" on a real trade is
+ * a claim about the price, and a missing rate is not one.
+ */
+export function avgPriceUsd(ethWei: bigint, sharesWei: bigint, ethUsd: number): number | null {
+  if (sharesWei <= 0n) return null;
+  const shares = weiToEth(sharesWei);
+  if (!(shares > 0)) return null;
+  const usd = weiToUsd(ethWei, ethUsd);
+  return usd == null ? null : usd / shares;
 }
 
 export const fmtUsd = (n: number): string =>
   n >= 1000 ? `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : `$${n.toFixed(2)}`;
 
 export const fmtShares = (sharesWei: bigint): string => {
-  const s = Number(sharesWei) / 1e18;
+  const s = weiToEth(sharesWei);
   return s >= 1000 ? s.toLocaleString("en-US", { maximumFractionDigits: 0 }) : s.toFixed(2);
 };
 

@@ -55,6 +55,7 @@ import {
   type DiscoveryMoment,
 } from "@/domain/discovery-moment";
 import type { CachedRelationship } from "@/lib/dna/viewer-dna-cache.server";
+import { weiToEth } from "@/domain/money";
 import {
   cohortKindForViewer,
   renderCohort,
@@ -264,7 +265,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       log_index: r.log_index as number | null,
       side: (r.side as "YES" | "NO" | null) ?? null,
       action: (r.action as "BUY" | "SELL" | null) ?? null,
-      amount_eth: Number(r.amount_eth ?? 0) / 1e18,
+      amount_eth: weiToEth(r.amount_eth as string | null),
       wallet: (r.wallet as string) ?? null,
       // System milestones carry their threshold in payload so the copy can render
       // it; trades keep payload null (their raw_log was never fetched).

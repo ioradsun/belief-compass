@@ -20,6 +20,7 @@ import { loadWindowChanges, pricePct } from "@/lib/window-change.server";
 import { buildPool, POOL, type PoolSlice } from "@/domain/feed/pool";
 import { classifyMomentum, NO_MOMENTUM, type MomentumFacts } from "@/domain/feed/momentum";
 import { currencyDrift } from "@/domain/market-change";
+import { weiToEth } from "@/domain/money";
 
 /** SSR/anon feed snapshots live this long before a background refresh. */
 const ANON_FEED_TTL_MS = 5_000;
@@ -1044,7 +1045,7 @@ export const getMarketChange = createServerFn({ method: "GET" })
       const action = t.action === "SELL" ? "SELL" : t.action === "BUY" ? "BUY" : null;
       if (!side || !action || !t.wallet) continue;
       const wei = Number(t.amount_eth ?? 0);
-      const eth = Number.isFinite(wei) ? wei / 1e18 : 0;
+      const eth = weiToEth(wei);
       const at = new Date(t.occurred_at).getTime();
       const priceWei = t.price == null ? null : Number(t.price);
       // Chain order inside the block. Whole blocks share one occurred_at, so
@@ -1060,7 +1061,7 @@ export const getMarketChange = createServerFn({ method: "GET" })
         side,
         action,
         eth,
-        price: priceWei != null && Number.isFinite(priceWei) ? priceWei / 1e18 : null,
+        price: priceWei == null ? null : weiToEth(priceWei),
         t: at,
         seq,
       });
@@ -1175,7 +1176,7 @@ export const listMarketPulses = createServerFn({ method: "GET" })
         wallet: w,
         name: null,
         pfpUrl: null,
-        eth: Number.isFinite(ethRaw) ? ethRaw / 1e18 : 0,
+        eth: weiToEth(ethRaw),
         at: String(r.occurred_at),
       });
     }
