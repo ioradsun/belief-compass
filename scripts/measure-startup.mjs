@@ -27,13 +27,22 @@
  * Also captured over the same window: layout shift after paint, long tasks, and
  * every request WITH ITS RESPONSE STATUS.
  *
- * The status is not decoration. The query client retries three times with
+ * The outcome is not decoration. The query client retries three times with
  * backoff, so a server function that FAILS fires four times and is
  * indistinguishable, by URL alone, from four healthy components asking for the
  * same thing. One is an environment artifact and the other is a real ownership
- * bug, and counting URLs cannot tell them apart. Duplicates are therefore
- * reported split by outcome: repeats that all succeeded, versus repeats that
- * followed a failure.
+ * bug, and counting URLs cannot tell them apart.
+ *
+ * HTTP STATUS IS NOT ENOUGH EITHER, and believing it was cost a wrong answer.
+ * TanStack Start serialises a thrown server function into a 200 response whose
+ * BODY carries the error; the client deserialises, throws, and React Query
+ * retries. So a run against a backend the environment cannot reach produces a
+ * page full of 200s that are all failures, spaced at exactly retryDelay(0) =
+ * 1000ms — which reads as "genuine duplicate observers" to anything that only
+ * looks at the status line.
+ *
+ * Repeats are therefore split by the response BODY: a `$TSR/Error` envelope
+ * means the request failed however healthy its status looked.
  *
  * Any route works — every one of them mounts the root providers — so this drives
  * the fixture route and needs no database.
@@ -61,10 +70,27 @@ async function measure(browser, name, viewport) {
 
   const requests = [];
   const status = new Map();
-  page.on("request", (r) => requests.push(r.url()));
-  page.on("response", (r) => {
+  const times = new Map();
+  const t0 = Date.now();
+  page.on("request", (r) => {
+    requests.push(r.url());
+    const list = times.get(r.url()) ?? [];
+    list.push(Date.now() - t0);
+    times.set(r.url(), list);
+  });
+  page.on("response", async (r) => {
     const list = status.get(r.url()) ?? [];
-    list.push(r.status());
+    let failed = r.status() >= 400;
+    if (!failed && r.url().includes("_serverFn")) {
+      // A 200 carrying a serialised throw is a failure. Read only the head —
+      // the envelope marker is at the front and payloads can be large.
+      try {
+        failed = /\$TSR\/Error|"error"/.test((await r.text()).slice(0, 300));
+      } catch {
+        /* body already consumed or navigation raced it — treat as success */
+      }
+    }
+    list.push(failed ? -1 : r.status());
     status.set(r.url(), list);
   });
   page.on("requestfailed", (r) => {
@@ -129,9 +155,13 @@ async function measure(browser, name, viewport) {
     .filter(([, n]) => n > 1)
     .map(([u, n]) => {
       const codes = status.get(u) ?? [];
-      const failed = codes.filter((c) => c === 0 || c >= 400).length;
+      const failed = codes.filter((c) => c === 0 || c === -1 || c >= 400).length;
       return {
         n,
+        // WHEN each repeat fired, ms from navigation. Near-simultaneous repeats
+        // are separate observers mounting; spread-out ones are refetches. The
+        // classification is not decidable from the count alone.
+        at: times.get(u) ?? [],
         // A repeat that follows a failure is the retry policy doing its job.
         // A repeat where everything succeeded is two callers asking twice.
         kind: failed > 0 ? "retry-after-failure" : "duplicate-success",
@@ -145,6 +175,10 @@ async function measure(browser, name, viewport) {
   return {
     viewport: name,
     anchor: anchored,
+    // True when any server function answered with a serialised throw. When it
+    // is, every repeat count below is retry noise and the run cannot be used to
+    // audit request ownership.
+    serverFnsFailing: [...status.values()].flat().some((c) => c === -1),
     treeRemounted: after.stillAttached === false,
     clsAfterPaint: after.cls,
     shifts: after.shifts,
@@ -189,7 +223,14 @@ for (const r of report.runs) {
   console.log(
     `           repeats: ${real.length} genuine, ${retried.length} retry-after-failure`,
   );
-  for (const d of real) console.log(`           ×${d.n} GENUINE  ${label(d.url)}`);
-  for (const d of retried) console.log(`           ×${d.n} retry    ${label(d.url)} ${d.codes.join(",")}`);
+  for (const d of real)
+    console.log(`           ×${d.n} GENUINE  ${label(d.url)}  at ${d.at.join("ms, ")}ms`);
+  for (const d of retried)
+    console.log(`           ×${d.n} retry    ${label(d.url)}  at ${d.at.join("ms, ")}ms`);
+  if (r.serverFnsFailing)
+    console.log(
+      "           NOTE: server functions are failing here (200 with an error body).\n" +
+        "                 Request-ownership numbers from this run are retry noise, not evidence.",
+    );
 }
 console.log(`\nwrote ${file}\n`);
