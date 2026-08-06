@@ -14,11 +14,7 @@
  */
 import { useMemo, useState, type ReactNode } from "react";
 import { PersonAvatar } from "@/components/PersonAvatar";
-import {
-  ParticipantSheet,
-  RingedAvatar,
-  RELATION_RING,
-} from "@/components/ParticipantSheet";
+import { ParticipantSheet, RingedAvatar, RELATION_RING } from "@/components/ParticipantSheet";
 import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
 import type { TapeTrade } from "@/domain/conviction-series";
 import type { FlowWindow } from "@/domain/market-flow";
@@ -26,10 +22,7 @@ import { formatMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
 import { believerMove, capitalMove, type MetricMove } from "@/domain/metric-display";
 import type { MarketChange, MetricChange } from "@/domain/market-change";
-import {
-  participantSocial,
-  type ParticipantRelation,
-} from "@/domain/participant-social";
+import { participantSocial, type ParticipantRelation } from "@/domain/participant-social";
 
 /**
  * A shared MetricChange in the shape believerMove/capitalMove expect.
@@ -186,7 +179,6 @@ function ParticipantProof({
   );
 }
 
-
 /**
  * One full-width metric row inside the Total Market instrument: the current
  * total in large type on the left, the percentage change in large type on the
@@ -214,8 +206,18 @@ function MomentumMetric({
   const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
   // Only a trusted (headline) % earns the big right-hand figure. A small-base %
   // is demoted to a quiet suffix on the absolute line so it never overstates the
-  // move; with no % at all the headline space stays empty.
-  const headlinePct = copy.pct ?? (copy.direction === "flat" ? "0%" : "");
+  // move.
+  //
+  // AND WITH NO % AT ALL, THE MOVE ITSELF TAKES THE SLOT. It used to stay empty,
+  // which is how a blank space came to argue for a looser percentage rule: the
+  // believer floor was lowered from ten to three to fill this gap, and at a base
+  // of three "3 → 6 participants" prints "+100%". The gap was the bug. Believers
+  // and capital both read faster as a count and an amount anyway — that is this
+  // module's own stated rule — so the fallback is not a compromise.
+  const headlinePct =
+    copy.pct && !copy.pctQuiet
+      ? copy.pct
+      : copy.figure || copy.pct || (copy.direction === "flat" ? "0%" : "");
   return (
     <div className={dense ? "px-4 py-2" : "px-4 py-3 sm:px-5"}>
       <div className="flex items-start justify-between gap-3">
@@ -258,7 +260,6 @@ function MomentumMetric({
     </div>
   );
 }
-
 
 export function MarketMomentum({
   tape,
