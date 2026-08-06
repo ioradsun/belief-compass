@@ -1,12 +1,17 @@
 /**
- * LEFT COLUMN — four flat tabs, one interaction hierarchy:
- *   Feed        = what's coming up                 (click → market in center)
- *   Convictions = my relationships with markets    (click → market in center)
- *   Tribe       = people who stand with me         (click → person in center)
- *   Rivals      = people who stand against me      (click → person in center)
- * Tribe and Rivals were a nested sub-control before; promoting them removes a
- * layer of navigation and lets each list breathe. The active tab persists for
- * the session; panels never stack in one scroll area.
+ * LEFT COLUMN — three flat tabs, one interaction hierarchy:
+ *   For You          = what's coming up                (click → market in center)
+ *   Your Convictions = my relationships with markets   (click → market in center)
+ *   Your People      = my relationships with people    (click → person in center)
+ *
+ * IT WAS FOUR, and Tribe and Rivals were two of them. That split asked the
+ * reader to choose a CAMP before they could see anyone, and it put people twelve
+ * points apart on opposite sides of a navigation control while people forty
+ * points apart shared one. Relationship is a spectrum, so it is now one list
+ * sorted end to end — see NetworkPanel and src/domain/relationship-spectrum.
+ * Removing the tab removed the classification from the navigation entirely.
+ *
+ * The active tab persists for the session; panels never stack in one scroll area.
  *
  * FEED JOINED THEM, and the header's Feed button went away with it. That button
  * had two jobs fused together — "show me what's next" and "get me out of here" —
@@ -30,14 +35,17 @@ import { presentRelationship } from "@/domain/relationship";
 import { type MarketRow } from "@/components/MarketCard";
 import { getWallet, type VolumeWindow } from "@/lib/markets.functions";
 
-type Tab = "feed" | "positions" | "tribe" | "rivals";
-const TABS: Tab[] = ["feed", "positions", "tribe", "rivals"];
+type Tab = "feed" | "positions" | "people";
+const TABS: Tab[] = ["feed", "positions", "people"];
 const KEY = "conviction:you-tab";
 
 function initialTab(): Tab {
   try {
     const v = window.sessionStorage.getItem(KEY);
-    if (v === "positions" || v === "tribe" || v === "rivals") return v;
+    if (v === "positions") return v;
+    // Sessions stored before the two people tabs became one land on the list
+    // that replaced them rather than silently on the feed.
+    if (v === "people" || v === "tribe" || v === "rivals") return "people";
     return "feed";
   } catch {
     return "feed";
@@ -86,9 +94,9 @@ export function MyWorld({
   /** Shown inside the three personal tabs when there is no wallet. */
   connectPrompt?: ReactNode;
 }) {
-  const [tab, setTab] = useState<Tab>(() => (initialNetwork ? "tribe" : initialTab()));
+  const [tab, setTab] = useState<Tab>(() => (initialNetwork ? "people" : initialTab()));
   const [convictionCount, setConvictionCount] = useState<number | null>(null);
-  const [counts, setCounts] = useState<{ tribe: number; rivals: number } | null>(null);
+  const [peopleCount, setPeopleCount] = useState<number | null>(null);
   const select = (t: Tab) => {
     setTab(t);
     if (t === "feed") onOpenFeedTab?.();
@@ -103,24 +111,26 @@ export function MyWorld({
   // so the strip reads the same cached queries the panels use (React Query dedupes)
   // and only defers to a mounted panel's own, richer count when it has reported one.
   const { data: netData } = useQuery(networkQO(wallet));
-  const netCounts = useMemo(() => {
-    let tribe = 0;
-    let rivals = 0;
-    for (const p of netData?.people ?? []) {
-      const g = presentRelationship({
-        agreement: p.agreement,
-        sharedConvictions: p.sharedBeliefs,
-        together: p.together,
-        apart: p.apart,
-        topicCount: p.topicCount,
-        strongestAlignedTopic: p.strongestAlignedDomain?.name ?? null,
-        strongestOpposedTopic: p.strongestOpposedDomain?.name ?? null,
-      }).group;
-      if (g === "tribe") tribe += 1;
-      else if (g === "rival") rivals += 1;
-    }
-    return { tribe, rivals };
-  }, [netData]);
+  // Everyone with any shared history — the same population the panel lists, so
+  // the strip and the list can never disagree about how many people you have.
+  // The old strip counted only tribe and rival, which silently omitted the
+  // middle of the spectrum from a number labelled "people".
+  const netCount = useMemo(
+    () =>
+      (netData?.people ?? []).filter(
+        (p) =>
+          presentRelationship({
+            agreement: p.agreement,
+            sharedConvictions: p.sharedBeliefs,
+            together: p.together,
+            apart: p.apart,
+            topicCount: p.topicCount,
+            strongestAlignedTopic: p.strongestAlignedDomain?.name ?? null,
+            strongestOpposedTopic: p.strongestOpposedDomain?.name ?? null,
+          }).group !== "insufficient",
+      ).length,
+    [netData],
+  );
 
   const { data: walletData } = useQuery({
     queryKey: ["my-convictions", wallet ?? null, win ?? "24h"],
@@ -142,13 +152,7 @@ export function MyWorld({
   );
 
   const tabName = (t: Tab): string =>
-    t === "feed"
-      ? "For You"
-      : t === "positions"
-        ? "Convictions"
-        : t === "tribe"
-          ? "Tribe"
-          : "Rivals";
+    t === "feed" ? "For You" : t === "positions" ? "Your Convictions" : "Your People";
 
   // The playlist tab carries no count: how many markets are queued is an
   // implementation detail, and no reader decides anything differently for it.
@@ -157,9 +161,7 @@ export function MyWorld({
       ? null
       : t === "positions"
         ? (convictionCount ?? positionCount)
-        : t === "tribe"
-          ? (counts?.tribe ?? netCounts.tribe)
-          : (counts?.rivals ?? netCounts.rivals);
+        : (peopleCount ?? netCount);
 
   const exploreMarkets = () => {
     const first = rows[0];
@@ -175,7 +177,7 @@ export function MyWorld({
         className="mb-4 flex overflow-x-auto rounded-[10px] p-0.5"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
         role="tablist"
-        aria-label="For You, Convictions, Tribe, or Rivals"
+        aria-label="For You, Your Convictions, or Your People"
       >
         {TABS.map((t) => (
           <button
@@ -220,10 +222,9 @@ export function MyWorld({
       ) : (
         <NetworkPanel
           wallet={wallet}
-          group={tab}
           selectedPerson={selectedPerson}
           onSelectPerson={onSelectPerson}
-          onCounts={setCounts}
+          onCount={setPeopleCount}
           onOpenDna={onOpenDna}
           onExplore={exploreMarkets}
         />

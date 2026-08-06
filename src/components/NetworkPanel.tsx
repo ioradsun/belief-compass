@@ -1,13 +1,35 @@
 /**
- * YOUR PEOPLE — one list at a time (Tribe or Rivals, chosen by the parent tabs).
+ * YOUR PEOPLE — one continuous list, ordered by relationship.
  *
- * Every row answers, at a glance and without wrapping: who, how aligned (a
- * meter), and how much evidence (one count). No duplicated lines, no per-row
- * "still forming", no chip on rows the tab already names — Twin/Opp only when
- * earned. Uncertainty is one quiet line at the top.
+ * IT WAS TWO LISTS, and the split was the bug. Someone at 56% alignment and
+ * someone at 44% sat in DIFFERENT TABS twelve points apart; someone at 56% and
+ * someone at 96% shared a tab forty points apart. The navigation contradicted
+ * the data, and the reader had to hold two rankings in their head to answer one
+ * question: who is closest to me?
  *
- * Presentation only: getNetwork owns the data; the pure src/domain/relationship
- * engine turns it into one honest story.
+ * Worse, the same printed number meant opposite things on the two tabs —
+ * `alignmentPct` on Tribe, `oppositionPct` on Rivals — so "70%" was agreement in
+ * one place and disagreement in the other. Two lists made that survivable. One
+ * list makes it a lie, so there is now exactly ONE number here: MATCH, always
+ * how often you agree, never flipped.
+ *
+ * And the middle of the spectrum had NOWHERE TO BE. `presentRelationship`
+ * classifies 45–55% as `neutral`, and neither tab rendered it: a whole cohort of
+ * real people, with real shared convictions, were computed and shown to nobody.
+ * They are the middle of this list.
+ *
+ * THE ORDER IS THE ONLY CONTROL, and it is not exposed. src/domain/relationship-
+ * spectrum damps every position by confidence, so a 100%-on-two-convictions
+ * match cannot outrank a 92%-on-thirty — it sits mid-list, in a neutral colour,
+ * where its evidence puts it. Certainty at the ends, uncertainty in the middle.
+ * Nothing to sort, nothing to filter, nothing to learn.
+ *
+ * SEARCH ARRIVES WHEN THE LIST GETS LONG, never because the page loaded. Below
+ * `SPECTRUM.searchAt` people, reading every row is faster than deciding what to
+ * type, and a permanently-mounted box is a tax paid for a rare need.
+ *
+ * Presentation only: getNetwork owns the data; the pure domain modules turn it
+ * into one honest story.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -15,26 +37,24 @@ import { networkQO } from "@/lib/network-query";
 import { type NetworkPersonRow } from "@/lib/dna.functions";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { WalletConnectButton } from "@/components/WalletConnect";
+import { presentRelationship, type RelationshipPresentation } from "@/domain/relationship";
 import {
-  presentRelationship,
-  relationshipLabel,
-  sortTribe,
-  sortRivals,
-  dnaMaturity,
-  DNA_STAGE,
-  type RelationshipPresentation,
-} from "@/domain/relationship";
-
-type Group = "tribe" | "rivals";
+  place,
+  bandLabel,
+  compareSpectrum,
+  spectrumColor,
+  needsSearch,
+  type SpectrumPlace,
+} from "@/domain/relationship-spectrum";
 
 interface PersonView {
   row: NetworkPersonRow;
   rel: RelationshipPresentation;
+  spot: SpectrumPlace;
 }
 
-const present = (row: NetworkPersonRow): PersonView => ({
-  row,
-  rel: presentRelationship({
+const present = (row: NetworkPersonRow): PersonView => {
+  const rel = presentRelationship({
     agreement: row.agreement,
     sharedConvictions: row.sharedBeliefs,
     together: row.together,
@@ -42,26 +62,34 @@ const present = (row: NetworkPersonRow): PersonView => ({
     topicCount: row.topicCount,
     strongestAlignedTopic: row.strongestAlignedDomain?.name ?? null,
     strongestOpposedTopic: row.strongestOpposedDomain?.name ?? null,
-  }),
-});
+  });
+  // The spectrum reads the relationship's own confidence and its own earned
+  // badge — it never re-derives either, so the two models cannot disagree.
+  return {
+    row,
+    rel,
+    spot: place({
+      alignmentPct: rel.alignmentPct,
+      confidence: rel.confidence,
+      earned: rel.earnedLabel,
+    }),
+  };
+};
 
 export function NetworkPanel({
   wallet,
-  group,
   selectedPerson,
   onSelectPerson,
-  onCounts,
+  onCount,
   onOpenDna,
   onExplore,
 }: {
   wallet?: string;
-  /** Which list this panel shows — chosen by the parent's top-level tabs. */
-  group: Group;
   selectedPerson?: string;
   onSelectPerson: (wallet: string) => void;
-  /** Reports both group sizes so the parent tabs can show counts. */
-  onCounts?: (c: { tribe: number; rivals: number }) => void;
-  /** Opens the full Conviction DNA view — reached from the maturity meter. */
+  /** Reports the list size so the parent tab can show one count. */
+  onCount?: (n: number) => void;
+  /** Opens the full Conviction DNA view — reached from the quiet DNA line. */
   onOpenDna?: () => void;
   onExplore?: () => void;
 }) {
@@ -77,40 +105,45 @@ export function NetworkPanel({
     };
   }, [rawQuery]);
 
-  // One call returns everyone with overlap; split client-side so the parent's
-  // tab switch never refetches.
   const { data, isLoading } = useQuery(networkQO(wallet, query));
 
-  const views = useMemo(() => (data?.people ?? []).map(present), [data]);
-  const tribe = useMemo(
-    () => views.filter((v) => v.rel.group === "tribe").sort((a, b) => sortTribe(a.rel, b.rel)),
-    [views],
+  /**
+   * Everyone with any shared history, in one order. `insufficient` is the only
+   * exclusion, and it means zero overlap — there is no relationship to place.
+   */
+  const list = useMemo(
+    () =>
+      (data?.people ?? [])
+        .map(present)
+        .filter((v) => v.rel.group !== "insufficient")
+        .sort((a, b) =>
+          compareSpectrum(
+            { ...a.spot, sharedConvictions: a.rel.sharedConvictions, wallet: a.row.wallet },
+            { ...b.spot, sharedConvictions: b.rel.sharedConvictions, wallet: b.row.wallet },
+          ),
+        ),
+    [data],
   );
-  const rivals = useMemo(
-    () => views.filter((v) => v.rel.group === "rival").sort((a, b) => sortRivals(a.rel, b.rel)),
-    [views],
-  );
-
-  useEffect(() => {
-    onCounts?.({ tribe: tribe.length, rivals: rivals.length });
-  }, [tribe.length, rivals.length, onCounts]);
 
   const searching = query.length > 0;
-  const active = group === "tribe" ? tribe : rivals;
-  const list = searching ? views : active;
 
-  // The ONE uncertainty line — a thin progress meter toward a well-defined DNA.
+  /**
+   * How long the list is when nothing is filtering it. Measured only on the
+   * unfiltered view, or typing would shrink the list under the box and take the
+   * box away mid-search.
+   */
+  const fullSize = useRef(0);
+  if (!searching && !isLoading) fullSize.current = list.length;
+  const showSearch = needsSearch(fullSize.current);
+
+  useEffect(() => {
+    if (!searching) onCount?.(list.length);
+  }, [list.length, searching, onCount]);
+
+  // The ONE line about your own DNA: how much of it exists, and a way in. No
+  // stage word, no second clause, no meter — the list below is already the
+  // honest picture of how well-formed this is.
   const mapped = data?.summary?.expressedBeliefs ?? 0;
-  const topics = useMemo(() => {
-    const s = new Set<string>();
-    for (const v of views) {
-      if (v.row.strongestAlignedDomain?.name) s.add(v.row.strongestAlignedDomain.name);
-      if (v.row.strongestOpposedDomain?.name) s.add(v.row.strongestOpposedDomain.name);
-    }
-    return s.size;
-  }, [views]);
-  const maturity = dnaMaturity(mapped, topics);
-  const progress = Math.min(1, mapped / DNA_STAGE.defined);
 
   if (!wallet) {
     return (
@@ -125,50 +158,35 @@ export function NetworkPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Your DNA — one quiet meter, tappable into the full breakdown. No stage
-          jargon: sharpening while it forms, "mapped" once it's defined. */}
       {mapped > 0 && (
         <button
           type="button"
           onClick={onOpenDna}
           disabled={!onOpenDna}
-          className="mb-2.5 w-full rounded-[8px] px-1 py-1 text-left transition-colors enabled:hover:bg-[var(--surface)] disabled:cursor-default"
+          className="mb-3 self-start rounded-[6px] px-1 py-0.5 text-[11px] text-[var(--text-muted)] transition-colors enabled:hover:text-[var(--text-secondary)] disabled:cursor-default"
           aria-label="Open your Conviction DNA"
         >
-          <div className="flex items-baseline justify-between text-[11px]">
-            <span className="text-[var(--text-secondary)]">
-              <span className="num text-[var(--text)]">{mapped}</span>{" "}
-              {maturity.moreToSharpen > 0 ? "convictions mapped" : "in your DNA"}
-            </span>
-            <span className="text-[var(--text-muted)]">
-              {maturity.moreToSharpen > 0 ? `${maturity.moreToSharpen} to sharpen` : "View DNA ›"}
-            </span>
-          </div>
-          {maturity.moreToSharpen > 0 && (
-            <div className="mt-1 h-0.5 w-full overflow-hidden rounded-full bg-[var(--border)]">
-              <div
-                className="h-full rounded-full bg-[var(--yes)]"
-                style={{ width: `${Math.round(progress * 100)}%`, transition: "width .3s ease" }}
-              />
-            </div>
-          )}
+          <span className="num">{mapped}</span> convictions mapped
+          {onOpenDna && <span aria-hidden> ›</span>}
         </button>
       )}
 
-      <input
-        value={rawQuery}
-        onChange={(e) => setRawQuery(e.target.value)}
-        placeholder="Search people…"
-        aria-label="Search people"
-        className="mb-2.5 w-full rounded-md bg-[var(--surface)] px-2.5 py-1.5 text-[13px] outline-none"
-        style={{ border: "1px solid var(--border)" }}
-      />
+      {showSearch && (
+        <input
+          value={rawQuery}
+          onChange={(e) => setRawQuery(e.target.value)}
+          placeholder="Search people…"
+          aria-label="Search people"
+          className="mb-2.5 w-full rounded-md bg-[var(--surface)] px-2.5 py-1.5 text-[13px] outline-none"
+          style={{ border: "1px solid var(--border)" }}
+        />
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {isLoading && list.length === 0 ? (
           <ul className="space-y-1.5" aria-hidden>
             {Array.from({ length: 8 }).map((_, i) => (
-              <li key={i} className="h-12 animate-pulse rounded-[10px] bg-[var(--border)]/40" />
+              <li key={i} className="h-14 animate-pulse rounded-[10px] bg-[var(--border)]/40" />
             ))}
           </ul>
         ) : list.length === 0 ? (
@@ -177,10 +195,10 @@ export function NetworkPanel({
               No people match this search.
             </p>
           ) : (
-            <EmptyTab group={group} onExplore={onExplore} />
+            <EmptyPeople onExplore={onExplore} />
           )
         ) : (
-          <ul className="flex flex-col">
+          <ul className="flex flex-col gap-0.5">
             {list.map((v) => (
               <PersonRow
                 key={v.row.wallet}
@@ -197,9 +215,16 @@ export function NetworkPanel({
 }
 
 /**
- * One person in two lines: name (+ earned chip only), then a meter + one count.
- * The meter's fill is the alignment (green together / red apart); the number is
- * the evidence. Nothing wraps; nothing repeats.
+ * One person, three answers, in the order they are asked:
+ *
+ *   WHO IS THIS?        the name
+ *   HOW SIMILAR ARE WE? the match, and the word for it when there is one
+ *   WHY SHOULD I CARE?  the shared convictions behind the match
+ *
+ * The percentage NEVER stands alone — its evidence is on the same line, so
+ * "100% match · 2 shared" reads as the thin thing it is rather than as a claim.
+ * The colour carries the rest: damped by confidence, so a barely-known person is
+ * grey however extreme their raw number.
  */
 function PersonRow({
   v,
@@ -210,15 +235,11 @@ function PersonRow({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const { row, rel } = v;
-  const label = relationshipLabel(rel);
-  const earned = label?.kind === "earned" ? label : null;
-  const rival = rel.group === "rival";
-  const tone = rival ? "var(--no)" : "var(--yes)";
-
-
-  // The value: mature leads with the %, low shows the shared count.
-  const value = rel.tier === "mature" ? `${rival ? rel.oppositionPct : rel.alignmentPct}%` : null;
+  const { row, rel, spot } = v;
+  const word = bandLabel(spot.band);
+  const tone = spectrumColor(spot.position);
+  const shared = rel.sharedConvictions;
+  const sharedText = `${shared} shared conviction${shared === 1 ? "" : "s"}`;
 
   return (
     <li>
@@ -226,17 +247,15 @@ function PersonRow({
         type="button"
         onClick={onSelect}
         aria-current={selected ? "true" : undefined}
-        aria-label={`${row.displayName}${earned ? `, ${earned.text}` : ""}. ${
-          rival ? rel.oppositionPct + "% opposite" : rel.alignmentPct + "% aligned"
-        }, ${rel.sharedConvictions} shared.`}
-        className="flex w-full items-center gap-2.5 rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--surface)]"
+        aria-label={`${row.displayName}${word ? `, ${word}` : ""}. ${spot.matchPct}% match, ${sharedText}.`}
+        className="flex w-full items-center gap-3 rounded-[10px] px-2 py-2.5 text-left transition-colors hover:bg-[var(--surface)]"
         style={selected ? { background: "var(--surface)" } : undefined}
       >
         {row.avatarUrl ? (
-          <img src={row.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+          <img src={row.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
         ) : (
           <span
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-white"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-white"
             style={{ background: `hsl(${hueFor(row.wallet)} 45% 45%)` }}
             aria-hidden
           >
@@ -244,46 +263,32 @@ function PersonRow({
           </span>
         )}
         <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5">
-            <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[var(--text)]">
-              {row.displayName}
+          <span className="block truncate text-[13.5px] font-medium text-[var(--text)]">
+            {row.displayName}
+          </span>
+          <span className="mt-1 flex items-baseline gap-1.5 text-[11.5px]">
+            <span className="num shrink-0 font-semibold" style={{ color: tone }}>
+              {spot.matchPct}% match
             </span>
-            {earned && (
-              <span
-                className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em]"
-                style={{ color: tone, background: `color-mix(in oklab, ${tone} 16%, transparent)` }}
-              >
-                {earned.text}
+            {word && (
+              <span className="shrink-0 font-medium" style={{ color: tone }}>
+                · {word}
               </span>
             )}
+            <span className="num truncate text-[var(--text-muted)]">· {sharedText}</span>
           </span>
-          <span className="mt-1 flex items-center gap-2">
-            {value && (
-              <span className="num text-[12px] font-semibold" style={{ color: tone }}>
-                {value}
-              </span>
-            )}
-            <span className="num truncate text-[11px] text-[var(--text-muted)]">
-              {rel.sharedConvictions} Convictions Align
-            </span>
-          </span>
-
         </span>
       </button>
     </li>
   );
 }
 
-function EmptyTab({ group, onExplore }: { group: Group; onExplore?: () => void }) {
+function EmptyPeople({ onExplore }: { onExplore?: () => void }) {
   return (
     <div className="pt-2">
-      <div className="text-[14px] font-semibold text-[var(--text)]">
-        {group === "tribe" ? "No Tribe yet." : "No Rivals yet."}
-      </div>
+      <div className="text-[14px] font-semibold text-[var(--text)]">No one yet.</div>
       <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--text-muted)]">
-        {group === "tribe"
-          ? "Keep taking sides — we’ll show who stands with you."
-          : "Take sides others oppose, and they’ll appear here."}
+        Take a side, and the people who stand with you — and against you — appear here.
       </p>
       {onExplore && (
         <button
