@@ -38,15 +38,31 @@ export interface SideSnapshot {
   capitalUsd: number | null;
   /** People who took this side during the window. */
   joined: number;
-  /** Capital change over the window, in percent, or null when unknown. */
-  capitalChangePct: number | null;
+  /**
+   * Per-share PRICE change over the window, in percent, or null when unknown.
+   *
+   * This used to be called `capitalChangePct`, and the caller filled it from
+   * `chg_window_yes` — which `market_change_window` computes as
+   * `(yes_price_usd − base_price) / base_price`, a price move. So the panel was
+   * saying "Capital moved toward YES" on the strength of a re-rate. On a bonding
+   * curve the DIRECTION is fair (YES gets more expensive when YES is bought),
+   * but the MAGNITUDE is not a capital figure at all, and the threshold below is
+   * read against it. The field now says what it holds; the copy says what it
+   * measures.
+   */
+  priceChangePct: number | null;
 }
 
 export const COMPARE = {
   /** Below this, arrivals are people rather than momentum. */
   minJoined: 2,
-  /** Capital moves smaller than this are noise, not a shift. */
-  minCapitalMovePct: 5,
+  /**
+   * Price moves smaller than this are noise, not a shift. Measured across 2,000
+   * live sides, the 95th percentile share price sits about 2.9% above the seed
+   * price — so five percent is deliberately above almost all of the noise, and
+   * this branch stays quiet on a market that has barely traded.
+   */
+  minPriceMovePct: 5,
   /**
    * How lopsided the believer count must be before one side is described as
    * leading. Anything closer reads as evenly matched, which is itself the
@@ -101,18 +117,20 @@ export function compareSides(yes: SideSnapshot, no: SideSnapshot): Comparison {
     return { story: "Both sides are gaining believers.", focus: null };
   }
 
-  // CAPITAL. Weaker than people — it is one person's decision restated in
-  // dollars — so it only speaks when nobody arrived.
-  const yc = yes.capitalChangePct;
-  const nc = no.capitalChangePct;
-  const ym = yc != null && Math.abs(yc) >= COMPARE.minCapitalMovePct ? yc : 0;
-  const nm = nc != null && Math.abs(nc) >= COMPARE.minCapitalMovePct ? nc : 0;
-  if (ym > 0 && ym >= Math.abs(nm)) return { story: "Capital moved toward YES.", focus: "YES" };
-  if (nm > 0 && nm >= Math.abs(ym)) return { story: "Capital moved toward NO.", focus: "NO" };
+  // PRICE. Weaker than people — it is one person's decision restated as a rate —
+  // so it only speaks when nobody arrived. The sentence says price, because
+  // price is what was measured; calling a re-rate "capital moved" would be
+  // stating a number in a unit it was never computed in.
+  const yc = yes.priceChangePct;
+  const nc = no.priceChangePct;
+  const ym = yc != null && Math.abs(yc) >= COMPARE.minPriceMovePct ? yc : 0;
+  const nm = nc != null && Math.abs(nc) >= COMPARE.minPriceMovePct ? nc : 0;
+  if (ym > 0 && ym >= Math.abs(nm)) return { story: "Backing YES costs more now.", focus: "YES" };
+  if (nm > 0 && nm >= Math.abs(ym)) return { story: "Backing NO costs more now.", focus: "NO" };
   if (ym < 0 && Math.abs(ym) > Math.abs(nm))
-    return { story: "Capital pulled back from YES.", focus: "YES" };
+    return { story: "Backing YES got cheaper.", focus: "YES" };
   if (nm < 0 && Math.abs(nm) > Math.abs(ym))
-    return { story: "Capital pulled back from NO.", focus: "NO" };
+    return { story: "Backing NO got cheaper.", focus: "NO" };
 
   // STANDING BALANCE — nothing moved, so describe what is rather than what
   // changed. This is the honest dull answer, and most markets most of the time.

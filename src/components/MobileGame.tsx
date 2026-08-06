@@ -26,7 +26,7 @@ import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { useHouseFinalize } from "@/lib/house-round";
 import { getMarketChange, listMarketPulses, getMarketBaselines } from "@/lib/markets.functions";
-import { windowChange } from "@/domain/window-change";
+import { gain, METRIC_DISPLAY } from "@/domain/metric-display";
 import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 import { marketAgeCopy } from "@/domain/market-freshness";
@@ -520,10 +520,16 @@ function BothSides({
     const cap = capital(s);
     const belBase = s === "YES" ? bl?.believersYes : bl?.believersNo;
     const capBase = s === "YES" ? bl?.yesCapitalUsd : bl?.noCapitalUsd;
-    const belChg = belBase != null ? windowChange(bel, belBase) : null;
-    const capChg = capBase != null ? windowChange(cap, capBase) : null;
-    const belDelta = belChg?.delta ?? null;
-    const capDelta = capChg?.delta ?? null;
+    // Ranked before rendered. This panel is where "$2.70 COMMITTED · 67298%▲"
+    // came from: the window opened with $0.004 on the side — dust the app
+    // elsewhere refuses to call capital — and the ratio reported how empty the
+    // market had been rather than that $2.69 arrived. `gain` withholds a
+    // percentage that has no base worth dividing by, and names the first money
+    // in as an arrival. See METRIC_DISPLAY for the measured thresholds.
+    const belChg = gain(bel, belBase, METRIC_DISPLAY.believers);
+    const capChg = gain(cap, capBase, METRIC_DISPLAY.capitalUsd);
+    const belDelta = belChg.delta;
+    const capDelta = capChg.delta;
     const priceUsd = Number(s === "YES" ? row.yes_price_usd : row.no_price_usd) || null;
     const rawPct = Number(s === "YES" ? row.chg_24h_yes : row.chg_24h_no);
     const pricePct = Number.isFinite(rawPct) ? rawPct : null;
@@ -533,24 +539,32 @@ function BothSides({
       {
         label: "Believers",
         value: bel.toLocaleString("en-US"),
-        pct: belChg?.pct ?? null,
+        pct: belChg.pct,
+        quiet: belChg.rank === "quiet",
         absolute:
-          belDelta == null
-            ? null
-            : belDelta === 0
-              ? "No change today"
-              : `${belDelta > 0 ? "+" : "−"}${Math.abs(belDelta)} believer${Math.abs(belDelta) === 1 ? "" : "s"} today`,
+          belChg.rank === "origin"
+            ? bel === 1
+              ? "First believer"
+              : `First ${Math.abs(Math.round(belDelta ?? 0))} believers today`
+            : belDelta == null
+              ? null
+              : belDelta === 0
+                ? "No change today"
+                : `${belDelta > 0 ? "+" : "−"}${Math.abs(belDelta)} believer${Math.abs(belDelta) === 1 ? "" : "s"} today`,
       },
       {
         label: "Committed",
         value: format(cap, "USD"),
-        pct: capChg?.pct ?? null,
+        pct: capChg.pct,
+        quiet: capChg.rank === "quiet",
         absolute:
-          capDelta == null
-            ? null
-            : Math.abs(capDelta) < 0.005
-              ? "No change today"
-              : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "left"} today`,
+          capChg.rank === "origin"
+            ? `First capital today · ${format(cap, "USD")}`
+            : capDelta == null
+              ? null
+              : Math.abs(capDelta) < 0.005
+                ? "No change today"
+                : `${format(capDelta, "USD", { signed: true })} ${capDelta > 0 ? "committed" : "left"} today`,
       },
     ];
   };
@@ -591,6 +605,7 @@ function BothSides({
                     label={m.label}
                     value={m.value}
                     pct={m.pct}
+                    quiet={m.quiet}
                     absolute={m.absolute}
                     color={s === "YES" ? "var(--yes)" : "var(--no)"}
                   />
@@ -668,12 +683,16 @@ function SideMetric({
   label,
   value,
   pct,
+  quiet = false,
   absolute,
   color,
 }: {
   label: string;
   value: string;
+  /** Already ranked by `gain` — null means no base worth dividing by. */
   pct: number | null;
+  /** A real base, but a thin one: shown small, never as the figure. */
+  quiet?: boolean;
   absolute?: string | null;
   color: string;
 }) {
@@ -682,6 +701,8 @@ function SideMetric({
   const arrow = flat ? "" : pct! > 0 ? "▲" : "▼";
   const pctText =
     pct == null ? "" : `${Math.abs(pct).toFixed(!flat && Math.abs(pct) < 10 ? 1 : 0)}%`;
+  // No percentage → the absolute change is the movement figure, so it steps up.
+  const leadAbsolute = pct == null;
   return (
     <div
       className="rounded-[10px] py-2 pl-2 pr-2.5"
@@ -695,8 +716,8 @@ function SideMetric({
           {value}
         </span>
         <span
-          className="num shrink-0 text-[14px] font-semibold leading-none tabular-nums"
-          style={{ color: tone }}
+          className={`num shrink-0 font-semibold leading-none tabular-nums ${quiet ? "text-[11px]" : "text-[14px]"}`}
+          style={{ color: tone, opacity: quiet ? 0.55 : 1 }}
         >
           {pctText}
           {arrow && pctText ? (
@@ -708,7 +729,10 @@ function SideMetric({
         {label}
       </div>
       {absolute && (
-        <div className="num mt-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+        <div
+          className={`num mt-0.5 ${leadAbsolute ? "text-[12.5px] font-medium" : "text-[11px]"}`}
+          style={{ color: "var(--text-muted)" }}
+        >
           <span style={{ color: tone }}>{absolute.split(" ")[0]}</span>
           {absolute.slice(absolute.split(" ")[0].length)}
         </div>

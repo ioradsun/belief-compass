@@ -91,13 +91,15 @@ export function MobileCaseView({
     believers: num(r.believers_yes),
     capitalUsd: numOrNull(r.yes_capital_usd),
     joined: num(r.new_believers_yes_24h),
-    capitalChangePct: numOrNull(r.chg_window_yes ?? r.chg_24h_yes),
+    // `chg_window_*` is a per-share PRICE change, not a capital one — see
+    // SideSnapshot.priceChangePct for why the distinction matters.
+    priceChangePct: numOrNull(r.chg_window_yes ?? r.chg_24h_yes),
   };
   const no = {
     believers: num(r.believers_no),
     capitalUsd: numOrNull(r.no_capital_usd),
     joined: num(r.new_believers_no_24h),
-    capitalChangePct: numOrNull(r.chg_window_no ?? r.chg_24h_no),
+    priceChangePct: numOrNull(r.chg_window_no ?? r.chg_24h_no),
   };
   const { story, focus } = compareSides(yes, no);
   const strip = comparisonStrip(yes, no);

@@ -57,14 +57,15 @@ describe("side lens (sideCaseSummary): each % equals its sparkline's endpoints",
         if (!s) return; // side never traded in this fixture — nothing to chart
         const series = s.series;
 
-        // Believers: the step line runs series[0].believers → series[last].believers.
-        expect(s.believersPct).toEqual(
-          endpointPct(series[0].believers, series[series.length - 1].believers),
-        );
-        // Capital: same, on the capital field.
-        expect(s.capitalPct).toEqual(
-          endpointPct(series[0].capital, series[series.length - 1].capital),
-        );
+        // The summary now hands over the BASE rather than a ratio, so the
+        // invariant is stated where it actually lives: the number the chart
+        // starts at is the number any percentage would be divided by, and the
+        // number it ends at is the headline total. A ratio built from these can
+        // never disagree with the line above it.
+        expect(s.believersBase).toBeCloseTo(series[0].believers, 9);
+        expect(s.believers).toBeCloseTo(series[series.length - 1].believers, 9);
+        expect(s.capitalBaseEth).toBeCloseTo(series[0].capital, 9);
+        expect(s.capitalEth).toBeCloseTo(series[series.length - 1].capital, 9);
         // Price: the line only plots priced points; the % must match those endpoints.
         const priced = series.filter((p) => p.price != null) as {
           price: number;

@@ -30,7 +30,7 @@ describe("sideCaseSummary", () => {
     expect(sideCaseSummary([buy("a", "NO", 1, 1, now)], "YES", "24h", now)).toBeNull();
   });
 
-  it("reports totals now with % change measured over the window", () => {
+  it("reports totals now with the window-open base beside them", () => {
     const tape = [
       // Before the 24h window: 1 believer, 1 ETH, price 1.0.
       buy("a", "YES", 1, 1.0, now - 3 * day),
@@ -39,9 +39,9 @@ describe("sideCaseSummary", () => {
     ];
     const s = sideCaseSummary(tape, "YES", "24h", now)!;
     expect(s.believers).toBe(2); // cumulative total now
-    expect(s.believersPct).toBe(100); // 1 → 2 over the window
+    expect(s.believersBase).toBe(1); // 1 → 2 over the window
     expect(s.capitalEth).toBeCloseTo(2);
-    expect(s.capitalPct).toBe(100); // 1 → 2 ETH
+    expect(s.capitalBaseEth).toBeCloseTo(1); // 1 → 2 ETH
     expect(s.priceEth).toBeCloseTo(1.5);
     expect(s.pricePct).toBeCloseTo(50); // 1.0 → 1.5
     expect(s.headline).toBeTruthy();
@@ -54,8 +54,8 @@ describe("sideCaseSummary", () => {
     ];
     const oneDay = sideCaseSummary(tape, "YES", "24h", now)!;
     const oneHour = sideCaseSummary(tape, "YES", "1h", now)!;
-    expect(oneDay.believersPct).toBe(100); // 1 → 2 today
-    expect(oneHour.believersPct).toBe(0); // nothing new in the last hour
+    expect(oneDay.believersBase).toBe(1); // 1 → 2 today
+    expect(oneHour.believersBase).toBe(2); // nothing new in the last hour
     expect(oneHour.believers).toBe(2); // but the total is unchanged
   });
 
@@ -78,7 +78,7 @@ describe("sideCaseSummary", () => {
     ];
     const s = sideCaseSummary(tape, "YES", "24h", now)!;
     expect(s.believers).toBe(1); // b is gone
-    expect(s.believersPct).toBe(-50); // 2 → 1 over the window
+    expect(s.believersBase).toBe(2); // 2 → 1 over the window
     // The drawn series ends at the lower value — a real decline, not a flat line.
     expect(s.series[s.series.length - 1].believers).toBe(1);
     expect(s.series[0].believers).toBe(2); // window opened with 2
@@ -120,10 +120,10 @@ describe("sideCaseSummary", () => {
     // Same current total regardless of window (definition is timeframe-invariant).
     expect(all.believers).toBe(3);
     expect(oneHour.believers).toBe(3);
-    // Only the measured change differs. Since-open has a zero base (the market
-    // opened with nobody), so its % is honestly null; the hour measures 2 → 3.
-    expect(all.believersPct).toBeNull();
-    expect(oneHour.believersPct).toBe(50);
+    // Only the base differs. Since-open opened with nobody — an origin, which
+    // `gain` refuses to express as a rate; the hour opened with 2.
+    expect(all.believersBase).toBe(0);
+    expect(oneHour.believersBase).toBe(2);
   });
 });
 
