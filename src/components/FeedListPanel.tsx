@@ -25,6 +25,7 @@ import type { FeedFilters, FeedNetwork } from "@/domain/feed/filters";
 import type { MarketRow } from "@/components/MarketCard";
 import type { Sensitivity } from "@/domain/market-change";
 import { marketTitle, marketTitleFallback } from "@/domain/market-title";
+import { WhyThis } from "@/components/WhyThis";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -159,11 +160,12 @@ export function FeedListPanel({
               activeTitle ??
               marketTitleFallback(activeId)}
           </p>
-          {(active?.reason ?? activeFacts?.discovery.story) && (
-            <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
-              {active?.reason ?? activeFacts?.discovery.story}
-            </p>
-          )}
+          {/* Accented, because this is the answer to "why am I looking at this?"
+            — the same treatment the centre gives it, from the same component. */}
+          <WhyThis
+            reason={active?.reason ?? activeFacts?.discovery.story}
+            className="mt-1 whitespace-normal"
+          />
           <Metrics metrics={activeFacts?.discovery.metrics ?? []} />
         </div>
       )}
@@ -200,11 +202,7 @@ export function FeedListPanel({
                   <span className="block text-[13px] font-medium leading-snug text-[var(--text-secondary)]">
                     {f?.question ?? marketTitleFallback(e.onchainId)}
                   </span>
-                  {line && (
-                    <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">
-                      {line}
-                    </span>
-                  )}
+                  <WhyThis reason={line} className="mt-0.5 whitespace-normal" />
                 </button>
               </li>
             );
