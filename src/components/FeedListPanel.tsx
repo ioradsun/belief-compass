@@ -141,31 +141,6 @@ export function FeedListPanel({
       </div>
 
 
-        <div
-          className="mb-3 rounded-[12px] px-3 py-2.5"
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border-strong)",
-          }}
-          aria-current="true"
-        >
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            Now reading
-          </p>
-          <p className="text-[13px] font-semibold leading-snug text-[var(--text)]">
-            {(activeFacts?.hasTitle ? activeFacts.question : null) ??
-              activeTitle ??
-              marketTitleFallback(activeId)}
-          </p>
-          {/* Accented, because this is the answer to "why am I looking at this?"
-            — the same treatment the centre gives it, from the same component. */}
-          <WhyThis
-            reason={active?.reason ?? activeFacts?.discovery.story}
-            className="mt-1 whitespace-normal"
-          />
-          <Metrics metrics={activeFacts?.discovery.metrics ?? []} />
-        </div>
-      )}
 
       {upcoming.length === 0 ? (
         <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
