@@ -68,26 +68,10 @@ function factsOf(row: MarketRow | undefined, nowMs: number) {
   };
 }
 
-function Metrics({ metrics }: { metrics: { label: string; value: string }[] }) {
-  if (metrics.length === 0) return null;
-  return (
-    <span className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
-      {metrics.map((m, i) => (
-        <span key={m.label} className="flex items-center gap-1.5">
-          {i > 0 && <span aria-hidden>·</span>}
-          <span className="tabular-nums">{m.value}</span>
-          <span className="opacity-80">{m.label}</span>
-        </span>
-      ))}
-    </span>
-  );
-}
-
 export function FeedListPanel({
   entries,
   rows,
   activeId,
-  activeTitle,
   onSelect,
   filters,
   onFilters,
@@ -100,14 +84,7 @@ export function FeedListPanel({
   /** Read-model rows keyed by onchain id — the same map the centre panel uses. */
   rows: Record<number, MarketRow>;
   activeId: number | null;
-  /**
-   * The title of the market the centre panel is CURRENTLY showing — the same
-   * string that panel renders. The playlist only knows the markets in its own
-   * slice, so a market opened from a link or search has no row here; without
-   * this the pinned "Now reading" card printed the id while the reader was
-   * looking at the question two columns over.
-   */
-  activeTitle?: string | null;
+
   onSelect: (id: number) => void;
   filters: FeedFilters;
   onFilters: (f: FeedFilters) => void;
@@ -126,9 +103,7 @@ export function FeedListPanel({
     rowRefs.current.get(activeId)?.scrollIntoView({ block: "nearest" });
   }, [activeId]);
 
-  const active = activeId == null ? null : (entries.find((e) => e.onchainId === activeId) ?? null);
   const upcoming = entries.filter((e) => e.onchainId !== activeId);
-  const activeFacts = activeId == null ? null : factsOf(rows[activeId], nowMs);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -142,33 +117,7 @@ export function FeedListPanel({
         />
       </div>
 
-      {/* NOW READING — pinned, always visible, unmistakably the current one. */}
-      {activeId != null && (
-        <div
-          className="mb-3 rounded-[12px] px-3 py-2.5"
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border-strong)",
-          }}
-          aria-current="true"
-        >
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
-            Now reading
-          </p>
-          <p className="text-[13px] font-semibold leading-snug text-[var(--text)]">
-            {(activeFacts?.hasTitle ? activeFacts.question : null) ??
-              activeTitle ??
-              marketTitleFallback(activeId)}
-          </p>
-          {/* Accented, because this is the answer to "why am I looking at this?"
-            — the same treatment the centre gives it, from the same component. */}
-          <WhyThis
-            reason={active?.reason ?? activeFacts?.discovery.story}
-            className="mt-1 whitespace-normal"
-          />
-          <Metrics metrics={activeFacts?.discovery.metrics ?? []} />
-        </div>
-      )}
+
 
       {upcoming.length === 0 ? (
         <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">

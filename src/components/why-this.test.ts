@@ -65,13 +65,16 @@ describe("Why this is one component, in one colour, on both surfaces", () => {
     expect(deck).not.toMatch(/uppercase tracking-\[0\.08em\] opacity-70/);
   });
 
-  it("is what the For You feed renders, for the active row and every upcoming one", () => {
+  it("is what the For You feed renders, for every upcoming row", () => {
     const feed = code("src/components/FeedListPanel.tsx");
     expect(feed).toMatch(/<WhyThis/);
-    // Two call sites: the "Now reading" block and the list rows.
-    expect((feed.match(/<WhyThis/g) ?? []).length).toBe(2);
+    // ONE call site now: the list rows. The "Now reading" card is gone — the
+    // active market's reason is told once, in "In this market" above the list.
+    expect((feed.match(/<WhyThis/g) ?? []).length).toBe(1);
     expect(feed).not.toMatch(/\{line\}\s*<\/span>/);
+    expect(code("src/components/CurrentMarketActivity.tsx")).toMatch(/<WhyThis reason=\{why\} lead/);
   });
+
 
   it("names itself only where a label earns its space", () => {
     // The centre labels it (one sentence above a large title). The feed does
