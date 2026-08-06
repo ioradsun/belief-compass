@@ -512,6 +512,8 @@ export function MarketDeck({
         data-probe="dock"
         className="shrink-0 pb-[env(safe-area-inset-bottom)]"
         style={{ display: "grid", gap: "var(--deck-gap, 12px)" }}
+        {...walletIntent}
+
 
       >
         {/* The controls. The analysis rail now lives inside the Total Market
