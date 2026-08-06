@@ -653,8 +653,33 @@ function BuyTicket({
 
       {trade.isError && (
         <div className="mt-2 text-[11px]" role="alert" style={{ color: "var(--loss)" }}>
-          {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
+          {/* Never a bare "Transaction failed" when we do not know that it
+              failed — that is the sentence that makes a reader submit again.
+              An error we cannot name is an error we say we cannot name. */}
+          {trade.error?.message?.slice(0, 120) ??
+            "We didn't get a result back. Check your wallet before trying again."}
         </div>
+      )}
+
+      {/* THE TWO ANXIOUS STATES, told apart. They shared one label — "Backing
+          YES…" — which answered neither of the questions a person actually has
+          at each: has my money left, and may I close this. */}
+      {trade.isSubmitting && !trade.isMining && (
+        <p className="mt-2 text-[11px] leading-snug text-[var(--text-muted)]" role="status">
+          <span className="font-semibold text-[var(--text-secondary)]">
+            Waiting for your wallet.
+          </span>{" "}
+          Nothing has been sent yet — approve it there, or dismiss to cancel.
+        </p>
+      )}
+      {trade.isMining && (
+        <p className="mt-2 text-[11px] leading-snug text-[var(--text-muted)]" role="status">
+          <span className="font-semibold text-[var(--text-secondary)]">
+            Sent — waiting for Base to confirm.
+          </span>{" "}
+          Your wallet has been debited. This usually takes a few seconds. You can safely leave this
+          screen; the result will be here when you come back.
+        </p>
       )}
 
       <button
@@ -854,8 +879,33 @@ function SellTicket({
 
       {trade.isError && (
         <div className="mt-2 text-[11px]" role="alert" style={{ color: "var(--loss)" }}>
-          {trade.error?.message?.slice(0, 90) ?? "Transaction failed."}
+          {/* Never a bare "Transaction failed" when we do not know that it
+              failed — that is the sentence that makes a reader submit again.
+              An error we cannot name is an error we say we cannot name. */}
+          {trade.error?.message?.slice(0, 120) ??
+            "We didn't get a result back. Check your wallet before trying again."}
         </div>
+      )}
+
+      {/* THE TWO ANXIOUS STATES, told apart. They shared one label — "Backing
+          YES…" — which answered neither of the questions a person actually has
+          at each: has my money left, and may I close this. */}
+      {trade.isSubmitting && !trade.isMining && (
+        <p className="mt-2 text-[11px] leading-snug text-[var(--text-muted)]" role="status">
+          <span className="font-semibold text-[var(--text-secondary)]">
+            Waiting for your wallet.
+          </span>{" "}
+          Nothing has been sent yet — approve it there, or dismiss to cancel.
+        </p>
+      )}
+      {trade.isMining && (
+        <p className="mt-2 text-[11px] leading-snug text-[var(--text-muted)]" role="status">
+          <span className="font-semibold text-[var(--text-secondary)]">
+            Sent — waiting for Base to confirm.
+          </span>{" "}
+          Your wallet has been debited. This usually takes a few seconds. You can safely leave this
+          screen; the result will be here when you come back.
+        </p>
       )}
 
       <button
