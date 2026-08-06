@@ -158,14 +158,17 @@ export function SideButton({
   onClick: () => void;
   className?: string;
 }) {
-  const accent =
-    tone === "yes" ? "var(--yes)" : tone === "no" ? "var(--no)" : "var(--text-secondary)";
+  // PASS IS AN ANSWER, NOT AN ABSENCE. Backing YES or NO speaks in the market's
+  // two colours; passing speaks to the app — "I've read this, move me on" — so
+  // it carries the system voice (--notice, the same purple the tape's "N New"
+  // indicator uses) rather than reading as a disabled or secondary control.
+  const accent = tone === "yes" ? "var(--yes)" : tone === "no" ? "var(--no)" : "var(--notice)";
   let style: React.CSSProperties;
   if (selected === undefined) {
     // Momentary: surface + colored text (the dock's neutral row).
     style =
       tone === "pass"
-        ? { border: "1px solid var(--border)", color: "var(--text-secondary)" }
+        ? { border: "1px solid var(--border)", color: "var(--notice)" }
         : {
             border: "1px solid var(--border-strong,var(--border))",
             background: "var(--surface)",
