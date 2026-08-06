@@ -18,25 +18,41 @@
  * number — it returns the value AND where the value came from, and callers that
  * cannot honestly act on a guess are able to say so.
  *
- * TWO SOURCES, IN ORDER:
+ * FOUR SOURCES, IN ORDER:
  *
- *   1. MARKED. A real USD valuation. Preferred whenever one exists, because it
- *      is what the position is worth right now.
- *   2. COST. The remaining acquisition cost in ETH, valued at the current rate.
+ *   1. MARKED, FRESH. A real USD valuation written by `belief-rollup` within
+ *      the staleness window. Preferred whenever one exists — not because it is
+ *      computed differently from rank 2 (it is not; the rollup does exactly
+ *      shares x price) but because it is the SHARED answer, so this figure
+ *      agrees with cohorts, whale detection and the dashboard.
+ *   2. LIVE. Shares held x the market's current price. A fresh measurement, so
+ *      it outranks a STALE mark: the Positions list argued this in a comment
+ *      before the rule lived here — "a stale marked value is not trusted as a
+ *      live mark ... so any gain is never a stale value minus a fresh cost
+ *      basis." That reasoning was right, and it belongs in one place.
+ *   3. MARKED, STALE. Still a real measurement, just an old one. Better than
+ *      cost, which was never a measurement of worth at all.
+ *   4. COST. The remaining acquisition cost in ETH, valued at the current rate.
  *      This is what they COMMITTED, not what it is worth — the two diverge as
  *      the price moves. For a conviction product that is a defensible fallback:
  *      the question a dust gate asks is "does this person have real skin in
  *      this", and skin is what you put in.
  *
  * Anything else is "unknown", which is zero AND says so. A caller computing a
- * gain must require `marked`: worth minus cost, where worth fell back to cost,
- * is a guaranteed zero dressed up as a measurement.
+ * gain must require a measurement (`marked` or `live`): worth minus cost, where
+ * worth fell back to cost, is a guaranteed zero dressed up as a measurement.
+ *
+ * WHY RANK 2 EXISTS AT ALL. It was already in the product — computed inline in
+ * `MyConvictions`, with a price chain that ended `?? 0`. A market the read model
+ * had no price for produced `shares x 0 = 0`, and the row was then dropped by an
+ * `if (!(value > 0))` filter. The holder's own position vanished from their own
+ * Positions list. Not shown as unpriced — gone.
  *
  * ZERO IO, pure, fully testable.
  */
 
 /** Where a USD figure came from. `unknown` means we genuinely cannot say. */
-export type ValueSource = "marked" | "cost" | "unknown";
+export type ValueSource = "marked" | "live" | "cost" | "unknown";
 
 /**
  * How much a reader should trust the figure, in the four states that actually
@@ -77,6 +93,9 @@ const finite = (v: unknown): number | null => {
  * @param valueUsd       A marked USD valuation, if one exists.
  * @param valueUpdatedAt When that valuation was written. Absent → assumed stale,
  *                       because an unknown age is not a fresh one.
+ * @param shares         Shares held on this side, for the live mark.
+ * @param priceUsd       Current per-share price. Missing means we cannot mark
+ *                       live — it does NOT mean the price is zero.
  * @param costEth        Remaining acquisition cost, in ETH.
  * @param ethUsd         Current ETH→USD rate. Zero or missing disables the
  *                       fallback rather than pricing everything at nothing.
@@ -84,11 +103,14 @@ const finite = (v: unknown): number | null => {
 export function positionValueUsd(input: {
   valueUsd?: unknown;
   valueUpdatedAt?: string | number | null;
+  shares?: unknown;
+  priceUsd?: unknown;
   costEth?: unknown;
   ethUsd?: number | null;
   nowMs?: number;
 }): PositionValue {
   const marked = finite(input.valueUsd);
+  let markedStale: number | null = null;
   if (marked != null && marked > 0) {
     const at =
       typeof input.valueUpdatedAt === "number"
@@ -100,8 +122,21 @@ export function positionValueUsd(input: {
     // No timestamp means we cannot show it is fresh, and "cannot show" is not
     // "is" — the same rule this whole module exists to enforce.
     const fresh = Number.isFinite(at) && now - at <= VALUE.staleAfterMs;
-    return { usd: marked, source: "marked", freshness: fresh ? "current" : "stale" };
+    if (fresh) return { usd: marked, source: "marked", freshness: "current" };
+    // Hold it. A stale mark still beats cost — but only after we have tried to
+    // mark it live, which is the whole reason this rank exists.
+    markedStale = marked;
   }
+
+  // Both must be real. A missing price is "we cannot mark this", never zero:
+  // `shares x 0` is a confident claim that a holding is worthless.
+  const shares = finite(input.shares);
+  const price = finite(input.priceUsd);
+  if (shares != null && shares > 0 && price != null && price > 0) {
+    return { usd: shares * price, source: "live", freshness: "current" };
+  }
+
+  if (markedStale != null) return { usd: markedStale, source: "marked", freshness: "stale" };
 
   const cost = finite(input.costEth);
   const rate = finite(input.ethUsd);
@@ -109,6 +144,11 @@ export function positionValueUsd(input: {
     return { usd: cost * rate, source: "cost", freshness: "fallback" };
   }
   return { usd: 0, source: "unknown", freshness: "unknown" };
+}
+
+/** Is this figure a measurement of worth, rather than a stand-in for it? */
+export function isMeasured(v: PositionValue): boolean {
+  return v.source === "marked" || v.source === "live";
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { positionValueUsd, costBasisUsd, VALUE } from "./position-value";
+import { positionValueUsd, costBasisUsd, isMeasured, VALUE } from "./position-value";
 
 const RATE = 1868.52;
 
@@ -172,5 +172,73 @@ describe("regression — a marked valuation replaces the fallback once available
   it("treats a marked value with no timestamp as stale, not current", () => {
     // An unknown age is not a fresh one — the same rule the module exists for.
     expect(positionValueUsd({ valueUsd: 120, nowMs: NOW }).freshness).toBe("stale");
+  });
+});
+
+/**
+ * RANK 2 — THE LIVE MARK.
+ *
+ * This ranking existed in the product before it existed here: `MyConvictions`
+ * computed `marked ? reported : shares * price` inline, with a price chain that
+ * ended `?? 0`. A market the read model had no price for produced
+ * `shares x 0 = 0`, and an `if (!(value > 0))` filter then dropped the row — the
+ * holder's own position vanished from their own Positions list.
+ */
+describe("the live mark", () => {
+  const FRESH = { valueUpdatedAt: Date.now() };
+
+  it("outranks a STALE mark, because it is an actual measurement of now", () => {
+    const old = new Date(Date.now() - VALUE.staleAfterMs - 1).toISOString();
+    const v = positionValueUsd({
+      valueUsd: 100,
+      valueUpdatedAt: old,
+      shares: 50,
+      priceUsd: 3,
+    });
+    expect(v).toEqual({ usd: 150, source: "live", freshness: "current" });
+  });
+
+  it("does NOT outrank a fresh mark, which is the shared answer", () => {
+    // Same arithmetic either way — belief-rollup computes shares x price too.
+    // Preferring the mark is what keeps this figure equal to the one cohorts,
+    // whale detection and the dashboard are using.
+    const v = positionValueUsd({ valueUsd: 100, ...FRESH, shares: 50, priceUsd: 3 });
+    expect(v.source).toBe("marked");
+    expect(v.usd).toBe(100);
+  });
+
+  it("falls back to the stale mark when there is no price to mark against", () => {
+    const old = new Date(Date.now() - VALUE.staleAfterMs - 1).toISOString();
+    const v = positionValueUsd({ valueUsd: 100, valueUpdatedAt: old, shares: 50, priceUsd: null });
+    expect(v).toEqual({ usd: 100, source: "marked", freshness: "stale" });
+  });
+
+  it("REFUSES to mark at a price of zero", () => {
+    // The exact defect: `shares x 0` is not a small number, it is a confident
+    // claim that a real holding is worthless.
+    const v = positionValueUsd({ shares: 50, priceUsd: 0, costEth: 0.01, ethUsd: RATE });
+    expect(v.source).toBe("cost");
+    expect(v.usd).toBeCloseTo(0.01 * RATE, 6);
+  });
+
+  it("says unknown rather than zero when nothing can price a real holding", () => {
+    const v = positionValueUsd({ shares: 50, priceUsd: null });
+    expect(v).toEqual({ usd: 0, source: "unknown", freshness: "unknown" });
+  });
+
+  it("does not mark a side the reader does not hold", () => {
+    const v = positionValueUsd({ shares: 0, priceUsd: 3 });
+    expect(v.source).toBe("unknown");
+  });
+});
+
+describe("isMeasured", () => {
+  it("separates a measurement of worth from a stand-in for one", () => {
+    // A gain computed against `cost` is worth-minus-cost where worth IS cost —
+    // a guaranteed zero dressed up as a measurement.
+    expect(isMeasured({ usd: 1, source: "marked", freshness: "current" })).toBe(true);
+    expect(isMeasured({ usd: 1, source: "live", freshness: "current" })).toBe(true);
+    expect(isMeasured({ usd: 1, source: "cost", freshness: "fallback" })).toBe(false);
+    expect(isMeasured({ usd: 0, source: "unknown", freshness: "unknown" })).toBe(false);
   });
 });
