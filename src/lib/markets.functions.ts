@@ -232,6 +232,18 @@ export const listFeed = createServerFn({ method: "GET" })
      */
     const tribeOverlap = new Map<number, number>();
     const oppOverlap = new Map<number, number>();
+    /**
+     * TOUCHED — every market one of the viewer's people CREATED or traded in,
+     * whether or not they still hold a side. The face piles stay a statement
+     * about live conviction; "show me my Tribe" is a question about where those
+     * people have been, and a market someone wrote or since exited is still
+     * theirs. Filter-only: nothing renders off these.
+     */
+    const tribeTouched = new Set<number>();
+    const oppTouched = new Set<number>();
+    /** Group membership, hoisted so creator authorship can be judged below. */
+    const tribeWallets = new Set<string>();
+    const oppWallets = new Set<string>();
     /** When one of the viewer's people last traded here — THEIR recency. */
     const netRecency = new Map<number, number>();
     let tribePerson: MatchPerson | null = null;
