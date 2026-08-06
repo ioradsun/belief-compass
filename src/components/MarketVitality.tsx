@@ -227,7 +227,13 @@ function MomentumMetric({
       ? copy.pct
       : copy.figure || copy.pct || (copy.direction === "flat" ? "0%" : "");
   return (
-    <div className={dense ? "px-4 py-2" : "px-4 py-3 sm:px-5"}>
+    /* The vertical padding is the deck's height-driven step where one is in
+       scope (the centre column), and the old constant everywhere else. */
+    <div
+      className={dense ? "px-4" : "px-4 sm:px-5"}
+      style={{ paddingBlock: dense ? "8px" : "var(--deck-metric-y, 12px)" }}
+    >
+
       <div className="flex items-start justify-between gap-3">
         <span className="min-w-0">
           <span className="flex min-w-0 items-baseline gap-2">
