@@ -286,7 +286,14 @@ export async function buildOpportunityFeed(
   /** What each market looks like to the reader's filter — filled as we map. */
   const filterFacts = new Map<
     number,
-    { category: string | null; tribeCount: number; oppCount: number; followedHere: number }
+    {
+      category: string | null;
+      tribeCount: number;
+      oppCount: number;
+      followedHere: number;
+      tribeTouched: boolean;
+      oppTouched: boolean;
+    }
   >();
 
   const candidates: SequenceCandidate[] = rows.map((r) => {
@@ -324,6 +331,10 @@ export async function buildOpportunityFeed(
       tribeCount: s.tribeCount,
       oppCount: s.oppCount,
       followedHere: s.followedHere,
+      // Created or traded here, side or no side — what "My Tribe" / "Rivals"
+      // actually asks about (see @/domain/feed/filters).
+      tribeTouched: Boolean(r["tribe_touched"]),
+      oppTouched: Boolean(r["opp_touched"]),
     });
     const ai = aiOf(analyses.get(s.onchainId));
     const state: ViewerMarketState | undefined = signals.states.get(s.onchainId);
