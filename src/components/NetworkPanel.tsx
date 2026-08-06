@@ -99,6 +99,7 @@ export function NetworkPanel({
 }) {
   const [rawQuery, setRawQuery] = useState("");
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<SpectrumFilter>("all");
 
   const t = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
