@@ -411,7 +411,9 @@ export function MarketDeck({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    /* `deck` supplies the height-proportional scale (see styles.css) — the gap
+       between the three zones comes from it, not from a constant. */
+    <div className="deck flex h-full min-h-0 flex-col">
       {/* Identity — pinned to the top of the column. In mobile Case mode the
         question moves into the carousel header, so this collapses. */}
       <div className={`shrink-0 ${mobileCaseOpen ? "hidden" : ""}`}>
@@ -419,7 +421,10 @@ export function MarketDeck({
           used to lead here; both were noise above the question, and the age was
           a second copy of what the byline already says under it. What is left is
           the exclusivity note, which is a fact about where the market exists. */}
-        <div className="mb-1 flex min-h-[22px] items-center gap-2">
+        <div
+          className="mb-1 flex items-center gap-2"
+          style={{ minHeight: "var(--deck-meta, 22px)" }}
+        >
           {cm?.market && (
             <span
               title="Markets created here don't appear on pov.co yet."
@@ -433,8 +438,8 @@ export function MarketDeck({
         {/* WHY THIS MARKET — the sentence the card was chosen on, carried in.
             One line, muted, above the question: it is context for what follows,
             not a claim competing with it. The row is always reserved so a market
-            with no reason does not shift the question up 18px. */}
-        <div className="min-h-[18px]">
+            with no reason does not shift the question up a line. */}
+        <div style={{ minHeight: "var(--deck-why, 18px)" }}>
           <WhyThis reason={reason} lead />
         </div>
         <div className="flex items-start gap-1.5">
@@ -443,9 +448,12 @@ export function MarketDeck({
             below the question — the market body, the dock, the controls — ever
             moves because one market asks a longer question than the last.
             `2.4em` is two lines at this element's own 1.2 line-height, in `em`
-            so it tracks the clamped font size across viewports. */}
+            so it tracks the clamped font size — which is now clamped by the
+            column's HEIGHT as well as its width, because a 30px question is
+            wrong on a 640px-tall window no matter how wide it is. */}
           <h1
-            className="line-clamp-2 min-h-[2.4em] min-w-0 flex-1 text-[clamp(20px,2.4vw,30px)] font-semibold leading-[1.2] tracking-tight text-[var(--text)]"
+            className="line-clamp-2 min-h-[2.4em] min-w-0 flex-1 font-semibold leading-[1.2] tracking-tight text-[var(--text)]"
+            style={{ fontSize: "var(--deck-title, clamp(20px, 2.4vw, 30px))" }}
             title={title}
           >
             {title}
@@ -462,8 +470,8 @@ export function MarketDeck({
         {/* The byline renders nothing until the creator lookup lands, and
           nothing at all for a market with no creator on record. Reserving its
           row means the market body below starts at the same y either way,
-          instead of jumping up 32px and back down as the lookup resolves. */}
-        <div className="min-h-[32px]">
+          instead of jumping as the lookup resolves. */}
+        <div style={{ minHeight: "var(--deck-byline, 32px)" }}>
           <MarketByline
             onchainId={Number(row.onchain_id)}
             viewerWallet={viewer}
@@ -471,6 +479,7 @@ export function MarketDeck({
           />
         </div>
       </div>
+
 
       {mobileCaseOpen ? (
         <MobileCaseView
