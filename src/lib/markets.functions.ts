@@ -104,17 +104,16 @@ async function sharedFeedData(win: VolumeWindow) {
     { participants: number; first: number | null; last: number | null }
   >();
   if (ids.length) {
-    // Window price-moves and the ETH/USD calibration are PRECOMPUTED by cron
-    // (market_window_change / calc_cache) — indexed lookups, not aggregate scans.
-    const [vol, cal, chg, part] = await Promise.all([
+    // Volume and the ETH/USD calibration are precomputed; the WINDOW MOVE is not
+    // read from any stored percentage. It comes from the one bulk baseline
+    // loader (src/lib/window-change.server), which pairs this very row with the
+    // same snapshot history the market panels use, so a card and the panel it
+    // opens can never disagree about the same window.
+    const [vol, cal, part, chg] = await Promise.all([
       sb.rpc("market_volume_window", { p_ids: ids, p_since: since }),
       sb.from("calc_cache").select("value").eq("key", "eth_usd").maybeSingle(),
-      sb
-        .from("market_window_change")
-        .select("onchain_id, chg_yes, chg_no, since_at")
-        .eq("window_key", win)
-        .in("onchain_id", ids),
       sb.rpc("market_participation"),
+      loadWindowChanges(sb, rows as unknown as Array<Record<string, unknown>>, win),
     ]);
     for (const p of (part.data ?? []) as unknown as Array<{
       onchain_id: number;
@@ -146,19 +145,16 @@ async function sharedFeedData(win: VolumeWindow) {
       }
     }
     ethUsd = Number((cal.data as { value?: number } | null)?.value ?? 0) || 0;
-    for (const c of (chg.data ?? []) as {
-      onchain_id: number;
-      chg_yes: number | null;
-      chg_no: number | null;
-      since_at: string | null;
-    }[]) {
-      const id = Number(c.onchain_id);
-      if (c.chg_yes != null && Number.isFinite(Number(c.chg_yes)))
-        chgYes.set(id, Number(c.chg_yes));
-      if (c.chg_no != null && Number.isFinite(Number(c.chg_no))) chgNo.set(id, Number(c.chg_no));
-      if (c.since_at && (historyFrom == null || c.since_at < historyFrom)) historyFrom = c.since_at;
+    for (const id of ids) {
+      const c = chg.byId.get(id);
+      const y = pricePct(c, "YES");
+      const n = pricePct(c, "NO");
+      if (y != null) chgYes.set(id, y);
+      if (n != null) chgNo.set(id, n);
     }
+    historyFrom = chg.historyFrom;
   }
+
   return { rows, yesEth, noEth, yesTrades, noTrades, ethUsd, chgYes, chgNo, historyFrom, reach };
 }
 
