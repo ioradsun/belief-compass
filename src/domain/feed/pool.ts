@@ -32,11 +32,21 @@
  * assembled from DIFFERENT ORDERINGS can contain the markets the different
  * components are looking for. Each slice is one question the feed needs answered:
  *
- *   ACTIVE      what is alive right now       (last trade, newest first)
- *   FRESH       what is new                   (created, newest first)
- *   CLASSIFIED  what the opportunity engine already flagged
- *   BELIEVED    where people actually are     (directional believers)
- *   DEEP        the substantial book          (lifetime volume — the old pool)
+ *   ACTIVE        what is alive right now     (last trade, newest first)
+ *   FRESH         what is new                 (created, newest first)
+ *   CLASSIFIED    what the opportunity engine already flagged
+ *   BELIEVED      who is holding a side now   (directional believers)
+ *   DEEP          the substantial book        (lifetime volume — the old pool)
+ *   CAPITAL       where the money is standing (yes + no capital)
+ *   PARTICIPANTS  where the people are        (everyone who ever traded)
+ *
+ * THE LAST TWO EXIST BECAUSE A LABEL IS A PROMISE. Explore's lens row offers
+ * "Most Capital" and "Most Participants", and a ranking lens can only rank what
+ * the pool lets it see. Without a capital ordering, "Most Capital" meant "most
+ * capital among the markets the other five rules happened to admit" — 15 of the
+ * platform's true top 40 by capital were not in the pool at all. `deep` is not a
+ * stand-in: lifetime volume and standing capital share only FIVE of their top
+ * forty markets.
  *
  * Each gets a GUARANTEED quota that the others cannot eat, which is what makes
  * the slices real. Without quotas the largest slice would simply be the pool
@@ -53,10 +63,25 @@
  */
 
 /** The question each slice answers. Provenance travels with the market. */
-export type PoolSlice = "active" | "fresh" | "classified" | "believed" | "deep";
+export type PoolSlice =
+  | "active"
+  | "fresh"
+  | "classified"
+  | "believed"
+  | "deep"
+  | "capital"
+  | "participants";
 
 /** Every slice, in the order they claim their quota. */
-export const POOL_SLICES: PoolSlice[] = ["active", "fresh", "classified", "believed", "deep"];
+export const POOL_SLICES: PoolSlice[] = [
+  "active",
+  "fresh",
+  "classified",
+  "believed",
+  "deep",
+  "capital",
+  "participants",
+];
 
 export interface SliceSpec {
   /** Rows to ask the database for. */
@@ -80,13 +105,13 @@ export const POOL: { total: number; slices: Record<PoolSlice, SliceSpec> } = {
    * ANY definition, so the pool stops being the binding constraint on the feed
    * long before it becomes the binding constraint on the query.
    */
-  total: 200,
+  total: 240,
   slices: {
     /**
      * The largest slice, because "what is happening" is the feed's first job
      * and because this is the one ordering the old pool had no way to express.
      */
-    active: { fetch: 90, quota: 60 },
+    active: { fetch: 90, quota: 45 },
     /**
      * Small in absolute terms because the platform creates ~8 markets a day and
      * ~39 in the freshness window — but guaranteed, which it never was. This
@@ -98,11 +123,40 @@ export const POOL: { total: number; slices: Record<PoolSlice, SliceSpec> } = {
      * The opportunity engine already ran and already decided. Excluding its
      * output from the pool that consumes it was pure waste.
      */
-    classified: { fetch: 50, quota: 30 },
-    /** Markets with people in them — the substrate every social signal needs. */
-    believed: { fetch: 60, quota: 35 },
+    classified: { fetch: 50, quota: 20 },
+    /** Markets with people HOLDING A SIDE — the substrate every social signal needs. */
+    believed: { fetch: 60, quota: 25 },
     /** The old pool, kept whole: a big book is still a real reason to look. */
-    deep: { fetch: 50, quota: 30 },
+    deep: { fetch: 50, quota: 20 },
+    /**
+     * A LENS THAT NAMES A MEASURE MUST BE ABLE TO SEE THAT MEASURE.
+     *
+     * Explore offers "Most Capital", and before this slice existed the honest
+     * reading of that label was "most capital AMONG THE MARKETS THE OTHER RULES
+     * HAPPENED TO ADMIT". Measured: 15 of the platform's true top 40 by capital
+     * were absent from the pool entirely, because none of the five orderings
+     * above is capital. `deep` looks closest and is not — it orders by LIFETIME
+     * VOLUME, and the top forty by volume and the top forty by capital share
+     * only FIVE markets. Volume is what has been traded; capital is what is
+     * standing there now.
+     *
+     * Ordered on `market_state.capital_usd`, the stored sum of the two sides —
+     * PostgREST cannot order on an expression, so the sum is a generated column
+     * with its own index rather than a second definition of capital.
+     */
+    capital: { fetch: 60, quota: 30 },
+    /**
+     * The same argument for "Most Participants", and this one costs no new
+     * query at all: `market_participation()` already runs once per shared feed
+     * build and already returns EVERY market on the platform, so the ranking is
+     * a sort of a result we were fetching and using for one lookup.
+     *
+     * `believed` is not a substitute. It orders by `directional_believers` —
+     * who is holding a side right now — which is a narrower population than
+     * everyone who ever traded, and has drifted from it (see
+     * @/domain/participants).
+     */
+    participants: { fetch: 60, quota: 30 },
   },
 };
 
@@ -236,6 +290,10 @@ export function sliceLabel(slice: PoolSlice): string {
       return "flagged by the opportunity engine";
     case "believed":
       return "has believers";
+    case "capital":
+      return "capital committed";
+    case "participants":
+      return "people have participated";
     default:
       return "large book";
   }

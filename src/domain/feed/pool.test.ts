@@ -135,3 +135,70 @@ describe("degenerate inputs", () => {
     for (const s of POOL_SLICES) expect(sliceLabel(s).length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * A LENS LABEL IS A PROMISE, AND THE POOL IS WHAT KEEPS IT.
+ *
+ * Explore ranks on capital and on participants. A ranking lens can only rank
+ * what the pool admits, so each of those measures needs its OWN ordering with a
+ * quota big enough to seat the whole Top 20 a reader might scroll. Measured
+ * before the capital slice existed: 14 of the platform's true top 20 by capital
+ * were in the pool, and 25 of the top 40 — the label meant "most capital among
+ * whatever the other rules admitted".
+ */
+describe("the pool can back every lens label", () => {
+  /** The deepest a reader is measured against — see scripts/check-lens-coverage. */
+  const TOP_N = 20;
+
+  it("has an ordering for each measure a lens names", () => {
+    expect(POOL_SLICES).toContain("capital");
+    expect(POOL_SLICES).toContain("participants");
+  });
+
+  it("guarantees each ranking lens enough room for its whole Top 20", () => {
+    // The quota is the floor no other slice can eat. Below TOP_N the coverage
+    // guarantee stops being structural and becomes a coincidence of the day's data.
+    for (const s of ["capital", "participants", "fresh", "active"] as const) {
+      expect(POOL.slices[s].quota, s).toBeGreaterThanOrEqual(TOP_N);
+    }
+  });
+
+  it("fetches deeper than it seats, so eligibility can drop rows without starving a lens", () => {
+    for (const s of POOL_SLICES) {
+      expect(POOL.slices[s].fetch, s).toBeGreaterThanOrEqual(POOL.slices[s].quota);
+    }
+  });
+
+  it("keeps the quotas collectively contestable rather than pre-allocating the pool", () => {
+    // If the quotas summed to the ceiling, the second pass would never run and a
+    // quiet slice's unclaimed space could not go to a busy one.
+    const quotas = POOL_SLICES.reduce((n, s) => n + POOL.slices[s].quota, 0);
+    expect(quotas).toBeLessThan(POOL.total);
+  });
+
+  it("did not solve coverage by loading the platform", () => {
+    // 2,779 markets. The pool is a candidate set, not a table scan — every id
+    // here is carried into the window aggregate, the baseline RPC and the
+    // viewer's belief overlay.
+    expect(POOL.total).toBeLessThanOrEqual(300);
+  });
+
+  it("every slice can still claim its floor when they all overflow", () => {
+    // The guarantee is only real if a slice's quota survives six rivals.
+    const rows = (base: number) => Array.from({ length: 90 }, (_, i) => ({ onchainId: base + i }));
+    const { claimed } = buildPool({
+      bySlice: {
+        active: rows(1000),
+        fresh: rows(2000),
+        classified: rows(3000),
+        believed: rows(4000),
+        deep: rows(5000),
+        capital: rows(6000),
+        participants: rows(7000),
+      },
+    });
+    for (const s of POOL_SLICES) {
+      expect(claimed[s], s).toBeGreaterThanOrEqual(POOL.slices[s].quota);
+    }
+  });
+});

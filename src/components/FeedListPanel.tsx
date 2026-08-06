@@ -26,6 +26,7 @@ import type { MarketRow } from "@/components/MarketCard";
 import type { Sensitivity } from "@/domain/market-change";
 import { marketTitle, marketTitleFallback } from "@/domain/market-title";
 import { WhyThis } from "@/components/WhyThis";
+import { participantCount } from "@/domain/participants";
 import { LENSES, LENS_LABELS, lensHero, scaleLine, type Lens } from "@/domain/feed/lens";
 
 const num = (v: unknown): number => {
@@ -53,11 +54,20 @@ function factsOf(row: MarketRow | undefined, nowMs: number) {
   // lens: they are how a reader tells a real question from an empty one, and no
   // lens replaces them. Both come off the row the feed already shipped — no
   // second query, no second cache, no second definition.
-  const believers = num(row.believers_yes) + num(row.believers_no);
+  //
+  // Participants is the CANONICAL count (@/domain/participants) — the same
+  // number the server ranks "Most Participants" on and the same one a search
+  // result prints. Ranking on one figure and displaying another is the exact
+  // failure this shares a definition to avoid.
+  const participants = participantCount({
+    reachParticipants: num(r.participants),
+    believersYes: num(row.believers_yes),
+    believersNo: num(row.believers_no),
+  });
   const createdAt = Date.parse(String(r.market_created_at ?? ""));
   const ageHours = Number.isFinite(createdAt) ? Math.max(0, (nowMs - createdAt) / 3_600_000) : null;
   return {
-    scale: { believers, capitalUsd },
+    scale: { participants, capitalUsd },
     ageHours,
     // A ROW WITHOUT A TITLE HAS NO QUESTION — it must NOT manufacture one.
     // Resolving the placeholder here made `?? activeTitle` unreachable, so the

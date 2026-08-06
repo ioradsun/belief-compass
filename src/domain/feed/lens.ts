@@ -10,7 +10,7 @@
  *   FOR YOU         why this matters to me
  *   MOVING          what is changing
  *   MOST CAPITAL    where the money is
- *   MOST BELIEVERS  where the people are
+ *   MOST PARTICIPANTS  where the people are
  *   FRESH           where I can be early
  *
  * The grammar is NOT deleted and this module does not replace it — both run, the
@@ -19,16 +19,23 @@
  *
  *   capital > 0            788 markets   top $505, only 9 at or above $100,
  *                                        median of those holding any: $0.93
- *   directional believers  797 markets   top 37, 60 markets at 5 or more
+ *   people in a market     797 markets   top 37, 60 markets at 5 or more
  *   traded in 24h / 7d      40 / 183
  *   created <24h / <7d        9 /  71    (2,726 of 2,779 are under 30 days old,
  *                                        so age only discriminates inside a week)
  *
  * AND THEY ARE GENUINELY DIFFERENT QUESTIONS, which was worth checking rather
- * than assuming: across the top twenty of each, capital and believers share 5
- * markets, capital and moving 6, believers and fresh 1. Capital is not a proxy
+ * than assuming: across the top twenty of each, capital and people share 5
+ * markets, capital and moving 6, people and fresh 1. Capital is not a proxy
  * for volume either — the top forty by capital and the top forty by lifetime
  * volume share only FIVE markets. Five lenses, five answers.
+ *
+ * WHY "MOST PARTICIPANTS" AND NOT "MOST BELIEVERS". Believer is the product's
+ * own word and it earns its place inside a market, but on a discovery control it
+ * asks the reader a question instead of answering one: believers on YES, on NO,
+ * both, holding now, or everyone who ever traded? The lens ranks the total
+ * number of people in the market irrespective of side, and "participants" is
+ * what that is. The label should need no interpretation.
  *
  * TWO KINDS OF LENS, and the distinction is the whole semantic rule here.
  *
@@ -37,26 +44,27 @@
  *                 up 8.4% today". Both sentences come from the canonical
  *                 engines (`reasonFor`, `momentumReason`) — this module invents
  *                 no side-specific arithmetic.
- *   MARKET-LEVEL  Most Capital, Most Believers and Fresh rank on a WHOLE-MARKET
- *                 total, so they describe the whole market. Turning "Most
- *                 Capital" into "YES has $505" would describe a side while
- *                 ranking on the sum — the interface would be explaining a
- *                 different ordering than the one it applied.
+ *   MARKET-LEVEL  Most Capital, Most Participants and Fresh rank on a
+ *                 WHOLE-MARKET total, so they describe the whole market.
+ *                 Turning "Most Capital" into "YES has $505" would describe a
+ *                 side while ranking on the sum — the interface would be
+ *                 explaining a different ordering than the one it applied.
  *
  * ZERO IO, pure, fully testable.
  */
 import { compactUsd } from "@/domain/market-discovery";
+import { participantsLabel } from "@/domain/participants";
 
-export type Lens = "for_you" | "moving" | "capital" | "believers" | "fresh";
+export type Lens = "for_you" | "moving" | "capital" | "participants" | "fresh";
 
 /** Display order — the personal question first, then the three public rankings. */
-export const LENSES: Lens[] = ["for_you", "moving", "capital", "believers", "fresh"];
+export const LENSES: Lens[] = ["for_you", "moving", "capital", "participants", "fresh"];
 
 export const LENS_LABELS: Record<Lens, string> = {
   for_you: "For You",
   moving: "Moving",
   capital: "Most Capital",
-  believers: "Most Believers",
+  participants: "Most Participants",
   fresh: "Fresh",
 };
 
@@ -65,13 +73,13 @@ export const LENS_LABELS: Record<Lens, string> = {
  * already said out loud. Null for the two lenses that lead with a sentence.
  *
  * This exists so the scale line can subtract it. A row reading "$505 committed"
- * above "18 believers · $505 committed" says the hero number twice, and the
+ * above "18 participants · $505 committed" says the hero number twice, and the
  * second printing is pure noise in the quietest line on the card.
  */
-export type LensMetric = "capital" | "believers" | null;
+export type LensMetric = "capital" | "participants" | null;
 
 export function heroMetric(lens: Lens): LensMetric {
-  return lens === "capital" ? "capital" : lens === "believers" ? "believers" : null;
+  return lens === "capital" ? "capital" : lens === "participants" ? "participants" : null;
 }
 
 /** May this lens name YES or NO? See the header — it is about what it ranks on. */
@@ -87,8 +95,12 @@ export interface LensCandidate {
   onchainId: number;
   /** Whole-market capital committed right now, USD: yes + no. */
   capitalUsd: number;
-  /** Directional believers, whole market. */
-  believers: number;
+  /**
+   * How many people are in this market — the canonical count, irrespective of
+   * side. See @/domain/participants: it is the ONLY number in the data model
+   * that means what the label "Most Participants" promises.
+   */
+  participants: number;
   /** Epoch ms the market was created, or null when we were never told. */
   createdAtMs: number | null;
   /**
@@ -114,8 +126,8 @@ export function admits(lens: Lens, c: LensCandidate): boolean {
   switch (lens) {
     case "capital":
       return c.capitalUsd > 0;
-    case "believers":
-      return c.believers > 0;
+    case "participants":
+      return c.participants > 0;
     case "fresh":
       return c.createdAtMs != null;
     case "moving":
@@ -130,8 +142,8 @@ export function lensRank(lens: Lens, c: LensCandidate): number {
   switch (lens) {
     case "capital":
       return c.capitalUsd;
-    case "believers":
-      return c.believers;
+    case "participants":
+      return c.participants;
     case "fresh":
       return c.createdAtMs ?? 0;
     case "moving":
@@ -169,11 +181,10 @@ export function toLens(v: unknown): Lens {
 
 /** The two universal measures of scale, as the row has them. */
 export interface Scale {
-  believers: number;
+  /** Canonical whole-market participant count — see @/domain/participants. */
+  participants: number;
   capitalUsd: number;
 }
-
-const people = (n: number): string => `${n} believer${n === 1 ? "" : "s"}`;
 
 /**
  * How long ago, in the shortest true form. Deliberately coarse past a day: the
@@ -196,7 +207,7 @@ export function freshLabel(ageHours: number): string | null {
  */
 export function lensHero(lens: Lens, s: Scale, ageHours: number | null): string | null {
   if (lens === "capital") return s.capitalUsd > 0 ? `${compactUsd(s.capitalUsd)} committed` : null;
-  if (lens === "believers") return s.believers > 0 ? people(s.believers) : null;
+  if (lens === "participants") return s.participants > 0 ? participantsLabel(s.participants) : null;
   if (lens === "fresh") return ageHours == null ? null : freshLabel(ageHours);
   return null;
 }
@@ -210,13 +221,13 @@ export function lensHero(lens: Lens, s: Scale, ageHours: number | null): string 
  * the lens that RANKED on one of them has already printed it in a larger, louder
  * line directly above, so that one is dropped here rather than repeated.
  *
- * A zero is omitted, never printed. "0 believers" is a true fact that costs a
+ * A zero is omitted, never printed. "0 participants" is a true fact that costs a
  * line to say nothing with; absence carries it.
  */
 export function scaleLine(lens: Lens, s: Scale): string | null {
   const hero = heroMetric(lens);
   const parts: string[] = [];
-  if (hero !== "believers" && s.believers > 0) parts.push(people(s.believers));
+  if (hero !== "participants" && s.participants > 0) parts.push(participantsLabel(s.participants));
   if (hero !== "capital" && s.capitalUsd > 0) parts.push(`${compactUsd(s.capitalUsd)} committed`);
   return parts.length > 0 ? parts.join(" · ") : null;
 }

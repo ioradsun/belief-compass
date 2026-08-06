@@ -37,6 +37,7 @@ import {
   type MomentumLens,
 } from "@/domain/feed/momentum";
 import { orderForLens, toLens, type Lens, type LensCandidate } from "@/domain/feed/lens";
+import { participantCount } from "@/domain/participants";
 import { shouldInsertSuggestion } from "@/domain/market-suggestion";
 import { listFeed, type VolumeWindow } from "@/lib/markets.functions";
 import {
@@ -498,14 +499,14 @@ export async function buildOpportunityFeed(
    * The other four are RANKINGS on one measure, so they order themselves and
    * tell the sequencer to leave that order alone.
    *
-   * BELIEVERS ARE COUNTED THE WAY THE ROW PRINTS THEM — `believers_yes +
-   * believers_no`, which is what `FeedListPanel` shows — and NOT
-   * `directional_believers`, which the pool slice and `signalsOf` use. The two
-   * agree on 2,769 of 2,779 markets and disagree on ten, always with
-   * `directional_believers` higher; market #101 carries 2 there while holding
-   * zero believers on both sides. Ranking on the counter and printing the sum
-   * would put a market at the top of "Most Believers" above a row saying it has
-   * none. One number, one meaning, even where the read model has drifted.
+   * PARTICIPANTS ARE COUNTED THE WAY THE ROW PRINTS THEM — one definition, in
+   * @/domain/participants, shared by the ranking here, the hero copy, the scale
+   * line and the search index. NOT `directional_believers`, which the `believed`
+   * pool slice uses: that counts who holds a side RIGHT NOW, it is a narrower
+   * population than everyone who ever traded, and it has drifted from the side
+   * columns — market #101 reads 2 there while holding zero believers on both
+   * sides. A lens that ranks on one number and prints another is a label that
+   * lies, and it would top "Most Participants" with a row saying it has none.
    */
   const ordered =
     lens === "for_you"
@@ -523,7 +524,11 @@ export async function buildOpportunityFeed(
             const lc: LensCandidate & { onchainId: number } = {
               onchainId: c.onchainId,
               capitalUsd: Math.max(0, num(r["yes_capital_usd"]) + num(r["no_capital_usd"])),
-              believers: Math.max(0, num(r["believers_yes"]) + num(r["believers_no"])),
+              participants: participantCount({
+                reachParticipants: num(r["participants"]),
+                believersYes: num(r["believers_yes"]),
+                believersNo: num(r["believers_no"]),
+              }),
               createdAtMs: Number.isFinite(created) ? created : null,
               momentumWeight: mo.weight,
               moving: mo.lenses.includes("moving"),

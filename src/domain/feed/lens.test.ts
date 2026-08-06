@@ -17,7 +17,7 @@ import {
 
 const c = (over: Partial<LensCandidate> & { onchainId: number }): LensCandidate => ({
   capitalUsd: 0,
-  believers: 0,
+  participants: 0,
   createdAtMs: null,
   momentumWeight: 0,
   moving: false,
@@ -54,14 +54,14 @@ describe("directional versus market-level", () => {
   it("lets only the two reason-led lenses name a side", () => {
     expect(isDirectional("for_you")).toBe(true);
     expect(isDirectional("moving")).toBe(true);
-    for (const l of ["capital", "believers", "fresh"] as Lens[]) {
+    for (const l of ["capital", "participants", "fresh"] as Lens[]) {
       expect(isDirectional(l), l).toBe(false);
     }
   });
 
   it("knows which whole-market total each lens has already said out loud", () => {
     expect(heroMetric("capital")).toBe("capital");
-    expect(heroMetric("believers")).toBe("believers");
+    expect(heroMetric("participants")).toBe("participants");
     expect(heroMetric("fresh")).toBeNull();
     expect(heroMetric("for_you")).toBeNull();
     expect(heroMetric("moving")).toBeNull();
@@ -75,8 +75,8 @@ describe("a lens never lists a market it cannot speak about", () => {
   });
 
   it("keeps an empty market out of Most Believers", () => {
-    expect(admits("believers", c({ onchainId: 1, believers: 0 }))).toBe(false);
-    expect(admits("believers", c({ onchainId: 1, believers: 1 }))).toBe(true);
+    expect(admits("participants", c({ onchainId: 1, participants: 0 }))).toBe(false);
+    expect(admits("participants", c({ onchainId: 1, participants: 1 }))).toBe(true);
   });
 
   it("keeps a still market out of Moving", () => {
@@ -107,14 +107,14 @@ describe("the order is descending on the named measure", () => {
     expect(orderForLens("capital", rows).map((r) => r.onchainId)).toEqual([2, 3, 1]);
   });
 
-  it("ranks Most Believers by believers, not by the money behind them", () => {
-    // Measured: the top market by believers (37) holds $137, while the top by
+  it("ranks Most Believers by participants, not by the money behind them", () => {
+    // Measured: the top market by participants (37) holds $137, while the top by
     // capital ($505) has 10. Ranking one on the other would be a third answer.
     const rows = [
-      c({ onchainId: 1, believers: 10, capitalUsd: 505 }),
-      c({ onchainId: 2, believers: 37, capitalUsd: 137 }),
+      c({ onchainId: 1, participants: 10, capitalUsd: 505 }),
+      c({ onchainId: 2, participants: 37, capitalUsd: 137 }),
     ];
-    expect(orderForLens("believers", rows).map((r) => r.onchainId)).toEqual([2, 1]);
+    expect(orderForLens("participants", rows).map((r) => r.onchainId)).toEqual([2, 1]);
   });
 
   it("ranks Fresh newest first", () => {
@@ -153,26 +153,28 @@ describe("the order is descending on the named measure", () => {
 });
 
 /**
- * THE HERO IS NEVER SAID TWICE. "$505 committed" above "18 believers · $505
+ * THE HERO IS NEVER SAID TWICE. "$505 committed" above "18 participants · $505
  * committed" prints the loudest number again in the quietest line.
  */
 describe("what a row says", () => {
-  const s = { believers: 18, capitalUsd: 505 };
+  const s = { participants: 18, capitalUsd: 505 };
 
   it("leads Most Capital with the money and grounds it with the people", () => {
     expect(lensHero("capital", s, null)).toBe("$505 committed");
-    expect(scaleLine("capital", s)).toBe("18 believers");
+    expect(scaleLine("capital", s)).toBe("18 participants");
   });
 
   it("leads Most Believers with the people and grounds it with the money", () => {
-    expect(lensHero("believers", { believers: 42, capitalUsd: 318 }, null)).toBe("42 believers");
-    expect(scaleLine("believers", { believers: 42, capitalUsd: 318 })).toBe("$318 committed");
+    expect(lensHero("participants", { participants: 42, capitalUsd: 318 }, null)).toBe(
+      "42 participants",
+    );
+    expect(scaleLine("participants", { participants: 42, capitalUsd: 318 })).toBe("$318 committed");
   });
 
   it("leads Fresh with the age and keeps BOTH measures underneath", () => {
-    expect(lensHero("fresh", { believers: 8, capitalUsd: 72 }, 3)).toBe("Created 3h ago");
-    expect(scaleLine("fresh", { believers: 8, capitalUsd: 72 })).toBe(
-      "8 believers · $72 committed",
+    expect(lensHero("fresh", { participants: 8, capitalUsd: 72 }, 3)).toBe("Created 3h ago");
+    expect(scaleLine("fresh", { participants: 8, capitalUsd: 72 })).toBe(
+      "8 participants · $72 committed",
     );
   });
 
@@ -181,34 +183,36 @@ describe("what a row says", () => {
     // wrote. Composing a second one here would be a third place deciding it.
     expect(lensHero("for_you", s, 3)).toBeNull();
     expect(lensHero("moving", s, 3)).toBeNull();
-    expect(scaleLine("for_you", { believers: 12, capitalUsd: 184 })).toBe(
-      "12 believers · $184 committed",
+    expect(scaleLine("for_you", { participants: 12, capitalUsd: 184 })).toBe(
+      "12 participants · $184 committed",
     );
   });
 
   it("omits a zero rather than printing it", () => {
-    // "0 believers" spends a line to say nothing; absence carries it.
-    expect(scaleLine("for_you", { believers: 0, capitalUsd: 184 })).toBe("$184 committed");
-    expect(scaleLine("for_you", { believers: 3, capitalUsd: 0 })).toBe("3 believers");
-    expect(scaleLine("for_you", { believers: 0, capitalUsd: 0 })).toBeNull();
+    // "0 participants" spends a line to say nothing; absence carries it.
+    expect(scaleLine("for_you", { participants: 0, capitalUsd: 184 })).toBe("$184 committed");
+    expect(scaleLine("for_you", { participants: 3, capitalUsd: 0 })).toBe("3 participants");
+    expect(scaleLine("for_you", { participants: 0, capitalUsd: 0 })).toBeNull();
   });
 
   it("says nothing rather than claiming a hero it lacks", () => {
-    expect(lensHero("capital", { believers: 4, capitalUsd: 0 }, null)).toBeNull();
-    expect(lensHero("believers", { believers: 0, capitalUsd: 9 }, null)).toBeNull();
+    expect(lensHero("capital", { participants: 4, capitalUsd: 0 }, null)).toBeNull();
+    expect(lensHero("participants", { participants: 0, capitalUsd: 9 }, null)).toBeNull();
     expect(lensHero("fresh", s, null)).toBeNull();
   });
 
   it("never leaves a lens with a hero AND an empty scale line silently wrong", () => {
     // The capital lens dropping capital from the scale line must not also drop
-    // the believers: the whole point of the quiet line is the OTHER measure.
-    expect(scaleLine("capital", { believers: 18, capitalUsd: 505 })).toContain("18");
-    expect(scaleLine("capital", { believers: 18, capitalUsd: 505 })).not.toContain("505");
-    expect(scaleLine("believers", { believers: 42, capitalUsd: 318 })).not.toContain("42");
+    // the participants: the whole point of the quiet line is the OTHER measure.
+    expect(scaleLine("capital", { participants: 18, capitalUsd: 505 })).toContain("18");
+    expect(scaleLine("capital", { participants: 18, capitalUsd: 505 })).not.toContain("505");
+    expect(scaleLine("participants", { participants: 42, capitalUsd: 318 })).not.toContain("42");
   });
 
-  it("says one believer, never 1 believers", () => {
-    expect(lensHero("believers", { believers: 1, capitalUsd: 0 }, null)).toBe("1 believer");
+  it("says one participant, never 1 participants", () => {
+    expect(lensHero("participants", { participants: 1, capitalUsd: 0 }, null)).toBe(
+      "1 participant",
+    );
   });
 
   it("coarsens age past a day, because the decision is the same either way", () => {

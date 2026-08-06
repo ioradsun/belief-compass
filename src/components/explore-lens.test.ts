@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { LENSES } from "@/domain/feed/lens";
+import { LENSES, LENS_LABELS } from "@/domain/feed/lens";
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 /** Comments stripped: these files EXPLAIN the rules they follow. */
@@ -29,11 +29,23 @@ describe("the playlist row", () => {
     expect(feed).toMatch(/scaleLine\(lens, f\.scale\)/);
   });
 
-  it("reads believers and capital off the row the feed already shipped", () => {
+  it("reads participants and capital off the row the feed already shipped", () => {
     // No second query, no second cache, no second definition of either measure.
-    expect(feed).toMatch(/believers_yes\) \+ num\(row\.believers_no\)/);
+    expect(feed).toMatch(/participantCount\(\{/);
     expect(feed).toMatch(/yes_capital_usd\) \+ num\(r\.no_capital_usd\)/);
     expect(feed).not.toMatch(/useQuery/);
+  });
+
+  it("counts participants with the SAME function the server ranks on", () => {
+    // Ranking on one field and displaying another is how "Most Participants"
+    // ends up topped by a row saying it has none.
+    const server = code("src/lib/opportunity-feed.server.ts");
+    expect(server).toMatch(/participantCount\(\{/);
+    expect(feed).toMatch(/from "@\/domain\/participants"/);
+    expect(server).toMatch(/from "@\/domain\/participants"/);
+    // And the search index, so one market cannot be 5 people in the playlist
+    // and 12 in a search result.
+    expect(code("src/lib/markets.functions.ts")).toMatch(/participantCount\(\{/);
   });
 
   it("never prints a reason sentence beside a ranked hero", () => {
@@ -60,7 +72,15 @@ describe("the lens control", () => {
   it("offers every lens the domain defines, and no hand-written list", () => {
     expect(feed).toMatch(/LENSES\.map/);
     expect(feed).toMatch(/LENS_LABELS\[l\]/);
-    expect(LENSES).toHaveLength(5);
+    expect(LENSES).toEqual(["for_you", "moving", "capital", "participants", "fresh"]);
+  });
+
+  it("names what it ranks, in words needing no interpretation", () => {
+    // "Most Believers" asked the reader a question instead of answering one:
+    // believers on YES, on NO, holding now, or everyone who ever traded? The
+    // lens ranks people in the market irrespective of side.
+    expect(LENS_LABELS.participants).toBe("Most Participants");
+    expect(Object.values(LENS_LABELS).join(" ")).not.toMatch(/Believer/i);
   });
 
   it("reserves its own height so choosing a lens cannot move the list", () => {
