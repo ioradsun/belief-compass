@@ -1000,6 +1000,7 @@ function Feed() {
                       <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
                         Connect a wallet in the header to see your convictions.
                       </p>
+                    </div>
                   )
                 }
               />
