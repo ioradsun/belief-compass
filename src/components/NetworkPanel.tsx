@@ -259,26 +259,16 @@ function PersonRow({
             )}
           </span>
           <span className="mt-1 flex items-center gap-2">
-            {/* Alignment meter: green = together, red = apart. */}
-            <span
-              className="flex h-1.5 w-14 shrink-0 overflow-hidden rounded-full"
-              style={{ background: "color-mix(in oklab, var(--no) 45%, var(--surface))" }}
-              aria-hidden
-            >
-              <span
-                className="h-full"
-                style={{ width: `${Math.round(greenFrac * 100)}%`, background: "var(--yes)" }}
-              />
-            </span>
             {value && (
               <span className="num text-[12px] font-semibold" style={{ color: tone }}>
                 {value}
               </span>
             )}
             <span className="num truncate text-[11px] text-[var(--text-muted)]">
-              {rel.sharedConvictions} shared
+              {rel.sharedConvictions} Convictions Align
             </span>
           </span>
+
         </span>
       </button>
     </li>
