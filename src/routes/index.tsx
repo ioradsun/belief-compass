@@ -813,6 +813,15 @@ function Feed() {
   }
   const currentRow: MarketRow | null = shownRow.current;
   const shownId = currentRow ? Number(currentRow.onchain_id) : null;
+  // A market opened from outside the loaded feed slice (search, a link, a market
+  // just created) has no row in `rowsById`, so the playlist would label it
+  // "Market #76". Its row IS on screen in the centre — register it here so
+  // "Now reading" says the question the reader is looking at.
+  if (currentRow && shownId != null) knownRowsRef.current[shownId] = currentRow;
+  // Same for the freshly-fetched solo row: available a frame before it is
+  // promoted into the scene, and already the truth about that market's title.
+  if (liveRow) knownRowsRef.current[Number(liveRow.onchain_id)] = liveRow;
+
 
   // "The House has an idea" — the SERVER decided whether an idea belongs in
   // this sequence and at which slot. The hook only owns the funnel calls.
