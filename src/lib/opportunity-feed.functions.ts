@@ -18,6 +18,11 @@ const input = z.object({
   sessionToken: z.string().min(16).max(2000).nullish(),
   window: z.enum(["1h", "24h", "7d", "30d", "all"]).optional(),
   lens: z.string().max(32).optional(),
+  mode: z.string().max(32).optional(),
+  // The reader's own lens. Bounded so a crafted request cannot widen the query.
+  networks: z.array(z.string().max(20)).max(8).optional(),
+  topics: z.array(z.string().max(24)).max(24).optional(),
+  originMarketId: z.number().int().nonnegative().nullish(),
   seenIds: z.array(z.number().int().nonnegative()).max(200).optional(),
   queuedIds: z.array(z.number().int().nonnegative()).max(200).optional(),
   cardsViewed: z.number().int().nonnegative().max(10_000).optional(),
