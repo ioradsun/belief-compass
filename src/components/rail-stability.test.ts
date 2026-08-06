@@ -126,7 +126,7 @@ describe("the update control never moves the feed", () => {
   it("lives in a fixed-height header beside the label, not in the scroller", () => {
     expect(c).toMatch(/label\?: string/);
     // A fixed-height row: the slot exists whether or not the control does.
-    expect(c).toMatch(/h-\[22px\]/);
+    expect(c).toMatch(/h-\[26px\]/);
     expect(c).not.toMatch(/sticky top-0/);
   });
 
@@ -153,9 +153,7 @@ describe("the update control never moves the feed", () => {
 
   it("puts admitted rows on top, in the mixer's current order", () => {
     const gate = code("src/hooks/useTapeGate.ts");
-    expect(gate).toMatch(
-      /groupArrivals\(incomingRef\.current as T\[\]\), \.\.\.taking, \.\.\.prev/,
-    );
+    expect(gate).toMatch(/collapse\(incomingRef\.current as T\[\]\), \.\.\.taking, \.\.\.prev/);
   });
 });
 
