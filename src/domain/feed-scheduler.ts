@@ -88,7 +88,11 @@ export const SCHEDULE = {
   /** Real rows pending at which the cadence tightens. */
   busyDepth: 4,
   /** Silence this long before a standing fact may be drawn at all. */
-  quietAfterMs: 45_000,
+  // TWENTY SECONDS. At 45s a tape only reached `quiet` on a genuinely dead
+  // market, so the reserve built on every fetch was rarely drawn and slow
+  // periods read as broken rather than calm. Twenty seconds of nothing is
+  // already a silence a reader notices.
+  quietAfterMs: 20_000,
   /**
    * The longest a "soon" row may be held. Past this the queue is behind reality
    * and the cadence drops to the floor — a feed that is pleasant and wrong is

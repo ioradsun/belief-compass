@@ -61,6 +61,9 @@ export interface StandingFactsInput {
  * with no standing facts is the status quo, and a feed that 500s because a
  * decoration could not be computed would be a strictly worse product.
  */
+/** How many facts one market may contribute to a single reserve. */
+const MAX_FACTS_PER_MARKET = 2;
+
 export async function buildStandingFacts(input: StandingFactsInput): Promise<StandingFact[]> {
   const ids = input.marketIds.slice(0, MAX_MARKETS);
   if (ids.length === 0) return [];
@@ -141,14 +144,19 @@ export async function buildStandingFacts(input: StandingFactsInput): Promise<Sta
   }
   if (all.length === 0) return [];
 
-  // Strongest first, one per market so a single crowded market cannot own every
-  // quiet moment. The per-reader cooldown lives on the client, where the
-  // knowledge of what this reader has already been told actually is.
+  // Strongest first, and capped PER MARKET so a single crowded market cannot
+  // own every quiet moment. Two rather than one: a strict cap of one meant a
+  // tape scoped to a single market — the side rails, where quiet is most
+  // visible — could only ever hold ONE standing fact, and once it was told the
+  // panel had nothing left to say for the rest of the session.
+  // The per-reader cooldown lives on the client, where the knowledge of what
+  // this reader has already been told actually is.
   const chosen: StandingFact[] = [];
-  const seenMarket = new Set<number>();
+  const perMarket = new Map<number, number>();
   for (const f of all.sort((a, b) => b.strength - a.strength || a.key.localeCompare(b.key))) {
-    if (seenMarket.has(f.marketId)) continue;
-    seenMarket.add(f.marketId);
+    const used = perMarket.get(f.marketId) ?? 0;
+    if (used >= MAX_FACTS_PER_MARKET) continue;
+    perMarket.set(f.marketId, used + 1);
     chosen.push(f);
     if (chosen.length >= input.limit) break;
   }

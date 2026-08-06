@@ -69,8 +69,15 @@ export const STANDING = {
    * to exclude what is not really a position. It was never meant to rank.
    */
   minPositionUsd: 1,
-  /** Under this many days, "still here" is not yet a claim worth making. */
-  minDays: 3,
+  /**
+   * Under this many days, "still here" is not yet a claim worth making.
+   *
+   * ONE day, not three. The reserve is the ONLY thing this feed can say during
+   * a quiet stretch, and a three-day floor disqualified every position taken
+   * this week — exactly the ones a young market is made of. A day of holding
+   * through a move is a real, checkable claim; below that it is still a trade.
+   */
+  minDays: 1,
   /** People named before the rest become "+N". */
   maxPeople: 3,
   /**
@@ -81,7 +88,11 @@ export const STANDING = {
    * days. A fact is identified by its `key`, so a cohort that GROWS becomes a
    * different fact and may speak sooner — which is correct, because it is news.
    */
-  cooldownMs: 3 * 86_400_000,
+  // SIX HOURS, not three days. Three days made the reserve nearly single-use:
+  // a reader who comes back the same evening had already been told everything
+  // the pool could say, so the tape sat silent through every quiet stretch.
+  // Six hours is longer than a session and shorter than a habit.
+  cooldownMs: 6 * 3_600_000,
   /**
    * A market a reader keeps meeting the same person in. Below this it is
    * coincidence, not a pattern worth naming.
