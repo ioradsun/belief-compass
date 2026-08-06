@@ -569,20 +569,46 @@ export async function attachCreatedMarket(
 
 
 /**
- * Wallets worth generating for: they answered something recently and have no
+ * Wallets worth generating for: they made a real decision recently — money
+ * behind a side, a tapped answer, or an answered House prediction — and have no
  * live idea waiting. Bounded so one job run can never fan out unboundedly.
  */
 export async function walletsNeedingSuggestions(limit = 15): Promise<string[]> {
   const sb = serviceClient();
-  const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
-  const { data } = await sb
-    .from("house_predictions")
-    .select("wallet")
-    .not("actual_action", "is", null)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(400);
-  const wallets = [...new Set(((data ?? []) as { wallet: string }[]).map((r) => norm(r.wallet)))];
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+
+  const [traded, tapped, answered] = await Promise.all([
+    sb
+      .from("wallet_beliefs")
+      .select("wallet, last_trade_at")
+      .neq("expressed_side", "INACTIVE")
+      .gte("last_trade_at", since)
+      .order("last_trade_at", { ascending: false })
+      .limit(400),
+    sb
+      .from("expressed_beliefs")
+      .select("wallet, updated_at")
+      .gte("updated_at", since)
+      .order("updated_at", { ascending: false })
+      .limit(400),
+    sb
+      .from("house_predictions")
+      .select("wallet, created_at")
+      .not("actual_action", "is", null)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(400),
+  ]);
+
+  const wallets = [
+    ...new Set(
+      [
+        ...((traded.data ?? []) as { wallet: string }[]),
+        ...((tapped.data ?? []) as { wallet: string }[]),
+        ...((answered.data ?? []) as { wallet: string }[]),
+      ].map((r) => norm(r.wallet)),
+    ),
+  ];
 
   const out: string[] = [];
   for (const w of wallets) {
@@ -596,3 +622,4 @@ export async function walletsNeedingSuggestions(limit = 15): Promise<string[]> {
   }
   return out;
 }
+
