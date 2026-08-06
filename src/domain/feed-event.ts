@@ -64,10 +64,43 @@ const CORE_WEIGHTS = { magnitude: 0.5, speed: 0.2, novelty: 0.3 } as const;
 
 /** A move this large is "big" in absolute terms regardless of the market. */
 const ABS_USD_CAP = 2000;
-/** A market's rough "normal" stake per believer — the market-relative reference. */
-const PER_BELIEVER_USD = 8;
-/** Floor for the reference so a brand-new (0-believer) market isn't divide-by-tiny. */
-const MIN_MARKET_REF_USD = 20;
+/**
+ * A market's rough "normal" stake per believer — the market-relative reference.
+ *
+ * Measured across 269 funded markets, capital per believer runs p25 $0.01 ·
+ * p50 $0.50 · p75 $1.20 · p90 $2.87 · p95 $4.94 — and it RISES WITH SIZE: the
+ * largest market (37 believers, $197) sits at $5.30 each. So a single rate
+ * cannot be right everywhere, and $8 was above the 95th percentile of the
+ * distribution while being roughly right for the biggest market.
+ *
+ * Four dollars is inside the observed range rather than above it. It is
+ * deliberately NOT the median: this rate multiplies the believer count, so it
+ * only decides the reference on markets that HAVE believers to multiply — the
+ * larger ones, where per-believer capital is high. The small-market case is the
+ * floor below, and that is where the real defect was.
+ */
+const PER_BELIEVER_USD = 4;
+/**
+ * Floor for the reference so a brand-new (0-believer) market isn't divide-by-tiny.
+ *
+ * IT WAS TWENTY, AND IT BOUND ON 78% OF FUNDED MARKETS (210 of 269 have two
+ * believers or fewer). The consequence is the whole reason this constant is now
+ * documented: on the median market, a trade equal to THE ENTIRE MARKET'S CAPITAL
+ * scored a relative magnitude of 0.048 — five percent of the "reaching its
+ * normal scale is a full-magnitude move" the line below promises.
+ *
+ * So inside a real market nothing could be distinguished: a $0.08 trade and a
+ * $0.96 trade both scored ≈0 on the term meant to separate them, and the
+ * ranking fell through to the people count, which is identical for every lone
+ * trade. That is what made a young platform feel uniformly busy rather than
+ * meaningfully active — not a missing relative rule, but a reference scale set
+ * twenty times above the median market's entire capital ($0.96).
+ *
+ * Two dollars sits just above the median market total and below the p90 of
+ * $5.38, so the floor now protects an empty market without flattening a small
+ * live one.
+ */
+const MIN_MARKET_REF_USD = 2;
 
 /** How much a viewer-network action lifts an event's importance. */
 const REL_BOOST: Record<NetTag, number> = { twin: 1.9, opp: 1.7, tribe: 1.5, inverse: 1.5 };

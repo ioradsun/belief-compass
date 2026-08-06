@@ -164,3 +164,46 @@ describe("meaning outranks money", () => {
     ).toBeLessThanOrEqual(100);
   });
 });
+
+/**
+ * THE RELATIVE TERM HAS TO WORK WHERE THE PLATFORM ACTUALLY LIVES.
+ *
+ * `magnitudeOf` weights a trade's fraction of its market's own scale at 60% —
+ * "reaching its normal scale is a full-magnitude move". The reference was
+ * `max($20, believers × $8)`, and measured against 269 funded markets that
+ * floor bound on 78% of them (210 have two believers or fewer) while sitting at
+ * TWENTY TIMES the median market's entire capital of $0.96.
+ *
+ * The consequence was not a missing rule but a dead one: inside a typical
+ * market, a $0.08 trade and a $0.96 trade both scored ≈0 on the term meant to
+ * separate them, and the ranking fell through to the people count — identical
+ * for every lone trade. That is what makes a young platform feel uniformly busy
+ * instead of meaningfully active.
+ */
+describe("significance is relative to the market it happened in", () => {
+  const inMarket = (amountUsd: number, believers: number) =>
+    scoreFeedEvent(trade({ amountUsd, marketBelievers: believers })).score;
+
+  it("separates a cent-sized trade from a market-sized one on a typical market", () => {
+    // The median funded market: one believer, $0.96 of capital.
+    const dust = inMarket(0.08, 1);
+    const whole = inMarket(0.96, 1);
+    // Not merely "greater" — under the old reference these were 1.41x apart on
+    // magnitude and a couple of points apart on score, which is indistinguishable
+    // once the constant people and novelty terms are added. The gap has to be
+    // wide enough to survive that dilution.
+    expect(whole - dust).toBeGreaterThanOrEqual(5);
+  });
+
+  it("still calls the same dollar amount noise in a market that dwarfs it", () => {
+    // $1 is most of a small market and nothing in a large one. The SAME trade,
+    // scored by where it happened — which is the whole point of the term.
+    expect(inMarket(1, 1)).toBeGreaterThan(inMarket(1, 100));
+  });
+
+  it("scales with the market rather than jumping at a fixed dollar line", () => {
+    const ladder = [1, 3, 10, 37].map((b) => inMarket(5, b));
+    // A $5 trade matters less the bigger the room it lands in, monotonically.
+    expect(ladder).toEqual([...ladder].sort((a, b) => b - a));
+  });
+});
