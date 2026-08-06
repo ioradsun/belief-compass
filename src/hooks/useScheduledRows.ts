@@ -60,7 +60,16 @@ export function useScheduledRows<T extends SchedulableRow>(
   all: T[],
   resetKey?: string,
   reserve: T[] = EMPTY,
+  /**
+   * REVEAL ON DEMAND. Changing this number means the reader ASKED for the
+   * waiting rows (they tapped "N New"). A drip is the right answer for activity
+   * nobody requested; it is the wrong answer for a direct request, where the
+   * rows must land at once, at the top, with a visible entrance — otherwise the
+   * tap appears to do nothing and the updates seem to vanish.
+   */
+  revealKey = 0,
 ): ScheduledView<T> {
+
   const [shown, setShown] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [pending, setPending] = useState(0);
 
