@@ -13,6 +13,7 @@
  * mobile; only the layout changes.
  */
 import { useMemo, type ReactNode } from "react";
+import { PersonAvatar } from "@/components/PersonAvatar";
 import { marketBook, type BookMetric, type BookWindow } from "@/domain/market-book";
 import type { TapeTrade } from "@/domain/conviction-series";
 import type { FlowWindow } from "@/domain/market-flow";
@@ -175,6 +176,7 @@ export function MarketMomentum({
   nowMs = Date.now(),
   footer,
   dense,
+  faces,
 }: {
   /** Still needed for the window phrase and the cold-start read. Never for a delta. */
   tape: TapeTrade[] | undefined;
@@ -198,6 +200,8 @@ export function MarketMomentum({
   footer?: ReactNode;
   /** Phone: believers and capital sit side by side so the market fits one screen. */
   dense?: boolean;
+  /** Who the participant count is made of — faces beside the Participants label. */
+  faces?: MomentumFace[];
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs, win), [tape, nowMs, win]);
   const { unit } = useDisplayUnit();
@@ -231,6 +235,8 @@ export function MarketMomentum({
         total={b.current.toLocaleString("en-US")}
         label="Participants"
         copy={believerCopy(b, book.window)}
+        faces={faces}
+        facesTotal={Math.max(faces?.length ?? 0, Math.round(b.current))}
       />
       <div className="border-t border-[var(--hairline)]" aria-hidden />
       <MomentumMetric
