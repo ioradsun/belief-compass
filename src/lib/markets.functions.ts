@@ -17,9 +17,20 @@ import { swrCache } from "@/lib/server-cache";
 import { rankMarkets } from "@/domain/market-search";
 import { availableModes, type FeedMode } from "@/domain/feed/mode";
 import { loadWindowChanges, pricePct } from "@/lib/window-change.server";
+import { buildPool, POOL, type PoolSlice } from "@/domain/feed/pool";
 
 /** SSR/anon feed snapshots live this long before a background refresh. */
 const ANON_FEED_TTL_MS = 5_000;
+
+/**
+ * How far back "recently traded" reaches for the pool's active slice.
+ *
+ * Seven days, not one. 30 markets traded in the last 24h and 184 in the last
+ * seven — a 24h window would leave the slice that exists to carry live activity
+ * unable to fill its own quota on most days, which is how a slice quietly stops
+ * being a slice.
+ */
+const POOL_ACTIVE_MS = 7 * 86_400_000;
 
 /**
  * How many of the viewer's people, per side, the feed overlay looks for.
@@ -51,35 +62,111 @@ export type MatchPerson = {
 };
 
 /**
- * The shared, viewer-independent slice of the feed for one window: the top-of-book
- * market_state rows plus the window-scoped volume, ETH/USD calibration and price
- * moves. Identical for every viewer, so listFeed caches it (SWR) — anon, connected,
- * SSR and poll traffic all read one warm snapshot per window instead of re-running
- * the market_state read and the per-window aggregate scans on every request. Throws
- * on a hard market_state error so a failure is never cached.
+ * Every column the read-model hands downstream. ONE list, because the ranker
+ * reads fields by name and a missing column is indistinguishable from a null
+ * one — which is exactly how `market_created_at` came to be read by
+ * `signalsOf`, absent from this list, and silently null on every market since
+ * the feed shipped. `ageHoursOf` then returned null, the age half of the
+ * `freshness` component was permanently zero, and the "Fresh market — created
+ * 3h ago" reason could never fire. Adding a field to the ranker means adding it
+ * here, in the same change.
  */
-async function sharedFeedData(win: VolumeWindow) {
-  const sb = serviceClient();
-  const { data, error } = await sb
-    .from("market_state")
-    .select(
-      `
+const FEED_COLUMNS = `
     onchain_id, yes_price_usd, no_price_usd, money_yes_pct, people_yes_pct, people_no_pct,
     believers_yes, believers_no, believers_mixed, directional_believers, divergence,
     volume_total_usd, trending_score,
     yes_capital_usd, no_capital_usd,
-    new_believers_1h, new_believers_24h, unique_wallets_24h, circulation_24h,
-    last_trade_at, velocity_5m,
+    new_believers_1h, new_believers_24h, new_believers_7d,
+    unique_wallets_1h, unique_wallets_24h, circulation_24h,
+    trade_count_1h, trade_count_24h, trade_count_7d,
+    market_created_at, first_trade_at, last_trade_at, inactive_for_seconds, velocity_5m,
+    side_flips_24h,
     live_line, live_line_kind, live_line_window, live_line_occurred_at,
     opportunity_type, opportunity_score, opportunity_reason, opportunity_reason_code,
     opportunity_window, opportunity_confidence, opportunity_sample_size, opportunity_eligible,
-    markets:onchain_id ( title, category, author_name, author_pfp, pov_slug )
-  `,
-    )
-    .order("volume_total_usd", { ascending: false, nullsFirst: false })
-    .limit(50);
-  if (error) throw new Error(error.message);
-  const rows = data ?? [];
+    markets:onchain_id ( title, category, author_wallet, author_name, author_pfp, pov_slug )
+  `;
+
+/**
+ * THE CANDIDATE POOL — five orderings, merged under quotas.
+ *
+ * This was one query: `market_state ORDER BY volume_total_usd DESC LIMIT 50`.
+ * Fifty markets out of 2,773, ranked by the least dynamic quantity available,
+ * identical for every viewer — and the whole ranking engine downstream could
+ * only ever reorder those fifty. On the day this was written 30 markets had
+ * traded in 24h and SEVEN of them were in the pool; 43 of the 50 had not traded
+ * at all that day.
+ *
+ * A bigger LIMIT does not fix that, because the ordering is the problem: a
+ * market created an hour ago has no volume and sits near rank 2,000 whatever the
+ * limit is. Only different ORDERINGS can surface different markets, so the pool
+ * asks five questions and `buildPool` merges the answers with a floor for each.
+ * See src/domain/feed/pool for the policy and the reasoning.
+ */
+async function poolRows(sb: ReturnType<typeof serviceClient>) {
+  const q = () => sb.from("market_state").select(FEED_COLUMNS);
+  const sinceActive = new Date(Date.now() - POOL_ACTIVE_MS).toISOString();
+
+  const [active, fresh, classified, believed, deep] = await Promise.all([
+    // What is alive. `last_trade_at` descending is the ordering the old pool had
+    // no way to express, and it is the feed's first question.
+    q()
+      .gte("last_trade_at", sinceActive)
+      .order("last_trade_at", { ascending: false, nullsFirst: false })
+      .limit(POOL.slices.active.fetch),
+    // What is new. Structurally impossible to reach through a volume ordering.
+    q()
+      .order("market_created_at", { ascending: false, nullsFirst: false })
+      .limit(POOL.slices.fresh.fetch),
+    // What the opportunity engine already flagged — output the pool that
+    // consumes it was mostly excluding.
+    q()
+      .not("opportunity_type", "is", null)
+      .order("opportunity_score", { ascending: false, nullsFirst: false })
+      .limit(POOL.slices.classified.fetch),
+    // Where people actually are — the substrate every social signal needs.
+    q()
+      .gt("directional_believers", 0)
+      .order("directional_believers", { ascending: false, nullsFirst: false })
+      .limit(POOL.slices.believed.fetch),
+    // The old pool, kept whole: a big book is still a real reason to look.
+    q()
+      .order("volume_total_usd", { ascending: false, nullsFirst: false })
+      .limit(POOL.slices.deep.fetch),
+  ]);
+
+  // A hard failure of the WHOLE read must throw so it is never cached; one slice
+  // erroring while others answer is a degraded pool, not a broken feed.
+  const results = { active, fresh, classified, believed, deep };
+  const errs = Object.values(results).filter((r) => r.error);
+  if (errs.length === Object.keys(results).length) {
+    throw new Error(errs[0]!.error!.message);
+  }
+
+  type StateRow = NonNullable<(typeof active)["data"]>[number];
+  const bySlice: Partial<Record<PoolSlice, (StateRow & { onchainId: number })[]>> = {};
+  for (const [slice, r] of Object.entries(results) as [PoolSlice, typeof active][]) {
+    bySlice[slice] = (r.data ?? []).map((row) => ({ ...row, onchainId: Number(row.onchain_id) }));
+  }
+  const pool = buildPool({ bySlice });
+  return {
+    rows: pool.markets.map((m) => m.row),
+    /** Which door each market came through — diagnostics only, never rendered. */
+    slicesById: new Map(pool.markets.map((m) => [m.row.onchainId, m.slices])),
+  };
+}
+
+/**
+ * The shared, viewer-independent slice of the feed for one window: the candidate
+ * pool plus the window-scoped volume, ETH/USD calibration and price moves.
+ * Identical for every viewer, so listFeed caches it (SWR) — anon, connected,
+ * SSR and poll traffic all read one warm snapshot per window instead of re-running
+ * the pool read and the per-window aggregate scans on every request. Throws
+ * on a hard market_state error so a failure is never cached.
+ */
+async function sharedFeedData(win: VolumeWindow) {
+  const sb = serviceClient();
+  const { rows, slicesById } = await poolRows(sb);
 
   const ms = VOLUME_WINDOWS[win];
   const since = ms == null ? null : new Date(Date.now() - ms).toISOString();
@@ -156,7 +243,19 @@ async function sharedFeedData(win: VolumeWindow) {
     historyFrom = chg.historyFrom;
   }
 
-  return { rows, yesEth, noEth, yesTrades, noTrades, ethUsd, chgYes, chgNo, historyFrom, reach };
+  return {
+    rows,
+    yesEth,
+    noEth,
+    yesTrades,
+    noTrades,
+    ethUsd,
+    chgYes,
+    chgNo,
+    historyFrom,
+    reach,
+    slicesById,
+  };
 }
 
 export const listFeed = createServerFn({ method: "GET" })
@@ -192,8 +291,19 @@ export const listFeed = createServerFn({ method: "GET" })
         opp: null as MatchPerson | null,
       };
     }
-    const { rows, yesEth, noEth, yesTrades, noTrades, ethUsd, chgYes, chgNo, historyFrom, reach } =
-      shared;
+    const {
+      rows,
+      yesEth,
+      noEth,
+      yesTrades,
+      noTrades,
+      ethUsd,
+      chgYes,
+      chgNo,
+      historyFrom,
+      reach,
+      slicesById,
+    } = shared;
     const sb = serviceClient();
 
     /**
@@ -451,6 +561,11 @@ export const listFeed = createServerFn({ method: "GET" })
         participants: reach.get(id)?.participants ?? 0,
         first_activity_at: reach.get(id)?.first ?? null,
         last_activity_at: reach.get(id)?.last ?? null,
+        // Which pool slice(s) admitted this market. Diagnostics only — the
+        // reader is told about SIGNALS, never about which door a market came
+        // through — but without it there is no way to answer "why is this in the
+        // feed at all", which is a different question from "why is it here".
+        pool_slices: slicesById.get(id) ?? [],
         story,
       };
     });
@@ -1253,7 +1368,6 @@ export const getWallet = createServerFn({ method: "GET" })
         if (n != null) chgNo.set(id, n);
       }
     }
-
 
     // Window-scoped BELIEVER intake per held side. The read model only stores a
     // fixed 24h intake, so the selected timeframe is replayed off the canonical
