@@ -21,6 +21,8 @@ export function LandingPanel({
   onCollapse,
   onExpand,
   onCreate,
+  createLabel = "Conviction Market",
+  showCreatePlus = true,
   search,
   profile,
 }: {
@@ -30,6 +32,10 @@ export function LandingPanel({
   onExpand: () => void;
   /** Opens the market-creation flow in the center column. */
   onCreate?: () => void;
+  /** Label for the bar's primary action (e.g. "Connect wallet" when signed out). */
+  createLabel?: string;
+  /** Hide the leading "+" when the action is not a create action. */
+  showCreatePlus?: boolean;
   /** Global search slot, shown only in the collapsed bar. */
   search?: ReactNode;
   /** The single account affordance — a profile icon, far right of the bar. */
@@ -113,7 +119,7 @@ export function LandingPanel({
                 }}
                 className="ml-auto hidden shrink-0 items-center gap-1 rounded-full bg-[var(--text)] px-3 py-1.5 text-[12px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] motion-reduce:transition-none lg:inline-flex"
               >
-                <span aria-hidden="true">+</span> Conviction Market
+                {showCreatePlus && <span aria-hidden="true">+</span>} {createLabel}
               </button>
             )}
 
