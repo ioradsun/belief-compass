@@ -636,7 +636,7 @@ function MarketByline({
         <span className={`font-semibold text-[var(--text)] ${clickable ? "hover:underline" : ""}`}>
           {c.name}
         </span>
-        <span className="text-[var(--text-muted)]"> · {when}</span>
+        {when && <span className="text-[var(--text-muted)]"> · {when}</span>}
       </span>
       {dna && tone && (
         <span
