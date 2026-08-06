@@ -565,10 +565,12 @@ function BothSides({
     const belDelta = belChg.delta;
     const capDelta = capChg.delta;
     const priceUsd = Number(s === "YES" ? row.yes_price_usd : row.no_price_usd) || null;
-    const rawPct = Number(s === "YES" ? row.chg_24h_yes : row.chg_24h_no);
-    const pricePct = Number.isFinite(rawPct) ? rawPct : null;
-    const priceDelta =
-      priceUsd != null && pricePct != null ? priceUsd - priceUsd / (1 + pricePct / 100) : null;
+    // The price move comes from the SAME `marketChange` the believer and capital
+    // rows above use — not from `market_state.chg_24h_*`, which was a second,
+    // separately-baselined answer to the same question rendered on one screen.
+    const priceChg = sideChg.price;
+    const pricePct = priceChg.pct;
+    const priceDelta = priceChg.delta;
     return [
       {
         label: "Believers",

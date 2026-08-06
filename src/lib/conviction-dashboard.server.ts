@@ -8,6 +8,7 @@
  * read on-chain by the client; everything here is indexed read-only.
  */
 import { serviceClient } from "@/lib/supabase-clients";
+import { loadWindowChanges, pricePct } from "@/lib/window-change.server";
 import { positionValueUsd } from "@/domain/position-value";
 import { readWalletTradesAscending } from "@/lib/conviction-dashboard.trades.server";
 import { decodeBuyCreatorFeeWei, decodeBuyTotalFeeWei } from "@/chain/decoder";
@@ -130,12 +131,27 @@ export async function buildConvictionDashboard(
     const [{ data: st }, { data: mk }] = await Promise.all([
       sb
         .from("market_state")
-        .select("onchain_id, chg_24h_yes, chg_24h_no")
+        .select(
+          "onchain_id, believers_yes, believers_no, yes_capital_usd, no_capital_usd, yes_price_usd, no_price_usd",
+        )
         .in("onchain_id", heldIds),
       sb.from("markets").select("onchain_id, title").in("onchain_id", heldIds),
     ]);
-    for (const s of st ?? [])
-      chgById.set(Number(s.onchain_id), { yes: num(s.chg_24h_yes), no: num(s.chg_24h_no) });
+    // Today's portfolio move reads the ONE producer of "what changed over this
+    // window" (src/lib/window-change.server) rather than the stored
+    // `chg_24h_*` percentages, so the dashboard, the cards and the market
+    // panels are the same subtraction over the same snapshot history.
+    const changes = await loadWindowChanges(
+      sb,
+      (st ?? []) as unknown as Array<Record<string, unknown>>,
+      "24h",
+    );
+    for (const id of heldIds) {
+      const c = changes.byId.get(id);
+      const y = pricePct(c, "YES");
+      const n = pricePct(c, "NO");
+      if (y != null || n != null) chgById.set(id, { yes: y ?? 0, no: n ?? 0 });
+    }
     for (const m of (mk ?? []) as Array<{ onchain_id: number | string; title: string | null }>)
       heldTitle.set(Number(m.onchain_id), m.title ?? "Untitled market");
   }
