@@ -187,8 +187,7 @@ function MomentumMetric({
           {/* The exact move sits directly under its percentage — one column,
           one story, for both participants and capital. */}
           <span
-            className={`num mt-1 block whitespace-nowrap ${dense ? "text-[11px]" : "text-[12px]"}`}
-            style={{ color: tone }}
+            className={`num mt-1 block whitespace-nowrap text-[var(--text-muted)] ${dense ? "text-[11px]" : "text-[12px]"}`}
           >
             {copy.absolute}
           </span>
