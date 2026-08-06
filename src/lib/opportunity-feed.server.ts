@@ -38,7 +38,7 @@ import {
   loadOriginOverlap,
   loadViewerSignals,
 } from "@/lib/feed/viewer-signals.server";
-import { serviceClient } from "@/lib/supabase-clients";
+import { serviceClientOrNull } from "@/lib/supabase-clients";
 
 export interface FeedSessionState {
   /** Market ids already shown to this viewer in this browsing session. */
@@ -274,7 +274,7 @@ export async function buildOpportunityFeed(
     ideaFor(wallet, input.sessionToken ?? null, input),
     // Anonymous viewers get this too: it is a fact about the MARKET they opened,
     // not about them, so it needs no wallet and no history.
-    loadOriginOverlap(serviceClient(), origin, ids),
+    loadOriginOverlap(serviceClientOrNull(), origin, ids),
   ]);
 
   const sessionSeen = new Set<number>(input.seenIds ?? []);
