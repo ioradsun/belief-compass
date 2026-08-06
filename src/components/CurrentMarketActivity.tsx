@@ -163,6 +163,7 @@ export function CurrentMarketActivity({
     // it back the same way when the first event lands.
     <Collapsible open={hasSomething} probe="market-activity" className={embedded ? "" : "mb-3"}>
       <div
+        ref={cardRef}
         className={embedded ? "overflow-hidden" : "overflow-hidden rounded-[12px]"}
         style={
           embedded
@@ -214,35 +215,57 @@ export function CurrentMarketActivity({
             </button>
           )}
         </div>
-
-
-        {/* EXPANDS DOWNWARD, IN PLACE. Same primitive as the card itself, so
-          opening is the same continuous movement as arriving — and the market
-          stays readable beside its own activity instead of behind a scrim. */}
-        <Collapsible open={open} probe="market-activity-body">
-          <div
-            className="overflow-y-auto px-3 pb-2"
-            style={{ maxHeight: EXPANDED_MAX }}
-            // The scroll lives here, so a flick inside the feed never chains up
-            // and starts scrolling the rail behind it.
-            onWheel={(e) => e.stopPropagation()}
-          >
-            <LiveTape
-              wallet={wallet}
-              onSelect={onSelect}
-              marketIds={[marketId]}
-              showTitles={false}
-              limit={200}
-              skeletonRows={4}
-              emptyText="Quiet for three days."
-              scroll={false}
-              // The reader opened this deliberately and is looking straight at
-              // it; new rows wait rather than rearranging what they are reading.
-              holdUpdates
-            />
-          </div>
-        </Collapsible>
       </div>
+
+      {/* DROPS DOWN OVER EVERYTHING. Portalled to <body> and fixed to this
+        card's column, so no ancestor overflow or stacking context can clip it
+        and the whole panel is visible. A transparent catcher behind it closes
+        on an outside tap. */}
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <>
+              <div className="fixed inset-0 z-[1200]" onClick={() => setOpen(false)} aria-hidden />
+              <div
+                className="fixed z-[1201] overflow-hidden rounded-[12px] border border-[var(--hairline)] shadow-2xl"
+                style={{
+                  left: anchor?.left ?? 0,
+                  width: anchor?.width ?? "100%",
+                  top: (anchor?.top ?? 0) + 4,
+                  background: "var(--surface-raised, var(--surface, #101014))",
+                }}
+                role="dialog"
+                aria-label="Activity in this market"
+              >
+                <div
+                  className="overflow-y-auto px-3 py-2"
+                  style={{
+                    maxHeight: `min(${EXPANDED_MAX}, calc(100vh - ${(anchor?.top ?? 0) + 20}px))`,
+                  }}
+                  onWheel={(e) => e.stopPropagation()}
+                >
+                  <LiveTape
+                    wallet={wallet}
+                    onSelect={(id) => {
+                      setOpen(false);
+                      onSelect(id);
+                    }}
+                    marketIds={[marketId]}
+                    showTitles={false}
+                    limit={200}
+                    skeletonRows={4}
+                    emptyText="Quiet for three days."
+                    scroll={false}
+                    // The reader opened this deliberately and is looking straight
+                    // at it; new rows wait rather than rearranging it.
+                    holdUpdates
+                  />
+                </div>
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
     </Collapsible>
+
   );
 }
