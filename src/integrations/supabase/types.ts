@@ -588,6 +588,7 @@ export type Database = {
           capital_held_no: number | null
           capital_held_total: number | null
           capital_held_yes: number | null
+          capital_usd: number | null
           chg_1h: number | null
           chg_24h: number | null
           chg_24h_no: number | null
@@ -686,6 +687,7 @@ export type Database = {
           capital_held_no?: number | null
           capital_held_total?: number | null
           capital_held_yes?: number | null
+          capital_usd?: number | null
           chg_1h?: number | null
           chg_24h?: number | null
           chg_24h_no?: number | null
@@ -784,6 +786,7 @@ export type Database = {
           capital_held_no?: number | null
           capital_held_total?: number | null
           capital_held_yes?: number | null
+          capital_usd?: number | null
           chg_1h?: number | null
           chg_24h?: number | null
           chg_24h_no?: number | null
