@@ -258,6 +258,39 @@
 }
 
 /*
+ * THE DECK'S VERTICAL SCALE — one set of numbers, driven by the viewport height.
+ *
+ * The centre column is a fixed-height stack: identity on top, the market body in
+ * the middle, the decision dock pinned to the bottom. Every one of those pieces
+ * used to reserve its space in constant pixels (22 / 18 / 32, gap-3, py-3), which
+ * is only correct at one window height. On a short laptop the constants added up
+ * past the column and pushed the dock — the only actionable thing on the page —
+ * off the bottom; on a tall monitor the same constants left the panel feeling
+ * pinched at the top of a lot of empty space.
+ *
+ * So the rhythm is a function of the height it lives in. `svh` (not `vh`) so a
+ * phone's collapsing URL bar cannot resize the scale mid-scroll, and `clamp` on
+ * both ends so the panel never becomes unreadably tight or absurdly airy.
+ * Reserved rows keep their purpose — they still hold their space so a market
+ * with no reason/byline does not shift the question — they just reserve a
+ * height proportional to the viewport instead of a constant.
+ */
+.deck {
+  --deck-gap: clamp(6px, 1.1svh, 12px);
+  /* Two constraints on the question: column width AND column height. */
+  --deck-title: clamp(17px, min(2.4vw, 3.3svh), 30px);
+  --deck-meta: clamp(0px, 2.2svh, 22px);
+  --deck-why: clamp(13px, 1.8svh, 18px);
+  --deck-byline: clamp(22px, 3.2svh, 32px);
+  /* Consumed by MarketVitality's metric rows, so the instrument breathes with
+     the same lungs as everything around it. */
+  --deck-metric-y: clamp(6px, 1.2svh, 12px);
+  gap: var(--deck-gap);
+}
+
+
+
+/*
  * Reduced motion: the layout-stability work stands on its own, so the honest
  * answer here is an immediate swap rather than a slower version of the motion.
  * Every other transition/animation in the app collapses to effectively nothing.
