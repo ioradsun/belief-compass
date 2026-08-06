@@ -112,7 +112,14 @@ export function PersonProfile({
   const { data, isLoading } = useQuery({
     queryKey: ["person", wallet.toLowerCase(), viewer ?? null],
     queryFn: () => getPersonProfile({ data: { wallet, viewer } }),
-    refetchInterval: 60_000,
+    // NO INTERVAL. Unlike the network and the DNA overview, this profile is
+    // computed on read rather than served from a worker cache, so there is no
+    // "still computing" state to wait on — the timer was re-running a
+    // multi-query service read every minute for a panel the reader opened and
+    // is looking at. What moves it is that person trading, which carries no
+    // wallet-keyed event; focus and reconnect refetching are the honest
+    // coverage, and this staleTime is short enough for them to fire.
+    staleTime: 60_000,
   });
 
   /**

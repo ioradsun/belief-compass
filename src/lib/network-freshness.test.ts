@@ -86,11 +86,14 @@ describe("the viewer's network cannot silently go stale", () => {
     expect(declarations).toEqual([]);
   });
 
-  it("and that definition sets no interval of its own", () => {
+  it("and that definition sets no STANDING interval of its own", () => {
     // Comments stripped first: this file EXPLAINS the interval it removed, and
     // an assertion that cannot tell prose from code fails on its own rationale.
     const code = NETWORK_QO.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-    expect(code).not.toMatch(/refetchInterval/);
+    // A literal delay is the regression — a timer that runs whatever the data
+    // says. The bounded wait added later is a function of the server's reported
+    // freshness and stops on its own; see the DNA-backed describe below.
+    expect(code).not.toMatch(/refetchInterval:\s*[0-9]/);
   });
 });
 
@@ -188,5 +191,35 @@ describe("the viewer's portfolio is revalued by the trade, not a timer", () => {
   it("and those definitions set no interval of their own", () => {
     const code = POSITIONS_QO.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
     expect(code).not.toMatch(/refetchInterval/);
+  });
+});
+
+/**
+ * A CACHE FILLED BY A WORKER NEEDS A BOUNDED WAIT, NOT A STANDING POLL.
+ *
+ * Two opposite mistakes were live at once. `["dna-overview"]` polled every 60s
+ * forever — long past the point the answer went fresh and nothing could change
+ * it. `["network"]` polled never, which is right for a settled cache and wrong
+ * for a first-time reader: that read TRIGGERS the computation, then nobody asked
+ * again, so their network stayed empty until they switched tabs. Both servers
+ * report which state the computation is in; the rule now reads it.
+ */
+describe("DNA-backed queries wait for the worker and then stop", () => {
+  it("polls the network only while the server says it is computing", () => {
+    expect(NETWORK_QO).toMatch(/dnaPollInterval/);
+  });
+
+  it("polls the overview on the same rule, instead of forever", () => {
+    const overview = read("src/components/DnaOverview.tsx");
+    expect(overview).toMatch(/dnaPollInterval/);
+    expect(overview).not.toMatch(/refetchInterval:\s*[0-9]/);
+  });
+
+  it("does not poll a profile that has no computation to wait for", () => {
+    // getPersonProfile is computed on read, not served from viewer_dna_cache —
+    // there is no "still computing" state, so a timer buys nothing.
+    const profile = read("src/components/PersonProfile.tsx");
+    expect(profile).not.toMatch(/refetchInterval/);
+    expect(profile).toMatch(/staleTime/);
   });
 });
