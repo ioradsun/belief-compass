@@ -418,26 +418,17 @@ export function MarketDeck({
       {/* Identity — pinned to the top of the column. In mobile Case mode the
         question moves into the carousel header, so this collapses. */}
       <div className={`shrink-0 ${mobileCaseOpen ? "hidden" : ""}`}>
-        {/* Meta row — its height is RESERVED. Category, age, the exclusivity
-          note and the lens chip all arrive asynchronously and are individually
-          optional; without a floor here a market that has none of them sits the
-          title (and therefore the whole body and the dock) higher than a market
-          that has all of them. The momentum chip that used to occupy the right
-          of this row is gone — it described the MARKET's temperature in the
-          loudest corner of the card, while the reader's actual question ("why
-          am I looking at this?") sat muted underneath. See components/WhyThis. */}
+        {/* Meta row — its height is RESERVED. The category and the market's age
+          used to lead here; both were noise above the question, and the age was
+          a second copy of what the byline already says under it. What is left is
+          the exclusivity note, which is a fact about where the market exists. */}
         <div className="mb-1 flex min-h-[22px] items-center gap-2">
-          {(category || freshToken) && (
-            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-              {[category, freshToken].filter(Boolean).join(" · ")}
-            </span>
-          )}
           {cm?.market && (
             <span
               title="Markets created here don't appear on pov.co yet."
               className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-secondary)]"
             >
-              · Company exclusive
+              Company exclusive
             </span>
           )}
         </div>
