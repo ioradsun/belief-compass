@@ -50,9 +50,8 @@ export function FollowButton({
 
   const mutation = useMutation({
     mutationFn: (following: boolean) =>
-      withSession((session) =>
-        setFollow({ data: { wallet: viewer as string, person, following, session } }),
-      ),
+      setFollow({ data: { wallet: viewer as string, person, following } }),
+
     // Optimistic: paint the new state, keep the old one to fall back to.
     onMutate: async (following) => {
       setError(null);
