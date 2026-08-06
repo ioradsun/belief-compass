@@ -291,11 +291,6 @@ const TABS: { key: MobileTab; label: string }[] = [
   { key: "room", label: "The Room" },
 ];
 
-const freshFirstIdDbg = (d: unknown) =>
-  ((d as { items?: { kind: string; onchainId?: number }[] } | undefined)?.items ?? []).find(
-    (i) => i.kind === "market",
-  )?.onchainId ?? null;
-
 function Feed() {
   const {
     wallet: searchWallet,
@@ -589,16 +584,9 @@ function Feed() {
   // A lens change is only honoured once the response for THAT lens lands: `data`
   // is undefined while the new query is in flight, so the freshly-filtered order
   // is read from it directly rather than from the sticky (still old) feed.
-  if (typeof window !== "undefined")
-    ((window as unknown as { __dbg: string[] }).__dbg ??= []).push(
-      `render data=${!!data} fresh=${freshFirstIdDbg(data)}`,
-    );
   const freshFirstId =
     data?.items?.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []))[0] ?? null;
   useEffect(() => {
-    ((window as unknown as { __dbg: string[] }).__dbg ??= []).push(
-      `effect repin=${repinRef.current} fresh=${freshFirstId}`,
-    );
     if (!repinRef.current || freshFirstId == null) return;
     repinRef.current = false;
     setPinnedId(freshFirstId);
@@ -676,10 +664,6 @@ function Feed() {
     if (pinnedId == null && selectedMarket == null && firstId != null) setPinnedId(firstId);
   }, [pinnedId, selectedMarket, firstId]);
   const activeMarket = selectedMarket ?? pinnedId ?? firstId;
-  if (typeof window !== "undefined")
-    ((window as unknown as { __dbg: string[] }).__dbg ??= []).push(
-      `active sel=${selectedMarket} pin=${pinnedId} first=${firstId} active=${activeMarket}`,
-    );
 
   const foundIdx =
     activeMarket == null ? -1 : marketRows.findIndex((r) => Number(r.onchain_id) === activeMarket);
