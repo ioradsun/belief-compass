@@ -62,6 +62,45 @@ const capitalCopy = (
 ): MetricMove =>
   capitalMove({ currentEth: m.current, baseEth: m.base, since: w.since, usd, money });
 
+/** A face the Participants row can show — the smallest shape an avatar needs. */
+export interface MomentumFace {
+  wallet: string;
+  name?: string | null;
+  avatarUrl?: string | null;
+}
+
+/**
+ * The faces behind a count. Placed on the LABEL line, right side — the one
+ * consistent slot in this instrument for "who": the top line is always
+ * magnitude (total · %), the label line is always identity, the line under it
+ * is always the move. Capital has no faces, so that slot simply stays empty and
+ * the two rows still read down the same columns.
+ */
+function FaceRow({ faces, total }: { faces: MomentumFace[]; total: number }) {
+  const shown = faces.slice(0, 3);
+  const rest = Math.max(0, total - shown.length);
+  if (shown.length === 0) return null;
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex -space-x-1.5">
+        {shown.map((f) => (
+          <PersonAvatar
+            key={f.wallet}
+            wallet={f.wallet}
+            name={f.name}
+            avatarUrl={f.avatarUrl}
+            size={20}
+            className="ring-1 ring-[var(--surface)]"
+          />
+        ))}
+      </div>
+      {rest > 0 && (
+        <span className="num text-[11px] text-[var(--text-muted)]">+{rest}</span>
+      )}
+    </div>
+  );
+}
+
 /**
  * One full-width metric row inside the Total Market instrument: the current
  * total in large type on the left, the percentage change in large type on the
@@ -73,12 +112,17 @@ function MomentumMetric({
   label,
   copy,
   dense,
+  faces,
+  facesTotal,
 }: {
   total: string;
   label: string;
   copy: MetricMove;
   /** Phone-tight rhythm so the whole market fits one screen without scrolling. */
   dense?: boolean;
+  /** Optional identity for this metric — rendered opposite the label. */
+  faces?: MomentumFace[];
+  facesTotal?: number;
 }) {
   const tone = dirTone(copy.direction);
   const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
@@ -104,10 +148,13 @@ function MomentumMetric({
           ) : null}
         </span>
       </div>
-      <div
-        className={`${dense ? "mt-1" : "mt-1.5"} text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]`}
-      >
-        {label}
+      <div className={`${dense ? "mt-1" : "mt-1.5"} flex items-center justify-between gap-3`}>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          {label}
+        </span>
+        {faces && faces.length > 0 && (
+          <FaceRow faces={faces} total={facesTotal ?? faces.length} />
+        )}
       </div>
       <div
         className={`num mt-0.5 ${dense ? "text-[11px]" : "text-[12px]"}`}
@@ -118,6 +165,7 @@ function MomentumMetric({
     </div>
   );
 }
+
 
 export function MarketMomentum({
   tape,
