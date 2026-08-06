@@ -88,6 +88,8 @@ function beliefAction(a: ConvictionAction | undefined) {
 const CELEBRATION_TRANSITIONS = new Set([
   "side_doubled",
   "believer_milestone",
+  "capital_milestone",
+  "market_reawakened",
   "tribe_forming",
   "participation_broadening",
   "market_dividing",

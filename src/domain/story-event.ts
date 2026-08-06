@@ -59,6 +59,9 @@ export type StoryEventType =
   | "participation_broadening"
   // MATERIAL — a move big enough that saying nothing would be the error.
   | "material_move"
+  // CELEBRATION — the community growing, said as the good news it is.
+  | "capital_milestone"
+  | "market_reawakened"
   // SOCIAL
   | "tribe_forming"
   // DECLINE
@@ -73,6 +76,19 @@ export interface SideWindow {
   pricePct?: number | null;
   /** Recent capital inflow (USD) for the acceleration check vs baseline. */
   recentCapitalUsd?: number | null;
+}
+
+/**
+ * Trade counts over the standard windows, as market_state already stores them.
+ *
+ * Cumulative: `trades7d` includes `trades24h`. When the two are EQUAL and there
+ * were trades today, every trade of the week happened in the last day — the
+ * market was silent for six days and has just woken. That is an exact reading of
+ * fields we already keep, with no new history to store.
+ */
+export interface MarketActivity {
+  trades24h: number;
+  trades7d: number;
 }
 
 export interface MarketBaseline {
@@ -98,6 +114,8 @@ export interface StoryEventInput {
   yes: SideWindow;
   no: SideWindow;
   baseline?: MarketBaseline | null;
+  /** Trade counts, for the reawakening read. Absent → no such claim is made. */
+  activity?: MarketActivity | null;
   social?: MarketSocial | null;
   /**
    * Moves that cleared the product's materiality bar, heaviest first, already
@@ -147,6 +165,8 @@ const TIER: Record<StoryEventType, 1 | 2 | 3> = {
   participation_broadening: 2,
   accelerating: 2,
   material_move: 1,
+  capital_milestone: 1,
+  market_reawakened: 2,
   losing_conviction: 3,
 };
 
@@ -161,6 +181,29 @@ const BEL = FEED_TRIGGERS.believers.minAbs;
 const TRIBE_FORMING_MIN = 3;
 /** Believer counts worth announcing when a side crosses them. */
 export const BELIEVER_MILESTONES = [10, 50, 100, 500, 1_000, 5_000] as const;
+
+/**
+ * Committed capital worth announcing when a MARKET crosses it, in USD.
+ *
+ * The brief asked for $1,000 / $10,000 / $100,000. Measured across 1,000 live
+ * markets, the largest holds $197 in total and only three are above $100 — so
+ * those three rungs alone would have been a celebration that could never fire.
+ * They are kept, as headroom this platform should grow into, and the ladder
+ * starts where the community actually is: thirteen markets are already past $10
+ * and four past $50, so the first crossings are days away rather than years.
+ *
+ * A market total, not a side: "this question has drawn $100" is the community
+ * story. Which side holds it is a different sentence, and the rails tell it.
+ */
+export const CAPITAL_MILESTONES = [10, 50, 100, 500, 1_000, 10_000, 100_000] as const;
+
+/** The largest rung strictly between a base and a current, or null. */
+function crossed(rungs: readonly number[], base: number, current: number): number | null {
+  if (!(current > base)) return null;
+  let hit: number | null = null;
+  for (const r of rungs) if (base < r && r <= current) hit = r;
+  return hit;
+}
 /**
  * A market is "balanced" when neither side holds more than this share of
  * believers. Wide enough that one arrival can't toggle it on and off.
@@ -524,6 +567,54 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
    * plain gain, and a plain gain outranks a decline that any chart already shows.
    */
   /**
+   * THE COMMUNITY CROSSED A NUMBER. A market total, from the two sides added —
+   * the same arithmetic the panels show, so the feed and the tile agree.
+   *
+   * The base is only trustworthy when BOTH sides reported a real delta; the
+   * emitter passes zero for a side whose history is missing, and a crossing
+   * measured against a fabricated zero would announce a milestone on a market
+   * that has been sitting above it for weeks. So a crossing needs a base above
+   * nothing — a market's very first dollars are `first capital`, told elsewhere.
+   */
+  const capitalMilestone = (): StoryEvent | null => {
+    const base = yes.capitalBaseUsd + no.capitalBaseUsd;
+    const now = base + yes.capitalDeltaUsd + no.capitalDeltaUsd;
+    if (base <= 0) return null;
+    const rung = crossed(CAPITAL_MILESTONES, base, now);
+    if (rung == null) return null;
+    return {
+      type: "capital_milestone",
+      tier: TIER.capital_milestone,
+      headline: `This question has drawn ${money(fmt, rung)}`,
+      detail: `Committed capital passed ${money(fmt, rung)} ${input.timeframeShort === "24H" ? "today" : `over ${input.timeframeShort}`}.`,
+      evidence: [{ label: "Committed", value: money(fmt, now) }],
+      fingerprint: `capital_milestone:${rung}`,
+    };
+  };
+
+  /**
+   * THE MARKET CAME BACK. Every trade of the week landed in the last day, so the
+   * six days before it were silent.
+   *
+   * It must already have been FUNDED to count: a market that opened yesterday
+   * also has all of its week's trades in the last day, and calling a birth a
+   * return would be the feed misreading its own community.
+   */
+  const reawakened = (): StoryEvent | null => {
+    const a = input.activity;
+    if (!a || a.trades24h <= 0 || a.trades7d !== a.trades24h) return null;
+    if (yes.capitalBaseUsd + no.capitalBaseUsd <= 0) return null;
+    return {
+      type: "market_reawakened",
+      tier: TIER.market_reawakened,
+      headline: "This question is alive again",
+      detail: `First trades in a week — ${a.trades24h} ${plural(a.trades24h, "trade", "trades")} today.`,
+      evidence: [{ label: "Trades today", value: String(a.trades24h) }],
+      fingerprint: "market_reawakened:market",
+    };
+  };
+
+  /**
    * THE FLOOR. Whatever else did or did not have a shape, a move this size is
    * reported. The fingerprint carries the metric and the side, so a capital move
    * and a price move on the same market are separate episodes and the dedup
@@ -580,6 +671,8 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
     () => firstOf(sideDoubled), //    a crowd doubled
     marketDividing, //           both sides gaining
     () => firstOf(milestone), //      a round number crossed
+    capitalMilestone, //         the community's money crossed one too
+    reawakened, //               silent for a week, trading again
     tribeForming, //             your people are clustering
     acceleration, //             faster than this market's own normal
     balanced, //                 genuine, settled disagreement

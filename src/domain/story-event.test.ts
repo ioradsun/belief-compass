@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { emitStoryEvent, type StoryEventInput, type SideWindow } from "./story-event";
+import {
+  emitStoryEvent,
+  CAPITAL_MILESTONES,
+  type StoryEventInput,
+  type SideWindow,
+} from "./story-event";
 import { changeFrom24hRow, materialMoves, MATERIAL } from "./market-change";
 
 const side = (over: Partial<SideWindow> = {}): SideWindow => ({
@@ -483,5 +488,113 @@ describe("a material move is never silently dropped", () => {
 
   it("holds the product's five percent line", () => {
     expect(MATERIAL.minPct).toBe(5);
+  });
+});
+
+/**
+ * CELEBRATIONS FROM DATA WE ALREADY KEEP.
+ *
+ * Nothing here needs a new table, a new emitter or a backfill: a capital
+ * milestone is the two sides added, and a reawakening is the week's trade count
+ * equalling the day's.
+ */
+describe("the community crossing a number is the good news it is", () => {
+  const funded = (over: Partial<SideWindow> = {}) =>
+    side({ capitalBaseUsd: 40, capitalDeltaUsd: 0, ...over });
+  /** The formatter the emitter actually passes, so the copy is the real copy. */
+  const money = (usd: number) => `$${Math.round(usd)}`;
+
+  it("announces the market passing a rung", () => {
+    // $80 → $110 crosses $100. Believers rise with the money so this is not
+    // also "capital concentrating", which is a contradiction and outranks it.
+    const t = emitStoryEvent(
+      input({
+        yes: funded({ capitalDeltaUsd: 30, believerDelta: 2 }),
+        no: funded({ capitalBaseUsd: 40 }),
+        money,
+      }),
+    );
+    expect(t?.type).toBe("capital_milestone");
+    expect(t?.headline).toBe("This question has drawn $100");
+    expect(t?.fingerprint).toBe("capital_milestone:100");
+  });
+
+  it("takes the highest rung crossed, not the first", () => {
+    const t = emitStoryEvent(
+      input({
+        yes: side({ capitalBaseUsd: 4, capitalDeltaUsd: 100, believerDelta: 2 }),
+        no: side({ capitalBaseUsd: 4, capitalDeltaUsd: 0 }),
+      }),
+    );
+    expect(t?.fingerprint).toBe("capital_milestone:100");
+  });
+
+  it("says nothing when no rung was crossed", () => {
+    const t = emitStoryEvent(
+      input({ yes: funded({ capitalDeltaUsd: 1 }), no: funded({ capitalBaseUsd: 30 }) }),
+    );
+    expect(t?.type).not.toBe("capital_milestone");
+  });
+
+  /**
+   * The emitter passes zero for a side whose history is missing. A crossing
+   * measured against a fabricated zero would announce a milestone on a market
+   * that has been sitting above it for weeks.
+   */
+  it("never claims a crossing it measured against a missing baseline", () => {
+    const t = emitStoryEvent(
+      input({
+        yes: side({ capitalBaseUsd: 0, capitalDeltaUsd: 0 }),
+        no: side({ capitalBaseUsd: 0, capitalDeltaUsd: 0 }),
+      }),
+    );
+    expect(t?.type).not.toBe("capital_milestone");
+  });
+
+  /**
+   * Kept as headroom the platform should grow into: the largest live market
+   * holds $197, so a ladder that started at $1,000 could never have fired.
+   */
+  it("starts the ladder where the community actually is", () => {
+    expect(CAPITAL_MILESTONES[0]).toBeLessThanOrEqual(10);
+    expect(CAPITAL_MILESTONES).toContain(1_000);
+    expect(CAPITAL_MILESTONES).toContain(100_000);
+  });
+});
+
+describe("a market that went quiet and came back", () => {
+  const funded = () => side({ capitalBaseUsd: 40, capitalDeltaUsd: 0, believerDelta: 0 });
+
+  it("reads a silent week from the cumulative counts", () => {
+    const t = emitStoryEvent(
+      input({ yes: funded(), no: funded(), activity: { trades24h: 3, trades7d: 3 } }),
+    );
+    expect(t?.type).toBe("market_reawakened");
+    expect(t?.detail).toBe("First trades in a week — 3 trades today.");
+  });
+
+  it("says nothing while the week was busy throughout", () => {
+    const t = emitStoryEvent(
+      input({ yes: funded(), no: funded(), activity: { trades24h: 3, trades7d: 11 } }),
+    );
+    expect(t?.type).not.toBe("market_reawakened");
+  });
+
+  /** A market that opened yesterday also has all its week's trades today. */
+  it("does not call a birth a return", () => {
+    const t = emitStoryEvent(
+      input({
+        yes: side({ capitalBaseUsd: 0, capitalDeltaUsd: 20 }),
+        no: side({ capitalBaseUsd: 0, capitalDeltaUsd: 0 }),
+        activity: { trades24h: 3, trades7d: 3 },
+      }),
+    );
+    expect(t?.type).not.toBe("market_reawakened");
+  });
+
+  it("makes no such claim without the counts", () => {
+    expect(emitStoryEvent(input({ yes: funded(), no: funded() }))?.type).not.toBe(
+      "market_reawakened",
+    );
   });
 });
