@@ -169,6 +169,11 @@ async function main() {
   // job is failing to fill it. Listing these under "apply these migrations"
   // would be actively misleading.
   const stalled: Requirement[] = [];
+  // Exists, correctly shaped, but the anon role cannot read it. That is a GRANT
+  // (or RLS policy) decision, never a missing migration — telling the reader to
+  // apply a migration that IS applied sends them to change nothing and conclude
+  // the checker is lying.
+  const ungranted: Requirement[] = [];
   for (const r of REQUIRED) {
     const { verdict, detail } = await probe(r);
     // A restricted table the app only reads server-side is fine — the check is
@@ -179,8 +184,11 @@ async function main() {
       verdict === "error" ||
       (verdict === "empty" && !!r.anonMustRead) ||
       (verdict === "blocked" && !!r.anonMustRead);
-    const stall = fatal && verdict === "empty" && !!r.emptyMeans;
-    if (fatal) (stall ? stalled : broken).push(r);
+    if (fatal) {
+      if (verdict === "empty" && r.emptyMeans) stalled.push(r);
+      else if (verdict === "blocked") ungranted.push(r);
+      else broken.push(r);
+    }
     const mark = fatal ? "✗" : verdict === "ok" ? "✓" : "·";
     console.log(`  ${mark} ${r.table.padEnd(24)} ${verdict.padEnd(15)} ${detail}`);
     console.log(`      ${r.feature}`);
@@ -188,10 +196,16 @@ async function main() {
     // An empty table with a known writer is a stalled JOB, not a missing
     // migration. Send the reader to the thing that is actually broken.
     if (verdict === "empty" && r.emptyMeans) console.log(`      ${r.emptyMeans}`);
+    else if (verdict === "blocked")
+      console.log(
+        `      TABLE EXISTS — anon simply cannot read it. Not a migration gap.\n` +
+          `      Decide whether ${r.table} should be public; if yes:\n` +
+          `        GRANT SELECT ON public.${r.table} TO anon;  -- plus a permissive SELECT policy`,
+      );
     else console.log(`      NOT APPLIED → supabase/migrations/${r.migration}`);
   }
 
-  if (broken.length === 0 && stalled.length === 0) {
+  if (broken.length === 0 && stalled.length === 0 && ungranted.length === 0) {
     console.log("\n✓ the database matches what the code expects.\n");
     process.exit(0);
   }
@@ -210,8 +224,16 @@ async function main() {
         "  Nothing to migrate — a background job is not writing. See the note above each.\n",
     );
   }
+  if (ungranted.length > 0) {
+    console.error(
+      `\n✗ ${ungranted.length} table(s) exist but are NOT READABLE BY ANON:\n` +
+        ungranted.map((r) => `    public.${r.table}`).join("\n") +
+        "\n  Nothing to migrate — this is a grant/policy decision about what is public.\n",
+    );
+  }
   process.exit(1);
 }
+
 
 main().catch((e) => {
   console.error(e);
