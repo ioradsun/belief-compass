@@ -23,6 +23,7 @@ import {
   type RoomSection,
   type Side,
 } from "@/domain/welcome";
+import { marketTitle, marketTitleFallback } from "@/domain/market-title";
 
 /** How far back a "new believer" still counts as welcomable / a welcome still shows. */
 const WELCOMABLE_WINDOW_DAYS = 7;
@@ -192,7 +193,7 @@ export const getWelcomable = createServerFn({ method: "GET" })
     ]);
     const titleById = new Map<number, string>();
     for (const m of (titlesRes.data ?? []) as { onchain_id: number; title: string | null }[])
-      titleById.set(Number(m.onchain_id), m.title ?? `Market #${m.onchain_id}`);
+      titleById.set(Number(m.onchain_id), marketTitle(m.title, m.onchain_id));
 
     const seenMs = lastSeenAt ? new Date(lastSeenAt).getTime() : 0;
     const people: WelcomablePerson[] = picks.map((p) => {
@@ -203,7 +204,7 @@ export const getWelcomable = createServerFn({ method: "GET" })
         name: prof?.displayName ?? aliasFor(p.wallet),
         avatarUrl: prof?.pfpUrl ?? null,
         marketId: p.marketId,
-        marketTitle: titleById.get(p.marketId) ?? `Market #${p.marketId}`,
+        marketTitle: titleById.get(p.marketId) ?? marketTitleFallback(p.marketId),
         side: p.side,
         occurredAt: p.occurredAt,
         relationship: rel?.relationship ?? null,

@@ -53,6 +53,7 @@ import { houseReadState } from "@/domain/house-read";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
+import { marketTitle } from "@/domain/market-title";
 
 type Phase = "question" | "sides";
 
@@ -70,7 +71,7 @@ export function MobileGame({
   onSelectPerson?: (wallet: string) => void;
 }) {
   const marketId = Number(row.onchain_id);
-  const title = row.markets?.title ?? `Market #${marketId}`;
+  const title = marketTitle(row.markets?.title, marketId);
   const category = row.markets?.category ?? null;
 
   const [phase, setPhase] = useState<Phase>("question");

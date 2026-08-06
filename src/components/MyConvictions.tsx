@@ -27,6 +27,7 @@ import {
   type PositionSignal,
   type Side,
 } from "@/domain/position-story";
+import { marketTitle } from "@/domain/market-title";
 
 type Position = {
   onchain_id: number;
@@ -355,7 +356,7 @@ export function MyConvictions({
         shares,
         entryPrice,
         currentPrice: priceRaw == null || !(Number(priceRaw) > 0) ? null : Number(priceRaw),
-        title: p.markets?.title ?? `Market #${id}`,
+        title: marketTitle(p.markets?.title, id),
         believers: believersRaw == null ? null : Number(believersRaw),
         newToday: newTodayRaw == null ? null : Number(newTodayRaw),
         live,

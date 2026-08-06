@@ -18,6 +18,7 @@ import { PersonAvatar } from "@/components/PersonAvatar";
 
 import type { MarketStory } from "@/domain/story";
 import { formatMoney, type DisplayUnit } from "@/domain/money";
+import { marketTitle } from "@/domain/market-title";
 
 // Pulse bar colour by aliveness. Amber for a living market (kept off the
 // YES-blue / NO-amber axis so it never reads as a side), fading to muted as
@@ -328,7 +329,7 @@ export function MarketCard({
     <article className="flex flex-col rounded-xl border border-border bg-card/40 transition-shadow hover:shadow-md">
       <header className="border-b border-border px-4 py-3">
         <div className="text-sm font-medium leading-snug">
-          {row.markets?.title ?? `Market #${row.onchain_id}`}
+          {marketTitle(row.markets?.title, row.onchain_id)}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
           {row.markets?.category && <span>{row.markets.category}</span>}

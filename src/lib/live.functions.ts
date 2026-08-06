@@ -64,6 +64,7 @@ import {
   type ConvictionCohort,
   type HoldingRung,
 } from "@/domain/conviction-cohort";
+import { fetchMarketNames } from "@/lib/market-titles.server";
 
 type NetLabel = "twin" | "tribe" | "opp" | "inverse";
 
@@ -199,10 +200,12 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     const momentumById = new Map<number, Momentum>();
     if (marketIds.length > 0) {
       const [mk, ms] = await Promise.all([
-        // `creator_wallet` is here so a reader's OWN questions can outrank a
-        // stranger's — see the viewer-stake block below for why that was
-        // impossible until now.
-        sb.from("markets").select("onchain_id, title, creator_wallet").in("onchain_id", marketIds),
+        // ONE lookup for what a market is called (and who asked it), shared with
+        // every other surface. It used to select `creator_wallet`, which does
+        // not exist on `markets` — PostgREST failed the whole request and every
+        // row in the tape silently degraded to "Market #<id>". The author column
+        // is `author_wallet`; the shared helper is the only place that knows.
+        fetchMarketNames(sb, marketIds),
         sb
           .from("market_state")
           .select(
@@ -210,17 +213,12 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           )
           .in("onchain_id", marketIds),
       ]);
-      for (const m of mk.data ?? []) {
-        const id = Number(m.onchain_id);
-        // ONLY A REAL TITLE GOES IN. Storing "" for a missing one made the map
-        // return a present-but-empty string, which survives BOTH `?? null` here
-        // and `?? \`Market #\`` in live-tape — so the row rendered a blank
-        // instead of either the title or the fallback. An empty sentinel that
-        // defeats two layers of null-coalescing is worse than no entry.
-        const title = typeof m.title === "string" ? m.title.trim() : "";
-        if (title) titleById.set(id, title);
-        const creator = String((m as Record<string, unknown>).creator_wallet ?? "").toLowerCase();
-        if (creator) creatorByMarket.set(id, creator);
+      for (const [id, m] of mk) {
+        // ONLY A REAL TITLE GOES IN — the helper already nulls blanks, because a
+        // present-but-empty string survives every layer of null-coalescing and
+        // renders as nothing at all.
+        if (m.title) titleById.set(id, m.title);
+        if (m.authorWallet) creatorByMarket.set(id, m.authorWallet);
       }
       for (const s of ms.data ?? []) {
         const r = s as Record<string, unknown>;

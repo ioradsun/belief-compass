@@ -24,6 +24,7 @@ import { FeedFilterMenu } from "@/components/FeedFilterMenu";
 import type { FeedFilters, FeedNetwork } from "@/domain/feed/filters";
 import type { MarketRow } from "@/components/MarketCard";
 import type { Sensitivity } from "@/domain/market-change";
+import { marketTitle, marketTitleFallback } from "@/domain/market-title";
 
 const num = (v: unknown): number => {
   const n = Number(v);
@@ -47,7 +48,13 @@ function factsOf(row: MarketRow | undefined, nowMs: number) {
   const r = row as unknown as Record<string, unknown>;
   const capitalUsd = num(r.yes_capital_usd) + num(r.no_capital_usd);
   return {
-    question: row.markets?.title ?? `Market #${row.onchain_id}`,
+    // A ROW WITHOUT A TITLE HAS NO QUESTION — it must NOT manufacture one.
+    // Resolving the placeholder here made `?? activeTitle` unreachable, so the
+    // pinned card printed "Market #2618" while the centre panel, holding the
+    // same market's full row, showed the question. Absence stays absent; the
+    // caller decides what to fall back to.
+    question: marketTitle(row.markets?.title, row.onchain_id),
+    hasTitle: Boolean(row.markets?.title?.trim()),
     discovery: composeDiscoveryRow({
       participants: num(r.participants),
       believers: num(row.believers_yes) + num(row.believers_no),
@@ -79,6 +86,7 @@ export function FeedListPanel({
   entries,
   rows,
   activeId,
+  activeTitle,
   onSelect,
   filters,
   onFilters,
@@ -91,6 +99,14 @@ export function FeedListPanel({
   /** Read-model rows keyed by onchain id — the same map the centre panel uses. */
   rows: Record<number, MarketRow>;
   activeId: number | null;
+  /**
+   * The title of the market the centre panel is CURRENTLY showing — the same
+   * string that panel renders. The playlist only knows the markets in its own
+   * slice, so a market opened from a link or search has no row here; without
+   * this the pinned "Now reading" card printed the id while the reader was
+   * looking at the question two columns over.
+   */
+  activeTitle?: string | null;
   onSelect: (id: number) => void;
   filters: FeedFilters;
   onFilters: (f: FeedFilters) => void;
@@ -139,7 +155,9 @@ export function FeedListPanel({
             Now reading
           </p>
           <p className="text-[13px] font-semibold leading-snug text-[var(--text)]">
-            {activeFacts?.question ?? `Market #${activeId}`}
+            {(activeFacts?.hasTitle ? activeFacts.question : null) ??
+              activeTitle ??
+              marketTitleFallback(activeId)}
           </p>
           {(active?.reason ?? activeFacts?.discovery.story) && (
             <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
@@ -180,7 +198,7 @@ export function FeedListPanel({
                   className="w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--surface)]"
                 >
                   <span className="block text-[13px] font-medium leading-snug text-[var(--text-secondary)]">
-                    {f?.question ?? `Market #${e.onchainId}`}
+                    {f?.question ?? marketTitleFallback(e.onchainId)}
                   </span>
                   {line && (
                     <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">

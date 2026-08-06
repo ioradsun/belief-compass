@@ -88,6 +88,7 @@ import { LandingPanel } from "@/components/LandingPanel";
 import { useLandingPanelState } from "@/hooks/useLandingPanelState";
 import { useDeckWindow } from "@/lib/deck-window";
 import { useCaptureShareVisit } from "@/lib/use-share-attribution";
+import { marketTitle } from "@/domain/market-title";
 
 /**
  * How long the scene will hold the previous market waiting for the next one's
@@ -1006,6 +1007,9 @@ function Feed() {
                     entries={feedEntries}
                     rows={knownRowsRef.current}
                     activeId={activeMarket}
+                    activeTitle={
+                      currentRow ? marketTitle(currentRow.markets?.title, currentRow.onchain_id) : null
+                    }
                     onSelect={selectMarket}
                     filters={filters}
                     onFilters={selectFilters}

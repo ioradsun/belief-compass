@@ -25,6 +25,8 @@ import {
   type DomainSummary,
   type ViewerDnaCache,
 } from "@/lib/dna/viewer-dna-cache.server";
+import { marketTitleFallback } from "@/domain/market-title";
+import { fetchMarketTitles } from "@/lib/market-titles.server";
 
 type Sb = ReturnType<typeof publicClient>;
 
@@ -100,7 +102,7 @@ async function latestActivityByWallet(sb: Sb, wallets: string[]): Promise<Map<st
   for (const [w, r] of first) {
     out.set(w, {
       marketId: String(r.market_id),
-      marketTitle: titles.get(Number(r.market_id)) ?? `Market #${r.market_id}`,
+      marketTitle: titles.get(Number(r.market_id)) ?? marketTitleFallback(r.market_id),
       side: r.side === "NO" ? "NO" : "YES",
       action: r.action ?? "backed",
       occurredAt: r.occurred_at,
@@ -109,17 +111,9 @@ async function latestActivityByWallet(sb: Sb, wallets: string[]): Promise<Map<st
   return out;
 }
 
+/** Titles come from the one shared lookup — never a second copy of that read. */
 async function marketTitles(sb: Sb, ids: number[]): Promise<Map<number, string>> {
-  const out = new Map<number, string>();
-  for (let i = 0; i < ids.length; i += 500) {
-    const { data } = await sb
-      .from("markets")
-      .select("onchain_id, title")
-      .in("onchain_id", ids.slice(i, i + 500));
-    for (const m of (data ?? []) as { onchain_id: number; title: string | null }[])
-      out.set(Number(m.onchain_id), m.title ?? `Market #${m.onchain_id}`);
-  }
-  return out;
+  return fetchMarketTitles(sb, ids);
 }
 
 /**
@@ -666,7 +660,7 @@ async function loadConvictionEvidence(
         : null;
     return {
       marketId: id,
-      title: titles.get(id) ?? `Market #${id}`,
+      title: titles.get(id) ?? marketTitleFallback(id),
       side: r.stance_side,
       valueUsd: valueUsd == null ? null : Number(valueUsd),
       daysHeld: days,
@@ -685,7 +679,7 @@ async function loadConvictionEvidence(
       const to = f.side as "YES" | "NO";
       return {
         marketId: id,
-        title: titles.get(id) ?? `Market #${id}`,
+        title: titles.get(id) ?? marketTitleFallback(id),
         from: to === "YES" ? ("NO" as const) : ("YES" as const),
         to,
         occurredAt: f.occurred_at,
@@ -1059,13 +1053,13 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       opposedDomains: opposed.map((d) => ({ domain: d.domain, agreement: d.agreement })),
       sharedBoth: both.slice(0, SHARED_CAP).map((b) => ({
         marketId: String(b.id),
-        title: titles.get(b.id) ?? `Market #${b.id}`,
+        title: titles.get(b.id) ?? marketTitleFallback(b.id),
         viewerSide: b.side,
         personSide: b.side,
       })),
       opposing: opp.slice(0, SHARED_CAP).map((o) => ({
         marketId: String(o.id),
-        title: titles.get(o.id) ?? `Market #${o.id}`,
+        title: titles.get(o.id) ?? marketTitleFallback(o.id),
         viewerSide: o.vSide,
         personSide: o.pSide,
       })),
@@ -1181,7 +1175,7 @@ export const listPersonConvictions = createServerFn({ method: "GET" })
       const value = r.stance_side === "YES" ? r.yes_value_usd : r.no_value_usd;
       return {
         marketId: id,
-        title: titles.get(id) ?? `Market #${id}`,
+        title: titles.get(id) ?? marketTitleFallback(id),
         side: r.stance_side,
         valueUsd: value == null ? null : Number(value),
         daysHeld: Number(r.days_held) || 0,
