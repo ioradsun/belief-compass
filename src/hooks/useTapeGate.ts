@@ -27,6 +27,8 @@ export interface TapeGate<T extends Arrival> {
   pending: number;
   /** Merge the held rows in and reset the counter. */
   admit: () => void;
+  /** Increments on every admit that actually merged rows. */
+  admitNonce: number;
   /** Attach to the tape's scroller so it can tell whether anyone is reading. */
   scrollRef: (el: HTMLElement | null) => void;
   /** Spread onto the tape's root: the pointer half of the same question. */
@@ -67,6 +69,7 @@ export function useTapeGate<T extends Arrival>(
 ): TapeGate<T> {
   const [admitted, setAdmitted] = useState<T[]>([]);
   const [pending, setPending] = useState(0);
+  const [admitNonce, setAdmitNonce] = useState(0);
 
   const heldRef = useRef<T[]>([]);
   // The mixer's latest, complete, freshly ranked output. Admitting REPLACES the
@@ -162,6 +165,7 @@ export function useTapeGate<T extends Arrival>(
     heldRef.current = [];
     setPending(0);
     if (taking.length === 0) return;
+    setAdmitNonce((n) => n + 1);
     setAdmitted((prev) =>
       // Re-rank: the mixer's current order wins, with anything it has since
       // dropped kept behind it so nothing the reader saw vanishes on a tap.
@@ -173,6 +177,7 @@ export function useTapeGate<T extends Arrival>(
     admitted,
     pending,
     admit,
+    admitNonce,
     scrollRef,
     pointerProps: {
       onPointerEnter: () => {

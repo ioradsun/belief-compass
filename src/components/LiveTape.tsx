@@ -260,7 +260,23 @@ export function LiveTape({
     gate.admitted,
     JSON.stringify(key),
     standing,
+    gate.admitNonce,
   );
+
+  /**
+   * THE TAP HAS TO LAND SOMEWHERE THE READER CAN SEE.
+   *
+   * Merged rows join at the TOP of the list. If the reader was scrolled down,
+   * that is off screen — the counter cleared and nothing appeared to change.
+   * Riding the scroller back to the top makes the destination obvious, and the
+   * rows play their entrance once they are in view.
+   */
+  const admit = useCallback(() => {
+    gate.admit();
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  }, [gate]);
 
   // Once a standing fact has actually been shown, it goes on cooldown. Recorded
   // on RELEASE rather than on fetch, so a fact that was held and never drawn is
@@ -304,7 +320,7 @@ export function LiveTape({
         </span>
         <button
           type="button"
-          onClick={gate.admit}
+          onClick={admit}
           /**
            * ONE PULSE, ON ARRIVAL, THEN STILLNESS.
            *
