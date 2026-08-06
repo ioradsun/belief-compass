@@ -1001,21 +1001,36 @@ function Feed() {
                 initialNetwork={Boolean(selectedPerson || dnaOpen)}
                 onOpenFeedTab={closeCase}
                 feedList={
-                  <FeedListPanel
-                    sensitivity={sensitivity}
-                    onSensitivity={setFeedSensitivity}
-                    entries={feedEntries}
-                    rows={knownRowsRef.current}
-                    activeId={activeMarket}
-                    activeTitle={
-                      currentRow ? marketTitle(currentRow.markets?.title, currentRow.onchain_id) : null
-                    }
-                    onSelect={selectMarket}
-                    filters={filters}
-                    onFilters={selectFilters}
-                    availableNetworks={availableNetworks}
-                  />
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    {/* IN THIS MARKET — pinned above the running order, because
+                      "where am I" and "what's next" belong in the same column.
+                      It carries the discovery reason too, so the market on
+                      screen is explained once, here, and not again one column
+                      over (the old "Now reading" card). */}
+                    {shownId != null && (
+                      <CurrentMarketActivity
+                        marketId={shownId}
+                        wallet={wallet}
+                        onSelect={selectMarket}
+                        reason={
+                          feedEntries.find((e) => e.onchainId === shownId)?.reason ?? null
+                        }
+                      />
+                    )}
+                    <FeedListPanel
+                      sensitivity={sensitivity}
+                      onSensitivity={setFeedSensitivity}
+                      entries={feedEntries}
+                      rows={knownRowsRef.current}
+                      activeId={activeMarket}
+                      onSelect={selectMarket}
+                      filters={filters}
+                      onFilters={selectFilters}
+                      availableNetworks={availableNetworks}
+                    />
+                  </div>
                 }
+
                 connectPrompt={
                   walletResolving ? (
                     /* Still reconnecting — hold neutral space rather than flash
