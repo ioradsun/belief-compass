@@ -6,6 +6,7 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const COORDINATOR = read("src/lib/realtime/coordinator.ts");
 const ROUTER = read("src/router.tsx");
 const NETWORK_QO = read("src/lib/network-query.ts");
+const MARKET_QO = read("src/lib/market-queries.ts");
 
 /**
  * WHAT KEEPS THE VIEWER'S NETWORK FRESH — the event matrix, as executable notes.
@@ -89,5 +90,62 @@ describe("the viewer's network cannot silently go stale", () => {
     // an assertion that cannot tell prose from code fails on its own rationale.
     const code = NETWORK_QO.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
     expect(code).not.toMatch(/refetchInterval/);
+  });
+});
+
+/**
+ * THE SAME REGRESSION, ON THE TWO KEYS THAT COST THE MOST.
+ *
+ * `["market-change", id]` (a replay of up to 1,000 trade events on the service
+ * client) was declared at five call sites with three different intervals;
+ * `["evidence", id]` (four service-client queries including a 200-row
+ * `wallet_beliefs` read and a 60-day price-series RPC) at six. React Query
+ * dedupes the key, never the options, so the phone's 20s was only the phone's
+ * until the deck mounted and re-timed the shared query to 15s.
+ *
+ * Both are functions of ONE thing — has this market traded — and the coordinator
+ * receives that exact event. See src/lib/market-queries.ts for the production
+ * numbers that settled it.
+ */
+describe("a market's expensive reads are driven by the trade, not a timer", () => {
+  it("refetches the traded market's change and evidence from the events stream", () => {
+    const drain = COORDINATOR.slice(
+      COORDINATOR.indexOf("const drainActivity"),
+      COORDINATOR.indexOf("const noteActivity"),
+    );
+    expect(drain).toMatch(/affectedMarketKeys/);
+  });
+
+  it("has exactly one definition of each query", () => {
+    const declarations = [
+      "src/components/MarketDeck.tsx",
+      "src/components/CaseFile.tsx",
+      "src/components/MobileGame.tsx",
+      "src/components/SharedConviction.tsx",
+      "src/routes/index.tsx",
+      "src/lib/realtime/use-predictive-prefetch.ts",
+    ].filter((f) => /queryKey:\s*\["(market-change|evidence)"/.test(read(f)));
+    expect(declarations).toEqual([]);
+  });
+
+  it("and those definitions set no interval of their own", () => {
+    const code = MARKET_QO.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    expect(code).not.toMatch(/refetchInterval/);
+  });
+
+  /**
+   * The stream is the freshness path, but only for a tab that is receiving it.
+   * A staleTime long enough to outlive a session would put a reader who missed
+   * the socket back where the poll had them — so focus/reconnect refetching has
+   * to still be able to fire.
+   */
+  it("keeps stale times short enough for focus refetching to still mean something", () => {
+    for (const name of ["MARKET_CHANGE_STALE_MS", "EVIDENCE_STALE_MS"]) {
+      const m = MARKET_QO.match(new RegExp(`${name} = ([0-9_]+)`));
+      expect(m, `${name} must exist`).toBeTruthy();
+      const ms = Number(m![1].replace(/_/g, ""));
+      expect(ms).toBeGreaterThan(0);
+      expect(ms).toBeLessThanOrEqual(5 * 60_000);
+    }
   });
 });

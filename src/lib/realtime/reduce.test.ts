@@ -5,6 +5,7 @@ import {
   applyMarketStateBatch,
   affectedPulseKeys,
   affectedPositionsTapeKeys,
+  affectedMarketKeys,
   viewerPositionKeys,
   liveFieldsOf,
   versionOf,
@@ -190,5 +191,31 @@ describe("versionOf", () => {
   it("treats a missing version as 0 (always applies)", () => {
     expect(versionOf({ onchain_id: 1 })).toBe(0);
     expect(versionOf({ onchain_id: 1, read_model_version: "8" })).toBe(8);
+  });
+});
+
+describe("affectedMarketKeys", () => {
+  // The two per-market reads that used to poll to discover a trade the socket
+  // had already delivered. See lib/market-queries.ts.
+  it("returns the change and evidence keys for markets that traded", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["market-change", 42], { yesPrice: 0.5 });
+    qc.setQueryData(["evidence", 42], { believers: [] });
+    qc.setQueryData(["market-change", 99], { yesPrice: 0.7 });
+    const keys = affectedMarketKeys(qc, new Set([42]));
+    expect(keys).toContainEqual(["market-change", 42]);
+    expect(keys).toContainEqual(["evidence", 42]);
+    // A market nobody traded is never refetched, however deep the cache is.
+    expect(keys).not.toContainEqual(["market-change", 99]);
+  });
+
+  it("costs nothing for a market that is not cached", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["market-change", 42], { yesPrice: 0.5 });
+    // The busiest market on the platform trades ~3 times an hour; the other
+    // 2,700 do not trade at all. Invalidating what is not held would put those
+    // back on the fetch path the poll removal took them off.
+    expect(affectedMarketKeys(qc, new Set([7]))).toEqual([]);
+    expect(affectedMarketKeys(qc, new Set())).toEqual([]);
   });
 });

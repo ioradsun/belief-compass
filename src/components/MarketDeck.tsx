@@ -10,9 +10,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
-import { getMarketChange, getPositionSummary, type VolumeWindow } from "@/lib/markets.functions";
+import { getPositionSummary, type VolumeWindow } from "@/lib/markets.functions";
+import { marketChangeQO, evidenceQO } from "@/lib/market-queries";
 import { useMarketChange } from "@/lib/market-change-query";
-import { getMarketEvidence } from "@/lib/evidence.functions";
 import { getHouseRead } from "@/lib/house.functions";
 import { requestConnect } from "@/lib/connect-bridge";
 import { walletIntent } from "@/lib/wagmi";
@@ -173,15 +173,7 @@ export function MarketDeck({
     },
   });
 
-  const { data: change } = useQuery({
-    queryKey: ["market-change", marketId],
-    queryFn: () => getMarketChange({ data: { id: marketId } }),
-    staleTime: 10_000,
-    refetchInterval: 15_000,
-    // Per-market key: carrying the previous result across a market change would
-    // paint another market's data under this one's title. The scene holds the
-    // whole previous market instead, so there is nothing to bridge here.
-  });
+  const { data: change } = useQuery(marketChangeQO(marketId));
 
   // The one on-screen timeframe — the center owns it, both cases follow it.
   const deckWin = useDeckWindow();
@@ -213,13 +205,7 @@ export function MarketDeck({
 
   const connected = useEffectiveWallet();
   const viewer = viewerWallet ?? connected;
-  const { data: evidence } = useQuery({
-    queryKey: ["evidence", marketId],
-    queryFn: () => getMarketEvidence({ data: { marketId } }),
-    refetchInterval: 60_000,
-    staleTime: 30_000,
-    // Per-market key — see above: never bridge across markets.
-  });
+  const { data: evidence } = useQuery(evidenceQO(marketId));
   const holders = evidence?.believers ?? [];
 
   // The reveal needs the viewer's network (for Tribe / Opps / Twin faces) and the

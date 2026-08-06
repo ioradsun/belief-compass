@@ -15,7 +15,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
-import { getMarketEvidence } from "@/lib/evidence.functions";
+import { evidenceQO } from "@/lib/market-queries";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { sharedConvictionLine, type PresentPerson } from "@/domain/shared-conviction";
 
@@ -43,10 +43,7 @@ export function SharedConviction({
   onSelectPerson?: (wallet: string) => void;
 }) {
   const { data: evidence } = useQuery({
-    queryKey: ["evidence", marketId],
-    queryFn: () => getMarketEvidence({ data: { marketId } }),
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    ...evidenceQO(marketId),
     placeholderData: (prev) => prev,
   });
   const { data: net } = useQuery(networkQO(viewerWallet));

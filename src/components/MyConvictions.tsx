@@ -379,9 +379,10 @@ export function MyConvictions({
     queryKey: ["positions-tape", wallet ?? null, [...tapeIds].sort((a, b) => a - b)],
     queryFn: () => listLiveEvents({ data: { wallet, marketIds: tapeIds, limit: 120 } }),
     enabled: tapeIds.length > 0,
-    // The events stream refetches this the moment one of these markets trades;
-    // the interval is now a slow safety reconcile.
-    refetchInterval: 30_000,
+    // NO INTERVAL — same reason as the pulses. `affectedPositionsTapeKeys` matches
+    // this key's id array against the markets that just traded and invalidates it
+    // precisely, so the tape is refreshed by the trade rather than by the clock.
+    staleTime: 60_000,
     placeholderData: (prev) => prev,
   });
   const netByMarket = new Map<

@@ -227,6 +227,30 @@ export function affectedPositionsTapeKeys(qc: QueryClient, affected: Set<number>
 }
 
 /**
+ * Which per-market caches a trade on one of `affected` invalidates.
+ *
+ * `["market-change", id]` is a replay of that market's trade tape and
+ * `["evidence", id]` is its believer roster plus price series — both are
+ * functions of "has this market traded", and nothing else moves them. They used
+ * to poll (15s and 60s) to DISCOVER a trade the socket had already delivered;
+ * these keys are how the socket tells them instead. See lib/market-queries.ts.
+ *
+ * Only ids the cache actually holds are returned, so a trade on a market nobody
+ * is looking at costs nothing. Pure — the coordinator does the invalidating.
+ */
+export function affectedMarketKeys(qc: QueryClient, affected: Set<number>): unknown[][] {
+  if (affected.size === 0) return [];
+  const out: unknown[][] = [];
+  for (const family of ["market-change", "evidence"] as const) {
+    for (const q of qc.getQueryCache().findAll({ queryKey: [family] })) {
+      const id = Number(q.queryKey[1]);
+      if (Number.isFinite(id) && affected.has(id)) out.push(q.queryKey as unknown[]);
+    }
+  }
+  return out;
+}
+
+/**
  * The viewer's position cache families, as partial key prefixes to invalidate
  * when their `wallet_beliefs` changes. Partial match covers every window/market
  * variant (`["my-convictions", w, win]`, `["position-summary", w, id]`, …);

@@ -4,12 +4,8 @@ import { lazyRetry } from "@/lib/lazy-retry";
 
 import { queryOptions, useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
-import {
-  listMarketPulses,
-  getMarketRow,
-  getMarketChange,
-  type VolumeWindow,
-} from "@/lib/markets.functions";
+import { listMarketPulses, getMarketRow, type VolumeWindow } from "@/lib/markets.functions";
+import { marketChangeQO } from "@/lib/market-queries";
 import { getOpportunityFeed } from "@/lib/opportunity-feed.functions";
 import { feedSession, resetFeedSession } from "@/lib/feed-session";
 import { readSessionToken } from "@/lib/wallet-session";
@@ -187,9 +183,11 @@ const pulsesQO = (ids: number[]) =>
     queryKey: ["market-pulses", ids.join(",")],
     queryFn: async () => await listMarketPulses({ data: { ids: ids.slice(0, 120) } }),
     enabled: ids.length > 0,
-    // The events stream refetches this the moment one of these markets trades;
-    // the interval is now just a slow safety reconcile.
-    refetchInterval: 30_000,
+    // NO INTERVAL. The coordinator invalidates exactly the pulse keys that hold
+    // a market which just traded (`affectedPulseKeys`), and re-syncs the whole
+    // family on reconnect and on a hidden tab coming back. A pulse cannot change
+    // without a trade, so a timer had nothing left to find.
+    staleTime: 60_000,
     placeholderData: (prev) => prev,
   });
 
@@ -775,10 +773,8 @@ function Feed() {
   // the EXACT key the deck uses, so React Query serves both from one request —
   // this is a readiness probe, not a second fetch.
   const { data: nextCore } = useQuery({
-    queryKey: ["market-change", activeMarket],
-    queryFn: () => getMarketChange({ data: { id: activeMarket as number } }),
+    ...marketChangeQO(activeMarket as number),
     enabled: activeMarket != null,
-    staleTime: 10_000,
   });
   const liveRow: MarketRow | null =
     foundIdx >= 0
