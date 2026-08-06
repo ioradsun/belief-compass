@@ -13,6 +13,7 @@ import {
   marketChange,
   materialMoves,
   MATERIAL,
+  BARS,
   type ChangeNow,
   type ChangeBase,
 } from "@/domain/market-change";
@@ -84,7 +85,7 @@ describe("the lens bar is reachable, which is the whole trap", () => {
         priceUsd: 1.9,
       },
     );
-    expect(MOMENTUM.minBelieverDelta).toBeLessThan(MATERIAL.minBelieverDelta);
+    expect(BARS.everything.minBelieverDelta).toBeLessThan(MATERIAL.minBelieverDelta);
     expect(materialMoves(c).some((m) => m.metric === "believers")).toBe(false);
     expect(classifyMomentum(c, ctx()).lenses).toContain("believers");
   });
@@ -191,7 +192,7 @@ describe("dust never becomes momentum", () => {
     );
     const f = classifyMomentum(c, ctx());
     expect(f.top?.metric).toBe("price");
-    expect(Math.abs(f.top!.delta)).toBeLessThan(MOMENTUM.minCapitalUsd);
+    expect(Math.abs(f.top!.delta)).toBeLessThan(BARS.everything.minUsd);
     expect(f.lenses).toContain("moving");
   });
 });

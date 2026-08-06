@@ -51,8 +51,8 @@
  *
  * ZERO IO, pure, fully testable.
  */
-import type { MaterialMove, MarketChange, MoveBar } from "@/domain/market-change";
-import { materialMoves } from "@/domain/market-change";
+import type { MaterialMove, MarketChange, MoveBar, Sensitivity } from "@/domain/market-change";
+import { barFor, materialMoves } from "@/domain/market-change";
 
 /**
  * The reader's momentum vocabulary. Each is a QUESTION someone actually asks,
@@ -89,33 +89,13 @@ export const MOMENTUM_LABELS: Record<MomentumLens, string> = {
 
 export const MOMENTUM = {
   /**
-   * Percentage bar for a price or capital move, NET OF CURRENCY DRIFT.
-   *
-   * Three, against `MATERIAL.minPct`'s five. The gap is the whole distinction:
-   * five is "tell the reader this happened", three is "the reader asked what is
-   * moving". Still comfortably above the ~1.6% drift, so the currency alone can
-   * never put a market in this lens — which is the property that matters, far
-   * more than the exact number.
+   * WHAT IS *NOT* HERE. The percentage, believer and capital floors used to be
+   * declared in this object. They are rows in the one bar table now
+   * (@/domain/market-change#BARS) — the momentum lens is simply the reader's
+   * chosen row, and `barFor` is the only place those numbers exist. What
+   * remains below is momentum's OWN: silence, contest and window scaling, none
+   * of which any other surface asks about.
    */
-  minPct: 3,
-  /**
-   * A believer arrival is movement at one person.
-   *
-   * `MATERIAL.minBelieverDelta` is 3 and correctly so — three arrivals on one
-   * side is above the 90th percentile of side size here, which is news. But the
-   * median market has ONE believer, so a lens gated at three shows nothing on a
-   * platform where a dozen markets gained somebody today. One person joining a
-   * side of one is a doubling; the reader can judge it.
-   */
-  minBelieverDelta: 1,
-  /**
-   * Capital moves below this are dust, whatever the ratio.
-   *
-   * Measured: 22% of funded sides hold under a cent, where every trade is
-   * thousands of percent. A dollar is roughly the median side (p50 $0.95), so
-   * this is "at least a typical position moved", not an arbitrary floor.
-   */
-  minCapitalUsd: 1,
   /**
    * Silent for this long, then traded → "waking up". Three days, because the
    * median pool market's last trade was 39 hours ago: a bar of one day would
@@ -152,6 +132,11 @@ export interface MomentumContext {
   inactiveForSeconds: number | null;
   /** Whether anything traded inside the reader's window at all. */
   tradedInWindow: boolean;
+  /**
+   * The reader's own floor. Absent means the default, which is today's
+   * behaviour — see DEFAULT_SENSITIVITY.
+   */
+  sensitivity?: Sensitivity;
 }
 
 export interface MomentumFacts {
@@ -180,12 +165,13 @@ const scale = (window: string): number => MOMENTUM.windowScale[window] ?? 1;
  * threshold that can never bind, which is the failure this codebase keeps
  * producing and which this very module nearly shipped.
  */
-export function momentumBar(window: string): MoveBar {
-  return {
-    minPct: MOMENTUM.minPct,
-    minBelieverDelta: MOMENTUM.minBelieverDelta * scale(window),
-    minOriginUsd: MOMENTUM.minCapitalUsd,
-  };
+export function momentumBar(window: string, sensitivity?: Sensitivity): MoveBar {
+  // The reader's own floor is a ROW IN THE ONE TABLE, not a second set of
+  // numbers — see @/domain/market-change#BARS. Only the window scaling is
+  // momentum's own, because a day and a week are not the same amount of time
+  // and no shared table can know which one the reader is looking at.
+  const base = barFor(sensitivity);
+  return { ...base, minBelieverDelta: base.minBelieverDelta * scale(window) };
 }
 
 /**
@@ -195,8 +181,8 @@ export function momentumBar(window: string): MoveBar {
  * here — so a 5% price move has a delta of about nine cents by construction, and
  * a dollar floor applied to it would silently delete every price move there is.
  */
-function notDust(m: MaterialMove): boolean {
-  return m.metric !== "capital" || Math.abs(m.delta) >= MOMENTUM.minCapitalUsd;
+function notDust(m: MaterialMove, bar: MoveBar): boolean {
+  return m.metric !== "capital" || Math.abs(m.delta) >= bar.minUsd;
 }
 
 /**
@@ -233,9 +219,8 @@ export function classifyMomentum(
     lenses.add("waking");
   }
 
-  const moves = change
-    ? materialMoves(change, driftPct, momentumBar(ctx.window)).filter(notDust)
-    : [];
+  const bar = momentumBar(ctx.window, ctx.sensitivity);
+  const moves = change ? materialMoves(change, driftPct, bar).filter((m) => notDust(m, bar)) : [];
   for (const m of moves) {
     lenses.add("moving");
     if (m.metric === "capital") lenses.add("capital");
