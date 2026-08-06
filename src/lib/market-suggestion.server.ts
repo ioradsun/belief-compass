@@ -60,6 +60,13 @@ function canonicalCategory(raw: string | null | undefined): string | null {
 /**
  * The last ~30 meaningful things this wallet did, newest first, joined to the
  * market titles and categories they happened on.
+ *
+ * Three real sources are unioned, newest first, one signal per market:
+ *   • money-backed positions (wallet_beliefs) — the strongest evidence
+ *   • tapped / calibration answers (expressed_beliefs) — a stated side
+ *   • answered House predictions (house_predictions) — includes PASS
+ * A market backed with money always wins over a lighter signal on the same
+ * market, so the profile never under-counts real conviction.
  */
 export async function buildInterest(
   sb: SupabaseClient,
@@ -68,7 +75,7 @@ export async function buildInterest(
   const w = norm(wallet);
   const limit = SUGGESTION.HISTORY_WINDOW;
 
-  const [decisions, positions, created] = await Promise.all([
+  const [decisions, positions, expressed, created] = await Promise.all([
     sb
       .from("house_predictions")
       .select("onchain_id, category, actual_action, revealed_at, created_at")
@@ -84,6 +91,12 @@ export async function buildInterest(
       .order("last_trade_at", { ascending: false })
       .limit(limit),
     sb
+      .from("expressed_beliefs")
+      .select("onchain_id, side, updated_at")
+      .eq("wallet", w)
+      .order("updated_at", { ascending: false })
+      .limit(limit),
+    sb
       .from("conviction_markets")
       .select("question")
       .eq("creator_wallet", w)
@@ -91,16 +104,49 @@ export async function buildInterest(
       .limit(20),
   ]);
 
-  const backed = new Set(
-    ((positions.data ?? []) as { onchain_id: number }[]).map((p) => Number(p.onchain_id)),
-  );
-  const rows = ((decisions.data ?? []) as {
+  const sideOf = (raw: string | null | undefined): "YES" | "NO" | null =>
+    raw === "YES" || raw === "NO" ? raw : null;
+
+  // Newest-first union, strongest evidence per market.
+  type Draft = { id: number; action: "YES" | "NO" | "PASS"; backed: boolean; category: string | null };
+  const drafts: Draft[] = [];
+
+  for (const p of (positions.data ?? []) as { onchain_id: number; expressed_side: string | null }[]) {
+    const side = sideOf(p.expressed_side);
+    if (!side) continue;
+    drafts.push({ id: Number(p.onchain_id), action: side, backed: true, category: null });
+  }
+  for (const e of (expressed.data ?? []) as { onchain_id: number; side: string | null }[]) {
+    const side = sideOf(e.side);
+    if (!side) continue;
+    drafts.push({ id: Number(e.onchain_id), action: side, backed: false, category: null });
+  }
+  for (const r of (decisions.data ?? []) as {
     onchain_id: number;
     category: string | null;
     actual_action: string | null;
-  }[]).filter((r) => r.actual_action);
+  }[]) {
+    if (!r.actual_action) continue;
+    drafts.push({
+      id: Number(r.onchain_id),
+      action: sideOf(r.actual_action) ?? "PASS",
+      backed: false,
+      category: r.category,
+    });
+  }
 
-  const ids = [...new Set(rows.map((r) => Number(r.onchain_id)))];
+  const byMarket = new Map<number, Draft>();
+  for (const d of drafts) {
+    const prev = byMarket.get(d.id);
+    // First writer wins per source order (backed first); a backed signal still
+    // upgrades an earlier lighter one on the same market.
+    if (!prev) byMarket.set(d.id, d);
+    else if (d.backed && !prev.backed) byMarket.set(d.id, { ...prev, ...d });
+    else if (!prev.category && d.category) byMarket.set(d.id, { ...prev, category: d.category });
+  }
+  const rows = [...byMarket.values()].slice(0, limit);
+
+  const ids = rows.map((r) => r.id);
   const titleOf = new Map<number, string>();
   const catOf = new Map<number, string | null>();
   if (ids.length) {
@@ -111,17 +157,14 @@ export async function buildInterest(
     }
   }
 
-  const signals: InterestSignal[] = rows.map((r) => {
-    const id = Number(r.onchain_id);
-    const action = r.actual_action === "YES" || r.actual_action === "NO" ? r.actual_action : "PASS";
-    return {
-      marketId: String(id),
-      category: canonicalCategory(r.category ?? catOf.get(id) ?? null),
-      action,
-      backed: backed.has(id) && action !== "PASS",
-      title: titleOf.get(id) ?? null,
-    };
-  });
+  const signals: InterestSignal[] = rows.map((r) => ({
+    marketId: String(r.id),
+    category: canonicalCategory(r.category ?? catOf.get(r.id) ?? null),
+    action: r.action,
+    backed: r.backed && r.action !== "PASS",
+    title: titleOf.get(r.id) ?? null,
+  }));
+
 
   const interest: UserMarketInterest = {
     viewerId: w,
