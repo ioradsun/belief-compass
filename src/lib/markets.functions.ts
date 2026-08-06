@@ -436,6 +436,27 @@ export const listFeed = createServerFn({ method: "GET" })
         // it had no way to say.
         tribe_count: tribeHere.get(id)?.length ?? 0,
         opp_count: oppHere.get(id)?.length ?? 0,
+        // Filter-only: has one of these people been here AT ALL — traded, or
+        // written the question. Authorship counts even with no position, which
+        // is the whole point of "markets they created or interacted with".
+        tribe_touched:
+          tribeTouched.has(id) ||
+          (!!(r as Record<string, unknown>).markets &&
+            tribeWallets.has(
+              String(
+                ((r["markets"] ?? null) as { author_wallet?: string | null } | null)
+                  ?.author_wallet ?? "",
+              ).toLowerCase(),
+            )),
+        opp_touched:
+          oppTouched.has(id) ||
+          (!!(r as Record<string, unknown>).markets &&
+            oppWallets.has(
+              String(
+                ((r["markets"] ?? null) as { author_wallet?: string | null } | null)
+                  ?.author_wallet ?? "",
+              ).toLowerCase(),
+            )),
         tribe_overlap: tribeOverlap.get(id) ?? 0,
         opp_overlap: oppOverlap.get(id) ?? 0,
         network_last_at: netRecency.get(id) ?? null,
