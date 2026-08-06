@@ -54,6 +54,8 @@ import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
 import { marketTitle } from "@/domain/market-title";
+import { hueFor, initialsFor } from "@/lib/wallet-identity";
+
 
 type Phase = "question" | "sides";
 
