@@ -19,7 +19,7 @@
  * highlight. Clicking a row selects that market; clicking a face opens that
  * person.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PersonStack } from "@/components/PersonStack";
 import { listLiveEvents } from "@/lib/live.functions";
@@ -260,7 +260,35 @@ export function LiveTape({
     gate.admitted,
     JSON.stringify(key),
     standing,
+    gate.admitNonce,
   );
+
+  /**
+   * THE TAP HAS TO LAND SOMEWHERE THE READER CAN SEE.
+   *
+   * Merged rows join at the TOP of the list. If the reader was scrolled down,
+   * that is off screen — the counter cleared and nothing appeared to change.
+   * Riding the scroller back to the top makes the destination obvious, and the
+   * rows play their entrance once they are in view.
+   */
+  const scrollerRef = useRef<HTMLElement | null>(null);
+  const setScroller = useCallback(
+    (el: HTMLElement | null) => {
+      scrollerRef.current = el;
+      gate.scrollRef(el);
+    },
+    [gate.scrollRef],
+  );
+
+  const admit = useCallback(() => {
+    gate.admit();
+    const el = scrollerRef.current;
+    if (!el) return;
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" });
+  }, [gate]);
 
   // Once a standing fact has actually been shown, it goes on cooldown. Recorded
   // on RELEASE rather than on fetch, so a fact that was held and never drawn is
@@ -304,7 +332,7 @@ export function LiveTape({
         </span>
         <button
           type="button"
-          onClick={gate.admit}
+          onClick={admit}
           /**
            * ONE PULSE, ON ARRIVAL, THEN STILLNESS.
            *
@@ -338,7 +366,7 @@ export function LiveTape({
 
   const body = (
     <div
-      ref={gate.scrollRef}
+      ref={setScroller}
       {...gate.pointerProps}
       className={
         scroll

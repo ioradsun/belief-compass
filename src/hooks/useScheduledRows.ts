@@ -60,7 +60,16 @@ export function useScheduledRows<T extends SchedulableRow>(
   all: T[],
   resetKey?: string,
   reserve: T[] = EMPTY,
+  /**
+   * REVEAL ON DEMAND. Changing this number means the reader ASKED for the
+   * waiting rows (they tapped "N New"). A drip is the right answer for activity
+   * nobody requested; it is the wrong answer for a direct request, where the
+   * rows must land at once, at the top, with a visible entrance — otherwise the
+   * tap appears to do nothing and the updates seem to vanish.
+   */
+  revealKey = 0,
 ): ScheduledView<T> {
+
   const [shown, setShown] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [pending, setPending] = useState(0);
 
@@ -180,6 +189,37 @@ export function useScheduledRows<T extends SchedulableRow>(
     );
     pump();
   }, [reserve, pump]);
+
+  // THE READER ASKED. Everything known — queued, held back, just merged — is
+  // released in one commit, and each newly visible row is given the major
+  // entrance so the answer to "where did they go?" is a thing you can watch.
+  const allRef = useRef(all);
+  allRef.current = all;
+  const revealed = useRef(revealKey);
+  useEffect(() => {
+    if (revealed.current === revealKey) return;
+    revealed.current = revealKey;
+    const rows = allRef.current;
+    if (rows.length === 0) return;
+    setShown((prev) => {
+      const next = new Set(prev);
+      for (const r of rows) {
+        known.current.add(r.id);
+        if (!next.has(r.id)) {
+          next.add(r.id);
+          entrances.current.set(r.id, 1);
+        }
+      }
+      return next;
+    });
+    if (timer.current != null) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    state.current = createScheduleState(Date.now());
+    setPending(0);
+  }, [revealKey]);
+
 
   useEffect(
     () => () => {
