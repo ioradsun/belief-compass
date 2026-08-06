@@ -1,32 +1,27 @@
 /**
- * FEED LIST — the running order, made visible.
+ * THE PLAYLIST — navigation for the centre stage, not a second feed.
  *
- * The server has always returned a finished sequence. The centre panel consumed
- * it one market at a time, so a reader could see what they were looking at and
- * nothing else: no sense of what came before, what is next, or how long the
- * queue is. This panel is that sequence on screen, and it is deliberately NOT a
- * grid of cards — a row here answers "should I go there next", not "what should
- * I do about this market". The centre panel is where a market gets its space.
+ * This panel answers exactly two questions and refuses the rest:
  *
- * FOUR THINGS PER ROW, and no fifth:
- *   1. the question
- *   2. the one sentence saying why it is here
- *   3. participants and size, when known
- *   4. where the market currently stands
+ *   WHERE AM I?      the market being read is pinned at the top, labelled
+ *                    "Now Reading", and never scrolls out of reach.
+ *   WHAT IS NEXT?    the remaining markets, in the order they will arrive.
  *
- * The reason is the load-bearing one. `reasonFor` has been writing these
- * sentences all along and `index.tsx` has been collecting them into a map that
- * nothing read — the fifth time in this codebase something computed the right
- * answer and dropped it. A row without its reason is a list of titles, which is
- * what search already was.
+ * WHAT WAS REMOVED, AND WHY. "Up next (25)", the queue size and the "1 new
+ * market" notice were all implementation details wearing UI: no reader decides
+ * anything differently because the queue holds 25 rather than 24. A playlist
+ * does not tell you how long it is; it tells you what is playing and what
+ * follows. New markets are folded in silently as the reader advances, so
+ * freshness costs nothing and interrupts nothing.
  *
- * THE ORDER HOLDS STILL. Every rule about when this list may change lives in
- * `@/domain/feed-queue`; this component renders what it is given and reports
- * clicks. New markets arrive behind a notice the reader chooses to accept.
+ * The rows stay quiet on purpose — a question, one reason, a couple of facts.
+ * The centre panel is where a market gets its space, and this column must never
+ * compete with it.
  */
 import { useEffect, useRef } from "react";
 import { composeDiscoveryRow } from "@/domain/market-discovery";
-import { FEED_MODES, type FeedMode } from "@/domain/feed/mode";
+import { FeedFilterMenu } from "@/components/FeedFilterMenu";
+import type { FeedFilters, FeedNetwork } from "@/domain/feed/filters";
 import type { MarketRow } from "@/components/MarketCard";
 
 const num = (v: unknown): number => {
@@ -42,13 +37,9 @@ export interface FeedListEntry {
 }
 
 /**
- * Row facts, from the SAME composer a search result uses.
- *
- * This is the point of sharing `composeDiscoveryRow` rather than writing a
- * second version here: a market found by searching and the same market waiting
- * in the running order now say the same things about themselves, in the same
- * words, from the same numbers. Two surfaces describing one market two ways is
- * how a reader learns not to trust either.
+ * Row facts, from the SAME composer a search result uses, so a market found by
+ * searching and the same market waiting in the playlist say the same things
+ * about themselves in the same words.
  */
 function factsOf(row: MarketRow | undefined, nowMs: number) {
   if (!row) return null;
@@ -68,127 +59,106 @@ function factsOf(row: MarketRow | undefined, nowMs: number) {
   };
 }
 
+function Metrics({ metrics }: { metrics: { label: string; value: string }[] }) {
+  if (metrics.length === 0) return null;
+  return (
+    <span className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+      {metrics.map((m, i) => (
+        <span key={m.label} className="flex items-center gap-1.5">
+          {i > 0 && <span aria-hidden>·</span>}
+          <span className="tabular-nums">{m.value}</span>
+          <span className="opacity-80">{m.label}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function FeedListPanel({
   entries,
   rows,
   activeId,
-  arrivalCount,
   onSelect,
-  onCommitArrivals,
-  mode,
-  modes,
-  onMode,
+  filters,
+  onFilters,
+  availableNetworks,
 }: {
   /** The visible running order, already sequenced by the server. */
   entries: FeedListEntry[];
   /** Read-model rows keyed by onchain id — the same map the centre panel uses. */
   rows: Record<number, MarketRow>;
   activeId: number | null;
-  /** Markets waiting to join the order. Zero hides the notice. */
-  arrivalCount: number;
   onSelect: (id: number) => void;
-  onCommitArrivals: () => void;
-  /** The active perspective. */
-  mode: FeedMode;
-  /**
-   * The perspectives this viewer's network can seat — decided server-side by
-   * the evidence gate. One entry means no choice worth offering, and the strip
-   * does not render at all.
-   */
-  modes: FeedMode[];
-  onMode: (m: FeedMode) => void;
+  filters: FeedFilters;
+  onFilters: (f: FeedFilters) => void;
+  /** Network groups this viewer's evidence can fill. Always includes everyone. */
+  availableNetworks: FeedNetwork[];
 }) {
-  const listRef = useRef<HTMLOListElement | null>(null);
   const rowRefs = useRef(new Map<number, HTMLLIElement>());
   const nowMs = Date.now();
 
-  // Advancing in the centre panel moves the active row, which may be off-screen
+  // Advancing in the centre panel moves the highlight, which may be off-screen
   // here. `nearest` reveals it without recentring a list the reader is scrolling.
   useEffect(() => {
     if (activeId == null) return;
     rowRefs.current.get(activeId)?.scrollIntoView({ block: "nearest" });
   }, [activeId]);
 
+  const active = activeId == null ? null : (entries.find((e) => e.onchainId === activeId) ?? null);
+  const upcoming = entries.filter((e) => e.onchainId !== activeId);
+  const activeFacts = activeId == null ? null : factsOf(rows[activeId], nowMs);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* The perspective sits with the list it reorders. Rendered ONLY when the
-          viewer's network can seat more than one: a picker whose other options
-          would open onto "nothing here" teaches the reader that the
-          relationship model is decoration. */}
-      {modes.length > 1 && (
+      <div className="mb-2">
+        <FeedFilterMenu
+          filters={filters}
+          onChange={onFilters}
+          availableNetworks={availableNetworks}
+        />
+      </div>
+
+      {/* NOW READING — pinned, always visible, unmistakably the current one. */}
+      {activeId != null && (
         <div
-          className="mb-3 flex rounded-[10px] p-0.5"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-          role="tablist"
-          aria-label="Feed perspective"
+          className="mb-3 rounded-[12px] px-3 py-2.5"
+          style={{
+            background: "var(--surface)",
+            border: "1px solid var(--border-strong)",
+          }}
+          aria-current="true"
         >
-          {modes.map((m) => (
-            <button
-              key={m}
-              role="tab"
-              type="button"
-              aria-selected={mode === m}
-              onClick={() => onMode(m)}
-              title={FEED_MODES[m].question}
-              className={`flex-1 rounded-[8px] px-2 py-1 text-[12px] font-medium whitespace-nowrap transition-colors ${
-                mode === m ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
-              }`}
-            >
-              {FEED_MODES[m].label}
-            </button>
-          ))}
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
+            Now reading
+          </p>
+          <p className="text-[13px] font-semibold leading-snug text-[var(--text)]">
+            {activeFacts?.question ?? `Market #${activeId}`}
+          </p>
+          {(active?.reason ?? activeFacts?.discovery.story) && (
+            <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
+              {active?.reason ?? activeFacts?.discovery.story}
+            </p>
+          )}
+          <Metrics metrics={activeFacts?.discovery.metrics ?? []} />
         </div>
       )}
 
-      <div className="mb-3 flex items-baseline gap-2">
-        <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--text-secondary)]">
-          Up next
-        </h2>
-        {entries.length > 0 && (
-          <span className="text-[11px] tabular-nums text-[var(--text-muted)]">
-            {entries.length}
-          </span>
-        )}
-      </div>
-
-      {/* Freshness without instability: what arrived is announced, never applied
-          under the reader. Accepting it is one tap, and it is always their tap. */}
-      {arrivalCount > 0 && (
-        <button
-          type="button"
-          onClick={onCommitArrivals}
-          className="mb-3 w-full rounded-[10px] px-3 py-2 text-[12px] font-medium transition-colors hover:brightness-110"
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            color: "var(--text)",
-          }}
-        >
-          {arrivalCount} new market{arrivalCount === 1 ? "" : "s"}
-        </button>
-      )}
-
-      {entries.length === 0 ? (
+      {upcoming.length === 0 ? (
         <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
-          {/* An empty Tribe or Rivals list is a TRUE answer — nobody you know
-              has taken a side in anything on the board — and saying so beats a
-              loading message that will never resolve. */}
-          {mode === "tribe"
-            ? "Nobody in your Tribe has taken a side in these markets yet."
-            : mode === "rivals"
-              ? "None of your Rivals have taken a side in these markets yet."
-              : "The running order appears here once the feed loads."}
+          {/* An empty result under a filter is a TRUE answer, and saying it
+              plainly beats a loading state that will never resolve. */}
+          {entries.length === 0
+            ? "Nothing matches this feed yet. Try widening it."
+            : "You're at the end of this feed."}
         </p>
       ) : (
-        <ol ref={listRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto">
-          {entries.map((e) => {
+        <ol className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+          {upcoming.map((e) => {
             const f = factsOf(rows[e.onchainId], nowMs);
-            const active = e.onchainId === activeId;
             // The reason the feed picked this market outranks the market's own
             // momentum sentence: one is about the reader, the other about the
             // market. Only when there is no reason does the story stand in.
             const line = e.reason ?? f?.discovery.story ?? null;
-            const metrics = f?.discovery.metrics ?? [];
             return (
               <li
                 key={e.onchainId}
@@ -200,37 +170,14 @@ export function FeedListPanel({
                 <button
                   type="button"
                   onClick={() => onSelect(e.onchainId)}
-                  aria-current={active ? "true" : undefined}
-                  className={`w-full rounded-[10px] px-3 py-2.5 text-left transition-colors ${
-                    active ? "bg-[var(--surface)]" : "hover:bg-[var(--surface)]"
-                  }`}
-                  style={active ? { border: "1px solid var(--border)" } : undefined}
+                  className="w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--surface)]"
                 >
-                  <span
-                    className={`block text-[13px] leading-snug ${
-                      active
-                        ? "font-semibold text-[var(--text)]"
-                        : "font-medium text-[var(--text-secondary)]"
-                    }`}
-                  >
+                  <span className="block text-[13px] font-medium leading-snug text-[var(--text-secondary)]">
                     {f?.question ?? `Market #${e.onchainId}`}
                   </span>
-
                   {line && (
-                    <span className="mt-1 block text-[12px] leading-snug text-[var(--text-muted)]">
+                    <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">
                       {line}
-                    </span>
-                  )}
-
-                  {metrics.length > 0 && (
-                    <span className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
-                      {metrics.map((m, i) => (
-                        <span key={m.label} className="flex items-center gap-1.5">
-                          {i > 0 && <span aria-hidden>·</span>}
-                          <span className="tabular-nums">{m.value}</span>
-                          <span className="opacity-80">{m.label}</span>
-                        </span>
-                      ))}
                     </span>
                   )}
                 </button>

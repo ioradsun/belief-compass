@@ -23,6 +23,13 @@ import {
   type FeedMode,
   type ModeCandidate,
 } from "@/domain/feed/mode";
+import {
+  matches as matchesFilters,
+  normalize as normalizeFilters,
+  orderingMode,
+  type FeedFilters,
+  type FeedNetwork,
+} from "@/domain/feed/filters";
 import { shouldInsertSuggestion } from "@/domain/market-suggestion";
 import { listFeed, type VolumeWindow } from "@/lib/markets.functions";
 import {
@@ -54,6 +61,13 @@ export interface OpportunityFeedInput extends FeedSessionState {
    * `?lens=hot` links) fall back to For You rather than emptying the feed.
    */
   mode?: string;
+  /**
+   * The reader's own lens: network groups and topics. OR within a group, AND
+   * across groups (see @/domain/feed/filters). Empty means "All", which is the
+   * unfiltered feed and the default.
+   */
+  networks?: string[];
+  topics?: string[];
   /**
    * The market the viewer arrived at from OUTSIDE the running order — a search
    * result, a Live row, one of their positions. Its people become a weak signal
@@ -218,6 +232,8 @@ export interface OpportunityFeedResult {
   opp: FeedRowPayload | null;
   /** The perspective this result was built for. */
   mode: FeedMode;
+  /** The canonical filter selection this result was built for. */
+  filters: FeedFilters;
   /**
    * The perspectives this viewer's network can actually seat. Always contains
    * "for_you"; Tribe and Rivals appear only once the evidence exists to fill
@@ -237,7 +253,13 @@ export async function buildOpportunityFeed(
   const wallet = input.wallet?.toLowerCase() ?? null;
   const now = Date.now();
 
-  const mode = toFeedMode(input.mode);
+  const filters: FeedFilters = normalizeFilters({
+    networks: (input.networks ?? []) as FeedNetwork[],
+    topics: input.topics ?? [],
+  });
+  // A single network chosen IS a perspective, so the Tribe / Rivals rankings
+  // still apply; everything else keeps the blend the ranker produced.
+  const mode = input.mode ? toFeedMode(input.mode) : toFeedMode(orderingMode(filters));
   const feed = await listFeed({ data: { window: win, ...(wallet ? { wallet } : {}) } });
   const rows = (feed.data ?? []) as unknown as Row[];
   const ids = rows.map((r) => Number(r.onchain_id));
@@ -260,6 +282,12 @@ export async function buildOpportunityFeed(
   // A rotating epoch keeps the exploration slot moving without reshuffling the
   // rest of the feed between polls.
   const epoch = Math.floor(now / 3_600_000);
+
+  /** What each market looks like to the reader's filter — filled as we map. */
+  const filterFacts = new Map<
+    number,
+    { category: string | null; tribeCount: number; oppCount: number; followedHere: number }
+  >();
 
   const candidates: SequenceCandidate[] = rows.map((r) => {
     // Followed people connected to this market: the ones holding a position,
@@ -291,6 +319,12 @@ export async function buildOpportunityFeed(
       { here: here.size, yes, no, names },
       originOverlap.get(Number(r.onchain_id)) ?? 0,
     );
+    filterFacts.set(s.onchainId, {
+      category: s.category,
+      tribeCount: s.tribeCount,
+      oppCount: s.oppCount,
+      followedHere: s.followedHere,
+    });
     const ai = aiOf(analyses.get(s.onchainId));
     const state: ViewerMarketState | undefined = signals.states.get(s.onchainId);
     const scored = scoreMarket({ signals: s, ai, viewer: signals.profile, now, epoch });
@@ -352,10 +386,19 @@ export async function buildOpportunityFeed(
    * hands the list through untouched: it is a blend, not a perspective on a
    * subset, and re-sorting it would undo the ranking that produced it.
    */
-  const candidateById = new Map(candidates.map((c) => [c.onchainId, c]));
+  // The reader's filter runs BEFORE the mode ordering and before sequencing, so
+  // rhythm and diversity still apply to whatever survives it. A filter that
+  // empties the feed returns an empty feed honestly rather than silently
+  // widening back out to All.
+  const kept = candidates.filter((c) => {
+    const facts = filterFacts.get(c.onchainId);
+    return facts ? matchesFilters(filters, facts) : true;
+  });
+
+  const candidateById = new Map(kept.map((c) => [c.onchainId, c]));
   const ordered = orderForMode(
     mode,
-    candidates.flatMap((c) => modeOf.get(c.onchainId) ?? []),
+    kept.flatMap((c) => modeOf.get(c.onchainId) ?? []),
   ).flatMap((m) => candidateById.get(m.onchainId) ?? []);
 
   const { items, engineVersion, excluded } = sequenceFeed({
@@ -382,6 +425,7 @@ export async function buildOpportunityFeed(
     tribe: (feed.tribe as FeedRowPayload | null) ?? null,
     opp: (feed.opp as FeedRowPayload | null) ?? null,
     mode,
+    filters,
     // A viewer whose network shrank below the gate keeps whatever they chose
     // for THIS response — the result says what it is, and the picker decides
     // separately what to offer next.
