@@ -21,6 +21,10 @@ import { formatMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
 import { believerMove, capitalMove, type MetricMove } from "@/domain/metric-display";
 import type { MarketChange, MetricChange } from "@/domain/market-change";
+import {
+  participantSocial,
+  type ParticipantRelation,
+} from "@/domain/participant-social";
 
 /**
  * A shared MetricChange in the shape believerMove/capitalMove expect.
