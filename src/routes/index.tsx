@@ -299,6 +299,21 @@ const TABS: { key: MobileTab; label: string }[] = [
   { key: "room", label: "The Room" },
 ];
 
+/** The center-panel destination, as the URL expresses it. `case` is a display
+ *  toggle rather than a destination, so it is deliberately not part of it. */
+type CenterView = Pick<Search, "m" | "p" | "dna" | "create" | "terms" | "dash">;
+
+const CLEARED_CENTER: CenterView = {
+  m: undefined,
+  p: undefined,
+  dna: undefined,
+  create: undefined,
+  terms: undefined,
+  dash: undefined,
+};
+
+
+
 function Feed() {
   const {
     wallet: searchWallet,
