@@ -20,6 +20,7 @@ const signals = (o: Partial<FeedMarketSignals> = {}): FeedMarketSignals => ({
   directionalBelievers: 0,
   divergence: 0,
   priceMovePct: 0,
+  momentumWeight: 0,
   opportunityType: null,
   opportunityReason: null,
   opportunityScore: null,
@@ -84,8 +85,13 @@ describe("following raises a market, it does not select one", () => {
    */
   it("does not beat a market that is genuinely moving", () => {
     const quietButFollowed = score(signals({ followedHere: FOLLOWS.SATURATE_AT })).score;
+    // "Genuinely moving" is now `momentumWeight` — a drift-corrected change from
+    // the same engine every panel renders. This fixture used to say it with
+    // `newBelievers1h: 10, tradeCount1h: 18`, which described a platform that
+    // does not exist: zero markets here have ever had a believer or a trade
+    // inside one hour, so the old "loud" market was loud only in the test.
     const loudAndUnfollowed = score(
-      signals({ newBelievers1h: 10, tradeCount1h: 18, velocity5m: 6, volumeUsd24h: 4000 }),
+      signals({ momentumWeight: 0.9, newBelievers24h: 4, tradeCount24h: 14, volumeUsd24h: 400 }),
     ).score;
     expect(loudAndUnfollowed).toBeGreaterThan(quietButFollowed);
   });

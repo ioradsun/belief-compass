@@ -36,6 +36,13 @@ export interface FeedMarketSignals {
   divergence: number;
   /** Absolute % price move over the active window. */
   priceMovePct: number;
+  /**
+   * How much this market MOVED, 0..1, from the drift-corrected change engine
+   * (see @/domain/feed/momentum). Zero on a still market, and zero is the
+   * honest answer — it is what lets a quiet market lose to a live one instead
+   * of the two competing on volume.
+   */
+  momentumWeight: number;
   opportunityType: string | null;
   opportunityReason: string | null;
   opportunityScore: number | null;
@@ -188,13 +195,38 @@ export function accelerationOf(s: FeedMarketSignals): number {
   return accelerationFrom(s.tradeCount1h, s.tradeCount24h, s.velocity5m);
 }
 
+/**
+ * MOMENTUM — what changed, not how big the market is.
+ *
+ * WHAT THIS USED TO BE: an acceleration ratio plus four SIZE terms
+ * (`newBelievers1h`, `tradeCount1h`, `velocity5m`, `volumeUsd24h`). Three
+ * problems, all measured:
+ *
+ *   - `newBelievers1h` is non-zero on ZERO markets platform-wide, and
+ *     `tradeCount1h` on zero as well. Two of the five terms were structurally
+ *     always nil, so the component ran mostly on `volumeUsd24h` — which is a
+ *     measure of SIZE, not of change. A large dead market outscored a small
+ *     live one on the axis named "momentum".
+ *   - The caps (12 new believers an hour, 20 trades an hour) were calibrated
+ *     for a platform that does not exist yet. The busiest hour on record here
+ *     has zero trades.
+ *   - Nothing in it was drift-corrected, so what movement it did see was
+ *     substantially the exchange rate.
+ *
+ * `momentumWeight` is now the leading term: it comes from the same change
+ * engine every panel renders, netted against the measured currency drift, so
+ * "momentum" finally means the market moved. The size terms remain, heavily
+ * demoted, because on a platform this quiet a busy market with no single big
+ * move is still more interesting than a silent one — but they can no longer
+ * outvote an actual change.
+ */
 function momentum(s: FeedMarketSignals): number {
   const accel = accelerationOf(s) / MOMENTUM_CAPS.ACCELERATION;
   return clamp01(
-    0.35 * accel +
-      0.25 * sat(s.newBelievers1h, MOMENTUM_CAPS.NEW_BELIEVERS_1H) +
-      0.2 * sat(s.tradeCount1h, MOMENTUM_CAPS.TRADES_1H) +
-      0.1 * sat(s.velocity5m, MOMENTUM_CAPS.VELOCITY_5M) +
+    0.55 * clamp01(s.momentumWeight) +
+      0.15 * accel +
+      0.1 * sat(s.newBelievers24h, MOMENTUM_CAPS.NEW_BELIEVERS_24H) +
+      0.1 * sat(s.tradeCount24h, MOMENTUM_CAPS.TRADES_24H) +
       0.1 * sat(s.volumeUsd24h, MOMENTUM_CAPS.VOLUME_USD_24H),
   );
 }

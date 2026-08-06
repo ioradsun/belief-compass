@@ -18,6 +18,7 @@ const signals = (o: Partial<FeedMarketSignals> = {}): FeedMarketSignals => ({
   directionalBelievers: 0,
   divergence: 0,
   priceMovePct: 0,
+  momentumWeight: 0,
   opportunityType: null,
   opportunityReason: null,
   opportunityScore: null,

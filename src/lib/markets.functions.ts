@@ -18,6 +18,8 @@ import { rankMarkets } from "@/domain/market-search";
 import { availableModes, type FeedMode } from "@/domain/feed/mode";
 import { loadWindowChanges, pricePct } from "@/lib/window-change.server";
 import { buildPool, POOL, type PoolSlice } from "@/domain/feed/pool";
+import { classifyMomentum, NO_MOMENTUM, type MomentumFacts } from "@/domain/feed/momentum";
+import { currencyDrift } from "@/domain/market-change";
 
 /** SSR/anon feed snapshots live this long before a background refresh. */
 const ANON_FEED_TTL_MS = 5_000;
@@ -178,6 +180,8 @@ async function sharedFeedData(win: VolumeWindow) {
   let ethUsd = 0;
   const chgYes = new Map<number, number>();
   const chgNo = new Map<number, number>();
+  const momentumById = new Map<number, MomentumFacts>();
+  let driftPct: number | null = null;
   let historyFrom: string | null = null;
   /**
    * Lifetime reach and the activity span — the SAME `market_participation` RPC
@@ -241,6 +245,56 @@ async function sharedFeedData(win: VolumeWindow) {
       if (n != null) chgNo.set(id, n);
     }
     historyFrom = chg.historyFrom;
+
+    /**
+     * THE CURRENCY, MEASURED — the move the whole pool shares.
+     *
+     * Every price and capital figure here is USD, and a share is a fixed 0.001
+     * ETH until somebody trades it, so the dollar value of every market moves
+     * together with the exchange rate, having done nothing. Measured over one
+     * 24h window: +1.44% at the 5th percentile, +1.59% at the 50th, +1.59% at
+     * the 95th. Every market "moved" by the same amount.
+     *
+     * The pool is exactly the right sample BECAUSE most of it never trades — the
+     * middle of that distribution IS the currency by construction, and the tails
+     * are the real moves. Below `MATERIAL.minDriftSamples` this returns null and
+     * consumers pass no drift rather than a guess from three markets.
+     */
+    driftPct = currencyDrift(ids.map((id) => pricePct(chg.byId.get(id), "YES")));
+
+    /**
+     * WHAT MOVED, per market, drift-corrected.
+     *
+     * `loadWindowChanges` has always built the full MarketChange — believers,
+     * capital and price, per side, against a real snapshot baseline — and this
+     * function pulled ONE scalar out of it (the YES price percentage) and
+     * dropped the rest. The ranker then measured "momentum" with an uncorrected
+     * figure that was mostly the exchange rate. Computed here rather than in the
+     * per-viewer loop because none of it depends on the viewer, so it is built
+     * once per window and shared by every reader.
+     */
+    for (const r of rows) {
+      const id = Number(r.onchain_id);
+      const rr = r as unknown as Record<string, unknown>;
+      momentumById.set(
+        id,
+        classifyMomentum(
+          chg.byId.get(id) ?? null,
+          {
+            window: win,
+            believersYes: Number(rr.believers_yes ?? 0),
+            believersNo: Number(rr.believers_no ?? 0),
+            moneyYesShare: rr.money_yes_pct == null ? null : Number(rr.money_yes_pct) / 100,
+            inactiveForSeconds:
+              rr.inactive_for_seconds == null ? null : Number(rr.inactive_for_seconds),
+            // Did anything happen inside the reader's own window? That is what
+            // makes a long silence "broken" rather than merely long.
+            tradedInWindow: (yesTrades.get(id) ?? 0) + (noTrades.get(id) ?? 0) > 0,
+          },
+          driftPct,
+        ),
+      );
+    }
   }
 
   return {
@@ -255,6 +309,8 @@ async function sharedFeedData(win: VolumeWindow) {
     historyFrom,
     reach,
     slicesById,
+    momentumById,
+    driftPct,
   };
 }
 
@@ -303,6 +359,8 @@ export const listFeed = createServerFn({ method: "GET" })
       historyFrom,
       reach,
       slicesById,
+      momentumById,
+      driftPct,
     } = shared;
     const sb = serviceClient();
 
@@ -566,6 +624,9 @@ export const listFeed = createServerFn({ method: "GET" })
         // through — but without it there is no way to answer "why is this in the
         // feed at all", which is a different question from "why is it here".
         pool_slices: slicesById.get(id) ?? [],
+        momentum: momentumById.get(id) ?? NO_MOMENTUM,
+        /** Carried so a surface can say what it corrected for. */
+        currency_drift_pct: driftPct,
         story,
       };
     });

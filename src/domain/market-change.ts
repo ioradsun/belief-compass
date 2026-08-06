@@ -179,7 +179,6 @@ export function nowFromRow(row: unknown): ChangeNow {
   };
 }
 
-
 /** Assemble the one shape. Both loaders below end here. */
 export function marketChange(now: ChangeNow, base: ChangeBase, window: string): MarketChange {
   const yes = sideChange(now.yes, base?.yes ?? null);
@@ -369,6 +368,26 @@ export const MATERIAL = {
   minOriginUsd: 1,
 } as const;
 
+/**
+ * The bar a move must clear. A POLICY, separate from the derivation.
+ *
+ * `MATERIAL` is one setting of it — the news bar, for interrupting a reader.
+ * "Is this moving?" is a different question asked by a reader who came looking,
+ * and it deserves a lower bar (see @/domain/feed/momentum). Both must come out
+ * of ONE derivation or the two answers drift apart, so the bar is passed in
+ * rather than read from a constant inside.
+ *
+ * This was very nearly shipped the other way: the momentum lens declared a 3%
+ * threshold while calling `materialMoves`, which had already dropped everything
+ * under 5% — a lower threshold that could never be reached, which is the exact
+ * shape of bug this codebase keeps producing.
+ */
+export interface MoveBar {
+  minPct: number;
+  minBelieverDelta: number;
+  minOriginUsd: number;
+}
+
 export type MoveKind = "rate" | "arrival" | "crowd";
 
 export interface MaterialMove {
@@ -390,11 +409,11 @@ export interface MaterialMove {
  * `driftPct` defaults to zero, which is the honest reading of "the cross-section
  * was not available to measure it" — never an assumption that there was none.
  */
-export function isRateMove(m: MetricChange, driftPct = 0): boolean {
+export function isRateMove(m: MetricChange, driftPct = 0, bar: MoveBar = MATERIAL): boolean {
   return (
     (m.rank === "quiet" || m.rank === "headline") &&
     m.pct != null &&
-    Math.abs(m.pct - driftPct) >= MATERIAL.minPct
+    Math.abs(m.pct - driftPct) >= bar.minPct
   );
 }
 
@@ -420,8 +439,9 @@ function rate(
   metric: ChangeMetric,
   side: Side | null,
   driftPct: number,
+  bar: MoveBar,
 ): MaterialMove | null {
-  if (!isRateMove(m, driftPct) || m.pct == null || m.delta == null) return null;
+  if (!isRateMove(m, driftPct, bar) || m.pct == null || m.delta == null) return null;
   // Believers are a count and carry no currency; price and capital are dollars.
   const net = metric === "believers" ? m.pct : m.pct - driftPct;
   const abs = Math.abs(net);
@@ -435,23 +455,28 @@ function rate(
     // would be the same number meaning two things.
     pct: net,
     delta: m.delta,
-    // Five percent is the entry bar, so it must not also be the top of the
-    // scale — a 5% move and a 60% move are not the same news. Saturating rather
-    // than clamping at the bar keeps the ordering meaningful.
-    weight: Math.min(1, 0.5 + (abs - MATERIAL.minPct) / 100),
+    // The entry bar must not also be the top of the scale — a 5% move and a 60%
+    // move are not the same news. Saturating rather than clamping at the bar
+    // keeps the ordering meaningful.
+    weight: Math.min(1, 0.5 + (abs - bar.minPct) / 100),
   };
 }
 
-function arrival(m: MetricChange, metric: ChangeMetric, side: Side | null): MaterialMove | null {
+function arrival(
+  m: MetricChange,
+  metric: ChangeMetric,
+  side: Side | null,
+  bar: MoveBar,
+): MaterialMove | null {
   if (m.rank !== "origin" || m.delta == null || m.current == null) return null;
-  if (metric === "capital" && m.current < MATERIAL.minOriginUsd) return null;
+  if (metric === "capital" && m.current < bar.minOriginUsd) return null;
   if (metric === "believers" && m.current < 1) return null;
   return { metric, side, direction: "up", kind: "arrival", pct: null, delta: m.delta, weight: 0.8 };
 }
 
-function crowd(m: MetricChange, side: Side | null): MaterialMove | null {
+function crowd(m: MetricChange, side: Side | null, bar: MoveBar): MaterialMove | null {
   if (m.rank === "unknown" || m.delta == null) return null;
-  if (Math.abs(m.delta) < MATERIAL.minBelieverDelta) return null;
+  if (Math.abs(m.delta) < bar.minBelieverDelta) return null;
   // An origin is already reported as an arrival; do not say it twice.
   if (m.rank === "origin") return null;
   return {
@@ -473,17 +498,22 @@ function crowd(m: MetricChange, side: Side | null): MaterialMove | null {
  * market-wide figures stay in `MarketChange` for the panels that show a total;
  * the news is about a side taking or losing ground.
  */
-export function sideMaterialMoves(s: SideChange, side: Side | null, driftPct = 0): MaterialMove[] {
+export function sideMaterialMoves(
+  s: SideChange,
+  side: Side | null,
+  driftPct = 0,
+  bar: MoveBar = MATERIAL,
+): MaterialMove[] {
   // AT MOST ONE MOVE PER METRIC. A side that gained four believers off a base of
   // twenty is both a 20% rate and a crowd of four; reporting both would announce
   // one event twice and let it outrank a market where two genuinely different
   // things happened.
   return [
-    rate(s.price, "price", side, driftPct),
-    rate(s.capital, "capital", side, driftPct) ?? arrival(s.capital, "capital", side),
-    rate(s.believers, "believers", side, driftPct) ??
-      crowd(s.believers, side) ??
-      arrival(s.believers, "believers", side),
+    rate(s.price, "price", side, driftPct, bar),
+    rate(s.capital, "capital", side, driftPct, bar) ?? arrival(s.capital, "capital", side, bar),
+    rate(s.believers, "believers", side, driftPct, bar) ??
+      crowd(s.believers, side, bar) ??
+      arrival(s.believers, "believers", side, bar),
   ].filter((m): m is MaterialMove => m != null);
 }
 
@@ -492,14 +522,23 @@ export function sideMaterialMoves(s: SideChange, side: Side | null, driftPct = 0
  * `currencyDrift(...)` measured over the batch; zero means "not measurable
  * here", which is the same behaviour this had before the drift was found.
  */
-export function materialMoves(c: MarketChange, driftPct: number | null = 0): MaterialMove[] {
+export function materialMoves(
+  c: MarketChange,
+  driftPct: number | null = 0,
+  bar: MoveBar = MATERIAL,
+): MaterialMove[] {
   const d = driftPct ?? 0;
-  return [...sideMaterialMoves(c.yes, "YES", d), ...sideMaterialMoves(c.no, "NO", d)].sort(
-    (a, b) => b.weight - a.weight,
-  );
+  return [
+    ...sideMaterialMoves(c.yes, "YES", d, bar),
+    ...sideMaterialMoves(c.no, "NO", d, bar),
+  ].sort((a, b) => b.weight - a.weight);
 }
 
 /** The single most newsworthy move in this window, or null on a quiet market. */
-export function topMaterialMove(c: MarketChange, driftPct: number | null = 0): MaterialMove | null {
-  return materialMoves(c, driftPct)[0] ?? null;
+export function topMaterialMove(
+  c: MarketChange,
+  driftPct: number | null = 0,
+  bar: MoveBar = MATERIAL,
+): MaterialMove | null {
+  return materialMoves(c, driftPct, bar)[0] ?? null;
 }
