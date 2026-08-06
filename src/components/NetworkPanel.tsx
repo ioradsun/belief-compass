@@ -373,8 +373,8 @@ function PersonRow({
             <span className="num shrink-0 font-semibold" style={{ color: tone }}>
               {spot.matchPct}%
             </span>
-
             <span className="num truncate text-[var(--text-muted)]">· {shared} shared</span>
+
           </span>
         </span>
       </button>
