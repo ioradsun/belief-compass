@@ -176,3 +176,69 @@ describe("the order is a set, not a bag", () => {
     expect(jumpTo(q, Number.NaN)).toBe(q);
   });
 });
+
+/**
+ * THE BUG THIS PREVENTS, in the shape it actually shipped in.
+ *
+ * The page mounts with `?m=2516` in the URL. The active market is known before
+ * any feed response, so the component splices it into an empty queue — order is
+ * now one market long. The real order then arrived and was treated as a re-rank
+ * to be HELD, because "does the reader have an order?" was asked as
+ * `order.length === 0`.
+ *
+ * The panel showed the market you arrived on under "Now reading" and "You're at
+ * the end of this feed." beneath it. The rest of the feed had been fetched,
+ * sequenced and scored, and was never shown.
+ */
+describe("an order invented from the URL is not a reading position", () => {
+  it("adopts the first server order instead of holding it behind one market", () => {
+    const arrived = jumpTo(emptyQueue, 2516);
+    expect(arrived.order).toEqual([2516]); // the placeholder
+    expect(arrived.seeded).toBe(false);
+
+    const after = receiveOrder(arrived, [10, 11, 12]);
+    expect(after.order).toEqual([2516, 10, 11, 12]);
+    expect(after.activeId).toBe(2516);
+    expect(after.incoming).toBeNull();
+    expect(after.seeded).toBe(true);
+  });
+
+  it("keeps the arrived-at market at the head, so Next walks the feed", () => {
+    const q = receiveOrder(jumpTo(emptyQueue, 99), [10, 11]);
+    expect(q.order[0]).toBe(99);
+    expect(advance(q).activeId).toBe(10);
+  });
+
+  it("does not duplicate a market the feed also happens to contain", () => {
+    const q = receiveOrder(jumpTo(emptyQueue, 11), [10, 11, 12]);
+    expect(q.order).toEqual([10, 11, 12]);
+    expect(q.activeId).toBe(11);
+  });
+
+  it("never reports the end of a feed it has not shown", () => {
+    const q = receiveOrder(jumpTo(emptyQueue, 2516), [10, 11, 12]);
+    expect(isCaughtUp(q)).toBe(false);
+    expect(q.order.filter((id) => id !== q.activeId)).toEqual([10, 11, 12]);
+  });
+
+  /**
+   * The promise the module exists for is unchanged: once a real order is on
+   * screen, a re-rank is still held. Only the placeholder loses its defence.
+   */
+  it("still holds a re-rank once a real order has been adopted", () => {
+    const seeded = receiveOrder(jumpTo(emptyQueue, 2516), [10, 11, 12]);
+    const later = receiveOrder(seeded, [12, 10, 11, 13]);
+    expect(later.order).toEqual([2516, 10, 11, 12]);
+    expect(later.incoming).toEqual([12, 10, 11, 13]);
+  });
+
+  it("treats a queue built straight from the server as seeded", () => {
+    expect(initQueue([1, 2, 3]).seeded).toBe(true);
+    expect(emptyQueue.seeded).toBe(false);
+  });
+
+  it("is seeded after a commit, whatever came before it", () => {
+    const held = receiveOrder(initQueue([1, 2]), [2, 1, 3]);
+    expect(commit(held).seeded).toBe(true);
+  });
+});
