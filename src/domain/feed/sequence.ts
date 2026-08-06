@@ -12,7 +12,7 @@
 import { SEQUENCE, FEED_ENGINE_VERSION, type ScoreComponent } from "./config";
 import type { ScoredMarket, Components } from "./score";
 import type { Eligibility, ExclusionReason, Reentry } from "./eligibility";
-import type { FeedReason } from "./reasons";
+import { familyOf, type FeedReason } from "./reasons";
 
 export type FeedItemKind = "market" | "market_idea";
 
@@ -29,6 +29,11 @@ export interface SequenceCandidate {
   reentry: Reentry | null;
   /** Candidate-pool provenance, for diagnostics. Empty when unknown. */
   poolSlices?: string[];
+  /**
+   * Which way this market is moving — "up", "down", or absent when it is still.
+   * Spacing rule only; the card never says it in these words.
+   */
+  moveDirection?: "up" | "down" | null;
 }
 
 export interface FeedIdeaCandidate {
@@ -60,6 +65,27 @@ export interface FeedDiagnostics {
    * The pool was one ordering, so the second had one answer for every market.
    */
   poolSlices: string[];
+  /**
+   * Candidates that scored HIGHER than this one and did not get the slot.
+   *
+   * The third question, and the one nothing could answer: a reader (or an
+   * engineer) looking at slot 4 could see its score and its reason but had no
+   * way to learn that two better-scoring markets were passed over because the
+   * rhythm wanted a different driver, or because placing them would have made
+   * three crypto cards in a row. `diversityAdjustments` recorded that SOMETHING
+   * was skipped; this records what, and why.
+   *
+   * Capped — see MAX_DISPLACED. The first few carry the explanation; the rest
+   * are payload.
+   */
+  displaced: DisplacedCandidate[];
+}
+
+export interface DisplacedCandidate {
+  onchainId: number;
+  score: number;
+  /** "slot wanted momentum", "category_run", "creator_run", … */
+  why: string;
 }
 
 export interface FeedMarketItem {
@@ -100,30 +126,81 @@ const RHYTHM: (ScoreComponent | "any")[] = [
   "exploration",
 ];
 
+/**
+ * How many passed-over candidates a card carries.
+ *
+ * Three, because the explanation is in the first few and the rest is payload
+ * shipped to every client on every poll. On a full 24-card queue an uncapped
+ * list would be quadratic in the pool.
+ */
+export const MAX_DISPLACED = 3;
+
 interface Placed {
   c: SequenceCandidate;
   adjustments: string[];
   intent: ScoreComponent | "reentry" | "fill";
+  displaced: DisplacedCandidate[];
 }
 
-function violates(out: Placed[], c: SequenceCandidate): string | null {
+/**
+ * What placing `c` next would break.
+ *
+ * TWO CLASSES, and the distinction is load bearing. Category, creator and
+ * duplicate-cluster spacing are the original contract, tested as absolutes.
+ * Family and direction spacing were added later from measured clustering and are
+ * PREFERENCES: on a thin pool every remaining candidate breaks something, and
+ * when that happens a preference must yield rather than a guarantee. Adding the
+ * two new rules without this split silently broke the category cap, which a test
+ * caught.
+ *
+ * The preferences are also independent of each other. An earlier version relaxed
+ * them together, so a pool where every card shared a family — which cannot
+ * satisfy the family rule at all — quietly stopped enforcing DIRECTION too. They
+ * are counted separately and the candidate breaking the fewest wins.
+ */
+function conflictsOf(out: Placed[], c: SequenceCandidate): { hard: string | null; soft: string[] } {
   const n = out.length;
-  if (c.category) {
+  const runOf = (match: (p: Placed) => boolean): number => {
     let run = 0;
-    for (let i = n - 1; i >= 0 && out[i]!.c.category === c.category; i -= 1) run += 1;
-    if (run >= SEQUENCE.MAX_SAME_CATEGORY_RUN) return "category_run";
-  }
-  if (c.creator) {
-    let run = 0;
-    for (let i = n - 1; i >= 0 && out[i]!.c.creator === c.creator; i -= 1) run += 1;
-    if (run >= SEQUENCE.MAX_SAME_CREATOR_RUN) return "creator_run";
-  }
-  if (c.clusterId) {
+    for (let i = n - 1; i >= 0 && match(out[i]!); i -= 1) run += 1;
+    return run;
+  };
+
+  let hard: string | null = null;
+  if (c.category && runOf((p) => p.c.category === c.category) >= SEQUENCE.MAX_SAME_CATEGORY_RUN) {
+    hard = "category_run";
+  } else if (
+    c.creator &&
+    runOf((p) => p.c.creator === c.creator) >= SEQUENCE.MAX_SAME_CREATOR_RUN
+  ) {
+    hard = "creator_run";
+  } else if (c.clusterId) {
     for (let i = n - 1; i >= Math.max(0, n - SEQUENCE.MIN_CLUSTER_GAP); i -= 1) {
-      if (out[i]!.c.clusterId === c.clusterId) return "semantic_duplicate";
+      if (out[i]!.c.clusterId === c.clusterId) {
+        hard = "semantic_duplicate";
+        break;
+      }
     }
   }
-  return null;
+
+  // The two runs the archetype harness measured as dominant. Both were uncapped
+  // while category and creator were guarded, and both ran longer than either:
+  // family to NINE, direction to four. See SEQUENCE for the numbers.
+  const soft: string[] = [];
+  const family = familyOf(c.reason?.code);
+  if (
+    family &&
+    runOf((p) => familyOf(p.c.reason?.code) === family) >= SEQUENCE.MAX_SAME_FAMILY_RUN
+  ) {
+    soft.push("family_run");
+  }
+  if (
+    c.moveDirection &&
+    runOf((p) => p.c.moveDirection === c.moveDirection) >= SEQUENCE.MAX_SAME_DIRECTION_RUN
+  ) {
+    soft.push("direction_run");
+  }
+  return { hard, soft };
 }
 
 export interface SequenceInput {
@@ -173,7 +250,12 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
     const slot = out.length;
     // Rare, evenly-spaced re-entry slots — never more than 1 in REENTRY_EVERY.
     if (slot > 0 && slot % SEQUENCE.REENTRY_EVERY === 0 && reentryIdx < reentries.length) {
-      out.push({ c: reentries[reentryIdx]!, adjustments: [], intent: "reentry" });
+      out.push({
+        c: reentries[reentryIdx]!,
+        adjustments: [],
+        intent: "reentry",
+        displaced: [],
+      });
       reentryIdx += 1;
       continue;
     }
@@ -188,18 +270,57 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
     let intent: ScoreComponent | "fill" = pick >= 0 ? (want as ScoreComponent) : "fill";
     if (pick < 0) pick = 0;
 
-    // Respect diversity: skip forward past anything that would clump.
-    let cursor = pick;
-    let conflict = violates(out, pool[cursor]!);
-    while (conflict && cursor < pool.length - 1) {
-      if (!adjustments.includes(conflict)) adjustments.push(conflict);
-      cursor += 1;
-      conflict = violates(out, pool[cursor]!);
-      intent = "fill";
+    /**
+     * Walk forward for the first candidate that breaks NOTHING. Failing that,
+     * the one that breaks the fewest preferences — and never a guarantee, unless
+     * every remaining candidate breaks one, in which case a shorter feed would
+     * be the worse outcome.
+     *
+     * Each skip is recorded against the candidate it skipped, so the placed card
+     * can say what it displaced rather than only that it displaced something.
+     */
+    const skipped = new Map<number, string>();
+    let cursor = -1;
+    let fewest = { idx: -1, soft: Number.POSITIVE_INFINITY };
+    for (let i = pick; i < pool.length; i += 1) {
+      const v = conflictsOf(out, pool[i]!);
+      if (v.hard) {
+        skipped.set(i, v.hard);
+        if (!adjustments.includes(v.hard)) adjustments.push(v.hard);
+        continue;
+      }
+      if (v.soft.length === 0) {
+        cursor = i;
+        break;
+      }
+      skipped.set(i, v.soft[0]!);
+      for (const sft of v.soft) if (!adjustments.includes(sft)) adjustments.push(sft);
+      if (v.soft.length < fewest.soft) fewest = { idx: i, soft: v.soft.length };
+    }
+    if (cursor < 0) {
+      // Nothing was clean. Take the least-bad, or — if every candidate broke a
+      // guarantee — the best-scoring one, because an unfillable slot is worse.
+      cursor = fewest.idx >= 0 ? fewest.idx : pick;
+      if (fewest.idx >= 0 && !adjustments.includes("soft_relaxed"))
+        adjustments.push("soft_relaxed");
+    }
+    if (cursor !== pick) intent = "fill";
+
+    // The pool is sorted by score, so everything before `cursor` scored at least
+    // as high as the card taking this slot. Each was passed for a knowable
+    // reason — record it rather than leaving the ordering to look arbitrary.
+    const displaced: DisplacedCandidate[] = [];
+    for (let i = 0; i < cursor && displaced.length < MAX_DISPLACED; i += 1) {
+      const c = pool[i]!;
+      displaced.push({
+        onchainId: c.onchainId,
+        score: c.scored.score,
+        why: skipped.get(i) ?? (want === "any" ? "outranked" : `slot wanted ${want}`),
+      });
     }
 
     const [chosen] = pool.splice(cursor, 1);
-    out.push({ c: chosen!, adjustments, intent });
+    out.push({ c: chosen!, adjustments, intent, displaced });
   }
 
   const items: OpportunityFeedItem[] = out.map((p, i) => ({
@@ -225,6 +346,7 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
       slotIntent: p.intent,
       reasonCode: p.c.reentry ? "reentry" : (p.c.reason?.code ?? null),
       poolSlices: p.c.poolSlices ?? [],
+      displaced: p.displaced,
     },
   }));
 

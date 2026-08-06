@@ -443,7 +443,17 @@ function rate(
 ): MaterialMove | null {
   if (!isRateMove(m, driftPct, bar) || m.pct == null || m.delta == null) return null;
   // Believers are a count and carry no currency; price and capital are dollars.
-  const net = metric === "believers" ? m.pct : m.pct - driftPct;
+  //
+  // AND THE RESULT IS FLOORED AT −100%, because a quantity that cannot go below
+  // zero cannot fall by more than all of itself. The drift subtraction is a
+  // real-terms adjustment and it happily walks past that boundary: a side that
+  // lost ALL its capital on a day the currency rose 1% computes to −101%, which
+  // the archetype harness printed sixteen times before this line existed. In
+  // real terms −101% is arguably correct and as a sentence shown to a person it
+  // is simply wrong, and being wrong in a checkable way is how a feed loses the
+  // reader it just spent a paragraph convincing.
+  const adjusted = metric === "believers" ? m.pct : m.pct - driftPct;
+  const net = Math.max(adjusted, -100);
   const abs = Math.abs(net);
   return {
     metric,

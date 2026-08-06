@@ -7,6 +7,7 @@
  * to null (the card simply shows no reason).
  */
 import type { FeedMarketSignals, ScoredMarket } from "./score";
+import { MATERIAL, type MaterialMove } from "@/domain/market-change";
 import { momentumReason, WAKING_REASON, CONTESTED_REASON, type MomentumFacts } from "./momentum";
 
 export type ReasonCode =
@@ -24,14 +25,62 @@ export type ReasonCode =
   | "interest"
   | "quality"
   | "exploration"
-  | "classified";
+  | "classified"
+  | "crowd";
 
 export interface FeedReason {
   code: ReasonCode;
   text: string;
 }
 
-const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
+/**
+ * The five families a card can belong to — the balance the feed is judged on.
+ *
+ * ONE definition, here, because the sequencer spaces cards by family and the
+ * archetype harness reports on family, and two copies of this map would let the
+ * diversity rule and the measurement of it drift apart silently.
+ */
+export type ReasonFamily = "PEOPLE" | "MOMENTUM" | "MARKET" | "DISCOVERY";
+
+const FAMILY: Record<ReasonCode, ReasonFamily> = {
+  momentum: "MOMENTUM",
+  waking: "MOMENTUM",
+  taking_off: "MOMENTUM",
+  early: "MOMENTUM",
+  contested: "MARKET",
+  split: "MARKET",
+  classified: "MARKET",
+  crowd: "MARKET",
+  quality: "MARKET",
+  follows: "PEOPLE",
+  tribe: "PEOPLE",
+  rival: "PEOPLE",
+  reentry: "PEOPLE",
+  interest: "DISCOVERY",
+  exploration: "DISCOVERY",
+  fresh: "DISCOVERY",
+};
+
+export const familyOf = (code: ReasonCode | null | undefined): ReasonFamily | null =>
+  code ? (FAMILY[code] ?? null) : null;
+
+const plural = (n: number, unit: string) =>
+  `${n} ${unit === "person" ? (n === 1 ? "person" : "people") : `${unit}${n === 1 ? "" : "s"}`}`;
+
+/**
+ * Is this move a HEADLINE, or only enough to be in the lens?
+ *
+ * Two bars, one derivation — see @/domain/feed/momentum. `MOMENTUM`'s bar
+ * admits a market to "Moving now" because the reader ASKED what is changing;
+ * `MATERIAL`'s is what earns the one sentence on the card. An arrival is always
+ * a headline: first money into a side is the largest thing that can happen to
+ * it, and it has no percentage to judge.
+ */
+function isHeadlineMove(m: MaterialMove): boolean {
+  if (m.kind === "arrival") return true;
+  if (m.metric === "believers") return Math.abs(m.delta) >= MATERIAL.minBelieverDelta;
+  return m.pct != null && Math.abs(m.pct) >= MATERIAL.minPct;
+}
 
 function freshText(ageHours: number | null): string | null {
   if (ageHours == null) return null;
@@ -95,19 +144,32 @@ export function reasonFor(
   const win = opts.window ?? "24h";
 
   /**
-   * MOVEMENT LEADS, when there is any.
+   * MOVEMENT LEADS — but only when the movement is a HEADLINE.
    *
-   * "YES gained 3 believers today" is the most checkable sentence the feed can
-   * write — a reader can open the market and verify it in one glance — and a
-   * reason that survives being checked is the only kind worth printing. It goes
-   * above the social reasons because a social reason describes a STATE ("your
-   * Tribe is backing YES", true for weeks) while this describes an EVENT, and
-   * an event is why a market is worth opening NOW rather than ever.
+   * The first version of this branch led on any move at all, and the archetype
+   * harness showed exactly what that costs: MOMENTUM was 70–90% of every feed,
+   * with a run of NINE consecutive momentum cards for a new viewer. Worse, a
+   * viewer with a real network got 80–90% momentum and 10–20% people — the
+   * social facts the DNA engine exists to produce were being buried under
+   * one-believer moves.
+   *
+   * The cause was a category error. `MOMENTUM`'s bar admits a market to the
+   * "Moving now" LENS — the reader asked what is changing, so one new believer
+   * qualifies. `MATERIAL`'s bar is what earns a HEADLINE. Leading the copy on
+   * the lens bar meant every market with the faintest movement out-shouted a
+   * fact about the reader's own people.
+   *
+   * So a move takes the headline when it clears the news bar, or when it is
+   * what actually ranked the card (`driver`). Below that it keeps its place —
+   * further down, after the personal and social reasons, where a small true
+   * fact belongs.
    *
    * `momentumReason` is drift-corrected at source, so this can never say a
    * market moved when only the exchange rate did.
    */
-  if (mo?.top) return { code: "momentum", text: momentumReason(mo.top, win) };
+  if (mo?.top && isHeadlineMove(mo.top)) {
+    return { code: "momentum", text: momentumReason(mo.top, win) };
+  }
 
   // A market that broke a long silence has no MOVE big enough to describe —
   // that is what makes it interesting — so it gets its own sentence rather than
@@ -160,6 +222,10 @@ export function reasonFor(
           ? `${s.oppCount} of your Rivals are backing ${s.oppSide}`
           : `A Rival is backing ${s.oppSide}`,
     };
+  // The move that did not earn the headline still beats a category blurb: it is
+  // a fact about this market today, where "New in crypto" is a fact about the
+  // shelf it sits on.
+  if (mo?.top) return { code: "momentum", text: momentumReason(mo.top, win) };
   if (scored.driver === "early" && scored.components.early > 0.25)
     return { code: "early", text: "Early — activity is accelerating" };
   if (Math.abs(s.divergence) >= 0.25)
@@ -179,5 +245,25 @@ export function reasonFor(
     return { code: "exploration", text: `Outside your usual — strong market in ${cat}` };
   if (scored.driver === "quality" && cat) return { code: "quality", text: `New in ${cat}` };
   if (s.opportunityReason) return { code: "classified", text: s.opportunityReason };
+
+  /**
+   * THE LAST TRUE THING. A card with no reason is the one outcome the brief
+   * rules out, and the archetype harness found one: a market with believers but
+   * no move, no network, no freshness and no classification fell through every
+   * branch and rendered blank.
+   *
+   * The crowd is still a fact, and a specific one — "5 people have taken sides
+   * here" is checkable in a glance, where "Recommended for you" is not. Below a
+   * crowd of two there is genuinely nothing to say and the card shows nothing,
+   * which is honest; a market with one believer and no movement has not earned a
+   * sentence.
+   */
+  if (s.directionalBelievers >= 2)
+    return {
+      code: "crowd",
+      text: `${plural(Math.round(s.directionalBelievers), "person")} ${
+        s.directionalBelievers === 1 ? "has" : "have"
+      } taken sides here`,
+    };
   return null;
 }
