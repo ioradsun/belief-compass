@@ -21,6 +21,7 @@ import { buildPool, POOL, type PoolSlice } from "@/domain/feed/pool";
 import { classifyMomentum, NO_MOMENTUM, type MomentumFacts } from "@/domain/feed/momentum";
 import { currencyDrift } from "@/domain/market-change";
 import { weiToEth } from "@/domain/money";
+import { participantCount } from "@/domain/participants";
 
 /** SSR/anon feed snapshots live this long before a background refresh. */
 const ANON_FEED_TTL_MS = 5_000;
@@ -106,11 +107,35 @@ const FEED_COLUMNS = `
  * asks five questions and `buildPool` merges the answers with a floor for each.
  * See src/domain/feed/pool for the policy and the reasoning.
  */
-async function poolRows(sb: ReturnType<typeof serviceClient>) {
+/** One row of `market_participation()` — the platform-wide reach table. */
+export interface ParticipationRow {
+  onchain_id: number;
+  participants: number;
+  first_activity_at: string | null;
+  last_activity_at: string | null;
+}
+
+/**
+ * The candidate pool, plus the participation table it was ranked with.
+ *
+ * Returned together because `market_participation()` is read ONCE and used
+ * twice — to rank the participants slice, and as the reach lookup every row
+ * carries. Fetching it again downstream would be a second answer to the same
+ * question, one round trip apart.
+ */
+async function poolRows(
+  sb: ReturnType<typeof serviceClient>,
+  /**
+   * In flight, not awaited. It is handed in as a promise so the RPC overlaps
+   * with the six ORDER BY slices instead of running before them — only the
+   * participants row-lookup, which genuinely depends on it, waits.
+   */
+  participationP: PromiseLike<{ data: unknown }>,
+) {
   const q = () => sb.from("market_state").select(FEED_COLUMNS);
   const sinceActive = new Date(Date.now() - POOL_ACTIVE_MS).toISOString();
 
-  const [active, fresh, classified, believed, deep] = await Promise.all([
+  const [active, fresh, classified, believed, deep, capital, participationRes] = await Promise.all([
     // What is alive. `last_trade_at` descending is the ordering the old pool had
     // no way to express, and it is the feed's first question.
     q()
@@ -136,11 +161,40 @@ async function poolRows(sb: ReturnType<typeof serviceClient>) {
     q()
       .order("volume_total_usd", { ascending: false, nullsFirst: false })
       .limit(POOL.slices.deep.fetch),
+    // WHERE THE MONEY IS STANDING — what "Most Capital" promises. `capital_usd`
+    // is the stored sum of the two sides (PostgREST cannot order on an
+    // expression); see the migration for why it is a generated column. Volume is
+    // NOT a substitute: the top forty by each share only five markets.
+    q()
+      .order("capital_usd", { ascending: false, nullsFirst: false })
+      .limit(POOL.slices.capital.fetch),
+    participationP,
   ]);
+
+  /**
+   * WHERE THE PEOPLE ARE — a complete platform-wide ranking, for free.
+   *
+   * `market_participation()` takes no arguments and returns EVERY market; the
+   * shared feed build has always called it and used it only as a lookup once the
+   * pool was already chosen. Sorting it here makes the top N the TRUE top N,
+   * rather than the top N of whatever the other slices left behind.
+   *
+   * Their read-model rows still have to be fetched, and that bounded
+   * primary-key lookup is the one query this slice costs.
+   */
+  const participation = (participationRes.data ?? []) as ParticipationRow[];
+  const topParticipantIds = [...participation]
+    .sort((a, b) => Number(b.participants) - Number(a.participants) || a.onchain_id - b.onchain_id)
+    .slice(0, POOL.slices.participants.fetch)
+    .map((p) => Number(p.onchain_id));
+
+  const participants = topParticipantIds.length
+    ? await q().in("onchain_id", topParticipantIds)
+    : { data: [], error: null };
 
   // A hard failure of the WHOLE read must throw so it is never cached; one slice
   // erroring while others answer is a degraded pool, not a broken feed.
-  const results = { active, fresh, classified, believed, deep };
+  const results = { active, fresh, classified, believed, deep, capital, participants };
   const errs = Object.values(results).filter((r) => r.error);
   if (errs.length === Object.keys(results).length) {
     throw new Error(errs[0]!.error!.message);
@@ -151,11 +205,26 @@ async function poolRows(sb: ReturnType<typeof serviceClient>) {
   for (const [slice, r] of Object.entries(results) as [PoolSlice, typeof active][]) {
     bySlice[slice] = (r.data ?? []).map((row) => ({ ...row, onchainId: Number(row.onchain_id) }));
   }
+  /**
+   * `.in()` returns rows in the database's order, not the order asked for — so
+   * the participants slice would arrive shuffled and `buildPool`, which takes
+   * from the FRONT of each slice, would seat an arbitrary 30 of the top 60
+   * rather than the top 30. Re-imposed here, against the same platform-wide
+   * ranking the ids came from.
+   */
+  const participantRank = new Map(topParticipantIds.map((id, i) => [id, i]));
+  bySlice.participants?.sort(
+    (a, b) =>
+      (participantRank.get(a.onchainId) ?? Number.MAX_SAFE_INTEGER) -
+      (participantRank.get(b.onchainId) ?? Number.MAX_SAFE_INTEGER),
+  );
   const pool = buildPool({ bySlice });
   return {
     rows: pool.markets.map((m) => m.row),
     /** Which door each market came through — diagnostics only, never rendered. */
     slicesById: new Map(pool.markets.map((m) => [m.row.onchainId, m.slices])),
+    /** Read once, used twice — see the doc on this function. */
+    participation,
   };
 }
 
@@ -169,7 +238,10 @@ async function poolRows(sb: ReturnType<typeof serviceClient>) {
  */
 async function sharedFeedData(win: VolumeWindow) {
   const sb = serviceClient();
-  const { rows, slicesById } = await poolRows(sb);
+  // ONE participation read for the whole build. Started here, awaited inside
+  // poolRows alongside the slice queries, and returned so the reach lookup below
+  // reuses it instead of asking the same question a second time.
+  const { rows, slicesById, participation } = await poolRows(sb, sb.rpc("market_participation"));
 
   const ms = VOLUME_WINDOWS[win];
   const since = ms == null ? null : new Date(Date.now() - ms).toISOString();
@@ -204,18 +276,15 @@ async function sharedFeedData(win: VolumeWindow) {
     // loader (src/lib/window-change.server), which pairs this very row with the
     // same snapshot history the market panels use, so a card and the panel it
     // opens can never disagree about the same window.
-    const [vol, cal, part, chg] = await Promise.all([
+    const [vol, cal, chg] = await Promise.all([
       sb.rpc("market_volume_window", { p_ids: ids, p_since: since }),
       readEthUsd(sb),
-      sb.rpc("market_participation"),
       loadWindowChanges(sb, rows as unknown as Array<Record<string, unknown>>, win),
     ]);
-    for (const p of (part.data ?? []) as unknown as Array<{
-      onchain_id: number;
-      participants: number;
-      first_activity_at: string | null;
-      last_activity_at: string | null;
-    }>) {
+    // Already in hand: `poolRows` ranked the participants slice with exactly
+    // this table. Re-running the RPC here would be a second read of the same
+    // aggregate, one round trip apart, with no way for the two to agree.
+    for (const p of participation) {
       reach.set(Number(p.onchain_id), {
         participants: Number(p.participants) || 0,
         first: p.first_activity_at ? Date.parse(p.first_activity_at) : null,
@@ -778,10 +847,15 @@ async function searchIndex(): Promise<IndexRow[]> {
         onchain_id: id,
         title: r.markets?.title ?? "",
         category: r.markets?.category ?? null,
-        // Reach is counted from the indexed event tape; markets whose trades
-        // pre-date indexing fall back to their standing believers so a live
-        // market never reads as if nobody ever showed up.
-        participants: Math.max(r2?.participants ?? 0, believers),
+        // ONE definition, shared with the feed row and the Explore lens — see
+        // @/domain/participants. It used to be this same `max` written inline
+        // here while the feed carried raw reach, so the same market could be 5
+        // participants in the running order and 12 in a search result.
+        participants: participantCount({
+          reachParticipants: r2?.participants ?? 0,
+          believersYes: num(r.believers_yes),
+          believersNo: num(r.believers_no),
+        }),
         believers,
         capitalUsd,
         firstActivityAt:
@@ -1338,7 +1412,6 @@ function pickLinePayload(raw: unknown): {
     sell_rate: n(p.sell_rate),
   };
 }
-
 
 /**
  * EVERY POSITION THE WALLET HOLDS, valued from our own numbers.

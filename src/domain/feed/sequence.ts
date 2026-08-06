@@ -208,6 +208,29 @@ export interface SequenceInput {
   idea?: FeedIdeaCandidate | null;
   ideaSlot?: number;
   limit?: number;
+  /**
+   * Take the candidates IN THE ORDER GIVEN — no re-sort, no rhythm, no diversity.
+   *
+   * WHY THIS HAD TO EXIST. Everything below assumes a BLEND: it re-sorts the pool
+   * on `scored.score` (line ~250) and then walks a rhythm of slot intents,
+   * spacing categories and creators so a mixed feed does not read as five crypto
+   * markets in a row. All of that is right for For You and all of it is wrong for
+   * a ranking. Under "Most Capital" the reader asked one question — where is the
+   * money — and a diversity rule that moves the $505 market below the $92 one to
+   * vary the category is the interface quietly answering a different question.
+   *
+   * AND IT REVEALED A LIVE DEFECT. Because the re-sort is unconditional,
+   * `orderForMode` — the Tribe / Rivals ranking, its own module with its own
+   * tests — has its ORDER discarded on every request; only its `admits` filter
+   * ever reached the reader. Another instance of this codebase's signature
+   * failure: something computes the right answer and the next stage throws it
+   * away. Fixing that is a product decision about the two social modes and is
+   * deliberately NOT bundled here; this flag is what lets a lens avoid it.
+   *
+   * Eligibility still applies — that is correctness, not taste — and re-entry
+   * markets stay out, because a ranked list is a ranking and not a mixture.
+   */
+  preserveOrder?: boolean;
 }
 
 export interface SequenceResult {
@@ -240,87 +263,98 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
     else excluded.push({ onchainId: c.onchainId, reason: r });
   }
 
-  pool.sort((a, b) => b.scored.score - a.scored.score || a.onchainId - b.onchainId);
-  reentries.sort((a, b) => b.scored.score - a.scored.score || a.onchainId - b.onchainId);
-
   const out: Placed[] = [];
   let reentryIdx = 0;
 
-  while (out.length < limit && (pool.length > 0 || reentryIdx < reentries.length)) {
-    const slot = out.length;
-    // Rare, evenly-spaced re-entry slots — never more than 1 in REENTRY_EVERY.
-    if (slot > 0 && slot % SEQUENCE.REENTRY_EVERY === 0 && reentryIdx < reentries.length) {
-      out.push({
-        c: reentries[reentryIdx]!,
-        adjustments: [],
-        intent: "reentry",
-        displaced: [],
-      });
-      reentryIdx += 1;
-      continue;
+  // A RANKING IS TAKEN AS GIVEN. The caller already sorted on the measure the
+  // reader chose, so the composite-score sort and the rhythm below are skipped
+  // wholesale — they would replace that ordering with a different one. Note this
+  // is not a hypothetical risk: it is precisely what happens to `orderForMode`
+  // on every request today. See `preserveOrder`.
+  if (input.preserveOrder) {
+    for (const c of pool.slice(0, limit)) {
+      out.push({ c, adjustments: [], intent: "fill", displaced: [] });
     }
-    if (pool.length === 0) break;
+  } else {
+    pool.sort((a, b) => b.scored.score - a.scored.score || a.onchainId - b.onchainId);
+    reentries.sort((a, b) => b.scored.score - a.scored.score || a.onchainId - b.onchainId);
 
-    const want = RHYTHM[slot % RHYTHM.length]!;
-    const adjustments: string[] = [];
-
-    // Prefer the best-scoring candidate whose dominant component matches the
-    // slot's intent; fall back to the best remaining one.
-    let pick = want === "any" ? -1 : pool.findIndex((c) => c.scored.driver === want);
-    let intent: ScoreComponent | "fill" = pick >= 0 ? (want as ScoreComponent) : "fill";
-    if (pick < 0) pick = 0;
-
-    /**
-     * Walk forward for the first candidate that breaks NOTHING. Failing that,
-     * the one that breaks the fewest preferences — and never a guarantee, unless
-     * every remaining candidate breaks one, in which case a shorter feed would
-     * be the worse outcome.
-     *
-     * Each skip is recorded against the candidate it skipped, so the placed card
-     * can say what it displaced rather than only that it displaced something.
-     */
-    const skipped = new Map<number, string>();
-    let cursor = -1;
-    let fewest = { idx: -1, soft: Number.POSITIVE_INFINITY };
-    for (let i = pick; i < pool.length; i += 1) {
-      const v = conflictsOf(out, pool[i]!);
-      if (v.hard) {
-        skipped.set(i, v.hard);
-        if (!adjustments.includes(v.hard)) adjustments.push(v.hard);
+    while (out.length < limit && (pool.length > 0 || reentryIdx < reentries.length)) {
+      const slot = out.length;
+      // Rare, evenly-spaced re-entry slots — never more than 1 in REENTRY_EVERY.
+      if (slot > 0 && slot % SEQUENCE.REENTRY_EVERY === 0 && reentryIdx < reentries.length) {
+        out.push({
+          c: reentries[reentryIdx]!,
+          adjustments: [],
+          intent: "reentry",
+          displaced: [],
+        });
+        reentryIdx += 1;
         continue;
       }
-      if (v.soft.length === 0) {
-        cursor = i;
-        break;
+      if (pool.length === 0) break;
+
+      const want = RHYTHM[slot % RHYTHM.length]!;
+      const adjustments: string[] = [];
+
+      // Prefer the best-scoring candidate whose dominant component matches the
+      // slot's intent; fall back to the best remaining one.
+      let pick = want === "any" ? -1 : pool.findIndex((c) => c.scored.driver === want);
+      let intent: ScoreComponent | "fill" = pick >= 0 ? (want as ScoreComponent) : "fill";
+      if (pick < 0) pick = 0;
+
+      /**
+       * Walk forward for the first candidate that breaks NOTHING. Failing that,
+       * the one that breaks the fewest preferences — and never a guarantee, unless
+       * every remaining candidate breaks one, in which case a shorter feed would
+       * be the worse outcome.
+       *
+       * Each skip is recorded against the candidate it skipped, so the placed card
+       * can say what it displaced rather than only that it displaced something.
+       */
+      const skipped = new Map<number, string>();
+      let cursor = -1;
+      let fewest = { idx: -1, soft: Number.POSITIVE_INFINITY };
+      for (let i = pick; i < pool.length; i += 1) {
+        const v = conflictsOf(out, pool[i]!);
+        if (v.hard) {
+          skipped.set(i, v.hard);
+          if (!adjustments.includes(v.hard)) adjustments.push(v.hard);
+          continue;
+        }
+        if (v.soft.length === 0) {
+          cursor = i;
+          break;
+        }
+        skipped.set(i, v.soft[0]!);
+        for (const sft of v.soft) if (!adjustments.includes(sft)) adjustments.push(sft);
+        if (v.soft.length < fewest.soft) fewest = { idx: i, soft: v.soft.length };
       }
-      skipped.set(i, v.soft[0]!);
-      for (const sft of v.soft) if (!adjustments.includes(sft)) adjustments.push(sft);
-      if (v.soft.length < fewest.soft) fewest = { idx: i, soft: v.soft.length };
-    }
-    if (cursor < 0) {
-      // Nothing was clean. Take the least-bad, or — if every candidate broke a
-      // guarantee — the best-scoring one, because an unfillable slot is worse.
-      cursor = fewest.idx >= 0 ? fewest.idx : pick;
-      if (fewest.idx >= 0 && !adjustments.includes("soft_relaxed"))
-        adjustments.push("soft_relaxed");
-    }
-    if (cursor !== pick) intent = "fill";
+      if (cursor < 0) {
+        // Nothing was clean. Take the least-bad, or — if every candidate broke a
+        // guarantee — the best-scoring one, because an unfillable slot is worse.
+        cursor = fewest.idx >= 0 ? fewest.idx : pick;
+        if (fewest.idx >= 0 && !adjustments.includes("soft_relaxed"))
+          adjustments.push("soft_relaxed");
+      }
+      if (cursor !== pick) intent = "fill";
 
-    // The pool is sorted by score, so everything before `cursor` scored at least
-    // as high as the card taking this slot. Each was passed for a knowable
-    // reason — record it rather than leaving the ordering to look arbitrary.
-    const displaced: DisplacedCandidate[] = [];
-    for (let i = 0; i < cursor && displaced.length < MAX_DISPLACED; i += 1) {
-      const c = pool[i]!;
-      displaced.push({
-        onchainId: c.onchainId,
-        score: c.scored.score,
-        why: skipped.get(i) ?? (want === "any" ? "outranked" : `slot wanted ${want}`),
-      });
-    }
+      // The pool is sorted by score, so everything before `cursor` scored at least
+      // as high as the card taking this slot. Each was passed for a knowable
+      // reason — record it rather than leaving the ordering to look arbitrary.
+      const displaced: DisplacedCandidate[] = [];
+      for (let i = 0; i < cursor && displaced.length < MAX_DISPLACED; i += 1) {
+        const c = pool[i]!;
+        displaced.push({
+          onchainId: c.onchainId,
+          score: c.scored.score,
+          why: skipped.get(i) ?? (want === "any" ? "outranked" : `slot wanted ${want}`),
+        });
+      }
 
-    const [chosen] = pool.splice(cursor, 1);
-    out.push({ c: chosen!, adjustments, intent, displaced });
+      const [chosen] = pool.splice(cursor, 1);
+      out.push({ c: chosen!, adjustments, intent, displaced });
+    }
   }
 
   const items: OpportunityFeedItem[] = out.map((p, i) => ({

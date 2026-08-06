@@ -274,3 +274,64 @@ describe("why a card is in this slot and not a better-scoring one", () => {
     }
   });
 });
+
+/**
+ * A RANKED LENS IS NOT A BLEND.
+ *
+ * Everything the sequencer does — the composite-score sort, the rhythm of slot
+ * intents, the category and creator spacing — is right for For You and wrong for
+ * "Most Capital", where the reader asked one question and expects the answer in
+ * order. `preserveOrder` is how a ranking opts out.
+ */
+describe("preserveOrder", () => {
+  it("keeps the caller's order instead of re-sorting on the composite score", () => {
+    // Descending capital would be 3, 1, 2 — while the composite score says the
+    // opposite. Without this flag the score wins and the lens is a lie.
+    const { items } = sequenceFeed({
+      preserveOrder: true,
+      candidates: [cand(3, { scored: scored(3, 1) }), cand(1), cand(2)],
+    });
+    expect(items.map((i) => (i.kind === "market" ? i.onchainId : null))).toEqual([3, 1, 2]);
+  });
+
+  it("still drops ineligible markets — that is correctness, not taste", () => {
+    const { items, excluded } = sequenceFeed({
+      preserveOrder: true,
+      candidates: [
+        cand(1),
+        cand(2, { eligibility: { eligible: false, reason: "hidden", availableAt: null } }),
+        cand(3),
+      ],
+    });
+    expect(items.map((i) => (i.kind === "market" ? i.onchainId : null))).toEqual([1, 3]);
+    expect(excluded.map((e) => e.onchainId)).toEqual([2]);
+  });
+
+  it("does not space categories — the ranking is the point", () => {
+    // Four crypto markets in a row is exactly what "Most Capital" should show
+    // when the four biggest books happen to be crypto. Measured: crypto holds 28
+    // of the 68 markets with $10 or more.
+    const rows = [1, 2, 3, 4].map((id) => cand(id, { category: "crypto" }));
+    const { items } = sequenceFeed({ preserveOrder: true, candidates: rows });
+    expect(items).toHaveLength(4);
+    expect(
+      items.every((i) => i.kind === "market" && i.diagnostics.diversityAdjustments.length === 0),
+    ).toBe(true);
+  });
+
+  it("honours the limit", () => {
+    const { items } = sequenceFeed({
+      preserveOrder: true,
+      limit: 2,
+      candidates: [cand(1), cand(2), cand(3)],
+    });
+    expect(items).toHaveLength(2);
+  });
+
+  it("leaves the blended path exactly as it was", () => {
+    // The flag is opt-in: For You must be byte-identical to before.
+    const rows = [cand(5, { scored: scored(5, 10) }), cand(6, { scored: scored(6, 90) })];
+    const { items } = sequenceFeed({ candidates: rows });
+    expect(items.map((i) => (i.kind === "market" ? i.onchainId : null))).toEqual([6, 5]);
+  });
+});

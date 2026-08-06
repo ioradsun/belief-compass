@@ -1,8 +1,8 @@
 /**
  * LEFT COLUMN — three flat tabs, one interaction hierarchy:
- *   For You          = what's coming up                (click → market in center)
- *   Your Convictions = my relationships with markets   (click → market in center)
- *   Your People      = my relationships with people    (click → person in center)
+ *   Explore   = discover markets                 (click → market in center)
+ *   Positions = what I have backed               (click → market in center)
+ *   People    = who I connect with               (click → person in center)
  *
  * IT WAS FOUR, and Tribe and Rivals were two of them. That split asked the
  * reader to choose a CAMP before they could see anyone, and it put people twelve
@@ -143,8 +143,20 @@ export function MyWorld({
     [walletData],
   );
 
+  /**
+   * THREE DESTINATIONS, THREE JOBS.
+   *
+   *   EXPLORE    discover markets
+   *   POSITIONS  what I have backed, and what is happening with it
+   *   PEOPLE     who I connect with, through shared and opposing convictions
+   *
+   * "For You" named ONE of Explore's five lenses, which made the tab and the
+   * lens row inside it contradict each other the moment a reader picked Moving.
+   * "Convictions" was the older word for the same thing "Positions" says
+   * plainly — and the internal tab key has been `positions` the whole time.
+   */
   const tabName = (t: Tab): string =>
-    t === "feed" ? "For You" : t === "positions" ? "Convictions" : "People";
+    t === "feed" ? "Explore" : t === "positions" ? "Positions" : "People";
 
   // The playlist tab carries no count: how many markets are queued is an
   // implementation detail, and no reader decides anything differently for it.
@@ -171,7 +183,7 @@ export function MyWorld({
         className="mb-4 flex overflow-x-auto rounded-[10px] p-0.5"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
         role="tablist"
-        aria-label="For You, Convictions, or People"
+        aria-label="Explore, Positions, or People"
       >
         {TABS.map((t) => (
           <button

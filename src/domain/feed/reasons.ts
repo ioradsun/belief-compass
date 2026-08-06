@@ -138,10 +138,29 @@ function followsReason(s: FeedMarketSignals): FeedReason {
 export function reasonFor(
   s: FeedMarketSignals,
   scored: ScoredMarket,
-  opts: { category?: string | null; momentum?: MomentumFacts | null; window?: string } = {},
+  opts: {
+    category?: string | null;
+    momentum?: MomentumFacts | null;
+    window?: string;
+    /**
+     * The reader explicitly asked what is CHANGING — the Moving lens.
+     *
+     * The headline bar below exists to stop small moves out-shouting a fact
+     * about the reader's own people in a BLEND. Under Moving there is no blend:
+     * every market in the list is there because it moved, and burying that under
+     * "Picked from your interest in crypto" would answer a question nobody asked.
+     * So the move leads whatever its size — which is exactly the distinction
+     * `isHeadlineMove` draws, applied to the one case where it should not.
+     */
+    preferMomentum?: boolean;
+  } = {},
 ): FeedReason | null {
   const mo = opts.momentum ?? null;
   const win = opts.window ?? "24h";
+
+  if (opts.preferMomentum && mo?.top) {
+    return { code: "momentum", text: momentumReason(mo.top, win) };
+  }
 
   /**
    * MOVEMENT LEADS — but only when the movement is a HEADLINE.

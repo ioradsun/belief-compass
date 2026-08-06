@@ -24,9 +24,14 @@
  * where its evidence puts it. Certainty at the ends, uncertainty in the middle.
  * Nothing to sort, nothing to filter, nothing to learn.
  *
- * SEARCH ARRIVES WHEN THE LIST GETS LONG, never because the page loaded. Below
- * `SPECTRUM.searchAt` people, reading every row is faster than deciding what to
- * type, and a permanently-mounted box is a tax paid for a rare need.
+ * THERE IS NO SEARCH BOX, and removing it is what made the ONE control visible.
+ * The box and the spectrum filter shared a `needsSearch(...)` gate, so under
+ * twenty people neither appeared: a reader with eight people had no way to look
+ * at just their Tribe, and a reader with thirty got two controls at once. The
+ * box also duplicated a search that already exists — the header field queries
+ * people across the whole platform, through the same `getNetwork(query)` this
+ * panel was calling. So the filter is now simply always there, on its own, and
+ * the answer to "where do I search for a person" is the one field in the header.
  *
  * Presentation only: getNetwork owns the data; the pure domain modules turn it
  * into one honest story.
@@ -45,7 +50,6 @@ import {
   spectrumColor,
   spectrumRing,
   matchesFilter,
-  needsSearch,
   SPECTRUM_FILTERS,
   type SpectrumFilter,
   type SpectrumPlace,
@@ -94,20 +98,12 @@ export function NetworkPanel({
   onCount?: (n: number) => void;
   onExplore?: () => void;
 }) {
-  const [rawQuery, setRawQuery] = useState("");
-  const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<SpectrumFilter>("all");
 
-  const t = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (t.current) clearTimeout(t.current);
-    t.current = setTimeout(() => setQuery(rawQuery.trim()), 200);
-    return () => {
-      if (t.current) clearTimeout(t.current);
-    };
-  }, [rawQuery]);
-
-  const { data, isLoading } = useQuery(networkQO(wallet, query));
+  // The UNFILTERED network, always. `networkQO` still takes a query — the header
+  // search uses it — but this panel no longer asks the server to narrow the list,
+  // so it reads the same cache entry every other surface does.
+  const { data, isLoading } = useQuery(networkQO(wallet));
 
   /**
    * Everyone with any shared history, in one order. `insufficient` is the only
@@ -132,20 +128,12 @@ export function NetworkPanel({
     [everyone, filter],
   );
 
-  const searching = query.length > 0;
-
-  /**
-   * How long the list is when nothing is filtering it. Measured only on the
-   * unfiltered view, or typing would shrink the list under the box and take the
-   * box away mid-search.
-   */
-  const fullSize = useRef(0);
-  if (!searching && !isLoading) fullSize.current = everyone.length;
-  const showSearch = needsSearch(fullSize.current);
-
+  // The tab's count is the whole network, never what the filter left behind:
+  // looking at just your Tribe must not make the number of people you have
+  // appear to drop.
   useEffect(() => {
-    if (!searching) onCount?.(everyone.length);
-  }, [everyone.length, searching, onCount]);
+    onCount?.(everyone.length);
+  }, [everyone.length, onCount]);
 
   // The ONE line about your own DNA: how much of it exists. No page to open, no
   // stage word, no meter — just the honest count and why it is worth growing.
@@ -170,20 +158,13 @@ export function NetworkPanel({
         </p>
       )}
 
-
-      {showSearch && (
-        <div className="mb-2.5 flex items-center gap-1.5">
-          <input
-            value={rawQuery}
-            onChange={(e) => setRawQuery(e.target.value)}
-            placeholder="Search people…"
-            aria-label="Search people"
-            className="min-w-0 flex-1 rounded-md bg-[var(--surface)] px-2.5 py-1.5 text-[13px] outline-none"
-            style={{ border: "1px solid var(--border)" }}
-          />
-          <SpectrumFilterControl value={filter} onChange={setFilter} />
-        </div>
-      )}
+      {/* THE ONE CONTROL. It used to share a visibility gate with the search box
+        and so appeared only past twenty people — which meant the reader most
+        likely to want "just my Tribe" (a short, new list) was the one who could
+        not have it. It stands alone now, and it is always there. */}
+      <div className="mb-2.5 flex items-center justify-end">
+        <SpectrumFilterControl value={filter} onChange={setFilter} />
+      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {isLoading && list.length === 0 ? (
@@ -193,7 +174,7 @@ export function NetworkPanel({
             ))}
           </ul>
         ) : list.length === 0 ? (
-          searching || filter !== "all" ? (
+          filter !== "all" ? (
             <p className="pt-3 text-[12.5px] text-[var(--text-muted)]">No people here yet.</p>
           ) : (
             <EmptyPeople onExplore={onExplore} />
