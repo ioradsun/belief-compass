@@ -305,8 +305,9 @@ export function positionStory(input: PositionStoryInput): PositionStory {
       tone: "up",
     };
 
-  // 5 — THE CANONICAL MARKET STORY, told from the owner's seat.
-  if (input.live) {
+  // 5 — THE CANONICAL MARKET STORY, told from the owner's seat — but only while
+  // it is still true. A stale line is worse than no line: it invents news.
+  if (input.live && isLineFresh(input.live, input.nowMs ?? Date.now())) {
     const s = ownerViewOfCanonical(side, input.live, believers);
     if (s) return s;
   }
