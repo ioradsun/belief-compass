@@ -45,6 +45,8 @@ import { discoveryValue, markSeen, type DiscoverySubject } from "@/domain/discov
 import { firstBackedIsFloor } from "@/domain/tenure";
 import { classifyPace } from "@/domain/feed-scheduler";
 import { buildStandingFacts } from "@/lib/standing-facts.server";
+import { buildPersonMilestones } from "@/lib/person-milestones.server";
+import { tellConvictionMilestone } from "@/domain/person-milestone";
 import { tellStandingFact } from "@/domain/standing-fact";
 import {
   findDiscoveryMoments,
@@ -746,6 +748,67 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         return r;
       });
 
+    // ── PERSON MILESTONES: the second story one action tells ────────────────
+    // Every other family reports what happened to a MARKET. "Sarah backed AI"
+    // and "AI welcomed a new believer" are both here; "Sarah now backs five
+    // questions" was not, and it is the one that makes a reader feel they are
+    // watching people rather than transactions.
+    //
+    // Read-time, no table, no emitter — see src/lib/person-milestones.server for
+    // why the crossing needs no ledger: a belief already knows when it began, so
+    // the moment somebody reached five is the start date of the newest of their
+    // five, recoverable identically forever.
+    //
+    // Full fetch only, like standing facts: a delta poll merges into a tail that
+    // already carries them, and a conviction count does not move in 30 seconds.
+    if (data?.since == null && actorWallets.length > 0) {
+      const reached = await buildPersonMilestones({
+        wallets: actorWallets,
+        nameByWallet: new Map(
+          [...profiles].map(([w, p]) => [w, p.displayName ?? aliasFor(w)] as const),
+        ),
+        titleById,
+        sinceMs: Date.now() - LIVE_WINDOW_MS,
+        nowMs: Date.now(),
+      }).catch(() => []);
+      for (const m of reached) {
+        const told = tellConvictionMilestone(m);
+        material.push({
+          id: m.id,
+          kind: "person_milestone",
+          marketId: String(m.marketId),
+          marketTitle: m.marketTitle,
+          occurredAt: m.occurredAt,
+          startedAt: m.occurredAt,
+          side: null,
+          walletCount: 1,
+          tradeCount: null,
+          amountEth: null,
+          amountUsd: null,
+          wallet: m.wallet,
+          people: [{ wallet: m.wallet, name: m.name, avatarUrl: null }],
+          story: {
+            category: "milestone",
+            headline: told.headline,
+            body: told.body,
+            attribution: told.attribution,
+            tone: "neutral",
+            personal: false,
+          },
+          text: `${told.headline} — ${told.body}`,
+          // `pace` is set by the scheduling loop below, from classifyPace —
+          // setting it here would be overwritten and would read as though this
+          // row paced itself.
+          //
+          // A person crossing a rung is a real community moment, and the scale
+          // is the shared one: this sits with a believer milestone, not with a
+          // market flip. Persisted in the payload because that is where the
+          // mixer reads an EMITTED significance from.
+          payload: { significance: m.rung >= 10 ? 0.72 : 0.6 },
+        } as (typeof material)[number]);
+      }
+    }
+
     // ── DISCOVERY: "is there someone here I should meet?" ────────────────────
     // The second ranking dimension, and the one the product is actually for.
     // Significance says how big an event is; this says whether it opens a
@@ -916,8 +979,15 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           isViewer: viewer != null && r.wallet?.toLowerCase() === viewer,
         }),
         // A discovery moment is the rarest row the product has; nothing about
-        // it should ever be scheduled as texture.
-        weight: r.kind === "discovery_moment" ? 1 : (tierById.get(r.id) ?? 3),
+        // it should ever be scheduled as texture. A person milestone has no
+        // trade tier to inherit and would default to texture — it is a moment,
+        // and the scheduler must not pace it like a dust buy.
+        weight:
+          r.kind === "discovery_moment"
+            ? 1
+            : r.kind === "person_milestone"
+              ? 2
+              : (tierById.get(r.id) ?? 3),
       };
     }
 

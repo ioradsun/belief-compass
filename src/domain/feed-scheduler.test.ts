@@ -392,3 +392,19 @@ describe("classifyPace", () => {
     expect(priorityOf(discovery)).toBeLessThanOrEqual(priorityOf(dust));
   });
 });
+
+/**
+ * A person's conviction count became true at a moment and then stays true — the
+ * same shape as "someone has held YES for 43 days". Scheduling it as standing is
+ * what lets a quiet stretch draw on it, which is the whole reason it exists.
+ */
+describe("a conviction count is a standing fact, not news that ages", () => {
+  it("paces a person milestone with the other things that do not rot", () => {
+    expect(classifyPace({ kind: "person_milestone" })).toBe("standing");
+    expect(classifyPace({ kind: "conviction_cohort" })).toBe("standing");
+  });
+
+  it("still yields to the reader's own move", () => {
+    expect(classifyPace({ kind: "person_milestone", isViewer: true })).toBe("now");
+  });
+});

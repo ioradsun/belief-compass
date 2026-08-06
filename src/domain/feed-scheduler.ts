@@ -135,9 +135,14 @@ export function classifyPace(input: {
   if (input.isViewer) return "now";
   switch (input.kind) {
     // Standing facts: true today, true tomorrow, no "when" of their own.
+    //
+    // `person_milestone` is the same shape as the rest: a conviction count
+    // became true at a moment and then stays true. Scheduling it as standing is
+    // what lets the quiet stretches draw on it, which is why it exists.
     case "conviction_cohort":
     case "believer_milestone":
     case "tribe_doubled":
+    case "person_milestone":
       return "standing";
     // A market opening is the one piece of news that is only news once.
     case "market_created":
