@@ -91,11 +91,22 @@ export function MarketDeck({
   mobileCaseOpen = false,
   onToggleCase,
   onSelectPerson,
+  reason,
 }: {
   row: MarketRow;
   ethUsd: number;
   onSkip: () => void;
   viewerWallet?: string;
+  /**
+   * Why the feed chose THIS market — the same sentence the playlist row showed.
+   *
+   * It was computed by `reasonFor`, carried to the client, rendered in the
+   * playlist, and then dropped at the moment the reader acted on it: opening a
+   * market lost the only explanation of why it was offered. Carrying it across
+   * the transition is what makes the two surfaces one experience instead of a
+   * list and an unrelated page.
+   */
+  reason?: string | null;
   /** Case File mode (desktop): the YES/NO evidence moves to the side columns. */
   caseOpen?: boolean;
   /** Case File mode (mobile): the center becomes a NO ← MARKET → YES carousel. */
@@ -477,6 +488,19 @@ export function MarketDeck({
           )}
         </div>
 
+        {/* WHY THIS MARKET — the sentence the card was chosen on, carried in.
+            One line, muted, above the question: it is context for what follows,
+            not a claim competing with it. The row is always reserved so a market
+            with no reason does not shift the question up 18px. */}
+        <div className="min-h-[18px]">
+          {reason && (
+            <p className="truncate text-[11.5px] leading-[18px] text-[var(--text-muted)]">
+              <span className="font-semibold uppercase tracking-[0.08em] opacity-70">Why this</span>
+              <span aria-hidden> · </span>
+              {reason}
+            </p>
+          )}
+        </div>
         <div className="flex items-start gap-1.5">
           {/* A DELIBERATE TITLE RULE: exactly two lines of space, always.
             One-line and three-line questions occupy the same box, so nothing
