@@ -151,6 +151,35 @@ export interface ChangeNow {
 }
 export type ChangeBase = { yes: ChangeNow["yes"]; no: ChangeNow["no"] } | null;
 
+/**
+ * The authoritative current state, per side, off a `market_state`-shaped row.
+ *
+ * Lives here (not beside a hook) because the client panels AND the server list
+ * loaders both read it, and two copies of "which columns are the current state"
+ * is exactly the drift this module exists to end. The trade tape is never
+ * consulted: replaying buys and sells accumulates float residue, and it is
+ * capped at 1000 rows, so on a busy market it is not a second opinion — it is a
+ * wrong one.
+ */
+export function nowFromRow(row: unknown): ChangeNow {
+  const r = (row ?? {}) as Record<string, unknown>;
+  const n = (v: unknown): number | null =>
+    v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+  return {
+    yes: {
+      believers: n(r["believers_yes"]),
+      capitalUsd: n(r["yes_capital_usd"]),
+      priceUsd: n(r["yes_price_usd"]),
+    },
+    no: {
+      believers: n(r["believers_no"]),
+      capitalUsd: n(r["no_capital_usd"]),
+      priceUsd: n(r["no_price_usd"]),
+    },
+  };
+}
+
+
 /** Assemble the one shape. Both loaders below end here. */
 export function marketChange(now: ChangeNow, base: ChangeBase, window: string): MarketChange {
   const yes = sideChange(now.yes, base?.yes ?? null);
