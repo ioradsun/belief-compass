@@ -554,6 +554,11 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     const actionById = new Map<string, ConvictionAction>();
     /** Which rows the grammar classified as a moment rather than a transaction. */
     const celebrationById = new Map<string, boolean>();
+    /**
+     * Cohort rows we cannot describe honestly (no kind, no rung, or nobody in
+     * them). Better silence than "undefined — 0 believers reached NaN months".
+     */
+    const unrenderable = new Set<string>();
 
     for (const r of live) {
       const w = r.wallet?.toLowerCase();
