@@ -36,6 +36,12 @@ import {
   reviewMarketQuestion,
 } from "@/lib/market-create.functions";
 import { clearDraft, getDraft, setDraft, setProbe } from "@/lib/create-draft";
+import {
+  CATEGORY_LABEL,
+  CREATOR_CATEGORIES,
+  normalizeCategory,
+  type CategorySlug,
+} from "@/domain/categories";
 import { rewardLine } from "@/domain/market-suggestion";
 import { completeSuggestion, trackSuggestion } from "@/lib/market-suggestion.functions";
 import { DEFAULT_CURVE, useCreateEconomics, useCreateMarket } from "@/chain/market-create";
@@ -89,6 +95,8 @@ export function CreateMarket({
   });
   const [localError, setLocalError] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
+  /** Null until the creator picks. The AI's read is shown, never silently kept. */
+  const [category, setCategory] = useState<CategorySlug | null>(saved.category);
 
 
 
@@ -121,12 +129,13 @@ export function CreateMarket({
       question,
       side,
       amount,
+      category,
       type: attachment ? "media" : "text",
       attachment: attachment
         ? { kind: "link", url: attachment.media.url, embed: attachment.media }
         : null,
     });
-  }, [question, side, amount, attachment]);
+  }, [question, side, amount, attachment, category]);
   useEffect(() => {
     setProbe({
       question: debounced,
@@ -142,6 +151,17 @@ export function CreateMarket({
     enabled: debounced.length >= MIN_QUESTION,
     staleTime: 5 * 60_000,
   });
+
+  /**
+   * The AI's read of the question, shown as the pre-selected chip.
+   *
+   * It is DISPLAYED, not adopted. `category` stays null until a chip is
+   * clicked, and only a non-null value is sent — otherwise the server would
+   * stamp `category_source: "creator"` on an answer no human ever looked at,
+   * and we would lose the only signal that says which categories are trusted.
+   */
+  const suggestedCategory = normalizeCategory(review?.review.category);
+  const activeCategory = category ?? suggestedCategory;
 
 
 
@@ -165,6 +185,7 @@ export function CreateMarket({
           description: null,
           format: attachment ? "media" : "text",
           side,
+          category,
         },
       });
 
@@ -341,6 +362,41 @@ export function CreateMarket({
               )}
             </div>
           )}
+        </div>
+
+        {/* 2b · Where this belongs.
+            Small, but it is the difference between a market that can be found
+            and one that only the AI has an opinion about. The chip the reviewer
+            suggests is pre-highlighted, so agreeing costs nothing and
+            disagreeing costs one tap. */}
+        <div>
+          <StepLabel>
+            {category ? "Category" : suggestedCategory ? "Category · our guess" : "Category"}
+          </StepLabel>
+          <div className="flex flex-wrap gap-1.5">
+            {CREATOR_CATEGORIES.map((slug) => {
+              const on = activeCategory === slug;
+              const guessed = on && !category;
+              return (
+                <button
+                  key={slug}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setCategory(slug)}
+                  className="rounded-full border px-2.5 py-1 text-[12px] leading-none transition-colors"
+                  style={{
+                    // A guess reads as an outline, a choice reads as a fill —
+                    // the creator can tell at a glance whether anyone decided.
+                    borderColor: on ? "var(--text)" : "var(--border)",
+                    background: guessed ? "transparent" : on ? "var(--text)" : "transparent",
+                    color: guessed ? "var(--text)" : on ? "var(--bg)" : "var(--text-muted)",
+                  }}
+                >
+                  {CATEGORY_LABEL[slug]}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* 3 · Position + amount — grouped by spacing, not by extra chrome. */}

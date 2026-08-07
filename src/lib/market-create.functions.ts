@@ -40,7 +40,7 @@ export const reviewMarketQuestion = createServerFn({ method: "POST" })
           ok: false,
           reason: "Say a bit more.",
           suggestion: null,
-          category: "Other",
+          category: "other" as const,
           blocked: false,
         },
       };
@@ -102,6 +102,15 @@ export const createMarketDraft = createServerFn({ method: "POST" })
     const review = await reviewQuestion(question);
     if (review.blocked) throw new Error("That question can't be published here.");
 
+    // The creator's pick wins, but only if it names something the rest of the
+    // system reads. `normalizeCategory` is the one door — a client sending an
+    // unknown string falls back to the reviewer's answer rather than writing a
+    // category no reader can resolve, which is exactly how the vocabularies
+    // drifted apart in the first place.
+    const { normalizeCategory } = await import("@/domain/categories");
+    const chosen = normalizeCategory(data.category);
+    const category = chosen ?? review.category;
+
     const questionId = makeQuestionId(question);
     const { error } = await db.from("conviction_markets").insert({
       question_id: questionId,
@@ -109,15 +118,15 @@ export const createMarketDraft = createServerFn({ method: "POST" })
       description: clean(data.description, 500) || null,
       format: data.format === "media" ? "media" : "text",
       side: data.side === "NO" ? "NO" : "YES",
-      category: data.category || review.category,
-      category_source: data.category ? "creator" : "ai",
+      category,
+      category_source: chosen ? "creator" : "ai",
       creator_wallet: wallet,
       contract_address: CONTRACT,
       chain_id: CHAIN_ID,
       status: "draft",
     });
     if (error) throw new Error(error.message);
-    return { questionId, category: data.category || review.category };
+    return { questionId, category };
   });
 
 /** A one-shot signed upload URL for the private market-media bucket. */

@@ -31,6 +31,8 @@
  * ZERO IO, pure, fully testable.
  */
 
+import { categoryLabel } from "@/domain/categories";
+
 export type Side = "YES" | "NO";
 
 /** One held position, as the profile needs to judge it. */
@@ -229,10 +231,16 @@ export interface Introduction {
   provisional: boolean;
 }
 
-/** The most-represented categories, strongest first. */
+/**
+ * The most-represented categories, strongest first.
+ *
+ * `name` stays the STORED VALUE, because callers match it back against
+ * `position.category`; `label` is the only thing a sentence may use. Keeping
+ * both is what stops "They take sides across human-nature" reaching a reader.
+ */
 export function topCategories(
   positions: readonly PersonPosition[],
-): { name: string; share: number }[] {
+): { name: string; label: string; share: number }[] {
   const counts = new Map<string, number>();
   let total = 0;
   for (const p of positions) {
@@ -242,7 +250,7 @@ export function topCategories(
   }
   if (total === 0) return [];
   return [...counts.entries()]
-    .map(([name, c]) => ({ name, share: c / total }))
+    .map(([name, c]) => ({ name, label: categoryLabel(name) ?? name, share: c / total }))
     .sort((a, b) => b.share - a.share);
 }
 
@@ -282,10 +290,10 @@ export function introduction(
     // Concentrated or spread — the difference is itself the observation.
     const lead = cats.filter((c) => c.share >= PROFILE.concentrationShare);
     if (lead.length > 0) {
-      lines.push(`Most of their convictions sit in ${joinNames(lead.map((c) => c.name))}.`);
+      lines.push(`Most of their convictions sit in ${joinNames(lead.map((c) => c.label))}.`);
     } else {
       lines.push(
-        `They take sides across ${joinNames(cats.slice(0, 3).map((c) => c.name))}, without concentrating in one.`,
+        `They take sides across ${joinNames(cats.slice(0, 3).map((c) => c.label))}, without concentrating in one.`,
       );
     }
   }
@@ -369,7 +377,7 @@ export function whyFollow(
   const cats = topCategories(positions);
   const lead = cats.filter((c) => c.share >= PROFILE.concentrationShare);
   if (lead.length > 0) {
-    const names = joinNames(lead.map((c) => c.name));
+    const names = joinNames(lead.map((c) => c.label));
     const inLead = positions.filter(
       (p) => p.category && lead.some((l) => l.name === p.category),
     ).length;

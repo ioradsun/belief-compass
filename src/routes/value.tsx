@@ -17,6 +17,7 @@ import { useReadContracts } from "wagmi";
 import { parseAbi } from "viem";
 import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
 import { getEcosystemValue, type EcosystemValue } from "@/lib/ecosystem-value.functions";
+import { categoryLabel } from "@/domain/categories";
 
 export const Route = createFileRoute("/value")({
   head: () => ({
@@ -245,7 +246,7 @@ function ValuePage() {
                 </Panel>
                 <Panel title="Highest-Earning Markets">
                   {topEarningMarkets.map((m) => (
-                    <LeaderRow key={m.onchainId} title={m.title} sub={m.category ?? "—"} value={fmtUsd(m.earningsUsd)} />
+                    <LeaderRow key={m.onchainId} title={m.title} sub={categoryLabel(m.category) ?? "—"} value={fmtUsd(m.earningsUsd)} />
                   ))}
                 </Panel>
               </div>
@@ -275,7 +276,7 @@ function ValuePage() {
                 </Panel>
                 <Panel title="Most Active Categories">
                   {data.categories.slice(0, 8).map((c) => (
-                    <LeaderRow key={c.category} title={c.category} sub={`${c.markets} markets · ${c.creators} creators`} value={fmtUsd(c.volumeUsd)} />
+                    <LeaderRow key={c.category} title={categoryLabel(c.category) ?? c.category} sub={`${c.markets} markets · ${c.creators} creators`} value={fmtUsd(c.volumeUsd)} />
                   ))}
                 </Panel>
               </div>
@@ -292,7 +293,7 @@ function ValuePage() {
                 </div>
                 {data.categories.map((c, i) => (
                   <div key={c.category} className={`grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 px-4 py-3 text-[13px] tabular-nums ${i > 0 ? "border-t border-[var(--hairline)]" : ""}`}>
-                    <span className="truncate font-medium text-[var(--text)]">{c.category}</span>
+                    <span className="truncate font-medium text-[var(--text)]">{categoryLabel(c.category) ?? c.category}</span>
                     <span className="text-right text-[var(--text-secondary)]">{fmtNum(c.markets)}</span>
                     <span className="text-right text-[var(--text-secondary)]">{fmtNum(c.trades)}</span>
                     <span className="text-right font-semibold text-[var(--text)]">{fmtUsd(c.volumeUsd)}</span>

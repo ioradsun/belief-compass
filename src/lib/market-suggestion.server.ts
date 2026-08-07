@@ -14,8 +14,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serviceClient } from "@/lib/supabase-clients";
-import { CATEGORIES } from "@/lib/market-create.server";
-import { categoryToDomain } from "@/domain/categories";
+import { CREATOR_CATEGORIES, categoryLabel, normalizeCategory } from "@/domain/categories";
 import {
   SUGGESTION,
   fitLine,
@@ -46,13 +45,18 @@ export interface ReadySuggestion {
 
 const norm = (w: string) => w.trim().toLowerCase();
 
-/** POV slugs and creator-set names both collapse onto the creation taxonomy. */
+/**
+ * What this wallet is interested in, named the way a person would say it.
+ *
+ * This used to bridge two vocabularies by hand — POV slug through
+ * `categoryToDomain`, creator name through a lookup in `CATEGORIES` — and so
+ * returned a DNA domain for one and a category name for the other. There is one
+ * vocabulary now, so it just normalises; `other` is dropped because "you keep
+ * returning to questions about Other" says nothing.
+ */
 function canonicalCategory(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const mapped = categoryToDomain(raw);
-  if (mapped) return mapped;
-  const hit = CATEGORIES.find((c) => c.toLowerCase() === raw.toLowerCase());
-  return hit && hit !== "Other" ? hit : null;
+  const slug = normalizeCategory(raw);
+  return slug && slug !== "other" ? categoryLabel(slug) : null;
 }
 
 // ── Interest profile ───────────────────────────────────────────────────────
@@ -265,7 +269,7 @@ const SYSTEM = [
   "Generate three different kinds of heat, not paraphrases: (1) Personal Stakes — a decision the reader imagines making; (2) Identity Conflict — an answer that reveals values, tribe, or worldview; (3) Future Consequence — a provocative implication of where the topic leads.",
   "Existing market protection: do not duplicate exact wording, close paraphrases, the same underlying dilemma, the same emotional fault line, or the same choice with different nouns. If an existing market already captures the core conflict, find a different tension inside the opportunity.",
   "Each question must: focus on one clear conflict; be answerable YES or NO; create two defensible camps; make sense without specialist knowledge; feel personal, consequential, or identity-revealing; sound natural spoken aloud; be concise, ideally under 90 characters; avoid compound questions; avoid obvious answers; avoid unsupported claims as fact; never mention the user, algorithms, recommendations, tracking, private activity, or why the opportunity was selected; never promise profit, returns, or financial performance.",
-  `The category MUST be exactly one of: ${CATEGORIES.join(", ")}.`,
+  `The category MUST be exactly one of these slugs: ${CREATOR_CATEGORIES.join(", ")}.`,
   "Final quality test before returning each question: would someone immediately choose a side; would the answer reveal something meaningful; could intelligent people passionately disagree; would it work as a screenshot on X; would people tag friends; would both sides feel emotionally defensible; is the wording direct enough; is there a more personal or consequential version; is it polarizing because of real human tension rather than cheap outrage? If any answer is no, rewrite the question.",
   "For each idea return: question (the final conviction-market question), category (exactly one allowed category), shortReason (one concise sentence describing the human tension that makes it polarizing), keywords (a short list of discovery terms).",
   'Return valid JSON only, shaped {"ideas":[{"question":string,"category":string,"shortReason":string,"keywords":string[]}]}.',
@@ -323,7 +327,12 @@ export async function generateIdeas(opp: MarketIdeaOpportunity): Promise<IdeaCan
       return [
         {
           question: o.question.replace(/\s+/g, " ").trim(),
-          category: o.category.trim(),
+          // Normalise HERE, not at validation. `validateCandidate` compares
+          // exactly and rejects a mismatch as `bad-category`, so a model that
+          // answers "Human Nature" instead of "human-nature" would lose an
+          // otherwise good idea to a spelling. An unrecognised category is
+          // still left as-is, so validation can reject it on the merits.
+          category: normalizeCategory(o.category) ?? o.category.trim(),
           shortReason:
             typeof o.shortReason === "string" ? o.shortReason.replace(/\s+/g, " ").trim().slice(0, 160) : "",
           keywords: Array.isArray(o.keywords)
@@ -434,7 +443,7 @@ export async function generateSuggestionFor(wallet: string): Promise<SuggestionO
   if (!candidates.length) return skip("no-candidates");
 
   const blocked = [...existing, ...interest.previouslyCreatedTitles];
-  const best = selectBestCandidate(candidates, opp, CATEGORIES, blocked);
+  const best = selectBestCandidate(candidates, opp, CREATOR_CATEGORIES, blocked);
   if (!best) return skip("all-rejected");
 
   const topics = [opp.primaryCategory, opp.secondaryCategory].filter((t): t is string => !!t);

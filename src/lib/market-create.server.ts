@@ -8,22 +8,10 @@
 import { serviceClient } from "@/lib/supabase-clients";
 import { textScore, contentTokens } from "@/domain/question-discovery";
 import { assertAllowedBytes } from "@/lib/market-create";
+import { CREATOR_CATEGORIES, normalizeCategory, type CategorySlug } from "@/domain/categories";
 
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
-
-export const CATEGORIES = [
-  "Relationships",
-  "Money",
-  "Technology",
-  "Society",
-  "Human Nature",
-  "Politics",
-  "Morality",
-  "Health",
-  "Entertainment",
-  "Other",
-] as const;
 
 export interface QuestionReview {
   ok: boolean;
@@ -31,7 +19,13 @@ export interface QuestionReview {
   reason: string | null;
   /** A tightened rewrite the user can accept with one tap. */
   suggestion: string | null;
-  category: string;
+  /**
+   * A CATEGORY SLUG, not a display name. This used to be a title-case string
+   * from a list that lived here and nowhere else, which meant the reviewer's
+   * answer was stored in a vocabulary no reader understood — see the note at
+   * the top of `@/domain/categories`.
+   */
+  category: CategorySlug;
   /** Hard block: illegal / targeted-harm content never reaches the chain. */
   blocked: boolean;
 }
@@ -84,7 +78,7 @@ export async function reviewQuestion(question: string): Promise<QuestionReview> 
       "A good question is a single, sharply-worded claim people can back YES or NO on today.",
       "It does NOT need a real-world resolution date — these are opinion markets.",
       'Reply ONLY as JSON: {"ok":bool,"reason":string|null,"suggestion":string|null,"category":string,"blocked":bool}',
-      `category must be one of: ${CATEGORIES.join(", ")}.`,
+      `category must be exactly one of these slugs: ${CREATOR_CATEGORIES.join(", ")}.`,
       "blocked=true ONLY for illegal content, sexual content involving minors, doxxing, or targeted harassment/violence against a real identifiable person.",
       "suggestion: a tighter rewrite under 160 characters, or null if the original is already good.",
     ].join(" "),
@@ -92,14 +86,16 @@ export async function reviewQuestion(question: string): Promise<QuestionReview> 
   );
   const parsed = parseJson<QuestionReview>(raw);
   if (!parsed)
-    return { ok: true, reason: null, suggestion: null, category: "Other", blocked: false };
+    return { ok: true, reason: null, suggestion: null, category: "other", blocked: false };
   return {
     ok: parsed.blocked ? false : parsed.ok !== false,
     reason: parsed.reason ?? null,
     suggestion: parsed.suggestion ?? null,
-    category: CATEGORIES.includes(parsed.category as (typeof CATEGORIES)[number])
-      ? parsed.category
-      : "Other",
+    // Through the same door as everything else. The model is asked for a slug
+    // but answers in prose often enough — "Human Nature", "Crypto" — and
+    // `normalizeCategory` accepts all of those spellings rather than dropping
+    // a usable answer on the floor.
+    category: normalizeCategory(parsed.category) ?? "other",
     blocked: parsed.blocked === true,
   };
 }

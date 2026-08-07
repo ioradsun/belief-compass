@@ -68,6 +68,7 @@ import { getPersonProfile, listPersonConvictions } from "@/lib/dna.functions";
 import { ago } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { FollowButton } from "@/components/FollowButton";
+import { categoryToDomain } from "@/domain/categories";
 import {
   definingConvictions,
   introduction,
@@ -156,7 +157,17 @@ export function PersonProfile({
       alignedTopics: data.alignedDomains.map((d) => d.domain),
       opposedTopics: data.opposedDomains.map((d) => d.domain),
       viewerTopics: data.viewerTopics,
-      personTopics: topCategories(data.positions).map((c) => c.name),
+      // As DOMAINS, because that is what `viewerTopics` and `alignedTopics`
+      // already are and `whatConnectsYou` intersects the three. Passing raw
+      // categories here compared "crypto" against "Money" and so found a
+      // shared topic exactly never — the same vocabulary split, one layer up.
+      personTopics: [
+        ...new Set(
+          topCategories(data.positions)
+            .map((c) => categoryToDomain(c.name))
+            .filter((d): d is NonNullable<typeof d> => d != null),
+        ),
+      ],
       viewerMedianDays: data.viewerMedianDays,
       personMedianDays: data.personMedianDays,
     },
@@ -551,7 +562,11 @@ function candidatesFrom(
   // explored: those lists only cover the overlap the DNA engine scored, while
   // "have you been here" is a fact about the viewer alone.
   const viewerHeld = new Set(data.viewerMarketIds);
-  const alignedTopics = new Set(data.alignedDomains.map((d) => d.domain.toLowerCase()));
+  // Compared as DOMAINS, not as raw strings. `alignedDomains` are DNA spokes
+  // ("Money") and `position.category` is a stored slug ("crypto"), so the old
+  // lowercase string match never once returned true — a flag that was silently
+  // always false rather than a flag that was wrong.
+  const alignedTopics = new Set(data.alignedDomains.map((d) => d.domain));
 
   const largestId = defining.find((d) => d.kind === "largest")?.marketId ?? null;
   const longestId = defining.find((d) => d.kind === "longest")?.marketId ?? null;
@@ -563,6 +578,7 @@ function candidatesFrom(
         : Math.round(
             Math.max(0, Math.min(100, p.side === "YES" ? 100 - p.crowdYesPct : p.crowdYesPct)),
           );
+    const domain = categoryToDomain(p.category);
     return {
       marketId: p.marketId,
       title: p.title,
@@ -574,7 +590,7 @@ function candidatesFrom(
       participants: p.participants,
       viewerSide: viewerSideOf.get(p.marketId) ?? (viewerHeld.has(p.marketId) ? p.side : null),
       category: p.category,
-      topicUsuallyAligned: p.category ? alignedTopics.has(p.category.toLowerCase()) : false,
+      topicUsuallyAligned: domain != null && alignedTopics.has(domain),
       isLargest: p.marketId === largestId,
       isLongest: p.marketId === longestId,
     };
