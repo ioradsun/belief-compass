@@ -43,7 +43,6 @@ import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { LiveTape } from "@/components/LiveTape";
 import { Collapsible } from "@/components/Collapsible";
-import { WhyThis } from "@/components/WhyThis";
 
 /** The relationship accent — the same faint purple personal rows use in the feed. */
 const RAIL = "var(--rel,#9b87f5)";
@@ -77,7 +76,6 @@ export function CurrentMarketActivity({
   wallet,
   onSelect,
   embedded,
-  reason,
 }: {
   marketId: number;
   wallet?: string;
@@ -114,10 +112,9 @@ export function CurrentMarketActivity({
   const rows = live?.rows ?? [];
   const hasActivity = rows.length > 0;
   const latest = rows[0]?.text ?? "";
-  const why = reason?.trim() ? reason.trim() : null;
   // The card has something to say if EITHER half is true. A quiet market the
   // reader was sent to for a reason still deserves its reason.
-  const hasSomething = hasActivity || Boolean(why);
+  const hasSomething = hasActivity;
 
   // OPENS OVER EVERYTHING. The expanded feed used to grow inside the rail,
   // where ancestor `overflow` and stacking contexts clipped it — so the panel
@@ -180,7 +177,10 @@ export function CurrentMarketActivity({
           className="flex w-full items-center gap-2 px-3 pb-1 pt-2 text-left"
           aria-expanded={open}
         >
-          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+          <span
+            className="text-[10px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: RAIL }}
+          >
             In this market
           </span>
           {hasActivity && (
@@ -194,13 +194,10 @@ export function CurrentMarketActivity({
           )}
         </button>
 
-        {/* ONE STORY, IN THE READER'S ORDER.
-          First WHY this market reached them — the discovery sentence, in the
-          discovery purple it carries everywhere else. Then WHAT is happening in
-          it right now. Two sentences about the same market, stacked, instead of
-          two cards in two columns saying half of it each. */}
+        {/* WHAT is happening in this market, and nothing else. The discovery
+          reason is told once by the centre panel; repeating it here put the
+          same sentence on screen twice. */}
         <div className="px-3 pb-2 pt-0.5">
-          <WhyThis reason={why} lead className="mb-0.5 whitespace-normal" />
           {/* The latest beat, in a slot that is always two lines tall — so the
             text can change under a reader without the card resizing. Only
             reserved when there IS a beat; a quiet market shouldn't hold air. */}
