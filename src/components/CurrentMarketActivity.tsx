@@ -43,7 +43,6 @@ import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { LiveTape } from "@/components/LiveTape";
 import { Collapsible } from "@/components/Collapsible";
-import { WhyThis } from "@/components/WhyThis";
 
 /** The relationship accent — the same faint purple personal rows use in the feed. */
 const RAIL = "var(--rel,#9b87f5)";
@@ -77,7 +76,6 @@ export function CurrentMarketActivity({
   wallet,
   onSelect,
   embedded,
-  reason,
 }: {
   marketId: number;
   wallet?: string;
@@ -114,10 +112,9 @@ export function CurrentMarketActivity({
   const rows = live?.rows ?? [];
   const hasActivity = rows.length > 0;
   const latest = rows[0]?.text ?? "";
-  const why = reason?.trim() ? reason.trim() : null;
   // The card has something to say if EITHER half is true. A quiet market the
   // reader was sent to for a reason still deserves its reason.
-  const hasSomething = hasActivity || Boolean(why);
+  const hasSomething = hasActivity;
 
   // OPENS OVER EVERYTHING. The expanded feed used to grow inside the rail,
   // where ancestor `overflow` and stacking contexts clipped it — so the panel
