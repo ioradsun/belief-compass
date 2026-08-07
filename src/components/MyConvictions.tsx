@@ -338,7 +338,12 @@ export function MyConvictions({
         (side === "YES" ? p.new_believers_yes_win : p.new_believers_no_win) ??
         (win === "24h" ? newTodayRaw : null);
       const invested = side === "YES" ? p.yes_cost : p.no_cost;
-      const pnl = positionPnl({ invested, worth: value });
+      // A COST FALLBACK IS NOT A VALUATION. When nothing could price the holding,
+      // `value` IS the cost basis — subtracting one from the other yields exactly
+      // zero, which the card printed as "no movement". That is a claim we have not
+      // earned, so gain stays unknown until the position is genuinely marked.
+      const measured = isMeasured(valuation);
+      const pnl = positionPnl({ invested, worth: measured ? value : null });
       // Average entry = remaining cost basis ÷ shares still held (both authoritative);
       // null unless we can quote it honestly. Current price is the live per-share mark.
       const entryPrice = pnl.investedUsd != null && shares > 0 ? pnl.investedUsd / shares : null;
