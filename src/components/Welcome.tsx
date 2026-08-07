@@ -23,7 +23,7 @@ import {
   sendWelcomes,
   type WelcomablePerson,
 } from "@/lib/welcomes.functions";
-import { ROOM_GROUP_LABEL, roomGroupFor, roomReason, welcomeKey } from "@/domain/welcome";
+import { ROOM_GROUP_LABEL, roomGroupFor, roomReason } from "@/domain/welcome";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
