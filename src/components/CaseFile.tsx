@@ -559,8 +559,8 @@ function heldLabel(daysHeld: number): string {
   return `${Math.round(daysHeld)}d`;
 }
 
-/** How many believers the panel previews before "+N more". */
-const PREVIEW = 5;
+/** One believer row, measured: avatar 28 + vertical padding. */
+const BELIEVER_ROW = 36;
 
 /** The people, as one ranked roster — name, amount, and shared DNA when there is any. */
 export function CaseRoster({
