@@ -104,3 +104,43 @@ export const getLaunchProgress = createServerFn({ method: "GET" })
     const { buildProgress } = await import("@/lib/launch.server");
     return buildProgress(data.marketId);
   });
+
+/**
+ * THE ONE EVENT CONSOLIDATION HAS NEVER EMITTED.
+ *
+ * The duplicate panel has existed for a long time and recorded nothing, so
+ * whether it ever diverted anybody has never been knowable — the feature could
+ * have been working perfectly or doing nothing at all and both look identical
+ * from outside. That is the failure this closes.
+ *
+ * `user_events` is the discovery-only interaction log the schema has always
+ * had, with an anon INSERT policy and no writer anywhere in the codebase. It is
+ * the right home and it needs no migration: reusing a table that already exists
+ * beats minting one to hold a single event type.
+ *
+ * DELIBERATELY NARROW. One type, emitted from one place, meaning one thing: a
+ * reader who was writing a question chose an existing market instead. It is
+ * never an attribution claim — see check-launch for what this can and cannot
+ * tell anyone.
+ */
+export const recordSimilarJoin = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) =>
+    z.object({ wallet: WALLET.nullish(), marketId: z.number().int().nonnegative() }).parse(raw),
+  )
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    // Unsigned and fire-and-forget: it is a usage fact about a public click,
+    // it grants nothing, and a failed metric must never cost a navigation.
+    try {
+      const { serviceClient } = await import("@/lib/supabase-clients");
+      await serviceClient()
+        .from("user_events")
+        .insert({
+          wallet: data.wallet ? data.wallet.toLowerCase() : null,
+          onchain_id: data.marketId,
+          type: "similar_market_join",
+        });
+    } catch {
+      /* the click is the product; the measurement is not worth breaking it */
+    }
+    return { ok: true };
+  });

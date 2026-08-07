@@ -28,6 +28,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { dismissSuggestions, useSuggestionProbe } from "@/lib/create-draft";
 import { suggestExistingMarkets } from "@/lib/market-create.functions";
+import { recordSimilarJoin } from "@/lib/launch.functions";
 import type { MarketSuggestion } from "@/lib/market-create.server";
 import { useMoney } from "@/lib/display-unit";
 
@@ -57,7 +58,13 @@ function activityText(ms: number | null): string | null {
   return `active ${Math.floor(hours / 24)}d ago`;
 }
 
-export function SimilarMarkets({ onJoin }: { onJoin: (marketId: number) => void }) {
+export function SimilarMarkets({
+  wallet,
+  onJoin,
+}: {
+  wallet?: string;
+  onJoin: (marketId: number) => void;
+}) {
   const { format } = useMoney();
   const probe = useSuggestionProbe();
   const question = probe?.question.trim() ?? "";
@@ -114,7 +121,16 @@ export function SimilarMarkets({ onJoin }: { onJoin: (marketId: number) => void 
             <li key={m.onchainId}>
               <button
                 type="button"
-                onClick={() => onJoin(m.onchainId)}
+                onClick={() => {
+                  // THE MEASUREMENT THIS PANEL NEVER HAD. Without it, a
+                  // consolidation feature that diverts nobody is
+                  // indistinguishable from one that works. Fired before
+                  // navigating and never awaited — the click is the product.
+                  void recordSimilarJoin({
+                    data: { wallet: wallet ?? null, marketId: m.onchainId },
+                  }).catch(() => undefined);
+                  onJoin(m.onchainId);
+                }}
                 className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition-colors hover:border-[var(--border-strong)]"
               >
                 <div className="flex gap-2.5">

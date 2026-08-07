@@ -1213,7 +1213,7 @@ function Feed() {
                    actually similar. Join is `selectMarket`, which clears
                    `?create` on its way to `?m`, so accepting the advice exits
                    the composer and lands on the existing debate. */
-                launchPanel={<SimilarMarkets onJoin={selectMarket} />}
+                launchPanel={<SimilarMarkets wallet={wallet} onJoin={selectMarket} />}
                 feedList={
                   <div className="flex min-h-0 flex-1 flex-col">
                     {/* IN THIS MARKET — pinned above the running order, because
