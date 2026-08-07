@@ -59,3 +59,78 @@ describe("swrCache", () => {
     expect(await swrCache("b", { ttlMs: 100, now }, async () => "B")).toBe("B");
   });
 });
+
+/**
+ * A COLD INSTANCE MUST DO THE WORK ONCE.
+ *
+ * The cold branch said "compute once, then cache" and did not: the entry is
+ * written only after `fn()` resolves, so every caller arriving during the first
+ * computation found the key absent and started another. On a cold serverless
+ * instance that is the normal path, not a rare race — the SSR loader, the
+ * client's hydration fetch and the client's 4s fallback all land inside the same
+ * window and each ran a full feed build. Slow first load, fast refresh.
+ */
+describe("single flight", () => {
+  it("runs one computation for concurrent cold callers", async () => {
+    _clearSwrCache();
+    let runs = 0;
+    let release!: (v: string) => void;
+    const gate = new Promise<string>((r) => (release = r));
+    const fn = () => {
+      runs += 1;
+      return gate;
+    };
+
+    // The three callers a cold instance actually produces, all before the first
+    // has finished.
+    const a = swrCache("k", { ttlMs: 1000 }, fn);
+    const b = swrCache("k", { ttlMs: 1000 }, fn);
+    const c = swrCache("k", { ttlMs: 1000 }, fn);
+    release("value");
+
+    expect(await Promise.all([a, b, c])).toEqual(["value", "value", "value"]);
+    expect(runs).toBe(1);
+  });
+
+  it("caches the shared result, so the next caller does no work at all", async () => {
+    _clearSwrCache();
+    let runs = 0;
+    const fn = async () => {
+      runs += 1;
+      return "v";
+    };
+    await Promise.all([swrCache("k", { ttlMs: 1000 }, fn), swrCache("k", { ttlMs: 1000 }, fn)]);
+    await swrCache("k", { ttlMs: 1000 }, fn);
+    expect(runs).toBe(1);
+  });
+
+  it("never caches a failure, and every waiter hears about it", async () => {
+    _clearSwrCache();
+    let runs = 0;
+    const boom = () => {
+      runs += 1;
+      return Promise.reject(new Error("db down"));
+    };
+    const a = swrCache("k", { ttlMs: 1000 }, boom);
+    const b = swrCache("k", { ttlMs: 1000 }, boom);
+    await expect(a).rejects.toThrow("db down");
+    await expect(b).rejects.toThrow("db down");
+    expect(runs).toBe(1);
+
+    // The slot is clear, so the next request is a real retry rather than an
+    // await on a promise that already rejected.
+    const ok = await swrCache("k", { ttlMs: 1000 }, async () => "recovered");
+    expect(ok).toBe("recovered");
+  });
+
+  it("keeps separate keys independent", async () => {
+    _clearSwrCache();
+    let runs = 0;
+    const fn = async () => {
+      runs += 1;
+      return "v";
+    };
+    await Promise.all([swrCache("a", { ttlMs: 1000 }, fn), swrCache("b", { ttlMs: 1000 }, fn)]);
+    expect(runs).toBe(2);
+  });
+});
