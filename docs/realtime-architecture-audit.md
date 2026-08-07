@@ -14,7 +14,7 @@ layer on top of it. No production code is changed by this document.
 **The backend is already at the target architecture — one canonical event log,
 one reducer, one position state, one market read model, all published to
 `supabase_realtime` — but the browser never subscribes to any of it and instead
-maintains truth by polling ~23 independent timers.**
+maintains truth by polling ~20 independent timers.**
 
 The expensive half of the philosophy ("Loading should happen once. Moving
 should happen forever.") is _inverted_ on the client: loading is excellent
@@ -68,8 +68,16 @@ websocket.)
 
 ### 2b. Polling loops (`refetchInterval`) — how "moving" is actually done
 
-23 independent poll timers across 15 files. The fastest three run every 6–8s
+20 independent poll timers across 13 files. The fastest three run every 6–8s
 and drive the primary surface:
+
+> **This one line was re-measured; the rest of the audit was not.** The original
+> count was 23 across 15 files. Say Hi and Invitations were deleted when
+> Challenge replaced them, taking `welcomable` (60s) and `welcomes-received`
+> (120s) with them. Subtracting those by hand would have given 21 — the real
+> figure is 20, from re-running the appendix's own command
+> (`grep -rn refetchInterval src`). Everything below is still as first measured,
+> so treat the per-row file:line references as of the audit date.
 
 | Interval | Query | File |
 |---|---|---|
@@ -82,8 +90,7 @@ and drive the primary surface:
 | 15s | current market activity | `CurrentMarketActivity.tsx` |
 | 20s | conviction-market / mobile / order quote | `MarketDeck.tsx:297`, `MobileGame.tsx:112`, `OrderTicket.tsx:38` |
 | 30s | creator fees (×2, on-chain) | `creator-fees.ts:41,48` |
-| 60s | evidence / network / person / dna / welcomes / shared | 8 sites |
-| 120s | welcomes received | `Welcome.tsx:255` |
+| 60s | evidence / network / person / dna / shared | 7 sites |
 
 **Note:** the feed is _two_ parallel 8s polls (`opp-feed` + `market-pulses`)
 for what is one logical surface. That alone is one redundant round-trip every
@@ -143,7 +150,7 @@ market deck:     market-change (15s) + conviction-market (20s) + evidence (60s)
                  + network (60s) + house + position-summary
 right column:    live-tape (6s) + current-market-activity (15s, shares market-change key)
 left column:     my-convictions (12s) + positions-tape (8s)
-chrome:          welcomable (60s) + welcomes-received (120s) + wallet-link + creator-fees (30s)
+chrome:          wallet-link + creator-fees (30s)
 ```
 
 Every one of these is the browser _asking the backend what changed_ — the exact
@@ -196,7 +203,7 @@ there is no event stream to drive it. Today the only tools are "poll again" and
 | One shared event stream | ❌ | `events`/`market_state` are published but nothing subscribes. **This is the whole gap.** |
 | One reducer (client) | ❌ | Server reducer exists; no client reducer applies events to cache |
 | One canonical client cache | ⚠️ | React Query is the cache, but market objects are duplicated (§3a) and read under many keys (§3b) |
-| Patch, don't reload | ❌ | Truth is maintained by 23 polls + broad invalidations, never by delta patches |
+| Patch, don't reload | ❌ | Truth is maintained by 20 polls + broad invalidations, never by delta patches |
 | Batch rapid events → one render | ❌ | No batching layer; each poll result renders independently |
 | Reconnect from cursor | ❌ | No stream, so no cursor resume; reconnect = the polls simply resume |
 | Predictive prefetch | ⚠️ | Code-split chunks are prefetched (`index.tsx:234`); market _data_ for next/prev is not |
@@ -274,7 +281,7 @@ backend work — the stream, reducer semantics, and read model already exist.**
    drop `refetchInterval` from `opp-feed`, `market-pulses`, `market-change`,
    `conviction-market`, `live-tape`, `current-market-activity`. Keep a slow
    safety re-sync (e.g. 60s) and on-focus refetch as reconciliation, not as the
-   primary transport. This is where most of the 23 timers disappear.
+   primary transport. This is where most of the 20 timers disappear.
 
 4. **Collapse the duplicate pulse cache (§3a)** and the repeated `network`
    literal (§3b) into single canonical selectors, so every surface reads one

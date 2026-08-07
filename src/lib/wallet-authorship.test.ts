@@ -5,17 +5,15 @@ import { join } from "node:path";
 /**
  * AUTHORSHIP IS NEVER SWALLOWED.
  *
- * THE MODULE THAT MOTIVATED THIS IS GONE; THE RULE IS NOT. `welcomes.functions.ts`
- * was deleted along with Say Hi when Challenge replaced it, and the obvious move
- * was to delete this file with it. That would have been backwards. The bug was
- * never about welcomes — it was about a SHAPE that any server function can grow,
- * and the scan below is what makes it a rule rather than one module's history.
- * Losing the guard because its first offender was refactored away is how a class
- * of bug comes back.
+ * THE MODULE THAT MOTIVATED THIS IS GONE; THE RULE IS NOT. The first offender
+ * was deleted in a later refactor, and the obvious move was to delete this file
+ * with it. That would have been backwards: the bug was never about that feature,
+ * it was about a SHAPE any server function can grow. Losing a guard because its
+ * first offender was refactored away is how a class of bug comes back.
  *
- * The original, kept because it is the clearest statement of the failure:
- * `welcomes.functions.ts` verified the wallet session and then, on any failure,
- * carried on with the wallet the CALLER claimed:
+ * The original is kept below because it is still the clearest statement of the
+ * failure. It verified the wallet session and then, on any failure, carried on
+ * with the wallet the CALLER claimed:
  *
  *     try {
  *       return await assertWalletOwnership(wallet, session);
@@ -24,10 +22,11 @@ import { join } from "node:path";
  *     }
  *     return wallet.toLowerCase();
  *
- * The reasoning was that saying hi moves no money. That is true and beside the
- * point: a welcome puts your name in someone else's interface, and server
- * functions are public, so anyone could post "your Twin said hi" from any wallet
- * to any wallet.
+ * The reasoning was that a free gesture moves no money. That is true and beside
+ * the point: the gesture put the actor's name in someone else's interface, and
+ * server functions are public, so anyone could post it from any wallet to any
+ * wallet. Any surface that attributes an action to a person has this exposure,
+ * whether or not money is involved.
  *
  * This is a SOURCE guard rather than a behavioural one on purpose. The failure
  * is a shape — a verification whose rejection goes nowhere — and it can reappear
@@ -125,7 +124,7 @@ describe("a rejected proof of authorship is never swallowed", () => {
 
   it("no module anywhere reintroduces the exact fallback that shipped the hole", () => {
     // The specific line, in any spacing, across every server module — not just
-    // the one that had it. `welcomes.functions.ts` is deleted; this outlives it.
+    // the one that had it. That module is deleted; this rule outlives it.
     for (const file of files) {
       const src = readFileSync(file, "utf8");
       expect(
