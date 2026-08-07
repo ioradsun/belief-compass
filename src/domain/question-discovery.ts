@@ -437,6 +437,52 @@ export interface Candidate {
   liveness: number;
 }
 
+/** The minimum a thing needs before it can be ordered for consolidation. */
+export interface Rankable {
+  onchainId: number;
+  score: number;
+  band: Relation;
+  liveness: number;
+}
+
+const BAND_RANK: Record<Relation, number> = {
+  duplicate: 3,
+  ambiguous: 2,
+  related: 1,
+  novel: 0,
+};
+
+/**
+ * BAND, THEN SIMILARITY, AND ONLY THEN LIVENESS — the one ordering, exported so
+ * that every surface asking "does this already exist" sorts identically.
+ *
+ * "Equally similar" has to mean equally similar. Sorting by liveness directly
+ * after the band lets a well-populated market outrank a semantically closer one,
+ * which is recommendation wearing consolidation's clothes — the reader asked
+ * whether their idea already exists, not what is popular.
+ *
+ * So scores are quantised into TIE_EPS buckets and liveness orders WITHIN a
+ * bucket. Two markets differing by less than a rounding step are ties and the
+ * busier one wins; anything further apart is decided by similarity alone. The
+ * rule is a property of the ordering, not of any particular subject matter: no
+ * term here reads the topic, and the regression that motivated it lives in the
+ * tests, where a concrete case belongs.
+ *
+ * The final `onchainId` term is not cosmetic — without it two markets identical
+ * on every signal would order by whatever the database happened to return, and
+ * the rail would flicker between renders.
+ */
+export function byConsolidation(a: Rankable, b: Rankable): number {
+  const bucket = (score: number) => Math.round(score / TIE_EPS);
+  return (
+    BAND_RANK[b.band] - BAND_RANK[a.band] ||
+    bucket(b.score) - bucket(a.score) ||
+    b.liveness - a.liveness ||
+    b.score - a.score ||
+    a.onchainId - b.onchainId
+  );
+}
+
 export interface Discovery {
   /** The strongest thing the draft could be. Never `ambiguous` to a caller. */
   relation: Exclude<Relation, "ambiguous">;
@@ -481,21 +527,8 @@ export function discover(
   // before scoring because it is not a matter of degree.
   const exact = retrieved.find((d) => normalizeQuestion(d.title) === key);
 
-  // BAND, THEN SIMILARITY, AND ONLY THEN LIVENESS.
-  //
-  // "Equally similar" has to mean equally similar. Sorting by liveness directly
-  // after the band lets a well-populated market outrank a semantically closer
-  // one, which is recommendation wearing consolidation's clothes — the reader
-  // asked whether their idea already exists, not what is popular.
-  //
-  // So scores are quantised into TIE_EPS buckets and liveness orders WITHIN a
-  // bucket. Two markets differing by less than a rounding step are ties and the
-  // busier one wins; anything further apart is decided by similarity alone. The
-  // rule is a property of the ordering, not of any particular subject matter:
-  // no term here reads the topic, and the regression that motivated it lives in
-  // the tests, where a concrete case belongs.
-  const rank: Record<Relation, number> = { duplicate: 3, ambiguous: 2, related: 1, novel: 0 };
-  const bucket = (score: number) => Math.round(score / TIE_EPS);
+  // Similarity gates, activity only breaks near-ties — see `byConsolidation`,
+  // which is the one ordering every consolidation surface shares.
   const scored: Candidate[] = retrieved
     .map((d) => {
       const score = textScore(q, d.title);
@@ -508,14 +541,7 @@ export function discover(
       };
     })
     .filter((c) => c.score >= BANDS.related)
-    .sort(
-      (a, b) =>
-        rank[b.band] - rank[a.band] ||
-        bucket(b.score) - bucket(a.score) ||
-        b.liveness - a.liveness ||
-        b.score - a.score ||
-        a.onchainId - b.onchainId,
-    )
+    .sort(byConsolidation)
     .slice(0, opts.keep ?? 5);
 
   if (exact) {

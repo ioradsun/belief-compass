@@ -33,7 +33,7 @@ import {
 } from "@/domain/feed-queue";
 import { LiveTape } from "@/components/LiveTape";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
-import { DuplicateSuggestions } from "@/components/DuplicateSuggestions";
+import { SimilarMarkets } from "@/components/SimilarMarkets";
 import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
 import { MobileGame } from "@/components/MobileGame";
@@ -1156,6 +1156,13 @@ function Feed() {
                 onOpenDashboard={openDashboard}
                 initialNetwork={Boolean(selectedPerson || dnaOpen)}
                 onOpenFeedTab={closeCase}
+                /* LAUNCH MODE — "should I join one of these instead?", asked in
+                   the column that already answers "where should I go". It self-
+                   hides unless a draft is being written and something is
+                   actually similar. Join is `selectMarket`, which clears
+                   `?create` on its way to `?m`, so accepting the advice exits
+                   the composer and lands on the existing debate. */
+                launchPanel={<SimilarMarkets onJoin={selectMarket} />}
                 feedList={
                   <div className="flex min-h-0 flex-1 flex-col">
                     {/* IN THIS MARKET — pinned above the running order, because
@@ -1383,9 +1390,6 @@ function Feed() {
             <>
               {/* Welcome the newest believers on a side you back — one tap. */}
               <WelcomePrompt wallet={wallet} onSelectPerson={selectPerson} />
-              {/* Duplicate suggestions sit above the feed while creating; the feed
-                below keeps running and is never replaced. */}
-              <DuplicateSuggestions onSelect={selectMarket} />
               {/* "In this market" moved to the top of the For You rail, next to
                 the running order. The global tape below still excludes the
                 current market, so its activity is told in exactly one place. */}

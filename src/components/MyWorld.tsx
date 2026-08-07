@@ -67,6 +67,7 @@ export function MyWorld({
   feedList,
   onOpenFeedTab,
   connectPrompt,
+  launchPanel,
 }: {
   wallet?: string;
   rows: MarketRow[];
@@ -90,6 +91,18 @@ export function MyWorld({
   /** How many markets are in the running order — the tab's count. */
   /** What the route does when the Feed tab is chosen (closing the Case File). */
   onOpenFeedTab?: () => void;
+  /**
+   * LAUNCH MODE — "should I join an existing conversation?", pinned above the
+   * tabs while a market is being written.
+   *
+   * A node rather than a tab, for two reasons. It is not a place you navigate
+   * to: it appears because you are drafting and vanishes when you stop, so a
+   * fourth destination would sit empty almost always. And it must not steal the
+   * tab a reader chose — Explore keeps running underneath, which is what makes
+   * this advice instead of an interruption. The panel self-hides when nothing
+   * is similar, so an absent match costs no space at all.
+   */
+  launchPanel?: ReactNode;
   /** Shown inside the three personal tabs when there is no wallet. */
   connectPrompt?: ReactNode;
 }) {
@@ -176,6 +189,13 @@ export function MyWorld({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* Launch Mode sits ABOVE the tabs, not inside one. While a market is
+          being written this column's first question is "does this already
+          exist" — and the answer has to be visible whichever tab is open,
+          because a reader who wandered into Positions has not stopped
+          drafting. */}
+      {launchPanel}
+
       {/* Quiet segmented control. Four tabs no longer divide 320px evenly —
           `flex-1` would clip "Convictions" — so each takes its natural width and
           the strip scrolls if a future label outgrows the rail. */}

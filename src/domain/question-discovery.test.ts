@@ -7,6 +7,7 @@ import {
   normalizeQuestion,
   bandFor,
   applyJudgement,
+  byConsolidation,
   contentTokens,
   livenessScore,
   TIE_EPS,
@@ -387,5 +388,65 @@ describe("the algorithm reads structure, never subject matter", () => {
       liveness: new Map([[100, { participants: 9999, lastActivityMs: NOW }]]),
     });
     expect(d.candidates.map((c) => c.onchainId)).not.toContain(100);
+  });
+});
+
+/**
+ * THE ORDERING, ON ITS OWN.
+ *
+ * `byConsolidation` is now shared: `discover` sorts with it, and so does the
+ * server that feeds the left rail. Testing it directly — on invented numbers,
+ * with no text and no corpus anywhere near it — is what makes it a rule rather
+ * than a property of one code path. If a second surface starts sorting for
+ * itself, these are the guarantees it would have to reproduce.
+ */
+describe("consolidation ordering: similarity gates, activity breaks near-ties", () => {
+  const at = (onchainId: number, score: number, liveness: number) => ({
+    onchainId,
+    score,
+    band: bandFor(score),
+    liveness,
+  });
+
+  it("never lets activity lift a candidate across a band", () => {
+    // Two markets on opposite sides of an edge, the weaker one maximally alive.
+    const strong = at(1, BANDS.ambiguous + 0.01, 0);
+    const weak = at(2, BANDS.ambiguous - 0.01, 1);
+    expect([weak, strong].sort(byConsolidation)[0]).toBe(strong);
+  });
+
+  it("gives the busier room the win when the scores are a rounding step apart", () => {
+    const quiet = at(1, 0.8, 0);
+    const busy = at(2, 0.8 - TIE_EPS / 2, 1);
+    expect([quiet, busy].sort(byConsolidation)[0]).toBe(busy);
+  });
+
+  it("keeps similarity in charge once the gap is real", () => {
+    const closer = at(1, 0.8, 0);
+    const busier = at(2, 0.8 - TIE_EPS * 3, 1);
+    expect([busier, closer].sort(byConsolidation)[0]).toBe(closer);
+  });
+
+  it("is a total order, so equal candidates cannot flicker between renders", () => {
+    const a = at(7, 0.7, 0.5);
+    const b = at(3, 0.7, 0.5);
+    expect([a, b].sort(byConsolidation)[0]?.onchainId).toBe(3);
+    expect([b, a].sort(byConsolidation)[0]?.onchainId).toBe(3);
+  });
+
+  it("sorts identically no matter what order the rows arrived in", () => {
+    const rows = [at(4, 0.71, 0.9), at(1, 0.93, 0), at(9, 0.5, 1), at(2, 0.7, 0.1)];
+    const forward = [...rows].sort(byConsolidation).map((r) => r.onchainId);
+    const backward = [...rows]
+      .reverse()
+      .sort(byConsolidation)
+      .map((r) => r.onchainId);
+    expect(backward).toEqual(forward);
+  });
+
+  it("puts an exact-match duplicate above everything, however quiet", () => {
+    const exact = { onchainId: 1, score: 1, band: "duplicate" as const, liveness: 0 };
+    const loud = at(2, 0.99, 1);
+    expect([loud, exact].sort(byConsolidation)[0]).toBe(exact);
   });
 });

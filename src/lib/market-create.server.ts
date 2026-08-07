@@ -6,7 +6,16 @@
  * browser bundle.
  */
 import { serviceClient } from "@/lib/supabase-clients";
-import { textScore, contentTokens } from "@/domain/question-discovery";
+import {
+  textScore,
+  contentTokens,
+  normalizeQuestion,
+  bandFor,
+  byConsolidation,
+  livenessScore,
+  BANDS,
+  type Relation,
+} from "@/domain/question-discovery";
 import { assertAllowedBytes } from "@/lib/market-create";
 import { CREATOR_CATEGORIES, normalizeCategory, type CategorySlug } from "@/domain/categories";
 
@@ -179,10 +188,18 @@ export interface MarketSuggestion {
   /** Why it surfaced, for the card's eyebrow. */
   reason: "same-media" | "same-link" | "similar";
   score: number;
+  /**
+   * How close this is, as a band rather than a number. The rail states its
+   * confidence in words, and a reader should never be shown 0.71 — see the note
+   * on BANDS: no numeric cut is honest enough to call something a duplicate.
+   */
+  band: Relation;
   thumbUrl: string | null;
   backedUsd: number | null;
   believers: number | null;
   yesPct: number | null;
+  /** Last trade, so the rail can say how alive the room is. Never a gate. */
+  lastActivityMs: number | null;
 }
 
 function normalizeUrl(raw: string): string {
@@ -197,11 +214,18 @@ function normalizeUrl(raw: string): string {
 }
 
 /**
- * Ranked "you might rather back this" candidates.
+ * Ranked "someone is already having this conversation" candidates.
  *
  * Three signals, strongest first: identical uploaded bytes, the same external
  * link, then question-text overlap. Stats come from the same `market_state`
  * read model the rest of the app renders — nothing here is invented.
+ *
+ * SIMILARITY GATES, ACTIVITY BREAKS NEAR-TIES. The band decides whether a market
+ * may appear at all; `byConsolidation` then orders, and it quantises the score
+ * before liveness is consulted so a busy room can never outrank a semantically
+ * closer one. Both come from @/domain/question-discovery — this file scores,
+ * gates and sorts with the same code the discovery module does, and owns none
+ * of it.
  */
 export async function findMarketSuggestions(
   input: SuggestionInput,
@@ -292,23 +316,65 @@ export async function findMarketSuggestions(
     consider(id, r.question, textScore(question, r.question), "similar", media);
   }
 
-  const ranked = [...best.entries()]
-    .map(([onchainId, v]) => ({ onchainId, ...v }))
-    .filter((m) => m.score >= 0.34)
+  // SIMILARITY GATES. The cut is `BANDS.related`, the same edge the discovery
+  // module uses, replacing a private 0.34 that let through pairs sharing a sport
+  // or an asset class and nothing else. A market below the band is not a quieter
+  // suggestion, it is a wrong one, and no amount of activity may promote it.
+  // The one unarguable claim, and the only place `duplicate` may come from: the
+  // same question, however it was typed. Everything else is a band, because no
+  // numeric cut separates "France win 2026" from "have you cheated / been
+  // cheated on" — see BANDS.
+  const key = normalizeQuestion(question);
+  const eligible = [...best.entries()]
+    .map(([onchainId, v]) => ({
+      onchainId,
+      ...v,
+      band: normalizeQuestion(v.title) === key ? ("duplicate" as Relation) : bandFor(v.score),
+    }))
+    .filter((m) => m.score >= BANDS.related)
     .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
-  if (!ranked.length) return [];
+    // A bounded shortlist, so liveness costs one `.in()` on a handful of ids
+    // rather than a second pass over the corpus. Wider than `limit` because
+    // activity may still reorder inside it.
+    .slice(0, Math.max(limit * 4, 12));
+  if (!eligible.length) return [];
 
   const { data: states } = await db
     .from("market_state")
     .select(
-      "onchain_id, volume_total_usd, believers_yes, believers_no, believers_mixed, money_yes_pct",
+      "onchain_id, volume_total_usd, believers_yes, believers_no, believers_mixed, money_yes_pct, directional_believers, last_trade_at, side_balance",
     )
     .in(
       "onchain_id",
-      ranked.map((m) => m.onchainId),
+      eligible.map((m) => m.onchainId),
     );
   const stateById = new Map((states ?? []).map((s) => [Number(s.onchain_id), s]));
+
+  // ACTIVITY ONLY BREAKS NEAR-TIES — `byConsolidation` is the one ordering, and
+  // it quantises score into TIE_EPS buckets before liveness is consulted at all.
+  const nowMs = Date.now();
+  const ranked = eligible
+    .map((m) => {
+      const s = stateById.get(m.onchainId);
+      const at = s?.last_trade_at ? Date.parse(String(s.last_trade_at)) : NaN;
+      return {
+        ...m,
+        lastActivityMs: Number.isFinite(at) ? at : null,
+        liveness: livenessScore(
+          {
+            participants: s?.directional_believers != null ? Number(s.directional_believers) : null,
+            lastActivityMs: Number.isFinite(at) ? at : null,
+            // `side_balance` is signed lopsidedness, so a room split down the
+            // middle is 0 and a one-sided one is ±1. Contest is the inverse.
+            contested:
+              s?.side_balance != null ? 1 - Math.min(1, Math.abs(Number(s.side_balance))) : null,
+          },
+          nowMs,
+        ),
+      };
+    })
+    .sort(byConsolidation)
+    .slice(0, limit);
 
   const out: MarketSuggestion[] = [];
   for (const m of ranked) {
@@ -326,6 +392,8 @@ export async function findMarketSuggestions(
       title: m.title,
       reason: m.reason,
       score: m.score,
+      band: m.band,
+      lastActivityMs: m.lastActivityMs,
       thumbUrl,
       backedUsd: s?.volume_total_usd != null ? Number(s.volume_total_usd) : null,
       believers:
