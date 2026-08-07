@@ -322,24 +322,26 @@ export function CaseColumn({
 
       <div ref={scroller} className="min-h-0 flex-1 space-y-5 overflow-y-scroll pr-0.5">
         {/* 1 — CURRENT STATE: what this side IS, in plain language, before any
-          metric. When something moved in the window, one sentence says what. */}
-        <div className="space-y-1">
+          metric. When something moved in the window, one sentence says what.
+          Fixed slot + clamped lines so YES and NO start their metrics on the
+          same line, whatever the copy length. */}
+        <div className="space-y-1 overflow-hidden" style={{ height: "var(--case-row-state)" }}>
           {pulse ? (
             <>
-              <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+              <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--text-secondary)]">
                 <SideWords text={pulse.narrative} />
               </p>
-              <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+              <p className="line-clamp-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
                 <SideWords text={stateLine} />
               </p>
             </>
           ) : (
             <>
-              <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+              <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--text-secondary)]">
                 <SideWords text={stateLine} />
               </p>
               {changeLine && (
-                <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+                <p className="line-clamp-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
                   <SideWords text={changeLine} />
                 </p>
               )}
@@ -391,23 +393,11 @@ export function CaseColumn({
         />
 
         {/* 4 — RECENT ACTIVITY: the same tape the app-wide feed runs, scoped to
-          this side. The column already says YES, so sentences don't repeat it. */}
-        <div className="space-y-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-            Recent activity
-          </span>
-          <LiveTape
-            marketIds={[marketId]}
-            side={side}
-            wallet={viewerWallet}
-            scroll={false}
-            showTitles={false}
-            limit={24}
-            skeletonRows={3}
-            emptyText="No moves on this side yet."
-          />
-        </div>
+          this side. The column already says YES, so sentences don't repeat it.
+          Fixed slot, no inner scroll — "See all" opens the full-height sheet. */}
+        <CaseActivity marketId={marketId} side={side} viewerWallet={viewerWallet} />
       </div>
+
     </div>
   );
 }
