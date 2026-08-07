@@ -837,12 +837,15 @@ function RosterSheet({
   );
 }
 
+/** One tape row, measured, so the slot can say how many of them fit. */
+const ACTIVITY_ROW = 50;
+
 /**
- * RECENT ACTIVITY — a fixed slot, never an inner scroller.
+ * RECENT ACTIVITY — an adaptive slot, never an inner scroller.
  *
- * The rail shows a constant number of row heights so YES and NO end at the same
- * y; anything past that is not squeezed into a cramped scroll area but opened
- * in the same full-height column sheet the roster uses.
+ * It takes the height the panel has left and renders exactly that many whole
+ * rows; both rails get the same height, so both show the same number. Anything
+ * past that opens in the full-height sheet the roster uses.
  */
 function CaseActivity({
   marketId,
@@ -855,27 +858,29 @@ function CaseActivity({
 }) {
   const [openAll, setOpenAll] = useState(false);
   const { ref: anchorRef, box: anchorBox } = useAnchorRect<HTMLDivElement>(openAll);
+  const { ref: slotRef, rows } = useFitRows(ACTIVITY_ROW);
 
   return (
-    <div ref={anchorRef} className="space-y-1.5">
-      <div className="flex items-baseline justify-between">
+    <div ref={anchorRef} className="flex min-h-0 flex-1 flex-col gap-1.5">
+      <div className="flex shrink-0 items-baseline justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
           Recent activity
         </span>
       </div>
-      <div className="overflow-hidden" style={{ height: "var(--case-row-activity)" }}>
+      <div ref={slotRef} className="min-h-0 flex-1 overflow-hidden">
         <LiveTape
           marketIds={[marketId]}
           side={side}
           wallet={viewerWallet}
           scroll={false}
           showTitles={false}
-          limit={6}
-          skeletonRows={3}
+          limit={rows}
+          skeletonRows={Math.min(3, rows)}
           emptyText="No moves on this side yet."
         />
       </div>
-      <div className="h-[18px]">
+      <div className="h-[18px] shrink-0">
+
         <button
           type="button"
           onClick={() => setOpenAll(true)}
