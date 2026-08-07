@@ -53,6 +53,33 @@ export const DNA_THRESHOLDS: DnaThresholdConfig = {
   opp: { enter: 33, exit: 38, minShared: 8, minConfidence: 0.4 },
 };
 
+/**
+ * WHAT A CONVICTION SOMEONE HAS LEFT IS STILL WORTH.
+ *
+ * DNA read only OPEN positions, so the moment either person exited a market, every
+ * agreement they ever had there vanished — the shared count fell, and Match was
+ * recomputed as though the two had never met. That is not an edge case: 43.5% of
+ * all wallet-market positions in production are fully exited, and rerunning the
+ * engine over "any side ever held" instead of "held right now" takes pairs with
+ * eight or more shared convictions from 22 to 174.
+ *
+ * So a past conviction still counts. It counts LESS, because the question the
+ * product answers is "how do we believe" and not "how did we once believe" — but
+ * it does not count as nothing, because two people who backed opposite sides of
+ * the same question last month genuinely did cross paths there.
+ *
+ * A QUARTER, and the number is chosen to be legible rather than tuned. Four
+ * remembered convictions weigh what one live one does: enough that a long shared
+ * history is visible, little enough that four exits can never outvote the market
+ * you are both standing in today. It is one constant with one meaning, which is
+ * the bar §17 of the review set — if explaining Match needs a paragraph about
+ * coefficients, the model has gone wrong.
+ *
+ * It applies to BOTH sides of the ledger: to how much a shared market moves the
+ * percentage, and to how much of the evidence bar it fills.
+ */
+export const PAST_WEIGHT = 0.25;
+
 /** Per-domain (Circle) evidence floor — one shared market never makes a Circle. */
 export const DOMAIN_MIN_SHARED = 5;
 
