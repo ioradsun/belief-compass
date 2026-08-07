@@ -182,7 +182,12 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         // saw them, so every market signal fell through to the derived score or
         // the 0.5 fallback. The number existed on disk and was thrown away on
         // the way to the only place it mattered.
-        "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index, milestone_threshold:payload->>threshold, transition_headline:payload->>headline, transition_detail:payload->>detail, transition_type:payload->>type, transition_significance:payload->>significance",
+        // A conviction cohort stores its PEOPLE (not prose) in the payload, so
+        // the sentence can be written per surface. Those sub-fields must be
+        // selected too — without them the row reached the renderer with no
+        // kind, no rung and no people, and read "undefined — 0 believers
+        // reached NaN months."
+        "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index, milestone_threshold:payload->>threshold, transition_headline:payload->>headline, transition_detail:payload->>detail, transition_type:payload->>type, transition_significance:payload->>significance, cohort_kind:payload->>kind, cohort_rung:payload->>rung, cohort_crossed_on:payload->>crossedOn, cohort_people:payload->people",
       )
       .eq("is_canonical", true)
       .in("kind", LIVE_KINDS);
