@@ -161,12 +161,20 @@ function ParticipantProof({
     rival: "Rival",
     other: "Participant",
   };
-  const named = shown.slice(0, 6);
+  // Named rows are a RELATIONSHIP affordance, not a width one. Listing nine
+  // strangers as "Participant / Participant / Participant" repeats the count
+  // above it in nine lines and says nothing new. So: rows only when at least
+  // one of these people is someone to you (tribe or rival); otherwise the face
+  // pile, exactly as before — recognition, one line, no repetition.
+  const hasRelation = shown.some((f) => f.relation === "tribe" || f.relation === "rival");
+  const named = hasRelation ? shown.slice(0, 6) : [];
 
   return (
     <div className="mt-2">
       {shown.length > 0 && (
-        <div className="momentum-faces flex items-center gap-1.5">
+        <div
+          className={`${hasRelation ? "momentum-faces " : ""}flex items-center gap-1.5`}
+        >
           <div className="flex -space-x-1.5">
             {shown.map((f) => (
               <PersonAvatar
