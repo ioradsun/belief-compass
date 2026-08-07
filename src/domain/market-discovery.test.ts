@@ -14,7 +14,13 @@ describe("marketStage", () => {
 
   it("is exited when everyone left", () => {
     expect(
-      marketStage({ ...base, participants: 91, believers: 0, capitalUsd: 0, lastActivityAt: ago(DAY) }),
+      marketStage({
+        ...base,
+        participants: 91,
+        believers: 0,
+        capitalUsd: 0,
+        lastActivityAt: ago(DAY),
+      }),
     ).toBe("exited");
   });
 
@@ -24,13 +30,23 @@ describe("marketStage", () => {
 
   it("is emerging for a young market with a couple of participants", () => {
     expect(
-      marketStage({ ...base, participants: 2, firstActivityAt: ago(3600_000), lastActivityAt: ago(3600_000) }),
+      marketStage({
+        ...base,
+        participants: 2,
+        firstActivityAt: ago(3600_000),
+        lastActivityAt: ago(3600_000),
+      }),
     ).toBe("emerging");
   });
 
   it("is growing when people arrived today", () => {
     expect(
-      marketStage({ ...base, firstActivityAt: ago(30 * DAY), lastActivityAt: ago(2 * DAY), joined24h: 3 }),
+      marketStage({
+        ...base,
+        firstActivityAt: ago(30 * DAY),
+        lastActivityAt: ago(2 * DAY),
+        joined24h: 3,
+      }),
     ).toBe("growing");
   });
 
@@ -41,8 +57,12 @@ describe("marketStage", () => {
   });
 
   it("cools then goes dormant as silence stretches", () => {
-    expect(marketStage({ ...base, firstActivityAt: ago(60 * DAY), lastActivityAt: ago(10 * DAY) })).toBe("cooling");
-    expect(marketStage({ ...base, firstActivityAt: ago(60 * DAY), lastActivityAt: ago(40 * DAY) })).toBe("dormant");
+    expect(
+      marketStage({ ...base, firstActivityAt: ago(60 * DAY), lastActivityAt: ago(10 * DAY) }),
+    ).toBe("cooling");
+    expect(
+      marketStage({ ...base, firstActivityAt: ago(60 * DAY), lastActivityAt: ago(40 * DAY) }),
+    ).toBe("dormant");
   });
 });
 
@@ -62,7 +82,9 @@ describe("composeDiscoveryRow", () => {
   });
 
   it("singularises a lone participant", () => {
-    expect(composeDiscoveryRow({ ...base, participants: 1 }).participantsText).toBe("1 participant");
+    expect(composeDiscoveryRow({ ...base, participants: 1 }).participantsText).toBe(
+      "1 participant",
+    );
   });
 });
 

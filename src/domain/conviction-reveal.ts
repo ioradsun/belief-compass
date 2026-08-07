@@ -57,7 +57,15 @@ export interface ConvictionRevealInput {
 }
 
 export type RevealCardType =
-  "surprise" | "twin" | "tribe" | "opps" | "belonging" | "early" | "momentum" | "dna" | "creator";
+  | "surprise"
+  | "twin"
+  | "tribe"
+  | "opps"
+  | "belonging"
+  | "early"
+  | "momentum"
+  | "dna"
+  | "creator";
 
 export interface RevealCard {
   type: RevealCardType;

@@ -174,9 +174,43 @@ export function participationOf(signals: InterestSignal[]): ParticipationStats {
 // ── Text similarity (V1 duplicate detection) ───────────────────────────────
 
 const STOP = new Set([
-  "the", "a", "an", "is", "are", "will", "be", "to", "of", "in", "on", "for", "and", "or",
-  "that", "this", "it", "do", "does", "did", "by", "at", "with", "than", "more", "less",
-  "who", "what", "when", "why", "how", "should", "would", "could", "can", "we", "you",
+  "the",
+  "a",
+  "an",
+  "is",
+  "are",
+  "will",
+  "be",
+  "to",
+  "of",
+  "in",
+  "on",
+  "for",
+  "and",
+  "or",
+  "that",
+  "this",
+  "it",
+  "do",
+  "does",
+  "did",
+  "by",
+  "at",
+  "with",
+  "than",
+  "more",
+  "less",
+  "who",
+  "what",
+  "when",
+  "why",
+  "how",
+  "should",
+  "would",
+  "could",
+  "can",
+  "we",
+  "you",
 ]);
 
 export function normalizeQuestion(text: string): string {
@@ -216,8 +250,17 @@ export function nearestExisting(question: string, existing: string[]): number {
 // ── Candidate validation ───────────────────────────────────────────────────
 
 const BANNED = [
-  "guaranteed", "profit", "high earning", "will perform", "algorithm",
-  "our ai", "based on your data", "tracking", "your wallet", "moon", "pump",
+  "guaranteed",
+  "profit",
+  "high earning",
+  "will perform",
+  "algorithm",
+  "our ai",
+  "based on your data",
+  "tracking",
+  "your wallet",
+  "moon",
+  "pump",
 ];
 
 export type RejectReason =

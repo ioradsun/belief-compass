@@ -17,11 +17,70 @@
 
 /** Words that carry no intent — dropped from the query and from title tokens. */
 const STOP = new Set([
-  "a","an","the","is","are","was","were","be","been","do","does","did","will","would",
-  "can","could","should","of","to","in","on","for","and","or","if","it","its","this",
-  "that","you","your","i","me","my","we","our","they","them","he","she","at","by",
-  "with","as","than","then","there","here","what","who","when","which","how","why",
-  "before","after","more","most","less","really","actually","ever","any","about",
+  "a",
+  "an",
+  "the",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "do",
+  "does",
+  "did",
+  "will",
+  "would",
+  "can",
+  "could",
+  "should",
+  "of",
+  "to",
+  "in",
+  "on",
+  "for",
+  "and",
+  "or",
+  "if",
+  "it",
+  "its",
+  "this",
+  "that",
+  "you",
+  "your",
+  "i",
+  "me",
+  "my",
+  "we",
+  "our",
+  "they",
+  "them",
+  "he",
+  "she",
+  "at",
+  "by",
+  "with",
+  "as",
+  "than",
+  "then",
+  "there",
+  "here",
+  "what",
+  "who",
+  "when",
+  "which",
+  "how",
+  "why",
+  "before",
+  "after",
+  "more",
+  "most",
+  "less",
+  "really",
+  "actually",
+  "ever",
+  "any",
+  "about",
 ]);
 
 /**
@@ -37,7 +96,18 @@ const CONCEPTS: string[][] = [
   ["iphone", "apple", "ios", "mac"],
   ["android", "samsung", "pixel", "google"],
   ["phone", "mobile", "smartphone", "device"],
-  ["work", "working", "job", "career", "employment", "labour", "labor", "slavery", "hustle", "9to5"],
+  [
+    "work",
+    "working",
+    "job",
+    "career",
+    "employment",
+    "labour",
+    "labor",
+    "slavery",
+    "hustle",
+    "9to5",
+  ],
   ["office", "remote", "wfh", "commute"],
   ["smile", "smiling", "laugh", "laughing", "happy", "happiness", "joy"],
   ["sad", "depressed", "depression", "lonely", "loneliness"],
@@ -164,7 +234,10 @@ function wordScore(q: string, p: Prepared): number {
   const c = CONCEPT_OF.get(q) ?? CONCEPT_OF.get(qs);
   if (c != null && p.concepts.has(c)) return 5;
   const b = budget(q);
-  if (b > 0 && p.words.some((w) => Math.abs(w.length - q.length) <= b && editDistance(w, q, b) <= b))
+  if (
+    b > 0 &&
+    p.words.some((w) => Math.abs(w.length - q.length) <= b && editDistance(w, q, b) <= b)
+  )
     return 4;
   return 0;
 }

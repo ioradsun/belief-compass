@@ -143,4 +143,3 @@ export function unseen<T extends Arrival>(
 ): T[] {
   return incoming.filter((r) => !visibleIds.has(r.id));
 }
-

@@ -56,7 +56,11 @@ describe("positionStory — one story, owner-first priority", () => {
 describe("positionStory — the CANONICAL line, told from the owner's seat", () => {
   it("new believers on your side reads as your side filling up", () => {
     const s = positionStory(
-      base({ side: "YES", believers: 35, live: live("new_believers", { wallets: 6, side: "YES" }) }),
+      base({
+        side: "YES",
+        believers: 35,
+        live: live("new_believers", { wallets: 6, side: "YES" }),
+      }),
     );
     expect(s.kind).toBe("believers_your_side");
     expect(s.headline).toBe("6 people joined YES today.");
@@ -80,8 +84,12 @@ describe("positionStory — the CANONICAL line, told from the owner's seat", () 
   });
 
   it("an overtake toward your side is good news, away from it is bad", () => {
-    const mine = positionStory(base({ side: "YES", live: live("side_overtake", { crossed: "YES_over_NO" }) }));
-    const theirs = positionStory(base({ side: "YES", live: live("side_overtake", { crossed: "NO_over_YES" }) }));
+    const mine = positionStory(
+      base({ side: "YES", live: live("side_overtake", { crossed: "YES_over_NO" }) }),
+    );
+    const theirs = positionStory(
+      base({ side: "YES", live: live("side_overtake", { crossed: "NO_over_YES" }) }),
+    );
     expect(mine.kind).toBe("side_overtake");
     expect(mine.headline).toBe("YES just became the majority.");
     expect(mine.tone).toBe("up");

@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  decideTransitionEmit,
-  TRANSITION_EMIT,
-  type TransitionStore,
-} from "./transition-emit";
+import { decideTransitionEmit, TRANSITION_EMIT, type TransitionStore } from "./transition-emit";
 
 const T0 = 1_000_000_000_000;
 const PERSIST = TRANSITION_EMIT.minPersistMs;

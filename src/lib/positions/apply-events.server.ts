@@ -83,6 +83,10 @@ function dbToBeliefRow(r: Record<string, unknown>): BeliefRow {
     directional_since: r.directional_since ? new Date(r.directional_since as string) : null,
     first_backed_at: r.first_backed_at ? new Date(r.first_backed_at as string) : null,
     last_trade_at: r.last_trade_at ? new Date(r.last_trade_at as string) : null,
+    last_directional_side:
+      r.last_directional_side === "YES" || r.last_directional_side === "NO"
+        ? r.last_directional_side
+        : null,
   };
 }
 
@@ -100,6 +104,9 @@ function stateForRpc(
     directional_since: row.directional_since?.toISOString() ?? "",
     first_backed_at: row.first_backed_at?.toISOString() ?? "",
     last_trade_at: row.last_trade_at?.toISOString() ?? "",
+    // Empty string reads as "nothing to write" at the RPC, which COALESCEs to
+    // the stored value — so an exit can never blank a remembered side.
+    last_directional_side: row.last_directional_side ?? "",
   };
   if (evaluated) {
     s.stance = evaluated.stance;

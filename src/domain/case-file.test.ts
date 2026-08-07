@@ -59,7 +59,13 @@ describe("sideCaseSummary", () => {
     expect(oneHour.believers).toBe(2); // but the total is unchanged
   });
 
-  const sell = (w: string, side: "YES" | "NO", eth: number, price: number, t: number): TapeTrade => ({
+  const sell = (
+    w: string,
+    side: "YES" | "NO",
+    eth: number,
+    price: number,
+    t: number,
+  ): TapeTrade => ({
     w,
     side,
     action: "SELL",

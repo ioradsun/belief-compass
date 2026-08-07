@@ -47,10 +47,7 @@ const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
  * @param people   Participants we have identities for (any order).
  * @param total    Authoritative participant count — usually ≥ people.length.
  */
-export function participantSocial(
-  people: SocialParticipant[],
-  total: number,
-): ParticipantSocial {
+export function participantSocial(people: SocialParticipant[], total: number): ParticipantSocial {
   const seen = new Set<string>();
   const unique: SocialParticipant[] = [];
   for (const p of people) {

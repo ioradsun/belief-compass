@@ -80,6 +80,37 @@ export const expressedFactor = (r: ExpressedBeliefRow): DnaFactor => ({
 export const isDirectional = (side: string | null | undefined): side is "YES" | "NO" =>
   side === "YES" || side === "NO";
 
+/**
+ * A conviction someone has LEFT — direction remembered, strength unknown.
+ *
+ * The stored `conviction` on an exited row is 0, because conviction is computed
+ * from a position's live value and there is no position left. Passing that
+ * through would make every remembered belief weigh exactly nothing — the pair
+ * weight is `sqrt(convA × convB)` — and PAST_WEIGHT would have nothing to scale.
+ * History would have been "included" and still counted for zero, which is the
+ * quietest possible way for this whole change to do nothing.
+ *
+ * So a remembered conviction makes NO STRENGTH CLAIM. We genuinely do not know
+ * how hard someone believed in a market they have closed, and reaching for the
+ * conviction they had at some earlier moment would be inventing a number. It
+ * carries a direction at full nominal strength, and `PAST_WEIGHT` in the scorer
+ * is the ONE discount applied to it.
+ *
+ * In practice that lands it below a quarter of a live conviction rather than at
+ * exactly a quarter, since live convictions sit around 0.6–1.0 — the error is in
+ * the direction of counting memories for less, which is the right way to be
+ * wrong.
+ */
+export const pastFactor = (r: {
+  onchain_id: number | string;
+  last_directional_side: string | null;
+}): DnaFactor => ({
+  marketId: Number(r.onchain_id),
+  side: r.last_directional_side === "NO" ? "NO" : "YES",
+  conviction: 1,
+  past: true,
+});
+
 export interface Readiness {
   /** Distinct directional beliefs the viewer holds (on-chain + expressed). */
   count: number;

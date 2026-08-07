@@ -44,7 +44,6 @@ export function sharesForPct(tokens: bigint, pct: number): bigint {
   return (tokens * bps) / 10_000n;
 }
 
-
 /**
  * Wei in USD, or null when there is no rate to cross with.
  *

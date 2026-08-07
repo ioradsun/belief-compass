@@ -117,8 +117,6 @@ export const ROOM_GROUP_BLURB: Record<RoomGroup, string> = {
   new: "",
 };
 
-
-
 /** DNA label → room group. Opp/Inverse arriving on YOUR side is a crossing. */
 export function roomGroupFor(relationship: string | null | undefined): RoomGroup {
   switch (relationship) {
@@ -221,7 +219,6 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-
 /**
  * The one line at the top of the room. It answers "why should I care about this
  * person?", so the RELATIONSHIP is the headline, not the activity: who they are
@@ -244,7 +241,9 @@ export function roomHeadline(sections: RoomSection[], hasVisitedBefore: boolean)
 
   if (counted.length === 0) {
     // Nothing new since last time, but these people are still unmet.
-    return total === 1 ? "1 person is still waiting to meet you" : `${total} people are still waiting to meet you`;
+    return total === 1
+      ? "1 person is still waiting to meet you"
+      : `${total} people are still waiting to meet you`;
   }
 
   const lead = counted[0];
@@ -286,5 +285,3 @@ function leadClause(group: RoomGroup, name: string, n: number): string {
       return withOthers("now shares one of your convictions", "now share your convictions");
   }
 }
-
-
