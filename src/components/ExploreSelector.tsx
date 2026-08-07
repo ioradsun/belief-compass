@@ -140,14 +140,21 @@ export function ExploreSelector({
         className="flex w-full items-center gap-1.5 rounded-[10px] py-1 text-left transition-colors hover:opacity-80"
       >
         <span className="min-w-0">
-          <span className="block truncate text-[15px] font-semibold tracking-[-0.01em] text-[var(--text)]">
+          <span className="block truncate text-[15px] font-semibold leading-[20px] tracking-[-0.01em] text-[var(--text)]">
             {LENS_LABELS[lens]}
           </span>
           {/* Narrowing is secondary information and reads as such — one quiet
-            line, never a row of chips with their own dismiss targets. */}
-          {narrowed && (
-            <span className="block truncate text-[11px] text-[var(--text-muted)]">{narrowed}</span>
-          )}
+            line, never a row of chips with their own dismiss targets.
+            ALWAYS RENDERED, never conditionally: choosing a topic would
+            otherwise grow this control by a line and push the whole playlist
+            down, which is a jump caused by the act of narrowing it. The row
+            holds its 15px whether or not it has anything to say. */}
+          <span
+            className="block h-[15px] truncate text-[11px] leading-[15px] text-[var(--text-muted)]"
+            aria-hidden={!narrowed}
+          >
+            {narrowed ?? ""}
+          </span>
         </span>
         <ChevronDown
           size={14}

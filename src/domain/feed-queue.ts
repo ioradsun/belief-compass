@@ -99,12 +99,26 @@ function unique(ids: readonly number[]): number[] {
  * the feed's own top pick — unless the caller already has one in hand (a link,
  * a restored session, a market opened before the feed arrived).
  */
-export function initQueue(order: readonly number[], activeId: number | null = null): FeedQueue {
+export function initQueue(
+  order: readonly number[],
+  activeId: number | null = null,
+  /** See `jumpTo` — false for a ranked lens, which admits nothing unranked. */
+  opts: { admit?: boolean } = {},
+): FeedQueue {
   const ids = unique(order);
   const active = activeId != null && Number.isFinite(activeId) ? activeId : (ids[0] ?? null);
-  // An active market outside the first order still belongs in it — the same
-  // splice `jumpTo` performs, applied at the boundary where nothing precedes it.
-  const withActive = active != null && !ids.includes(active) ? [active, ...ids] : ids;
+  /**
+   * An active market outside the first order still belongs in it — the same
+   * splice `jumpTo` performs, applied at the boundary where nothing precedes it.
+   *
+   * AND THIS IS THE PATH THAT ACTUALLY BIT. A lens change empties the queue, so
+   * the next server order arrives UNSEEDED and `receiveOrder` routes it through
+   * here — putting the market still on screen at the HEAD of the new ranking.
+   * "Most Capital" then opened with a $2.59 market above a $259 one. Guarding
+   * only `jumpTo` would have missed it.
+   */
+  const admit = opts.admit !== false;
+  const withActive = admit && active != null && !ids.includes(active) ? [active, ...ids] : ids;
   return { order: withActive, activeId: active, incoming: null, seeded: true };
 }
 
@@ -115,12 +129,18 @@ export function initQueue(order: readonly number[], activeId: number | null = nu
  * a failed enrichment, a filtered-out slice — must not be able to empty a list
  * the reader is looking at.
  */
-export function receiveOrder(q: FeedQueue, latest: readonly number[]): FeedQueue {
+export function receiveOrder(
+  q: FeedQueue,
+  latest: readonly number[],
+  /** See `jumpTo` — false for a ranked lens, which admits nothing unranked. */
+  opts: { admit?: boolean } = {},
+): FeedQueue {
   const ids = unique(latest);
   if (ids.length === 0) return q;
   // Nothing the reader chose is on screen yet — either the queue is empty, or it
-  // holds only the market the URL named. Adopt, keeping that market at the head.
-  if (!q.seeded) return initQueue(ids, q.activeId);
+  // holds only the market the URL named. Adopt, keeping that market at the head
+  // when the lens is a blend that has room for it.
+  if (!q.seeded) return initQueue(ids, q.activeId, opts);
   if (same(ids, q.order)) return q.incoming ? { ...q, incoming: null } : q;
   return { ...q, incoming: ids };
 }
@@ -168,9 +188,34 @@ export function activeIndex(q: FeedQueue): number {
  * active market, so the running order continues from where the reader is
  * instead of restarting somewhere else.
  */
-export function jumpTo(q: FeedQueue, id: number): FeedQueue {
+export function jumpTo(
+  q: FeedQueue,
+  id: number,
+  /**
+   * Should a market the order has never seen be SPLICED INTO it?
+   *
+   * True for a blend: the reader opened something from search, a live row or one
+   * of their positions, and the session should continue from there rather than
+   * ending when the result closes. That is the whole point of an origin.
+   *
+   * FALSE FOR A RANKING, and this was a real defect. "Most Capital" is a promise
+   * that the list descends by capital. Splicing the market being read into it
+   * put a $2.59 market above a $259 one — and because a lens change empties the
+   * queue first, `activeIndex` returned -1 and the splice landed at the FRONT,
+   * so the very first row of a ranked lens was the one market that had not been
+   * ranked at all. The reader keeps their market in centre stage either way;
+   * only the playlist stays honest about its own ordering.
+   */
+  opts: { admit?: boolean } = {},
+): FeedQueue {
   if (!Number.isFinite(id)) return q;
   if (q.order.includes(id)) return { ...q, activeId: id };
+  if (opts.admit === false) {
+    // Active but not a member. `advance` already handles this: with no index it
+    // moves to the head of the order, so "Next" leaves the foreign market and
+    // enters the ranking at the top, which is where the ranking begins.
+    return { ...q, activeId: id };
+  }
   const at = activeIndex(q);
   const order = [...q.order];
   order.splice(at < 0 ? order.length : at + 1, 0, id);
