@@ -55,19 +55,36 @@ describe("nothing in the right rail changes height instantly", () => {
     expect(c).toMatch(/minHeight: BEAT_MIN_H/);
   });
 
-  it("expanding grows the card in place, not a fixed overlay over the column", () => {
+  it("expanding never resizes the column the reader is looking at", () => {
     const c = code("src/components/CurrentMarketActivity.tsx");
-    // The old expansion was `createPortal` into a `fixed inset` sheet with a
-    // backdrop, which replaced the column rather than extending the card.
-    expect(c).not.toMatch(/createPortal/);
+    /**
+     * THE PROPERTY, NOT THE MECHANISM — and this test used to get that wrong.
+     *
+     * It banned `createPortal` outright, because the ORIGINAL bug was a portal
+     * into a `fixed inset-0` sheet with a scrim that replaced the whole column.
+     * The fix then was to expand in place. A later responsive pass moved it back
+     * to a portal — but an ANCHORED one, positioned at this card's own left/top/
+     * width with a transparent catcher — which satisfies the actual requirement
+     * (the rail does not move) better than expanding in place did, because a
+     * portal cannot change the column's height at all, and it escapes the
+     * ancestor `overflow-hidden` that clipped the in-place version.
+     *
+     * So the guard now asserts what must be true: the panel is positioned
+     * against this card, not stretched over the viewport.
+     */
     expect(c).not.toMatch(/aria-modal/);
-    expect(c).toMatch(/probe="market-activity-body"/);
+    // A full-bleed SHEET is still banned; a full-bleed transparent catcher for
+    // outside-taps is not the same thing and is how every menu closes.
+    expect(c).not.toMatch(/fixed inset-0[^"]*bg-|backdrop-blur/);
+    expect(c).toMatch(/anchor\?\.(left|top|width)/);
   });
 
-  it("the expanded feed is bounded so the tape below keeps a viewport", () => {
+  it("the expanded feed is bounded so it can never run off the screen", () => {
     const c = code("src/components/CurrentMarketActivity.tsx");
     expect(c).toMatch(/EXPANDED_MAX/);
-    expect(c).toMatch(/maxHeight: EXPANDED_MAX/);
+    // Bounded by the card's budget AND by what is left of the viewport below
+    // it — a literal `maxHeight: EXPANDED_MAX` was the old spelling of this.
+    expect(c).toMatch(/maxHeight:[^,}]*EXPANDED_MAX/);
   });
 });
 
@@ -153,7 +170,9 @@ describe("the update control never moves the feed", () => {
 
   it("puts the rows the reader asked for at the very top", () => {
     const gate = code("src/hooks/useTapeGate.ts");
-    expect(gate).toMatch(/\.\.\.taking, \.\.\.collapse\(incomingRef\.current as T\[\]\), \.\.\.prev/);
+    expect(gate).toMatch(
+      /\.\.\.taking, \.\.\.collapse\(incomingRef\.current as T\[\]\), \.\.\.prev/,
+    );
   });
 });
 

@@ -39,9 +39,14 @@ describe("the momentum chip is gone", () => {
   });
 
   it("keeps a floor under the header row so the title still cannot shift", () => {
-    // Removing the chip must not remove the reservation: a market with no
+    // Removing the chip must not remove the RESERVATION: a market with no
     // category would otherwise sit its title higher than one with a category.
-    expect(deck).toMatch(/min-h-\[22px\]/);
+    //
+    // Spelled as a custom property since the responsive pass, so the height can
+    // retune with the column while staying reserved. The property is what
+    // matters — this guard used to demand the literal class and broke on an
+    // improvement, which is a tax rather than a protection.
+    expect(deck).toMatch(/min-h-\[22px\]|--deck-meta, ?22px/);
   });
 });
 
@@ -72,9 +77,10 @@ describe("Why this is one component, in one colour, on both surfaces", () => {
     // active market's reason is told once, in "In this market" above the list.
     expect((feed.match(/<WhyThis/g) ?? []).length).toBe(1);
     expect(feed).not.toMatch(/\{line\}\s*<\/span>/);
-    expect(code("src/components/CurrentMarketActivity.tsx")).toMatch(/<WhyThis reason=\{why\} lead/);
+    expect(code("src/components/CurrentMarketActivity.tsx")).toMatch(
+      /<WhyThis reason=\{why\} lead/,
+    );
   });
-
 
   it("names itself only where a label earns its space", () => {
     // The centre labels it (one sentence above a large title). The feed does
