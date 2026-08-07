@@ -13,6 +13,7 @@
  * trip, and it should not outlive the tab.
  */
 import { useSyncExternalStore } from "react";
+import type { CategorySlug } from "@/domain/categories";
 
 export interface DraftAttachment {
   kind: "image" | "video" | "audio" | "link";
@@ -44,6 +45,12 @@ export interface Draft {
   type: "text" | "media";
   attachment: DraftAttachment | null;
   source: DraftSource | null;
+  /**
+   * The creator's own pick, or null while the AI's read still stands. Null and
+   * "the AI happened to say the same thing" have to stay distinguishable: only
+   * a real pick may be stored as `category_source: "creator"`.
+   */
+  category: CategorySlug | null;
 }
 
 export const EMPTY_DRAFT: Draft = {
@@ -53,6 +60,7 @@ export const EMPTY_DRAFT: Draft = {
   type: "text",
   attachment: null,
   source: null,
+  category: null,
 };
 
 

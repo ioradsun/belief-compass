@@ -152,7 +152,7 @@ describe("the introduction never invents a person", () => {
   it("describes where their convictions sit, not who they are", () => {
     const intro = introduction(enough({ category: "crypto" }));
     expect(intro.provisional).toBe(false);
-    expect(intro.lines[0]).toBe("Most of their convictions sit in crypto.");
+    expect(intro.lines[0]).toBe("Most of their convictions sit in Crypto.");
   });
 
   it("says spread when there is no concentration", () => {
@@ -205,7 +205,7 @@ describe("why follow them", () => {
     const r = whyFollow(enough({ category: "technology" }));
     expect(r[0]).toEqual({
       kind: "topic",
-      headline: "Follow them for technology.",
+      headline: "Follow them for Technology.",
       evidence: "4 of their 4 current convictions sit there.",
     });
   });

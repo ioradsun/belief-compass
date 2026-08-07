@@ -15,25 +15,38 @@ const CHAIN_ID = 8453;
 const DRAFTS_PER_HOUR = 10;
 
 function clean(s: unknown, max: number): string {
-  return String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+  return String(s ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
 }
 
-/** Pre-flight the question text: AI quality review + near-duplicate search. */
+/**
+ * Pre-flight the question text: AI quality review only.
+ *
+ * IT NO LONGER SEARCHES FOR DUPLICATES. It used to return a `duplicates` array
+ * from `findSimilarMarkets` — a 4,000-row scan on every debounced keystroke —
+ * which no component ever read. The rail that DOES show neighbours runs its own
+ * bounded query (`suggestExistingMarkets`), so the scan was pure cost.
+ */
 export const reviewMarketQuestion = createServerFn({ method: "POST" })
-  .inputValidator((data: { question: string }) => ({ question: clean(data.question, QUESTION_MAX) }))
+  .inputValidator((data: { question: string }) => ({
+    question: clean(data.question, QUESTION_MAX),
+  }))
   .handler(async ({ data }) => {
     if (data.question.length < 8) {
       return {
-        review: { ok: false, reason: "Say a bit more.", suggestion: null, category: "Other", blocked: false },
-        duplicates: [],
+        review: {
+          ok: false,
+          reason: "Say a bit more.",
+          suggestion: null,
+          category: "other" as const,
+          blocked: false,
+        },
       };
     }
-    const { reviewQuestion, findSimilarMarkets } = await import("@/lib/market-create.server");
-    const [review, duplicates] = await Promise.all([
-      reviewQuestion(data.question),
-      findSimilarMarkets(data.question),
-    ]);
-    return { review, duplicates };
+    const { reviewQuestion } = await import("@/lib/market-create.server");
+    return { review: await reviewQuestion(data.question) };
   });
 
 /**
@@ -41,16 +54,17 @@ export const reviewMarketQuestion = createServerFn({ method: "POST" })
  * Advisory only — creation stays permissionless, so this never gates anything.
  */
 export const suggestExistingMarkets = createServerFn({ method: "POST" })
-  .inputValidator((data: { question: string; sha256?: string | null; linkUrl?: string | null }) => ({
-    question: clean(data.question, QUESTION_MAX),
-    sha256: data.sha256 ? clean(data.sha256, 80) : null,
-    linkUrl: data.linkUrl ? clean(data.linkUrl, 500) : null,
-  }))
+  .inputValidator(
+    (data: { question: string; sha256?: string | null; linkUrl?: string | null }) => ({
+      question: clean(data.question, QUESTION_MAX),
+      sha256: data.sha256 ? clean(data.sha256, 80) : null,
+      linkUrl: data.linkUrl ? clean(data.linkUrl, 500) : null,
+    }),
+  )
   .handler(async ({ data }) => {
     const { findMarketSuggestions } = await import("@/lib/market-create.server");
     return findMarketSuggestions(data, 3);
   });
-
 
 /** Reserve an off-chain draft + its immutable questionId. */
 export const createMarketDraft = createServerFn({ method: "POST" })
@@ -88,6 +102,15 @@ export const createMarketDraft = createServerFn({ method: "POST" })
     const review = await reviewQuestion(question);
     if (review.blocked) throw new Error("That question can't be published here.");
 
+    // The creator's pick wins, but only if it names something the rest of the
+    // system reads. `normalizeCategory` is the one door — a client sending an
+    // unknown string falls back to the reviewer's answer rather than writing a
+    // category no reader can resolve, which is exactly how the vocabularies
+    // drifted apart in the first place.
+    const { normalizeCategory } = await import("@/domain/categories");
+    const chosen = normalizeCategory(data.category);
+    const category = chosen ?? review.category;
+
     const questionId = makeQuestionId(question);
     const { error } = await db.from("conviction_markets").insert({
       question_id: questionId,
@@ -95,24 +118,29 @@ export const createMarketDraft = createServerFn({ method: "POST" })
       description: clean(data.description, 500) || null,
       format: data.format === "media" ? "media" : "text",
       side: data.side === "NO" ? "NO" : "YES",
-      category: data.category || review.category,
-      category_source: data.category ? "creator" : "ai",
+      category,
+      category_source: chosen ? "creator" : "ai",
       creator_wallet: wallet,
       contract_address: CONTRACT,
       chain_id: CHAIN_ID,
       status: "draft",
     });
     if (error) throw new Error(error.message);
-    return { questionId, category: data.category || review.category };
+    return { questionId, category };
   });
 
 /** A one-shot signed upload URL for the private market-media bucket. */
 export const signMarketUpload = createServerFn({ method: "POST" })
-  .inputValidator((data: { wallet: string; token: string; questionId: string; ext: string }) => data)
+  .inputValidator(
+    (data: { wallet: string; token: string; questionId: string; ext: string }) => data,
+  )
   .handler(async ({ data }) => {
     const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
     const wallet = await assertWalletOwnership(data.wallet, data.token);
-    const ext = clean(data.ext, 5).toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
+    const ext =
+      clean(data.ext, 5)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "") || "bin";
     const { serviceClient } = await import("@/lib/supabase-clients");
     const db = serviceClient();
     const { data: row } = await db
@@ -193,7 +221,9 @@ export const attachMarketMedia = createServerFn({ method: "POST" })
 
 /** Attach an https link with its OpenGraph preview. */
 export const attachMarketLink = createServerFn({ method: "POST" })
-  .inputValidator((data: { wallet: string; token: string; questionId: string; url: string }) => data)
+  .inputValidator(
+    (data: { wallet: string; token: string; questionId: string; url: string }) => data,
+  )
   .handler(async ({ data }) => {
     const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
     const wallet = await assertWalletOwnership(data.wallet, data.token);
@@ -287,10 +317,11 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-
 /** Remember a failed attempt so the draft can be resumed instead of re-typed. */
 export const recordCreateFailure = createServerFn({ method: "POST" })
-  .inputValidator((data: { wallet: string; token: string; questionId: string; message: string }) => data)
+  .inputValidator(
+    (data: { wallet: string; token: string; questionId: string; message: string }) => data,
+  )
   .handler(async ({ data }) => {
     const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
     const wallet = await assertWalletOwnership(data.wallet, data.token);
@@ -342,7 +373,9 @@ export const getConvictionMarket = createServerFn({ method: "GET" })
 
     const { data: row } = await db
       .from("conviction_markets")
-      .select("question_id, question, description, category, media, creator_wallet, created_at, hidden, moderation_status, status")
+      .select(
+        "question_id, question, description, category, media, creator_wallet, created_at, hidden, moderation_status, status",
+      )
       .eq("onchain_id", data.onchainId)
       .maybeSingle();
     if (!row || row.status !== "active" || row.hidden || row.moderation_status === "blocked") {
@@ -376,7 +409,6 @@ export const getConvictionMarket = createServerFn({ method: "GET" })
     return { market: { ...row, mediaUrl: url }, creator, createdAt };
   });
 
-
 /** Resolved creator identity for the market byline (one request, profile-aware). */
 export interface MarketCreatorIdentity {
   wallet: string;
@@ -401,13 +433,15 @@ export const reportMarket = createServerFn({ method: "POST" })
     const reason = clean(data.reason, 60);
     if (!reason) throw new Error("Pick a reason.");
     const { serviceClient } = await import("@/lib/supabase-clients");
-    const { error } = await serviceClient().from("market_reports").insert({
-      onchain_id: data.onchainId ?? null,
-      question_id: data.questionId ?? null,
-      reason,
-      details: clean(data.details, 500) || null,
-      reporter_wallet: data.wallet ? String(data.wallet).toLowerCase() : null,
-    });
+    const { error } = await serviceClient()
+      .from("market_reports")
+      .insert({
+        onchain_id: data.onchainId ?? null,
+        question_id: data.questionId ?? null,
+        reason,
+        details: clean(data.details, 500) || null,
+        reporter_wallet: data.wallet ? String(data.wallet).toLowerCase() : null,
+      });
     if (error) throw new Error(error.message);
     return { ok: true as const };
   });

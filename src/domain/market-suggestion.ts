@@ -8,6 +8,7 @@
  * The product rule this file exists to protect: the House may claim FIT and
  * NOVELTY. It must never invent demand, earnings, or urgency.
  */
+import { textScore } from "./question-discovery";
 
 /** Every tunable in one place — never scattered through components. */
 export const SUGGESTION = {
@@ -171,79 +172,37 @@ export function participationOf(signals: InterestSignal[]): ParticipationStats {
   };
 }
 
-// ── Text similarity (V1 duplicate detection) ───────────────────────────────
+// ── Text similarity ────────────────────────────────────────────────────────
+//
+// A THIRD stopword list and a SECOND Jaccard used to live here, so the idea
+// generator could ask "is anything like this already up?" — the same question
+// creation asks, answered with different words and a different threshold (0.62
+// here, 0.45 and 0.34 there).
+//
+// One scorer now answers it. `textScore` is subject-gated rather than plain
+// Jaccard, so it is strictly better at the thing this file cares about: two
+// ideas built from the same template about different subjects no longer read as
+// the same idea.
+//
+// `normalizeText` below is NOT the same function as question-discovery's
+// `normalizeQuestion`, despite the old shared name. That one is a token-set KEY
+// — sorted, stopwords dropped — for cache lookups and exact-match tests. This
+// one preserves word order and every word, because its callers count words and
+// test for substrings. Conflating them silently broke both.
 
-const STOP = new Set([
-  "the",
-  "a",
-  "an",
-  "is",
-  "are",
-  "will",
-  "be",
-  "to",
-  "of",
-  "in",
-  "on",
-  "for",
-  "and",
-  "or",
-  "that",
-  "this",
-  "it",
-  "do",
-  "does",
-  "did",
-  "by",
-  "at",
-  "with",
-  "than",
-  "more",
-  "less",
-  "who",
-  "what",
-  "when",
-  "why",
-  "how",
-  "should",
-  "would",
-  "could",
-  "can",
-  "we",
-  "you",
-]);
-
-export function normalizeQuestion(text: string): string {
-  return text
+/** Lowercased, punctuation-free, order-preserving. For counting and matching. */
+export function normalizeText(text: string): string {
+  return String(text ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function contentTokens(text: string): Set<string> {
-  return new Set(
-    normalizeQuestion(text)
-      .split(" ")
-      .filter((w) => w.length > 2 && !STOP.has(w)),
-  );
-}
-
-/** Jaccard token overlap on content words. 1 = the same proposition. */
-export function textSimilarity(a: string, b: string): number {
-  if (normalizeQuestion(a) === normalizeQuestion(b)) return 1;
-  const ta = contentTokens(a);
-  const tb = contentTokens(b);
-  if (!ta.size || !tb.size) return 0;
-  let shared = 0;
-  for (const t of ta) if (tb.has(t)) shared++;
-  return shared / (ta.size + tb.size - shared);
-}
-
 /** How close the nearest existing market is (0 = nothing like it). */
 export function nearestExisting(question: string, existing: string[]): number {
   let max = 0;
-  for (const e of existing) max = Math.max(max, textSimilarity(question, e));
+  for (const e of existing) max = Math.max(max, textScore(question, e));
   return max;
 }
 
@@ -304,7 +263,7 @@ export function clarityScore(question: string): number {
   const len = question.length;
   // Concise is the target; a very short or very long question loses points.
   const lengthFit = len <= 90 ? 1 : Math.max(0, 1 - (len - 90) / 40);
-  const words = normalizeQuestion(question).split(" ").length;
+  const words = normalizeText(question).split(" ").length;
   const wordFit = words >= 5 && words <= 16 ? 1 : words < 5 ? 0.5 : 0.6;
   return Math.min(1, lengthFit * 0.5 + wordFit * 0.5);
 }
@@ -313,9 +272,9 @@ export function relevanceScore(c: IdeaCandidate, opp: MarketIdeaOpportunity): nu
   let s = 0;
   if (c.category === opp.primaryCategory) s += 0.6;
   else if (opp.secondaryCategory && c.category === opp.secondaryCategory) s += 0.35;
-  const q = normalizeQuestion(c.question);
+  const q = normalizeText(c.question);
   const topics = opp.relevantTopics.map((t) => t.toLowerCase()).filter(Boolean);
-  const hits = topics.filter((t) => q.includes(normalizeQuestion(t))).length;
+  const hits = topics.filter((t) => q.includes(normalizeText(t))).length;
   if (topics.length) s += 0.4 * Math.min(1, hits / Math.min(2, topics.length));
   return Math.min(1, s);
 }

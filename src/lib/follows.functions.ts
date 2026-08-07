@@ -96,7 +96,6 @@ export const setFollow = createServerFn({ method: "POST" })
     // than a constraint name.
     if (follower === followed) throw new Error("You can't follow yourself.");
 
-
     const sb = serviceClient();
     if (data.following) {
       const { error } = await sb
@@ -113,6 +112,45 @@ export const setFollow = createServerFn({ method: "POST" })
     }
 
     return getFollows({ data: { wallet: follower, person: followed } });
+  });
+
+/**
+ * WHO FOLLOWS THIS PERSON, by name rather than as a number.
+ *
+ * `getFollows` has always been able to COUNT followers — `select(…, { head:
+ * true })` — which is all a profile badge needs and nothing an invitation can
+ * use. Recruiting the people who already chose to hear from you requires the
+ * list itself, so this returns it.
+ *
+ * Bounded and unsigned, for the same reason the rest of this file is: a follow
+ * is public by construction, since every position behind it is on-chain.
+ */
+export const listFollowers = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({ wallet: z.string().min(3), limit: z.number().int().min(1).max(200).optional() })
+      .parse(raw),
+  )
+  .handler(async ({ data }): Promise<string[]> => {
+    const sb = serviceClient();
+    const { data: rows, error } = await sb
+      .from("follows")
+      .select("follower")
+      .eq("followed", data.wallet.toLowerCase())
+      .order("created_at", { ascending: false })
+      .limit(data.limit ?? 100);
+    // Loudly, then degrade — the same reasoning as `loadFollowing`: a silent
+    // empty list here would read as "nobody follows you", which is a different
+    // and much more discouraging claim than "we could not look".
+    if (error) {
+      console.error("[follows] listFollowers failed", {
+        wallet: data.wallet.toLowerCase(),
+        code: error.code,
+        message: error.message,
+      });
+      return [];
+    }
+    return ((rows ?? []) as { follower: string }[]).map((r) => String(r.follower).toLowerCase());
   });
 
 /**

@@ -19,6 +19,7 @@ import { PersonAvatar } from "@/components/PersonAvatar";
 import type { MarketStory } from "@/domain/story";
 import { formatMoney, type DisplayUnit } from "@/domain/money";
 import { marketTitle } from "@/domain/market-title";
+import { categoryLabel } from "@/domain/categories";
 
 // Pulse bar colour by aliveness. Amber for a living market (kept off the
 // YES-blue / NO-amber axis so it never reads as a side), fading to muted as
@@ -332,7 +333,11 @@ export function MarketCard({
           {marketTitle(row.markets?.title, row.onchain_id)}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
-          {row.markets?.category && <span>{row.markets.category}</span>}
+          {/* The label, never the stored slug — a card reading "human-nature"
+              is the vocabulary leaking through the surface. */}
+          {categoryLabel(row.markets?.category) && (
+            <span>{categoryLabel(row.markets?.category)}</span>
+          )}
           <span>·</span>
           <span>cap {capTotal > 0 ? fmtUsd(capTotal) : "—"}</span>
           <span>·</span>

@@ -12,6 +12,7 @@ import { useEffect } from "react";
 import { rewardLine } from "@/domain/market-suggestion";
 import { useCreateEconomics } from "@/chain/market-create";
 import type { ReadySuggestion } from "@/lib/market-suggestion.functions";
+import { categoryLabel } from "@/domain/categories";
 
 export function SuggestedMarketCard({
   suggestion,
@@ -42,7 +43,7 @@ export function SuggestedMarketCard({
       <div className="shrink-0">
         <div className="mb-1 flex items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            {suggestion.category}
+            {categoryLabel(suggestion.category) ?? suggestion.category}
           </span>
           <span
             className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text)]"

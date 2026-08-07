@@ -6,23 +6,21 @@
  * browser bundle.
  */
 import { serviceClient } from "@/lib/supabase-clients";
+import {
+  textScore,
+  contentTokens,
+  normalizeQuestion,
+  bandFor,
+  byConsolidation,
+  livenessScore,
+  BANDS,
+  type Relation,
+} from "@/domain/question-discovery";
 import { assertAllowedBytes } from "@/lib/market-create";
+import { CREATOR_CATEGORIES, normalizeCategory, type CategorySlug } from "@/domain/categories";
 
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
-
-export const CATEGORIES = [
-  "Relationships",
-  "Money",
-  "Technology",
-  "Society",
-  "Human Nature",
-  "Politics",
-  "Morality",
-  "Health",
-  "Entertainment",
-  "Other",
-] as const;
 
 export interface QuestionReview {
   ok: boolean;
@@ -30,7 +28,13 @@ export interface QuestionReview {
   reason: string | null;
   /** A tightened rewrite the user can accept with one tap. */
   suggestion: string | null;
-  category: string;
+  /**
+   * A CATEGORY SLUG, not a display name. This used to be a title-case string
+   * from a list that lived here and nowhere else, which meant the reviewer's
+   * answer was stored in a vocabulary no reader understood — see the note at
+   * the top of `@/domain/categories`.
+   */
+  category: CategorySlug;
   /** Hard block: illegal / targeted-harm content never reaches the chain. */
   blocked: boolean;
 }
@@ -83,86 +87,38 @@ export async function reviewQuestion(question: string): Promise<QuestionReview> 
       "A good question is a single, sharply-worded claim people can back YES or NO on today.",
       "It does NOT need a real-world resolution date — these are opinion markets.",
       'Reply ONLY as JSON: {"ok":bool,"reason":string|null,"suggestion":string|null,"category":string,"blocked":bool}',
-      `category must be one of: ${CATEGORIES.join(", ")}.`,
+      `category must be exactly one of these slugs: ${CREATOR_CATEGORIES.join(", ")}.`,
       "blocked=true ONLY for illegal content, sexual content involving minors, doxxing, or targeted harassment/violence against a real identifiable person.",
       "suggestion: a tighter rewrite under 160 characters, or null if the original is already good.",
     ].join(" "),
     question,
   );
   const parsed = parseJson<QuestionReview>(raw);
-  if (!parsed) return { ok: true, reason: null, suggestion: null, category: "Other", blocked: false };
+  if (!parsed)
+    return { ok: true, reason: null, suggestion: null, category: "other", blocked: false };
   return {
     ok: parsed.blocked ? false : parsed.ok !== false,
     reason: parsed.reason ?? null,
     suggestion: parsed.suggestion ?? null,
-    category: CATEGORIES.includes(parsed.category as (typeof CATEGORIES)[number])
-      ? parsed.category
-      : "Other",
+    // Through the same door as everything else. The model is asked for a slug
+    // but answers in prose often enough — "Human Nature", "Crypto" — and
+    // `normalizeCategory` accepts all of those spellings rather than dropping
+    // a usable answer on the floor.
+    category: normalizeCategory(parsed.category) ?? "other",
     blocked: parsed.blocked === true,
   };
 }
 
-const STOP = new Set([
-  "the","a","an","is","are","will","be","to","of","in","on","for","and","or","that","this","it",
-  "do","does","did","by","at","with","than","more","less","who","what","when","why","how",
-]);
-
-function tokens(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, " ")
-      .split(/\s+/)
-      .filter((w) => w.length > 2 && !STOP.has(w)),
-  );
-}
-
-/** Jaccard overlap — cheap, deterministic, and good enough to catch near-dupes. */
-export function similarity(a: string, b: string): number {
-  const ta = tokens(a);
-  const tb = tokens(b);
-  if (!ta.size || !tb.size) return 0;
-  let shared = 0;
-  for (const t of ta) if (tb.has(t)) shared++;
-  return shared / (ta.size + tb.size - shared);
-}
-
-export interface DuplicateMatch {
-  onchainId: number | null;
-  questionId: string | null;
-  title: string;
-  score: number;
-}
-
-/** Existing markets that look like the same question. */
-export async function findSimilarMarkets(question: string, limit = 5): Promise<DuplicateMatch[]> {
-  const db = serviceClient();
-  const [pov, own] = await Promise.all([
-    db.from("markets").select("onchain_id, title").not("title", "is", null).limit(2000),
-    db.from("conviction_markets").select("onchain_id, question_id, question").limit(2000),
-  ]);
-  const pool: DuplicateMatch[] = [];
-  for (const r of pov.data ?? []) {
-    pool.push({
-      onchainId: Number(r.onchain_id),
-      questionId: null,
-      title: String(r.title),
-      score: similarity(question, String(r.title)),
-    });
-  }
-  for (const r of (own.data ?? []) as { onchain_id: number | null; question_id: string; question: string }[]) {
-    pool.push({
-      onchainId: r.onchain_id != null ? Number(r.onchain_id) : null,
-      questionId: r.question_id,
-      title: r.question,
-      score: similarity(question, r.question),
-    });
-  }
-  return pool
-    .filter((m) => m.score >= 0.45)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
-}
+/**
+ * WHAT WAS HERE. A private stopword list, a private `tokens()`, a Jaccard
+ * `similarity()`, and `findSimilarMarkets()` — a blind 4,000-row scan of
+ * `markets` + `conviction_markets` on every debounced keystroke, whose result
+ * `reviewMarketQuestion` dutifully returned and **no component ever read**.
+ *
+ * All four are gone. Tokenising and scoring live in @/domain/question-discovery,
+ * the one place that decides what a duplicate is, where retrieval costs 0.04ms
+ * against the warm catalog instead of two full table reads.
+ */
 
 /**
  * Download what the client actually stored and verify it by magic bytes.
@@ -194,67 +150,29 @@ export async function fetchLinkPreview(url: string) {
   });
   const html = (await res.text()).slice(0, 200_000);
   const pick = (prop: string) =>
-    html.match(new RegExp(`<meta[^>]+property=["']${prop}["'][^>]+content=["']([^"']+)`, "i"))?.[1] ??
-    html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${prop}["']`, "i"))?.[1] ??
+    html.match(
+      new RegExp(`<meta[^>]+property=["']${prop}["'][^>]+content=["']([^"']+)`, "i"),
+    )?.[1] ??
+    html.match(
+      new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${prop}["']`, "i"),
+    )?.[1] ??
     null;
   return {
     url: parsed.toString(),
-    title: pick("og:title") ?? html.match(/<title[^>]*>([^<]{1,200})/i)?.[1]?.trim() ?? parsed.hostname,
+    title:
+      pick("og:title") ?? html.match(/<title[^>]*>([^<]{1,200})/i)?.[1]?.trim() ?? parsed.hostname,
     image: pick("og:image"),
     site: parsed.hostname,
   };
 }
 
-/** Character trigrams — catches rewordings that share no whole tokens. */
-function trigrams(text: string): Set<string> {
-  const t = ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
-  const out = new Set<string>();
-  for (let i = 0; i + 3 <= t.length; i++) out.add(t.slice(i, i + 3));
-  return out;
-}
-
-function dice(a: Set<string>, b: Set<string>): number {
-  if (!a.size || !b.size) return 0;
-  let shared = 0;
-  for (const x of a) if (b.has(x)) shared++;
-  return (2 * shared) / (a.size + b.size);
-}
-
 /**
- * Words that carry question *shape*, not subject matter. "Should political
- * parties be required to…" and "Should AI tools be required to…" share almost
- * every one of these, which is exactly how unrelated markets used to surface.
+ * Scoring is @/domain/question-discovery's job. `textScore` is the same
+ * subject-gated measure this file used to own, moved so the rails, the idea
+ * generator and creation all read ONE implementation. `contentTokens` comes with
+ * it, because the keyword pull below must target the same words the scorer
+ * weighs — that is what keeps retrieval and ranking honest about each other.
  */
-const TEMPLATE = new Set([
-  "should","would","could","shall","must","can","may","might","need","needs","required","require",
-  "requires","allowed","allow","allows","banned","ban","bans","let","make","makes","made","get",
-  "gets","going","ever","still","really","actually","just","also","before","after","during","their",
-  "them","they","there","then","its","his","her","our","your","you","we","us","people","person",
-  "everyone","anyone","someone","thing","things","been","being","have","has","had","was","were",
-  "from","into","about","over","under","out","off","not","never","always","other","others","any",
-  "all","some","most","much","many","new","own","one","two","per","via","yes","no",
-]);
-
-/** Subject-matter words only — the part a duplicate must actually share. */
-function contentTokens(text: string): Set<string> {
-  const out = new Set<string>();
-  for (const t of tokens(text)) if (!TEMPLATE.has(t)) out.add(t);
-  return out;
-}
-
-/**
- * How alike two questions read. Surface overlap (token-Dice, char-trigrams,
- * Jaccard) catches rewordings, but on its own it rewards shared boilerplate.
- * We gate it on subject-word overlap: both must be high for the score to be.
- */
-export function suggestionScore(a: string, b: string): number {
-  const subject = dice(contentTokens(a), contentTokens(b));
-  if (subject <= 0) return 0;
-  const surface = Math.max(dice(tokens(a), tokens(b)), dice(trigrams(a), trigrams(b)), similarity(a, b));
-  if (surface <= 0) return 0;
-  return Math.sqrt(surface * subject);
-}
-
 
 export interface SuggestionInput {
   question: string;
@@ -270,10 +188,18 @@ export interface MarketSuggestion {
   /** Why it surfaced, for the card's eyebrow. */
   reason: "same-media" | "same-link" | "similar";
   score: number;
+  /**
+   * How close this is, as a band rather than a number. The rail states its
+   * confidence in words, and a reader should never be shown 0.71 — see the note
+   * on BANDS: no numeric cut is honest enough to call something a duplicate.
+   */
+  band: Relation;
   thumbUrl: string | null;
   backedUsd: number | null;
   believers: number | null;
   yesPct: number | null;
+  /** Last trade, so the rail can say how alive the room is. Never a gate. */
+  lastActivityMs: number | null;
 }
 
 function normalizeUrl(raw: string): string {
@@ -288,11 +214,18 @@ function normalizeUrl(raw: string): string {
 }
 
 /**
- * Ranked "you might rather back this" candidates.
+ * Ranked "someone is already having this conversation" candidates.
  *
  * Three signals, strongest first: identical uploaded bytes, the same external
  * link, then question-text overlap. Stats come from the same `market_state`
  * read model the rest of the app renders — nothing here is invented.
+ *
+ * SIMILARITY GATES, ACTIVITY BREAKS NEAR-TIES. The band decides whether a market
+ * may appear at all; `byConsolidation` then orders, and it quantises the score
+ * before liveness is consulted so a busy room can never outrank a semantically
+ * closer one. Both come from @/domain/question-discovery — this file scores,
+ * gates and sorts with the same code the discovery module does, and owns none
+ * of it.
  */
 export async function findMarketSuggestions(
   input: SuggestionInput,
@@ -315,7 +248,12 @@ export async function findMarketSuggestions(
 
   const [pov, povRecent, own] = await Promise.all([
     titleOr
-      ? db.from("markets").select("onchain_id, title").not("title", "is", null).or(titleOr).limit(400)
+      ? db
+          .from("markets")
+          .select("onchain_id, title")
+          .not("title", "is", null)
+          .or(titleOr)
+          .limit(400)
       : Promise.resolve({ data: [] as { onchain_id: number | null; title: string | null }[] }),
     db
       .from("markets")
@@ -332,8 +270,10 @@ export async function findMarketSuggestions(
       .limit(400),
   ]);
 
-
-  const best = new Map<number, { title: string; score: number; reason: MarketSuggestion["reason"]; media: unknown }>();
+  const best = new Map<
+    number,
+    { title: string; score: number; reason: MarketSuggestion["reason"]; media: unknown }
+  >();
   const consider = (
     id: number | null,
     title: string,
@@ -347,9 +287,13 @@ export async function findMarketSuggestions(
   };
 
   for (const r of [...(pov.data ?? []), ...(povRecent.data ?? [])]) {
-    consider(r.onchain_id != null ? Number(r.onchain_id) : null, String(r.title), suggestionScore(question, String(r.title)), "similar");
+    consider(
+      r.onchain_id != null ? Number(r.onchain_id) : null,
+      String(r.title),
+      textScore(question, String(r.title)),
+      "similar",
+    );
   }
-
 
   const wantLink = input.linkUrl ? normalizeUrl(input.linkUrl) : null;
   for (const r of (own.data ?? []) as {
@@ -369,21 +313,68 @@ export async function findMarketSuggestions(
       consider(id, r.question, 0.98, "same-link", media);
       continue;
     }
-    consider(id, r.question, suggestionScore(question, r.question), "similar", media);
+    consider(id, r.question, textScore(question, r.question), "similar", media);
   }
 
-  const ranked = [...best.entries()]
-    .map(([onchainId, v]) => ({ onchainId, ...v }))
-    .filter((m) => m.score >= 0.34)
+  // SIMILARITY GATES. The cut is `BANDS.related`, the same edge the discovery
+  // module uses, replacing a private 0.34 that let through pairs sharing a sport
+  // or an asset class and nothing else. A market below the band is not a quieter
+  // suggestion, it is a wrong one, and no amount of activity may promote it.
+  // The one unarguable claim, and the only place `duplicate` may come from: the
+  // same question, however it was typed. Everything else is a band, because no
+  // numeric cut separates "France win 2026" from "have you cheated / been
+  // cheated on" — see BANDS.
+  const key = normalizeQuestion(question);
+  const eligible = [...best.entries()]
+    .map(([onchainId, v]) => ({
+      onchainId,
+      ...v,
+      band: normalizeQuestion(v.title) === key ? ("duplicate" as Relation) : bandFor(v.score),
+    }))
+    .filter((m) => m.score >= BANDS.related)
     .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
-  if (!ranked.length) return [];
+    // A bounded shortlist, so liveness costs one `.in()` on a handful of ids
+    // rather than a second pass over the corpus. Wider than `limit` because
+    // activity may still reorder inside it.
+    .slice(0, Math.max(limit * 4, 12));
+  if (!eligible.length) return [];
 
   const { data: states } = await db
     .from("market_state")
-    .select("onchain_id, volume_total_usd, believers_yes, believers_no, believers_mixed, money_yes_pct")
-    .in("onchain_id", ranked.map((m) => m.onchainId));
+    .select(
+      "onchain_id, volume_total_usd, believers_yes, believers_no, believers_mixed, money_yes_pct, directional_believers, last_trade_at, side_balance",
+    )
+    .in(
+      "onchain_id",
+      eligible.map((m) => m.onchainId),
+    );
   const stateById = new Map((states ?? []).map((s) => [Number(s.onchain_id), s]));
+
+  // ACTIVITY ONLY BREAKS NEAR-TIES — `byConsolidation` is the one ordering, and
+  // it quantises score into TIE_EPS buckets before liveness is consulted at all.
+  const nowMs = Date.now();
+  const ranked = eligible
+    .map((m) => {
+      const s = stateById.get(m.onchainId);
+      const at = s?.last_trade_at ? Date.parse(String(s.last_trade_at)) : NaN;
+      return {
+        ...m,
+        lastActivityMs: Number.isFinite(at) ? at : null,
+        liveness: livenessScore(
+          {
+            participants: s?.directional_believers != null ? Number(s.directional_believers) : null,
+            lastActivityMs: Number.isFinite(at) ? at : null,
+            // `side_balance` is signed lopsidedness, so a room split down the
+            // middle is 0 and a one-sided one is ±1. Contest is the inverse.
+            contested:
+              s?.side_balance != null ? 1 - Math.min(1, Math.abs(Number(s.side_balance))) : null,
+          },
+          nowMs,
+        ),
+      };
+    })
+    .sort(byConsolidation)
+    .slice(0, limit);
 
   const out: MarketSuggestion[] = [];
   for (const m of ranked) {
@@ -401,11 +392,15 @@ export async function findMarketSuggestions(
       title: m.title,
       reason: m.reason,
       score: m.score,
+      band: m.band,
+      lastActivityMs: m.lastActivityMs,
       thumbUrl,
       backedUsd: s?.volume_total_usd != null ? Number(s.volume_total_usd) : null,
       believers:
         s != null
-          ? Number(s.believers_yes ?? 0) + Number(s.believers_no ?? 0) + Number(s.believers_mixed ?? 0)
+          ? Number(s.believers_yes ?? 0) +
+            Number(s.believers_no ?? 0) +
+            Number(s.believers_mixed ?? 0)
           : null,
       yesPct: s?.money_yes_pct != null ? Number(s.money_yes_pct) : null,
     });
