@@ -396,9 +396,15 @@ export function MobileGame({
     </>
   );
 
+  const sidesOpen = phase === "sides";
+
   return (
     <Screen>
-      {stageMedia ? (
+      {/* THE FRAME IS CONSTANT. Question above, dock below; only the middle
+          swaps between the market view and Both Sides — so closing the case
+          returns you to the market without a navigation, and the order bar is
+          reachable the whole time you are reading it. */}
+      {stageMedia && !sidesOpen ? (
         <>
           <div className="shrink-0 pt-1">{questionBlock}</div>
           <MediaStage media={stageMedia} className="mt-2 flex min-h-0 flex-1 flex-col gap-3 pb-1">
@@ -408,9 +414,19 @@ export function MobileGame({
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden pb-1 pt-1">
           {questionBlock}
-          {marketBody}
+          {sidesOpen ? (
+            <BothSides
+              marketId={marketId}
+              ethUsd={ethUsd}
+              row={row}
+              onClose={() => setPhase("question")}
+            />
+          ) : (
+            marketBody
+          )}
         </div>
       )}
+
 
       {/* One dock, transforming in place — the SAME order surface the desktop
         deck uses, with the analysis rail (market signal + see both sides)
