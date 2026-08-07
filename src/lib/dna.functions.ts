@@ -17,6 +17,14 @@ import type { PersonPosition, SideChange } from "@/domain/person-profile";
 import { NETWORK, type Overlap } from "@/domain/person-network";
 import { CIRCLE_MIN_PEOPLE, type EvidenceLevel, type RelationshipLabel } from "@/domain/dna/config";
 import { scoreRelationship, type DnaFactor } from "@/domain/dna/score";
+import {
+  mergeBeliefFactors,
+  onChainFactor,
+  expressedFactor,
+  isDirectional,
+  type OnChainBeliefRow,
+  type ExpressedBeliefRow,
+} from "@/domain/beliefs";
 import { classifyRelationship } from "@/domain/dna/classify";
 import { scoreDomains, splitDomains } from "@/domain/dna/domains";
 import {
@@ -132,31 +140,15 @@ async function loadFactors(sb: Sb, wallet: string): Promise<DnaFactor[]> {
     sb.from("expressed_beliefs").select("onchain_id, side, weight").eq("wallet", w),
   ]);
 
-  const byMarket = new Map<number, DnaFactor>();
-  for (const r of (expressed.data ?? []) as {
-    onchain_id: number;
-    side: string;
-    weight: number | null;
-  }[]) {
-    if (r.side !== "YES" && r.side !== "NO") continue;
-    byMarket.set(Number(r.onchain_id), {
-      marketId: Number(r.onchain_id),
-      side: r.side,
-      conviction: Math.abs(Number(r.weight ?? 0)),
-    });
-  }
-  for (const r of (traded.data ?? []) as {
-    onchain_id: number;
-    stance_side: string;
-    conviction: number | null;
-  }[]) {
-    byMarket.set(Number(r.onchain_id), {
-      marketId: Number(r.onchain_id),
-      side: r.stance_side === "NO" ? "NO" : "YES",
-      conviction: Math.abs(Number(r.conviction ?? 0)),
-    });
-  }
-  return [...byMarket.values()];
+  // The SAME mappers and the SAME merge rule the network path uses. This used to
+  // be a second inline copy that read a null expressed weight as zero, so a free
+  // belief counted for nothing here and 0.15 there — see @/domain/beliefs.
+  return mergeBeliefFactors(
+    ((traded.data ?? []) as OnChainBeliefRow[]).map(onChainFactor),
+    ((expressed.data ?? []) as ExpressedBeliefRow[])
+      .filter((r) => isDirectional(r.side))
+      .map(expressedFactor),
+  );
 }
 
 async function expressedBeliefCount(sb: Sb, wallet: string): Promise<number> {
@@ -556,9 +548,18 @@ async function loadConvictionEvidence(
     // A change of mind is a RECORDED event, never inferred from a position that
     // merely closed — someone selling out has not changed their mind, they have
     // left. Newest first: the most recent reversal is the one worth showing.
+    //
+    // READ THE PAYLOAD, NOT `side`. A transition event is written by
+    // emitTransition (src/lib/positions/apply-events.server.ts), which sets the
+    // sides in `payload` and leaves the `side` COLUMN null — that column belongs
+    // to trade events. This selected `side` and then filtered on it, so the
+    // filter discarded every row and this list has been empty in production
+    // since it shipped: all 26 stored transitions carry payload sides and none
+    // carries a column side. The payload also makes `from` a recorded fact
+    // instead of an inversion of `to`.
     sb
       .from("events")
-      .select("market_id, side, occurred_at")
+      .select("market_id, payload, occurred_at")
       .eq("wallet", target)
       .eq("kind", "position_changed_side")
       .eq("is_canonical", true)
@@ -585,7 +586,7 @@ async function loadConvictionEvidence(
   const ids = rows.map((r) => Number(r.onchain_id));
   const flipRows = (flips.data ?? []) as unknown as {
     market_id: number;
-    side: "YES" | "NO" | null;
+    payload: { previous_side?: string | null; new_side?: string | null } | null;
     occurred_at: string;
   }[];
   const allIds = [...new Set([...ids, ...flipRows.map((f) => Number(f.market_id))])];
@@ -672,16 +673,18 @@ async function loadConvictionEvidence(
     };
   });
 
+  // BOTH sides must be recorded and directional. A transition into or out of
+  // MIXED/INACTIVE is not a change of mind, and a row missing either side is a
+  // reversal we cannot describe — neither belongs in a list of reversals.
   const changes: SideChange[] = flipRows
-    .filter((f) => f.side === "YES" || f.side === "NO")
+    .filter((f) => isDirectional(f.payload?.previous_side) && isDirectional(f.payload?.new_side))
     .map((f) => {
       const id = Number(f.market_id);
-      const to = f.side as "YES" | "NO";
       return {
         marketId: id,
         title: titles.get(id) ?? marketTitleFallback(id),
-        from: to === "YES" ? ("NO" as const) : ("YES" as const),
-        to,
+        from: f.payload!.previous_side as "YES" | "NO",
+        to: f.payload!.new_side as "YES" | "NO",
         occurredAt: f.occurred_at,
       };
     });
