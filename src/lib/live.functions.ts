@@ -635,6 +635,18 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           crossedOn?: string;
           people: CohortHolder[];
         };
+        // A cohort sentence is only true if we know WHO, WHICH SIDE and HOW
+        // LONG. Missing any of the three, the row is dropped, never guessed.
+        if (
+          !p?.kind ||
+          !p?.side ||
+          !Number.isFinite(Number(p?.rung)) ||
+          !Array.isArray(p?.people) ||
+          p.people.length === 0
+        ) {
+          unrenderable.add(r.id);
+          continue;
+        }
         const cohort: ConvictionCohort = {
           kind: p.kind,
           side: p.side,
