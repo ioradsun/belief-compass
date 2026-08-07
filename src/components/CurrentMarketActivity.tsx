@@ -180,7 +180,10 @@ export function CurrentMarketActivity({
           className="flex w-full items-center gap-2 px-3 pb-1 pt-2 text-left"
           aria-expanded={open}
         >
-          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+          <span
+            className="text-[10px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: RAIL }}
+          >
             In this market
           </span>
           {hasActivity && (
