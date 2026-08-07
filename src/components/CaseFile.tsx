@@ -23,6 +23,7 @@ import { LiveTape } from "@/components/LiveTape";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useAnchorRect, anchorStyle, type AnchorBox } from "@/hooks/useAnchorRect";
+import { useFitRows } from "@/hooks/useFitRows";
 import { useMoney } from "@/lib/display-unit";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { Clock, DollarSign } from "lucide-react";
@@ -320,12 +321,19 @@ export function CaseColumn({
         </div>
       </div>
 
-      <div ref={scroller} className="min-h-0 flex-1 space-y-5 overflow-y-scroll pr-0.5">
+      {/* No inner scroller. The fixed parts (state, metrics, chart) take what
+        they need; Believers and Recent activity split whatever is left and each
+        renders exactly as many rows as fit. Both rails are the same height, so
+        both resolve to the same row count and stay aligned on every monitor. */}
+      <div ref={scroller} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden pr-0.5">
         {/* 1 — CURRENT STATE: what this side IS, in plain language, before any
           metric. When something moved in the window, one sentence says what.
           Fixed slot + clamped lines so YES and NO start their metrics on the
           same line, whatever the copy length. */}
-        <div className="space-y-1 overflow-hidden" style={{ height: "var(--case-row-state)" }}>
+        <div
+          className="shrink-0 space-y-1 overflow-hidden"
+          style={{ height: "var(--case-row-state)" }}
+        >
           {pulse ? (
             <>
               <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--text-secondary)]">
@@ -353,7 +361,7 @@ export function CaseColumn({
           lens selector — no tabs, no segmented control. Supporting copy appears
           only when the metric actually moved. */}
         <div
-          className="space-y-0.5"
+          className="shrink-0 space-y-0.5"
           role="radiogroup"
           aria-label={`${side} — choose a metric to chart`}
         >
@@ -374,29 +382,37 @@ export function CaseColumn({
 
         {/* The chart carries no caption: the headline and the metric row above
           already say what moved and by how much. */}
-        <LensChart
-          side={side}
-          metric={metric}
-          kind={meta.kind}
-          series={series}
-          markers={[]}
-          coldStart={coldStart}
-        />
+        <div className="shrink-0">
+          <LensChart
+            side={side}
+            metric={metric}
+            kind={meta.kind}
+            series={series}
+            markers={[]}
+            coldStart={coldStart}
+          />
+        </div>
 
-        {/* 3 — BELIEVERS: the people currently backing this side. */}
-        <CaseRoster
-          side={side}
-          believers={believers}
-          people={net?.people}
-          priceUsd={priceUsd}
-          variant={compactRoster ? "compact" : "list"}
-        />
+        {/* 3 — BELIEVERS: the people currently backing this side. Takes half of
+          whatever height is left over and fills it with as many rows as fit. */}
+        <div className="flex min-h-[72px] flex-1 flex-col">
+          <CaseRoster
+            side={side}
+            believers={believers}
+            people={net?.people}
+            priceUsd={priceUsd}
+            variant={compactRoster ? "compact" : "list"}
+          />
+        </div>
 
         {/* 4 — RECENT ACTIVITY: the same tape the app-wide feed runs, scoped to
           this side. The column already says YES, so sentences don't repeat it.
-          Fixed slot, no inner scroll — "See all" opens the full-height sheet. */}
-        <CaseActivity marketId={marketId} side={side} viewerWallet={viewerWallet} />
+          Adaptive slot, no inner scroll — "See all" opens the full-height sheet. */}
+        <div className="flex min-h-[72px] flex-1 flex-col">
+          <CaseActivity marketId={marketId} side={side} viewerWallet={viewerWallet} />
+        </div>
       </div>
+
 
     </div>
   );
@@ -544,8 +560,8 @@ function heldLabel(daysHeld: number): string {
   return `${Math.round(daysHeld)}d`;
 }
 
-/** How many believers the panel previews before "+N more". */
-const PREVIEW = 5;
+/** One believer row, measured: avatar 28 + vertical padding. */
+const BELIEVER_ROW = 36;
 
 /** The people, as one ranked roster — name, amount, and shared DNA when there is any. */
 export function CaseRoster({
@@ -566,6 +582,9 @@ export function CaseRoster({
   const { format } = useMoney();
   const [openAll, setOpenAll] = useState(false);
   const { ref: anchorRef, box: anchorBox } = useAnchorRect<HTMLDivElement>(openAll);
+  // The slot decides the preview length, not a constant: whatever the panel
+  // leaves us, we fill with whole rows and hand the rest to "See all".
+  const { ref: slotRef, rows: preview } = useFitRows(BELIEVER_ROW);
   const byWallet = useMemo(
     () => new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p])),
     [people],
@@ -625,8 +644,8 @@ export function CaseRoster({
 
 
   return (
-    <div ref={anchorRef} className="space-y-1.5">
-      <div className="flex items-baseline justify-between">
+    <div ref={anchorRef} className="flex min-h-0 flex-1 flex-col gap-1.5">
+      <div className="flex shrink-0 items-baseline justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
           Believers
         </span>
@@ -637,7 +656,7 @@ export function CaseRoster({
       {/* Icon column heads — the row grammar (who · how much · how long) without
         three words of chrome. */}
       {roster.length > 0 && variant !== "compact" && (
-        <div className="flex items-center gap-2 px-1 pb-0.5 text-[var(--text-muted)]">
+        <div className="flex shrink-0 items-center gap-2 px-1 pb-0.5 text-[var(--text-muted)]">
           <span className="w-[28px] shrink-0" aria-hidden />
           <span className="min-w-0 flex-1" aria-hidden />
           <span className="flex w-[52px] shrink-0 justify-end" title="Position">
@@ -668,23 +687,23 @@ export function CaseRoster({
         )
       ) : (
         <>
-          {/* A FIXED SLOT, ALWAYS. Five row heights whether this side has five
-            believers, one, or none — the empty slots are the comparison ("this
-            side is thinner"), and they keep the section below aligned with the
-            other rail without measuring anything. */}
-          <div className="overflow-hidden" style={{ height: "var(--case-row-believers)" }}>
+          {/* AN ADAPTIVE SLOT. The panel hands this section whatever height is
+            left; we render as many whole rows as fit and no more, so the rail
+            never scrolls. Empty space below a short list is the comparison
+            ("this side is thinner") and keeps both rails aligned. */}
+          <div ref={slotRef} className="min-h-0 flex-1 overflow-hidden">
             {roster.length === 0 ? (
               <p className="px-0.5 text-[11px] text-[var(--text-muted)]">
                 No one on this side yet.
               </p>
             ) : (
-              renderRows(roster.slice(0, PREVIEW))
+              renderRows(roster.slice(0, preview))
             )}
           </div>
-          {/* The footer line is always reserved, so a side with fewer than five
-            believers still ends at the same y as the other rail. */}
-          <div className="h-[18px]">
-            {roster.length > PREVIEW && (
+          {/* The footer line is always reserved, so a side with fewer believers
+            still ends at the same y as the other rail. */}
+          <div className="h-[18px] shrink-0">
+            {roster.length > preview && (
               <button
                 type="button"
                 onClick={() => setOpenAll(true)}
@@ -694,6 +713,7 @@ export function CaseRoster({
               </button>
             )}
           </div>
+
 
           {openAll && (
             <RosterSheet
@@ -817,12 +837,15 @@ function RosterSheet({
   );
 }
 
+/** One tape row, measured, so the slot can say how many of them fit. */
+const ACTIVITY_ROW = 50;
+
 /**
- * RECENT ACTIVITY — a fixed slot, never an inner scroller.
+ * RECENT ACTIVITY — an adaptive slot, never an inner scroller.
  *
- * The rail shows a constant number of row heights so YES and NO end at the same
- * y; anything past that is not squeezed into a cramped scroll area but opened
- * in the same full-height column sheet the roster uses.
+ * It takes the height the panel has left and renders exactly that many whole
+ * rows; both rails get the same height, so both show the same number. Anything
+ * past that opens in the full-height sheet the roster uses.
  */
 function CaseActivity({
   marketId,
@@ -835,27 +858,29 @@ function CaseActivity({
 }) {
   const [openAll, setOpenAll] = useState(false);
   const { ref: anchorRef, box: anchorBox } = useAnchorRect<HTMLDivElement>(openAll);
+  const { ref: slotRef, rows } = useFitRows(ACTIVITY_ROW);
 
   return (
-    <div ref={anchorRef} className="space-y-1.5">
-      <div className="flex items-baseline justify-between">
+    <div ref={anchorRef} className="flex min-h-0 flex-1 flex-col gap-1.5">
+      <div className="flex shrink-0 items-baseline justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
           Recent activity
         </span>
       </div>
-      <div className="overflow-hidden" style={{ height: "var(--case-row-activity)" }}>
+      <div ref={slotRef} className="min-h-0 flex-1 overflow-hidden">
         <LiveTape
           marketIds={[marketId]}
           side={side}
           wallet={viewerWallet}
           scroll={false}
           showTitles={false}
-          limit={6}
-          skeletonRows={3}
+          limit={rows}
+          skeletonRows={Math.min(3, rows)}
           emptyText="No moves on this side yet."
         />
       </div>
-      <div className="h-[18px]">
+      <div className="h-[18px] shrink-0">
+
         <button
           type="button"
           onClick={() => setOpenAll(true)}
