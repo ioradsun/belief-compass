@@ -12,6 +12,7 @@
  * roster ordering from the pure src/domain/case-file engine.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { setDeckLens, useDeckLens } from "@/lib/deck-lens";
 import { useQuery } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
@@ -774,9 +775,13 @@ function RosterSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  return (
+  // An ancestor rail can create a containing block (transform/contain), which
+  // would trap a `fixed` sheet inside one column. The panel is portalled to the
+  // body so "full width" really is the viewport.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
-      className="fixed inset-x-0 bottom-0 top-0 z-50 flex flex-col"
+      className="fixed inset-x-0 bottom-0 top-0 z-[80] flex flex-col"
       role="dialog"
       aria-modal="true"
     >
@@ -806,7 +811,8 @@ function RosterSheet({
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -896,9 +902,13 @@ function SideSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  return (
+  // An ancestor rail can create a containing block (transform/contain), which
+  // would trap a `fixed` sheet inside one column. The panel is portalled to the
+  // body so "full width" really is the viewport.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
-      className="fixed inset-x-0 bottom-0 top-0 z-50 flex flex-col"
+      className="fixed inset-x-0 bottom-0 top-0 z-[80] flex flex-col"
       role="dialog"
       aria-modal="true"
     >
@@ -924,6 +934,7 @@ function SideSheet({
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
