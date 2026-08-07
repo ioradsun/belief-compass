@@ -197,13 +197,10 @@ export function CurrentMarketActivity({
           )}
         </button>
 
-        {/* ONE STORY, IN THE READER'S ORDER.
-          First WHY this market reached them — the discovery sentence, in the
-          discovery purple it carries everywhere else. Then WHAT is happening in
-          it right now. Two sentences about the same market, stacked, instead of
-          two cards in two columns saying half of it each. */}
+        {/* WHAT is happening in this market, and nothing else. The discovery
+          reason is told once by the centre panel; repeating it here put the
+          same sentence on screen twice. */}
         <div className="px-3 pb-2 pt-0.5">
-          <WhyThis reason={why} lead className="mb-0.5 whitespace-normal" />
           {/* The latest beat, in a slot that is always two lines tall — so the
             text can change under a reader without the card resizing. Only
             reserved when there IS a beat; a quiet market shouldn't hold air. */}
