@@ -1416,6 +1416,7 @@ export type Database = {
           last_applied_event_id: string | null
           last_applied_log_index: number | null
           last_applied_source_key: string | null
+          last_directional_side: string | null
           last_evaluated_at: string | null
           last_trade_at: string | null
           needs_rebuild: boolean
@@ -1449,6 +1450,7 @@ export type Database = {
           last_applied_event_id?: string | null
           last_applied_log_index?: number | null
           last_applied_source_key?: string | null
+          last_directional_side?: string | null
           last_evaluated_at?: string | null
           last_trade_at?: string | null
           needs_rebuild?: boolean
@@ -1482,6 +1484,7 @@ export type Database = {
           last_applied_event_id?: string | null
           last_applied_log_index?: number | null
           last_applied_source_key?: string | null
+          last_directional_side?: string | null
           last_evaluated_at?: string | null
           last_trade_at?: string | null
           needs_rebuild?: boolean
