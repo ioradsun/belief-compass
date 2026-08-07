@@ -494,9 +494,12 @@ export type Database = {
           inviter_wallet: string
           message: string | null
           onchain_id: number
+          reason: string | null
+          reason_kind: string | null
           side: string | null
           status: string
           updated_at: string
+          viewed_at: string | null
         }
         Insert: {
           accepted_at?: string | null
@@ -509,9 +512,12 @@ export type Database = {
           inviter_wallet: string
           message?: string | null
           onchain_id: number
+          reason?: string | null
+          reason_kind?: string | null
           side?: string | null
           status?: string
           updated_at?: string
+          viewed_at?: string | null
         }
         Update: {
           accepted_at?: string | null
@@ -524,9 +530,12 @@ export type Database = {
           inviter_wallet?: string
           message?: string | null
           onchain_id?: number
+          reason?: string | null
+          reason_kind?: string | null
           side?: string | null
           status?: string
           updated_at?: string
+          viewed_at?: string | null
         }
         Relationships: []
       }
