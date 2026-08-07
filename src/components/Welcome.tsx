@@ -375,7 +375,7 @@ export function WelcomePrompt({
             </div>
 
             <ul className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
-              {people.map((p) => {
+              {roster.map((p) => {
                 const k = keyOf(p);
                 const on = selected.has(k);
                 return (
