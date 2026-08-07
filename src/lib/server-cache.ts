@@ -82,9 +82,13 @@ export async function swrCache<T>(key: string, opts: SwrOptions, fn: () => Promi
   if (hit && hit.expires > t) return hit.value; // fresh
 
   if (hit) {
-    // Stale: serve immediately, refresh once in the background.
-    if (!hit.refreshing) {
+    // Stale: serve immediately, refresh once in the background. A refresh that
+    // was cancelled mid-flight (and so never settles) is retried once its own
+    // watchdog window passes, instead of latching `refreshing` forever.
+    const refreshStale = hit.refreshing && (hit.refreshAt ?? 0) + MAX_REFRESH_MS < t;
+    if (!hit.refreshing || refreshStale) {
       hit.refreshing = true;
+      hit.refreshAt = t;
       void fn()
         .then((value) => store.set(key, { value, expires: now() + opts.ttlMs, refreshing: false }))
         .catch(() => {
@@ -98,16 +102,26 @@ export async function swrCache<T>(key: string, opts: SwrOptions, fn: () => Promi
   const running = inflight.get(key) as Promise<T> | undefined;
   if (running) return running;
 
-  const started = fn()
-    .then((value) => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const started = Promise.race<T>([
+    fn().then((value) => {
       store.set(key, { value, expires: now() + opts.ttlMs, refreshing: false });
       return value;
-    })
-    .finally(() => {
-      // Cleared whether it resolved or threw — a failed build must not become a
-      // promise every future caller keeps awaiting.
-      inflight.delete(key);
-    });
+    }),
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        // Evict eagerly: the next caller must start a fresh build rather than
+        // await a computation that may never come back.
+        if (inflight.get(key) === started) inflight.delete(key);
+        reject(new Error(`swrCache: "${key}" did not settle in ${MAX_INFLIGHT_MS}ms`));
+      }, MAX_INFLIGHT_MS);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+    // Cleared whether it resolved or threw — a failed build must not become a
+    // promise every future caller keeps awaiting.
+    if (inflight.get(key) === started) inflight.delete(key);
+  });
   inflight.set(key, started);
   return started;
 }
