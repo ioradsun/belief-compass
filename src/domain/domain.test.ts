@@ -207,3 +207,85 @@ describe("Invariant (c): idempotent replay", () => {
     expect(r2).toEqual(r1);
   });
 });
+
+/**
+ * A REMEMBERED SIDE OUTLIVES THE POSITION.
+ *
+ * `expressed_side` goes INACTIVE the moment someone closes out, taking the
+ * direction with it — which is why Shared DNA could not remember a conviction
+ * anyone had exited. `last_directional_side` is the survivor, and the property
+ * that matters is that NOTHING clears it.
+ */
+describe("last_directional_side", () => {
+  const t = (
+    side: "YES" | "NO",
+    direction: "BUY" | "SELL",
+    token_amount: number,
+    day = 0,
+  ): Trade => ({
+    side,
+    direction,
+    token_amount,
+    eth_amount: token_amount,
+    ts: new Date(2026, 0, 1 + day),
+  });
+
+  it("is null until a position actually becomes directional", () => {
+    expect(emptyRow().last_directional_side).toBeNull();
+  });
+
+  it("records the side taken", () => {
+    expect(applyTrade(emptyRow(), t("YES", "BUY", 10)).last_directional_side).toBe("YES");
+    expect(applyTrade(emptyRow(), t("NO", "BUY", 10)).last_directional_side).toBe("NO");
+  });
+
+  it("SURVIVES a full exit, where expressed_side does not", () => {
+    const held = applyTrade(emptyRow(), t("YES", "BUY", 10));
+    const gone = applyTrade(held, t("YES", "SELL", 10, 1));
+    expect(gone.expressed_side).toBe("INACTIVE");
+    expect(gone.yes_shares).toBe(0);
+    // The position is gone; which way they were facing is not.
+    expect(gone.last_directional_side).toBe("YES");
+  });
+
+  it("survives a straddle that makes the position MIXED", () => {
+    let r = applyTrade(emptyRow(), t("YES", "BUY", 10));
+    r = applyTrade(r, t("NO", "BUY", 10, 1));
+    expect(r.expressed_side).toBe("MIXED");
+    expect(r.last_directional_side).toBe("YES");
+  });
+
+  it("follows a genuine side switch", () => {
+    let r = applyTrade(emptyRow(), t("YES", "BUY", 10));
+    r = applyTrade(r, t("YES", "SELL", 10, 1));
+    r = applyTrade(r, t("NO", "BUY", 10, 2));
+    expect(r.last_directional_side).toBe("NO");
+  });
+
+  it("keeps only the LATEST side — it is not an episode history", () => {
+    // YES → exit → NO → exit. The earlier YES is genuinely gone, and no copy
+    // may claim we remember every time two people agreed.
+    let r = applyTrade(emptyRow(), t("YES", "BUY", 10));
+    r = applyTrade(r, t("YES", "SELL", 10, 1));
+    r = applyTrade(r, t("NO", "BUY", 10, 2));
+    r = applyTrade(r, t("NO", "SELL", 10, 3));
+    expect(r.expressed_side).toBe("INACTIVE");
+    expect(r.last_directional_side).toBe("NO");
+  });
+
+  it("is never cleared by any sequence of trades that once went directional", () => {
+    // Property, not a case: fold arbitrary buys and sells and assert the field
+    // only ever moves from null to a side, and between sides — never back.
+    const sides = ["YES", "NO"] as const;
+    let r = emptyRow();
+    let everSet = false;
+    for (let i = 0; i < 40; i++) {
+      const side = sides[i % 2];
+      const dir = i % 3 === 2 ? "SELL" : "BUY";
+      r = applyTrade(r, t(side, dir, 5, i));
+      if (r.last_directional_side) everSet = true;
+      if (everSet) expect(r.last_directional_side).not.toBeNull();
+    }
+    expect(everSet).toBe(true);
+  });
+});

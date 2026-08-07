@@ -57,9 +57,7 @@ describe("houseReadState", () => {
 
   it("reports a correct call after the round closes", () => {
     expect(
-      houseReadState(
-        src({ closed: true, outcome: "correct", predicted: "YES", actual: "YES" }),
-      ),
+      houseReadState(src({ closed: true, outcome: "correct", predicted: "YES", actual: "YES" })),
     ).toEqual({ status: "correct", predictedSide: "YES", actualSide: "YES" });
   });
 
@@ -137,9 +135,9 @@ describe("houseReadCopy — the voice", () => {
   });
 
   it("renders a supplied calibrated confidence", () => {
-    expect(houseReadCopy({ status: "predicted", predictedSide: "YES", confidence: 0.78 }).suffix).toBe(
-      " · 78% confidence",
-    );
+    expect(
+      houseReadCopy({ status: "predicted", predictedSide: "YES", confidence: 0.78 }).suffix,
+    ).toBe(" · 78% confidence");
   });
 
   it("speaks the result plainly, with no label", () => {

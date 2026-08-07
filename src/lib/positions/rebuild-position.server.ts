@@ -116,6 +116,7 @@ export async function rebuildPosition(
           directional_since: fold.row.directional_since?.toISOString() ?? "",
           first_backed_at: fold.row.first_backed_at?.toISOString() ?? "",
           last_trade_at: fold.row.last_trade_at?.toISOString() ?? "",
+          last_directional_side: fold.row.last_directional_side ?? "",
           ...evaluated,
         };
     const hash = reducerStateHash(

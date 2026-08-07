@@ -25,7 +25,12 @@ describe("composeMarketOg", () => {
   });
 
   it("prefers fresh momentum, labelled as a recent change (never a forecast)", () => {
-    const og = composeMarketOg({ ...base, yesPct: 70, newBelievers: 9, newBelieversWindow: "today" });
+    const og = composeMarketOg({
+      ...base,
+      yesPct: 70,
+      newBelievers: 9,
+      newBelieversWindow: "today",
+    });
     expect(og.description).toContain("+9 new believers today");
     expect(og.description).not.toMatch(/will|expected|projected|likely/i);
   });

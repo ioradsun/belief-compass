@@ -44,9 +44,7 @@ describe("marketBook invariants", () => {
       sell("a", "YES", 3, now - hour), // a exits → inactive
     ];
     const bk = marketBook(tape, now);
-    expect(bk.believers.market.current).toBe(
-      bk.believers.yes.current + bk.believers.no.current,
-    );
+    expect(bk.believers.market.current).toBe(bk.believers.yes.current + bk.believers.no.current);
     expect(bk.capitalEth.market.current).toBeCloseTo(
       bk.capitalEth.yes.current + bk.capitalEth.no.current,
     );

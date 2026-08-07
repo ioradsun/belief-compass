@@ -31,6 +31,24 @@ export interface BeliefRow {
   yes_cost: number;
   no_cost: number;
   expressed_side: Side; // from applyTrade only
+  /**
+   * THE LAST SIDE THIS WALLET ACTUALLY TOOK HERE — set when the position becomes
+   * directional and NEVER cleared, not on a partial sell, not on a full exit.
+   *
+   * `expressed_side` answers "where do they stand now" and goes INACTIVE the
+   * moment they leave, taking the direction with it. That is why DNA could not
+   * remember a conviction anyone had exited: nothing in the row survived to say
+   * which way they had gone. This is the survivor.
+   *
+   * WHAT IT DOES NOT KEEP, and the copy must never imply otherwise. One field
+   * holds one answer: the MOST RECENT directional side. A wallet that went
+   * YES → exit → NO → exit reads NO, and the earlier YES is gone. DNA is one
+   * factor per market, so the latest conviction is the right single
+   * representation — but "we remember every time you agreed" would be false.
+   * "Past convictions still count, with less weight than positions you hold
+   * today" is true, and is what the product may say.
+   */
+  last_directional_side: "YES" | "NO" | null;
   directional_since: Date | null;
   first_backed_at: Date | null;
   last_trade_at: Date | null;
@@ -67,6 +85,7 @@ export const emptyRow = (): BeliefRow => ({
   yes_cost: 0,
   no_cost: 0,
   expressed_side: "INACTIVE",
+  last_directional_side: null,
   directional_since: null,
   first_backed_at: null,
   last_trade_at: null,
@@ -148,6 +167,11 @@ export function applyTrade(prior: BeliefRow, t: Trade): BeliefRow {
   const priorSide = prior.expressed_side;
   const newSide = classifyByShares(next.yes_shares, next.no_shares);
   next.expressed_side = newSide;
+
+  // Remember the direction. Written whenever the wallet IS directional and left
+  // untouched otherwise, so leaving a market cannot erase which way they went.
+  // Monotone by construction: this branch only ever assigns a real side.
+  if (newSide === "YES" || newSide === "NO") next.last_directional_side = newSide;
 
   // directional_since transitions per spec table
   if (priorSide === "INACTIVE" || priorSide === "MIXED") {

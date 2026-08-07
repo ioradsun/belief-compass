@@ -140,7 +140,9 @@ export function composeDiscoveryRow(i: DiscoveryInput): DiscoveryRow {
     accent: stage === "growing" ? "growing" : stage === "active" ? "active" : "none",
     story,
     participantsText:
-      participants > 0 ? `${participants.toLocaleString("en-US")} participant${participants === 1 ? "" : "s"}` : null,
+      participants > 0
+        ? `${participants.toLocaleString("en-US")} participant${participants === 1 ? "" : "s"}`
+        : null,
     capText: stage === "new" ? null : `${compactUsd(capital)} market cap`,
   };
 }

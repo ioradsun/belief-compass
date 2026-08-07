@@ -43,7 +43,6 @@ export function compareTape(a: TapeTrade, b: TapeTrade): number {
   return a.t - b.t || (a.seq ?? 0) - (b.seq ?? 0);
 }
 
-
 export interface SeriesPoint {
   t: number;
   /** Cumulative distinct believers on this side at t. */
@@ -58,13 +57,7 @@ export interface SeriesPoint {
   pricePct: number | null;
 }
 
-export type TimelineEventKind =
-  | "believers"
-  | "capital"
-  | "whale"
-  | "price"
-  | "milestone"
-  | "exit";
+export type TimelineEventKind = "believers" | "capital" | "whale" | "price" | "milestone" | "exit";
 
 export interface TimelineEvent {
   id: string;
@@ -104,9 +97,7 @@ export function convictionSeries(
   nowMs: number,
   maxPoints = 120,
 ): SeriesPoint[] {
-  const mine = trades
-    .filter((t) => t.side === side && Number.isFinite(t.t))
-    .sort(compareTape);
+  const mine = trades.filter((t) => t.side === side && Number.isFinite(t.t)).sort(compareTape);
   if (mine.length === 0) return [];
 
   const since = win === "all" ? -Infinity : nowMs - FLOW_WINDOW_MS[win];
@@ -139,7 +130,12 @@ export function convictionSeries(
   const opening =
     priorIdx >= 0
       ? { ...raw[priorIdx], t: since === -Infinity ? raw[0].t : since }
-      : { t: since === -Infinity ? raw[0].t : Math.min(since, raw[0].t), believers: 0, capital: 0, price: inWindow[0]?.price ?? null };
+      : {
+          t: since === -Infinity ? raw[0].t : Math.min(since, raw[0].t),
+          believers: 0,
+          capital: 0,
+          price: inWindow[0]?.price ?? null,
+        };
 
   // Carry the last known state forward to the window's right edge (now). Without
   // this a window with no recent activity would end at its final event — the flat
@@ -186,9 +182,7 @@ export function timelineEvents(
   limit = 12,
 ): TimelineEvent[] {
   const since = win === "all" ? -Infinity : nowMs - FLOW_WINDOW_MS[win];
-  const all = trades
-    .filter((t) => t.side === side && Number.isFinite(t.t))
-    .sort(compareTape);
+  const all = trades.filter((t) => t.side === side && Number.isFinite(t.t)).sort(compareTape);
 
   // Believer count entering the window, so milestones are truthful.
   const seenBefore = new Set<string>();
@@ -294,7 +288,8 @@ export function leadStory(pts: SeriesPoint[]): string | null {
   const c = last.capitalPct;
   const p = last.pricePct ?? 0;
   if (b <= 0 && c <= 0 && p <= 0) return null;
-  if (c > b * 2 && c > 20 && b < 20) return "Money moved without new people — a large position led.";
+  if (c > b * 2 && c > 20 && b < 20)
+    return "Money moved without new people — a large position led.";
   if (b > c * 1.5 && b > 20) return "People arrived first; capital is still catching up.";
   if (p > b && p > c && p > 10) return "Price moved ahead of the belief behind it.";
   if (b > 0 && c > 0 && p >= 0) return "People, money and price are moving together.";
@@ -378,7 +373,11 @@ export function convictionStory(
   if (believerDelta <= 0)
     return { ...base, shape: "concentrated", headline: `${side} is being topped up` };
   if (believerDelta === 1)
-    return { ...base, shape: "concentrated", headline: `${side} is one conviction, heavily funded` };
+    return {
+      ...base,
+      shape: "concentrated",
+      headline: `${side} is one conviction, heavily funded`,
+    };
   if (pricePct != null && pricePct > z.believersPct && pricePct > z.capitalPct && pricePct > 10)
     return { ...base, shape: "price-ahead", headline: `${side} price is ahead of its believers` };
   return { ...base, shape: "growing", headline: `${side} is gaining believers` };
@@ -410,9 +409,7 @@ export function narrateStory(
   }
   if (cap > 0) {
     clauses.push(
-      bel > 0
-        ? `they committed ${money(cap)}`
-        : `existing believers committed ${money(cap)}`,
+      bel > 0 ? `they committed ${money(cap)}` : `existing believers committed ${money(cap)}`,
     );
   } else if (cap < 0) {
     clauses.push(`${money(Math.abs(cap))} left the side`);
@@ -423,7 +420,9 @@ export function narrateStory(
     people = `Nothing moved on ${side} ${when} — no new believers and no capital in or out.`;
   } else {
     const joined =
-      clauses.length === 1 ? clauses[0] : `${clauses.slice(0, -1).join(", ")} and ${clauses[clauses.length - 1]}`;
+      clauses.length === 1
+        ? clauses[0]
+        : `${clauses.slice(0, -1).join(", ")} and ${clauses[clauses.length - 1]}`;
     people = `${joined.charAt(0).toUpperCase()}${joined.slice(1)} ${when}.`;
   }
 
@@ -433,4 +432,3 @@ export function narrateStory(
   const dir = pct! > 0 ? "rose" : "fell";
   return `${people} Price ${dir} ${Math.abs(pct!).toFixed(1)}% ${when}.`;
 }
-

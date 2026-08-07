@@ -16,7 +16,12 @@
  */
 
 export type DnaStage =
-  "unmapped" | "forming" | "recognizable" | "distinct" | "stable" | "twin_ready";
+  | "unmapped"
+  | "forming"
+  | "recognizable"
+  | "distinct"
+  | "stable"
+  | "twin_ready";
 
 /** Low → high. Used for `stageAtLeast` comparisons. */
 export const DNA_STAGE_ORDER: readonly DnaStage[] = [

@@ -60,9 +60,7 @@ export function sideChangeLine({
     );
   }
   if (price) {
-    parts.push(
-      `the price per share ${price > 0 ? "rose" : "fell"} ${money(Math.abs(price))}`,
-    );
+    parts.push(`the price per share ${price > 0 ? "rose" : "fell"} ${money(Math.abs(price))}`);
   }
 
   const detail =

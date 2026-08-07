@@ -89,7 +89,13 @@ export function buildShare(
       cEcoM += num(d.ecoMarkets);
       cConvM += num(d.convMarkets);
     }
-    series.push({ day, ecoVolumeUsd: cEco, convVolumeUsd: cConv, ecoMarkets: cEcoM, convMarkets: cConvM });
+    series.push({
+      day,
+      ecoVolumeUsd: cEco,
+      convVolumeUsd: cConv,
+      ecoMarkets: cEcoM,
+      convMarkets: cConvM,
+    });
   }
 
   return {

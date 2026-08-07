@@ -118,7 +118,13 @@ export function buildMilestones(f: MilestoneFacts): {
   pct: number;
   next: Milestone | null;
 } {
-  const M = (key: string, label: string, done: boolean, current?: number, target?: number): Milestone => ({
+  const M = (
+    key: string,
+    label: string,
+    done: boolean,
+    current?: number,
+    target?: number,
+  ): Milestone => ({
     key,
     label,
     done,
@@ -133,12 +139,30 @@ export function buildMilestones(f: MilestoneFacts): {
     M("trades-100", "100 Trades", f.tradeCount >= 100, f.tradeCount, 100),
     M("held-30", "Hold a Conviction 30 Days", f.longestHeldDays >= 30, f.longestHeldDays, 30),
     M("first-claim", "First Claim", f.hasClaimed),
-    M("earn-1k", "Earn $1,000 Creating Markets", f.creatorLifetimeUsd >= 1000, f.creatorLifetimeUsd, 1000),
-    M("vol-10k", "A Market Reaches $10k Volume", f.maxMarketVolumeUsd >= 10_000, f.maxMarketVolumeUsd, 10_000),
+    M(
+      "earn-1k",
+      "Earn $1,000 Creating Markets",
+      f.creatorLifetimeUsd >= 1000,
+      f.creatorLifetimeUsd,
+      1000,
+    ),
+    M(
+      "vol-10k",
+      "A Market Reaches $10k Volume",
+      f.maxMarketVolumeUsd >= 10_000,
+      f.maxMarketVolumeUsd,
+      10_000,
+    ),
     M("value-10k", "Reach $10k Conviction", f.totalValueUsd >= 10_000, f.totalValueUsd, 10_000),
     M("trades-500", "500 Trades", f.tradeCount >= 500, f.tradeCount, 500),
     M("value-50k", "Reach $50k Conviction", f.totalValueUsd >= 50_000, f.totalValueUsd, 50_000),
-    M("earn-10k", "Earn $10,000 Creating Markets", f.creatorLifetimeUsd >= 10_000, f.creatorLifetimeUsd, 10_000),
+    M(
+      "earn-10k",
+      "Earn $10,000 Creating Markets",
+      f.creatorLifetimeUsd >= 10_000,
+      f.creatorLifetimeUsd,
+      10_000,
+    ),
     M("value-100k", "Reach $100k Conviction", f.totalValueUsd >= 100_000, f.totalValueUsd, 100_000),
   ];
   const unlocked = list.filter((m) => m.done).length;

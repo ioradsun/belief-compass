@@ -172,9 +172,7 @@ function ownerViewOfCanonical(
       const mine = leader === side;
       return {
         kind: "side_overtake",
-        headline: mine
-          ? `${side} just became the majority.`
-          : `${leader} just overtook ${side}.`,
+        headline: mine ? `${side} just became the majority.` : `${leader} just overtook ${side}.`,
         body: mine ? "More people now stand where you stand." : undefined,
         tone: mine ? "up" : "down",
       };
@@ -200,7 +198,9 @@ function ownerViewOfCanonical(
           kind: "believers_your_side",
           headline: `${people(n)} joined ${side} ${win}.`,
           body:
-            believers != null ? `${believers.toLocaleString("en-US")} now back ${side}.` : undefined,
+            believers != null
+              ? `${believers.toLocaleString("en-US")} now back ${side}.`
+              : undefined,
           tone: "up",
         };
       if (s === other(side))
@@ -235,7 +235,9 @@ function ownerViewOfCanonical(
     // old copy claimed "money is moving into YES", which it never had evidence for.
     return {
       kind: "capital",
-      headline: live.line ? `Money moved here — ${lowerFirst(live.line)}` : `Money moved here ${win}.`,
+      headline: live.line
+        ? `Money moved here — ${lowerFirst(live.line)}`
+        : `Money moved here ${win}.`,
       tone: "neutral",
     };
   }

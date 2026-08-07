@@ -38,6 +38,8 @@ const rowToBeliefRow = (r: Record<string, unknown>): BeliefRow => ({
   directional_since: r.directional_since ? new Date(r.directional_since as string) : null,
   first_backed_at: r.first_backed_at ? new Date(r.first_backed_at as string) : null,
   last_trade_at: r.last_trade_at ? new Date(r.last_trade_at as string) : null,
+  // Not read by evaluate(); present to satisfy the canonical row shape.
+  last_directional_side: null,
 });
 
 export const Route = createFileRoute("/api/public/jobs/belief-rollup")({

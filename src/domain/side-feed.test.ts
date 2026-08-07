@@ -66,7 +66,8 @@ describe("side feed — the anatomy of one side", () => {
       buy("d", 0.9, 5), // newer, bigger
     ];
     const items = sideFeed(base({ trades }));
-    for (let i = 1; i < items.length; i += 1) expect(items[i - 1].t).toBeGreaterThanOrEqual(items[i].t);
+    for (let i = 1; i < items.length; i += 1)
+      expect(items[i - 1].t).toBeGreaterThanOrEqual(items[i].t);
   });
 
   it("attaches current state to only the most recent beat of each dimension", () => {
@@ -127,9 +128,7 @@ describe("social tagging", () => {
   });
 
   it("reads opp as Rival", () => {
-    const items = sideFeed(
-      base({ trades: [buy("r1", 0.02, 10)], network: net([["r1", "opp"]]) }),
-    );
+    const items = sideFeed(base({ trades: [buy("r1", 0.02, 10)], network: net([["r1", "opp"]]) }));
     const people = items.find((i) => i.emoji === "👥");
     expect(people!.headline).toBe("Your Rival joined YES");
   });

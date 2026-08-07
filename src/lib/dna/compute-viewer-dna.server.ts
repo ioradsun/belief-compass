@@ -27,6 +27,7 @@ import {
   mergeBeliefFactors,
   onChainFactor,
   expressedFactor,
+  pastFactor,
   type OnChainBeliefRow,
   type ExpressedBeliefRow,
 } from "@/domain/beliefs";
@@ -60,8 +61,33 @@ const EMPTY: ViewerDnaOutput = {
 // expressed weight as zero instead of EXPRESSED_WEIGHT.
 type BeliefRow = OnChainBeliefRow & { wallet?: string };
 type ExpressedRow = ExpressedBeliefRow & { wallet?: string };
+type HistoricBeliefRow = BeliefRow & { last_directional_side: string | null };
 const toFactor = onChainFactor;
 const expressedToFactor = expressedFactor;
+
+/**
+ * Held now → a live factor. Left, but remembered → a past factor.
+ *
+ * The query admits both, so the discriminator is which column is directional.
+ * `stance_side` wins: someone standing in a market today is described by where
+ * they stand, never by where they used to.
+ */
+const factorFor = (r: HistoricBeliefRow) =>
+  r.stance_side === "YES" || r.stance_side === "NO" ? onChainFactor(r) : pastFactor(r);
+
+const isLive = (r: HistoricBeliefRow) => r.stance_side === "YES" || r.stance_side === "NO";
+
+/**
+ * THREE TIERS, strongest last: remembered → expressed → held.
+ *
+ * The old rule was "money beats a free tap", which was the whole story while
+ * every on-chain factor was a live position. It is not any more: a conviction
+ * someone LEFT is money that is no longer there, and a free belief they hold
+ * today is a statement about today. So a current expressed belief outranks a
+ * remembered position, and a live position still outranks both.
+ */
+const mergeTiers = (live: DnaFactor[], expressed: DnaFactor[], past: DnaFactor[]) =>
+  mergeBeliefFactors(live, mergeBeliefFactors(expressed, past));
 
 async function loadDomains(
   sb: ReturnType<typeof publicClient>,
@@ -104,17 +130,24 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
 
   // 1. Viewer directional factors — on-chain positions ∪ free expressed beliefs
   //    (expressed at a low weight; an on-chain position always overrides).
+  //    A row that is no longer directional but REMEMBERS a side (see
+  //    wallet_beliefs.last_directional_side) contributes a past factor, so a
+  //    conviction someone has left keeps counting at PAST_WEIGHT instead of
+  //    vanishing. One query, not two: the live and remembered rows live in the
+  //    same table and are told apart by which column is populated.
   const [{ data: mine }, { data: mineExpressed }] = await Promise.all([
     svc
       .from("wallet_beliefs")
-      .select("onchain_id, stance_side, conviction")
+      .select("onchain_id, stance_side, conviction, last_directional_side")
       .eq("wallet", viewer)
-      .in("stance_side", ["YES", "NO"]),
+      .or("stance_side.in.(YES,NO),last_directional_side.in.(YES,NO)"),
     svc.from("expressed_beliefs").select("onchain_id, side, weight").eq("wallet", viewer),
   ]);
-  const viewerFactors = mergeBeliefFactors(
-    ((mine ?? []) as BeliefRow[]).map(toFactor),
+  const mineRows = (mine ?? []) as HistoricBeliefRow[];
+  const viewerFactors = mergeTiers(
+    mineRows.filter(isLive).map(factorFor),
     ((mineExpressed ?? []) as ExpressedRow[]).map(expressedToFactor),
+    mineRows.filter((r) => !isLive(r)).map(factorFor),
   );
 
   // Enough for a "closest" read; strong Twin/Tribe labels still need more shared.
@@ -132,6 +165,7 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
   // 3. Candidate directional factors (set-based, chunked for `in` size only).
   //    On-chain ∪ expressed per candidate, on-chain overriding on a shared market.
   const candidateOnChain = new Map<string, DnaFactor[]>();
+  const candidatePast = new Map<string, DnaFactor[]>();
   const candidateExpressed = new Map<string, DnaFactor[]>();
   for (let i = 0; i < candidateWallets.length; i += 200) {
     const chunk = candidateWallets.slice(i, i + 200);
@@ -139,21 +173,22 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
     const [{ data: onchain }, { data: expressed }] = await Promise.all([
       svc
         .from("wallet_beliefs")
-        .select("wallet, onchain_id, stance_side, conviction")
+        .select("wallet, onchain_id, stance_side, conviction, last_directional_side")
         .in("wallet", chunk)
         .in("onchain_id", viewerMarkets)
-        .in("stance_side", ["YES", "NO"]),
+        .or("stance_side.in.(YES,NO),last_directional_side.in.(YES,NO)"),
       svc
         .from("expressed_beliefs")
         .select("wallet, onchain_id, side, weight")
         .in("wallet", chunk)
         .in("onchain_id", viewerMarkets),
     ]);
-    for (const r of (onchain ?? []) as BeliefRow[]) {
+    for (const r of (onchain ?? []) as HistoricBeliefRow[]) {
       const w = String(r.wallet).toLowerCase();
-      const arr = candidateOnChain.get(w) ?? [];
-      arr.push(toFactor(r));
-      candidateOnChain.set(w, arr);
+      const into = isLive(r) ? candidateOnChain : candidatePast;
+      const arr = into.get(w) ?? [];
+      arr.push(factorFor(r));
+      into.set(w, arr);
     }
     for (const r of (expressed ?? []) as ExpressedRow[]) {
       const w = String(r.wallet).toLowerCase();
@@ -163,10 +198,18 @@ export async function computeViewerDna(viewerWallet: string): Promise<ViewerDnaC
     }
   }
   const candidateFactors = new Map<string, DnaFactor[]>();
-  for (const w of new Set([...candidateOnChain.keys(), ...candidateExpressed.keys()])) {
+  for (const w of new Set([
+    ...candidateOnChain.keys(),
+    ...candidatePast.keys(),
+    ...candidateExpressed.keys(),
+  ])) {
     candidateFactors.set(
       w,
-      mergeBeliefFactors(candidateOnChain.get(w) ?? [], candidateExpressed.get(w) ?? []),
+      mergeTiers(
+        candidateOnChain.get(w) ?? [],
+        candidateExpressed.get(w) ?? [],
+        candidatePast.get(w) ?? [],
+      ),
     );
   }
 

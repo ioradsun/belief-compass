@@ -92,7 +92,9 @@ describe("buildShare", () => {
     const s = buildShare(
       rpc({
         baseline: { ecoBuyWei: eth(50), convBuyWei: eth(5), ecoMarkets: 100, convMarkets: 2 },
-        byDay: [{ day: day(0), ecoBuyWei: eth(10), convBuyWei: eth(1), ecoMarkets: 1, convMarkets: 1 }],
+        byDay: [
+          { day: day(0), ecoBuyWei: eth(10), convBuyWei: eth(1), ecoMarkets: 1, convMarkets: 1 },
+        ],
       }),
       ETH_USD,
       NOW,
@@ -107,7 +109,11 @@ describe("buildShare", () => {
 
   it("ignores buckets that fall outside the generated window", () => {
     const s = buildShare(
-      rpc({ byDay: [{ day: day(400), ecoBuyWei: eth(99), convBuyWei: eth(99), ecoMarkets: 9, convMarkets: 9 }] }),
+      rpc({
+        byDay: [
+          { day: day(400), ecoBuyWei: eth(99), convBuyWei: eth(99), ecoMarkets: 9, convMarkets: 9 },
+        ],
+      }),
       ETH_USD,
       NOW,
       90,
@@ -118,7 +124,9 @@ describe("buildShare", () => {
   it("never lets our slice exceed the whole market", () => {
     const s = buildShare(
       rpc({
-        byDay: [{ day: day(1), ecoBuyWei: eth(10), convBuyWei: eth(4), ecoMarkets: 4, convMarkets: 2 }],
+        byDay: [
+          { day: day(1), ecoBuyWei: eth(10), convBuyWei: eth(4), ecoMarkets: 4, convMarkets: 2 },
+        ],
       }),
       ETH_USD,
       NOW,
