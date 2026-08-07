@@ -354,6 +354,7 @@ export function MyConvictions({
         id,
         side,
         value,
+        priced: measured,
         chg,
         invested: pnl.investedUsd,
         gainUsd: pnl.gainUsd,
