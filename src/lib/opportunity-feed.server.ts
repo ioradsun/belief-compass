@@ -315,7 +315,10 @@ export async function buildOpportunityFeed(
       : null;
   const [signals, analyses, ideaResult, originOverlap] = await Promise.all([
     wallet && ids.length ? loadViewerSignals(wallet, ids) : Promise.resolve(EMPTY_SIGNALS),
-    loadMarketAnalyses(ids),
+    // The vector only when a viewer exists to compare against. An anonymous
+    // request — the SSR path that sets first-paint TTFB — has no taste
+    // embedding by construction, so `cosine` would return 0 without reading it.
+    loadMarketAnalyses(ids, Boolean(wallet)),
     ideaFor(wallet, input.sessionToken ?? null, input),
     // Anonymous viewers get this too: it is a fact about the MARKET they opened,
     // not about them, so it needs no wallet and no history.
