@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { lazyRetry } from "@/lib/lazy-retry";
 
-import { queryOptions, useSuspenseQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
 import { listMarketPulses, getMarketRow, type VolumeWindow } from "@/lib/markets.functions";
 import { marketChangeQO } from "@/lib/market-queries";
@@ -270,9 +270,18 @@ export const Route = createFileRoute("/")({
       // content; on a cold/slow instance the timeout wins so the shell still ships
       // fast (client fills it in), and the in-flight compute primes the cache for
       // the next visitor. Either way the loader never owns the TTFB budget.
+      // 120ms, and the number only ever applies to a COLD instance: a warm or
+      // stale cache resolves in ~0ms, so the timeout is unreachable there.
+      //
+      // It could be shortened because losing this race now costs nothing. The
+      // build is single-flighted (see lib/server-cache), so abandoning the wait
+      // does not abandon the work — it keeps running, and the client's own fetch
+      // JOINS it instead of starting a second one. Before that fix, giving up
+      // early meant the client began a duplicate build, which is why the shell
+      // was made to wait longer than it needed to.
       const feed = await Promise.race([
         getOpportunityFeed({ data: { window: "24h" } }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 200)),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 120)),
       ]);
       // fetchedAt travels with the payload so the client can age the snapshot
       // correctly instead of treating it as "fetched at hydration time".

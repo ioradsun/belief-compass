@@ -24,7 +24,28 @@ import { weiToEth } from "@/domain/money";
 import { participantCount } from "@/domain/participants";
 
 /** SSR/anon feed snapshots live this long before a background refresh. */
-const ANON_FEED_TTL_MS = 5_000;
+/**
+ * How long one window's shared feed build stays fresh.
+ *
+ * THIRTY SECONDS, and it was five. Five is half the story of a slow first load:
+ * the client's own structural poll runs every 60s, so a 5s TTL meant the
+ * expensive build — seven pool queries, the platform-wide participation
+ * aggregate and the window-change loader — went stale up to TWELVE times between
+ * two requests that could possibly notice. Every one of those is a background
+ * rebuild competing with whatever a reader is waiting for.
+ *
+ * Thirty is half the client's poll, so any request still sees data at most one
+ * refresh old — the freshness the reader can actually perceive is unchanged.
+ * Nothing here carries live prices anyway: the realtime coordinator moves each
+ * card's canonical `market_state` fields over one socket, and this cache holds
+ * the STRUCTURAL layer (which markets are candidates, and their ordering) that
+ * changes when someone creates or trades a market. Measured: 41 markets traded
+ * platform-wide in the last 24 hours.
+ *
+ * Stale is served instantly either way — the cost this removes is server work,
+ * not reader latency, and server work is what makes a cold instance slow.
+ */
+const ANON_FEED_TTL_MS = 30_000;
 
 /**
  * How far back "recently traded" reaches for the pool's active slice.

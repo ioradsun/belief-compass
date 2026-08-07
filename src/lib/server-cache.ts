@@ -10,7 +10,8 @@
  *   • fresh (within ttl)        → return cached value, no work
  *   • stale (past ttl, present) → return the stale value NOW, refresh in the
  *                                 background (one refresh at a time per key)
- *   • cold (absent)             → await the computation once, then cache it
+ *   • cold (absent)             → ONE computation, shared by every concurrent
+ *                                 caller, then cached
  *
  * A background refresh failure is swallowed and the stale value is kept, so a
  * transient DB blip never turns into a user-facing error.
@@ -18,6 +19,35 @@
 type Entry<T> = { value: T; expires: number; refreshing: boolean };
 
 const store = new Map<string, Entry<unknown>>();
+
+/**
+ * COLD COMPUTES CURRENTLY RUNNING, so concurrent callers share one.
+ *
+ * THE DEFECT THIS CLOSES, and it is why a first load on mobile was slow and a
+ * refresh was fast. The cold branch used to say "compute once, then cache" and
+ * did not: the entry is written only AFTER `fn()` resolves, so every caller that
+ * arrives while the first is still working finds the key absent and starts its
+ * own full build.
+ *
+ * On a cold instance that is not a theoretical race — it is the normal sequence:
+ *
+ *   1. the SSR loader asks for the feed → cold, starts build A
+ *   2. ~200ms later the loader's race times out, the shell ships, the client
+ *      hydrates and asks for the feed   → still cold, starts build B
+ *   3. 4s later the client's own timeout fires its anonymous fallback
+ *                                       → still cold, starts build C
+ *
+ * Three concurrent runs of the same seven pool queries, the platform-wide
+ * participation aggregate and the window-change loader — each making the others
+ * slower, none cancelled. Then the reader reloads, the cache is finally warm,
+ * and the page appears at once. "Slow the first time, fine on refresh" is
+ * precisely the shape this produces.
+ *
+ * The first caller now registers its promise and the rest await it, so a cold
+ * instance does the work once. A rejection reaches every waiter and clears the
+ * slot, so a failure is never cached and the next request genuinely retries.
+ */
+const inflight = new Map<string, Promise<unknown>>();
 
 export interface SwrOptions {
   ttlMs: number;
@@ -45,13 +75,26 @@ export async function swrCache<T>(key: string, opts: SwrOptions, fn: () => Promi
     return hit.value;
   }
 
-  // Cold: compute once, then cache.
-  const value = await fn();
-  store.set(key, { value, expires: now() + opts.ttlMs, refreshing: false });
-  return value;
+  // Cold: ONE computation for every caller waiting on this key.
+  const running = inflight.get(key) as Promise<T> | undefined;
+  if (running) return running;
+
+  const started = fn()
+    .then((value) => {
+      store.set(key, { value, expires: now() + opts.ttlMs, refreshing: false });
+      return value;
+    })
+    .finally(() => {
+      // Cleared whether it resolved or threw — a failed build must not become a
+      // promise every future caller keeps awaiting.
+      inflight.delete(key);
+    });
+  inflight.set(key, started);
+  return started;
 }
 
-/** Test-only: drop all cached entries. */
+/** Test-only: drop all cached entries and any computation in flight. */
 export function _clearSwrCache(): void {
   store.clear();
+  inflight.clear();
 }
