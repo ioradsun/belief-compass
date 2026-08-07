@@ -544,8 +544,8 @@ function heldLabel(daysHeld: number): string {
   return `${Math.round(daysHeld)}d`;
 }
 
-/** How many believers the panel previews before "+N more". */
-const PREVIEW = 5;
+/** How many believers the panel previews before "See all N". */
+const PREVIEW = 3;
 
 /** The people, as one ranked roster — name, amount, and shared DNA when there is any. */
 export function CaseRoster({
@@ -681,7 +681,7 @@ export function CaseRoster({
               renderRows(roster.slice(0, PREVIEW))
             )}
           </div>
-          {/* The footer line is always reserved, so a side with fewer than five
+          {/* The footer line is always reserved, so a side with fewer than three
             believers still ends at the same y as the other rail. */}
           <div className="h-[18px]">
             {roster.length > PREVIEW && (
@@ -850,7 +850,7 @@ function CaseActivity({
           wallet={viewerWallet}
           scroll={false}
           showTitles={false}
-          limit={6}
+          limit={3}
           skeletonRows={3}
           emptyText="No moves on this side yet."
         />
