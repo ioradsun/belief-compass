@@ -500,7 +500,7 @@ export function MarketDeck({
           rebuilt the entire market body — visible as the panel blinking on
           exactly those transitions, and a wasted round of mounts. MediaStage
           now takes `null` and renders a plain single-page scroller. */
-        <MediaStage media={stageMedia} className="flex min-h-0 flex-1 touch-pan-y flex-col">
+        <MediaStage media={stageMedia} className="deck-stage flex min-h-0 flex-1 touch-pan-y flex-col">
           {marketInner}
         </MediaStage>
       )}
