@@ -441,11 +441,13 @@ export function MobileGame({
         >
           <ExamineCta
             compact
-            open={false}
-            onToggle={() => setPhase("sides")}
+            open={sidesOpen}
+            onToggle={() => setPhase(sidesOpen ? "question" : "sides")}
             houseRead={houseReadState_}
             openLabel="See both sides"
+            closeLabel="Back to the market"
           />
+
           <div className="border-t border-[var(--hairline)]" aria-hidden />
           {/* Owned and undecided? The SHARED dock — the identical ownership line,
             selector and sell ticket the desktop deck renders. Otherwise the buy
