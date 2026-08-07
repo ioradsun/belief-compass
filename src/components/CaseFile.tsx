@@ -668,7 +668,7 @@ export function CaseRoster({
         )
       ) : (
         <>
-          {/* A FIXED SLOT, ALWAYS. Five row heights whether this side has five
+          {/* A FIXED SLOT, ALWAYS. Three row heights whether this side has three
             believers, one, or none — the empty slots are the comparison ("this
             side is thinner"), and they keep the section below aligned with the
             other rail without measuring anything. */}
