@@ -275,25 +275,17 @@ export const Route = createFileRoute("/")({
   // stale-while-revalidate cache, so this loader is a snapshot read, not the
   // multi-query round trip that once made SSR's TTFB the whole page budget.
   // Personalized (wallet) feeds still fetch on the client after connect.
+  //
+  // THE LOADER AWAITS ITS OWN WORK. There used to be a 120ms race here that
+  // shipped the shell and left the build running. On the serverless runtime the
+  // app deploys to, work belonging to a request that has already responded is
+  // cancelled — and the abandoned build, shared through the single-flight cache,
+  // could then never settle, so every later request (SSR and browser alike)
+  // joined a promise that never came back and the published site sat on the
+  // skeleton forever. Never start server work you do not wait for.
   loader: async () => {
     try {
-      // Bound the SSR cost: when the cache is warm this resolves in ~0ms with real
-      // content; on a cold/slow instance the timeout wins so the shell still ships
-      // fast (client fills it in), and the in-flight compute primes the cache for
-      // the next visitor. Either way the loader never owns the TTFB budget.
-      // 120ms, and the number only ever applies to a COLD instance: a warm or
-      // stale cache resolves in ~0ms, so the timeout is unreachable there.
-      //
-      // It could be shortened because losing this race now costs nothing. The
-      // build is single-flighted (see lib/server-cache), so abandoning the wait
-      // does not abandon the work — it keeps running, and the client's own fetch
-      // JOINS it instead of starting a second one. Before that fix, giving up
-      // early meant the client began a duplicate build, which is why the shell
-      // was made to wait longer than it needed to.
-      const feed = await Promise.race([
-        getOpportunityFeed({ data: { window: "24h" } }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 120)),
-      ]);
+      const feed = await getOpportunityFeed({ data: { window: "24h" } });
       // fetchedAt travels with the payload so the client can age the snapshot
       // correctly instead of treating it as "fetched at hydration time".
       return { feed, fetchedAt: Date.now() };
