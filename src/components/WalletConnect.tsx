@@ -56,8 +56,8 @@ function ReconnectOnConnectors({ ready }: { ready: boolean }) {
 /**
  * wagmi wraps the app (every `useAccount` / `useSignMessage` call site depends
  * on it), but boots with a connector-free config so no wallet SDK is on the
- * first-paint path. Once the browser is idle we swap in the real connectors and
- * mount the RainbowKit UI layer, both from lazily imported chunks.
+ * first-paint path. The real connectors and RainbowKit are loaded only after a
+ * reader explicitly asks to connect; browsing never downloads the wallet stack.
  *
  * The swap is now invisible: the provider is never re-keyed, so the tree below
  * it survives, and the session restore happens through wagmi's own action.
@@ -75,12 +75,13 @@ export function WalletProviders({ children }: { children: ReactNode }) {
         setWalletUi(true);
       });
     };
-    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
-      .requestIdleCallback;
-    const id = ric ? ric(boot) : window.setTimeout(boot, 200);
+    // An intent may have landed before this effect attached (for example a very
+    // early tap during hydration). Otherwise remain completely dormant.
+    if (hasConnectIntent()) boot();
+    window.addEventListener(CONNECT_EVENT, boot);
     return () => {
       cancelled = true;
-      if (!ric) window.clearTimeout(id as number);
+      window.removeEventListener(CONNECT_EVENT, boot);
     };
   }, []);
 

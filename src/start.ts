@@ -2,7 +2,6 @@ import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/r
 
 import { renderErrorPage } from "./lib/error-page";
 import { isAbortError } from "./lib/error-capture";
-import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 
 // NOTE: no Supabase bearer middleware here on purpose. This app authenticates
 // writes with wallet signatures (see src/lib/wallet-session.ts) and no server
@@ -43,6 +42,5 @@ const csrfMiddleware = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
-  functionMiddleware: [attachSupabaseAuth],
   requestMiddleware: [errorMiddleware, csrfMiddleware],
 }));

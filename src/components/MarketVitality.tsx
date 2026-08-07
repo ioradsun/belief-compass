@@ -269,6 +269,7 @@ function MomentumMetric({
             <span
               className="num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] text-[var(--text)]"
               style={{ fontSize: "var(--mom-total, 20px)" }}
+              suppressHydrationWarning
             >
               {total}
             </span>
@@ -289,6 +290,7 @@ function MomentumMetric({
           <span
             className="num block font-semibold leading-none tabular-nums"
             style={{ color: tone, fontSize: "var(--mom-pct, 16px)" }}
+            suppressHydrationWarning
           >
             {headlinePct}
             {arrow && headlinePct ? (
@@ -300,6 +302,7 @@ function MomentumMetric({
           <span
             className="num mt-1 block whitespace-nowrap text-[var(--text-muted)]"
             style={{ fontSize: "var(--mom-abs, 12px)" }}
+            suppressHydrationWarning
           >
             {copy.absolute}
           </span>
