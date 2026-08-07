@@ -292,11 +292,9 @@ function MomentumMetric({
     /* Every dimension here is a token the container sets (see `.momentum` in
        styles.css): width chooses the type scale, height chooses the air. */
     <div
-      className="flex flex-col justify-center"
       style={{
         paddingInline: "var(--mom-pad-x, 16px)",
         paddingBlock: "var(--mom-pad-y, 12px)",
-        minHeight: "var(--mom-row-min, 0px)",
       }}
     >
       <div className="flex items-start justify-between gap-3">

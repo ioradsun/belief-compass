@@ -529,10 +529,8 @@
   --mom-face: 26px;
   --mom-pad-x: 16px;
   --mom-pad-y: var(--deck-metric-y, 12px);
-  --mom-row-min: 0px;
 }
 .momentum-dense {
-  --mom-row-min: 0px;
   --mom-total: 18px;
   --mom-pct: 14px;
   --mom-abs: 11px;
@@ -590,20 +588,21 @@
    vertically centred inside that taller band. */
 @media (min-height: 900px) {
   .momentum {
-    --mom-pad-y: 20px;
-    --mom-row-min: 104px;
+    --mom-pad-y: 18px;
+  }
+  /* Tall window: the column stops stretching to the edges. Title, market body
+     and order bar become ONE centred stack, so the spare height falls above
+     and below the group instead of opening gaps between its parts. */
+  .deck {
+    justify-content: center;
+  }
+  .deck-stage {
+    flex: 0 1 auto;
   }
 }
 @media (min-height: 1100px) {
   .momentum {
-    --mom-pad-y: 26px;
-    --mom-row-min: 124px;
-  }
-}
-@media (min-height: 1300px) {
-  .momentum {
-    --mom-pad-y: 32px;
-    --mom-row-min: 148px;
+    --mom-pad-y: 22px;
   }
 }
 
@@ -612,8 +611,7 @@
 @media (max-height: 720px) {
   .momentum {
     --mom-pad-y: 8px;
-    --mom-row-min: 0px;
-    --mom-total: 20px;
+      --mom-total: 20px;
     --mom-pct: 15px;
   }
   .momentum-names {
