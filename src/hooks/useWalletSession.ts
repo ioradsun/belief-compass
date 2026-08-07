@@ -3,7 +3,7 @@
  * write that is keyed by a wallet address (beliefs, House rounds).
  *
  * The signature prompt is reserved for actions that involve money. Free actions
- * (expressing a belief, passing, welcoming, training the House) call
+ * (expressing a belief, passing, training the House) call
  * `ensureSession({ interactive: false })`: they reuse a cached session when the
  * wallet already signed for a paid action, and are skipped otherwise instead of
  * popping the wallet open.

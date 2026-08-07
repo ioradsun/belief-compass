@@ -879,7 +879,7 @@ export const listLiveEvents = createServerFn({ method: "GET" })
 
     // ── PERSON MILESTONES: the second story one action tells ────────────────
     // Every other family reports what happened to a MARKET. "Sarah backed AI"
-    // and "AI welcomed a new believer" are both here; "Sarah now backs five
+    // and "AI gained a new believer" are both here; "Sarah now backs five
     // questions" was not, and it is the one that makes a reader feel they are
     // watching people rather than transactions.
     //

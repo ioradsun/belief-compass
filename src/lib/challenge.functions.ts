@@ -8,7 +8,8 @@
  * Stamping an answer is unsigned for a different reason — it records a fact
  * that is already public on-chain (a position was taken) rather than producing
  * an identity. Nothing here puts one person's name in another's interface, which
- * is the line that forced `verifiedActor` onto the welcome path.
+ * is the line that forces `verifiedActor` onto a server function — see
+ * wallet-authorship.test.ts for the shape that rule exists to prevent.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";

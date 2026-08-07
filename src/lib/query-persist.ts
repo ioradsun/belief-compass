@@ -46,7 +46,7 @@ const PERSIST_PREFIXES = new Set([
   "market-change",
   "evidence",
   "network",
-  // Challenge replaced Say Hi. Deliberately NOT persisted: an open call is
+  // Challenge is deliberately NOT persisted: an open call is
   // about who has acted since you last looked, and a restored snapshot would
   // show yesterday's obligations as though they were still waiting.
   "conviction-market",

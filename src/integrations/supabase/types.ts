@@ -482,60 +482,30 @@ export type Database = {
         }
         Relationships: []
       }
-      market_invites: {
+      market_calls: {
         Row: {
-          accepted_at: string | null
-          accepted_by_wallet: string | null
-          code: string
-          created_at: string
-          expires_at: string
-          id: string
-          invitee_wallet: string | null
-          inviter_wallet: string
-          message: string | null
-          onchain_id: number
-          reason: string | null
-          reason_kind: string | null
-          side: string | null
-          status: string
-          updated_at: string
-          viewed_at: string | null
+          called_at: string
+          caller_wallet: string
+          market_id: number
+          relation_at_call: string
+          responded_at: string | null
+          responder_wallet: string
         }
         Insert: {
-          accepted_at?: string | null
-          accepted_by_wallet?: string | null
-          code?: string
-          created_at?: string
-          expires_at?: string
-          id?: string
-          invitee_wallet?: string | null
-          inviter_wallet: string
-          message?: string | null
-          onchain_id: number
-          reason?: string | null
-          reason_kind?: string | null
-          side?: string | null
-          status?: string
-          updated_at?: string
-          viewed_at?: string | null
+          called_at?: string
+          caller_wallet: string
+          market_id: number
+          relation_at_call: string
+          responded_at?: string | null
+          responder_wallet: string
         }
         Update: {
-          accepted_at?: string | null
-          accepted_by_wallet?: string | null
-          code?: string
-          created_at?: string
-          expires_at?: string
-          id?: string
-          invitee_wallet?: string | null
-          inviter_wallet?: string
-          message?: string | null
-          onchain_id?: number
-          reason?: string | null
-          reason_kind?: string | null
-          side?: string | null
-          status?: string
-          updated_at?: string
-          viewed_at?: string | null
+          called_at?: string
+          caller_wallet?: string
+          market_id?: number
+          relation_at_call?: string
+          responded_at?: string | null
+          responder_wallet?: string
         }
         Relationships: []
       }
@@ -1634,54 +1604,6 @@ export type Database = {
           updated_at?: string
           version?: number
           wallet?: string
-        }
-        Relationships: []
-      }
-      welcome_room_visits: {
-        Row: {
-          last_seen_at: string
-          updated_at: string
-          visit_count: number
-          wallet: string
-        }
-        Insert: {
-          last_seen_at?: string
-          updated_at?: string
-          visit_count?: number
-          wallet: string
-        }
-        Update: {
-          last_seen_at?: string
-          updated_at?: string
-          visit_count?: number
-          wallet?: string
-        }
-        Relationships: []
-      }
-      welcomes: {
-        Row: {
-          created_at: string
-          id: string
-          market_id: string
-          recipient_wallet: string
-          side: string
-          welcomer_wallet: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          market_id: string
-          recipient_wallet: string
-          side: string
-          welcomer_wallet: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          market_id?: string
-          recipient_wallet?: string
-          side?: string
-          welcomer_wallet?: string
         }
         Relationships: []
       }

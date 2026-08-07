@@ -7,7 +7,7 @@
  * ones about the PERSON:
  *
  *     Sarah backed AI.                    ← the feed already says this
- *     AI welcomed a new believer.         ← and this
+ *     AI gained a new believer.           ← and this
  *     Sarah now backs five questions.     ← nothing said this, ever
  *
  * The third is not a second reading of the first. It is a fact about a person
