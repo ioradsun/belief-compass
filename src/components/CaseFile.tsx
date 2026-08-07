@@ -329,7 +329,10 @@ export function CaseColumn({
           metric. When something moved in the window, one sentence says what.
           Fixed slot + clamped lines so YES and NO start their metrics on the
           same line, whatever the copy length. */}
-        <div className="space-y-1 overflow-hidden" style={{ height: "var(--case-row-state)" }}>
+        <div
+          className="shrink-0 space-y-1 overflow-hidden"
+          style={{ height: "var(--case-row-state)" }}
+        >
           {pulse ? (
             <>
               <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--text-secondary)]">
