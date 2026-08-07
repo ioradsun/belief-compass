@@ -137,7 +137,7 @@ export function ExploreSelector({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex w-full items-center gap-1.5 rounded-[10px] py-1 text-left transition-colors hover:opacity-80"
+        className="flex w-full items-start gap-1.5 rounded-[10px] py-1 text-left transition-colors hover:opacity-80"
       >
         <span className="min-w-0">
           <span className="block truncate text-[15px] font-semibold leading-[20px] tracking-[-0.01em] text-[var(--text)]">
@@ -156,9 +156,11 @@ export function ExploreSelector({
             {narrowed ?? ""}
           </span>
         </span>
+        {/* Sits on the label's own 20px line, not the centre of the two-line
+          stack — the arrow belongs to the word it opens. */}
         <ChevronDown
           size={14}
-          className={`shrink-0 text-[var(--text-muted)] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`mt-[3px] shrink-0 text-[var(--text-muted)] transition-transform ${open ? "rotate-180" : ""}`}
           aria-hidden
         />
       </button>
