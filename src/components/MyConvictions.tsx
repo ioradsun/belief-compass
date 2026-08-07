@@ -201,19 +201,30 @@ function ConvictionCard({
           <div className="mt-1 text-[10px] text-[var(--text-muted)]">Current value</div>
         </div>
 
-        {(ret || windowMove != null) && (
+        {ret || windowMove != null ? (
           <div className="ml-auto text-right">
             <div
               className="num text-[14px] font-semibold leading-none"
               style={{ color: outcomeTone }}
             >
-              {ret ? ret.pnl : signedMoney(windowMove as number)}
-              {ret?.pct && <span className="ml-3">{ret.pct}</span>}
+              {/* A sub-cent dollar move drops its dollar line and lets the
+                percentage take the slot — never a misleading "+$0.00". */}
+              {ret ? (ret.pnl ?? ret.pct) : signedMoney(windowMove as number)}
+              {ret?.pnl && ret.pct && <span className="ml-3">{ret.pct}</span>}
             </div>
             <div className="mt-1 text-[10px] text-[var(--text-muted)]">
-              Return{ret?.pct && <span className="ml-3">Return %</span>}
+              {ret && !ret.pnl ? "Return %" : "Return"}
+              {ret?.pnl && ret.pct && <span className="ml-3">Return %</span>}
             </div>
           </div>
+        ) : (
+          // NOT PRICED IS NOT FLAT. Saying so plainly beats a dash the holder
+          // reads as "nothing happened".
+          !p.priced && (
+            <div className="ml-auto text-right text-[10px] text-[var(--text-muted)]">
+              Not priced yet
+            </div>
+          )
         )}
       </div>
 
