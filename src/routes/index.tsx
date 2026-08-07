@@ -548,6 +548,10 @@ function Feed() {
    * given. See @/domain/feed/lens.
    */
   const [lens, setLens] = useState<Lens>("for_you");
+  // Read inside the active-market effect, which deliberately keys on the market
+  // alone — adding `lens` to its deps would re-splice on every lens change.
+  const lensRef = useRef<Lens>(lens);
+  lensRef.current = lens;
 
   /**
    * How much has to happen before a market is worth showing. A row in the one
@@ -676,7 +680,8 @@ function Feed() {
   const serverOrderKey = serverOrder.join(",");
   useEffect(() => {
     if (serverOrder.length === 0) return;
-    setQueue((q) => receiveOrder(q, serverOrder));
+    // A ranked lens admits nothing it has not ranked — see feed-queue#jumpTo.
+    setQueue((q) => receiveOrder(q, serverOrder, { admit: lensRef.current === "for_you" }));
     // serverOrderKey identifies the order by value: a poll that returns the same
     // sequence must not re-enter this, or every 8s tick becomes a render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -721,6 +726,13 @@ function Feed() {
    * For You is excluded here because it is the continuation DESTINATION; its own
    * end-of-feed behaviour (CaughtUp) is untouched.
    */
+  /**
+   * No answer for the lens on screen yet. `stableFeed` is already gated to the
+   * current lens, so this is exactly "the request for what the control says is
+   * still in flight" — never a slow poll over a feed already rendered.
+   */
+  const feedLoading = stableFeed === undefined;
+
   const lensExhausted =
     lens !== "for_you" &&
     !isFeedError &&
@@ -765,9 +777,15 @@ function Feed() {
       // Moving is the safe moment to adopt whatever arrived while they read.
       q = arrivalCount(q) > 0 ? commit(q) : q;
       // Not in the order yet = they came from somewhere else. That is the whole
-      // definition of an origin, and `jumpTo` is about to splice it in.
-      if (q.order.length > 0 && !q.order.includes(activeMarket)) setOriginMarket(activeMarket);
-      return jumpTo(q, activeMarket);
+      // definition of an origin — but only a BLEND has room for one. A ranked
+      // lens orders by a single measure, so a market that arrived from outside
+      // it has no rank, and neither splicing it in nor re-fetching around it
+      // would make the list truer.
+      const blend = lensRef.current === "for_you";
+      if (blend && q.order.length > 0 && !q.order.includes(activeMarket)) {
+        setOriginMarket(activeMarket);
+      }
+      return jumpTo(q, activeMarket, { admit: blend });
     });
   }, [activeMarket]);
 
@@ -1117,6 +1135,7 @@ function Feed() {
                       lens={lens}
                       onLens={selectLens}
                       lensExhausted={lensExhausted}
+                      loading={feedLoading}
                       entries={feedEntries}
                       rows={knownRowsRef.current}
                       activeId={activeMarket}
@@ -1153,7 +1172,6 @@ function Feed() {
         <main
           className={`${show("belief")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-4 py-[clamp(10px,2svh,20px)] lg:col-start-2 lg:flex lg:px-8 lg:py-[clamp(12px,2.4svh,24px)]`}
         >
-
           <div className="mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col">
             {/* Center focus: person profile, DNA overview, or the single-market deck.
               The deck owns its own internal scroll so its dock stays pinned. */}

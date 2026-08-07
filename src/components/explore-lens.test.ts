@@ -354,3 +354,61 @@ describe("sensitivity has exactly one source of truth", () => {
     expect(profile).not.toMatch(/SENSITIVITY_COPY|minPct|minUsd/);
   });
 });
+
+/**
+ * SWITCHING LENS MUST NOT MOVE THE COLUMN.
+ *
+ * The playlist used to collapse to a single line of text and push back open a
+ * few hundred milliseconds later — the list and everything under it moving twice
+ * for one decision. The cause was that an unanswered request and a genuinely
+ * empty result are indistinguishable from `entries.length`, so the empty-state
+ * sentence rendered for both.
+ */
+describe("loading holds the shape", () => {
+  const feed = code("src/components/FeedListPanel.tsx");
+  const idx = code("src/routes/index.tsx");
+  const sel = code("src/components/ExploreSelector.tsx");
+
+  it("separates 'no answer yet' from 'the answer is empty'", () => {
+    expect(feed).toMatch(/loading\?: boolean/);
+    expect(feed).toMatch(/\{loading && upcoming\.length === 0 \? \(\s*<PlaylistSkeleton/);
+  });
+
+  it("never shows the empty-state sentence while a request is in flight", () => {
+    // The sentence is a VERDICT. It may only appear after one.
+    const branch = feed.slice(feed.indexOf("{loading &&"), feed.indexOf("<ol className"));
+    expect(branch).toMatch(/upcoming\.length === 0 && !lensExhausted/);
+    expect(branch.indexOf("PlaylistSkeleton")).toBeLessThan(branch.indexOf("Nothing matches"));
+  });
+
+  it("reserves the row's real geometry, not a spinner", () => {
+    expect(feed).toMatch(/function PlaylistSkeleton/);
+    // Three bands per row, same as a real one: question, hero, scale.
+    expect(feed).toMatch(/SKELETON_LINES/);
+    expect(feed).not.toMatch(/Loading…|spinner/i);
+  });
+
+  it("keeps the reserved height deterministic across server and client", () => {
+    // A random line count would reserve a different height in each render pass,
+    // which is the same jump with extra steps.
+    expect(feed).not.toMatch(/Math\.random/);
+    expect(feed).toMatch(/SKELETON_LINES = \[[\d, ]+\] as const/);
+  });
+
+  it("derives loading from the lens-gated feed, so a poll never triggers it", () => {
+    // `stableFeed` is already gated to the current lens, so this is exactly
+    // "the request for what the control says is still in flight".
+    expect(idx).toMatch(/const feedLoading = stableFeed === undefined/);
+    expect(idx).toMatch(/loading=\{feedLoading\}/);
+  });
+
+  it("reserves the selector's narrowing line whether or not it has words", () => {
+    // Choosing a topic would otherwise grow the control by a line and push the
+    // whole playlist down — a jump caused by the act of narrowing it.
+    expect(sel).toMatch(/h-\[15px\][^>]*>\s*\{narrowed \?\? ""\}/);
+  });
+
+  it("stops the animation for readers who asked it to", () => {
+    expect(feed).toMatch(/motion-reduce:animate-none/);
+  });
+});

@@ -242,3 +242,52 @@ describe("an order invented from the URL is not a reading position", () => {
     expect(commit(held).seeded).toBe(true);
   });
 });
+
+/**
+ * A RANKED LENS ADMITS NOTHING IT HAS NOT RANKED.
+ *
+ * "Most Capital" is a promise that the list descends by capital. The market the
+ * reader is currently on has no rank under that measure, and splicing it in put
+ * a $2.59 market at the top of a list whose next row was $259.
+ *
+ * BOTH DOORS HAD TO BE SHUT. `jumpTo` is the obvious one. The one that actually
+ * bit is `initQueue` via `receiveOrder`: a lens change empties the queue, so the
+ * next server order arrives UNSEEDED and is adopted through `initQueue`, which
+ * put the still-active market at the HEAD.
+ */
+describe("admit", () => {
+  it("keeps a foreign market out of a ranked order, but still makes it active", () => {
+    const q = jumpTo(initQueue([10, 20, 30]), 99, { admit: false });
+    expect(q.order).toEqual([10, 20, 30]);
+    expect(q.activeId).toBe(99);
+  });
+
+  it("still splices it into a blend, which is what an origin is for", () => {
+    const q = jumpTo(initQueue([10, 20, 30], 10), 99);
+    expect(q.order).toContain(99);
+  });
+
+  it("closes the door the lens change actually opens", () => {
+    // Empty queue + an active market from the previous lens + the first ranked
+    // response. This is the exact sequence behind the screenshot.
+    const empty = { order: [], activeId: 99, incoming: null, seeded: false } as const;
+    const ranked = receiveOrder(empty, [10, 20, 30], { admit: false });
+    expect(ranked.order).toEqual([10, 20, 30]);
+    expect(ranked.order[0]).not.toBe(99);
+    // The blend keeps its old, deliberate behaviour.
+    expect(receiveOrder(empty, [10, 20, 30]).order).toEqual([99, 10, 20, 30]);
+  });
+
+  it("never duplicates a market that IS in the ranking", () => {
+    const q = jumpTo(initQueue([10, 20, 30]), 20, { admit: false });
+    expect(q.order).toEqual([10, 20, 30]);
+    expect(q.activeId).toBe(20);
+  });
+
+  it("lets Next enter the ranking at its top from a foreign market", () => {
+    // `advance` with no index moves to order[0] — the ranking begins where the
+    // ranking begins, rather than stranding the reader.
+    const q = jumpTo(initQueue([10, 20, 30]), 99, { admit: false });
+    expect(advance(q).activeId).toBe(10);
+  });
+});

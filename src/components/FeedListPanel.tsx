@@ -95,6 +95,7 @@ export function FeedListPanel({
   lens,
   onLens,
   lensExhausted = false,
+  loading = false,
   filters,
   onFilters,
   availableNetworks,
@@ -115,6 +116,16 @@ export function FeedListPanel({
    * this panel renders the verdict and never infers one from `entries.length`.
    */
   lensExhausted?: boolean;
+  /**
+   * No feed for THIS lens has arrived yet.
+   *
+   * Distinct from "empty", and the distinction is the whole reason the column
+   * stops jumping: an unanswered request and a genuinely empty result look
+   * identical from `entries.length`, and rendering the empty-state sentence for
+   * the first collapsed the list to one line and expanded it again a moment
+   * later. Loading gets the shape; only a real answer gets the words.
+   */
+  loading?: boolean;
   filters: FeedFilters;
   onFilters: (f: FeedFilters) => void;
   /** Network groups this viewer's evidence can fill. Always includes everyone. */
@@ -142,7 +153,9 @@ export function FeedListPanel({
         availableNetworks={availableNetworks}
       />
 
-      {upcoming.length === 0 && !lensExhausted ? (
+      {loading && upcoming.length === 0 ? (
+        <PlaylistSkeleton />
+      ) : upcoming.length === 0 && !lensExhausted ? (
         <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
           {/* An empty result under a filter is a TRUE answer, and saying it
               plainly beats a loading state that will never resolve. */}
@@ -248,5 +261,52 @@ function Continuation({ onContinue }: { onContinue: () => void }) {
         Continue with For You <span aria-hidden>&rarr;</span>
       </button>
     </li>
+  );
+}
+
+/**
+ * THE SHAPE OF A PLAYLIST, BEFORE THERE IS ONE.
+ *
+ * Switching lens used to collapse this column to a single line of text and then
+ * push it back open a few hundred milliseconds later — the list, the heading and
+ * everything under them moving twice for one decision. That is not a slow feed,
+ * it is an interface that forgot how much room it was using.
+ *
+ * So the skeleton is the ROW, not a spinner: the same paddings, the same three
+ * bands, the same rhythm, at the same heights. The column is the size it will be
+ * when the answer lands, so the answer costs nothing to arrive.
+ *
+ * THE LINE COUNTS ARE FIXED AND UNEVEN ON PURPOSE. Real questions wrap to one,
+ * two or three lines, so a uniform skeleton would itself be a jump the moment
+ * real text replaced it. This pattern repeats, which keeps the total height
+ * deterministic — a random one would make the reserved space differ between the
+ * server render and the client's, which is the same bug wearing a costume.
+ *
+ * `aria-hidden` and no text: a screen reader should hear the answer, not the
+ * placeholder. `animate-pulse` is the one motion, and `motion-reduce` stops it.
+ */
+const SKELETON_LINES = [2, 1, 2, 3, 1, 2, 2, 1] as const;
+
+function PlaylistSkeleton() {
+  return (
+    <ul className="min-h-0 flex-1 space-y-0.5 overflow-hidden" aria-hidden>
+      {SKELETON_LINES.map((lines, i) => (
+        <li key={i} className="px-3 py-2">
+          {/* The question — one bar per line it would have taken, the last one
+            short, exactly as a wrapped sentence ends. */}
+          {Array.from({ length: lines }).map((_, l) => (
+            <div
+              key={l}
+              className="mb-1 h-[13px] animate-pulse rounded bg-[var(--border)]/40 motion-reduce:animate-none"
+              style={{ width: l === lines - 1 ? "62%" : "100%" }}
+            />
+          ))}
+          {/* The hero, then the quiet scale line — the same two rows every real
+            row carries, at the same sizes. */}
+          <div className="mt-1.5 h-[12px] w-[38%] animate-pulse rounded bg-[var(--border)]/40 motion-reduce:animate-none" />
+          <div className="mt-1.5 h-[11px] w-[52%] animate-pulse rounded bg-[var(--border)]/25 motion-reduce:animate-none" />
+        </li>
+      ))}
+    </ul>
   );
 }
