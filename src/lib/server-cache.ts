@@ -16,7 +16,26 @@
  * A background refresh failure is swallowed and the stale value is kept, so a
  * transient DB blip never turns into a user-facing error.
  */
-type Entry<T> = { value: T; expires: number; refreshing: boolean };
+type Entry<T> = { value: T; expires: number; refreshing: boolean; refreshAt?: number };
+
+/**
+ * A SHARED PROMISE MUST NEVER BE ABLE TO HANG FOREVER.
+ *
+ * On the serverless runtime the app is deployed to, pending I/O belonging to a
+ * request that has already responded is cancelled — and a cancelled await does
+ * not always reject: it can simply never resume. The single-flight map below is
+ * per-isolate and long-lived, so ONE such build wedges the key permanently and
+ * every later request joins a promise that will never settle. That is exactly
+ * the "published site shows the skeleton forever while preview is fine" shape:
+ * the request is made, the connection stays open, nothing ever comes back.
+ *
+ * So every shared computation gets a watchdog. If it has not settled in time we
+ * evict the slot and reject the waiters, which turns a permanent wedge into one
+ * ordinary failed request that the next caller genuinely retries.
+ */
+const MAX_INFLIGHT_MS = 10_000;
+/** A background refresh that never settles must not block later refreshes. */
+const MAX_REFRESH_MS = 15_000;
 
 const store = new Map<string, Entry<unknown>>();
 
