@@ -6,13 +6,12 @@ import {
   fitLine,
   isParticipationEligible,
   nearestExisting,
-  normalizeQuestion,
+  normalizeText,
   participationOf,
   rankCategories,
   rewardLine,
   selectBestCandidate,
   shouldInsertSuggestion,
-  textSimilarity,
   validateCandidate,
   type IdeaCandidate,
   type InterestSignal,
@@ -36,6 +35,7 @@ const idea = (over: Partial<IdeaCandidate> = {}): IdeaCandidate => ({
   keywords: ["AI", "schools"],
   ...over,
 });
+import { textScore } from "./question-discovery";
 
 describe("eligibility", () => {
   it("requires participation across categories", () => {
@@ -106,17 +106,15 @@ describe("interest profile", () => {
 
 describe("duplicate detection", () => {
   it("normalizes punctuation and case", () => {
-    expect(normalizeQuestion("Should Schools BAN AI?!")).toBe("should schools ban ai");
-    expect(textSimilarity("Should schools ban AI?", "should schools ban ai")).toBe(1);
+    expect(normalizeText("Should Schools BAN AI?!")).toBe("should schools ban ai");
+    expect(textScore("Should schools ban AI?", "should schools ban ai")).toBe(1);
   });
 
   it("scores reworded propositions high and new angles low", () => {
-    expect(
-      textSimilarity("Should schools ban AI tools?", "Should schools ban AI?"),
-    ).toBeGreaterThan(0.6);
-    expect(textSimilarity("Should schools ban AI?", "Will crypto replace banks?")).toBeLessThan(
-      0.1,
+    expect(textScore("Should schools ban AI tools?", "Should schools ban AI?")).toBeGreaterThan(
+      0.6,
     );
+    expect(textScore("Should schools ban AI?", "Will crypto replace banks?")).toBeLessThan(0.1);
   });
 
   it("rejects a candidate that duplicates an existing market", () => {
