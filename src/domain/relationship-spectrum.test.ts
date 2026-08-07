@@ -10,10 +10,30 @@ import {
   SPECTRUM,
 } from "./relationship-spectrum";
 import { confidenceFor, EARNED_LABELS } from "./dna/config";
+import { presentRelationship } from "./relationship";
 
-/** A person, described the way the engine describes one. */
+/**
+ * A person, composed the way PRODUCTION composes one: the engine decides the
+ * group, the spectrum places them inside it. Deriving the group here rather than
+ * passing a chosen one is the point — these tests would otherwise assert what
+ * the spectrum does with an input nobody sends it.
+ */
 const person = (alignmentPct: number, shared: number, earned: "twin" | "opp" | null = null) =>
-  place({ alignmentPct, confidence: confidenceFor(shared), earned });
+  place({
+    alignmentPct,
+    confidence: confidenceFor(shared),
+    earned,
+    group: groupOf(alignmentPct, shared),
+  });
+
+const groupOf = (alignmentPct: number, shared: number) =>
+  presentRelationship({
+    agreement: alignmentPct,
+    sharedConvictions: shared,
+    together: 0,
+    apart: 0,
+    topicCount: 0,
+  }).group;
 
 describe("one continuum, not two tabs", () => {
   /**
@@ -49,8 +69,8 @@ describe("the one number is MATCH, never flipped", () => {
 
   it("rounds rather than inventing precision, and never leaves 0–100", () => {
     expect(person(87.4, 20).matchPct).toBe(87);
-    expect(place({ alignmentPct: 140, confidence: 1 }).matchPct).toBe(100);
-    expect(place({ alignmentPct: -20, confidence: 1 }).matchPct).toBe(0);
+    expect(place({ alignmentPct: 140, confidence: 1, group: "tribe" }).matchPct).toBe(100);
+    expect(place({ alignmentPct: -20, confidence: 1, group: "rival" }).matchPct).toBe(0);
   });
 });
 
@@ -113,10 +133,11 @@ describe("the rare words stay earned", () => {
    * The badge names a direction as well as a strength. An "opp" badge attached
    * to an aligned position must not print "Opponent" over a positive match.
    */
-  it("never lets a badge contradict the side of the continuum", () => {
-    expect(bandFor(0.6, "opp")).toBe("tribe");
-    expect(bandFor(-0.6, "twin")).toBe("rival");
-    expect(bandFor(0, "twin")).toBe("neutral");
+  it("never lets a badge contradict the side the engine put them on", () => {
+    expect(bandFor("tribe", "opp")).toBe("tribe");
+    expect(bandFor("rival", "twin")).toBe("rival");
+    expect(bandFor("neutral", "twin")).toBe("neutral");
+    expect(bandFor("insufficient", "twin")).toBe("neutral");
   });
 });
 

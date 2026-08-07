@@ -65,7 +65,7 @@
  * ZERO IO, pure, fully testable.
  */
 import { confidenceFor } from "./dna/config";
-import type { EarnedLabel } from "./relationship";
+import type { EarnedLabel, RelationshipGroup } from "./relationship";
 
 /** A word for a region of the continuum. Never a container, never a filter. */
 export type SpectrumBand = "twin" | "tribe" | "neutral" | "rival" | "opponent";
@@ -84,6 +84,18 @@ export interface SpectrumInput {
    * two extreme words are gated on it rather than on a cutoff. See the header.
    */
   earned?: EarnedLabel;
+  /**
+   * WHERE THE ENGINE PUT THEM — from `presentRelationship`, which gets it from
+   * `labelFor`. The band is now this, not a cut through `position`.
+   *
+   * The header below argues at length against inventing a `strong` cutoff on the
+   * continuum. That argument was right and did not go far enough: the OTHER two
+   * cuts, at ±SPECTRUM.neutral, were inventions too, and they disagreed with the
+   * engine on 92.7% of real relationships. `position` was always the honest part
+   * of this module — a confidence-damped scalar for ORDER and COLOUR. It is now
+   * only that.
+   */
+  group: RelationshipGroup;
 }
 
 export interface SpectrumPlace {
@@ -142,28 +154,30 @@ export function place(input: SpectrumInput): SpectrumPlace {
   const alignment = clamp(input.alignmentPct, 0, 100);
   const confidence = clamp(input.confidence, 0, 1);
   // The whole design, in one line: distance from neutral, damped by how much we
-  // actually know. Thin evidence cannot reach an extreme.
+  // actually know. Thin evidence cannot reach an extreme. ORDER and COLOUR only —
+  // the word comes from the engine.
   const position = ((alignment - 50) / 50) * confidence;
   return {
     position,
     matchPct: Math.round(alignment),
-    band: bandFor(position, input.earned ?? null),
+    band: bandFor(input.group, input.earned ?? null),
   };
 }
 
 /**
- * The word for a place on the continuum.
+ * The word for a place on the continuum — the ENGINE'S direction, plus the
+ * earned badge when one was won.
  *
- * Position alone gives the three regions. The two extreme words are the earned
- * badge the model already computes — a scalar cannot know that a relationship
- * spans three topics, and inventing a cutoff that pretends it can is how the
- * rare label stops being rare. See the header.
+ * This used to cut `position` at ±SPECTRUM.neutral and decide for itself. That
+ * made it the third module classifying relationships, and the three disagreed on
+ * 92.7% of real ones. A scalar cannot know a relationship spans three topics; it
+ * turns out it could not reliably know the direction either, because the damping
+ * that makes it a good SORT key also drags genuine relationships into the middle.
  */
-export function bandFor(position: number, earned: EarnedLabel = null): SpectrumBand {
-  const p = clamp(position, -1, 1);
-  if (p > SPECTRUM.neutral) return earned === "twin" ? "twin" : "tribe";
-  if (p >= -SPECTRUM.neutral) return "neutral";
-  return earned === "opp" ? "opponent" : "rival";
+export function bandFor(group: RelationshipGroup, earned: EarnedLabel = null): SpectrumBand {
+  if (group === "tribe") return earned === "twin" ? "twin" : "tribe";
+  if (group === "rival") return earned === "opp" ? "opponent" : "rival";
+  return "neutral";
 }
 
 /**

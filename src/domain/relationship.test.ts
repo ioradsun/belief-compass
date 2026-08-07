@@ -8,7 +8,10 @@ import {
   sortRivals,
   dnaMaturity,
   type RelationshipInput,
+  type RelationshipGroup,
 } from "./relationship";
+import { labelFor } from "./dna/classify";
+import { place, type SpectrumBand } from "./relationship-spectrum";
 
 const make = (o: Partial<RelationshipInput>): RelationshipInput => ({
   agreement: 50,
@@ -20,28 +23,35 @@ const make = (o: Partial<RelationshipInput>): RelationshipInput => ({
 });
 
 describe("alignment vs evidence separation", () => {
-  it("low-evidence positive relationship: Tribe, counts (not a %), never a Twin", () => {
+  it("low-evidence positive relationship: ranked, never PLACED, never a Twin", () => {
+    // 75% over four shared convictions. This used to read "Tribe" on the strength
+    // of a flat 55% cut; the engine wants 77% over eight, so the honest answer is
+    // that we cannot place them yet — and the row says so in ranking language
+    // rather than going silent or claiming a group it has not earned.
     const p = presentRelationship(
       make({ agreement: 75, sharedConvictions: 4, together: 3, apart: 1, topicCount: 2 }),
     );
-    expect(p.group).toBe("tribe");
-    expect(p.placed).toBe(true);
+    expect(p.group).toBe("neutral");
+    expect(p.placed).toBe(false);
     expect(p.tier).toBe("low");
     expect(p.earnedLabel).toBeNull();
     expect(relationshipInsight(p)).toBe("3 together · 1 apart");
     // No mature percentage leaked into the primary insight.
     expect(relationshipInsight(p)).not.toMatch(/%/);
     expect(relationshipLabel(p)?.text).toBe("Closest so far");
+    expect(relationshipLabel(p)?.kind).toBe("provisional");
   });
 
-  it("low-evidence inverse relationship: Rivals, 'Opposite on all N', never an Opp", () => {
+  it("low-evidence inverse relationship: ranked, never PLACED, never an Opp", () => {
     const p = presentRelationship(
       make({ agreement: 0, sharedConvictions: 3, together: 0, apart: 3, topicCount: 2 }),
     );
-    expect(p.group).toBe("rival");
+    expect(p.group).toBe("neutral");
+    expect(p.placed).toBe(false);
     expect(p.tier).toBe("low");
     expect(p.earnedLabel).toBeNull();
     expect(relationshipInsight(p)).toBe("Opposite on all 3");
+    expect(relationshipInsight(p)).not.toMatch(/%/);
     expect(relationshipLabel(p)?.text).toBe("Most opposite so far");
   });
 
@@ -204,5 +214,82 @@ describe("page-level DNA maturity (factual, not a fake identity %)", () => {
 
   it("invites the first decision when nothing is mapped", () => {
     expect(dnaMaturity(0, 0).note).toContain("Take a side");
+  });
+});
+
+/**
+ * ONE AUTHORITY.
+ *
+ * Three modules used to decide whether someone is your Tribe, with three
+ * different rules, agreeing on 7.3% of real relationships. These do not check
+ * that the other two now import the engine — a later refactor could satisfy that
+ * and still diverge. They check the only thing that matters: that for any
+ * relationship at all, the three answers are the SAME answer.
+ */
+describe("one authority decides placement", () => {
+  const grid: { agreement: number; shared: number }[] = [];
+  for (const agreement of [0, 5, 10, 20, 33, 40, 45, 50, 55, 60, 72, 77, 85, 90, 93, 100]) {
+    for (const shared of [0, 1, 2, 4, 5, 7, 8, 10, 15, 19, 20, 40, 100]) {
+      grid.push({ agreement, shared });
+    }
+  }
+
+  const side = (b: SpectrumBand) =>
+    b === "twin" || b === "tribe" ? "aligned" : b === "opponent" || b === "rival" ? "opposed" : "—";
+  const groupSide = (g: RelationshipGroup) =>
+    g === "tribe" ? "aligned" : g === "rival" ? "opposed" : "—";
+
+  it("gives the engine's answer for every shape of relationship", () => {
+    const disagreements: string[] = [];
+    for (const { agreement, shared } of grid) {
+      const p = presentRelationship(
+        make({ agreement, sharedConvictions: shared, together: 0, apart: 0, topicCount: 4 }),
+      );
+      const engine = labelFor({
+        agreement: p.alignmentPct,
+        sharedBeliefs: p.sharedConvictions,
+        confidence: p.confidence,
+      });
+      const engineSide =
+        engine === "twin" || engine === "tribe"
+          ? "aligned"
+          : engine === "opp" || engine === "inverse"
+            ? "opposed"
+            : "—";
+      const spectrum = place({
+        alignmentPct: p.alignmentPct,
+        confidence: p.confidence,
+        earned: p.earnedLabel,
+        group: p.group,
+      });
+      // `insufficient` (never met) is the one thing presentation knows that the
+      // engine does not — it reads as unplaced, which is the same side.
+      if (groupSide(p.group) !== engineSide || side(spectrum.band) !== engineSide) {
+        disagreements.push(
+          `${agreement}% over ${shared}: engine=${engineSide} people=${groupSide(p.group)} spectrum=${side(spectrum.band)}`,
+        );
+      }
+    }
+    expect(disagreements).toEqual([]);
+  });
+
+  it("never places anyone the engine calls unplaceable, however perfect the score", () => {
+    // 100% agreement on four shared convictions is the shape that used to mint a
+    // Tribe member out of a coin flip, on every surface but the engine.
+    const p = presentRelationship(
+      make({ agreement: 100, sharedConvictions: 4, together: 4, apart: 0, topicCount: 4 }),
+    );
+    expect(p.placed).toBe(false);
+    expect(p.earnedLabel).toBeNull();
+    expect(place({ ...p, group: p.group, earned: p.earnedLabel }).band).toBe("neutral");
+  });
+
+  it("still lets a genuinely earned badge through", () => {
+    const p = presentRelationship(
+      make({ agreement: 95, sharedConvictions: 30, together: 29, apart: 1, topicCount: 4 }),
+    );
+    expect(p.group).toBe("tribe");
+    expect(p.earnedLabel).toBe("twin");
+    expect(place({ ...p, group: p.group, earned: p.earnedLabel }).band).toBe("twin");
   });
 });

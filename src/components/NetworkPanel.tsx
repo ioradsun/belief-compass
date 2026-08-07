@@ -71,8 +71,9 @@ const present = (row: NetworkPersonRow): PersonView => {
     strongestAlignedTopic: row.strongestAlignedDomain?.name ?? null,
     strongestOpposedTopic: row.strongestOpposedDomain?.name ?? null,
   });
-  // The spectrum reads the relationship's own confidence and its own earned
-  // badge — it never re-derives either, so the two models cannot disagree.
+  // The spectrum reads the relationship's own group, confidence and earned badge
+  // — it re-derives NOTHING, so the word on the row and the word the engine chose
+  // cannot disagree. It contributes the ordering and the colour, only.
   return {
     row,
     rel,
@@ -80,6 +81,7 @@ const present = (row: NetworkPersonRow): PersonView => {
       alignmentPct: rel.alignmentPct,
       confidence: rel.confidence,
       earned: rel.earnedLabel,
+      group: rel.group,
     }),
   };
 };

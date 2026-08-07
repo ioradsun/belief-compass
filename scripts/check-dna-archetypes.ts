@@ -16,9 +16,13 @@
  *   place / bandFor              src/domain/relationship-spectrum.ts (the spectrum's)
  *
  * THE THREE LABEL COLUMNS ARE THE POINT. They are three different modules asked
- * the same question about the same relationship, and they are printed side by side
- * because they do not agree — measured against production, all three agree on 7.3%
- * of real overlapping pairs. A single label column would hide that.
+ * the same question about the same relationship. When this harness was written
+ * they disagreed — measured against production, all three agreed on 7.3% of real
+ * overlapping pairs, and the columns are what made that legible.
+ *
+ * They agree now: placement is the engine's alone, and the other two present it.
+ * The columns stay, and the run now FAILS if they ever diverge again — keeping
+ * them collapsed into one is the point, and a single column could not prove it.
  *
  * The lifecycle archetypes (partial sell, double down, exit, re-entry, side
  * switch) are expressed as TRADES, not as hand-written positions, so what they
@@ -148,10 +152,14 @@ function report(name: string, a: DnaFactor[], b: DnaFactor[]): Report {
     topicCount: TOPICS,
     confidence: s.confidence,
   });
+  // The group comes from the presentation layer, which got it from the engine.
+  // Passing it — rather than letting the spectrum re-derive a band from
+  // `position` — is the whole point of the consolidation.
   const sp = place({
     alignmentPct: p.alignmentPct,
     confidence: p.confidence,
     earned: p.earnedLabel,
+    group: p.group,
   });
   return {
     archetype: name,
@@ -345,14 +353,32 @@ if (JSON_OUT) {
     return !(n.engine === n.people && n.people === n.spectrum);
   });
   console.log("─".repeat(160));
-  console.log(
-    `\n${split.length} of ${reports.length} archetypes get a DIFFERENT answer from the three modules that classify relationships:`,
-  );
-  for (const r of split) {
-    const n = norm(r);
+  if (split.length === 0) {
     console.log(
-      `  ${pad(r.archetype, 52)} engine=${n.engine}  people=${n.people}  spectrum=${n.spectrum}`,
+      "\nAll three modules agree on every archetype — one authority, three presentations.\n",
     );
+  } else {
+    console.log(
+      `\n${split.length} of ${reports.length} archetypes get a DIFFERENT answer from the three modules that classify relationships:`,
+    );
+    for (const r of split) {
+      const n = norm(r);
+      console.log(
+        `  ${pad(r.archetype, 52)} engine=${n.engine}  people=${n.people}  spectrum=${n.spectrum}`,
+      );
+    }
+    console.log("");
   }
-  console.log("");
+
+  /**
+   * NON-ZERO ON ANY DISAGREEMENT — this is a gate, not a printout.
+   *
+   * It earned that within an hour of being written. `scripts/` is not in
+   * tsconfig's `include`, so when `place()` grew a required `group` argument
+   * this file kept compiling, kept running, and quietly reported EVERY
+   * relationship as unplaced. The table looked plausible and was wrong. A
+   * report nobody can fail is worth very little; one that breaks the build
+   * when the modules drift apart again is the whole reason it exists.
+   */
+  if (split.length > 0) process.exitCode = 1;
 }
