@@ -239,7 +239,7 @@ export const markRoomSeen = createServerFn({ method: "POST" })
       .parse(raw),
   )
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
-    const viewer = await resolveActor(data.wallet, data.session);
+    const viewer = await verifiedActor(data.wallet, data.session);
     const sb = serviceClient();
     const now = new Date().toISOString();
     const { data: prev } = await sb
@@ -259,21 +259,34 @@ export const markRoomSeen = createServerFn({ method: "POST" })
 
 
 /**
- * Saying hi and marking the room seen are free, non-financial gestures: they
- * never move money and can't be used to read anything back. So the wallet is
- * never asked to sign for them — a cached session is honoured when present,
- * otherwise the claimed wallet is used as-is.
+ * WHO IS ACTUALLY DOING THIS. Throws unless the session proves the wallet.
+ *
+ * WHAT THIS REPLACES, and it was a forgery hole rather than a leniency. The old
+ * `resolveActor` treated a missing or stale session as a reason to trust the
+ * CLAIMED wallet:
+ *
+ *     } catch {
+ *       // stale token — the gesture is free, fall through to the claimed wallet
+ *     }
+ *     return wallet.toLowerCase();
+ *
+ * The reasoning was that saying hi moves no money and reads nothing back, which
+ * is true and beside the point. A welcome is not a private gesture: it puts your
+ * name in someone ELSE's interface. With no verification, any caller could post
+ * "your Twin said hi" to any wallet, from any wallet — and the server functions
+ * are public, so "any caller" means anyone with the URL.
+ *
+ * Cheapness is a reason not to demand a signature per gesture. It is not a
+ * reason to skip authorship. The session is minted once and cached, so the cost
+ * of this is one signature per device, not one per hello.
+ *
+ * The migration comment for `welcomes` already claimed this was how it worked —
+ * "AFTER it verifies the caller controls the welcomer wallet". Now it does.
  */
-async function resolveActor(wallet: string, session?: string | null): Promise<string> {
-  if (session) {
-    try {
-      const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
-      return await assertWalletOwnership(wallet, session);
-    } catch {
-      /* stale token — the gesture is free, fall through to the claimed wallet */
-    }
-  }
-  return wallet.toLowerCase();
+async function verifiedActor(wallet: string, session?: string | null): Promise<string> {
+  if (!session) throw new Error("Verify your wallet first.");
+  const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+  return assertWalletOwnership(wallet, session);
 }
 
 /** Record welcomes (idempotent). */
@@ -297,7 +310,7 @@ export const sendWelcomes = createServerFn({ method: "POST" })
       .parse(raw),
   )
   .handler(async ({ data }): Promise<{ welcomed: number }> => {
-    const welcomer = await resolveActor(data.wallet, data.session);
+    const welcomer = await verifiedActor(data.wallet, data.session);
     const sb = serviceClient();
 
     const rows = data.recipients

@@ -138,8 +138,13 @@ export function WelcomePrompt({
     mutationFn: async () => {
       const chosen = people.filter((p) => selected.has(keyOf(p)));
       if (chosen.length === 0) return { welcomed: 0 };
-      // Saying hi is free — reuse a session if one exists, never open the wallet.
-      const session = await bestEffort(() => ensureSession({ interactive: false }));
+      // A welcome puts YOUR NAME in someone else's interface, so the server now
+      // requires proof of the wallet rather than trusting the claimed one. That
+      // makes this the one place the gesture may open the wallet: it is an
+      // explicit, deliberate act, the signature is once per device, and every
+      // hello after it is free. Sending unsigned was what let anyone say hi as
+      // anyone.
+      const session = await ensureSession({ interactive: true });
       const res = await sendWelcomes({
         data: {
           wallet: wallet as string,
@@ -161,10 +166,19 @@ export function WelcomePrompt({
     },
   });
 
-  /** "Seen it" without saying hi — the room resets, the people stay. */
+  /**
+   * "Seen it" without saying hi — the room resets, the people stay.
+   *
+   * Stays non-interactive: this writes only the reader's own visit counter and
+   * is worth nobody's signature prompt. It now needs a session to land, so a
+   * reader who has never signed simply keeps seeing the same room until they
+   * do — a degraded ritual, not a broken one, and it heals on their first
+   * signed action.
+   */
   const seen = useMutation({
     mutationFn: async () => {
       const session = await bestEffort(() => ensureSession({ interactive: false }));
+      if (!session) return { ok: false };
       return markRoomSeen({ data: { wallet: wallet as string, session } });
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["welcomable", wallet ?? null] }),
