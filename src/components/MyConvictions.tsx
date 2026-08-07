@@ -13,7 +13,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { type VolumeWindow } from "@/lib/markets.functions";
-import { positionValueUsd } from "@/domain/position-value";
+import { positionValueUsd, isMeasured } from "@/domain/position-value";
 import { myConvictionsQO } from "@/lib/positions-query";
 import { type MarketRow } from "@/components/MarketCard";
 import { positionPnl } from "@/domain/position";
