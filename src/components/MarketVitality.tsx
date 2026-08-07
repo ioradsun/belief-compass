@@ -149,10 +149,24 @@ function ParticipantProof({
     );
   }
 
+  // DESKTOP — two readings of the same list, chosen by the room available.
+  // Narrow columns get the face pile (recognition). Once the column is wide
+  // enough for a name to sit beside a face without truncating, the SAME people
+  // are listed as people: face, name, and how you relate to them. CSS decides
+  // which one is on, so the switch happens at the width where it stops being a
+  // compromise — never at a device breakpoint.
+  const shortWallet = (w: string) => `${w.slice(0, 6)}…${w.slice(-4)}`;
+  const relLabel: Record<ParticipantRelation, string> = {
+    tribe: "Tribe",
+    rival: "Rival",
+    other: "Participant",
+  };
+  const named = shown.slice(0, 6);
+
   return (
     <div className="mt-2">
       {shown.length > 0 && (
-        <div className="flex items-center gap-1.5">
+        <div className="momentum-faces flex items-center gap-1.5">
           <div className="flex -space-x-1.5">
             {shown.map((f) => (
               <PersonAvatar
@@ -170,14 +184,62 @@ function ParticipantProof({
           )}
         </div>
       )}
+
+      {named.length > 0 && (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Open participants (${total})`}
+          onClick={() => setSheet(true)}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setSheet(true)}
+          className="momentum-names gap-x-4 gap-y-2"
+        >
+          {named.map((f) => (
+            <div key={f.wallet} className="flex min-w-0 items-center gap-2">
+              <RingedAvatar
+                wallet={f.wallet}
+                name={f.name}
+                avatarUrl={f.avatarUrl}
+                size={30}
+                ring={RELATION_RING[f.relation ?? "other"]}
+              />
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] font-medium leading-tight text-[var(--text)]">
+                  {f.name || shortWallet(f.wallet)}
+                </span>
+                <span className="block truncate text-[11px] leading-tight text-[var(--text-muted)]">
+                  {relLabel[f.relation ?? "other"]}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {summary && (
-        <div className={`${shown.length > 0 ? "mt-1" : ""} text-[11px] text-[var(--text-muted)]`}>
+        <div className={`${shown.length > 0 ? "mt-2" : ""} text-[11px] text-[var(--text-muted)]`}>
           {summary}
         </div>
+      )}
+      {sheet && (
+        <ParticipantSheet
+          people={faces.map((f) => ({
+            wallet: f.wallet,
+            name: f.name,
+            avatarUrl: f.avatarUrl,
+            relation: f.relation,
+            side: f.side,
+            valueUsd: f.valueUsd,
+            daysHeld: f.daysHeld,
+          }))}
+          total={total}
+          onClose={() => setSheet(false)}
+        />
       )}
     </div>
   );
 }
+
 
 /**
  * One full-width metric row inside the Total Market instrument: the current
