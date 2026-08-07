@@ -94,8 +94,14 @@ describe("Why this is one component, in one colour, on both surfaces", () => {
     // The playlist explains the rows the reader has not reached yet.
     expect((feed.match(/<WhyThis/g) ?? []).length).toBe(1);
     expect(feed).toMatch(/const upcoming = entries\.filter\(\(e\) => e\.onchainId !== activeId\)/);
-    // And nobody says it a second time.
+    // And nobody says it a second time — nor keeps the plumbing for saying it.
+    // The rail card accepted a `reason` prop for several commits after it
+    // stopped rendering one, and the route computed a per-render scan of the
+    // feed entries to supply it. A prop that is accepted and ignored reads like
+    // a feature to whoever arrives next, and is how the duplicate returns.
     expect(rail).not.toMatch(/<WhyThis/);
+    expect(rail).not.toMatch(/reason\?: string/);
+    expect(code("src/routes/index.tsx")).not.toMatch(/<CurrentMarketActivity[\s\S]{0,240}?reason=/);
     expect(feed).not.toMatch(/\{line\}\s*<\/span>/);
     expect(code("src/components/WhyThis.tsx")).toMatch(/export function WhyThis/);
   });

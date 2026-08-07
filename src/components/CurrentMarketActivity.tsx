@@ -83,18 +83,19 @@ export function CurrentMarketActivity({
   /** Rendered inside another instrument: drop the card chrome and outer margin. */
   embedded?: boolean;
   /**
-   * WHY this market is in front of the reader — the same sentence `reasonFor`
-   * composes for the playlist row and the centre panel.
+   * NO `reason` PROP. This card is about WHAT IS HAPPENING in the market, and
+   * the reason the market is in front of the reader belongs to the centre panel,
+   * which says it once above the question.
    *
-   * It used to live in a second pinned card ("Now reading"), one column over
-   * from this one, both describing the market already filling the centre. Two
-   * cards, one subject. They are now told as one story in the reader's order:
-   *   WHY you're here  →  WHAT is happening here.
+   * It briefly lived here as well, and the duplicate was the problem: the same
+   * sentence in two columns, neither looking authoritative. The prop outlived
+   * the render by a few commits — declared, documented as though it appeared,
+   * and passed a value the caller computed with a per-render scan of the feed
+   * entries. A prop that is accepted and ignored is worse than no prop: it reads
+   * like a feature to everyone who arrives later.
    */
-  reason?: string | null;
 }) {
   const [open, setOpen] = useState(false);
-
 
   // The SAME scoped live query LiveTape runs, so what the header says and what
   // opens beneath it are the same rows, and React Query never double-fetches.
@@ -154,7 +155,6 @@ export function CurrentMarketActivity({
   const toggle = () => {
     if (hasActivity) setOpen((v) => !v);
   };
-
 
   return (
     // Always open: the frame is fixed and only the text inside changes.
@@ -266,6 +266,5 @@ export function CurrentMarketActivity({
           )
         : null}
     </Collapsible>
-
   );
 }
