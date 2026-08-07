@@ -129,10 +129,25 @@ export function WelcomePrompt({
   const overlap = -6;
 
 
-  const keyOf = (p: WelcomablePerson) => welcomeKey(p.wallet, p.marketId, p.side);
+  /**
+   * One row, one person. `people` carries an entry per (wallet, market, side),
+   * so a believer who joined you on two markets appeared twice and the button
+   * counted 21 where the headline — which folds by person — said 20. Select by
+   * wallet, and send every tribe that wallet joined you in.
+   */
+  const keyOf = (p: WelcomablePerson) => p.wallet.toLowerCase();
+  const roster = useMemo(() => {
+    const seen = new Set<string>();
+    return people.filter((p) => {
+      const k = p.wallet.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }, [people]);
 
   const openSheet = () => {
-    setSelected(new Set(people.map(keyOf))); // default: say hi to everyone
+    setSelected(new Set(roster.map(keyOf))); // default: say hi to everyone
     setOpen(true);
   };
 
@@ -140,6 +155,7 @@ export function WelcomePrompt({
   const send = useMutation({
     mutationFn: async () => {
       const chosen = people.filter((p) => selected.has(keyOf(p)));
+
       if (chosen.length === 0) return { welcomed: 0 };
       // A welcome puts YOUR NAME in someone else's interface, so the server now
       // requires proof of the wallet rather than trusting the claimed one. That
