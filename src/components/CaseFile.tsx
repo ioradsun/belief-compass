@@ -23,6 +23,7 @@ import { LiveTape } from "@/components/LiveTape";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
 import { useAnchorRect, anchorStyle, type AnchorBox } from "@/hooks/useAnchorRect";
+import { useFitRows } from "@/hooks/useFitRows";
 import { useMoney } from "@/lib/display-unit";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { Clock, DollarSign } from "lucide-react";
