@@ -790,30 +790,32 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     // cost. Judged on dollars alone this feed reported capital and missed the
     // only thing it is about: a $12 exit after three months is a story, and a
     // $200 entry by someone who arrived this morning often is not.
-    const scored = live.filter((r) => !unrenderable.has(r.id)).map((r) => {
-      const m = momentumById.get(Number(r.marketId));
-      const marketBelievers = m ? (m.believersYes ?? 0) + (m.believersNo ?? 0) : null;
-      const b = r.wallet
-        ? beliefByKey.get(`${r.wallet.toLowerCase()}:${Number(r.marketId)}`)
-        : null;
-      const heldSide = r.side === "YES" ? b?.yesShares : b?.noShares;
-      const sell = (r.payload as { action?: string }).action === "SELL";
-      const fullExit = sell && heldSide != null && heldSide <= 0;
-      const conviction = beliefAction(actionById.get(r.id));
-      const candidate = {
-        kind: r.kind,
-        side: r.side,
-        amountUsd: r.amountUsd,
-        walletCount: r.walletCount,
-        tradeCount: r.tradeCount,
-        windowMs: Number((r.payload as { window_ms?: number }).window_ms ?? 0) || null,
-        relationship: (r.face?.relationship as NetTag | null) ?? null,
-        marketBelievers,
-        conviction,
-        daysHeld: b?.daysHeld ?? null,
-      };
-      return { r, candidate, fullExit, daysHeld: b?.daysHeld ?? null };
-    });
+    const scored = live
+      .filter((r) => !unrenderable.has(r.id))
+      .map((r) => {
+        const m = momentumById.get(Number(r.marketId));
+        const marketBelievers = m ? (m.believersYes ?? 0) + (m.believersNo ?? 0) : null;
+        const b = r.wallet
+          ? beliefByKey.get(`${r.wallet.toLowerCase()}:${Number(r.marketId)}`)
+          : null;
+        const heldSide = r.side === "YES" ? b?.yesShares : b?.noShares;
+        const sell = (r.payload as { action?: string }).action === "SELL";
+        const fullExit = sell && heldSide != null && heldSide <= 0;
+        const conviction = beliefAction(actionById.get(r.id));
+        const candidate = {
+          kind: r.kind,
+          side: r.side,
+          amountUsd: r.amountUsd,
+          walletCount: r.walletCount,
+          tradeCount: r.tradeCount,
+          windowMs: Number((r.payload as { window_ms?: number }).window_ms ?? 0) || null,
+          relationship: (r.face?.relationship as NetTag | null) ?? null,
+          marketBelievers,
+          conviction,
+          daysHeld: b?.daysHeld ?? null,
+        };
+        return { r, candidate, fullExit, daysHeld: b?.daysHeld ?? null };
+      });
 
     // ADAPTIVE DENSITY. The gate above is absolute — "is this big?" — and on a
     // quiet chain the honest answer is no for everything, which is how a live
