@@ -1,0 +1,252 @@
+import { describe, it, expect } from "vitest";
+import {
+  composeChallenges,
+  reasonFor,
+  challengeLock,
+  answeredNotices,
+  callReachLine,
+  CHALLENGE,
+  CALLER_RELATIONS,
+  type CallEvidence,
+  type CallerRelation,
+  type NamedPerson,
+} from "./challenge";
+
+const T0 = Date.parse("2026-08-07T00:00:00Z");
+const p = (name: string | null, wallet = `0x${name ?? "anon"}`): NamedPerson => ({ wallet, name });
+
+const call = (over: Partial<CallEvidence> = {}): CallEvidence => ({
+  marketId: 1,
+  title: "Will ETH outperform BTC?",
+  caller: p("Mike"),
+  relation: "opp",
+  act: "trade",
+  callerSide: "YES",
+  atMs: T0,
+  ...over,
+});
+
+/**
+ * THE RULE IS INHERITED, NOT REINVENTED. `for-you.ts` refused to show a row it
+ * could not justify; Challenge refuses for the same reason and with the same
+ * mechanism — `reasonFor` returns null and the row ceases to exist. There is no
+ * fallback string anywhere in the path, by design.
+ */
+describe("a call that cannot name its caller is not a call", () => {
+  it("gives every surviving challenge a non-empty reason", () => {
+    const rows = composeChallenges(
+      CALLER_RELATIONS.map((relation, i) => call({ marketId: i + 1, relation })),
+    );
+    expect(rows).toHaveLength(CALLER_RELATIONS.length);
+    for (const r of rows) expect(r.reason.trim().length).toBeGreaterThan(0);
+  });
+
+  it("refuses an unnamed caller rather than saying 'someone'", () => {
+    // A call is one person asking you a question. "Someone took YES" is news,
+    // and news lives one tab across in the tape.
+    expect(reasonFor(call({ caller: p(null) }))).toBeNull();
+    expect(reasonFor(call({ caller: { wallet: "0xa", name: "   " } }))).toBeNull();
+  });
+
+  it("refuses a trade whose side we do not know", () => {
+    // We cannot quote someone asking a question if we cannot say what they did.
+    expect(reasonFor(call({ callerSide: null }))).toBeNull();
+    expect(reasonFor(call({ callerSide: "MIXED" as never }))).toBeNull();
+  });
+
+  it("refuses a market with no title", () => {
+    expect(reasonFor(call({ title: "  " }))).toBeNull();
+  });
+
+  it("drops the unjustifiable instead of softening it", () => {
+    expect(composeChallenges([call({ caller: p(null) }), call({ callerSide: null })])).toEqual([]);
+  });
+});
+
+/**
+ * THE SUBSTANTIVE CHANGE FROM for-you.ts. The old Rival row required the viewer
+ * to already hold a side — it could only say "took the other side of your YES".
+ * Challenge targets markets the viewer has NOT answered, so there is no other
+ * side yet, and claiming one would be inventing a position they do not hold.
+ */
+describe("a Challenge never implies a side the viewer has not taken", () => {
+  it("states the caller's side and asks for yours", () => {
+    expect(reasonFor(call({ caller: p("Mike"), relation: "opp", callerSide: "YES" }))).toBe(
+      "Mike, your Rival, took YES. What's your call?",
+    );
+  });
+
+  it("needs no viewer side at all — there is no viewerSide to pass", () => {
+    // The property, stated structurally: CallEvidence has no field for it, so a
+    // reason cannot depend on one even by accident.
+    expect(Object.keys(call())).not.toContain("viewerSide");
+    expect(reasonFor(call())).not.toContain("other side");
+  });
+
+  it("never says 'the other side'", () => {
+    for (const relation of CALLER_RELATIONS) {
+      for (const callerSide of ["YES", "NO"] as const) {
+        const r = reasonFor(call({ relation, callerSide }))!;
+        expect(r).not.toMatch(/other side/i);
+      }
+    }
+  });
+
+  it("uses the canonical vocabulary — opp reads Rival, inverse reads Opp", () => {
+    expect(reasonFor(call({ relation: "opp" }))).toContain("your Rival");
+    expect(reasonFor(call({ relation: "inverse" }))).toContain("your Opp");
+    expect(reasonFor(call({ relation: "twin" }))).toContain("your Twin");
+    expect(reasonFor(call({ relation: "tribe" }))).toContain("your Tribe");
+  });
+
+  it("treats a creation as a question asked, not a side taken", () => {
+    const r = reasonFor(call({ act: "market_created", callerSide: null, caller: p("Ana") }))!;
+    expect(r).toBe("Ana, your Rival, asked this. What's your call?");
+    expect(r).not.toMatch(/took/);
+  });
+});
+
+describe("one market, one call, from whoever has most standing to ask", () => {
+  it("keeps the strongest relation when several people called", () => {
+    const rows = composeChallenges([
+      call({ marketId: 7, relation: "tribe", caller: p("Tribe") }),
+      call({ marketId: 7, relation: "twin", caller: p("Twin") }),
+      call({ marketId: 7, relation: "opp", caller: p("Rival") }),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].relation).toBe("twin");
+  });
+
+  it("breaks a same-relation collision by recency", () => {
+    const rows = composeChallenges([
+      call({ marketId: 7, caller: p("Old"), atMs: T0 }),
+      call({ marketId: 7, caller: p("New"), atMs: T0 + 60_000 }),
+    ]);
+    expect(rows[0].caller.name).toBe("New");
+  });
+
+  it("NEVER shows a market the viewer has already acted in", () => {
+    // The single most important exclusion: an answered call is not a quieter
+    // call, it is not a call.
+    const rows = composeChallenges([call({ marketId: 1 }), call({ marketId: 2 })], {
+      answered: new Set([1]),
+    });
+    expect(rows.map((r) => r.marketId)).toEqual([2]);
+  });
+
+  it("puts a Twin's older question above a Tribe member's newer one", () => {
+    const rows = composeChallenges([
+      call({ marketId: 2, relation: "tribe", atMs: T0 + 999_999 }),
+      call({ marketId: 1, relation: "twin", atMs: T0 - 999_999 }),
+    ]);
+    expect(rows.map((r) => r.relation)).toEqual(["twin", "tribe"]);
+  });
+
+  it("is a total order, so the panel cannot reshuffle between loads", () => {
+    const rows = [5, 2, 9].map((marketId) => call({ marketId }));
+    const forward = composeChallenges(rows).map((r) => r.marketId);
+    const backward = composeChallenges([...rows].reverse()).map((r) => r.marketId);
+    expect(backward).toEqual(forward);
+    expect(forward).toEqual([2, 5, 9]);
+  });
+
+  it("stays a set of open questions rather than a second feed", () => {
+    const many = Array.from({ length: 30 }, (_, i) => call({ marketId: i + 1 }));
+    expect(composeChallenges(many)).toHaveLength(CHALLENGE.maxOpen);
+  });
+
+  it("is empty when nobody qualifies, which is most viewers today", () => {
+    expect(composeChallenges([])).toEqual([]);
+  });
+});
+
+/**
+ * THE LOCK REUSES THE CANONICAL STAGE GATE. `dnaStage` already puts
+ * "recognizable" at exactly five decisions. A second five defined here would be
+ * a second answer to one question.
+ */
+describe("the lock opens at the stage the DNA engine already defines", () => {
+  it("is locked below five decisions and open at five", () => {
+    for (const d of [0, 1, 2, 3, 4]) expect(challengeLock(d).unlocked, `${d}`).toBe(false);
+    for (const d of [5, 6, 40]) expect(challengeLock(d).unlocked, `${d}`).toBe(true);
+  });
+
+  it("shows the destination rather than hiding it", () => {
+    const lock = challengeLock(3);
+    expect(lock.title).toBe("Find Your People");
+    expect(lock.filled).toBe(3);
+    expect(lock.total).toBe(5);
+    expect(lock.detail).toBe("2 more to start finding your Tribe and Rivals.");
+  });
+
+  it("speaks to someone who has done nothing yet without shaming them", () => {
+    const lock = challengeLock(0);
+    expect(lock.filled).toBe(0);
+    expect(lock.detail).toBe("Take 5 sides to start finding your Tribe and Rivals.");
+    expect(lock.detail).not.toMatch(/^0\b/);
+  });
+
+  it("stops filling the bar once the thing it gates has opened", () => {
+    // The bar measures the unlock, not the next stage. A bar that keeps growing
+    // after the door opens is measuring something nobody asked about.
+    for (const d of [5, 15, 40]) {
+      const lock = challengeLock(d);
+      expect(lock.filled).toBe(5);
+      expect(lock.total).toBe(5);
+      expect(lock.detail).toBeNull();
+    }
+  });
+
+  it("unlocking grants access, it does not manufacture relationships", () => {
+    // An unlocked but empty panel is a correct state. The lock says nothing
+    // about whether anyone qualifies — only the DNA engine decides that.
+    expect(challengeLock(50).unlocked).toBe(true);
+    expect(composeChallenges([])).toEqual([]);
+  });
+});
+
+describe("the reverse event is causal, and temporary", () => {
+  const answer = (name: string | null, atMs = T0, marketId = 1) => ({
+    marketId,
+    title: "Will ETH outperform BTC?",
+    responder: p(name),
+    respondedAtMs: atMs,
+  });
+
+  it("says who showed up and what they answered", () => {
+    const [n] = answeredNotices([answer("Sarah")]);
+    expect(n.headline).toBe("SARAH SHOWED UP");
+    expect(n.body).toBe("Sarah answered your call.");
+    expect(n.title).toBe("Will ETH outperform BTC?");
+  });
+
+  it("drops an answer it cannot attribute", () => {
+    expect(answeredNotices([answer(null)])).toEqual([]);
+  });
+
+  it("shows the newest first and does not accumulate forever", () => {
+    const many = Array.from({ length: 10 }, (_, i) => answer(`P${i}`, T0 + i * 1000, i + 1));
+    const out = answeredNotices(many);
+    expect(out).toHaveLength(CHALLENGE.maxAnswered);
+    expect(out[0].respondedAtMs).toBeGreaterThan(out[1].respondedAtMs);
+  });
+});
+
+describe("call reach is honest about a channel that does not exist", () => {
+  it("names who became eligible", () => {
+    expect(callReachLine({ tribe: 8, rivals: 2 })).toBe("8 Tribe · 2 Rivals");
+    expect(callReachLine({ tribe: 0, rivals: 1 })).toBe("1 Rival");
+  });
+
+  it("says nothing rather than showing a zero scoreboard", () => {
+    // "0 Tribe · 0 Rivals" reads as a game being lost. A network still forming
+    // is not a failure, and the honest rendering of it is silence.
+    expect(callReachLine({ tribe: 0, rivals: 0 })).toBeNull();
+  });
+
+  it("never claims anyone was notified", () => {
+    const line = callReachLine({ tribe: 3, rivals: 1 })!;
+    expect(line).not.toMatch(/notif/i);
+    expect(line).not.toMatch(/sent|alert|messag/i);
+  });
+});
