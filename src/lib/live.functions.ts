@@ -308,19 +308,38 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       payload:
         r.kind === "believer_milestone"
           ? { threshold: Number((r as Record<string, unknown>).milestone_threshold ?? 0) }
-          : r.kind === "market_transition"
+          : r.kind === "conviction_cohort"
             ? {
-                headline: ((r as Record<string, unknown>).transition_headline as string) ?? "",
-                detail: ((r as Record<string, unknown>).transition_detail as string | null) ?? null,
-                type: ((r as Record<string, unknown>).transition_type as string | null) ?? null,
-                // Stored as text by `payload->>`; a malformed value stays absent
-                // so the mixer falls back rather than ranking on a NaN.
+                kind: ((r as Record<string, unknown>).cohort_kind as string) ?? null,
+                side: (r.side as string | null) ?? null,
+                rung: (() => {
+                  const v = Number((r as Record<string, unknown>).cohort_rung);
+                  return Number.isFinite(v) ? v : null;
+                })(),
+                crossedOn:
+                  ((r as Record<string, unknown>).cohort_crossed_on as string | null) ?? null,
+                people: Array.isArray((r as Record<string, unknown>).cohort_people)
+                  ? ((r as Record<string, unknown>).cohort_people as unknown[])
+                  : [],
                 significance: (() => {
                   const v = Number((r as Record<string, unknown>).transition_significance);
                   return Number.isFinite(v) ? v : undefined;
                 })(),
               }
-            : null,
+            : r.kind === "market_transition"
+              ? {
+                  headline: ((r as Record<string, unknown>).transition_headline as string) ?? "",
+                  detail:
+                    ((r as Record<string, unknown>).transition_detail as string | null) ?? null,
+                  type: ((r as Record<string, unknown>).transition_type as string | null) ?? null,
+                  // Stored as text by `payload->>`; a malformed value stays absent
+                  // so the mixer falls back rather than ranking on a NaN.
+                  significance: (() => {
+                    const v = Number((r as Record<string, unknown>).transition_significance);
+                    return Number.isFinite(v) ? v : undefined;
+                  })(),
+                }
+              : null,
     }));
 
     const live = groupLiveRows(events, ethUsd).slice(0, limit);
