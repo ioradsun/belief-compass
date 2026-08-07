@@ -374,6 +374,7 @@ export function MyConvictions({
     id: number;
     side: Side;
     value: number;
+    priced: boolean;
     chg: number | null;
     invested: number | null;
     gainUsd: number | null;
