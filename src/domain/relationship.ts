@@ -24,7 +24,32 @@ import {
   MATURE_MIN_SHARED,
   RELATIONSHIP_LIST_MIN_SHARED,
   confidenceFor,
+  type RelationshipLabel as EngineLabel,
 } from "./dna/config";
+import { labelFor } from "./dna/classify";
+
+/**
+ * The engine's five labels, in the two directions a reader cares about.
+ *
+ * Twin collapses into tribe and inverse into rival ON PURPOSE: the extreme words
+ * are earned badges laid over a direction, not separate places to be. A Twin is
+ * a member of your Tribe who cleared a higher bar — putting them in a different
+ * group would say they are somewhere else.
+ */
+function groupFor(label: EngineLabel): RelationshipGroup {
+  switch (label) {
+    case "twin":
+    case "tribe":
+      return "tribe";
+    case "opp":
+    case "inverse":
+      return "rival";
+    default:
+      // `neutral` (met, unplaced) and `insufficient` (met too little to judge)
+      // are both "we cannot say" to a reader; only the engine needs them apart.
+      return "neutral";
+  }
+}
 
 /** The two primary groups — plus the states that keep someone OUT of them. */
 export type RelationshipGroup = "tribe" | "rival" | "neutral" | "insufficient";
@@ -75,9 +100,27 @@ const clampPct = (v: number): number =>
   !Number.isFinite(v) ? 0 : Math.max(0, Math.min(100, Math.round(v)));
 const count = (v: number): number => (Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
 
-/** The neutral dead-zone around 50% — inside it, nobody is Tribe or Rival. */
-const NEUTRAL_LOW = 45;
-const NEUTRAL_HIGH = 55;
+/**
+ * WHAT WAS HERE, and why it had to go.
+ *
+ *     const NEUTRAL_LOW = 45;
+ *     const NEUTRAL_HIGH = 55;
+ *
+ * A flat 55% put someone in your Tribe, needing exactly ONE shared conviction —
+ * `RELATIONSHIP_LIST_MIN_SHARED`. The engine next door says Tribe means 77%
+ * agreement over at least eight shared convictions at 0.4 confidence. Both ran.
+ * Both were called "the relationship". Measured on production, the engine placed
+ * 7 pairs where this placed 1,136, and a third rule in the spectrum placed 219 —
+ * all three agreeing on 7.3% of real relationships.
+ *
+ * So placement is no longer decided here. This module asks `labelFor` — the
+ * engine's one rule — and then does what it is actually for: turning a label
+ * plus its evidence into something a person can read.
+ *
+ * The rare words are still EARNED on top (see `earnedFor`), because topic
+ * breadth is a requirement no single scalar can express, and that layering was
+ * always the intent.
+ */
 
 /** Does this relationship clear an earned badge's alignment + evidence + breadth? */
 function earnedFor(p: {
@@ -122,17 +165,15 @@ export function presentRelationship(input: RelationshipInput): RelationshipPrese
       ? input.confidence
       : confidenceFor(shared);
 
-  // Placement: too little shared history → not in the primary lists (search only).
-  let group: RelationshipGroup;
-  if (shared < RELATIONSHIP_LIST_MIN_SHARED) {
-    group = "insufficient";
-  } else if (alignmentPct >= NEUTRAL_HIGH) {
-    group = "tribe";
-  } else if (alignmentPct <= NEUTRAL_LOW) {
-    group = "rival";
-  } else {
-    group = "neutral";
-  }
+  // Placement comes from the ENGINE, not from a second set of thresholds here.
+  // `insufficient` still means "no shared history at all" rather than the
+  // engine's "under five shared" — a person you have never met in a market is a
+  // different thing from one you have met four times, and only the first should
+  // be absent from a list rather than merely unplaced in it.
+  const group: RelationshipGroup =
+    shared < RELATIONSHIP_LIST_MIN_SHARED
+      ? "insufficient"
+      : groupFor(labelFor({ agreement: alignmentPct, sharedBeliefs: shared, confidence }));
 
   const tier: EvidenceTier = shared >= MATURE_MIN_SHARED ? "mature" : "low";
   const earnedLabel = earnedFor({
@@ -246,7 +287,27 @@ export function relationshipLabel(
 ): RelationshipLabel | null {
   if (p.earnedLabel === "twin") return { text: "Twin", kind: "earned", tone: "aligned" };
   if (p.earnedLabel === "opp") return { text: "Opp", kind: "earned", tone: "opposed" };
-  if (!p.placed) return null;
+  // Never met → nothing to rank, so nothing to say.
+  if (p.group === "insufficient") return null;
+
+  // PROVISIONAL LANGUAGE IS FOR THE UNPLACED, and that is now most people.
+  //
+  // This used to `return null` for anyone the model would not place, which was
+  // survivable while placement meant "55% over one shared conviction". Now that
+  // placement is the engine's — 77% over eight — the same guard would leave a
+  // reader's whole list wordless. "Closest so far" is exactly the honest thing
+  // to say about thin evidence: it ranks without claiming, and the "so far" IS
+  // the uncertainty. Direction here is ordering language, not a placement.
+  if (!p.placed) {
+    if (!isTop) return null; // only the strongest gets even ranking language
+    const leaning = p.alignmentPct >= 50;
+    return {
+      text: leaning ? "Closest so far" : "Most opposite so far",
+      kind: "provisional",
+      tone: leaning ? "aligned" : "opposed",
+    };
+  }
+
   const tone = p.group === "rival" ? "opposed" : "aligned";
   if (p.tier === "mature") {
     return { text: p.group === "rival" ? "Rival" : "Tribe", kind: "group", tone };

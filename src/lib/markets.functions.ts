@@ -551,21 +551,30 @@ export const listFeed = createServerFn({ method: "GET" })
       // and the LEAD of each side is the one the story would have picked anyway.
       const byStrength = (a: { agreement: number }, b: { agreement: number }) =>
         Math.abs(b.agreement - 50) - Math.abs(a.agreement - 50);
-      const aligned = [...(cache?.closest ?? []), ...(cache?.tribe ?? [])]
-        .sort(byStrength)
-        .slice(0, NETWORK_OVERLAY_CAP);
-      const opposed = [...(cache?.inverse ?? []), ...(cache?.opp ?? [])]
-        .sort(byStrength)
-        .slice(0, NETWORK_OVERLAY_CAP);
+      // CLOSEST IS NOT TRIBE, and this used to union the two.
+      //
+      // `closest` is the graceful fallback for a thin viewer: everyone sharing
+      // at least ONE conviction, so the Network is never empty. It is a ranking,
+      // not a relationship — the engine may well have labelled every one of them
+      // `neutral`. Unioning it into `aligned` meant the feed said "your Tribe is
+      // backing YES" about people it had explicitly declined to place. Measured
+      // across production: 98.6% of closest entries rest on fewer than five
+      // shared convictions and 77% on exactly one.
+      //
+      // So the overlay now reads the PLACED buckets only. `twin` joins `tribe`
+      // because it was previously reachable only THROUGH closest — dropping the
+      // union without adding it would have lost the strongest relationships the
+      // model can produce.
+      const alignedAll = [...(cache?.twin ?? []), ...(cache?.tribe ?? [])];
+      const opposedAll = [...(cache?.inverse ?? []), ...(cache?.opp ?? [])];
+      const aligned = [...alignedAll].sort(byStrength).slice(0, NETWORK_OVERLAY_CAP);
+      const opposed = [...opposedAll].sort(byStrength).slice(0, NETWORK_OVERLAY_CAP);
       tribeRel = aligned[0]?.relationship === "twin" ? "twin" : "tribe";
       oppRel = opposed[0]?.relationship === "inverse" ? "inverse" : "opp";
       // Judged on the WHOLE bucket, not the capped overlay slice: whether a
       // mode is worth offering is a question about the viewer's network, not
       // about how many of them this feed page happened to look at.
-      modes = availableModes({
-        aligned: [...(cache?.closest ?? []), ...(cache?.tribe ?? [])],
-        opposed: [...(cache?.inverse ?? []), ...(cache?.opp ?? [])],
-      });
+      modes = availableModes({ aligned: alignedAll, opposed: opposedAll });
 
       const alignedBy = new Map(aligned.map((e) => [e.wallet.toLowerCase(), e]));
       const opposedBy = new Map(opposed.map((e) => [e.wallet.toLowerCase(), e]));
@@ -1005,7 +1014,19 @@ export const getMarketFaces = createServerFn({ method: "GET" })
       try {
         const { readViewerDnaCache } = await import("@/lib/dna/viewer-dna-cache.server");
         const cache = await readViewerDnaCache(sb, data.wallet.toLowerCase());
-        for (const bucket of [cache?.twin, cache?.tribe, cache?.closest, cache?.opp] as const)
+        // `closest` BELONGS here, unlike in the Tribe overlay above. This asks
+        // "have I crossed paths with this person", which is what makes a face
+        // worth showing — not "are they my Tribe", which is a claim about the
+        // relationship and needs the engine's placement. Same bucket, different
+        // question. `inverse` joins for symmetry with `opp`: someone you
+        // consistently disagree with is a familiar face too.
+        for (const bucket of [
+          cache?.twin,
+          cache?.tribe,
+          cache?.closest,
+          cache?.opp,
+          cache?.inverse,
+        ] as const)
           for (const r of bucket ?? []) known.add(r.wallet.toLowerCase());
       } catch {
         /* no network yet — fall back to biggest positions */
