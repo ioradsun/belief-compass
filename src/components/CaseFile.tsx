@@ -381,29 +381,37 @@ export function CaseColumn({
 
         {/* The chart carries no caption: the headline and the metric row above
           already say what moved and by how much. */}
-        <LensChart
-          side={side}
-          metric={metric}
-          kind={meta.kind}
-          series={series}
-          markers={[]}
-          coldStart={coldStart}
-        />
+        <div className="shrink-0">
+          <LensChart
+            side={side}
+            metric={metric}
+            kind={meta.kind}
+            series={series}
+            markers={[]}
+            coldStart={coldStart}
+          />
+        </div>
 
-        {/* 3 — BELIEVERS: the people currently backing this side. */}
-        <CaseRoster
-          side={side}
-          believers={believers}
-          people={net?.people}
-          priceUsd={priceUsd}
-          variant={compactRoster ? "compact" : "list"}
-        />
+        {/* 3 — BELIEVERS: the people currently backing this side. Takes half of
+          whatever height is left over and fills it with as many rows as fit. */}
+        <div className="flex min-h-[96px] flex-1 flex-col">
+          <CaseRoster
+            side={side}
+            believers={believers}
+            people={net?.people}
+            priceUsd={priceUsd}
+            variant={compactRoster ? "compact" : "list"}
+          />
+        </div>
 
         {/* 4 — RECENT ACTIVITY: the same tape the app-wide feed runs, scoped to
           this side. The column already says YES, so sentences don't repeat it.
-          Fixed slot, no inner scroll — "See all" opens the full-height sheet. */}
-        <CaseActivity marketId={marketId} side={side} viewerWallet={viewerWallet} />
+          Adaptive slot, no inner scroll — "See all" opens the full-height sheet. */}
+        <div className="flex min-h-[96px] flex-1 flex-col">
+          <CaseActivity marketId={marketId} side={side} viewerWallet={viewerWallet} />
+        </div>
       </div>
+
 
     </div>
   );
