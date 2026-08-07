@@ -532,6 +532,7 @@
   --mom-row-min: 0px;
 }
 .momentum-dense {
+  --mom-row-min: 0px;
   --mom-total: 18px;
   --mom-pct: 14px;
   --mom-abs: 11px;
