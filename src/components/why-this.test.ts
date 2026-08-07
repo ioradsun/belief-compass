@@ -70,16 +70,34 @@ describe("Why this is one component, in one colour, on both surfaces", () => {
     expect(deck).not.toMatch(/uppercase tracking-\[0\.08em\] opacity-70/);
   });
 
-  it("is what the For You feed renders, for every upcoming row", () => {
+  it("tells the active market's reason exactly once, and the centre tells it", () => {
+    /**
+     * THE PROPERTY, NOT THE PLACE — this assertion has now been wrong twice for
+     * the same reason, so it is written about the invariant instead.
+     *
+     * The reason belongs to ONE surface at a time. It has lived in a "Now
+     * reading" card, then in the rail's "In this market", and now in the centre
+     * panel above the question. Every one of those is defensible; two of them at
+     * once is not, because the reader sees the same sentence in two columns and
+     * neither looks authoritative.
+     *
+     * So: the centre says it (labelled, `lead`), the playlist says it for rows
+     * that are NOT active — `upcoming` filters the active one out — and no third
+     * surface repeats it.
+     */
     const feed = code("src/components/FeedListPanel.tsx");
-    expect(feed).toMatch(/<WhyThis/);
-    // ONE call site now: the list rows. The "Now reading" card is gone — the
-    // active market's reason is told once, in "In this market" above the list.
+    const deck = code("src/components/MarketDeck.tsx");
+    const rail = code("src/components/CurrentMarketActivity.tsx");
+
+    // The centre owns the active market's reason.
+    expect(deck).toMatch(/<WhyThis reason=\{reason\} lead \/>/);
+    // The playlist explains the rows the reader has not reached yet.
     expect((feed.match(/<WhyThis/g) ?? []).length).toBe(1);
+    expect(feed).toMatch(/const upcoming = entries\.filter\(\(e\) => e\.onchainId !== activeId\)/);
+    // And nobody says it a second time.
+    expect(rail).not.toMatch(/<WhyThis/);
     expect(feed).not.toMatch(/\{line\}\s*<\/span>/);
-    expect(code("src/components/CurrentMarketActivity.tsx")).toMatch(
-      /<WhyThis reason=\{why\} lead/,
-    );
+    expect(code("src/components/WhyThis.tsx")).toMatch(/export function WhyThis/);
   });
 
   it("names itself only where a label earns its space", () => {
