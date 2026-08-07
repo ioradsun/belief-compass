@@ -28,8 +28,32 @@ export const NETWORK_OPTIONS: { key: FeedNetwork; label: string; blurb: string }
    * created and holding mean, and the feed row already carries the author and
    * the viewer's positions — so this needed wiring, not building.
    */
-  { key: "mine", label: "My Markets", blurb: "Questions you asked, or have money on." },
-  { key: "tribe", label: "My Tribe", blurb: "Markets people you align with created or traded." },
+  { key: "mine", label: "Mine", blurb: "Questions you asked, or have money on." },
+  /**
+   * THE SAME WORDS THE PEOPLE TAB USES, and they mean the same thing.
+   *
+   * These read "My Tribe" and "Rivals" while the People list called the same
+   * people "Tribe" and "Rival" (`bandLabel`) — two vocabularies for one
+   * relationship, one tab apart. `check` below holds them together.
+   *
+   * WHERE ARE TWIN AND OPPONENT? Inside these. The spectrum does not have four
+   * peer levels: `bandFor` returns "twin" only when the relationship ALSO
+   * carries the earned badge, and "tribe" for everyone else on the same positive
+   * side — so twin ⊆ tribe and opponent ⊆ rival BY CONSTRUCTION. Narrowing to
+   * Tribe already includes your Twins.
+   *
+   * Offering them as separate choices would also mean offering choices that are
+   * empty for almost everyone: `EARNED_LABELS.twin` demands 90% agreement across
+   * FIFTEEN shared convictions in three topics, on a platform whose busiest
+   * market has 37 participants. And the feed could not honour them anyway — the
+   * DNA overlay deliberately collapses `closest ∪ tribe` into one aligned bucket
+   * and `inverse ∪ opp` into one opposed bucket, so `tribe_count` / `opp_count`
+   * are the only per-market relationship figures that exist.
+   *
+   * `neutral` is not here either, and should not be: it is the band for people
+   * the evidence CANNOT place. Narrowing markets by them is narrowing by noise.
+   */
+  { key: "tribe", label: "Tribe", blurb: "Markets people you align with created or traded." },
   {
     key: "rivals",
     label: "Rivals",

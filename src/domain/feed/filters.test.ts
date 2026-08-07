@@ -14,6 +14,8 @@ import {
   type FilterCandidate,
 } from "./filters";
 import { MOMENTUM_LENSES } from "./momentum";
+import { NETWORK_OPTIONS } from "./filters";
+import { bandLabel } from "@/domain/relationship-spectrum";
 
 const m = (o: Partial<FilterCandidate> = {}): FilterCandidate => ({
   category: "ai",
@@ -77,7 +79,7 @@ describe("uncategorised markets are Other, not invisible", () => {
 describe("the title stays short", () => {
   it("names one or two selections", () => {
     expect(filterTitle(toggleTopic(ALL, "ai"))).toBe("AI");
-    expect(filterTitle(toggleTopic(toggleNetwork(ALL, "tribe"), "ai"))).toBe("AI + My Tribe");
+    expect(filterTitle(toggleTopic(toggleNetwork(ALL, "tribe"), "ai"))).toBe("AI + Tribe");
   });
 
   it("counts instead of listing beyond two", () => {
@@ -222,5 +224,44 @@ describe("My Markets is the one Focus option that was missing", () => {
     expect(matches(f, m({ mine: true }))).toBe(true);
     expect(matches(f, m({ tribeCount: 1 }))).toBe(true);
     expect(matches(f, m())).toBe(false);
+  });
+});
+
+/**
+ * ONE VOCABULARY FOR ONE RELATIONSHIP.
+ *
+ * Explore's People narrowing and the People tab describe the same population
+ * through the same DNA engine, and for a while they used different words for it
+ * — "My Tribe" in one place, "Tribe" in the other, one tab apart.
+ *
+ * Twin and Opponent are deliberately NOT offered here. They are not peer levels:
+ * `bandFor` returns "twin" only when the relationship also carries the earned
+ * badge and "tribe" for everyone else on the same side, so twin ⊆ tribe and
+ * opponent ⊆ rival by construction — narrowing to Tribe already includes them.
+ */
+describe("Explore narrows by the same relationship words the People tab shows", () => {
+  it("uses the spectrum's own labels", () => {
+    const label = (k: string) => NETWORK_OPTIONS.find((n) => n.key === k)?.label;
+    expect(label("tribe")).toBe(bandLabel("tribe"));
+    // Plural for a group of markets, singular for one person — the same word.
+    expect(label("rivals")).toBe(`${bandLabel("rival")}s`);
+  });
+
+  it("offers no relationship level the feed cannot actually evaluate", () => {
+    // The DNA overlay collapses closest ∪ tribe and inverse ∪ opp, so
+    // `tribe_count` / `opp_count` are the only per-market figures that exist.
+    // A Twin or Opponent option would be a filter with nothing behind it.
+    const keys = NETWORK_OPTIONS.map((n) => n.key);
+    expect(keys).not.toContain("twin");
+    expect(keys).not.toContain("opponent");
+    // And never `neutral` — the band for people the evidence cannot place.
+    expect(keys).not.toContain("neutral");
+  });
+
+  it("still narrows by every level it does offer", () => {
+    const has = (k: string) => NETWORK_OPTIONS.some((n) => n.key === k);
+    for (const k of ["everyone", "mine", "tribe", "rivals", "following"]) {
+      expect(has(k), k).toBe(true);
+    }
   });
 });
