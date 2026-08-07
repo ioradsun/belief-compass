@@ -504,19 +504,31 @@ export function MobileGame({
   );
 }
 
-/** Screen 3 — See Both Sides. Totals first; one tap opens a side's case. */
+/**
+ * BOTH SIDES — a VIEW of the market, not a destination.
+ *
+ * It used to be a whole screen: its own `<Screen>`, its own "← Back", and a
+ * second copy of the question under it. Reading a side meant leaving the
+ * market, and acting on what you read meant going back first. The question and
+ * the order bar are constants; only the evidence between them changes. So this
+ * now renders INSIDE the market's middle region, between the question above and
+ * the dock below, and closes with an × on its own header rather than a back
+ * link floating above someone else's title.
+ *
+ * The comparison sentence and the split come from the same pure
+ * `@/domain/side-compare` the desktop Case File reads, so the phone cannot
+ * phrase the market differently from the desk.
+ */
 function BothSides({
   marketId,
-  title,
   ethUsd,
   row,
-  onBack,
+  onClose,
 }: {
   marketId: number;
-  title: string;
   ethUsd: number;
   row: MarketRow;
-  onBack: () => void;
+  onClose: () => void;
 }) {
   const [open, setOpen] = useState<OrderSide | null>(null);
   const { unit, format } = useMoney();
@@ -550,7 +562,21 @@ function BothSides({
   };
   const events = pulses?.pulses?.[String(marketId)] ?? [];
 
-  /** Believers / capital / price momentum for one side, read the Total Market way. */
+  // The comparison, read the one shared way.
+  const rr = row as unknown as Record<string, unknown>;
+  const joined = (s: OrderSide) =>
+    Number(rr[s === "YES" ? "new_believers_yes_24h" : "new_believers_no_24h"] ?? 0) || 0;
+  const snap = (s: OrderSide) => ({
+    believers: count(s),
+    capitalUsd: capital(s) || null,
+    joined: joined(s),
+    capitalChangePct: (s === "YES" ? marketChange.yes : marketChange.no).capital.pct,
+    priceChangePct: (s === "YES" ? marketChange.yes : marketChange.no).price.pct,
+  });
+  const { story } = compareSides(snap("YES"), snap("NO"));
+  const strip = comparisonStrip(snap("YES"), snap("NO"));
+
+  /** Believers / capital momentum for one side, read the Total Market way. */
   const rows = (s: OrderSide) => {
     const bel = count(s);
     const cap = capital(s);
@@ -564,13 +590,6 @@ function BothSides({
     const capChg = sideChg.capital;
     const belDelta = belChg.delta;
     const capDelta = capChg.delta;
-    const priceUsd = Number(s === "YES" ? row.yes_price_usd : row.no_price_usd) || null;
-    // The price move comes from the SAME `marketChange` the believer and capital
-    // rows above use — not from `market_state.chg_24h_*`, which was a second,
-    // separately-baselined answer to the same question rendered on one screen.
-    const priceChg = sideChg.price;
-    const pricePct = priceChg.pct;
-    const priceDelta = priceChg.delta;
     return [
       {
         label: "Believers",
@@ -606,107 +625,143 @@ function BothSides({
   };
 
   return (
-    <Screen>
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pb-4 pt-1 [-webkit-overflow-scrolling:touch]">
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* 1 — WHICH SIDE IS GAINING, and the way out. The question above this is
+          the market's only title; there is no second copy here. */}
+      <div className="mb-2.5 flex shrink-0 items-start gap-2">
+        <p className="min-w-0 flex-1 text-[14px] font-medium leading-snug text-[var(--text)]">
+          {story}
+        </p>
         <button
           type="button"
-          onClick={onBack}
-          className="text-left text-[13px] text-[var(--text-muted)]"
+          onClick={onClose}
+          aria-label="Close both sides"
+          className="-mr-1 -mt-1 shrink-0 rounded-full px-2 py-1 text-[15px] leading-none text-[var(--text-muted)] transition-colors active:text-[var(--text)]"
         >
-          ← Back
+          ×
         </button>
-        <h2 className="text-[18px] font-semibold leading-snug text-[var(--text)]">{title}</h2>
-
-        {(["YES", "NO"] as OrderSide[]).map((s) => (
-          <div key={s}>
-            <Rule />
-            <button
-              type="button"
-              onClick={() => setOpen((cur) => (cur === s ? null : s))}
-              className="w-full pt-5 text-left"
-            >
-              <div
-                className="flex items-baseline justify-between text-[20px] font-semibold"
-                style={{ color: s === "YES" ? "var(--yes)" : "var(--no)" }}
-              >
-                {s}
-                <span className="text-[12px] font-medium text-[var(--text-muted)]">
-                  {open === s ? "Hide" : "Details"}
-                </span>
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {rows(s).map((m) => (
-                  <SideMetric
-                    key={m.label}
-                    label={m.label}
-                    value={m.value}
-                    pct={m.pct}
-                    quiet={m.quiet}
-                    absolute={m.absolute}
-                    color={s === "YES" ? "var(--yes)" : "var(--no)"}
-                  />
-                ))}
-              </div>
-            </button>
-
-            {/* WHO BACKS THIS SIDE — always visible face pile; tap it to open
-                the full roster without the list eating the screen. */}
-            <div className="mt-4">
-              <CaseRoster
-                side={s}
-                believers={believers.filter((b) => b.side === s)}
-                priceUsd={Number(s === "YES" ? row.yes_price_usd : row.no_price_usd) || null}
-                variant="compact"
-              />
-            </div>
-
-            {open === s && (
-              <div className="mt-5 space-y-5">
-                {(evidence?.defense ?? []).filter((d) => d.vote === s).length > 0 && (
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                      Why people believe
-                    </div>
-                    <ul className="mt-2 space-y-2">
-                      {(evidence?.defense ?? [])
-                        .filter((d) => d.vote === s)
-                        .slice(0, 3)
-                        .map((d, i) => (
-                          <li
-                            key={i}
-                            className="text-[14px] leading-relaxed text-[var(--text-secondary)]"
-                          >
-                            • {d.opinion}
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-                )}
-                {events.filter((e) => e.side === s).length > 0 && (
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                      Recent activity
-                    </div>
-                    <ul className="mt-2 space-y-2">
-                      {events
-                        .filter((e) => e.side === s)
-                        .slice(0, 5)
-                        .map((e, i) => (
-                          <li key={i} className="text-[14px] text-[var(--text-secondary)]">
-                            {pulseLine(e, ethUsd, unit)}
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
       </div>
-    </Screen>
+
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pb-3 [-webkit-overflow-scrolling:touch]">
+        {/* 2 — THE BALANCE, before any number. */}
+        <SplitBar strip={strip} />
+
+        {/* 3 — BOTH SIDES AT ONCE. Neither is behind a tap; the tap only adds
+            depth (who, why, what just happened) to the one you asked about. */}
+        {(["YES", "NO"] as OrderSide[]).map((s) => {
+          const color = s === "YES" ? "var(--yes)" : "var(--no)";
+          const isOpen = open === s;
+          return (
+            <div
+              key={s}
+              className="rounded-[14px] px-3.5 py-3"
+              style={{
+                background: "var(--surface)",
+                border: isOpen ? `1px solid ${color}` : "1px solid var(--border)",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setOpen((cur) => (cur === s ? null : s))}
+                aria-expanded={isOpen}
+                className="w-full text-left"
+              >
+                <div
+                  className="flex items-baseline justify-between text-[16px] font-semibold"
+                  style={{ color }}
+                >
+                  {s}
+                  <span className="text-[11px] font-medium text-[var(--text-muted)]">
+                    {isOpen ? "Hide" : "Details"}
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {rows(s).map((m) => (
+                    <SideMetric
+                      key={m.label}
+                      label={m.label}
+                      value={m.value}
+                      pct={m.pct}
+                      quiet={m.quiet}
+                      absolute={m.absolute}
+                      color={color}
+                    />
+                  ))}
+                </div>
+              </button>
+
+              {isOpen && (
+                <div className="mt-4 space-y-4">
+                  {/* WHO BACKS THIS SIDE — inside the disclosure, so two closed
+                      sides always fit the region together. */}
+                  <CaseRoster
+                    side={s}
+                    believers={believers.filter((b) => b.side === s)}
+                    priceUsd={Number(s === "YES" ? row.yes_price_usd : row.no_price_usd) || null}
+                    variant="compact"
+                  />
+                  {(evidence?.defense ?? []).filter((d) => d.vote === s).length > 0 && (
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                        Why people believe
+                      </div>
+                      <ul className="mt-2 space-y-2">
+                        {(evidence?.defense ?? [])
+                          .filter((d) => d.vote === s)
+                          .slice(0, 3)
+                          .map((d, i) => (
+                            <li
+                              key={i}
+                              className="text-[14px] leading-relaxed text-[var(--text-secondary)]"
+                            >
+                              • {d.opinion}
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  )}
+                  {events.filter((e) => e.side === s).length > 0 && (
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+                        Recent activity
+                      </div>
+                      <ul className="mt-2 space-y-2">
+                        {events
+                          .filter((e) => e.side === s)
+                          .slice(0, 5)
+                          .map((e, i) => (
+                            <li key={i} className="text-[14px] text-[var(--text-secondary)]">
+                              {pulseLine(e, ethUsd, unit)}
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
+
+/**
+ * One bar, split by believers. The share arrives already computed beside the
+ * numbers (see `comparisonStrip`) so the bar and the counts under it cannot
+ * disagree.
+ */
+function SplitBar({ strip }: { strip: readonly [StripSide, StripSide] }) {
+  const [yes, no] = strip;
+  return (
+    <div className="flex h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]" aria-hidden>
+      <span style={{ width: `${yes.share * 100}%`, background: "var(--yes)" }} />
+      <span style={{ width: `${no.share * 100}%`, background: "var(--no)" }} />
+    </div>
+  );
+}
+
 
 /* ---------- primitives ---------- */
 
