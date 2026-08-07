@@ -307,3 +307,85 @@ describe("the bands are ordered and total", () => {
     expect(() => discover(index, "")).not.toThrow();
   });
 });
+
+/**
+ * DOMAIN-AGNOSTIC BY CONSTRUCTION.
+ *
+ * The fixtures above are real production titles, which makes them good
+ * regressions and bad specifications — an algorithm tuned to them would pass
+ * every one and still be wrong about anything else. These tests use invented
+ * tokens with no meaning in any language, so nothing but the ALGORITHM can make
+ * them pass. If the real corpus vanished tomorrow, this is what would still
+ * have to hold.
+ */
+describe("the algorithm reads structure, never subject matter", () => {
+  const synth = buildIndex([
+    { onchainId: 100, title: "Will zorbex quandle the frimble?" },
+    { onchainId: 101, title: "Will zorbex quandle the frimble by 2030?" },
+    { onchainId: 102, title: "Will plentor quandle the frimble?" },
+    { onchainId: 103, title: "Will zorbex quandle the wibbet?" },
+    { onchainId: 104, title: "Should marnip be splibbed by everyone?" },
+    { onchainId: 105, title: "Should trentle be splibbed by everyone?" },
+  ]);
+
+  it("calls an exact restatement a duplicate with no real words involved", () => {
+    const d = discover(synth, "will  ZORBEX quandle the frimble???", { now: NOW });
+    expect(d.relation).toBe("duplicate");
+    expect(d.duplicateOf?.onchainId).toBe(100);
+  });
+
+  it("refuses to auto-resolve a swapped SUBJECT, exactly as with real titles", () => {
+    // 100 and 102 differ only in the actor. Same shape, different question.
+    expect(
+      bandFor(textScore("Will zorbex quandle the frimble?", "Will plentor quandle the frimble?")),
+    ).not.toBe("duplicate");
+  });
+
+  it("refuses to auto-resolve a swapped OBJECT", () => {
+    expect(
+      bandFor(textScore("Will zorbex quandle the frimble?", "Will zorbex quandle the wibbet?")),
+    ).not.toBe("duplicate");
+  });
+
+  it("scores shared TEMPLATE with different subjects far below shared subject", () => {
+    // "Should X be splibbed by everyone" twice, X differing — the template is
+    // identical and the subject is not, which is the case the subject gate
+    // exists for.
+    const templateOnly = textScore(
+      "Should marnip be splibbed by everyone?",
+      "Should trentle be splibbed by everyone?",
+    );
+    const sameSubject = textScore(
+      "Will zorbex quandle the frimble?",
+      "Will zorbex quandle the frimble by 2030?",
+    );
+    expect(sameSubject).toBeGreaterThan(templateOnly);
+  });
+
+  it("gives a busy room the tie ONLY between genuinely tied candidates", () => {
+    // 102 (actor swapped) and 103 (object swapped) are each exactly one token
+    // from the draft, so they tie with each other. 101 merely ADDS a token, so
+    // it is a closer match and must stay ahead of both regardless of activity.
+    const draft = "Will zorbex quandle the frimble?";
+    const live = (id: number) =>
+      new Map([[id, { participants: 50, lastActivityMs: NOW - 3_600_000 }]]);
+    const posOf = (d: ReturnType<typeof discover>, id: number) =>
+      d.candidates.findIndex((c) => c.onchainId === id);
+
+    for (const id of [102, 103]) {
+      const other = id === 102 ? 103 : 102;
+      const d = discover(synth, draft, { now: NOW, liveness: live(id) });
+      expect(d.candidates[0]?.onchainId).toBe(100); // the exact match still leads
+      expect(posOf(d, id)).toBeLessThan(posOf(d, other)); // busy wins the tie
+      expect(posOf(d, 101)).toBeLessThan(posOf(d, id)); // ...but never the gap
+    }
+  });
+
+  it("never lets an unrelated invented market in, however busy", () => {
+    const d = discover(synth, "Should marnip be splibbed by everyone?", {
+      now: NOW,
+      liveness: new Map([[100, { participants: 9999, lastActivityMs: NOW }]]),
+    });
+    expect(d.candidates.map((c) => c.onchainId)).not.toContain(100);
+  });
+});

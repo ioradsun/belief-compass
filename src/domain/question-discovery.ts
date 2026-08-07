@@ -483,16 +483,17 @@ export function discover(
 
   // BAND, THEN SIMILARITY, AND ONLY THEN LIVENESS.
   //
-  // "Equally similar" has to mean equally similar. An earlier cut sorted by
-  // liveness immediately after the band, which let a busy market outrank a
-  // genuinely closer one — a draft about France surfaced Argentina first,
-  // because Argentina's room had more people in it. That is recommendation
-  // wearing consolidation's clothes.
+  // "Equally similar" has to mean equally similar. Sorting by liveness directly
+  // after the band lets a well-populated market outrank a semantically closer
+  // one, which is recommendation wearing consolidation's clothes — the reader
+  // asked whether their idea already exists, not what is popular.
   //
   // So scores are quantised into TIE_EPS buckets and liveness orders WITHIN a
-  // bucket. Two markets that differ by less than a rounding step are ties and
-  // the busier one wins; anything further apart is decided by similarity, which
-  // is the only thing that answers the reader's actual question.
+  // bucket. Two markets differing by less than a rounding step are ties and the
+  // busier one wins; anything further apart is decided by similarity alone. The
+  // rule is a property of the ordering, not of any particular subject matter:
+  // no term here reads the topic, and the regression that motivated it lives in
+  // the tests, where a concrete case belongs.
   const rank: Record<Relation, number> = { duplicate: 3, ambiguous: 2, related: 1, novel: 0 };
   const bucket = (score: number) => Math.round(score / TIE_EPS);
   const scored: Candidate[] = retrieved
