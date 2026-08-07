@@ -332,20 +332,51 @@ export async function recordViewerMarketEvent(
 }
 
 /** Stored AI meaning for the markets currently in play. */
+/**
+ * Everything except the vector. `embedding` is deliberately absent here — see
+ * `loadMarketAnalyses`, which adds it only when there is something to compare
+ * it against.
+ */
+const ANALYSIS_COLUMNS =
+  "onchain_id, category, subcategory, topic, summary, clarity_score, answerability_score, " +
+  "novelty_score, debate_score, identity_score, time_sensitivity, media_relevance, " +
+  "quality_score, risk_flags, duplicate_cluster_id, duplicate_similarity";
+
+/**
+ * AI analysis for a set of markets.
+ *
+ * THE EMBEDDING IS OPTIONAL, AND THAT IS THE WHOLE POINT. It is the one wide
+ * column in this table — a vector per market — and it has exactly one consumer:
+ * `cosine(viewer.tasteEmbedding, ai.embedding)` in the personal score.
+ *
+ * A viewer with no taste vector makes that term structurally zero. `cosine`
+ * returns 0 the moment either side is null, so every byte of every embedding is
+ * fetched, transferred, JSON-parsed and then multiplied by nothing.
+ *
+ * AND THAT IS PRECISELY THE SSR PATH. An anonymous request gets `EMPTY_SIGNALS`,
+ * whose profile carries `tasteEmbedding: null` — always, by construction, not by
+ * accident of data. So the `/` loader, which is what sets TTFB for a first-time
+ * visitor's first paint, was paying for a column it could not use. Personalised
+ * requests still get it, because for them the term is real.
+ */
 export async function loadMarketAnalyses(
   ids: number[],
+  withEmbedding = false,
 ): Promise<Map<number, Record<string, unknown>>> {
   if (ids.length === 0) return new Map();
   const sb = serviceClient();
   const { data } = await sb
     .from("market_ai_analysis")
-    .select(
-      "onchain_id, category, subcategory, topic, summary, clarity_score, answerability_score, novelty_score, debate_score, identity_score, time_sensitivity, media_relevance, quality_score, risk_flags, embedding, duplicate_cluster_id, duplicate_similarity",
-    )
+    .select(withEmbedding ? `${ANALYSIS_COLUMNS}, embedding` : ANALYSIS_COLUMNS)
     .in("onchain_id", ids)
     .eq("status", "ready");
   const out = new Map<number, Record<string, unknown>>();
-  for (const r of (data ?? []) as Record<string, unknown>[]) {
+  // Through `unknown`: a select built at runtime defeats supabase-js's
+  // literal-type inference, so it widens the row to its error shape. The rows
+  // are opaque JSON to every consumer anyway — `aiOf` reads them by key and
+  // yields `embedding: null` when the column is absent, which is exactly the
+  // value an anonymous viewer's cosine term needs.
+  for (const r of (data ?? []) as unknown as Record<string, unknown>[]) {
     out.set(Number(r.onchain_id), r);
   }
   return out;
