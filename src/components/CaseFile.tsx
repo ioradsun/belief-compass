@@ -647,32 +647,46 @@ export function CaseRoster({
           </span>
         </div>
       )}
-      {roster.length === 0 ? (
-        <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No one on this side yet.</p>
-      ) : variant === "compact" ? (
-        <>
-          <FacePile roster={roster} onOpenAll={() => setOpenAll(true)} />
-          {openAll && (
-            <RosterSheet
-              side={side}
-              count={roster.length}
-              onClose={() => setOpenAll(false)}
-              anchor={anchorBox}
-            >
-              {rows}
-            </RosterSheet>
-          )}
-        </>
+      {variant === "compact" ? (
+        roster.length === 0 ? (
+          <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No one on this side yet.</p>
+        ) : (
+          <>
+            <FacePile roster={roster} onOpenAll={() => setOpenAll(true)} />
+            {openAll && (
+              <RosterSheet
+                side={side}
+                count={roster.length}
+                onClose={() => setOpenAll(false)}
+                anchor={anchorBox}
+              >
+                {allRows}
+              </RosterSheet>
+            )}
+          </>
+        )
       ) : (
         <>
-          {rows}
+          {/* A FIXED SLOT, ALWAYS. Five row heights whether this side has five
+            believers, one, or none — the empty slots are the comparison ("this
+            side is thinner"), and they keep the section below aligned with the
+            other rail without measuring anything. */}
+          <div className="overflow-hidden" style={{ height: "var(--case-row-believers)" }}>
+            {roster.length === 0 ? (
+              <p className="px-0.5 text-[11px] text-[var(--text-muted)]">
+                No one on this side yet.
+              </p>
+            ) : (
+              renderRows(roster.slice(0, PREVIEW))
+            )}
+          </div>
           {roster.length > PREVIEW && (
             <button
               type="button"
               onClick={() => setOpenAll(true)}
               className="px-1 text-[12px] text-[var(--text-secondary)] underline-offset-2 hover:underline"
             >
-              +{roster.length - PREVIEW} more
+              See all {roster.length} →
             </button>
           )}
           {openAll && (
@@ -687,6 +701,7 @@ export function CaseRoster({
           )}
         </>
       )}
+
     </div>
   );
 }
