@@ -132,6 +132,17 @@ const REQUIRED: Requirement[] = [
     // than sending the reader to a migration that is already applied.
     emptyMeans: "No follows recorded yet — expected until someone taps Follow.",
   },
+  {
+    feature: "Invitations — the only way a person-to-person signal reaches anyone",
+    table: "market_invites",
+    columns: ["market_id", "from_wallet", "to_wallet", "reason", "reason_kind"],
+    migration: "20260831000000_market_invites.sql",
+    // There is no notification channel on this platform, so if this table is
+    // missing an invitation does not degrade — it silently does not exist, and
+    // the For You shelf that delivers it has nothing to show. Exactly the class
+    // of failure this script was written for.
+    emptyMeans: "No invitations sent yet — expected until a creator recruits someone.",
+  },
 ];
 
 type Verdict = "ok" | "missing_table" | "missing_column" | "blocked" | "empty" | "error";

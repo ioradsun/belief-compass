@@ -34,6 +34,7 @@ import {
 import { LiveTape } from "@/components/LiveTape";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { SimilarMarkets } from "@/components/SimilarMarkets";
+import { ForYouShelf } from "@/components/ForYouShelf";
 import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
 import { MobileGame } from "@/components/MobileGame";
@@ -1390,6 +1391,12 @@ function Feed() {
             <>
               {/* Welcome the newest believers on a side you back — one tap. */}
               <WelcomePrompt wallet={wallet} onSelectPerson={selectPerson} />
+              {/* WHAT IS HAPPENING TO YOU, above what is happening. There is no
+                notification channel on this platform, so an invitation reaches
+                someone here or nowhere — see ForYouShelf. It stays silent
+                unless the system can say why THIS person, which today is most
+                of the time. */}
+              <ForYouShelf wallet={wallet} onSelect={selectMarket} />
               {/* "In this market" moved to the top of the For You rail, next to
                 the running order. The global tape below still excludes the
                 current market, so its activity is told in exactly one place. */}
