@@ -114,6 +114,18 @@
      the "N New" update pill. Never a side, never a P&L. */
   --notice: #a78bfa;
 
+  /* CASE FILE ROW CONTRACT — YES and NO are two independent scrollers with the
+     centre panel between them, so no CSS grid can pair them. Alignment is made
+     true by construction instead: every variable section declares the SAME
+     fixed height on both rails, and overflow moves into the full-height sheet
+     rather than an inner scroller. */
+  --case-row-state: 58px;
+  --case-believer-row: 36px;
+  --case-row-believers: calc(5 * var(--case-believer-row) + 4 * 2px);
+  --case-row-activity: 156px;
+
+
+
   --background: var(--bg);
   --foreground: var(--text);
   --card: var(--panel);

@@ -322,24 +322,26 @@ export function CaseColumn({
 
       <div ref={scroller} className="min-h-0 flex-1 space-y-5 overflow-y-scroll pr-0.5">
         {/* 1 — CURRENT STATE: what this side IS, in plain language, before any
-          metric. When something moved in the window, one sentence says what. */}
-        <div className="space-y-1">
+          metric. When something moved in the window, one sentence says what.
+          Fixed slot + clamped lines so YES and NO start their metrics on the
+          same line, whatever the copy length. */}
+        <div className="space-y-1 overflow-hidden" style={{ height: "var(--case-row-state)" }}>
           {pulse ? (
             <>
-              <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+              <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--text-secondary)]">
                 <SideWords text={pulse.narrative} />
               </p>
-              <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+              <p className="line-clamp-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
                 <SideWords text={stateLine} />
               </p>
             </>
           ) : (
             <>
-              <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+              <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--text-secondary)]">
                 <SideWords text={stateLine} />
               </p>
               {changeLine && (
-                <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
+                <p className="line-clamp-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
                   <SideWords text={changeLine} />
                 </p>
               )}
@@ -391,23 +393,11 @@ export function CaseColumn({
         />
 
         {/* 4 — RECENT ACTIVITY: the same tape the app-wide feed runs, scoped to
-          this side. The column already says YES, so sentences don't repeat it. */}
-        <div className="space-y-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-            Recent activity
-          </span>
-          <LiveTape
-            marketIds={[marketId]}
-            side={side}
-            wallet={viewerWallet}
-            scroll={false}
-            showTitles={false}
-            limit={24}
-            skeletonRows={3}
-            emptyText="No moves on this side yet."
-          />
-        </div>
+          this side. The column already says YES, so sentences don't repeat it.
+          Fixed slot, no inner scroll — "See all" opens the full-height sheet. */}
+        <CaseActivity marketId={marketId} side={side} viewerWallet={viewerWallet} />
       </div>
+
     </div>
   );
 }
@@ -629,9 +619,10 @@ export function CaseRoster({
     </ul>
   );
 
-  // The list variant previews the strongest few; "+N more" opens the rest.
+  // The list variant previews the strongest few; "See all" opens the rest in a
+  // full-height sheet rather than a cramped inner scroller.
   const allRows = renderRows(roster);
-  const rows = variant === "compact" ? allRows : renderRows(roster.slice(0, PREVIEW));
+
 
   return (
     <div ref={anchorRef} className="space-y-1.5">
@@ -657,34 +648,53 @@ export function CaseRoster({
           </span>
         </div>
       )}
-      {roster.length === 0 ? (
-        <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No one on this side yet.</p>
-      ) : variant === "compact" ? (
-        <>
-          <FacePile roster={roster} onOpenAll={() => setOpenAll(true)} />
-          {openAll && (
-            <RosterSheet
-              side={side}
-              count={roster.length}
-              onClose={() => setOpenAll(false)}
-              anchor={anchorBox}
-            >
-              {rows}
-            </RosterSheet>
-          )}
-        </>
+      {variant === "compact" ? (
+        roster.length === 0 ? (
+          <p className="px-0.5 text-[11px] text-[var(--text-muted)]">No one on this side yet.</p>
+        ) : (
+          <>
+            <FacePile roster={roster} onOpenAll={() => setOpenAll(true)} />
+            {openAll && (
+              <RosterSheet
+                side={side}
+                count={roster.length}
+                onClose={() => setOpenAll(false)}
+                anchor={anchorBox}
+              >
+                {allRows}
+              </RosterSheet>
+            )}
+          </>
+        )
       ) : (
         <>
-          {rows}
-          {roster.length > PREVIEW && (
-            <button
-              type="button"
-              onClick={() => setOpenAll(true)}
-              className="px-1 text-[12px] text-[var(--text-secondary)] underline-offset-2 hover:underline"
-            >
-              +{roster.length - PREVIEW} more
-            </button>
-          )}
+          {/* A FIXED SLOT, ALWAYS. Five row heights whether this side has five
+            believers, one, or none — the empty slots are the comparison ("this
+            side is thinner"), and they keep the section below aligned with the
+            other rail without measuring anything. */}
+          <div className="overflow-hidden" style={{ height: "var(--case-row-believers)" }}>
+            {roster.length === 0 ? (
+              <p className="px-0.5 text-[11px] text-[var(--text-muted)]">
+                No one on this side yet.
+              </p>
+            ) : (
+              renderRows(roster.slice(0, PREVIEW))
+            )}
+          </div>
+          {/* The footer line is always reserved, so a side with fewer than five
+            believers still ends at the same y as the other rail. */}
+          <div className="h-[18px]">
+            {roster.length > PREVIEW && (
+              <button
+                type="button"
+                onClick={() => setOpenAll(true)}
+                className="px-1 text-[12px] leading-[18px] text-[var(--text-secondary)] underline-offset-2 hover:underline"
+              >
+                See all {roster.length} →
+              </button>
+            )}
+          </div>
+
           {openAll && (
             <RosterSheet
               side={side}
@@ -697,6 +707,7 @@ export function CaseRoster({
           )}
         </>
       )}
+
     </div>
   );
 }
@@ -789,6 +800,128 @@ function RosterSheet({
           <span className="text-[12px] font-semibold text-[var(--text)]">
             Who backs {side} · <span className="num text-[var(--text-muted)]">{count}</span>
           </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="-mr-1 rounded-full px-2 py-1 text-[14px] text-[var(--text-muted)] hover:text-[var(--text)]"
+          >
+            ×
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * RECENT ACTIVITY — a fixed slot, never an inner scroller.
+ *
+ * The rail shows a constant number of row heights so YES and NO end at the same
+ * y; anything past that is not squeezed into a cramped scroll area but opened
+ * in the same full-height column sheet the roster uses.
+ */
+function CaseActivity({
+  marketId,
+  side,
+  viewerWallet,
+}: {
+  marketId: number;
+  side: Side;
+  viewerWallet?: string;
+}) {
+  const [openAll, setOpenAll] = useState(false);
+  const { ref: anchorRef, box: anchorBox } = useAnchorRect<HTMLDivElement>(openAll);
+
+  return (
+    <div ref={anchorRef} className="space-y-1.5">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          Recent activity
+        </span>
+      </div>
+      <div className="overflow-hidden" style={{ height: "var(--case-row-activity)" }}>
+        <LiveTape
+          marketIds={[marketId]}
+          side={side}
+          wallet={viewerWallet}
+          scroll={false}
+          showTitles={false}
+          limit={6}
+          skeletonRows={3}
+          emptyText="No moves on this side yet."
+        />
+      </div>
+      <div className="h-[18px]">
+        <button
+          type="button"
+          onClick={() => setOpenAll(true)}
+          className="px-1 text-[12px] leading-[18px] text-[var(--text-secondary)] underline-offset-2 hover:underline"
+        >
+          See all activity →
+        </button>
+      </div>
+      {openAll && (
+        <SideSheet
+          title={`${side} activity`}
+          onClose={() => setOpenAll(false)}
+          anchor={anchorBox}
+        >
+          <LiveTape
+            marketIds={[marketId]}
+            side={side}
+            wallet={viewerWallet}
+            scroll={false}
+            showTitles={false}
+            limit={100}
+            skeletonRows={3}
+            emptyText="No moves on this side yet."
+          />
+        </SideSheet>
+      )}
+    </div>
+  );
+}
+
+/** The full-height column sheet: one pinned header over one scroll area. */
+function SideSheet({
+  title,
+  onClose,
+  anchor,
+  children,
+}: {
+  title: React.ReactNode;
+  onClose: () => void;
+  anchor: AnchorBox | null;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed bottom-0 top-0 z-50 flex flex-col"
+      style={anchorStyle(anchor)}
+      role="dialog"
+      aria-modal="true"
+    >
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/50"
+      />
+      <div className="relative mt-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-t-[16px] border-t border-[var(--border)] bg-[var(--bg)] pt-3">
+        <div className="mb-2 flex shrink-0 items-center justify-between px-4">
+          <span className="text-[12px] font-semibold text-[var(--text)]">{title}</span>
           <button
             type="button"
             onClick={onClose}
