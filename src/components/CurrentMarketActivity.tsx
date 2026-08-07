@@ -112,9 +112,11 @@ export function CurrentMarketActivity({
   const rows = live?.rows ?? [];
   const hasActivity = rows.length > 0;
   const latest = rows[0]?.text ?? "";
-  // The card has something to say if EITHER half is true. A quiet market the
-  // reader was sent to for a reason still deserves its reason.
-  const hasSomething = hasActivity;
+  // A FIXED FRAME. The card used to mount/unmount (and animate open/closed)
+  // with the data, so every market change jumped the rail: the frame vanished,
+  // then reappeared a fetch later. The frame is now permanent and only its
+  // CONTENT is swapped — quiet, loading and busy all occupy the same height.
+  const beat = hasActivity ? latest : live ? "Quiet here for now." : "Loading activity…";
 
   // OPENS OVER EVERYTHING. The expanded feed used to grow inside the rail,
   // where ancestor `overflow` and stacking contexts clipped it — so the panel
@@ -155,10 +157,8 @@ export function CurrentMarketActivity({
 
 
   return (
-    // NOT `return null` when quiet. The card collapses to zero height instead,
-    // so a market with nothing to say gives its space back smoothly and takes
-    // it back the same way when the first event lands.
-    <Collapsible open={hasSomething} probe="market-activity" className={embedded ? "" : "mb-3"}>
+    // Always open: the frame is fixed and only the text inside changes.
+    <Collapsible open probe="market-activity" className={embedded ? "" : "mb-3"}>
       <div
         ref={cardRef}
         className={embedded ? "overflow-hidden" : "overflow-hidden rounded-[12px]"}
@@ -200,17 +200,20 @@ export function CurrentMarketActivity({
         <div className="px-3 pb-2 pt-0.5">
           {/* The latest beat, in a slot that is always two lines tall — so the
             text can change under a reader without the card resizing. Only
-            reserved when there IS a beat; a quiet market shouldn't hold air. */}
-          {hasActivity && (
-            <button type="button" onClick={toggle} className="block w-full text-left">
-              <span
-                className="line-clamp-2 break-words text-[13px] leading-snug text-[var(--text-secondary)]"
-                style={{ minHeight: BEAT_MIN_H }}
-              >
-                {latest}
-              </span>
-            </button>
-          )}
+            reserved always, so the frame never resizes as the text changes. */}
+          <button
+            type="button"
+            onClick={toggle}
+            className="block w-full text-left"
+            disabled={!hasActivity}
+          >
+            <span
+              className="line-clamp-2 break-words text-[13px] leading-snug text-[var(--text-secondary)]"
+              style={{ minHeight: BEAT_MIN_H, opacity: hasActivity ? 1 : 0.6 }}
+            >
+              {beat}
+            </span>
+          </button>
         </div>
       </div>
 
