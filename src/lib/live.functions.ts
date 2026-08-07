@@ -182,7 +182,12 @@ export const listLiveEvents = createServerFn({ method: "GET" })
         // saw them, so every market signal fell through to the derived score or
         // the 0.5 fallback. The number existed on disk and was thrown away on
         // the way to the only place it mattered.
-        "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index, milestone_threshold:payload->>threshold, transition_headline:payload->>headline, transition_detail:payload->>detail, transition_type:payload->>type, transition_significance:payload->>significance",
+        // A conviction cohort stores its PEOPLE (not prose) in the payload, so
+        // the sentence can be written per surface. Those sub-fields must be
+        // selected too — without them the row reached the renderer with no
+        // kind, no rung and no people, and read "undefined — 0 believers
+        // reached NaN months."
+        "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index, milestone_threshold:payload->>threshold, transition_headline:payload->>headline, transition_detail:payload->>detail, transition_type:payload->>type, transition_significance:payload->>significance, cohort_kind:payload->>kind, cohort_rung:payload->>rung, cohort_crossed_on:payload->>crossedOn, cohort_people:payload->people",
       )
       .eq("is_canonical", true)
       .in("kind", LIVE_KINDS);
@@ -303,19 +308,38 @@ export const listLiveEvents = createServerFn({ method: "GET" })
       payload:
         r.kind === "believer_milestone"
           ? { threshold: Number((r as Record<string, unknown>).milestone_threshold ?? 0) }
-          : r.kind === "market_transition"
+          : r.kind === "conviction_cohort"
             ? {
-                headline: ((r as Record<string, unknown>).transition_headline as string) ?? "",
-                detail: ((r as Record<string, unknown>).transition_detail as string | null) ?? null,
-                type: ((r as Record<string, unknown>).transition_type as string | null) ?? null,
-                // Stored as text by `payload->>`; a malformed value stays absent
-                // so the mixer falls back rather than ranking on a NaN.
+                kind: ((r as Record<string, unknown>).cohort_kind as string) ?? null,
+                side: (r.side as string | null) ?? null,
+                rung: (() => {
+                  const v = Number((r as Record<string, unknown>).cohort_rung);
+                  return Number.isFinite(v) ? v : null;
+                })(),
+                crossedOn:
+                  ((r as Record<string, unknown>).cohort_crossed_on as string | null) ?? null,
+                people: Array.isArray((r as Record<string, unknown>).cohort_people)
+                  ? ((r as Record<string, unknown>).cohort_people as unknown[])
+                  : [],
                 significance: (() => {
                   const v = Number((r as Record<string, unknown>).transition_significance);
                   return Number.isFinite(v) ? v : undefined;
                 })(),
               }
-            : null,
+            : r.kind === "market_transition"
+              ? {
+                  headline: ((r as Record<string, unknown>).transition_headline as string) ?? "",
+                  detail:
+                    ((r as Record<string, unknown>).transition_detail as string | null) ?? null,
+                  type: ((r as Record<string, unknown>).transition_type as string | null) ?? null,
+                  // Stored as text by `payload->>`; a malformed value stays absent
+                  // so the mixer falls back rather than ranking on a NaN.
+                  significance: (() => {
+                    const v = Number((r as Record<string, unknown>).transition_significance);
+                    return Number.isFinite(v) ? v : undefined;
+                  })(),
+                }
+              : null,
     }));
 
     const live = groupLiveRows(events, ethUsd).slice(0, limit);
@@ -530,6 +554,11 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     const actionById = new Map<string, ConvictionAction>();
     /** Which rows the grammar classified as a moment rather than a transaction. */
     const celebrationById = new Map<string, boolean>();
+    /**
+     * Cohort rows we cannot describe honestly (no kind, no rung, or nobody in
+     * them). Better silence than "undefined — 0 believers reached NaN months".
+     */
+    const unrenderable = new Set<string>();
 
     for (const r of live) {
       const w = r.wallet?.toLowerCase();
@@ -606,6 +635,18 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           crossedOn?: string;
           people: CohortHolder[];
         };
+        // A cohort sentence is only true if we know WHO, WHICH SIDE and HOW
+        // LONG. Missing any of the three, the row is dropped, never guessed.
+        if (
+          !p?.kind ||
+          !p?.side ||
+          !Number.isFinite(Number(p?.rung)) ||
+          !Array.isArray(p?.people) ||
+          p.people.length === 0
+        ) {
+          unrenderable.add(r.id);
+          continue;
+        }
         const cohort: ConvictionCohort = {
           kind: p.kind,
           side: p.side,
@@ -749,30 +790,32 @@ export const listLiveEvents = createServerFn({ method: "GET" })
     // cost. Judged on dollars alone this feed reported capital and missed the
     // only thing it is about: a $12 exit after three months is a story, and a
     // $200 entry by someone who arrived this morning often is not.
-    const scored = live.map((r) => {
-      const m = momentumById.get(Number(r.marketId));
-      const marketBelievers = m ? (m.believersYes ?? 0) + (m.believersNo ?? 0) : null;
-      const b = r.wallet
-        ? beliefByKey.get(`${r.wallet.toLowerCase()}:${Number(r.marketId)}`)
-        : null;
-      const heldSide = r.side === "YES" ? b?.yesShares : b?.noShares;
-      const sell = (r.payload as { action?: string }).action === "SELL";
-      const fullExit = sell && heldSide != null && heldSide <= 0;
-      const conviction = beliefAction(actionById.get(r.id));
-      const candidate = {
-        kind: r.kind,
-        side: r.side,
-        amountUsd: r.amountUsd,
-        walletCount: r.walletCount,
-        tradeCount: r.tradeCount,
-        windowMs: Number((r.payload as { window_ms?: number }).window_ms ?? 0) || null,
-        relationship: (r.face?.relationship as NetTag | null) ?? null,
-        marketBelievers,
-        conviction,
-        daysHeld: b?.daysHeld ?? null,
-      };
-      return { r, candidate, fullExit, daysHeld: b?.daysHeld ?? null };
-    });
+    const scored = live
+      .filter((r) => !unrenderable.has(r.id))
+      .map((r) => {
+        const m = momentumById.get(Number(r.marketId));
+        const marketBelievers = m ? (m.believersYes ?? 0) + (m.believersNo ?? 0) : null;
+        const b = r.wallet
+          ? beliefByKey.get(`${r.wallet.toLowerCase()}:${Number(r.marketId)}`)
+          : null;
+        const heldSide = r.side === "YES" ? b?.yesShares : b?.noShares;
+        const sell = (r.payload as { action?: string }).action === "SELL";
+        const fullExit = sell && heldSide != null && heldSide <= 0;
+        const conviction = beliefAction(actionById.get(r.id));
+        const candidate = {
+          kind: r.kind,
+          side: r.side,
+          amountUsd: r.amountUsd,
+          walletCount: r.walletCount,
+          tradeCount: r.tradeCount,
+          windowMs: Number((r.payload as { window_ms?: number }).window_ms ?? 0) || null,
+          relationship: (r.face?.relationship as NetTag | null) ?? null,
+          marketBelievers,
+          conviction,
+          daysHeld: b?.daysHeld ?? null,
+        };
+        return { r, candidate, fullExit, daysHeld: b?.daysHeld ?? null };
+      });
 
     // ADAPTIVE DENSITY. The gate above is absolute — "is this big?" — and on a
     // quiet chain the honest answer is no for everything, which is how a live
