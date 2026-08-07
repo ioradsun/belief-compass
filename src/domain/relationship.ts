@@ -75,6 +75,16 @@ export interface RelationshipInput {
   strongestOpposedTopic?: string | null;
   /** Optional precomputed confidence; derived from evidence when omitted. */
   confidence?: number;
+  /**
+   * Shared convictions in CURRENT-EQUIVALENT terms (`DnaScore.evidence`).
+   *
+   * Defaults to the raw shared count, which is exactly right for a relationship
+   * where nothing has been exited — so callers that never saw history keep their
+   * behaviour. Where the two differ, THIS is what places the relationship: a
+   * reader is told they share twelve convictions, and the model knows that eight
+   * of them are memories.
+   */
+  evidence?: number;
 }
 
 export interface RelationshipPresentation {
@@ -160,10 +170,16 @@ export function presentRelationship(input: RelationshipInput): RelationshipPrese
   const topicCount = count(input.topicCount);
   const alignmentPct = clampPct(input.agreement);
   const oppositionPct = 100 - alignmentPct;
+  // Current-equivalent evidence. Falls back to the raw count, which is the same
+  // number for a relationship where nothing has been exited.
+  const evidence =
+    typeof input.evidence === "number" && Number.isFinite(input.evidence)
+      ? Math.max(0, input.evidence)
+      : shared;
   const confidence =
     typeof input.confidence === "number" && Number.isFinite(input.confidence)
       ? input.confidence
-      : confidenceFor(shared);
+      : confidenceFor(evidence);
 
   // Placement comes from the ENGINE, not from a second set of thresholds here.
   // `insufficient` still means "no shared history at all" rather than the
@@ -173,14 +189,17 @@ export function presentRelationship(input: RelationshipInput): RelationshipPrese
   const group: RelationshipGroup =
     shared < RELATIONSHIP_LIST_MIN_SHARED
       ? "insufficient"
-      : groupFor(labelFor({ agreement: alignmentPct, sharedBeliefs: shared, confidence }));
+      : groupFor(labelFor({ agreement: alignmentPct, evidence, confidence }));
 
-  const tier: EvidenceTier = shared >= MATURE_MIN_SHARED ? "mature" : "low";
+  // Maturity is an EVIDENCE question — "may this row lead with a percentage?" —
+  // so it reads current-equivalent convictions. Twelve shared markets that are
+  // all memories should not license the precision that twelve live ones do.
+  const tier: EvidenceTier = evidence >= MATURE_MIN_SHARED ? "mature" : "low";
   const earnedLabel = earnedFor({
     group,
     alignmentPct,
     oppositionPct,
-    sharedConvictions: shared,
+    sharedConvictions: evidence,
     topicCount,
     confidence,
   });

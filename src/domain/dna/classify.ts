@@ -26,7 +26,13 @@ export interface ClassifyInput {
  */
 export interface ClassifiableScore {
   agreement: number;
-  sharedBeliefs: number;
+  /**
+   * Shared convictions in CURRENT-EQUIVALENT terms — `DnaScore.evidence`, not
+   * the raw shared count. When nobody has left anything the two are identical,
+   * which is why every threshold below still means exactly what it meant before
+   * remembered convictions were allowed to count at all.
+   */
+  evidence: number;
   confidence: number;
 }
 
@@ -49,7 +55,7 @@ function bandHolds(
 ): boolean {
   const threshold = hold ? band.exit : band.enter;
   const agreeOk = isHigh ? s.agreement >= threshold : s.agreement <= threshold;
-  return agreeOk && s.sharedBeliefs >= band.minShared && s.confidence >= band.minConfidence;
+  return agreeOk && s.evidence >= band.minShared && s.confidence >= band.minConfidence;
 }
 
 /**
@@ -64,7 +70,7 @@ export function labelFor(
 ): RelationshipLabel {
   const t = thresholds ?? DNA_THRESHOLDS;
   const prev = previousRelationship;
-  if (s.sharedBeliefs < t.minSharedOverall) return "insufficient";
+  if (s.evidence < t.minSharedOverall) return "insufficient";
   if (bandHolds(t.twin, true, s, prev === "twin")) return "twin";
   if (bandHolds(t.tribe, true, s, prev === "tribe")) return "tribe";
   if (bandHolds(t.inverse, false, s, prev === "inverse")) return "inverse";

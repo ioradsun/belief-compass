@@ -247,7 +247,7 @@ describe("one authority decides placement", () => {
       );
       const engine = labelFor({
         agreement: p.alignmentPct,
-        sharedBeliefs: p.sharedConvictions,
+        evidence: p.sharedConvictions,
         confidence: p.confidence,
       });
       const engineSide =

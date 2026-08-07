@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { scoreRelationship, type DnaFactor } from "./score";
 import { classifyRelationship } from "./classify";
 import { scoreDomains, splitDomains } from "./domains";
-import { evidenceLevelFor, confidenceFor, type RelationshipLabel } from "./config";
+import { evidenceLevelFor, confidenceFor, DNA_THRESHOLDS, type RelationshipLabel } from "./config";
 
 const f = (id: number, side: "YES" | "NO", conviction = 0.8): DnaFactor => ({
   marketId: id,
@@ -173,5 +173,114 @@ describe("scoreDomains", () => {
     const { aligned, opposed } = splitDomains(scoreDomains(a, b, domainOf));
     expect(aligned[0].domain).toBe("Technology");
     expect(opposed[0].domain).toBe("Money");
+  });
+});
+
+/**
+ * HISTORY AS EVIDENCE.
+ *
+ * DNA read only open positions, so an exit erased every agreement the two ever
+ * had in that market — and 43.5% of production positions are fully exited. A
+ * conviction someone has left now still counts, at PAST_WEIGHT.
+ *
+ * These assert the RELATIONSHIPS between the numbers, not the constant. Change
+ * PAST_WEIGHT and they should all still hold; break the model and they should
+ * not.
+ */
+describe("convictions people have left", () => {
+  const f = (marketId: number, side: "YES" | "NO", past = false): DnaFactor => ({
+    marketId,
+    side,
+    conviction: 1,
+    past,
+  });
+
+  it("counts a shared market nobody left exactly as it always did", () => {
+    const a = [f(1, "YES"), f(2, "YES"), f(3, "NO")];
+    const b = [f(1, "YES"), f(2, "NO"), f(3, "NO")];
+    const s = scoreRelationship(a, b);
+    expect(s.sharedBeliefs).toBe(3);
+    expect(s.currentShared).toBe(3);
+    expect(s.pastShared).toBe(0);
+    expect(s.evidence).toBe(3);
+    expect(s.agreement).toBeCloseTo((2 / 3) * 100, 6);
+  });
+
+  it("REMEMBERS an agreement after one of them exits, instead of erasing it", () => {
+    const both = [f(1, "YES"), f(2, "YES")];
+    const left = [f(1, "YES"), f(2, "YES", true)];
+    const s = scoreRelationship(both, left);
+    // The market is still shared and still agreed — it simply weighs less.
+    expect(s.sharedBeliefs).toBe(2);
+    expect(s.currentShared).toBe(1);
+    expect(s.pastShared).toBe(1);
+    expect(s.agreement).toBe(100);
+    // ...and it is worth strictly less evidence than two live convictions.
+    expect(s.evidence).toBeLessThan(2);
+    expect(s.evidence).toBeGreaterThan(1);
+  });
+
+  it("treats a market as past when EITHER of them has left it", () => {
+    const aLeft = scoreRelationship([f(1, "YES", true)], [f(1, "YES")]);
+    const bLeft = scoreRelationship([f(1, "YES")], [f(1, "YES", true)]);
+    const bothLeft = scoreRelationship([f(1, "YES", true)], [f(1, "YES", true)]);
+    expect(aLeft.pastShared).toBe(1);
+    expect(bLeft.pastShared).toBe(1);
+    expect(bothLeft.pastShared).toBe(1);
+    expect(aLeft.evidence).toBe(bLeft.evidence);
+    expect(aLeft.evidence).toBe(bothLeft.evidence);
+  });
+
+  it("never lets remembered disagreement outvote where the two stand today", () => {
+    // Four past disagreements against one live agreement. Today they agree, and
+    // the number has to say that even though history is louder in raw count.
+    const a = [
+      f(1, "YES"),
+      f(2, "YES", true),
+      f(3, "YES", true),
+      f(4, "YES", true),
+      f(5, "YES", true),
+    ];
+    const b = [f(1, "YES"), f(2, "NO", true), f(3, "NO", true), f(4, "NO", true), f(5, "NO", true)];
+    const s = scoreRelationship(a, b);
+    expect(s.sameSideBeliefs).toBe(1);
+    expect(s.oppositeSideBeliefs).toBe(4);
+    // A raw count would read 20%. The live market is worth as much as all four.
+    expect(s.agreement).toBeGreaterThan(20);
+    expect(s.agreement).toBe(50);
+  });
+
+  it("cannot reach an evidence gate on memories alone that live positions would fail", () => {
+    // Enough remembered convictions to clear minSharedOverall on raw count...
+    const past = (n: number, side: "YES" | "NO") =>
+      Array.from({ length: n }, (_, i) => f(i + 1, side, true));
+    const s = scoreRelationship(past(6, "YES"), past(6, "YES"));
+    expect(s.sharedBeliefs).toBeGreaterThanOrEqual(DNA_THRESHOLDS.minSharedOverall);
+    // ...but not in current-equivalent terms, so the engine still declines.
+    expect(s.evidence).toBeLessThan(DNA_THRESHOLDS.minSharedOverall);
+    expect(classifyRelationship({ currentScore: s }).relationship).toBe("insufficient");
+  });
+
+  it("lets a long shared history genuinely place a relationship it could not before", () => {
+    // Two people who agreed 20 times and have since closed most of those markets.
+    const many = (n: number, side: "YES" | "NO", past: boolean) =>
+      Array.from({ length: n }, (_, i) => f(i + 1, side, past));
+    const live = many(4, "YES", false);
+    const gone = Array.from({ length: 20 }, (_, i) => f(i + 100, "YES", true));
+    const s = scoreRelationship([...live, ...gone], [...live, ...gone]);
+    expect(s.evidence).toBeGreaterThanOrEqual(DNA_THRESHOLDS.tribe.minShared);
+    expect(classifyRelationship({ currentScore: s }).relationship).not.toBe("insufficient");
+    // Four live convictions alone would not have been enough.
+    const liveOnly = scoreRelationship(live, live);
+    expect(classifyRelationship({ currentScore: liveOnly }).relationship).toBe("insufficient");
+  });
+
+  it("keeps confidence monotonic: more remembered history never lowers it", () => {
+    const grow = [0, 1, 4, 12, 40].map((n) => {
+      const past = Array.from({ length: n }, (_, i) => f(i + 100, "YES", true));
+      const live = [f(1, "YES"), f(2, "YES")];
+      return scoreRelationship([...live, ...past], [...live, ...past]).confidence;
+    });
+    for (let i = 1; i < grow.length; i++) expect(grow[i]).toBeGreaterThan(grow[i - 1]);
   });
 });

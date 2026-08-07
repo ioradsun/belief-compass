@@ -126,6 +126,8 @@ interface Report {
   archetype: string;
   matchPct: number;
   shared: number;
+  live: number;
+  gone: number;
   together: number;
   apart: number;
   confidence: number;
@@ -151,6 +153,7 @@ function report(name: string, a: DnaFactor[], b: DnaFactor[]): Report {
     apart: s.oppositeSideBeliefs,
     topicCount: TOPICS,
     confidence: s.confidence,
+    evidence: s.evidence,
   });
   // The group comes from the presentation layer, which got it from the engine.
   // Passing it — rather than letting the spectrum re-derive a band from
@@ -165,6 +168,8 @@ function report(name: string, a: DnaFactor[], b: DnaFactor[]): Report {
     archetype: name,
     matchPct: Math.round(s.agreement),
     shared: s.sharedBeliefs,
+    live: s.currentShared,
+    gone: s.pastShared,
     together: s.sameSideBeliefs,
     apart: s.oppositeSideBeliefs,
     confidence: Number(s.confidence.toFixed(3)),
@@ -287,6 +292,50 @@ lifecycle("Lifecycle · adds NO alongside YES on market 1 (straddle)", [
   });
 }
 
+// ── history: what a conviction someone has LEFT is still worth ──
+{
+  const held = (n: number, side: "YES" | "NO", from = 1): DnaFactor[] =>
+    Array.from({ length: n }, (_, i) => ({ marketId: from + i, side, conviction: 0.72 }));
+  const gone = (n: number, side: "YES" | "NO", from = 1): DnaFactor[] =>
+    Array.from({ length: n }, (_, i) => ({
+      marketId: from + i,
+      side,
+      conviction: 0.72,
+      past: true,
+    }));
+
+  cases.push({
+    name: "History · 12 agreed, all still held",
+    a: held(12, "YES"),
+    b: held(12, "YES"),
+  });
+  cases.push({
+    name: "History · 12 agreed, ONE of them has exited all 12",
+    a: held(12, "YES"),
+    b: gone(12, "YES"),
+  });
+  cases.push({
+    name: "History · 4 live agreements + 20 remembered ones",
+    a: [...held(4, "YES"), ...gone(20, "YES", 100)],
+    b: [...held(4, "YES"), ...gone(20, "YES", 100)],
+  });
+  cases.push({
+    name: "History · 4 live agreements alone (what the above used to be)",
+    a: held(4, "YES"),
+    b: held(4, "YES"),
+  });
+  cases.push({
+    name: "History · agree today, disagreed on 4 they have both left",
+    a: [...held(1, "YES"), ...gone(4, "YES", 100)],
+    b: [...held(1, "YES"), ...gone(4, "NO", 100)],
+  });
+  cases.push({
+    name: "History · 6 remembered agreements and nothing live",
+    a: gone(6, "YES"),
+    b: gone(6, "YES"),
+  });
+}
+
 // ── duration: identical sides, wildly different holding times ──
 {
   const fresh: Holding[] = [];
@@ -313,7 +362,7 @@ if (JSON_OUT) {
   const num = (v: number | string, n: number) => String(v).padStart(n);
   console.log("\nDNA ARCHETYPES — what a person actually sees\n");
   console.log(
-    `${pad("archetype", 52)} ${num("match", 6)} ${num("shrd", 5)} ${num("tog", 4)} ${num("apt", 4)} ${num("conf", 6)}  ${pad("engine", 13)} ${pad("people", 13)} ${pad("spectrum", 10)} human line`,
+    `${pad("archetype", 52)} ${num("match", 6)} ${num("shrd", 5)} ${num("live", 5)} ${num("gone", 5)} ${num("tog", 4)} ${num("apt", 4)} ${num("conf", 6)}  ${pad("engine", 13)} ${pad("people", 13)} ${pad("spectrum", 10)} human line`,
   );
   console.log("─".repeat(160));
   let last = "";
@@ -322,7 +371,7 @@ if (JSON_OUT) {
     if (group !== last && last !== "") console.log("");
     last = group;
     console.log(
-      `${pad(r.archetype, 52)} ${num(`${r.matchPct}%`, 6)} ${num(r.shared, 5)} ${num(r.together, 4)} ${num(r.apart, 4)} ${num(r.confidence.toFixed(2), 6)}  ${pad(r.engineLabel, 13)} ${pad(r.peopleLabel, 13)} ${pad(r.spectrumLabel, 10)} ${r.humanLine}`,
+      `${pad(r.archetype, 52)} ${num(`${r.matchPct}%`, 6)} ${num(r.shared, 5)} ${num(r.live, 5)} ${num(r.gone, 5)} ${num(r.together, 4)} ${num(r.apart, 4)} ${num(r.confidence.toFixed(2), 6)}  ${pad(r.engineLabel, 13)} ${pad(r.peopleLabel, 13)} ${pad(r.spectrumLabel, 10)} ${r.humanLine}`,
     );
   }
 

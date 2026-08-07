@@ -9,7 +9,7 @@
  * Only directional beliefs (YES/NO) participate — MIXED/INACTIVE are excluded by
  * construction (DnaFactor.side is YES|NO). Conviction weights are clamped to ≥0.
  */
-import { confidenceFor, evidenceLevelFor, type EvidenceLevel } from "./config";
+import { confidenceFor, evidenceLevelFor, PAST_WEIGHT, type EvidenceLevel } from "./config";
 
 /** A wallet's directional stake in one market. */
 export interface DnaFactor {
@@ -17,14 +17,36 @@ export interface DnaFactor {
   side: "YES" | "NO";
   /** Absolute normalized conviction strength, 0..1. */
   conviction: number;
+  /**
+   * Have they LEFT this position? A remembered side, not a held one.
+   *
+   * Absent means currently held, so every existing caller keeps its meaning
+   * without a change. See PAST_WEIGHT for what a remembered side is worth.
+   */
+  past?: boolean;
 }
 
 export interface DnaScore {
   /** Conviction-weighted same-side fraction, 0..100 (100 = full agreement). */
   agreement: number;
+  /** Every conviction the two have shared, held or remembered. The human count. */
   sharedBeliefs: number;
   sameSideBeliefs: number;
   oppositeSideBeliefs: number;
+  /** Shared convictions BOTH still hold. */
+  currentShared: number;
+  /** Shared convictions at least one of them has left. */
+  pastShared: number;
+  /**
+   * Shared convictions in CURRENT-EQUIVALENT terms:
+   * `currentShared + PAST_WEIGHT × pastShared`.
+   *
+   * This — not the raw count — is what confidence and every evidence threshold
+   * read, so a bar that meant "eight convictions worth of evidence" still means
+   * that after history was let in. Thirty-two remembered markets do not quietly
+   * mint a Twin.
+   */
+  evidence: number;
   sharedWeight: number;
   sameSideWeight: number;
   oppositeSideWeight: number;
@@ -45,6 +67,8 @@ export function scoreRelationship(a: DnaFactor[], b: DnaFactor[]): DnaScore {
   let sharedBeliefs = 0;
   let sameSideBeliefs = 0;
   let oppositeSideBeliefs = 0;
+  let currentShared = 0;
+  let pastShared = 0;
   let sharedWeight = 0;
   let sameSideWeight = 0;
   let oppositeSideWeight = 0;
@@ -54,7 +78,14 @@ export function scoreRelationship(a: DnaFactor[], b: DnaFactor[]): DnaScore {
     const x = byId.get(key(y.marketId));
     if (!x) continue;
     sharedBeliefs += 1;
-    const w = Math.sqrt(Math.max(0, x.conviction) * Math.max(0, y.conviction));
+    // A shared market is LIVE only while both are still standing in it. If
+    // either has left, this is a place the two once met — and the weaker of the
+    // two claims is the honest one to carry.
+    const live = !x.past && !y.past;
+    if (live) currentShared += 1;
+    else pastShared += 1;
+    const w =
+      Math.sqrt(Math.max(0, x.conviction) * Math.max(0, y.conviction)) * (live ? 1 : PAST_WEIGHT);
     sharedWeight += w;
     if (x.side === y.side) {
       sameSideBeliefs += 1;
@@ -64,6 +95,7 @@ export function scoreRelationship(a: DnaFactor[], b: DnaFactor[]): DnaScore {
       oppositeSideWeight += w;
     }
   }
+  const evidence = currentShared + PAST_WEIGHT * pastShared;
 
   // Prefer the conviction-weighted fraction; fall back to the count fraction when
   // every shared conviction is ~0 (weights vanish) so agreement stays defined.
@@ -79,10 +111,16 @@ export function scoreRelationship(a: DnaFactor[], b: DnaFactor[]): DnaScore {
     sharedBeliefs,
     sameSideBeliefs,
     oppositeSideBeliefs,
+    currentShared,
+    pastShared,
+    evidence,
     sharedWeight,
     sameSideWeight,
     oppositeSideWeight,
-    confidence: confidenceFor(sharedBeliefs),
-    evidenceLevel: evidenceLevelFor(sharedBeliefs),
+    // Confidence and the evidence tier read CURRENT-EQUIVALENT convictions, never
+    // the raw count — otherwise letting history in would have silently loosened
+    // every threshold that was calibrated against live positions.
+    confidence: confidenceFor(evidence),
+    evidenceLevel: evidenceLevelFor(evidence),
   };
 }
