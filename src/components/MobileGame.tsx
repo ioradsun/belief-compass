@@ -27,6 +27,7 @@ import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { useHouseFinalize } from "@/lib/house-round";
+import { useAnswerCalls } from "@/hooks/useAnswerCalls";
 import { listMarketPulses, type VolumeWindow } from "@/lib/markets.functions";
 import { marketChangeQO, evidenceQO } from "@/lib/market-queries";
 import { useMarketChange } from "@/lib/market-change-query";
@@ -276,6 +277,10 @@ export function MobileGame({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trade.isSuccess, trade.hash, side]);
+
+  // The SAME rule the desktop deck runs, from the same hook rather than a second
+  // copy of it — a confirmed buy closes every open Challenge in this market.
+  useAnswerCalls(viewerWallet, marketId, trade.isSuccess && !!trade.hash);
 
   const stageMedia = stageMediaFrom(cm);
   const createdAt = cm?.createdAt ?? cm?.creator?.createdAt ?? null;

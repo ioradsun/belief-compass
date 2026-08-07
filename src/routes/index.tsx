@@ -34,9 +34,8 @@ import {
 import { LiveTape } from "@/components/LiveTape";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { SimilarMarkets } from "@/components/SimilarMarkets";
-import { ForYouShelf } from "@/components/ForYouShelf";
+import { ChallengeRail } from "@/components/ChallengeRail";
 import { LaunchRail } from "@/components/LaunchRail";
-import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
 import { MobileGame } from "@/components/MobileGame";
 import { MarketScene } from "@/components/MarketScene";
@@ -510,6 +509,16 @@ function Feed() {
   };
   const closeLaunch = () =>
     navigate({ search: (prev: Search) => ({ ...prev, launch: undefined }) });
+
+  /**
+   * The market a buy just confirmed in — component state, NOT a search param.
+   *
+   * Publishing owns `?launch=` because a creator arrives at that URL and the
+   * moment survives a reload. A buy is the opposite: it happened once, in this
+   * session, and resurrecting "you took a side" on a refresh two days later
+   * would be a lie the URL told on the app's behalf.
+   */
+  const [backedId, setBackedId] = useState<number | null>(null);
 
   const selectPerson = (personWallet: string) => {
     if (personWallet === selectedPerson) return;
@@ -1191,7 +1200,6 @@ function Feed() {
           ) : (
             <>
               {/* Recipient side of belonging — one aggregated line, dismissible. */}
-              {wallet && <WelcomeReceived wallet={wallet} />}
               {/* Rendered whether or not a wallet is connected: the Feed tab is
                   the one that works signed out, and the rail used to hide it
                   behind a connect prompt that replaced the whole column. */}
@@ -1385,6 +1393,7 @@ function Feed() {
                     mobileCaseOpen={mobileCaseActive}
                     onToggleCase={toggleCase}
                     onSelectPerson={selectPerson}
+                    onBacked={setBackedId}
                     reason={reasonByMarket[Number(currentRow.onchain_id)] ?? null}
                   />
                 )}
@@ -1439,39 +1448,38 @@ function Feed() {
             </Suspense>
           ) : (
             <>
-              {/* Welcome the newest believers on a side you back — one tap. */}
-              <WelcomePrompt wallet={wallet} onSelectPerson={selectPerson} />
-              {/* LAUNCH MODE, after publish. It REPLACES the shelf rather than
-                stacking above it: a creator who has just made a market has one
-                useful thing to do, and putting other people's markets beside it
-                would be competing for the only attention that matters here. */}
+              {/* CALL FEEDBACK, after publish. It sits ABOVE the rail rather
+                than replacing it: "your people got the call" is a fact about
+                what just happened, not a destination, and the rail underneath
+                is still where anyone's calls to YOU arrive. */}
+              {/* Publish wins when both are true for the same market: "your
+                  market is live" is the larger fact, and a creator who backs
+                  their own question should not have it downgraded. */}
               {launchId != null && launchId === shownId ? (
-                <LaunchRail wallet={wallet} marketId={launchId} onDone={closeLaunch} />
-              ) : (
-                /* WHAT IS HAPPENING TO YOU, above what is happening. There is no
-                  notification channel on this platform, so an invitation reaches
-                  someone here or nowhere — see ForYouShelf. It stays silent
-                  unless the system can say why THIS person, which today is most
-                  of the time. */
-                <ForYouShelf wallet={wallet} onSelect={selectMarket} />
-              )}
-              {/* "In this market" moved to the top of the For You rail, next to
-                the running order. The global tape below still excludes the
-                current market, so its activity is told in exactly one place. */}
-
-              {/* The heading belongs to the tape now, so the update control can
-                share its line. It used to be a sticky button INSIDE the
-                scroller, which pushed every row down when activity arrived and
-                snapped them back on the tap meant to be the calm act. */}
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <LiveTape
-                  wallet={wallet}
-                  onSelect={selectMarket}
-                  excludeMarketId={shownId ?? undefined}
-                  holdUpdates
-                  label="Now"
-                />
-              </div>
+                <LaunchRail wallet={wallet} kind="created" onDone={closeLaunch} />
+              ) : backedId != null && backedId === shownId ? (
+                <LaunchRail wallet={wallet} kind="backed" onDone={() => setBackedId(null)} />
+              ) : null}
+              {/* CHALLENGE | NOW — the two social questions, kept apart.
+                Challenge is "where are my people waiting for my take"; Now is
+                "what is happening across Conviction". Anything that cannot tell
+                those apart belongs in the tape, which is why the tape is passed
+                in rather than owned here. */}
+              <ChallengeRail
+                wallet={wallet}
+                onSelect={selectMarket}
+                now={
+                  <div className="min-h-0 flex-1 overflow-hidden">
+                    <LiveTape
+                      wallet={wallet}
+                      onSelect={selectMarket}
+                      excludeMarketId={shownId ?? undefined}
+                      holdUpdates
+                      label="Now"
+                    />
+                  </div>
+                }
+              />
             </>
           )}
         </aside>

@@ -5,8 +5,17 @@ import { join } from "node:path";
 /**
  * AUTHORSHIP IS NEVER SWALLOWED.
  *
- * `welcomes.functions.ts` used to verify the wallet session and then, on any
- * failure, carry on with the wallet the CALLER claimed:
+ * THE MODULE THAT MOTIVATED THIS IS GONE; THE RULE IS NOT. `welcomes.functions.ts`
+ * was deleted along with Say Hi when Challenge replaced it, and the obvious move
+ * was to delete this file with it. That would have been backwards. The bug was
+ * never about welcomes — it was about a SHAPE that any server function can grow,
+ * and the scan below is what makes it a rule rather than one module's history.
+ * Losing the guard because its first offender was refactored away is how a class
+ * of bug comes back.
+ *
+ * The original, kept because it is the clearest statement of the failure:
+ * `welcomes.functions.ts` verified the wallet session and then, on any failure,
+ * carried on with the wallet the CALLER claimed:
  *
  *     try {
  *       return await assertWalletOwnership(wallet, session);
@@ -114,10 +123,15 @@ describe("a rejected proof of authorship is never swallowed", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("welcomes still proves the sender, since that is the one that reaches others", () => {
-    const src = readFileSync(join(LIB, "welcomes.functions.ts"), "utf8");
-    expect(PROOF.test(src)).toBe(true);
-    // The exact fallback that shipped the hole, in any spacing.
-    expect(/catch\s*\{[^}]*\}\s*\}?\s*return\s+wallet\.toLowerCase\(\)/.test(src)).toBe(false);
+  it("no module anywhere reintroduces the exact fallback that shipped the hole", () => {
+    // The specific line, in any spacing, across every server module — not just
+    // the one that had it. `welcomes.functions.ts` is deleted; this outlives it.
+    for (const file of files) {
+      const src = readFileSync(file, "utf8");
+      expect(
+        /catch\s*\{[^}]*\}\s*\}?\s*return\s+wallet\.toLowerCase\(\)/.test(src),
+        file.split("/").pop(),
+      ).toBe(false);
+    }
   });
 });

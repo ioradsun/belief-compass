@@ -133,25 +133,15 @@ const REQUIRED: Requirement[] = [
     emptyMeans: "No follows recorded yet — expected until someone taps Follow.",
   },
   {
-    feature: "Invitations — the only way a person-to-person signal reaches anyone",
-    table: "market_invites",
-    // The table shipped without these three. `reason` is the feature — the For
-    // You rule refuses to render a row that cannot say why THIS person, and
-    // there is no fallback string — so an invitation without one is invisible.
-    columns: [
-      "onchain_id",
-      "inviter_wallet",
-      "invitee_wallet",
-      "reason",
-      "reason_kind",
-      "viewed_at",
-    ],
-    migration: "20260901000000_market_invites_reason.sql",
-    // There is no notification channel on this platform, so if this table is
-    // missing an invitation does not degrade — it silently does not exist, and
-    // the For You shelf that delivers it has nothing to show. Exactly the class
-    // of failure this script was written for.
-    emptyMeans: "No invitations sent yet — expected until a creator recruits someone.",
+    feature: "Challenge — the durable record of whose conviction called whom",
+    table: "market_calls",
+    columns: ["market_id", "caller_wallet", "responder_wallet", "relation_at_call", "responded_at"],
+    migration: "20260902000000_market_calls.sql",
+    // Open Challenges are DERIVED and need nothing here, so a missing table
+    // does not break the panel — it silently loses Dependability instead, and
+    // the historical relationship snapshot can never be reconstructed later.
+    // Exactly the class of failure this script was written for.
+    emptyMeans: "No calls recorded yet — expected until someone qualifies as a Tribe or Rival.",
   },
 ];
 
