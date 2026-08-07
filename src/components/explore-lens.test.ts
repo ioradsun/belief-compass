@@ -398,8 +398,38 @@ describe("loading holds the shape", () => {
   it("derives loading from the lens-gated feed, so a poll never triggers it", () => {
     // `stableFeed` is already gated to the current lens, so this is exactly
     // "the request for what the control says is still in flight".
-    expect(idx).toMatch(/const feedLoading = stableFeed === undefined/);
+    expect(idx).toMatch(/const feedPending = stableFeed === undefined && !isFeedError/);
     expect(idx).toMatch(/loading=\{feedLoading\}/);
+  });
+
+  it("never leaves a skeleton as the final answer", () => {
+    /**
+     * A skeleton is a PROMISE that something is coming, so it must never be
+     * terminal. `stableFeed === undefined` alone does not mean "in flight" — it
+     * is also what a failed request looks like, and a shimmer that never
+     * resolves with nothing to press is the worst of the three outcomes.
+     *
+     * Three states, three renders: loading gets the placeholder, failure gets a
+     * sentence and a retry, empty gets its own words.
+     */
+    expect(idx).toMatch(/const feedLoading = feedPending && !feedStalled/);
+    expect(idx).toMatch(
+      /const feedFailed = stableFeed === undefined && \(isFeedError \|\| feedStalled\)/,
+    );
+    // A request that never settles is not an error, so nothing else would ever
+    // replace the placeholder — hence the timer.
+    expect(idx).toMatch(/FEED_STALL_MS/);
+    expect(idx).toMatch(/<FeedUnavailable onRetry=\{refreshFeed\}/);
+    // The centre's skeleton branch is now gated on loading, not on absence.
+    expect(idx).toMatch(/activeMarket != null \|\| feedLoading \?/);
+  });
+
+  it("does not blame the reader's filter for a failed request", () => {
+    // Falling through to "Nothing matches this feed yet. Try widening it" sends
+    // someone to change a control that was never the problem.
+    expect(feed).toMatch(/failed\?: boolean/);
+    const branch = feed.slice(feed.indexOf("{loading &&"), feed.indexOf("<ol className"));
+    expect(branch.indexOf("Couldn")).toBeLessThan(branch.indexOf("Nothing matches"));
   });
 
   it("reserves the selector's narrowing line whether or not it has words", () => {

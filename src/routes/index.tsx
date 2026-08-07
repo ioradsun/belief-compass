@@ -99,6 +99,17 @@ import { marketTitle } from "@/domain/market-title";
  */
 const PROMOTE_TIMEOUT_MS = 1_200;
 
+/**
+ * How long a first feed may be silent before the reader is told.
+ *
+ * Twelve seconds is far past any healthy cold build — the shared snapshot is
+ * single-flighted and the client's own fallback fires at four — so reaching this
+ * means something is genuinely wrong rather than merely slow. It exists because
+ * a promise that never settles is not an error, so nothing else would ever
+ * replace the placeholder.
+ */
+const FEED_STALL_MS = 12_000;
+
 const WINDOW_OPTIONS: { key: VolumeWindow; label: string }[] = [
   { key: "1h", label: "1H" },
   { key: "24h", label: "24H" },
@@ -740,7 +751,35 @@ function Feed() {
    * current lens, so this is exactly "the request for what the control says is
    * still in flight" — never a slow poll over a feed already rendered.
    */
-  const feedLoading = stableFeed === undefined;
+  /**
+   * A SKELETON IS A PROMISE THAT SOMETHING IS COMING.
+   *
+   * It must therefore never be the terminal state. `stableFeed === undefined`
+   * alone does not mean "in flight" — it is also what a FAILED request looks
+   * like, and rendering the placeholder for that leaves a reader watching a
+   * shimmer that will never resolve, with nothing to press.
+   *
+   * The same discipline `lensExhausted` already applies: loading, error and
+   * empty are three states, and only the first earns a placeholder.
+   *
+   * The timer covers the third way a skeleton becomes permanent — a request
+   * that never settles at all. React Query cannot help there, because a promise
+   * that hangs is not an error. After STALL_MS the reader is told plainly and
+   * given the retry, rather than being left to guess.
+   */
+  const feedPending = stableFeed === undefined && !isFeedError;
+  const [feedStalled, setFeedStalled] = useState(false);
+  useEffect(() => {
+    if (!feedPending) {
+      setFeedStalled(false);
+      return;
+    }
+    const t = setTimeout(() => setFeedStalled(true), FEED_STALL_MS);
+    return () => clearTimeout(t);
+  }, [feedPending, lens]);
+  const feedLoading = feedPending && !feedStalled;
+  /** Nothing to show and nothing on the way — say so, and offer the way back. */
+  const feedFailed = stableFeed === undefined && (isFeedError || feedStalled);
 
   const lensExhausted =
     lens !== "for_you" &&
@@ -1146,6 +1185,7 @@ function Feed() {
                       onLens={selectLens}
                       lensExhausted={lensExhausted}
                       loading={feedLoading}
+                      failed={feedFailed}
                       entries={feedEntries}
                       rows={knownRowsRef.current}
                       activeId={activeMarket}
@@ -1299,10 +1339,15 @@ function Feed() {
                   />
                 )}
               </MarketScene>
-            ) : activeMarket != null || stableFeed === undefined ? (
-              // A market is selected (or the feed is still arriving) but nothing
-              // has ever been rendered here — the ONLY time a skeleton is right.
-              // Once a market has been shown, the branch above holds it instead.
+            ) : feedFailed ? (
+              // The request failed, or never settled. A skeleton here would be a
+              // promise the app cannot keep.
+              <FeedUnavailable onRetry={refreshFeed} />
+            ) : activeMarket != null || feedLoading ? (
+              // A market is selected (or the feed is genuinely still arriving)
+              // but nothing has ever been rendered here — the ONLY time a
+              // skeleton is right. Once a market has been shown, the branch
+              // above holds it instead.
               <div className="flex min-h-0 flex-1 flex-col">
                 <DeckSkeleton />
               </div>
@@ -1410,6 +1455,36 @@ function Feed() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * THE FEED DID NOT ARRIVE.
+ *
+ * Distinct from "caught up", which is a finished journey, and from a skeleton,
+ * which is a promise that something is coming. This is the third outcome — the
+ * request failed, or never settled — and before it existed the app rendered a
+ * placeholder for it forever, so a reader saw a shimmer that would never resolve
+ * and had nothing to press.
+ *
+ * One sentence and one action. No error code: a reader cannot use it, and the
+ * only thing they can actually do is ask again.
+ */
+function FeedUnavailable({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
+      <p className="max-w-[34ch] text-[15px] leading-relaxed text-[var(--text)]">
+        We couldn&rsquo;t load the markets just now.
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-5 rounded-full px-5 py-2.5 text-[13px] font-semibold text-[var(--bg)] transition-opacity hover:opacity-90"
+        style={{ background: "var(--text)" }}
+      >
+        Try again
+      </button>
     </div>
   );
 }
