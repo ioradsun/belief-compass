@@ -19,12 +19,20 @@
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
+import { categoryLabel, normalizeCategory } from "@/domain/categories";
 import {
   composeForYou,
   type ForYouCandidate,
   type ForYouRow,
   type NamedPerson,
 } from "@/domain/for-you";
+import {
+  composeAudience,
+  type AudienceCandidate,
+  type AudienceEvidence,
+  type AudienceRow,
+  type LaunchProgress,
+} from "@/domain/launch-audience";
 
 /**
  * Sending limits.
@@ -53,6 +61,16 @@ const READ = {
   marketsPerSource: 40,
   /** Invitations shown, newest first. */
   invites: 20,
+  /** Similar markets consulted for the Adjacent audience. */
+  similarMarkets: 6,
+  /** Position rows read across those similar markets. */
+  adjacentRows: 400,
+  /** Followers offered. */
+  followers: 60,
+  /** Recent markets sampled for the Category audience. */
+  categoryMarkets: 60,
+  /** Position rows read across those category markets. */
+  categoryRows: 400,
 } as const;
 
 export type InviteKind = "adjacent" | "tribe" | "rival" | "category" | "follower";
@@ -451,4 +469,273 @@ export async function buildForYou(viewer: string): Promise<ForYouRow[]> {
   }
 
   return composeForYou(candidates, { alreadyIn: new Set(mySide.keys()) });
+}
+
+/* ── Recruitment: who should see this debate first ───────────────────────── */
+
+/**
+ * The five audiences for one market.
+ *
+ * NO NEW RETRIEVAL. "Adjacent" means people already holding a position in a
+ * market that resembles this one, and finding those markets is the job
+ * `findMarketSuggestions` already does — the same keyword pull, the same
+ * `textScore`, the same band gate. This asks it about the market's OWN title
+ * and reads the participants of whatever comes back. A second similarity
+ * implementation would be a second set of answers to one question.
+ *
+ * Composition — including who may be offered at all — belongs to
+ * `@/domain/launch-audience`. This gathers evidence and nothing else.
+ */
+export async function buildAudience(creator: string, marketId: number): Promise<AudienceRow[]> {
+  const me = creator.toLowerCase();
+  const sb = serviceClient();
+
+  const { data: market } = await sb
+    .from("markets")
+    .select("onchain_id, title, category")
+    .eq("onchain_id", marketId)
+    .maybeSingle();
+  if (!market?.title) return composeAudience([], { creator: me });
+
+  const title = String(market.title);
+  const slug = normalizeCategory(market.category as string | null);
+
+  const { findMarketSuggestions } = await import("@/lib/market-create.server");
+  const [similar, here, invitedRows, dna, followers] = await Promise.all([
+    // The market's own question, asked of the one scorer. Its exact self comes
+    // back too and is filtered below — cheaper than special-casing the query.
+    findMarketSuggestions({ question: title }, READ.similarMarkets),
+    sb
+      .from("wallet_beliefs")
+      .select("wallet")
+      .eq("onchain_id", marketId)
+      .in("stance_side", ["YES", "NO"]),
+    sb.from("market_invites").select("to_wallet").eq("market_id", marketId).eq("from_wallet", me),
+    sb
+      .from("viewer_dna_cache")
+      .select("twin_matches, tribe_matches, opp_matches, inverse_matches")
+      .eq("viewer_wallet", me)
+      .maybeSingle(),
+    sb
+      .from("follows")
+      .select("follower")
+      .eq("followed", me)
+      .order("created_at", { ascending: false })
+      .limit(READ.followers),
+  ]);
+
+  const alreadyIn = new Set(
+    ((here.data ?? []) as { wallet: string }[]).map((r) => String(r.wallet).toLowerCase()),
+  );
+  const invited = new Set(
+    ((invitedRows.data ?? []) as { to_wallet: string }[]).map((r) =>
+      String(r.to_wallet).toLowerCase(),
+    ),
+  );
+
+  const similarIds = similar.map((s) => s.onchainId).filter((id) => id !== marketId);
+  const titleById = new Map(similar.map((s) => [s.onchainId, s.title]));
+
+  // ADJACENT — holders of the similar markets, capped. This is the only
+  // audience with real density (≥1 for 22% of markets, max 43), which is why it
+  // leads the panel.
+  const { data: adjacentRows } = similarIds.length
+    ? await sb
+        .from("wallet_beliefs")
+        .select("wallet, onchain_id")
+        .in("onchain_id", similarIds)
+        .in("stance_side", ["YES", "NO"])
+        .limit(READ.adjacentRows)
+    : { data: [] as never[] };
+
+  const adjacentOf = new Map<string, { count: number; title: string }>();
+  for (const r of (adjacentRows ?? []) as { wallet: string; onchain_id: number }[]) {
+    const w = String(r.wallet).toLowerCase();
+    const t = titleById.get(Number(r.onchain_id));
+    if (!t) continue;
+    const prev = adjacentOf.get(w);
+    // The FIRST similar market is the closest one — `findMarketSuggestions`
+    // returns them ranked — so the sentence names the strongest overlap rather
+    // than whichever row the database happened to return last.
+    adjacentOf.set(w, { count: (prev?.count ?? 0) + 1, title: prev?.title ?? t });
+  }
+
+  // CATEGORY — people active in this subject. Real but untargeted: it is the
+  // weakest reason on the panel, which is why it sits fourth.
+  const categoryOf = new Map<string, number>();
+  if (slug && slug !== "other") {
+    const { data: sameCategory } = await sb
+      .from("markets")
+      .select("onchain_id")
+      .eq("category", slug)
+      .neq("onchain_id", marketId)
+      .order("onchain_id", { ascending: false })
+      .limit(READ.categoryMarkets);
+    const ids = ((sameCategory ?? []) as { onchain_id: number }[]).map((m) => Number(m.onchain_id));
+    if (ids.length) {
+      const { data: backers } = await sb
+        .from("wallet_beliefs")
+        .select("wallet")
+        .in("onchain_id", ids)
+        .in("stance_side", ["YES", "NO"])
+        .limit(READ.categoryRows);
+      for (const r of (backers ?? []) as { wallet: string }[]) {
+        const w = String(r.wallet).toLowerCase();
+        categoryOf.set(w, (categoryOf.get(w) ?? 0) + 1);
+      }
+    }
+  }
+
+  const relOf = new Map<string, CachedRelationship>();
+  const collect = (rows: unknown) => {
+    for (const r of ((rows as CachedRelationship[] | null) ?? []).slice(0, READ.peoplePerBucket)) {
+      const w = r?.wallet ? String(r.wallet).toLowerCase() : null;
+      if (w) relOf.set(w, r);
+    }
+  };
+  collect(dna.data?.twin_matches);
+  collect(dna.data?.tribe_matches);
+  const tribeWallets = [...relOf.keys()];
+  collect(dna.data?.opp_matches);
+  collect(dna.data?.inverse_matches);
+  const rivalWallets = [...relOf.keys()].filter((w) => !tribeWallets.includes(w));
+
+  const followerWallets = ((followers.data ?? []) as { follower: string }[]).map((r) =>
+    String(r.follower).toLowerCase(),
+  );
+
+  const everyone = [
+    ...new Set([
+      ...adjacentOf.keys(),
+      ...tribeWallets,
+      ...rivalWallets,
+      ...categoryOf.keys(),
+      ...followerWallets,
+    ]),
+  ].filter((w) => w !== me && !alreadyIn.has(w));
+
+  const { resolveProfiles } = await import("@/lib/profiles.server");
+  const profiles = await resolveProfiles(everyone, 0);
+  const nameOf = (w: string) => profiles.get(w)?.displayName?.trim() || aliasFor(w);
+
+  const candidates: AudienceCandidate[] = [];
+  const push = (wallet: string, evidence: AudienceEvidence) => {
+    if (!everyone.includes(wallet)) return;
+    candidates.push({ wallet, name: nameOf(wallet), evidence, invited: invited.has(wallet) });
+  };
+
+  for (const [wallet, a] of adjacentOf) {
+    push(wallet, { kind: "adjacent", similarTitle: a.title, similarCount: a.count });
+  }
+  for (const wallet of tribeWallets) {
+    const r = relOf.get(wallet);
+    push(wallet, {
+      kind: "tribe",
+      agreement: r?.agreement ?? null,
+      shared: r?.sharedBeliefs ?? null,
+      topic: r?.strongestAlignedDomain?.name?.trim() || null,
+    });
+  }
+  for (const wallet of rivalWallets) {
+    const r = relOf.get(wallet);
+    push(wallet, {
+      kind: "rival",
+      agreement: r?.agreement ?? null,
+      shared: r?.sharedBeliefs ?? null,
+    });
+  }
+  if (slug) {
+    const label = categoryLabel(slug);
+    for (const [wallet, backed] of categoryOf) {
+      if (label) push(wallet, { kind: "category", label, backed });
+    }
+  }
+  for (const wallet of followerWallets) push(wallet, { kind: "follower" });
+
+  return composeAudience(candidates, { creator: me, alreadyIn });
+}
+
+/**
+ * LAUNCH PROGRESS — what happened to the debate, not what the creator sent.
+ *
+ * `joined_at` is DERIVED and then persisted the first time it is observed. A
+ * position can be exited, and a ladder that recomputed from live positions
+ * would let "Joined" go backwards — which is not a thing that can happen to a
+ * past event. Recording when we first saw it makes the rung durable without
+ * needing a writer on the trade path.
+ */
+export async function buildProgress(marketId: number): Promise<LaunchProgress> {
+  const sb = serviceClient();
+
+  const [invites, state] = await Promise.all([
+    sb.from("market_invites").select("to_wallet, viewed_at, joined_at").eq("market_id", marketId),
+    sb
+      .from("market_state")
+      .select("directional_believers")
+      .eq("onchain_id", marketId)
+      .maybeSingle(),
+  ]);
+
+  const rows = (invites.data ?? []) as {
+    to_wallet: string;
+    viewed_at: string | null;
+    joined_at: string | null;
+  }[];
+  const invitedWallets = rows.map((r) => String(r.to_wallet).toLowerCase());
+  const participants = Number(state.data?.directional_believers ?? 0);
+
+  if (invitedWallets.length === 0) {
+    return { invited: 0, viewed: 0, joined: 0, backed: 0, participants };
+  }
+
+  // JOINED is any stated side; BACKED is money. They are different rungs
+  // because taking a side costs nothing and holding one does — collapsing them
+  // would let a market look alive when nobody had committed anything.
+  const [expressed, held] = await Promise.all([
+    sb
+      .from("expressed_beliefs")
+      .select("wallet")
+      .eq("onchain_id", marketId)
+      .in("wallet", invitedWallets),
+    sb
+      .from("wallet_beliefs")
+      .select("wallet")
+      .eq("onchain_id", marketId)
+      .in("wallet", invitedWallets)
+      .in("stance_side", ["YES", "NO"]),
+  ]);
+
+  const backedSet = new Set(
+    ((held.data ?? []) as { wallet: string }[]).map((r) => String(r.wallet).toLowerCase()),
+  );
+  const joinedSet = new Set([
+    ...backedSet,
+    ...((expressed.data ?? []) as { wallet: string }[]).map((r) => String(r.wallet).toLowerCase()),
+  ]);
+
+  // Persist the first sighting, so the rung survives an exit. Fire and forget:
+  // a failure here costs a stamp, never a number, since the count above is
+  // already computed from live evidence.
+  const newlyJoined = rows
+    .filter((r) => !r.joined_at && joinedSet.has(String(r.to_wallet).toLowerCase()))
+    .map((r) => String(r.to_wallet).toLowerCase());
+  if (newlyJoined.length > 0) {
+    void sb
+      .from("market_invites")
+      .update({ joined_at: new Date().toISOString() })
+      .eq("market_id", marketId)
+      .in("to_wallet", newlyJoined)
+      .is("joined_at", null)
+      .then(() => undefined);
+  }
+
+  return {
+    invited: rows.length,
+    viewed: rows.filter((r) => !!r.viewed_at).length,
+    // An earlier sighting counts even if the position is gone now.
+    joined: rows.filter((r) => !!r.joined_at || joinedSet.has(String(r.to_wallet).toLowerCase()))
+      .length,
+    backed: backedSet.size,
+    participants,
+  };
 }

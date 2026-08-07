@@ -35,6 +35,7 @@ import { LiveTape } from "@/components/LiveTape";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { SimilarMarkets } from "@/components/SimilarMarkets";
 import { ForYouShelf } from "@/components/ForYouShelf";
+import { LaunchRail } from "@/components/LaunchRail";
 import { WelcomePrompt, WelcomeReceived } from "@/components/Welcome";
 import { MarketDeck } from "@/components/MarketDeck";
 import { MobileGame } from "@/components/MobileGame";
@@ -229,6 +230,13 @@ type Search = {
   terms?: boolean;
   case?: boolean;
   dash?: boolean;
+  /**
+   * LAUNCH MODE, after publish. Carries the market a creator has just made so
+   * the right rail can ask "who should see it first?" before it becomes a
+   * dashboard. In the URL rather than in state because publishing navigates
+   * (?create clears, ?m arrives) and the moment has to survive that.
+   */
+  launch?: number;
   /** Share attribution code — who this visitor arrived via (?r=). */
   r?: string;
 };
@@ -249,6 +257,10 @@ export const Route = createFileRoute("/")({
     case: search.case === true || search.case === "1" ? true : undefined,
     // Conviction Dashboard — the financial story, a center-panel destination.
     dash: search.dash === true || search.dash === "1" ? true : undefined,
+    launch:
+      search.launch != null && Number.isFinite(Number(search.launch))
+        ? Number(search.launch)
+        : undefined,
     // Attribution code carried from a shared link; kept in the URL so it
     // survives hydration and the arrival is recorded once.
     r: typeof search.r === "string" && search.r.length >= 3 ? search.r : undefined,
@@ -330,7 +342,7 @@ const TABS: { key: MobileTab; label: string }[] = [
 
 /** The center-panel destination, as the URL expresses it. `case` is a display
  *  toggle rather than a destination, so it is deliberately not part of it. */
-type CenterView = Pick<Search, "m" | "p" | "dna" | "create" | "terms" | "dash">;
+type CenterView = Pick<Search, "m" | "p" | "dna" | "create" | "terms" | "dash" | "launch">;
 
 const CLEARED_CENTER: CenterView = {
   m: undefined,
@@ -339,6 +351,9 @@ const CLEARED_CENTER: CenterView = {
   create: undefined,
   terms: undefined,
   dash: undefined,
+  // Carried with the center view so back/forward restores Launch Mode with the
+  // market it belongs to, instead of leaving the flag dangling on another one.
+  launch: undefined,
 };
 
 function Feed() {
@@ -351,6 +366,7 @@ function Feed() {
     terms: termsOpen,
     case: caseOpen,
     dash: dashOpen,
+    launch: launchId,
     r: refCode,
   } = Route.useSearch();
 
@@ -456,11 +472,45 @@ function Feed() {
         create: undefined,
         terms: undefined,
         dash: undefined,
+        // Leaving for another market ends Launch Mode. The recruitment panel is
+        // about ONE market a creator just made; letting it trail along would
+        // offer people an invitation to whatever they happened to click next.
+        launch: undefined,
       }),
     });
     setTab("belief");
     enterProduct();
   };
+
+  /**
+   * Publishing lands on the new market AND opens Launch Mode.
+   *
+   * `?launch` rather than component state because publishing navigates —
+   * `?create` clears and `?m` arrives — and the "who should see it first?"
+   * moment has to survive that. It is also then a real place: refreshing or
+   * sharing the URL puts a creator back in front of their own recruitment.
+   */
+  const marketCreated = (marketId: number) => {
+    setCaughtUp(false);
+    pushCenter();
+    navigate({
+      search: (prev: Search) => ({
+        ...prev,
+        m: marketId,
+        launch: marketId,
+        p: undefined,
+        dna: undefined,
+        create: undefined,
+        terms: undefined,
+        dash: undefined,
+      }),
+    });
+    setTab("belief");
+    enterProduct();
+  };
+  const closeLaunch = () =>
+    navigate({ search: (prev: Search) => ({ ...prev, launch: undefined }) });
+
   const selectPerson = (personWallet: string) => {
     if (personWallet === selectedPerson) return;
     pushCenter();
@@ -1252,7 +1302,7 @@ function Feed() {
                 <Suspense fallback={<DeckSkeleton />}>
                   <CreateMarket
                     ethUsd={stableFeed?.ethUsd ?? 0}
-                    onCreated={(marketId) => selectMarket(marketId)}
+                    onCreated={(marketId) => marketCreated(marketId)}
                     onCancel={closeCreate}
                     onOpenTerms={openTerms}
                   />
@@ -1391,12 +1441,20 @@ function Feed() {
             <>
               {/* Welcome the newest believers on a side you back — one tap. */}
               <WelcomePrompt wallet={wallet} onSelectPerson={selectPerson} />
-              {/* WHAT IS HAPPENING TO YOU, above what is happening. There is no
-                notification channel on this platform, so an invitation reaches
-                someone here or nowhere — see ForYouShelf. It stays silent
-                unless the system can say why THIS person, which today is most
-                of the time. */}
-              <ForYouShelf wallet={wallet} onSelect={selectMarket} />
+              {/* LAUNCH MODE, after publish. It REPLACES the shelf rather than
+                stacking above it: a creator who has just made a market has one
+                useful thing to do, and putting other people's markets beside it
+                would be competing for the only attention that matters here. */}
+              {launchId != null && launchId === shownId ? (
+                <LaunchRail wallet={wallet} marketId={launchId} onDone={closeLaunch} />
+              ) : (
+                /* WHAT IS HAPPENING TO YOU, above what is happening. There is no
+                  notification channel on this platform, so an invitation reaches
+                  someone here or nowhere — see ForYouShelf. It stays silent
+                  unless the system can say why THIS person, which today is most
+                  of the time. */
+                <ForYouShelf wallet={wallet} onSelect={selectMarket} />
+              )}
               {/* "In this market" moved to the top of the For You rail, next to
                 the running order. The global tape below still excludes the
                 current market, so its activity is told in exactly one place. */}

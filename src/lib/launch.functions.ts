@@ -16,6 +16,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { ForYouRow } from "@/domain/for-you";
 import type { InviteResult } from "@/lib/launch.server";
+import type { AudienceRow, LaunchProgress } from "@/domain/launch-audience";
 
 const WALLET = z.string().min(3).max(80);
 
@@ -77,4 +78,29 @@ export const markInviteSeen = createServerFn({ method: "POST" })
     const { markInviteViewed } = await import("@/lib/launch.server");
     await markInviteViewed(data.wallet, data.marketId);
     return { ok: true };
+  });
+
+/**
+ * WHO SHOULD SEE THIS FIRST — the five recruitment rows for one market.
+ *
+ * Unsigned: it names people the caller could already find by browsing, and it
+ * writes nothing. Sending is the signed act, and that is `sendInvites`.
+ */
+export const getLaunchAudience = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) =>
+    z.object({ wallet: WALLET, marketId: z.number().int().nonnegative() }).parse(raw),
+  )
+  .handler(async ({ data }): Promise<AudienceRow[]> => {
+    const { buildAudience } = await import("@/lib/launch.server");
+    return buildAudience(data.wallet, data.marketId);
+  });
+
+/** What happened to the debate. Outcomes only — see launchLadder. */
+export const getLaunchProgress = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) =>
+    z.object({ marketId: z.number().int().nonnegative() }).parse(raw),
+  )
+  .handler(async ({ data }): Promise<LaunchProgress> => {
+    const { buildProgress } = await import("@/lib/launch.server");
+    return buildProgress(data.marketId);
   });
