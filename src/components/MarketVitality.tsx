@@ -400,7 +400,7 @@ export function MarketMomentum({
   return (
     <section
       aria-label="Total market"
-      className="shrink-0 overflow-hidden rounded-[16px]"
+      className={`momentum${dense ? " momentum-dense" : ""} shrink-0 overflow-hidden rounded-[16px]`}
       style={{ background: "var(--surface)", border: "1px solid var(--hairline)" }}
     >
       <MomentumMetric
