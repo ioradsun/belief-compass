@@ -390,13 +390,27 @@ export function positionReturn(input: {
   gainUsd: number | null;
   gainPct: number | null;
   money: (usd: number, signed?: boolean) => string;
-}): { direction: Direction; pnl: string; pct: string | null } | null {
+}): { direction: Direction; pnl: string | null; pct: string | null } | null {
   const { gainUsd, gainPct, money } = input;
   if (gainUsd == null) return null;
   const direction = metricDirection(gainUsd, 0.005);
-  // Flat is flat: "+$0.00 / +0.0%" reads as a result when nothing happened. A
-  // single em dash says "no movement" without pretending to be a number.
-  if (direction === "flat") return { direction, pnl: "—", pct: null };
+  // A SUB-CENT DOLLAR MOVE IS NOT A FLAT POSITION. On small stakes the return can
+  // be a real percentage while the dollar figure rounds to nothing — printing "—"
+  // there told the holder their position had not moved, which is false. When the
+  // percentage is meaningful it takes the slot on its own; the dollar line is
+  // dropped rather than shown as a misleading "+$0.00".
+  if (direction === "flat") {
+    if (gainPct != null && Math.abs(gainPct) >= 0.05) {
+      return {
+        direction: gainPct > 0 ? "up" : "down",
+        pnl: null,
+        pct: formatPct(gainPct, { precise: true }),
+      };
+    }
+    // Genuinely flat: a single em dash says "no movement" without pretending to
+    // be a number.
+    return { direction, pnl: "—", pct: null };
+  }
   return {
     direction,
     pnl: money(gainUsd, true),
