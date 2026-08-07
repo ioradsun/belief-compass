@@ -104,6 +104,25 @@ export function MobileGame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketId]);
 
+  // THE SYSTEM BACK GESTURE AGREES WITH THE × BUTTON. Both Sides is a view, so
+  // swiping/pressing back closes it rather than leaving the market. Opening it
+  // pushes one history entry; closing it by button consumes that entry again,
+  // so the stack never grows.
+  useEffect(() => {
+    if (phase !== "sides") return;
+    const marker = { convictionSides: marketId };
+    window.history.pushState(marker, "");
+    const onPop = () => setPhase("question");
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      const st = window.history.state as { convictionSides?: number } | null;
+      if (st?.convictionSides === marketId) window.history.back();
+    };
+  }, [phase, marketId]);
+
+
+
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
   const house = useHouseFinalize(marketId, viewerWallet);
