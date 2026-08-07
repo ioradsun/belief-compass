@@ -325,7 +325,7 @@ export function CaseColumn({
         they need; Believers and Recent activity split whatever is left and each
         renders exactly as many rows as fit. Both rails are the same height, so
         both resolve to the same row count and stay aligned on every monitor. */}
-      <div ref={scroller} className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden pr-0.5">
+      <div ref={scroller} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden pr-0.5">
         {/* 1 — CURRENT STATE: what this side IS, in plain language, before any
           metric. When something moved in the window, one sentence says what.
           Fixed slot + clamped lines so YES and NO start their metrics on the
@@ -395,7 +395,7 @@ export function CaseColumn({
 
         {/* 3 — BELIEVERS: the people currently backing this side. Takes half of
           whatever height is left over and fills it with as many rows as fit. */}
-        <div className="flex min-h-[96px] flex-1 flex-col">
+        <div className="flex min-h-[72px] flex-1 flex-col">
           <CaseRoster
             side={side}
             believers={believers}
@@ -408,7 +408,7 @@ export function CaseColumn({
         {/* 4 — RECENT ACTIVITY: the same tape the app-wide feed runs, scoped to
           this side. The column already says YES, so sentences don't repeat it.
           Adaptive slot, no inner scroll — "See all" opens the full-height sheet. */}
-        <div className="flex min-h-[96px] flex-1 flex-col">
+        <div className="flex min-h-[72px] flex-1 flex-col">
           <CaseActivity marketId={marketId} side={side} viewerWallet={viewerWallet} />
         </div>
       </div>
