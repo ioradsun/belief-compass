@@ -686,23 +686,23 @@ export function CaseRoster({
         )
       ) : (
         <>
-          {/* A FIXED SLOT, ALWAYS. Five row heights whether this side has five
-            believers, one, or none — the empty slots are the comparison ("this
-            side is thinner"), and they keep the section below aligned with the
-            other rail without measuring anything. */}
-          <div className="overflow-hidden" style={{ height: "var(--case-row-believers)" }}>
+          {/* AN ADAPTIVE SLOT. The panel hands this section whatever height is
+            left; we render as many whole rows as fit and no more, so the rail
+            never scrolls. Empty space below a short list is the comparison
+            ("this side is thinner") and keeps both rails aligned. */}
+          <div ref={slotRef} className="min-h-0 flex-1 overflow-hidden">
             {roster.length === 0 ? (
               <p className="px-0.5 text-[11px] text-[var(--text-muted)]">
                 No one on this side yet.
               </p>
             ) : (
-              renderRows(roster.slice(0, PREVIEW))
+              renderRows(roster.slice(0, preview))
             )}
           </div>
-          {/* The footer line is always reserved, so a side with fewer than five
-            believers still ends at the same y as the other rail. */}
-          <div className="h-[18px]">
-            {roster.length > PREVIEW && (
+          {/* The footer line is always reserved, so a side with fewer believers
+            still ends at the same y as the other rail. */}
+          <div className="h-[18px] shrink-0">
+            {roster.length > preview && (
               <button
                 type="button"
                 onClick={() => setOpenAll(true)}
@@ -712,6 +712,7 @@ export function CaseRoster({
               </button>
             )}
           </div>
+
 
           {openAll && (
             <RosterSheet
