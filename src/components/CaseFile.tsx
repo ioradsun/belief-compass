@@ -360,7 +360,7 @@ export function CaseColumn({
           lens selector — no tabs, no segmented control. Supporting copy appears
           only when the metric actually moved. */}
         <div
-          className="space-y-0.5"
+          className="shrink-0 space-y-0.5"
           role="radiogroup"
           aria-label={`${side} — choose a metric to chart`}
         >
