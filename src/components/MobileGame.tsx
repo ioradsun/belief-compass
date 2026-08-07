@@ -300,16 +300,10 @@ export function MobileGame({
     );
   }
 
-  if (phase === "sides")
-    return (
-      <BothSides
-        marketId={marketId}
-        title={title}
-        ethUsd={ethUsd}
-        row={row}
-        onBack={() => setPhase("question")}
-      />
-    );
+  // NOTE: "sides" is no longer an early return. Both Sides is a view of the
+  // middle region (see the render below) so the question and the order bar stay
+  // mounted and reachable while it is open.
+
 
   // ---- The Question — ONE screen. The dock transforms decision → order in place;
   // the House pick + celebration only arrive after the order is placed (above). ----
