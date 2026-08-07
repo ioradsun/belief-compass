@@ -213,7 +213,7 @@ export function WelcomePrompt({
 
   /** The headline already names them — the button is just the next step. */
   const cardLabel = "Say Hi";
-  const selectedNames = people.filter((p) => selected.has(keyOf(p))).map((p) => p.name);
+  const selectedNames = roster.filter((p) => selected.has(keyOf(p))).map((p) => p.name);
   const sheetLabel = selectedNames.length > 1 ? `Say Hi to ${selectedNames.length}` : "Say Hi";
 
   return (
