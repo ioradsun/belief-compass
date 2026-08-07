@@ -320,7 +320,11 @@ export function CaseColumn({
         </div>
       </div>
 
-      <div ref={scroller} className="min-h-0 flex-1 space-y-5 overflow-y-scroll pr-0.5">
+      {/* No inner scroller. The fixed parts (state, metrics, chart) take what
+        they need; Believers and Recent activity split whatever is left and each
+        renders exactly as many rows as fit. Both rails are the same height, so
+        both resolve to the same row count and stay aligned on every monitor. */}
+      <div ref={scroller} className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden pr-0.5">
         {/* 1 — CURRENT STATE: what this side IS, in plain language, before any
           metric. When something moved in the window, one sentence says what.
           Fixed slot + clamped lines so YES and NO start their metrics on the
