@@ -16,7 +16,26 @@
  * A background refresh failure is swallowed and the stale value is kept, so a
  * transient DB blip never turns into a user-facing error.
  */
-type Entry<T> = { value: T; expires: number; refreshing: boolean };
+type Entry<T> = { value: T; expires: number; refreshing: boolean; refreshAt?: number };
+
+/**
+ * A SHARED PROMISE MUST NEVER BE ABLE TO HANG FOREVER.
+ *
+ * On the serverless runtime the app is deployed to, pending I/O belonging to a
+ * request that has already responded is cancelled — and a cancelled await does
+ * not always reject: it can simply never resume. The single-flight map below is
+ * per-isolate and long-lived, so ONE such build wedges the key permanently and
+ * every later request joins a promise that will never settle. That is exactly
+ * the "published site shows the skeleton forever while preview is fine" shape:
+ * the request is made, the connection stays open, nothing ever comes back.
+ *
+ * So every shared computation gets a watchdog. If it has not settled in time we
+ * evict the slot and reject the waiters, which turns a permanent wedge into one
+ * ordinary failed request that the next caller genuinely retries.
+ */
+const MAX_INFLIGHT_MS = 10_000;
+/** A background refresh that never settles must not block later refreshes. */
+const MAX_REFRESH_MS = 15_000;
 
 const store = new Map<string, Entry<unknown>>();
 
@@ -63,9 +82,13 @@ export async function swrCache<T>(key: string, opts: SwrOptions, fn: () => Promi
   if (hit && hit.expires > t) return hit.value; // fresh
 
   if (hit) {
-    // Stale: serve immediately, refresh once in the background.
-    if (!hit.refreshing) {
+    // Stale: serve immediately, refresh once in the background. A refresh that
+    // was cancelled mid-flight (and so never settles) is retried once its own
+    // watchdog window passes, instead of latching `refreshing` forever.
+    const refreshStale = hit.refreshing && (hit.refreshAt ?? 0) + MAX_REFRESH_MS < t;
+    if (!hit.refreshing || refreshStale) {
       hit.refreshing = true;
+      hit.refreshAt = t;
       void fn()
         .then((value) => store.set(key, { value, expires: now() + opts.ttlMs, refreshing: false }))
         .catch(() => {
@@ -79,16 +102,26 @@ export async function swrCache<T>(key: string, opts: SwrOptions, fn: () => Promi
   const running = inflight.get(key) as Promise<T> | undefined;
   if (running) return running;
 
-  const started = fn()
-    .then((value) => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const started = Promise.race<T>([
+    fn().then((value) => {
       store.set(key, { value, expires: now() + opts.ttlMs, refreshing: false });
       return value;
-    })
-    .finally(() => {
-      // Cleared whether it resolved or threw — a failed build must not become a
-      // promise every future caller keeps awaiting.
-      inflight.delete(key);
-    });
+    }),
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        // Evict eagerly: the next caller must start a fresh build rather than
+        // await a computation that may never come back.
+        if (inflight.get(key) === started) inflight.delete(key);
+        reject(new Error(`swrCache: "${key}" did not settle in ${MAX_INFLIGHT_MS}ms`));
+      }, MAX_INFLIGHT_MS);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+    // Cleared whether it resolved or threw — a failed build must not become a
+    // promise every future caller keeps awaiting.
+    if (inflight.get(key) === started) inflight.delete(key);
+  });
   inflight.set(key, started);
   return started;
 }
