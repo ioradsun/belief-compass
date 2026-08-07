@@ -482,6 +482,54 @@ export type Database = {
         }
         Relationships: []
       }
+      market_invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_by_wallet: string | null
+          code: string
+          created_at: string
+          expires_at: string
+          id: string
+          invitee_wallet: string | null
+          inviter_wallet: string
+          message: string | null
+          onchain_id: number
+          side: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by_wallet?: string | null
+          code?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invitee_wallet?: string | null
+          inviter_wallet: string
+          message?: string | null
+          onchain_id: number
+          side?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by_wallet?: string | null
+          code?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invitee_wallet?: string | null
+          inviter_wallet?: string
+          message?: string | null
+          onchain_id?: number
+          side?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       market_milestone: {
         Row: {
           market_id: string
