@@ -22,7 +22,6 @@ import { useMarketChange } from "@/lib/market-change-query";
 import { LiveTape } from "@/components/LiveTape";
 import { LensChart } from "@/components/LensChart";
 import type { MarketRow } from "@/components/MarketCard";
-import { useAnchorRect, anchorStyle, type AnchorBox } from "@/hooks/useAnchorRect";
 import { useMoney } from "@/lib/display-unit";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { Clock, DollarSign } from "lucide-react";
@@ -565,7 +564,7 @@ export function CaseRoster({
 }) {
   const { format } = useMoney();
   const [openAll, setOpenAll] = useState(false);
-  const { ref: anchorRef, box: anchorBox } = useAnchorRect<HTMLDivElement>(openAll);
+
   const byWallet = useMemo(
     () => new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p])),
     [people],
@@ -625,7 +624,7 @@ export function CaseRoster({
 
 
   return (
-    <div ref={anchorRef} className="space-y-1.5">
+    <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
           Believers
@@ -659,7 +658,6 @@ export function CaseRoster({
                 side={side}
                 count={roster.length}
                 onClose={() => setOpenAll(false)}
-                anchor={anchorBox}
               >
                 {allRows}
               </RosterSheet>
@@ -700,7 +698,6 @@ export function CaseRoster({
               side={side}
               count={roster.length}
               onClose={() => setOpenAll(false)}
-              anchor={anchorBox}
             >
               {allRows}
             </RosterSheet>
@@ -762,14 +759,11 @@ function RosterSheet({
   side,
   count,
   onClose,
-  anchor,
   children,
 }: {
   side: Side;
   count: number;
   onClose: () => void;
-  /** Column the sheet opens over, so it never spans the whole viewport. */
-  anchor: AnchorBox | null;
   children: React.ReactNode;
 }) {
   useEffect(() => {
@@ -782,8 +776,7 @@ function RosterSheet({
 
   return (
     <div
-      className="fixed bottom-0 top-0 z-50 flex flex-col"
-      style={anchorStyle(anchor)}
+      className="fixed inset-x-0 bottom-0 top-0 z-50 flex flex-col"
       role="dialog"
       aria-modal="true"
     >
@@ -834,10 +827,10 @@ function CaseActivity({
   viewerWallet?: string;
 }) {
   const [openAll, setOpenAll] = useState(false);
-  const { ref: anchorRef, box: anchorBox } = useAnchorRect<HTMLDivElement>(openAll);
+
 
   return (
-    <div ref={anchorRef} className="space-y-1.5">
+    <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
           Recent activity
@@ -868,7 +861,6 @@ function CaseActivity({
         <SideSheet
           title={`${side} activity`}
           onClose={() => setOpenAll(false)}
-          anchor={anchorBox}
         >
           <LiveTape
             marketIds={[marketId]}
@@ -890,12 +882,10 @@ function CaseActivity({
 function SideSheet({
   title,
   onClose,
-  anchor,
   children,
 }: {
   title: React.ReactNode;
   onClose: () => void;
-  anchor: AnchorBox | null;
   children: React.ReactNode;
 }) {
   useEffect(() => {
@@ -908,8 +898,7 @@ function SideSheet({
 
   return (
     <div
-      className="fixed bottom-0 top-0 z-50 flex flex-col"
-      style={anchorStyle(anchor)}
+      className="fixed inset-x-0 bottom-0 top-0 z-50 flex flex-col"
       role="dialog"
       aria-modal="true"
     >
