@@ -816,3 +816,125 @@ function RosterSheet({
     </div>
   );
 }
+
+/**
+ * RECENT ACTIVITY — a fixed slot, never an inner scroller.
+ *
+ * The rail shows a constant number of row heights so YES and NO end at the same
+ * y; anything past that is not squeezed into a cramped scroll area but opened
+ * in the same full-height column sheet the roster uses.
+ */
+function CaseActivity({
+  marketId,
+  side,
+  viewerWallet,
+}: {
+  marketId: number;
+  side: Side;
+  viewerWallet?: string;
+}) {
+  const [openAll, setOpenAll] = useState(false);
+  const { ref: anchorRef, box: anchorBox } = useAnchorRect<HTMLDivElement>(openAll);
+
+  return (
+    <div ref={anchorRef} className="space-y-1.5">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          Recent activity
+        </span>
+      </div>
+      <div className="overflow-hidden" style={{ height: "var(--case-row-activity)" }}>
+        <LiveTape
+          marketIds={[marketId]}
+          side={side}
+          wallet={viewerWallet}
+          scroll={false}
+          showTitles={false}
+          limit={6}
+          skeletonRows={3}
+          emptyText="No moves on this side yet."
+        />
+      </div>
+      <div className="h-[18px]">
+        <button
+          type="button"
+          onClick={() => setOpenAll(true)}
+          className="px-1 text-[12px] leading-[18px] text-[var(--text-secondary)] underline-offset-2 hover:underline"
+        >
+          See all activity →
+        </button>
+      </div>
+      {openAll && (
+        <SideSheet
+          title={`${side} activity`}
+          onClose={() => setOpenAll(false)}
+          anchor={anchorBox}
+        >
+          <LiveTape
+            marketIds={[marketId]}
+            side={side}
+            wallet={viewerWallet}
+            scroll={false}
+            showTitles={false}
+            limit={100}
+            skeletonRows={3}
+            emptyText="No moves on this side yet."
+          />
+        </SideSheet>
+      )}
+    </div>
+  );
+}
+
+/** The full-height column sheet: one pinned header over one scroll area. */
+function SideSheet({
+  title,
+  onClose,
+  anchor,
+  children,
+}: {
+  title: React.ReactNode;
+  onClose: () => void;
+  anchor: AnchorBox | null;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed bottom-0 top-0 z-50 flex flex-col"
+      style={anchorStyle(anchor)}
+      role="dialog"
+      aria-modal="true"
+    >
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/50"
+      />
+      <div className="relative mt-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-t-[16px] border-t border-[var(--border)] bg-[var(--bg)] pt-3">
+        <div className="mb-2 flex shrink-0 items-center justify-between px-4">
+          <span className="text-[12px] font-semibold text-[var(--text)]">{title}</span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="-mr-1 rounded-full px-2 py-1 text-[14px] text-[var(--text-muted)] hover:text-[var(--text)]"
+          >
+            ×
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
