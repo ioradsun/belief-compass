@@ -109,6 +109,7 @@ export function WelcomePrompt({
     placeholderData: (prev) => prev,
   });
   const people = data?.people ?? [];
+
   const count = data?.count ?? 0;
   const sections = data?.sections ?? [];
 
