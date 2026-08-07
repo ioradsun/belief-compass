@@ -118,13 +118,15 @@ export function WelcomePrompt({
   // deselects and the box animates closed around nothing.
   const peeked = useSticky(peekedNow ?? undefined, () => false) ?? null;
 
-  // Rarest commonality first, one face per person; the stack tightens and then
-  // spills into a "+N" so the row height is constant no matter how full it is.
+  // Rarest commonality first, one face per person. FOUR faces, not seven: past
+  // that the row reads as a crowd rather than as people, and the "+N" carries
+  // the size better than a squeezed eighth avatar ever did.
   const ordered = useMemo(() => sections.flatMap((s) => s.people), [sections]);
-  const MAX_FACES = 7;
+  const MAX_FACES = 4;
   const shown = ordered.slice(0, MAX_FACES);
   const hidden = ordered.length - shown.length;
-  const overlap = shown.length > 5 ? -12 : shown.length > 3 ? -8 : -4;
+  const overlap = -6;
+
 
   const keyOf = (p: WelcomablePerson) => welcomeKey(p.wallet, p.marketId, p.side);
 
