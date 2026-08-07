@@ -23,7 +23,13 @@ import {
   type RelationshipLabel,
 } from "@/domain/dna/config";
 import { scoreRelationship, type DnaFactor } from "@/domain/dna/score";
-import { mergeBeliefFactors, EXPRESSED_WEIGHT } from "@/domain/beliefs";
+import {
+  mergeBeliefFactors,
+  onChainFactor,
+  expressedFactor,
+  type OnChainBeliefRow,
+  type ExpressedBeliefRow,
+} from "@/domain/beliefs";
 import { classifyRelationship } from "@/domain/dna/classify";
 import { scoreDomains, splitDomains } from "@/domain/dna/domains";
 import { findDnaCandidates } from "./find-candidates.server";
@@ -49,25 +55,13 @@ const EMPTY: ViewerDnaOutput = {
   scoredCount: 0,
 };
 
-type BeliefRow = {
-  wallet?: string;
-  onchain_id: number;
-  stance_side: string | null;
-  conviction: number | null;
-};
-
-const toFactor = (r: BeliefRow): DnaFactor => ({
-  marketId: Number(r.onchain_id),
-  side: r.stance_side === "NO" ? "NO" : "YES",
-  conviction: Math.abs(Number(r.conviction ?? 0)),
-});
-
-type ExpressedRow = { wallet?: string; onchain_id: number; side: string; weight: number | null };
-const expressedToFactor = (r: ExpressedRow): DnaFactor => ({
-  marketId: Number(r.onchain_id),
-  side: r.side === "NO" ? "NO" : "YES",
-  conviction: Math.abs(Number(r.weight ?? EXPRESSED_WEIGHT)),
-});
+// The row → factor mappers live in @/domain/beliefs — one definition, shared
+// with the profile path, which used to keep its own copy that read a null
+// expressed weight as zero instead of EXPRESSED_WEIGHT.
+type BeliefRow = OnChainBeliefRow & { wallet?: string };
+type ExpressedRow = ExpressedBeliefRow & { wallet?: string };
+const toFactor = onChainFactor;
+const expressedToFactor = expressedFactor;
 
 async function loadDomains(
   sb: ReturnType<typeof publicClient>,

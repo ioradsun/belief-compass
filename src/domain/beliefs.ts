@@ -29,6 +29,57 @@ export function mergeBeliefFactors(onChain: DnaFactor[], expressed: DnaFactor[])
   return [...byMarket.values()];
 }
 
+/* ── Row → factor ────────────────────────────────────────────────────────────
+ *
+ * THE ONE PLACE a stored belief row becomes a DNA factor, because there used to
+ * be two and they disagreed. The network path read a null expressed weight as
+ * EXPRESSED_WEIGHT; the profile path read the same null as ZERO — and a factor
+ * with zero conviction contributes zero to `sharedWeight`, so the SAME free
+ * belief was worth 0.15 of a person's DNA on one screen and nothing at all on
+ * the next. Both are IO-free mappings over a row shape, which is exactly the
+ * kind of thing that gets rewritten inline instead of imported.
+ */
+
+/** A stored `wallet_beliefs` row, narrowed to what DNA reads. */
+export interface OnChainBeliefRow {
+  onchain_id: number | string;
+  stance_side: string | null;
+  conviction: number | null;
+}
+
+/** A stored `expressed_beliefs` row, narrowed to what DNA reads. */
+export interface ExpressedBeliefRow {
+  onchain_id: number | string;
+  side: string | null;
+  weight: number | null;
+}
+
+/**
+ * A money-backed position. `stance_side` is already constrained to YES/NO by
+ * every caller's query, so anything else resolves to YES rather than throwing —
+ * a malformed row must not take down a whole viewer's network.
+ */
+export const onChainFactor = (r: OnChainBeliefRow): DnaFactor => ({
+  marketId: Number(r.onchain_id),
+  side: r.stance_side === "NO" ? "NO" : "YES",
+  conviction: Math.abs(Number(r.conviction ?? 0)),
+});
+
+/**
+ * A free expressed belief. A MISSING weight means "we never wrote one", not
+ * "this belief is worthless" — so it falls back to EXPRESSED_WEIGHT. An explicit
+ * zero is honoured, because that is a decision someone recorded.
+ */
+export const expressedFactor = (r: ExpressedBeliefRow): DnaFactor => ({
+  marketId: Number(r.onchain_id),
+  side: r.side === "NO" ? "NO" : "YES",
+  conviction: Math.abs(Number(r.weight ?? EXPRESSED_WEIGHT)),
+});
+
+/** Is this row directional at all? MIXED/INACTIVE never enter DNA. */
+export const isDirectional = (side: string | null | undefined): side is "YES" | "NO" =>
+  side === "YES" || side === "NO";
+
 export interface Readiness {
   /** Distinct directional beliefs the viewer holds (on-chain + expressed). */
   count: number;
