@@ -529,10 +529,8 @@
   --mom-face: 26px;
   --mom-pad-x: 16px;
   --mom-pad-y: var(--deck-metric-y, 12px);
-  --mom-row-min: 0px;
 }
 .momentum-dense {
-  --mom-row-min: 0px;
   --mom-total: 18px;
   --mom-pct: 14px;
   --mom-abs: 11px;
@@ -613,8 +611,7 @@
 @media (max-height: 720px) {
   .momentum {
     --mom-pad-y: 8px;
-    --mom-row-min: 0px;
-    --mom-total: 20px;
+      --mom-total: 20px;
     --mom-pct: 15px;
   }
   .momentum-names {
