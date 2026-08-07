@@ -1,7 +1,7 @@
 /**
  * RIGHT-RAIL LAYOUT FIXTURE — does anything jump?
  *
- * The right rail is a flex column: a welcome card, a market-activity card, a
+ * The right rail is a flex column: a top card, a market-activity card, a
  * "Now" heading, and a live tape that takes whatever height is left. Because the
  * tape is `flex-1`, ANY height change in the blocks above it moves the heading
  * and resizes the tape's viewport — so the rows a reader is looking at move.
@@ -30,8 +30,14 @@ export const Route = createFileRoute("/dev/rail")({ component: RailHarness });
 declare global {
   interface Window {
     __rail?: {
-      /** The room has people in it (the "Say hi" card). */
-      setWelcome: (on: boolean) => void;
+      /**
+       * The card at the TOP of the column is showing. Deliberately named for
+       * the slot rather than its occupant: it was Say Hi, it is Challenge now,
+       * and the geometry this measures is the same either way. Naming it after
+       * whichever component happens to sit there dates the fixture the moment
+       * that component is replaced — which has now happened once.
+       */
+      setTopCard: (on: boolean) => void;
       /** This market has activity (the "In this market" card). */
       setActivity: (on: boolean) => void;
       /** The activity card is expanded. */
@@ -52,7 +58,7 @@ const LONG =
   "Wazir backed YES with $240, the third of your tribe to move on this market in the last hour";
 
 function RailHarness() {
-  const [welcome, setWelcome] = useState(true);
+  const [topCard, setTopCard] = useState(true);
   const [activity, setActivity] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const [longBeat, setLongBeat] = useState(false);
@@ -62,13 +68,13 @@ function RailHarness() {
   const [pending, setPending] = useState(false);
 
   const state = useCallback(
-    () => ({ welcome, activity, expanded, longBeat, legacy, pending }),
-    [welcome, activity, expanded, longBeat, legacy, pending],
+    () => ({ topCard, activity, expanded, longBeat, legacy, pending }),
+    [topCard, activity, expanded, longBeat, legacy, pending],
   );
 
   useEffect(() => {
     window.__rail = {
-      setWelcome,
+      setTopCard,
       setActivity,
       setExpanded,
       setLongBeat,
@@ -84,19 +90,21 @@ function RailHarness() {
 
   const beat = longBeat ? LONG : SHORT;
 
-  const welcomeCard = (
+  const topCardBlock = (
     <div
       className="rounded-[14px] px-3.5 py-3"
       style={{ background: "var(--surface)" }}
-      data-probe="welcome-card"
+      data-probe="top-card"
     >
       <div className="flex items-start gap-2.5">
-        <span className="mt-[1px] text-[17px] leading-none">👋</span>
+        {/* Same box, same two-line budget, same 32px control below it — the
+            words are a stand-in for whatever occupies this slot. */}
+        <span className="mt-[1px] text-[17px] leading-none">◆</span>
         <div
           className="min-w-0 flex-1 text-[13px] font-semibold text-[var(--text)]"
           style={legacy ? undefined : { minHeight: 36 }}
         >
-          Three people just backed YES beside you
+          Sarah, your Twin, took YES. What&apos;s your call?
         </div>
       </div>
       <div className="mt-2 h-[32px] rounded-full" style={{ background: "var(--surface-2)" }} />
@@ -151,13 +159,13 @@ function RailHarness() {
       >
         {legacy ? (
           <>
-            {welcome && <div className="mb-4">{welcomeCard}</div>}
+            {topCard && <div className="mb-4">{topCardBlock}</div>}
             {activity && <div className="mb-3 shrink-0">{activityCard}</div>}
           </>
         ) : (
           <>
-            <Collapsible open={welcome} probe="welcome" className="mb-4">
-              {welcomeCard}
+            <Collapsible open={topCard} probe="top-card" className="mb-4">
+              {topCardBlock}
             </Collapsible>
             <Collapsible open={activity} probe="activity" className="mb-3">
               {activityCard}

@@ -20,6 +20,7 @@ import { walletIntent } from "@/lib/wagmi";
 import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { useHouseFinalize, houseKey } from "@/lib/house-round";
+import { useAnswerCalls } from "@/hooks/useAnswerCalls";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
@@ -84,12 +85,19 @@ export function MarketDeck({
   mobileCaseOpen = false,
   onToggleCase,
   onSelectPerson,
+  onBacked,
   reason,
 }: {
   row: MarketRow;
   ethUsd: number;
   onSkip: () => void;
   viewerWallet?: string;
+  /**
+   * A buy confirmed on-chain in this market. The right rail uses it to show the
+   * same "your people got the call" line a publish shows — taking a side calls
+   * your people exactly as creating a market does.
+   */
+  onBacked?: (marketId: number) => void;
   /**
    * Why the feed chose THIS market — the same sentence the playlist row showed.
    *
@@ -292,6 +300,21 @@ export function MarketDeck({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trade.isSuccess, trade.hash, side]);
+
+  // …and closes every open Challenge in this market. Separate from the House
+  // reveal deliberately: that is a one-time unlock this viewer paid for, this is
+  // a durable social fact, and neither should be able to break the other.
+  const backed = trade.isSuccess && !!trade.hash;
+  useAnswerCalls(viewerWallet, marketId, backed);
+
+  // TELL THE RAIL, so it can say who this side just reached. The deck owns the
+  // trade state and the rail is a sibling, so this is the only way across —
+  // and it is a plain notification, not a second source of truth: the rail
+  // re-reads reach from the server rather than being handed a number.
+  useEffect(() => {
+    if (backed && viewerWallet) onBacked?.(marketId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backed, viewerWallet, marketId]);
 
   // Keyboard: ←/→ select a side, ↑ pass. None of them buy or reveal.
   useEffect(() => {

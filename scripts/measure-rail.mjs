@@ -90,7 +90,7 @@ function settleMs(frames, key) {
  * happen is worse than no harness.
  */
 const ALL_OFF = {
-  welcome: false,
+  topCard: false,
   activity: false,
   expanded: false,
   longBeat: false,
@@ -99,7 +99,7 @@ const ALL_OFF = {
 const setAll = (p, s) =>
   p.evaluate(
     (v) => {
-      window.__rail.setWelcome(v.welcome);
+      window.__rail.setTopCard(v.topCard);
       window.__rail.setActivity(v.activity);
       window.__rail.setExpanded(v.expanded);
       window.__rail.setLongBeat(v.longBeat);
@@ -110,39 +110,39 @@ const setAll = (p, s) =>
 const CASES = [
   {
     name: "activity card appears (market gains its first event)",
-    setup: (p) => setAll(p, { welcome: true }),
+    setup: (p) => setAll(p, { topCard: true }),
     act: (p) => p.evaluate(() => window.__rail.setActivity(true)),
   },
   {
     name: "activity card disappears (switch to a quiet market)",
-    setup: (p) => setAll(p, { welcome: true, activity: true }),
+    setup: (p) => setAll(p, { topCard: true, activity: true }),
     act: (p) => p.evaluate(() => window.__rail.setActivity(false)),
   },
   {
     name: "latest beat rewraps to two lines (an event lands)",
-    setup: (p) => setAll(p, { welcome: true, activity: true }),
+    setup: (p) => setAll(p, { topCard: true, activity: true }),
     act: (p) => p.evaluate(() => window.__rail.setLongBeat(true)),
   },
   {
-    name: "welcome card disappears (room marked seen)",
-    setup: (p) => setAll(p, { welcome: true, activity: true }),
-    act: (p) => p.evaluate(() => window.__rail.setWelcome(false)),
+    name: "top card disappears (its data runs out)",
+    setup: (p) => setAll(p, { topCard: true, activity: true }),
+    act: (p) => p.evaluate(() => window.__rail.setTopCard(false)),
   },
   {
     name: "update control appears (activity arrives)",
-    setup: (p) => setAll(p, { welcome: true, activity: true }),
+    setup: (p) => setAll(p, { topCard: true, activity: true }),
     act: (p) => p.evaluate(() => window.__rail.setPending(true)),
     anchor: "rowY",
   },
   {
     name: "update control is tapped (it goes away)",
-    setup: (p) => setAll(p, { welcome: true, activity: true, pending: true }),
+    setup: (p) => setAll(p, { topCard: true, activity: true, pending: true }),
     act: (p) => p.evaluate(() => window.__rail.setPending(false)),
     anchor: "rowY",
   },
   {
     name: "expand 'In this market'",
-    setup: (p) => setAll(p, { welcome: true, activity: true }),
+    setup: (p) => setAll(p, { topCard: true, activity: true }),
     act: (p) => p.evaluate(() => window.__rail.setExpanded(true)),
   },
 ];

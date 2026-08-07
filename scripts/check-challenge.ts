@@ -1,12 +1,18 @@
 /**
- * check-launch — is Launch Mode actually producing participation?
+ * check-challenge — is the social layer actually producing participation?
  *
- * SUCCESS IS PARTICIPATION. Not markets created, not invitations sent. Both of
- * those measure how hard people worked, and a product that optimises them ends
- * up with more markets that nobody is in — which is the exact failure this
- * whole effort exists to fix. So the numbers here are joins, backings, and
- * markets that reached a real conversation. Invitations appear only as the
- * denominator the outcomes are read against.
+ * SUCCESS IS PARTICIPATION. Not markets created, not calls made. Both measure
+ * how hard people worked, and a product that optimises them ends up with more
+ * markets nobody is in — the exact failure this whole effort exists to fix. So
+ * the numbers here are answers, backings, and markets that reached a real
+ * conversation. Calls appear only as the denominator the outcomes are read
+ * against.
+ *
+ * WHAT REPLACED WHAT. This was check-launch, measuring invitations sent →
+ * viewed → joined. Invitations are gone; a Challenge is created by somebody's
+ * conviction rather than by pressing a button, so the funnel is now called →
+ * answered, and it can be broken down by the relationship that made the call —
+ * which is the question a recruitment panel could never answer.
  *
  * THE BASELINE, measured before any of this shipped:
  *
@@ -22,7 +28,7 @@
  * shipped, and there is no honest way to backfill a click that was never
  * recorded. A report that quietly implied otherwise would be worse than none.
  *
- * Run:  npx tsx scripts/check-launch.ts   (npm run check:launch)
+ * Run:  npx tsx scripts/check-challenge.ts   (npm run check:challenge)
  *       --json   machine-readable, for tracking the numbers over time
  */
 const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
@@ -97,15 +103,17 @@ interface MarketState {
   onchain_id: number;
   directional_believers: number | null;
 }
-interface Invite {
-  onchain_id: number;
-  invitee_wallet: string;
-  reason_kind: string | null;
-  created_at: string;
-  viewed_at: string | null;
-  /** The table's own name for "they took a side". */
-  accepted_at: string | null;
+interface Call {
+  market_id: number;
+  caller_wallet: string;
+  responder_wallet: string;
+  /** The relationship AS IT WAS when the call was made — never recomputed. */
+  relation_at_call: string;
+  called_at: string;
+  responded_at: string | null;
 }
+/** The only values `relation_at_call` may hold. Mirrors the migration's CHECK. */
+const RELATIONS = new Set(["twin", "tribe", "opp", "inverse"]);
 interface UserEvent {
   onchain_id: number | null;
   type: string;
@@ -125,11 +133,11 @@ const delta = (now: number, then: number) => {
 };
 
 async function main() {
-  const [states, invites, events] = await Promise.all([
+  const [states, calls, events] = await Promise.all([
     page<MarketState>("market_state", "onchain_id,directional_believers"),
-    page<Invite>(
-      "market_invites",
-      "onchain_id,invitee_wallet,reason_kind,created_at,viewed_at,accepted_at",
+    page<Call>(
+      "market_calls",
+      "market_id,caller_wallet,responder_wallet,relation_at_call,called_at,responded_at",
       "",
       true,
     ),
@@ -138,7 +146,7 @@ async function main() {
 
   const unreadable: string[] = [];
   if (states.blocked) unreadable.push(`market_state — ${states.why}`);
-  if (invites.blocked) unreadable.push(`market_invites — ${invites.why}`);
+  if (calls.blocked) unreadable.push(`market_calls — ${calls.why}`);
   if (events.blocked) unreadable.push(`user_events — ${events.why}`);
 
   /* ── 1 · PARTICIPATION — the only success measure ─────────────────────── */
@@ -150,24 +158,24 @@ async function main() {
   const zeroPct = pct(zero, total);
   const fivePlusPct = pct(fivePlus, total);
 
-  /* ── 2 · INVITATIONS — outcomes, with sends as the denominator ─────────── */
+  /* ── 2 · CALLS — outcomes, with calls made as the denominator ──────────── */
 
-  const inviteRows = invites.rows ?? [];
-  const invitedPairs = inviteRows.map((i) => ({
-    market: Number(i.onchain_id),
-    wallet: String(i.invitee_wallet).toLowerCase(),
+  const callRows = calls.rows ?? [];
+  const calledPairs = callRows.map((c) => ({
+    market: Number(c.market_id),
+    wallet: String(c.responder_wallet).toLowerCase(),
   }));
-  const invitedMarkets = [...new Set(invitedPairs.map((p) => p.market))];
+  const calledMarkets = [...new Set(calledPairs.map((p) => p.market))];
 
   // Did the invited person end up holding a side HERE? Read from live positions
   // rather than from the stored stamp, so the report never launders its own
   // bookkeeping — the stamp exists to survive an exit, not to be the evidence.
   const backedKeys = new Set<string>();
-  if (invitedMarkets.length > 0) {
+  if (calledMarkets.length > 0) {
     const held = await page<Belief>(
       "wallet_beliefs",
       "wallet,onchain_id",
-      `&onchain_id=in.(${invitedMarkets.join(",")})&stance_side=in.(YES,NO)`,
+      `&onchain_id=in.(${calledMarkets.join(",")})&stance_side=in.(YES,NO)`,
     );
     if (held.blocked) unreadable.push(`wallet_beliefs — ${held.why}`);
     for (const h of held.rows ?? []) {
@@ -175,20 +183,26 @@ async function main() {
     }
   }
 
-  const sent = inviteRows.length;
-  const viewed = inviteRows.filter((i) => !!i.viewed_at).length;
-  const joined = inviteRows.filter((i) => !!i.accepted_at).length;
-  const backed = invitedPairs.filter((p) => backedKeys.has(`${p.market}:${p.wallet}`)).length;
+  const made = callRows.length;
+  const answered = callRows.filter((c) => !!c.responded_at).length;
+  const backed = calledPairs.filter((p) => backedKeys.has(`${p.market}:${p.wallet}`)).length;
 
-  const byKind = new Map<string, { sent: number; backed: number }>();
-  inviteRows.forEach((i, idx) => {
-    // A row written before `reason_kind` existed groups honestly as unknown
-    // rather than being silently folded into one of the real audiences.
-    const k = i.reason_kind ? String(i.reason_kind) : "(unlabelled)";
-    const cur = byKind.get(k) ?? { sent: 0, backed: 0 };
-    cur.sent += 1;
-    if (backedKeys.has(`${invitedPairs[idx].market}:${invitedPairs[idx].wallet}`)) cur.backed += 1;
-    byKind.set(k, cur);
+  // WHICH RELATIONSHIP ACTUALLY MOVES PEOPLE — the question a recruitment panel
+  // could never answer, because it had no relationship frozen at send time.
+  // `relation_at_call` is the snapshot taken when the call was created, so this
+  // breakdown stays true even after Sarah stops being Tribe; recomputing the
+  // relationship here would let history rewrite itself every time DNA shifts.
+  const byRelation = new Map<string, { called: number; answered: number; backed: number }>();
+  callRows.forEach((c, idx) => {
+    // The column is NOT NULL with a CHECK, so this fallback should be
+    // unreachable — but a row that somehow escaped it groups honestly as
+    // unknown rather than being folded into one of the real relationships.
+    const k = c.relation_at_call ? String(c.relation_at_call) : "(unlabelled)";
+    const cur = byRelation.get(k) ?? { called: 0, answered: 0, backed: 0 };
+    cur.called += 1;
+    if (c.responded_at) cur.answered += 1;
+    if (backedKeys.has(`${calledPairs[idx].market}:${calledPairs[idx].wallet}`)) cur.backed += 1;
+    byRelation.set(k, cur);
   });
 
   /* ── 3 · CONSOLIDATION — the signal that never existed ─────────────────── */
@@ -211,13 +225,13 @@ async function main() {
       fivePlusPct: Number(fivePlusPct.toFixed(1)),
       baseline: BASELINE,
     },
-    invitations: {
-      blocked: invites.blocked,
-      sent,
-      viewed,
-      joined,
+    calls: {
+      blocked: calls.blocked,
+      made,
+      answered,
       backed,
-      byKind: Object.fromEntries(byKind),
+      markets: calledMarkets.length,
+      byRelation: Object.fromEntries(byRelation),
     },
     consolidation: { blocked: events.blocked, diversions, markets: divertedMarkets.size },
   };
@@ -228,7 +242,7 @@ async function main() {
     const pad = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s.padEnd(n));
     const num = (v: string | number, n: number) => String(v).padStart(n);
 
-    console.log("\nLAUNCH — is any of this producing participation?\n");
+    console.log("\nCHALLENGE — is any of this producing participation?\n");
 
     console.log(`read with the ${privileged ? "service-role" : "publishable"} key\n`);
 
@@ -249,30 +263,37 @@ async function main() {
       delta(fivePlusPct, BASELINE.fivePlusPct),
     );
 
-    console.log("\nINVITATIONS  (outcomes — sends are the denominator, never the score)");
-    if (invites.blocked) {
-      // NOT "0 invitations". A read we were refused and a table that is empty
-      // are different facts, and reporting them the same way is how a broken
+    console.log("\nCALLS  (outcomes — calls made are the denominator, never the score)");
+    if (calls.blocked) {
+      // NOT "0 calls". A read we were refused and a table that is empty are
+      // different facts, and reporting them the same way is how a broken
       // pipeline gets certified as a quiet week.
       console.log("  COULD NOT READ — this section is unknown, not zero.");
-    } else if (sent === 0) {
-      console.log("  Nothing sent yet. Every number below is waiting on the first invitation.");
+    } else if (made === 0) {
+      // Nobody pressed a button wrong. A call needs a qualified relationship
+      // AND a market the viewer has not acted in, so an empty ledger before
+      // anyone has five decisions is the expected state, not a failure.
+      console.log("  No calls yet. Every number below is waiting on the first qualified caller.");
     } else {
-      console.log(`  sent                     ${num(sent, 8)}`);
       console.log(
-        `  viewed                   ${num(viewed, 8)}   ${fmtPct(pct(viewed, sent))} of sent`,
+        `  made                     ${num(made, 8)}   across ${calledMarkets.length} markets`,
       );
       console.log(
-        `  joined                   ${num(joined, 8)}   ${fmtPct(pct(joined, sent))} of sent`,
+        `  answered                 ${num(answered, 8)}   ${fmtPct(pct(answered, made))} of made`,
       );
       console.log(
-        `  backed with money        ${num(backed, 8)}   ${fmtPct(pct(backed, sent))} of sent`,
+        `  backed with money        ${num(backed, 8)}   ${fmtPct(pct(backed, made))} of made`,
       );
-      if (byKind.size > 0) {
-        console.log("\n  which audience actually converts");
-        for (const [kind, v] of [...byKind].sort((a, b) => b[1].backed - a[1].backed)) {
+      if (byRelation.size > 0) {
+        // Sorted by answer RATE, not by volume: Twin will always be the
+        // smallest bucket and would sink to the bottom of a count-ordered list
+        // even if it converts twice as well as everything above it.
+        console.log("\n  which relationship actually moves people");
+        const rate = (v: { called: number; answered: number }) => pct(v.answered, v.called);
+        for (const [rel, v] of [...byRelation].sort((a, b) => rate(b[1]) - rate(a[1]))) {
           console.log(
-            `    ${pad(kind, 12)} ${num(v.sent, 5)} sent  ${num(v.backed, 5)} backed  ${fmtPct(pct(v.backed, v.sent))}`,
+            `    ${pad(rel, 12)} ${num(v.called, 5)} called  ${num(v.answered, 5)} answered  ` +
+              `${pad(fmtPct(rate(v)), 7)}  ${num(v.backed, 5)} backed`,
           );
         }
       }
@@ -300,8 +321,10 @@ async function main() {
         "    nothing for its whole life, and a click nobody recorded cannot be\n" +
         "    recovered — the consolidation number starts at zero by construction,\n" +
         "    not because nothing happened.\n" +
-        "  · Whether an invited person joined BECAUSE of the invitation. Arrival is\n" +
-        "    observable; persuasion is not.\n" +
+        "  · Whether someone answered BECAUSE of the call. A Challenge is surfaced,\n" +
+        "    not delivered — there is no notification channel, so the ledger records\n" +
+        "    that the row was eligible to be seen, not that anyone saw it. Arrival\n" +
+        "    is observable; persuasion is not.\n" +
         "  · Anyone who never connected a wallet.",
     );
     console.log("");
@@ -313,21 +336,49 @@ async function main() {
   // Invariants apply only to sections we actually READ. Asserting over a
   // blocked table would turn "no access" into "bug", which is the same
   // category error the report itself refuses to make.
-  const checkInvites = !invites.blocked;
-  // These are counting bugs, not bad results. `joined` is stamped on first
-  // sighting and `backed` is read live, so a joined-count below backed means
-  // buildProgress stopped stamping — which would silently flatten the ladder.
-  if (checkInvites && viewed > sent) problems.push(`viewed (${viewed}) exceeds sent (${sent})`);
-  if (checkInvites && joined > sent) problems.push(`joined (${joined}) exceeds sent (${sent})`);
-  if (checkInvites && backed > sent) problems.push(`backed (${backed}) exceeds sent (${sent})`);
-  if (checkInvites && sent > 0 && backed > 0 && joined === 0) {
-    problems.push("people backed invited markets but nothing was ever stamped joined");
-  }
-  // The one link with no other symptom: markInviteSeen is called from the shelf
-  // on render, so invitations that exist and were never seen by anyone means
-  // either nobody opened the app or the call is not firing.
-  if (checkInvites && sent > 0 && viewed === 0) {
-    problems.push("invitations exist but none has ever been marked viewed — check markInviteSeen");
+  //
+  // NOTE ON WHAT IS *NOT* CHECKED. `answered <= made` and `backed <= made` look
+  // like the obvious invariants and are worth stating only to explain their
+  // absence: both are filters over `callRows`, so they hold by construction and
+  // a check would be dead code dressed as diligence. The checks below are the
+  // ones that can actually come out false.
+  if (!calls.blocked) {
+    // THE ONE WITH NO OTHER SYMPTOM. `answered` is stamped by markCallsAnswered
+    // on the post-order path; `backed` is read live from wallet_beliefs. People
+    // holding sides in markets they were called into, with nothing ever
+    // stamped, means the stamp is not firing — and the panel would keep showing
+    // Challenges that were already answered, forever, with no error anywhere.
+    if (made > 0 && backed > 0 && answered === 0) {
+      problems.push(
+        "people hold sides in called markets but no call was ever stamped answered — " +
+          "check markCallsAnswered on the completion path",
+      );
+    }
+    // A stamp that predates the call means responded_at was written against the
+    // wrong row, or the ledger is being backfilled from something other than a
+    // live answer. Either way the funnel above is measuring fiction.
+    const backwards = callRows.filter(
+      (c) => c.responded_at && Date.parse(c.responded_at) < Date.parse(c.called_at),
+    ).length;
+    if (backwards > 0) problems.push(`${backwards} call(s) answered before they were made`);
+    // The CHECK constraint should make this impossible. If it comes out true the
+    // constraint is not there, and an unrecognised value silently invents a
+    // bucket in the breakdown above rather than failing.
+    const badRelations = [
+      ...new Set(callRows.map((c) => String(c.relation_at_call)).filter((r) => !RELATIONS.has(r))),
+    ];
+    if (badRelations.length > 0) {
+      problems.push(`relation_at_call holds values outside the CHECK: ${badRelations.join(", ")}`);
+    }
+    // The normalize trigger rejects self-calls and lowercases both wallets. A
+    // self-call getting through means the trigger is gone, and it would show up
+    // to the reader as their own conviction demanding a response from them.
+    const selfCalls = callRows.filter(
+      (c) => String(c.caller_wallet).toLowerCase() === String(c.responder_wallet).toLowerCase(),
+    ).length;
+    if (selfCalls > 0) {
+      problems.push(`${selfCalls} call(s) where caller and responder are the same wallet`);
+    }
   }
 
   if (problems.length > 0) {

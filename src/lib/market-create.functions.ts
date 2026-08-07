@@ -445,3 +445,52 @@ export const reportMarket = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true as const };
   });
+
+/**
+ * THE ONE EVENT CONSOLIDATION HAS NEVER EMITTED.
+ *
+ * The duplicate panel has existed for a long time and recorded nothing, so
+ * whether it ever diverted anybody has never been knowable — the feature could
+ * have been working perfectly or doing nothing at all and both look identical
+ * from outside. That is the failure this closes.
+ *
+ * `user_events` is the discovery-only interaction log the schema has always
+ * had, with an anon INSERT policy and no writer anywhere in the codebase. It is
+ * the right home and it needs no migration: reusing a table that already exists
+ * beats minting one to hold a single event type.
+ *
+ * IT LIVES HERE, beside `suggestExistingMarkets`, because that is the server
+ * function feeding the panel this event measures. It used to sit in
+ * `launch.functions.ts` for no better reason than that the invitation work
+ * happened to build it — and when invitations were deleted it would have gone
+ * with them, silently taking consolidation's only metric along.
+ *
+ * DELIBERATELY NARROW. One type, emitted from one place, meaning one thing: a
+ * reader who was writing a question chose an existing market instead. It is
+ * never an attribution claim — see check-challenge for what this can and cannot
+ * tell anyone.
+ */
+export const recordSimilarJoin = createServerFn({ method: "POST" })
+  // Validated the way the rest of this file does — a plain function and
+  // `clean` — rather than dragging zod in for one call site.
+  .inputValidator((data: { wallet?: string | null; marketId: number }) => ({
+    wallet: data.wallet ? clean(data.wallet, 80) : null,
+    marketId: Number.isFinite(data.marketId) ? Math.max(0, Math.floor(data.marketId)) : 0,
+  }))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    // Unsigned and fire-and-forget: it is a usage fact about a public click,
+    // it grants nothing, and a failed metric must never cost a navigation.
+    try {
+      const { serviceClient } = await import("@/lib/supabase-clients");
+      await serviceClient()
+        .from("user_events")
+        .insert({
+          wallet: data.wallet ? data.wallet.toLowerCase() : null,
+          onchain_id: data.marketId,
+          type: "similar_market_join",
+        });
+    } catch {
+      /* the click is the product; the measurement is not worth breaking it */
+    }
+    return { ok: true };
+  });

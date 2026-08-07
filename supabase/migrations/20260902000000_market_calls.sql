@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS public.market_calls (
   )
 );
 
--- Backend-only, like follows, market_invites and viewer_dna_cache: RLS is ON
+-- Backend-only, like follows and viewer_dna_cache: RLS is ON
 -- with no policy, so the anon key reads nothing and every access goes through a
 -- server function. A call names two people and is emphatically not public.
 ALTER TABLE public.market_calls ENABLE ROW LEVEL SECURITY;

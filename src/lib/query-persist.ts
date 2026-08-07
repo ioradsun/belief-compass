@@ -2,7 +2,7 @@
  * Instant-on-return cache — persist the React Query cache across reloads.
  *
  * The problem: on a return visit every client-side panel (live tape, positions,
- * pulses, evidence, network, welcomes …) starts from an EMPTY QueryClient and
+ * pulses, evidence, network, challenges …) starts from an EMPTY QueryClient and
  * shows a skeleton until its first network round-trip. The feel is "loading",
  * even though we already showed this person almost exactly this data minutes ago.
  *
@@ -46,8 +46,9 @@ const PERSIST_PREFIXES = new Set([
   "market-change",
   "evidence",
   "network",
-  "welcomable",
-  "welcomes-received",
+  // Challenge replaced Say Hi. Deliberately NOT persisted: an open call is
+  // about who has acted since you last looked, and a restored snapshot would
+  // show yesterday's obligations as though they were still waiting.
   "conviction-market",
   // Who the viewer is, so a return visit paints signed-in immediately.
   "wallet-link",

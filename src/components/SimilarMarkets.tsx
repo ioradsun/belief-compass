@@ -27,8 +27,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { dismissSuggestions, useSuggestionProbe } from "@/lib/create-draft";
-import { suggestExistingMarkets } from "@/lib/market-create.functions";
-import { recordSimilarJoin } from "@/lib/launch.functions";
+import { recordSimilarJoin, suggestExistingMarkets } from "@/lib/market-create.functions";
 import type { MarketSuggestion } from "@/lib/market-create.server";
 import { useMoney } from "@/lib/display-unit";
 

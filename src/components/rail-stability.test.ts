@@ -13,8 +13,8 @@ const code = (p: string) =>
 /**
  * THE RIGHT RAIL MUST NOT TELEPORT.
  *
- * The rail is a flex column — welcome card, market-activity card, "Now", then a
- * `flex-1` live tape. Because the tape absorbs the residual height, ANY block
+ * The rail is a flex column — a top card, the market-activity card, "Now", then
+ * a `flex-1` live tape. Because the tape absorbs the residual height, ANY block
  * above it changing height moves the heading and resizes the reader's window
  * onto the feed. `return null` is the worst version: a whole card leaves in one
  * frame and takes ~70px of the column with it.
@@ -24,7 +24,7 @@ const code = (p: string) =>
  *   activity card appears      67px in 1 step   →  73px over 11 steps / 197ms
  *   activity card disappears   67px in 1 step   →  73px over 11 steps / 186ms
  *   latest beat rewraps        36px in 1 step   →  0px, one tape height
- *   welcome card disappears   119px in 1 step   → 103px over 11 steps / 186ms
+ *   top card disappears       119px in 1 step   → 103px over 11 steps / 186ms
  *   expand "In this market"    full-column overlay → 288px downward, in place
  *
  * The distinction that matters is steps, not pixels. One step is a
@@ -41,10 +41,27 @@ describe("nothing in the right rail changes height instantly", () => {
     expect(c).not.toMatch(/count === 0\)?\s*return null/);
   });
 
-  it("the welcome card collapses instead of unmounting", () => {
-    const c = code("src/components/Welcome.tsx");
-    expect(c).toMatch(/Collapsible/);
-    expect(c).not.toMatch(/!wallet \|\| count === 0\) return null/);
+  /**
+   * WHAT THIS REPLACED. The welcome card used to sit at the top of this column
+   * and was the worst offender in the table above — 119px leaving in one frame.
+   * Say Hi is gone and Challenge took its place, so the assertion follows the
+   * SLOT rather than the deleted component: whatever occupies the top of the
+   * rail must not vanish when its data does.
+   *
+   * ChallengeRail satisfies this differently and better. It cannot collapse at
+   * all, because the tab strip is unconditional and every state — connect
+   * prompt, locked panel, empty, populated — renders INSIDE it. There is no
+   * `return null` to guard against, which is why this checks for its absence
+   * rather than for a Collapsible.
+   */
+  it("the top of the rail cannot vanish when its data does", () => {
+    const c = code("src/components/ChallengeRail.tsx");
+    // The tab strip renders before any data branch, so the column keeps its
+    // height whether or not anybody is calling.
+    expect(c).toMatch(/role="tablist"/);
+    // No early bail-out above the strip — that is the shape that teleports.
+    const beforeReturn = c.slice(0, c.indexOf('role="tablist"'));
+    expect(beforeReturn).not.toMatch(/return null/);
   });
 
   it("the latest beat reserves both of its lines", () => {
