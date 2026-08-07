@@ -289,22 +289,27 @@ function MomentumMetric({
       ? copy.pct
       : copy.figure || copy.pct || (copy.direction === "flat" ? "0%" : "");
   return (
-    /* The vertical padding is the deck's height-driven step where one is in
-       scope (the centre column), and the old constant everywhere else. */
+    /* Every dimension here is a token the container sets (see `.momentum` in
+       styles.css): width chooses the type scale, height chooses the air. */
     <div
-      className={dense ? "px-4" : "px-4 sm:px-5"}
-      style={{ paddingBlock: dense ? "8px" : "var(--deck-metric-y, 12px)" }}
+      style={{
+        paddingInline: "var(--mom-pad-x, 16px)",
+        paddingBlock: "var(--mom-pad-y, 12px)",
+      }}
     >
-
       <div className="flex items-start justify-between gap-3">
         <span className="min-w-0">
           <span className="flex min-w-0 items-baseline gap-2">
             <span
-              className={`num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] text-[var(--text)] ${dense ? "text-[18px]" : "text-[20px] sm:text-[22px]"}`}
+              className="num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] text-[var(--text)]"
+              style={{ fontSize: "var(--mom-total, 20px)" }}
             >
               {total}
             </span>
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            <span
+              className="shrink-0 font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]"
+              style={{ fontSize: "var(--mom-label, 10px)" }}
+            >
               {label}
             </span>
           </span>
@@ -316,8 +321,8 @@ function MomentumMetric({
         </span>
         <span className="shrink-0 text-right">
           <span
-            className={`num block font-semibold leading-none tabular-nums ${dense ? "text-[14px]" : "text-[16px] sm:text-[18px]"}`}
-            style={{ color: tone }}
+            className="num block font-semibold leading-none tabular-nums"
+            style={{ color: tone, fontSize: "var(--mom-pct, 16px)" }}
           >
             {headlinePct}
             {arrow && headlinePct ? (
@@ -327,7 +332,8 @@ function MomentumMetric({
           {/* The exact move sits directly under its percentage — one column,
           one story, for both participants and capital. */}
           <span
-            className={`num mt-1 block whitespace-nowrap text-[var(--text-muted)] ${dense ? "text-[11px]" : "text-[12px]"}`}
+            className="num mt-1 block whitespace-nowrap text-[var(--text-muted)]"
+            style={{ fontSize: "var(--mom-abs, 12px)" }}
           >
             {copy.absolute}
           </span>
@@ -335,6 +341,7 @@ function MomentumMetric({
       </div>
     </div>
   );
+
 }
 
 export function MarketMomentum({
