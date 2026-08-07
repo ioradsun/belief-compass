@@ -187,6 +187,14 @@ export async function writeInvites(
         // The shareable handle. Generated here rather than relying on a column
         // default, so the write works whether or not the table has one.
         code: inviteCode(),
+        // `side` IS DELIBERATELY NOT SET, and it is right there in the table.
+        // Recruitment invites someone INTO a market; it does not tell them
+        // which side to take. An invitation pre-loaded with the sender's answer
+        // is not a recruitment, it is a solicitation, and it would turn the For
+        // You shelf into a place where people are told what to think by
+        // whoever got there first. The column is reserved for a real "challenge
+        // this side" interaction, where naming a side is the entire point and
+        // the recipient knows it. Guarded in invite-reason.test.ts.
         reason: i.reason.slice(0, 300),
         reason_kind: i.reasonKind,
       })),
