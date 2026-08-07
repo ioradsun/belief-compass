@@ -96,6 +96,7 @@ export function FeedListPanel({
   onLens,
   lensExhausted = false,
   loading = false,
+  failed = false,
   filters,
   onFilters,
   availableNetworks,
@@ -126,6 +127,15 @@ export function FeedListPanel({
    * later. Loading gets the shape; only a real answer gets the words.
    */
   loading?: boolean;
+  /**
+   * The feed could not be loaded — failed, or never settled.
+   *
+   * A THIRD state, and it needs its own words. Without it this panel fell
+   * through to "Nothing matches this feed yet. Try widening it", which blames
+   * the reader's filter for a network failure and sends them to change a control
+   * that was never the problem.
+   */
+  failed?: boolean;
   filters: FeedFilters;
   onFilters: (f: FeedFilters) => void;
   /** Network groups this viewer's evidence can fill. Always includes everyone. */
@@ -155,6 +165,10 @@ export function FeedListPanel({
 
       {loading && upcoming.length === 0 ? (
         <PlaylistSkeleton />
+      ) : failed && upcoming.length === 0 ? (
+        <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
+          Couldn&rsquo;t load markets. Retry from the centre.
+        </p>
       ) : upcoming.length === 0 && !lensExhausted ? (
         <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
           {/* An empty result under a filter is a TRUE answer, and saying it
