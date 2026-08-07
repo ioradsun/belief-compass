@@ -619,9 +619,10 @@ export function CaseRoster({
     </ul>
   );
 
-  // The list variant previews the strongest few; "+N more" opens the rest.
+  // The list variant previews the strongest few; "See all" opens the rest in a
+  // full-height sheet rather than a cramped inner scroller.
   const allRows = renderRows(roster);
-  const rows = variant === "compact" ? allRows : renderRows(roster.slice(0, PREVIEW));
+
 
   return (
     <div ref={anchorRef} className="space-y-1.5">
