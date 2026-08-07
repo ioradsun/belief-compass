@@ -465,6 +465,7 @@ export function MyConvictions({
       side: f.side,
       paired: (sidesPerMarket.get(f.id) ?? 0) > 1,
       value: f.value,
+      priced: f.priced,
       gainUsd: f.gainUsd,
       gainPct: f.gainPct,
       shares: f.shares,
