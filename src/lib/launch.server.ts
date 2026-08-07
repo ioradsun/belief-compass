@@ -109,9 +109,11 @@ function walletsOf(rows: unknown, cap: number): string[] {
 /**
  * Write invitations for one market.
  *
- * IDEMPOTENT BY CONSTRUCTION, not by checking first. The primary key is
- * (market_id, from_wallet, to_wallet), so a resend, a double-click, a refresh
- * and a retry all resolve to one row.
+ * IDEMPOTENT BY CONSTRUCTION, not by checking first. A partial unique index on
+ * (onchain_id, inviter_wallet, invitee_wallet) means a resend, a double-click,
+ * a refresh and a retry all resolve to one row. It is deliberately NOT the
+ * table's own uniqueness, which sits on `code` and therefore makes each SEND
+ * unique rather than each RELATIONSHIP — see the 20260901 migration.
  *
  * The caller must have PROVEN `fromWallet`. An invitation carries one person's
  * name into another person's interface; see verifiedActor in
@@ -143,28 +145,28 @@ export async function writeInvites(
   const [existing, marketCount, hourCount] = await Promise.all([
     sb
       .from("market_invites")
-      .select("to_wallet")
-      .eq("market_id", marketId)
-      .eq("from_wallet", from)
+      .select("invitee_wallet")
+      .eq("onchain_id", marketId)
+      .eq("inviter_wallet", from)
       .in(
-        "to_wallet",
+        "invitee_wallet",
         wanted.map((i) => i.toWallet),
       ),
     sb
       .from("market_invites")
-      .select("to_wallet", { count: "exact", head: true })
-      .eq("market_id", marketId)
-      .eq("from_wallet", from),
+      .select("invitee_wallet", { count: "exact", head: true })
+      .eq("onchain_id", marketId)
+      .eq("inviter_wallet", from),
     sb
       .from("market_invites")
-      .select("to_wallet", { count: "exact", head: true })
-      .eq("from_wallet", from)
+      .select("invitee_wallet", { count: "exact", head: true })
+      .eq("inviter_wallet", from)
       .gte("created_at", hourAgo),
   ]);
 
   const already = new Set(
-    ((existing.data ?? []) as { to_wallet: string }[]).map((r) =>
-      String(r.to_wallet).toLowerCase(),
+    ((existing.data ?? []) as { invitee_wallet: string }[]).map((r) =>
+      String(r.invitee_wallet).toLowerCase(),
     ),
   );
   const fresh = wanted.filter((i) => !already.has(i.toWallet));
@@ -179,9 +181,12 @@ export async function writeInvites(
   if (allowed.length > 0) {
     const { error } = await sb.from("market_invites").upsert(
       allowed.map((i) => ({
-        market_id: marketId,
-        from_wallet: from,
-        to_wallet: i.toWallet,
+        onchain_id: marketId,
+        inviter_wallet: from,
+        invitee_wallet: i.toWallet,
+        // The shareable handle. Generated here rather than relying on a column
+        // default, so the write works whether or not the table has one.
+        code: inviteCode(),
         reason: i.reason.slice(0, 300),
         reason_kind: i.reasonKind,
       })),
@@ -190,7 +195,14 @@ export async function writeInvites(
       // as a double-click, and — more importantly — a repeat must never rewrite
       // the STORED REASON. The recipient keeps the sentence the sender saw when
       // they first chose them.
-      { onConflict: "market_id,from_wallet,to_wallet", ignoreDuplicates: true },
+      //
+      // Targets the partial unique index on the PAIR, not the surrogate id or
+      // the code: uniqueness on `code` would make each SEND unique instead of
+      // each RELATIONSHIP, and two taps of Invite would stack in the shelf.
+      {
+        onConflict: "onchain_id,inviter_wallet,invitee_wallet",
+        ignoreDuplicates: true,
+      },
     );
     if (error) throw new Error(error.message);
   }
@@ -202,14 +214,20 @@ export async function writeInvites(
   };
 }
 
+/** A shareable handle for one invitation. Not a secret — it identifies, it does
+ *  not authorise; every read behind it re-checks who is asking. */
+function inviteCode(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /** Mark an invitation seen. The first rung of the outcome ladder. */
 export async function markInviteViewed(toWallet: string, marketId: number): Promise<void> {
   const sb = serviceClient();
   await sb
     .from("market_invites")
     .update({ viewed_at: new Date().toISOString() })
-    .eq("market_id", marketId)
-    .eq("to_wallet", toWallet.toLowerCase())
+    .eq("onchain_id", marketId)
+    .eq("invitee_wallet", toWallet.toLowerCase())
     // Only the first view is recorded: "when did this reach them" is the fact
     // Launch Progress needs, and overwriting it every load would turn it into
     // "when were they last here", which is a different and less useful thing.
@@ -230,8 +248,10 @@ export async function buildForYou(viewer: string): Promise<ForYouRow[]> {
   const [invites, dna, follows, mine] = await Promise.all([
     sb
       .from("market_invites")
-      .select("market_id, from_wallet, reason, created_at")
-      .eq("to_wallet", me)
+      .select("onchain_id, inviter_wallet, reason, created_at, expires_at, status")
+      .eq("invitee_wallet", me)
+      // An expired invitation is not a quieter invitation, it is a past one.
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
       .order("created_at", { ascending: false })
       .limit(READ.invites),
     sb
@@ -345,19 +365,35 @@ export async function buildForYou(viewer: string): Promise<ForYouRow[]> {
   });
   const byFollowed = group((p) => followSet.has(p.wallet) && !mySide.has(p.marketId));
 
+  // LOUDLY, THEN DEGRADE. A missing column or a blocked table comes back as
+  // `data: null` with an error set, and swallowing that turns the entire
+  // invitation channel off silently and forever — exactly how the three
+  // previous unapplied-migration failures hid. Log, then carry on with the
+  // other shelf sources rather than taking the whole shelf down.
+  if (invites.error) {
+    console.error("[launch] market_invites unreadable — the shelf shows no invitations", {
+      code: invites.error.code,
+      message: invites.error.message,
+    });
+  }
   const inviteRows = (
     (invites.data ?? []) as {
-      market_id: number;
-      from_wallet: string;
-      reason: string;
+      onchain_id: number;
+      inviter_wallet: string;
+      reason: string | null;
       created_at: string;
     }[]
-  ).filter((r) => !mySide.has(Number(r.market_id)));
+  )
+    .filter((r) => !mySide.has(Number(r.onchain_id)))
+    // A row with no stored reason cannot say why THIS person, and there is no
+    // fallback string by design. Rows written before `reason` existed stay in
+    // the table and simply never claim a justification they do not have.
+    .filter((r) => !!r.reason?.trim());
 
   // Titles and display names, resolved once for everything the shelf might show.
   const marketIds = [
     ...new Set([
-      ...inviteRows.map((r) => Number(r.market_id)),
+      ...inviteRows.map((r) => Number(r.onchain_id)),
       ...byTribe.keys(),
       ...byRival.keys(),
       ...byFollowed.keys(),
@@ -367,7 +403,7 @@ export async function buildForYou(viewer: string): Promise<ForYouRow[]> {
 
   const peopleWallets = [
     ...new Set([
-      ...inviteRows.map((r) => String(r.from_wallet).toLowerCase()),
+      ...inviteRows.map((r) => String(r.inviter_wallet).toLowerCase()),
       ...[...byTribe.values(), ...byRival.values(), ...byFollowed.values()].flatMap(
         (g) => g.people,
       ),
@@ -400,18 +436,18 @@ export async function buildForYou(viewer: string): Promise<ForYouRow[]> {
   // invited you" is one shelf row, not two.
   const inviteByMarket = new Map<number, { from: string[]; reason: string; atMs: number }>();
   for (const r of inviteRows) {
-    const id = Number(r.market_id);
+    const id = Number(r.onchain_id);
     const atMs = Date.parse(String(r.created_at));
     const prev = inviteByMarket.get(id);
     if (prev) {
-      prev.from.push(String(r.from_wallet).toLowerCase());
+      prev.from.push(String(r.inviter_wallet).toLowerCase());
       prev.atMs = Math.max(prev.atMs, atMs);
     } else {
       // Rows arrive newest first, so the first reason seen is the most recent —
       // and it is used verbatim, never regenerated.
       inviteByMarket.set(id, {
-        from: [String(r.from_wallet).toLowerCase()],
-        reason: String(r.reason),
+        from: [String(r.inviter_wallet).toLowerCase()],
+        reason: String(r.reason ?? ""),
         atMs,
       });
     }
@@ -510,7 +546,11 @@ export async function buildAudience(creator: string, marketId: number): Promise<
       .select("wallet")
       .eq("onchain_id", marketId)
       .in("stance_side", ["YES", "NO"]),
-    sb.from("market_invites").select("to_wallet").eq("market_id", marketId).eq("from_wallet", me),
+    sb
+      .from("market_invites")
+      .select("invitee_wallet")
+      .eq("onchain_id", marketId)
+      .eq("inviter_wallet", me),
     sb
       .from("viewer_dna_cache")
       .select("twin_matches, tribe_matches, opp_matches, inverse_matches")
@@ -528,8 +568,8 @@ export async function buildAudience(creator: string, marketId: number): Promise<
     ((here.data ?? []) as { wallet: string }[]).map((r) => String(r.wallet).toLowerCase()),
   );
   const invited = new Set(
-    ((invitedRows.data ?? []) as { to_wallet: string }[]).map((r) =>
-      String(r.to_wallet).toLowerCase(),
+    ((invitedRows.data ?? []) as { invitee_wallet: string }[]).map((r) =>
+      String(r.invitee_wallet).toLowerCase(),
     ),
   );
 
@@ -668,7 +708,10 @@ export async function buildProgress(marketId: number): Promise<LaunchProgress> {
   const sb = serviceClient();
 
   const [invites, state] = await Promise.all([
-    sb.from("market_invites").select("to_wallet, viewed_at, joined_at").eq("market_id", marketId),
+    sb
+      .from("market_invites")
+      .select("invitee_wallet, viewed_at, accepted_at")
+      .eq("onchain_id", marketId),
     sb
       .from("market_state")
       .select("directional_believers")
@@ -677,11 +720,13 @@ export async function buildProgress(marketId: number): Promise<LaunchProgress> {
   ]);
 
   const rows = (invites.data ?? []) as {
-    to_wallet: string;
+    invitee_wallet: string;
     viewed_at: string | null;
-    joined_at: string | null;
+    // The table's own name for "they took a side". Reused rather than adding a
+    // second column meaning the same thing.
+    accepted_at: string | null;
   }[];
-  const invitedWallets = rows.map((r) => String(r.to_wallet).toLowerCase());
+  const invitedWallets = rows.map((r) => String(r.invitee_wallet).toLowerCase());
   const participants = Number(state.data?.directional_believers ?? 0);
 
   if (invitedWallets.length === 0) {
@@ -717,15 +762,15 @@ export async function buildProgress(marketId: number): Promise<LaunchProgress> {
   // a failure here costs a stamp, never a number, since the count above is
   // already computed from live evidence.
   const newlyJoined = rows
-    .filter((r) => !r.joined_at && joinedSet.has(String(r.to_wallet).toLowerCase()))
-    .map((r) => String(r.to_wallet).toLowerCase());
+    .filter((r) => !r.accepted_at && joinedSet.has(String(r.invitee_wallet).toLowerCase()))
+    .map((r) => String(r.invitee_wallet).toLowerCase());
   if (newlyJoined.length > 0) {
     void sb
       .from("market_invites")
-      .update({ joined_at: new Date().toISOString() })
-      .eq("market_id", marketId)
-      .in("to_wallet", newlyJoined)
-      .is("joined_at", null)
+      .update({ accepted_at: new Date().toISOString() })
+      .eq("onchain_id", marketId)
+      .in("invitee_wallet", newlyJoined)
+      .is("accepted_at", null)
       .then(() => undefined);
   }
 
@@ -733,8 +778,9 @@ export async function buildProgress(marketId: number): Promise<LaunchProgress> {
     invited: rows.length,
     viewed: rows.filter((r) => !!r.viewed_at).length,
     // An earlier sighting counts even if the position is gone now.
-    joined: rows.filter((r) => !!r.joined_at || joinedSet.has(String(r.to_wallet).toLowerCase()))
-      .length,
+    joined: rows.filter(
+      (r) => !!r.accepted_at || joinedSet.has(String(r.invitee_wallet).toLowerCase()),
+    ).length,
     backed: backedSet.size,
     participants,
   };

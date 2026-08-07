@@ -98,12 +98,13 @@ interface MarketState {
   directional_believers: number | null;
 }
 interface Invite {
-  market_id: number;
-  to_wallet: string;
-  reason_kind: string;
+  onchain_id: number;
+  invitee_wallet: string;
+  reason_kind: string | null;
   created_at: string;
   viewed_at: string | null;
-  joined_at: string | null;
+  /** The table's own name for "they took a side". */
+  accepted_at: string | null;
 }
 interface UserEvent {
   onchain_id: number | null;
@@ -128,7 +129,7 @@ async function main() {
     page<MarketState>("market_state", "onchain_id,directional_believers"),
     page<Invite>(
       "market_invites",
-      "market_id,to_wallet,reason_kind,created_at,viewed_at,joined_at",
+      "onchain_id,invitee_wallet,reason_kind,created_at,viewed_at,accepted_at",
       "",
       true,
     ),
@@ -153,8 +154,8 @@ async function main() {
 
   const inviteRows = invites.rows ?? [];
   const invitedPairs = inviteRows.map((i) => ({
-    market: Number(i.market_id),
-    wallet: String(i.to_wallet).toLowerCase(),
+    market: Number(i.onchain_id),
+    wallet: String(i.invitee_wallet).toLowerCase(),
   }));
   const invitedMarkets = [...new Set(invitedPairs.map((p) => p.market))];
 
@@ -176,12 +177,14 @@ async function main() {
 
   const sent = inviteRows.length;
   const viewed = inviteRows.filter((i) => !!i.viewed_at).length;
-  const joined = inviteRows.filter((i) => !!i.joined_at).length;
+  const joined = inviteRows.filter((i) => !!i.accepted_at).length;
   const backed = invitedPairs.filter((p) => backedKeys.has(`${p.market}:${p.wallet}`)).length;
 
   const byKind = new Map<string, { sent: number; backed: number }>();
   inviteRows.forEach((i, idx) => {
-    const k = String(i.reason_kind);
+    // A row written before `reason_kind` existed groups honestly as unknown
+    // rather than being silently folded into one of the real audiences.
+    const k = i.reason_kind ? String(i.reason_kind) : "(unlabelled)";
     const cur = byKind.get(k) ?? { sent: 0, backed: 0 };
     cur.sent += 1;
     if (backedKeys.has(`${invitedPairs[idx].market}:${invitedPairs[idx].wallet}`)) cur.backed += 1;

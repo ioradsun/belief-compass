@@ -135,8 +135,18 @@ const REQUIRED: Requirement[] = [
   {
     feature: "Invitations — the only way a person-to-person signal reaches anyone",
     table: "market_invites",
-    columns: ["market_id", "from_wallet", "to_wallet", "reason", "reason_kind"],
-    migration: "20260831000000_market_invites.sql",
+    // The table shipped without these three. `reason` is the feature — the For
+    // You rule refuses to render a row that cannot say why THIS person, and
+    // there is no fallback string — so an invitation without one is invisible.
+    columns: [
+      "onchain_id",
+      "inviter_wallet",
+      "invitee_wallet",
+      "reason",
+      "reason_kind",
+      "viewed_at",
+    ],
+    migration: "20260901000000_market_invites_reason.sql",
     // There is no notification channel on this platform, so if this table is
     // missing an invitation does not degrade — it silently does not exist, and
     // the For You shelf that delivers it has nothing to show. Exactly the class
@@ -244,7 +254,6 @@ async function main() {
   }
   process.exit(1);
 }
-
 
 main().catch((e) => {
   console.error(e);
