@@ -681,15 +681,20 @@ export function CaseRoster({
               renderRows(roster.slice(0, PREVIEW))
             )}
           </div>
-          {roster.length > PREVIEW && (
-            <button
-              type="button"
-              onClick={() => setOpenAll(true)}
-              className="px-1 text-[12px] text-[var(--text-secondary)] underline-offset-2 hover:underline"
-            >
-              See all {roster.length} →
-            </button>
-          )}
+          {/* The footer line is always reserved, so a side with fewer than five
+            believers still ends at the same y as the other rail. */}
+          <div className="h-[18px]">
+            {roster.length > PREVIEW && (
+              <button
+                type="button"
+                onClick={() => setOpenAll(true)}
+                className="px-1 text-[12px] leading-[18px] text-[var(--text-secondary)] underline-offset-2 hover:underline"
+              >
+                See all {roster.length} →
+              </button>
+            )}
+          </div>
+
           {openAll && (
             <RosterSheet
               side={side}
