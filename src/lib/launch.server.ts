@@ -109,11 +109,12 @@ function walletsOf(rows: unknown, cap: number): string[] {
 /**
  * Write invitations for one market.
  *
- * IDEMPOTENT BY CONSTRUCTION, not by checking first. A partial unique index on
- * (onchain_id, inviter_wallet, invitee_wallet) means a resend, a double-click,
- * a refresh and a retry all resolve to one row. It is deliberately NOT the
- * table's own uniqueness, which sits on `code` and therefore makes each SEND
- * unique rather than each RELATIONSHIP — see the 20260901 migration.
+ * IDEMPOTENT, and by the table's own constraint rather than one this branch
+ * added. `market_invites_pending_unique` covers (inviter, invitee, onchain_id)
+ * WHERE status = 'pending', so a resend, a double-click, a refresh and a retry
+ * all resolve to one PENDING row — while a genuine re-invite after a decline,
+ * an expiry or a revoke is still allowed, which a stricter constraint would
+ * have forbidden.
  *
  * The caller must have PROVEN `fromWallet`. An invitation carries one person's
  * name into another person's interface; see verifiedActor in
@@ -179,7 +180,21 @@ export async function writeInvites(
   const allowed = fresh.slice(0, Math.min(marketRoom, hourRoom));
 
   if (allowed.length > 0) {
-    const { error } = await sb.from("market_invites").upsert(
+    // PLAIN INSERT, NOT UPSERT, and the reason is the shape of the index.
+    //
+    // `market_invites_pending_unique` is PARTIAL — (inviter, invitee,
+    // onchain_id) WHERE invitee_wallet IS NOT NULL AND status = 'pending'.
+    // Postgres cannot infer a partial index from `ON CONFLICT (cols)` unless the
+    // predicate is given too, and supabase-js has no way to express one. An
+    // upsert here would therefore fail with 42P10 on EVERY send, not just on a
+    // collision.
+    //
+    // So the pre-filter above does the deduplication and the constraint is the
+    // backstop for a race. A 23505 is swallowed deliberately: two concurrent
+    // identical sends are the same non-event as a double-click, and — more
+    // importantly — the loser must NOT overwrite, because the recipient keeps
+    // the sentence the sender saw when they first chose them.
+    const { error } = await sb.from("market_invites").insert(
       allowed.map((i) => ({
         onchain_id: marketId,
         inviter_wallet: from,
@@ -198,21 +213,10 @@ export async function writeInvites(
         reason: i.reason.slice(0, 300),
         reason_kind: i.reasonKind,
       })),
-      // `ignoreDuplicates` rather than an overwrite, and rather than trusting
-      // the pre-filter above. A concurrent identical send is the same non-event
-      // as a double-click, and — more importantly — a repeat must never rewrite
-      // the STORED REASON. The recipient keeps the sentence the sender saw when
-      // they first chose them.
-      //
-      // Targets the partial unique index on the PAIR, not the surrogate id or
-      // the code: uniqueness on `code` would make each SEND unique instead of
-      // each RELATIONSHIP, and two taps of Invite would stack in the shelf.
-      {
-        onConflict: "onchain_id,inviter_wallet,invitee_wallet",
-        ignoreDuplicates: true,
-      },
     );
-    if (error) throw new Error(error.message);
+    // 23505 = unique_violation. Anything else is a real failure and the caller
+    // must hear about it rather than being told the send succeeded.
+    if (error && error.code !== "23505") throw new Error(error.message);
   }
 
   return {
@@ -258,7 +262,13 @@ export async function buildForYou(viewer: string): Promise<ForYouRow[]> {
       .from("market_invites")
       .select("onchain_id, inviter_wallet, reason, created_at, expires_at, status")
       .eq("invitee_wallet", me)
-      // An expired invitation is not a quieter invitation, it is a past one.
+      // PENDING ONLY. An accepted invitation has already done its job, and a
+      // declined or revoked one is a decision somebody made — re-showing any of
+      // them would be the shelf arguing with its own reader.
+      .eq("status", "pending")
+      // Belt and braces on top of `status`: nothing sweeps expired rows to
+      // 'expired' on a schedule, so a stale invitation can still read as
+      // pending. An expired invitation is not a quieter one, it is a past one.
       .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
       .order("created_at", { ascending: false })
       .limit(READ.invites),
@@ -775,7 +785,11 @@ export async function buildProgress(marketId: number): Promise<LaunchProgress> {
   if (newlyJoined.length > 0) {
     void sb
       .from("market_invites")
-      .update({ accepted_at: new Date().toISOString() })
+      // `status` moves with the timestamp. Leaving a row stamped accepted but
+      // still 'pending' would keep it on the recipient's shelf forever, since
+      // the shelf reads status — two fields describing one fact must not be
+      // allowed to disagree.
+      .update({ accepted_at: new Date().toISOString(), status: "accepted" })
       .eq("onchain_id", marketId)
       .in("invitee_wallet", newlyJoined)
       .is("accepted_at", null)

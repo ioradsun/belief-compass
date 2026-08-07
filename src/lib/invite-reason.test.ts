@@ -100,8 +100,16 @@ describe("an invitation that cannot say why THIS person is never shown", () => {
 describe("recruitment invites into a market, never onto a side", () => {
   it("never writes `side` on an invitation", () => {
     const server = readFileSync(join(SRC, "lib/launch.server.ts"), "utf8");
-    const insert = /\.from\("market_invites"\)\s*\.upsert\(([\s\S]{0,600}?)\)\s*,/.exec(server);
-    expect(insert, "could not find the market_invites write").not.toBeNull();
-    expect(insert![1]).not.toMatch(/(^|[^_\w])side\s*:/);
+    // Method-agnostic: this write has already been an upsert and an insert, and
+    // the rule is about what it SETS, not how it is spelled.
+    const write = /\.from\("market_invites"\)\s*\.(?:insert|upsert)\(([\s\S]{0,1200}?)\n\s*\);/.exec(
+      server,
+    );
+    expect(write, "could not find the market_invites write").not.toBeNull();
+    // Strip comments first — the paragraph explaining WHY side is unset
+    // naturally contains the word, and flagging its own rationale would make
+    // the guard impossible to document.
+    const code = write![1].replace(/\/\/[^\n]*/g, "");
+    expect(code).not.toMatch(/(^|[^_\w])side\s*:/);
   });
 });
