@@ -81,6 +81,8 @@ type Built = {
   /** The other side of this market is held too — so two cards is not a duplicate. */
   paired: boolean;
   value: number;
+  /** The value is a real mark, not a cost-basis stand-in. False → no return yet. */
+  priced: boolean;
   gainUsd: number | null;
   /** Return on remaining cost basis (gain / invested × 100), null when no basis. */
   gainPct: number | null;
