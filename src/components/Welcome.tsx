@@ -23,7 +23,7 @@ import {
   sendWelcomes,
   type WelcomablePerson,
 } from "@/lib/welcomes.functions";
-import { ROOM_GROUP_LABEL, roomGroupFor, roomReason, welcomeKey } from "@/domain/welcome";
+import { ROOM_GROUP_LABEL, roomGroupFor, roomReason } from "@/domain/welcome";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
@@ -109,6 +109,7 @@ export function WelcomePrompt({
     placeholderData: (prev) => prev,
   });
   const people = data?.people ?? [];
+
   const count = data?.count ?? 0;
   const sections = data?.sections ?? [];
 
@@ -128,10 +129,25 @@ export function WelcomePrompt({
   const overlap = -6;
 
 
-  const keyOf = (p: WelcomablePerson) => welcomeKey(p.wallet, p.marketId, p.side);
+  /**
+   * One row, one person. `people` carries an entry per (wallet, market, side),
+   * so a believer who joined you on two markets appeared twice and the button
+   * counted 21 where the headline — which folds by person — said 20. Select by
+   * wallet, and send every tribe that wallet joined you in.
+   */
+  const keyOf = (p: WelcomablePerson) => p.wallet.toLowerCase();
+  const roster = useMemo(() => {
+    const seen = new Set<string>();
+    return people.filter((p) => {
+      const k = p.wallet.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }, [people]);
 
   const openSheet = () => {
-    setSelected(new Set(people.map(keyOf))); // default: say hi to everyone
+    setSelected(new Set(roster.map(keyOf))); // default: say hi to everyone
     setOpen(true);
   };
 
@@ -139,6 +155,7 @@ export function WelcomePrompt({
   const send = useMutation({
     mutationFn: async () => {
       const chosen = people.filter((p) => selected.has(keyOf(p)));
+
       if (chosen.length === 0) return { welcomed: 0 };
       // A welcome puts YOUR NAME in someone else's interface, so the server now
       // requires proof of the wallet rather than trusting the claimed one. That
@@ -196,7 +213,7 @@ export function WelcomePrompt({
 
   /** The headline already names them — the button is just the next step. */
   const cardLabel = "Say Hi";
-  const selectedNames = people.filter((p) => selected.has(keyOf(p))).map((p) => p.name);
+  const selectedNames = roster.filter((p) => selected.has(keyOf(p))).map((p) => p.name);
   const sheetLabel = selectedNames.length > 1 ? `Say Hi to ${selectedNames.length}` : "Say Hi";
 
   return (
@@ -358,7 +375,7 @@ export function WelcomePrompt({
             </div>
 
             <ul className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
-              {people.map((p) => {
+              {roster.map((p) => {
                 const k = keyOf(p);
                 const on = selected.has(k);
                 return (
