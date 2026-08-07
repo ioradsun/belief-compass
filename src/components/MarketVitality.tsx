@@ -149,10 +149,24 @@ function ParticipantProof({
     );
   }
 
+  // DESKTOP — two readings of the same list, chosen by the room available.
+  // Narrow columns get the face pile (recognition). Once the column is wide
+  // enough for a name to sit beside a face without truncating, the SAME people
+  // are listed as people: face, name, and how you relate to them. CSS decides
+  // which one is on, so the switch happens at the width where it stops being a
+  // compromise — never at a device breakpoint.
+  const shortWallet = (w: string) => `${w.slice(0, 6)}…${w.slice(-4)}`;
+  const relLabel: Record<ParticipantRelation, string> = {
+    tribe: "Tribe",
+    rival: "Rival",
+    other: "Participant",
+  };
+  const named = shown.slice(0, 6);
+
   return (
     <div className="mt-2">
       {shown.length > 0 && (
-        <div className="flex items-center gap-1.5">
+        <div className="momentum-faces flex items-center gap-1.5">
           <div className="flex -space-x-1.5">
             {shown.map((f) => (
               <PersonAvatar
@@ -170,14 +184,62 @@ function ParticipantProof({
           )}
         </div>
       )}
+
+      {named.length > 0 && (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Open participants (${total})`}
+          onClick={() => setSheet(true)}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setSheet(true)}
+          className="momentum-names gap-x-4 gap-y-2"
+        >
+          {named.map((f) => (
+            <div key={f.wallet} className="flex min-w-0 items-center gap-2">
+              <RingedAvatar
+                wallet={f.wallet}
+                name={f.name}
+                avatarUrl={f.avatarUrl}
+                size={30}
+                ring={RELATION_RING[f.relation ?? "other"]}
+              />
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] font-medium leading-tight text-[var(--text)]">
+                  {f.name || shortWallet(f.wallet)}
+                </span>
+                <span className="block truncate text-[11px] leading-tight text-[var(--text-muted)]">
+                  {relLabel[f.relation ?? "other"]}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {summary && (
-        <div className={`${shown.length > 0 ? "mt-1" : ""} text-[11px] text-[var(--text-muted)]`}>
+        <div className={`${shown.length > 0 ? "mt-2" : ""} text-[11px] text-[var(--text-muted)]`}>
           {summary}
         </div>
+      )}
+      {sheet && (
+        <ParticipantSheet
+          people={faces.map((f) => ({
+            wallet: f.wallet,
+            name: f.name,
+            avatarUrl: f.avatarUrl,
+            relation: f.relation,
+            side: f.side,
+            valueUsd: f.valueUsd,
+            daysHeld: f.daysHeld,
+          }))}
+          total={total}
+          onClose={() => setSheet(false)}
+        />
       )}
     </div>
   );
 }
+
 
 /**
  * One full-width metric row inside the Total Market instrument: the current
@@ -227,22 +289,27 @@ function MomentumMetric({
       ? copy.pct
       : copy.figure || copy.pct || (copy.direction === "flat" ? "0%" : "");
   return (
-    /* The vertical padding is the deck's height-driven step where one is in
-       scope (the centre column), and the old constant everywhere else. */
+    /* Every dimension here is a token the container sets (see `.momentum` in
+       styles.css): width chooses the type scale, height chooses the air. */
     <div
-      className={dense ? "px-4" : "px-4 sm:px-5"}
-      style={{ paddingBlock: dense ? "8px" : "var(--deck-metric-y, 12px)" }}
+      style={{
+        paddingInline: "var(--mom-pad-x, 16px)",
+        paddingBlock: "var(--mom-pad-y, 12px)",
+      }}
     >
-
       <div className="flex items-start justify-between gap-3">
         <span className="min-w-0">
           <span className="flex min-w-0 items-baseline gap-2">
             <span
-              className={`num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] text-[var(--text)] ${dense ? "text-[18px]" : "text-[20px] sm:text-[22px]"}`}
+              className="num min-w-0 truncate font-semibold leading-none tracking-[-0.02em] text-[var(--text)]"
+              style={{ fontSize: "var(--mom-total, 20px)" }}
             >
               {total}
             </span>
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            <span
+              className="shrink-0 font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]"
+              style={{ fontSize: "var(--mom-label, 10px)" }}
+            >
               {label}
             </span>
           </span>
@@ -254,8 +321,8 @@ function MomentumMetric({
         </span>
         <span className="shrink-0 text-right">
           <span
-            className={`num block font-semibold leading-none tabular-nums ${dense ? "text-[14px]" : "text-[16px] sm:text-[18px]"}`}
-            style={{ color: tone }}
+            className="num block font-semibold leading-none tabular-nums"
+            style={{ color: tone, fontSize: "var(--mom-pct, 16px)" }}
           >
             {headlinePct}
             {arrow && headlinePct ? (
@@ -265,7 +332,8 @@ function MomentumMetric({
           {/* The exact move sits directly under its percentage — one column,
           one story, for both participants and capital. */}
           <span
-            className={`num mt-1 block whitespace-nowrap text-[var(--text-muted)] ${dense ? "text-[11px]" : "text-[12px]"}`}
+            className="num mt-1 block whitespace-nowrap text-[var(--text-muted)]"
+            style={{ fontSize: "var(--mom-abs, 12px)" }}
           >
             {copy.absolute}
           </span>
@@ -273,6 +341,7 @@ function MomentumMetric({
       </div>
     </div>
   );
+
 }
 
 export function MarketMomentum({
@@ -331,7 +400,7 @@ export function MarketMomentum({
   return (
     <section
       aria-label="Total market"
-      className="shrink-0 overflow-hidden rounded-[16px]"
+      className={`momentum${dense ? " momentum-dense" : ""} shrink-0 overflow-hidden rounded-[16px]`}
       style={{ background: "var(--surface)", border: "1px solid var(--hairline)" }}
     >
       <MomentumMetric

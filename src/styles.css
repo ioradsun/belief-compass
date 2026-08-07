@@ -507,3 +507,105 @@
     }
   }
 }
+
+/*
+ * MARKET MOMENTUM — ADAPTIVE SPATIAL SCALE
+ *
+ * The instrument is sized by the SPACE IT IS GIVEN, not by the device. It is a
+ * size container, so every token below answers one question: how much room does
+ * this column actually have? Width decides typography and whether participants
+ * can be read as *people* (name + relationship) instead of only recognised as
+ * faces; height decides the breathing room between rows. Both are clamped so
+ * the totals never overtake the question above them (title caps at 30px, the
+ * totals cap a clear step below at 24px).
+ */
+.momentum {
+  container-type: inline-size;
+  container-name: momentum;
+  --mom-total: 20px;
+  --mom-pct: 16px;
+  --mom-abs: 12px;
+  --mom-label: 10px;
+  --mom-face: 26px;
+  --mom-pad-x: 16px;
+  --mom-pad-y: var(--deck-metric-y, 12px);
+}
+.momentum-dense {
+  --mom-total: 18px;
+  --mom-pct: 14px;
+  --mom-abs: 11px;
+  --mom-face: 26px;
+  --mom-pad-x: 16px;
+  --mom-pad-y: 8px;
+}
+
+/* Named participant rows are a WIDTH affordance: they only exist where a name
+   can sit beside a face without truncating into nonsense. */
+.momentum-names {
+  display: none;
+}
+
+@container momentum (min-width: 420px) {
+  .momentum {
+    --mom-total: 22px;
+    --mom-pct: 17px;
+    --mom-face: 28px;
+    --mom-pad-x: 20px;
+  }
+}
+
+@container momentum (min-width: 560px) {
+  .momentum {
+    --mom-total: 24px;
+    --mom-pct: 18px;
+    --mom-abs: 12.5px;
+    --mom-label: 10.5px;
+    --mom-face: 30px;
+    --mom-pad-x: 22px;
+  }
+  .momentum-faces {
+    display: none;
+  }
+  .momentum-names {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container momentum (min-width: 760px) {
+  .momentum {
+    --mom-pad-x: 24px;
+  }
+  .momentum-names {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Tall monitors: the same instrument, more air. Nothing grows — the space
+   between things does, which is what "a lot of blank space" actually wants. */
+@media (min-height: 900px) {
+  .momentum {
+    --mom-pad-y: 18px;
+  }
+}
+@media (min-height: 1100px) {
+  .momentum {
+    --mom-pad-y: 22px;
+  }
+}
+
+/* Short viewports keep the phone rhythm regardless of how wide the column is —
+   height is the binding constraint there, not width. */
+@media (max-height: 720px) {
+  .momentum {
+    --mom-pad-y: 8px;
+    --mom-total: 20px;
+    --mom-pct: 15px;
+  }
+  .momentum-names {
+    display: none !important;
+  }
+  .momentum-faces {
+    display: flex !important;
+  }
+}
