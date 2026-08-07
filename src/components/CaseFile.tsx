@@ -581,6 +581,9 @@ export function CaseRoster({
   const { format } = useMoney();
   const [openAll, setOpenAll] = useState(false);
   const { ref: anchorRef, box: anchorBox } = useAnchorRect<HTMLDivElement>(openAll);
+  // The slot decides the preview length, not a constant: whatever the panel
+  // leaves us, we fill with whole rows and hand the rest to "See all".
+  const { ref: slotRef, rows: preview } = useFitRows(BELIEVER_ROW);
   const byWallet = useMemo(
     () => new Map((people ?? []).map((p) => [p.wallet.toLowerCase(), p])),
     [people],
