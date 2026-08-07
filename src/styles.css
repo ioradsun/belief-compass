@@ -529,8 +529,10 @@
   --mom-face: 26px;
   --mom-pad-x: 16px;
   --mom-pad-y: var(--deck-metric-y, 12px);
+  --mom-row-min: 0px;
 }
 .momentum-dense {
+  --mom-row-min: 0px;
   --mom-total: 18px;
   --mom-pct: 14px;
   --mom-abs: 11px;
@@ -582,15 +584,26 @@
 }
 
 /* Tall monitors: the same instrument, more air. Nothing grows — the space
-   between things does, which is what "a lot of blank space" actually wants. */
+   between things does, which is what "a lot of blank space" actually wants.
+   Each metric also takes a floor height so the two rows physically occupy the
+   spare column height instead of leaving a gap under them; the content stays
+   vertically centred inside that taller band. */
 @media (min-height: 900px) {
   .momentum {
-    --mom-pad-y: 18px;
+    --mom-pad-y: 20px;
+    --mom-row-min: 104px;
   }
 }
 @media (min-height: 1100px) {
   .momentum {
-    --mom-pad-y: 22px;
+    --mom-pad-y: 26px;
+    --mom-row-min: 124px;
+  }
+}
+@media (min-height: 1300px) {
+  .momentum {
+    --mom-pad-y: 32px;
+    --mom-row-min: 148px;
   }
 }
 
@@ -599,6 +612,7 @@
 @media (max-height: 720px) {
   .momentum {
     --mom-pad-y: 8px;
+    --mom-row-min: 0px;
     --mom-total: 20px;
     --mom-pct: 15px;
   }
