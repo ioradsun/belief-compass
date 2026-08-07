@@ -655,7 +655,7 @@ export function CaseRoster({
       {/* Icon column heads — the row grammar (who · how much · how long) without
         three words of chrome. */}
       {roster.length > 0 && variant !== "compact" && (
-        <div className="flex items-center gap-2 px-1 pb-0.5 text-[var(--text-muted)]">
+        <div className="flex shrink-0 items-center gap-2 px-1 pb-0.5 text-[var(--text-muted)]">
           <span className="w-[28px] shrink-0" aria-hidden />
           <span className="min-w-0 flex-1" aria-hidden />
           <span className="flex w-[52px] shrink-0 justify-end" title="Position">
