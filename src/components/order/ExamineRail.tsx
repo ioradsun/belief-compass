@@ -6,6 +6,7 @@
  * instrument, the phone attaches it to the top of the dock, so the order bar
  * reads identically everywhere. No card, no tab: a hairline does the separating.
  */
+import { useEffect, useState } from "react";
 import { HouseRead } from "@/components/HouseRead";
 import type { HouseReadState } from "@/domain/house-read";
 
@@ -30,11 +31,16 @@ export function ExamineCta({
   /** Phone dock: tighter padding, same anatomy. */
   compact?: boolean;
 }) {
+  // The House Read depends on the viewer's wallet, which only exists in the
+  // browser — rendering it during SSR guarantees a hydration mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   return (
     <div>
       {/* Only the House Read remains here — the generic momentum interpretation
           was removed for being noisy and often wrong. */}
-      {houseRead && (
+      {mounted && houseRead && (
         <>
           <div className={compact ? "px-3.5 py-2" : "px-4 py-3 sm:px-5"}>
             <HouseRead state={houseRead} />
