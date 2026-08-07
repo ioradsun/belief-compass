@@ -120,8 +120,9 @@ export default defineConfig({
     optimizeDeps: {
       include: [
         "eventemitter3",
-        "canonicalize",
-        "fetch-retry",
+        // NOTE: only list packages that are actually installed — a missing entry
+        // makes Vite re-run dep optimization and reload the page mid-load.
+
         "@coinbase/wallet-sdk",
         "@walletconnect/time",
         "@walletconnect/environment",
