@@ -12,6 +12,9 @@ import {
   canPutOnTable,
   tableLine,
   progressLine,
+  finishedLine,
+  finishedVisible,
+  FINISHED_WINDOW_MS,
   type RecipientFact,
 } from "./table";
 
@@ -194,5 +197,81 @@ describe("the cap survives two browser tabs", () => {
     );
     expect(s).toMatch(/ADD COLUMN IF NOT EXISTS passed_at/);
     expect(s).not.toMatch(/DROP TABLE|ALTER TABLE public\.market_calls\s+DROP/);
+  });
+});
+
+/**
+ * WHAT BECAME OF IT — and why a finished Challenge is not a deleted one.
+ *
+ * The bug these guard: `tableFor` read only open rows AND auto-closed anything
+ * everybody had answered, in the same pass. So the sequence was — put a question
+ * up, everyone answers, open Yours, and the row is gone. The single most valuable
+ * event this product can produce was the one most likely to be deleted before its
+ * own author ever saw it.
+ */
+describe("the ending, told to the person who asked", () => {
+  const p = (showedUp: number, passedCount: number, waiting = 0) =>
+    tableProgress([
+      ...many(showedUp, showed),
+      ...many(passedCount, passed),
+      ...many(waiting, open),
+    ]);
+
+  it("celebrates a full house without gushing at one person", () => {
+    expect(finishedLine(p(3, 0), "all_responded")).toBe("Everyone showed up.");
+    // "Everyone" needs a crowd to mean anything. At one it is a flourish about a
+    // single human being, which reads as the system trying too hard.
+    expect(finishedLine(p(1, 0), "all_responded")).toBe("They showed up.");
+  });
+
+  it("states a partial turnout without accounting for the rest", () => {
+    expect(finishedLine(p(3, 5), "all_responded")).toBe("3 of 8 showed up.");
+  });
+
+  it("blames nobody when nobody showed up", () => {
+    const line = finishedLine(p(0, 4), "all_responded");
+    expect(line).toBe("Quiet one. Not every question finds its people.");
+    // A pass is a choice about a QUESTION, so the sentence lands on the question.
+    // And no tally of passes: a count of who would not is a ledger of rejection
+    // with a friendlier label on it.
+    expect(line).not.toMatch(/\b4\b/);
+    for (const w of TABLE_BANNED) expect(line.toLowerCase()).not.toContain(w);
+  });
+
+  it("owns a manual close as something you did", () => {
+    expect(finishedLine(p(2, 0, 3), "creator")).toBe(
+      "You took it off the table. 2 of 5 showed up.",
+    );
+    expect(finishedLine(p(0, 0, 5), "creator")).toBe("You took it off the table.");
+  });
+
+  it("never uses a banned word in any branch", () => {
+    for (const reason of ["creator", "all_responded"] as const)
+      for (const [s, ps, w] of [
+        [0, 0, 3],
+        [1, 0, 0],
+        [3, 0, 0],
+        [3, 5, 0],
+        [0, 4, 0],
+      ] as const) {
+        const line = finishedLine(p(s, ps, w), reason).toLowerCase();
+        for (const banned of TABLE_BANNED) expect(line, line).not.toContain(banned);
+      }
+  });
+
+  it("keeps a finished Challenge for a week, then lets it go", () => {
+    const now = 10 * FINISHED_WINDOW_MS;
+    expect(finishedVisible(now - 1000, now)).toBe(true);
+    expect(finishedVisible(now - FINISHED_WINDOW_MS + 1, now)).toBe(true);
+    expect(finishedVisible(now - FINISHED_WINDOW_MS, now)).toBe(false);
+    // Still live — there is nothing finished to show.
+    expect(finishedVisible(null, now)).toBe(false);
+  });
+
+  it("frees the slot the moment it closes, however good the outcome was", () => {
+    // The other half of the fix. A week of successful Challenges reading as a full
+    // table would be the exact opposite of what closing means.
+    expect(canPutOnTable(0)).toBe(true);
+    expect(tableLine(0)).toBeNull();
   });
 });

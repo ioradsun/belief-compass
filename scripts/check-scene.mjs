@@ -38,6 +38,9 @@ const SCENES = [
   "thin",
   "exited",
   "full",
+  "everyoneShowed",
+  "nobodyShowed",
+  "tookItDown",
   "crowd",
 ];
 const ROLES = ["challenger", "challenged", "bystander"];

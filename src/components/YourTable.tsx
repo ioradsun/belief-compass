@@ -27,7 +27,14 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getTable, takeOffTable } from "@/lib/table.functions";
-import { tableProgress, progressLine, tableLine, type RecipientFact } from "@/domain/table";
+import {
+  tableProgress,
+  progressLine,
+  tableLine,
+  finishedLine,
+  type RecipientFact,
+  type CloseReason,
+} from "@/domain/table";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 
 export const tableKey = (wallet?: string) => ["table", wallet ?? null] as const;
@@ -88,6 +95,19 @@ export function YourTable({
   }
 
   const table = rows ?? [];
+  /**
+   * ACTIVE FIRST, THEN WHAT ENDED. Two groups, one list — a heading over three
+   * cards would be scaffolding around a thing small enough not to need it, and the
+   * dashed border already says which is which.
+   *
+   * THE CAPACITY LINE COUNTS ONLY THE LIVE ONES. A week of finished Challenges
+   * reading as "3 on the table" would be the opposite of the truth: closing is
+   * precisely what gave the slot back.
+   */
+  const live = table.filter((r) => r.closedAtMs == null);
+  const ended = table.filter((r) => r.closedAtMs != null);
+  const ordered = [...live, ...ended];
+
   if (table.length === 0) {
     return (
       <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
@@ -102,15 +122,16 @@ export function YourTable({
       {/* CAPACITY, NOT CURRENCY. "2 on the table · 1 spot open" rather than
           "2 / 3 USED" — a fraction with a denominator reads as a balance being
           spent, and turns an editorial choice into an allowance. */}
-      <p className="num text-[11px] text-[var(--text-muted)]">{tableLine(table.length)}</p>
+      <p className="num text-[11px] text-[var(--text-muted)]">{tableLine(live.length)}</p>
 
       <ul className="space-y-2">
-        {table.map((row) => (
+        {ordered.map((row) => (
           <TableRowCard
             key={row.id}
             id={row.id}
             title={row.title}
             recipients={row.recipients}
+            closeReason={row.closeReason}
             onOpen={() => onSelect(row.marketId)}
             onClose={() => close.mutate(row.id)}
             closing={close.isPending}
@@ -125,6 +146,7 @@ function TableRowCard({
   id,
   title,
   recipients,
+  closeReason,
   onOpen,
   onClose,
   closing,
@@ -132,30 +154,49 @@ function TableRowCard({
   id: number;
   title: string | null;
   recipients: RecipientFact[];
+  /** Set once it has ended — the card becomes an outcome rather than a status. */
+  closeReason: CloseReason | null;
   onOpen: () => void;
   onClose: () => void;
   closing: boolean;
 }) {
   const progress = tableProgress(recipients);
-  const line = progressLine(progress);
+  const finished = closeReason != null;
+  const line = finished ? finishedLine(progress, closeReason) : progressLine(progress);
 
   return (
     <li className="relative" data-challenge={id}>
       <button
         type="button"
         onClick={onOpen}
-        className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition-colors hover:border-[var(--border-strong)]"
+        className={`w-full rounded-xl border p-3 text-left transition-colors ${
+          finished
+            ? // QUIETER, NOT GREYED OUT. A finished Challenge is the best thing
+              // that happens here; disabling its appearance would say the opposite.
+              // It steps back because it no longer needs anything from you.
+              "border-dashed border-[var(--border)] bg-transparent hover:border-[var(--border-strong)]"
+            : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-strong)]"
+        }`}
       >
-        <p className="line-clamp-2 text-[13px] leading-snug text-[var(--text)]">
+        <p
+          className={`line-clamp-2 text-[13px] leading-snug ${finished ? "text-[var(--text-secondary)]" : "text-[var(--text)]"}`}
+        >
           {title ?? "This question"}
         </p>
 
         {/* WHAT HAPPENED BECAUSE YOU PUT IT UP. Absent entirely until somebody has
             been reached — a Challenge with no audience has no story yet, and
-            "0 of 0" is not a state anybody needs described. */}
-        {line && <p className="num mt-1.5 text-[11.5px] text-[var(--text-secondary)]">{line}</p>}
+            "0 of 0" is not a state anybody needs described. Once it has ended the
+            same slot carries the ending instead, in the past tense. */}
+        {line && (
+          <p
+            className={`mt-1.5 text-[11.5px] leading-snug ${finished ? "text-[var(--text)]" : "num text-[var(--text-secondary)]"}`}
+          >
+            {line}
+          </p>
+        )}
 
-        {progress.waiting > 0 && progress.showedUp === 0 && progress.passed === 0 && (
+        {!finished && progress.waiting > 0 && progress.showedUp === 0 && progress.passed === 0 && (
           /* Nobody has answered yet, and saying so plainly beats a row of noughts.
              It is early, not empty. */
           <p className="mt-1.5 text-[11.5px] leading-snug text-[var(--text-muted)]">
@@ -167,15 +208,21 @@ function TableRowCard({
       {/* TAKE IT OFF THE TABLE — casual, because it is. Not "Delete", not "Cancel":
           nothing is destroyed and nothing failed. The slot frees, every recipient
           row survives with its stamps, and who showed up stays part of the
-          relationship forever. */}
-      <button
-        type="button"
-        onClick={onClose}
-        disabled={closing}
-        className="mt-1 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-50"
-      >
-        Take off the table
-      </button>
+          relationship forever.
+
+          GONE ONCE IT HAS ENDED, and no control replaces it. A finished card needs
+          no dismissing: it ages out by itself, and an outcome you have to file away
+          is an inbox. The only thing left to do with it is read it. */}
+      {!finished && (
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={closing}
+          className="mt-1 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-50"
+        >
+          Take off the table
+        </button>
+      )}
     </li>
   );
 }

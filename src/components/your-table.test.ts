@@ -47,7 +47,11 @@ describe("the outbound card claims only what the server proved", () => {
 
   it("reads capacity from the canonical line, never its own arithmetic", () => {
     const c = yours();
-    expect(c).toMatch(/tableLine\(table\.length\)/);
+    // `live`, not `table` — the payload now also carries Challenges that ended in
+    // the last week so their author finds out what happened, and counting those as
+    // occupied slots would tell somebody with three good outcomes that their table
+    // was full. Closing is exactly what gave the slot back.
+    expect(c).toMatch(/tableLine\(live\.length\)/);
     expect(c).not.toMatch(/\/ 3|of 3 used|TABLE_SLOTS -/i);
   });
 });
