@@ -247,6 +247,12 @@ type Search = {
   tab?: MobileTab;
 };
 
+/** A URL boolean, however it arrives: `?x`, `?x=1`, `?x=true`, parsed or raw. */
+const flag = (v: unknown): true | undefined =>
+  v === true || v === 1 || v === "1" || v === "true" || v === "" ? true : undefined;
+
+
+
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>): Search => ({
     wallet:
