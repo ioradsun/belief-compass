@@ -19,6 +19,8 @@ import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
 import { getEcosystemValue, type EcosystemValue } from "@/lib/ecosystem-value.functions";
 import { categoryLabel } from "@/domain/categories";
 import { ago } from "@/domain/relative-time";
+import { InfoPageHeader } from "@/components/InfoPageHeader";
+
 
 export const Route = createFileRoute("/value")({
   head: () => ({
@@ -175,8 +177,10 @@ function ValuePage() {
   return (
     // The app shell locks html/body to overflow:hidden (it's a fixed-viewport
     // experience), so this long report needs to own its own vertical scroll.
-    <div className="h-[100svh] overflow-y-auto bg-[var(--bg)] text-[var(--text)]">
+    <div className="h-[100svh] w-full overflow-x-hidden overflow-y-auto bg-[var(--bg)] text-[var(--text)]">
+      <InfoPageHeader label="Why it matters" />
       <div className="mx-auto w-full max-w-[1080px] px-5 py-10 sm:px-8 sm:py-14">
+
         {/* HERO */}
         <header className="mb-12">
           <div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">

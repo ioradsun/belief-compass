@@ -14,6 +14,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { BrandMark } from "@/components/BrandMark";
+import { InfoPageHeader } from "@/components/InfoPageHeader";
+
 
 export const Route = createFileRoute("/how")({
   head: () => ({
@@ -79,31 +81,10 @@ function HowItWorks() {
   }, [filter]);
 
   return (
-    <div className="h-[100dvh] overflow-y-auto overscroll-contain bg-[var(--bg)] text-[var(--text)] [-webkit-overflow-scrolling:touch] [scroll-behavior:smooth]">
+    <div className="h-[100dvh] w-full overflow-x-hidden overflow-y-auto overscroll-contain bg-[var(--bg)] text-[var(--text)] [-webkit-overflow-scrolling:touch] [scroll-behavior:smooth]">
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
-      <header
-        className="sticky top-0 z-30 bg-[var(--panel)]/95 backdrop-blur"
-        style={{ borderBottom: "1px solid var(--border)" }}
-      >
-        <div className="mx-auto flex h-14 max-w-[1180px] items-center gap-3 px-4 lg:px-8">
-          <a
-            href="/"
-            className="flex items-center gap-2 text-[var(--text)]"
-            aria-label="Conviction"
-          >
-            <BrandMark size={22} className="shrink-0" />
-            <span className="text-[13px] font-semibold tracking-[-0.01em]">Conviction</span>
-          </a>
-          <span className="hidden text-[12px] text-[var(--text-muted)] sm:inline">
-            · How it works
-          </span>
-          <a
-            href="/"
-            className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[var(--text)] px-4 py-1.5 text-[12px] font-semibold text-[var(--bg)] transition-opacity hover:opacity-90"
-          >
-            <span aria-hidden>✕</span> Close
-          </a>
-        </div>
+      <InfoPageHeader label="How it works">
+
 
         {/* Mobile jump nav — a dropdown, so ten sections cost one line, not a
             horizontal scroll the reader has to fish through. */}
@@ -155,9 +136,10 @@ function HowItWorks() {
             </ul>
           </details>
         </div>
-      </header>
+      </InfoPageHeader>
 
-      <div className="mx-auto max-w-[1180px] px-4 lg:px-8">
+      <div className="mx-auto w-full max-w-[1180px] px-4 lg:px-8">
+
         <div className="lg:grid lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-14">
           {/* ── Sticky table of contents (desktop) ──────────────────────────── */}
           <nav className="hidden lg:block">
