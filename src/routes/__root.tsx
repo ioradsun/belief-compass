@@ -22,7 +22,6 @@ import { restoreQueryCache, startQueryPersist } from "../lib/query-persist";
 import { startRealtime } from "../lib/realtime/coordinator";
 import { THEME_INIT_SCRIPT } from "../lib/theme";
 
-
 // Web fonts, loaded OFF the critical path. The system fallback stack in styles.css
 // (system-ui / -apple-system / Segoe UI …) paints instantly; Inter + JetBrains
 // Mono swap in when their CSS arrives, so a cross-origin stylesheet never blocks

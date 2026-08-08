@@ -71,8 +71,7 @@ export function kindForMime(mime: string): Exclude<MediaKind, "link"> | null {
  */
 export function sniffMime(bytes: Uint8Array): string | null {
   const b = bytes;
-  const ascii = (start: number, len: number) =>
-    String.fromCharCode(...b.slice(start, start + len));
+  const ascii = (start: number, len: number) => String.fromCharCode(...b.slice(start, start + len));
   if (b.length < 12) return null;
   if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
   if (b[0] === 0x89 && ascii(1, 3) === "PNG") return "image/png";

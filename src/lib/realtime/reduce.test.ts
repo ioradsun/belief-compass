@@ -59,9 +59,9 @@ describe("liveFieldsOf", () => {
     expect("story" in live).toBe(false);
   });
   it("normalizes opportunity_eligible to a boolean", () => {
-    expect(liveFieldsOf(stateRow(1, { opportunity_eligible: "t" as never })).opportunity_eligible).toBe(
-      true,
-    );
+    expect(
+      liveFieldsOf(stateRow(1, { opportunity_eligible: "t" as never })).opportunity_eligible,
+    ).toBe(true);
   });
 });
 
@@ -70,8 +70,11 @@ describe("applyMarketStateRow", () => {
     qc.setQueryData(["opp-feed", null, "24h", "all"], feedData(42));
     const touched = applyMarketStateRow(qc, stateRow(42));
     expect(touched).toBe(1);
-    const row = (qc.getQueryData(["opp-feed", null, "24h", "all"]) as { rows: Record<number, Record<string, unknown>> })
-      .rows[42];
+    const row = (
+      qc.getQueryData(["opp-feed", null, "24h", "all"]) as {
+        rows: Record<number, Record<string, unknown>>;
+      }
+    ).rows[42];
     // canonical fields moved
     expect(row.yes_price_usd).toBe(0.73);
     expect(row.believers_yes).toBe(12);
@@ -125,8 +128,11 @@ describe("applyMarketStateBatch — deterministic ordering", () => {
       ],
       last,
     );
-    const row = (qc.getQueryData(["opp-feed", null, "24h", "all"]) as { rows: Record<number, Record<string, unknown>> })
-      .rows[42];
+    const row = (
+      qc.getQueryData(["opp-feed", null, "24h", "all"]) as {
+        rows: Record<number, Record<string, unknown>>;
+      }
+    ).rows[42];
     expect(row.yes_price_usd).toBe(0.9); // highest version wins
     expect(last.get(42)).toBe(3);
   });
@@ -140,8 +146,11 @@ describe("applyMarketStateBatch — deterministic ordering", () => {
       last,
     );
     expect(touched).toBe(0);
-    const row = (qc.getQueryData(["opp-feed", null, "24h", "all"]) as { rows: Record<number, Record<string, unknown>> })
-      .rows[42];
+    const row = (
+      qc.getQueryData(["opp-feed", null, "24h", "all"]) as {
+        rows: Record<number, Record<string, unknown>>;
+      }
+    ).rows[42];
     expect(row.yes_price_usd).toBe(0.5); // unchanged
   });
 });

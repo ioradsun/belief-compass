@@ -53,4 +53,3 @@ export function relationshipAria(
   const rel = RELATIONSHIP_TEXT[label];
   return `${name}, ${rel} relationship, ${agreement} percent Conviction Match across ${shared} shared convictions`;
 }
-

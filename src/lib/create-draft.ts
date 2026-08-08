@@ -28,7 +28,6 @@ export interface DraftAttachment {
   sha256?: string | null;
 }
 
-
 /**
  * Where a draft came from, when it did not come from a blank form. Carried so a
  * published market can be attributed back to the House idea that started it.
@@ -62,7 +61,6 @@ export const EMPTY_DRAFT: Draft = {
   source: null,
   category: null,
 };
-
 
 /** What the suggestion search runs on. Null means "not creating right now". */
 export interface Probe {
@@ -109,7 +107,6 @@ export function startDraftFromSuggestion(
 }
 
 export function clearDraft() {
-
   draft = EMPTY_DRAFT;
   probe = null;
   dismissed = false;

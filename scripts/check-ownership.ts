@@ -47,7 +47,11 @@ for (const f of files) {
 
     // (3) full-history refold outside repair/reconciliation/pure-core.
     const repairish = /(rebuild-position|reconcile|position-core)/.test(f.path);
-    if (!repairish && (/\brefold\s*\(/.test(line) || /loadAllCanonicalEvents/.test(line)) && isCode(line))
+    if (
+      !repairish &&
+      (/\brefold\s*\(/.test(line) || /loadAllCanonicalEvents/.test(line)) &&
+      isCode(line)
+    )
       note(`full-refold outside repair module — ${at}`);
   });
 
@@ -55,14 +59,17 @@ for (const f of files) {
   if (/\.from\(["']feed_events["']\)/.test(f.text) && /\.order\(/.test(f.text)) {
     // Only flag when the same file both selects feed_events AND orders — a
     // chronological read. (getIngestStatus uses head-count only.)
-    if (/feed_events[\s\S]{0,200}?\.order\(/.test(f.text)) note(`chronological feed_events read — ${f.path}`);
+    if (/feed_events[\s\S]{0,200}?\.order\(/.test(f.text))
+      note(`chronological feed_events read — ${f.path}`);
   }
 
   // (5) trades product read = a select of position/chronological columns (a
   //     head-count in getIngestStatus is a diagnostic and allowed).
   if (
     /\.from\(["']trades["']\)/.test(f.text) &&
-    /trades["']\)[\s\S]{0,160}?\.select\(["'][^"']*(side|direction|occurred_at|token_amount)/.test(f.text) &&
+    /trades["']\)[\s\S]{0,160}?\.select\(["'][^"']*(side|direction|occurred_at|token_amount)/.test(
+      f.text,
+    ) &&
     !/getIngestStatus/.test(f.text)
   ) {
     note(`trades product read (non-diagnostic) — ${f.path}`);
@@ -74,4 +81,6 @@ if (violations.length > 0) {
   for (const v of violations) console.error("  ✗ " + v);
   process.exit(1);
 }
-console.log(`[check-ownership] OK — scanned ${files.length} production files, no prohibited patterns.`);
+console.log(
+  `[check-ownership] OK — scanned ${files.length} production files, no prohibited patterns.`,
+);

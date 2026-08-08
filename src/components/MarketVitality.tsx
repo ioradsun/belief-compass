@@ -181,7 +181,6 @@ function ParticipantProof({
         </div>
       )}
 
-
       {summary && (
         <div className={`${shown.length > 0 ? "mt-2" : ""} text-[11px] text-[var(--text-muted)]`}>
           {summary}
@@ -205,7 +204,6 @@ function ParticipantProof({
     </div>
   );
 }
-
 
 /**
  * One full-width metric row inside the Total Market instrument: the current
@@ -299,7 +297,6 @@ function MomentumMetric({
               <ParticipantProof faces={faces} total={facesTotal ?? faces.length} dense={dense} />
             </div>
           ) : null}
-
         </span>
         <span className="shrink-0 text-right">
           <span
@@ -325,7 +322,6 @@ function MomentumMetric({
       </div>
     </div>
   );
-
 }
 
 export function MarketMomentum({

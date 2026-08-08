@@ -83,8 +83,6 @@ async function checkRetired() {
   }
 }
 
-
-
 type Rel = {
   wallet: string;
   agreement: number;

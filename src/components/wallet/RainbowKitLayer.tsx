@@ -97,6 +97,5 @@ function RainbowKitBridge() {
     };
   }, [openConnectModal, isConnected, address, disconnectAsync, connector]);
 
-
   return null;
 }

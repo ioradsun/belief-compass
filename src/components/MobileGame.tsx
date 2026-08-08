@@ -60,7 +60,6 @@ import { compareSides, comparisonStrip, type StripSide } from "@/domain/side-com
 
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 
-
 type Phase = "question" | "sides";
 
 export function MobileGame({
@@ -78,7 +77,6 @@ export function MobileGame({
 }) {
   const marketId = Number(row.onchain_id);
   const title = marketTitle(row.markets?.title, marketId);
-  
 
   const [phase, setPhase] = useState<Phase>("question");
   const [side, setSide] = useState<OrderSide | null>(null);
@@ -122,8 +120,6 @@ export function MobileGame({
       if (st?.convictionSides === marketId) window.history.back();
     };
   }, [phase, marketId]);
-
-
 
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
@@ -291,7 +287,6 @@ export function MobileGame({
     ? marketAgeCopy(Date.now() - new Date(createdAt).getTime()).toLowerCase()
     : null;
 
-
   // A completed buy takes over the screen with the Conviction Reveal — the same
   // engine + component desktop uses. The trade was only the unlock.
   if (trade.isSuccess && side && !dock.isSelling) {
@@ -330,7 +325,6 @@ export function MobileGame({
   // NOTE: "sides" is no longer an early return. Both Sides is a view of the
   // middle region (see the render below) so the question and the order bar stay
   // mounted and reachable while it is open.
-
 
   // ---- The Question — ONE screen. The dock transforms decision → order in place;
   // the House pick + celebration only arrive after the order is placed (above). ----
@@ -390,7 +384,6 @@ export function MobileGame({
         <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">Opened · {openedWhen}</p>
       ) : null}
     </div>
-
   );
 
   const marketBody = (
@@ -453,7 +446,6 @@ export function MobileGame({
           )}
         </div>
       )}
-
 
       {/* One dock, transforming in place — the SAME order surface the desktop
         deck uses, with the analysis rail (market signal + see both sides)
@@ -731,7 +723,6 @@ function BothSides({
 
               {isOpen && (
                 <SideDetailSheet side={s} color={color} onClose={() => setOpen(null)}>
-
                   {/* WHO BACKS THIS SIDE — inside the disclosure, so two closed
                       sides always fit the region together. */}
                   <CaseRoster
@@ -863,7 +854,6 @@ function SplitBar({ strip }: { strip: readonly [StripSide, StripSide] }) {
     </div>
   );
 }
-
 
 /* ---------- primitives ---------- */
 

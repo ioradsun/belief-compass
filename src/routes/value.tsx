@@ -101,12 +101,14 @@ function ValuePage() {
 
   // On-chain fee rate → real fees + creator earnings from real volume.
   const fees = useReadContracts({
-    contracts: (["feeBps", "FEE_DENOMINATOR", "CREATOR_FEE_SHARE"] as const).map((functionName) => ({
-      address: PROXY_ADDRESS as `0x${string}`,
-      abi: FEE_ABI,
-      functionName,
-      chainId: CHAIN_ID,
-    })),
+    contracts: (["feeBps", "FEE_DENOMINATOR", "CREATOR_FEE_SHARE"] as const).map(
+      (functionName) => ({
+        address: PROXY_ADDRESS as `0x${string}`,
+        abi: FEE_ABI,
+        functionName,
+        chainId: CHAIN_ID,
+      }),
+    ),
   });
   const readN = (i: number): number | null => {
     const r = (fees.data ?? [])[i];
@@ -124,7 +126,8 @@ function ValuePage() {
 
   const t = data.totals;
   const feesUsd = feeRate != null ? t.volumeUsd * feeRate : null;
-  const creatorEarningsUsd = feesUsd != null && creatorShare != null ? feesUsd * creatorShare : null;
+  const creatorEarningsUsd =
+    feesUsd != null && creatorShare != null ? feesUsd * creatorShare : null;
 
   // Per-market derived earnings → creator economy + leaderboards (consistent with
   // the headline: same real-volume × real-rate formula, sums back to the total).
@@ -133,22 +136,39 @@ function ValuePage() {
     feesUsd: feeRate != null ? m.volumeUsd * feeRate : 0,
     earningsUsd: feeRate != null && creatorShare != null ? m.volumeUsd * feeRate * creatorShare : 0,
   }));
-  const topMarketsByVolume = [...data.markets].sort((a, b) => b.volumeUsd - a.volumeUsd).slice(0, 8);
-  const topEarningMarkets = [...marketEarn].sort((a, b) => b.earningsUsd - a.earningsUsd).slice(0, 6);
+  const topMarketsByVolume = [...data.markets]
+    .sort((a, b) => b.volumeUsd - a.volumeUsd)
+    .slice(0, 8);
+  const topEarningMarkets = [...marketEarn]
+    .sort((a, b) => b.earningsUsd - a.earningsUsd)
+    .slice(0, 6);
 
-  const creatorMap = new Map<string, { wallet: string; name: string | null; markets: number; volumeUsd: number; earningsUsd: number }>();
+  const creatorMap = new Map<
+    string,
+    { wallet: string; name: string | null; markets: number; volumeUsd: number; earningsUsd: number }
+  >();
   for (const m of marketEarn) {
     if (!m.authorWallet) continue;
     const w = m.authorWallet.toLowerCase();
-    const e = creatorMap.get(w) ?? { wallet: w, name: m.authorName, markets: 0, volumeUsd: 0, earningsUsd: 0 };
+    const e = creatorMap.get(w) ?? {
+      wallet: w,
+      name: m.authorName,
+      markets: 0,
+      volumeUsd: 0,
+      earningsUsd: 0,
+    };
     e.markets++;
     e.volumeUsd += m.volumeUsd;
     e.earningsUsd += m.earningsUsd;
     if (!e.name && m.authorName) e.name = m.authorName;
     creatorMap.set(w, e);
   }
-  const topCreators = [...creatorMap.values()].sort((a, b) => b.earningsUsd - a.earningsUsd).slice(0, 6);
-  const avgEarningsPerMarket = data.markets.length ? (creatorEarningsUsd ?? 0) / data.markets.length : 0;
+  const topCreators = [...creatorMap.values()]
+    .sort((a, b) => b.earningsUsd - a.earningsUsd)
+    .slice(0, 6);
+  const avgEarningsPerMarket = data.markets.length
+    ? (creatorEarningsUsd ?? 0) / data.markets.length
+    : 0;
   const avgVolPerMarket = data.markets.length ? t.volumeUsd / data.markets.length : 0;
   const avgTradesPerMarket = data.markets.length ? t.tradesExecuted / data.markets.length : 0;
 
@@ -167,8 +187,13 @@ function ValuePage() {
           </h1>
           {data.since && (
             <div className="mt-3 text-[12.5px] text-[var(--text-muted)]">
-              Measured from {new Date(data.since).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })},
-              when trade attribution began.
+              Measured from{" "}
+              {new Date(data.since).toLocaleDateString("en-US", {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+              , when trade attribution began.
             </div>
           )}
           <div className="mt-9 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--border)] sm:grid-cols-3">
@@ -187,7 +212,9 @@ function ValuePage() {
         {data.share && (
           <section className="mb-12">
             <div className="mb-3 flex items-baseline gap-3">
-              <h2 className="text-[15px] font-semibold text-[var(--text)]">Share of the ecosystem</h2>
+              <h2 className="text-[15px] font-semibold text-[var(--text)]">
+                Share of the ecosystem
+              </h2>
               <span className="text-[12px] text-[var(--text-muted)]">
                 POV and Conviction combined · last {data.share.days} days
               </span>
@@ -199,7 +226,10 @@ function ValuePage() {
                 ecoValue={data.share.volume.ecoUsd}
                 convValue={data.share.volume.convUsd}
                 format={fmtUsd}
-                points={data.share.series.map((p) => ({ eco: p.ecoVolumeUsd, conv: p.convVolumeUsd }))}
+                points={data.share.series.map((p) => ({
+                  eco: p.ecoVolumeUsd,
+                  conv: p.convVolumeUsd,
+                }))}
               />
               <ShareCard
                 label="Markets"
@@ -215,18 +245,22 @@ function ValuePage() {
 
         {t.tradesExecuted === 0 && (
           <div className="mb-12 rounded-2xl bg-[var(--surface)] p-5">
-            <div className="text-[14px] font-semibold text-[var(--text)]">No trades attributed yet</div>
+            <div className="text-[14px] font-semibold text-[var(--text)]">
+              No trades attributed yet
+            </div>
             <p className="mt-2 max-w-[70ch] text-[12.5px] leading-relaxed text-[var(--text-muted)]">
               A trade counts here only once Conviction has provably routed it. The contract records
-              no referrer, so trades sent before attribution shipped can&rsquo;t be recovered — and we
-              don&rsquo;t estimate them. That is why the volume share above reads 0.00% while the
+              no referrer, so trades sent before attribution shipped can&rsquo;t be recovered — and
+              we don&rsquo;t estimate them. That is why the volume share above reads 0.00% while the
               markets share is already real: market origin has been recorded since the beginning.
               Trade figures build from here.
             </p>
           </div>
         )}
 
-        <div className={`grid gap-12 lg:grid-cols-[1fr_360px] ${t.tradesExecuted === 0 ? "hidden" : ""}`}>
+        <div
+          className={`grid gap-12 lg:grid-cols-[1fr_360px] ${t.tradesExecuted === 0 ? "hidden" : ""}`}
+        >
           <div className="min-w-0 space-y-12">
             {/* GROWTH */}
             <Section title="Growth" note="Cumulative, last 30 days">
@@ -239,15 +273,26 @@ function ValuePage() {
             </Section>
 
             {/* CREATOR ECONOMY */}
-            <Section title="Creator Economy" note="What believers' volume earns the markets they back">
+            <Section
+              title="Creator Economy"
+              note="What believers' volume earns the markets they back"
+            >
               <div className="grid gap-3 sm:grid-cols-2">
                 <Panel>
-                  <Kpi label="Total Creator Earnings" value={creatorEarningsUsd == null ? "—" : fmtUsd(creatorEarningsUsd)} />
+                  <Kpi
+                    label="Total Creator Earnings"
+                    value={creatorEarningsUsd == null ? "—" : fmtUsd(creatorEarningsUsd)}
+                  />
                   <Kpi label="Avg Earnings / Market" value={fmtUsd(avgEarningsPerMarket)} />
                 </Panel>
                 <Panel title="Highest-Earning Markets">
                   {topEarningMarkets.map((m) => (
-                    <LeaderRow key={m.onchainId} title={m.title} sub={categoryLabel(m.category) ?? "—"} value={fmtUsd(m.earningsUsd)} />
+                    <LeaderRow
+                      key={m.onchainId}
+                      title={m.title}
+                      sub={categoryLabel(m.category) ?? "—"}
+                      value={fmtUsd(m.earningsUsd)}
+                    />
                   ))}
                 </Panel>
               </div>
@@ -272,12 +317,22 @@ function ValuePage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <Panel title="Highest-Volume Markets">
                   {topMarketsByVolume.map((m) => (
-                    <LeaderRow key={m.onchainId} title={m.title} sub={`${fmtNum(m.trades)} trades`} value={fmtUsd(m.volumeUsd)} />
+                    <LeaderRow
+                      key={m.onchainId}
+                      title={m.title}
+                      sub={`${fmtNum(m.trades)} trades`}
+                      value={fmtUsd(m.volumeUsd)}
+                    />
                   ))}
                 </Panel>
                 <Panel title="Most Active Categories">
                   {data.categories.slice(0, 8).map((c) => (
-                    <LeaderRow key={c.category} title={categoryLabel(c.category) ?? c.category} sub={`${c.markets} markets · ${c.creators} creators`} value={fmtUsd(c.volumeUsd)} />
+                    <LeaderRow
+                      key={c.category}
+                      title={categoryLabel(c.category) ?? c.category}
+                      sub={`${c.markets} markets · ${c.creators} creators`}
+                      value={fmtUsd(c.volumeUsd)}
+                    />
                   ))}
                 </Panel>
               </div>
@@ -293,11 +348,22 @@ function ValuePage() {
                   <span className="text-right">Volume</span>
                 </div>
                 {data.categories.map((c, i) => (
-                  <div key={c.category} className={`grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 px-4 py-3 text-[13px] tabular-nums ${i > 0 ? "border-t border-[var(--hairline)]" : ""}`}>
-                    <span className="truncate font-medium text-[var(--text)]">{categoryLabel(c.category) ?? c.category}</span>
-                    <span className="text-right text-[var(--text-secondary)]">{fmtNum(c.markets)}</span>
-                    <span className="text-right text-[var(--text-secondary)]">{fmtNum(c.trades)}</span>
-                    <span className="text-right font-semibold text-[var(--text)]">{fmtUsd(c.volumeUsd)}</span>
+                  <div
+                    key={c.category}
+                    className={`grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 px-4 py-3 text-[13px] tabular-nums ${i > 0 ? "border-t border-[var(--hairline)]" : ""}`}
+                  >
+                    <span className="truncate font-medium text-[var(--text)]">
+                      {categoryLabel(c.category) ?? c.category}
+                    </span>
+                    <span className="text-right text-[var(--text-secondary)]">
+                      {fmtNum(c.markets)}
+                    </span>
+                    <span className="text-right text-[var(--text-secondary)]">
+                      {fmtNum(c.trades)}
+                    </span>
+                    <span className="text-right font-semibold text-[var(--text)]">
+                      {fmtUsd(c.volumeUsd)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -322,9 +388,9 @@ function ValuePage() {
           which begins when we started recording it. Buy volume, trades and traders count only
           transactions Conviction routed, recorded when we send them and matched to on-chain events
           by transaction hash — across any market, pov- or conviction-born. Trades made elsewhere
-          are never counted, and trades predating attribution are not estimated.
-          Fees and creator earnings are computed from the protocol&rsquo;s own fee rate applied to
-          that real buy volume. Updated continuously.
+          are never counted, and trades predating attribution are not estimated. Fees and creator
+          earnings are computed from the protocol&rsquo;s own fee rate applied to that real buy
+          volume. Updated continuously.
         </footer>
       </div>
     </div>
@@ -359,14 +425,21 @@ function ShareCard({
   const stepX = pts.length > 1 ? w / (pts.length - 1) : w;
   const y = (v: number) => h - (v / max) * (h - 6) - 3;
   const path = (get: (p: { eco: number; conv: number }) => number) =>
-    pts.map((p, i) => `${i === 0 ? "M" : "L"}${(i * stepX).toFixed(1)},${y(get(p)).toFixed(1)}`).join(" ");
+    pts
+      .map((p, i) => `${i === 0 ? "M" : "L"}${(i * stepX).toFixed(1)},${y(get(p)).toFixed(1)}`)
+      .join(" ");
   const ecoLine = path((p) => p.eco);
   const convLine = path((p) => p.conv);
 
   return (
     <div className="rounded-2xl bg-[var(--surface)] p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</div>
-      <div className="mt-1.5 text-[30px] font-semibold leading-none tabular-nums tracking-[-0.02em]" style={{ color: "var(--gain)" }}>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        {label}
+      </div>
+      <div
+        className="mt-1.5 text-[30px] font-semibold leading-none tabular-nums tracking-[-0.02em]"
+        style={{ color: "var(--gain)" }}
+      >
         {fmtPct(pct)}
       </div>
       <div className="mt-1.5 text-[12px] text-[var(--text-muted)]">
@@ -375,10 +448,23 @@ function ShareCard({
       <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 h-[96px] w-full" preserveAspectRatio="none">
         {/* the whole market */}
         <path d={`${ecoLine} L${w},${h} L0,${h} Z`} fill="var(--text-muted)" opacity="0.13" />
-        <path d={ecoLine} fill="none" stroke="var(--text-muted)" strokeWidth="1.5" opacity="0.5" vectorEffect="non-scaling-stroke" />
+        <path
+          d={ecoLine}
+          fill="none"
+          stroke="var(--text-muted)"
+          strokeWidth="1.5"
+          opacity="0.5"
+          vectorEffect="non-scaling-stroke"
+        />
         {/* our slice of it */}
         <path d={`${convLine} L${w},${h} L0,${h} Z`} fill="var(--gain)" opacity="0.22" />
-        <path d={convLine} fill="none" stroke="var(--gain)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        <path
+          d={convLine}
+          fill="none"
+          stroke="var(--gain)"
+          strokeWidth="2"
+          vectorEffect="non-scaling-stroke"
+        />
       </svg>
       <div className="mt-2.5 flex items-center justify-between text-[11.5px] tabular-nums">
         <span className="flex items-center gap-1.5 text-[var(--text)]">
@@ -399,7 +485,9 @@ function GrowthChart({ growth }: { growth: EcosystemValue["growth"] }) {
   const max = Math.max(1, ...pts.map((p) => p.volumeUsd));
   const stepX = pts.length > 1 ? w / (pts.length - 1) : w;
   const xy = pts.map((p, i) => [i * stepX, h - (p.volumeUsd / max) * (h - 8) - 4] as const);
-  const line = xy.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const line = xy
+    .map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`)
+    .join(" ");
   const area = `${line} L${w},${h} L0,${h} Z`;
   return (
     <div className="rounded-2xl bg-[var(--surface)] p-4">
@@ -409,7 +497,13 @@ function GrowthChart({ growth }: { growth: EcosystemValue["growth"] }) {
       </div>
       <svg viewBox={`0 0 ${w} ${h}`} className="mt-2 h-[160px] w-full" preserveAspectRatio="none">
         <path d={area} fill="var(--gain)" opacity="0.12" />
-        <path d={line} fill="none" stroke="var(--gain)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        <path
+          d={line}
+          fill="none"
+          stroke="var(--gain)"
+          strokeWidth="2"
+          vectorEffect="non-scaling-stroke"
+        />
       </svg>
     </div>
   );
@@ -423,7 +517,12 @@ function ActivityRow({ a }: { a: EcosystemValue["recentActivity"][number] }) {
     a.kind === "market_created"
       ? "New market created"
       : `${a.action === "SELL" ? "Sold" : "Backed"} ${a.side ?? ""}${usd != null && usd > 0 ? ` · ${fmtUsd(usd)}` : ""}`;
-  const dot = a.kind === "market_created" ? "var(--text-secondary)" : a.side === "NO" ? "var(--no)" : "var(--gain)";
+  const dot =
+    a.kind === "market_created"
+      ? "var(--text-secondary)"
+      : a.side === "NO"
+        ? "var(--no)"
+        : "var(--gain)";
   return (
     <div className="flex items-start gap-2.5 rounded-xl bg-[var(--surface)] px-3 py-2.5">
       <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: dot }} />
@@ -431,11 +530,12 @@ function ActivityRow({ a }: { a: EcosystemValue["recentActivity"][number] }) {
         <div className="truncate text-[13px] font-medium text-[var(--text)]">{a.title}</div>
         <div className="text-[12px] text-[var(--text-muted)]">{text}</div>
       </div>
-      <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--text-muted)]">{ago(a.at)}</span>
+      <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--text-muted)]">
+        {ago(a.at)}
+      </span>
     </div>
   );
 }
-
 
 // --- small presentational pieces -------------------------------------------
 function Hero({
@@ -452,7 +552,9 @@ function Hero({
   return (
     <div className="bg-[var(--bg)] px-4 py-5">
       <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-        {live && <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--gain)" }} />}
+        {live && (
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--gain)" }} />
+        )}
         {label}
       </div>
       <div className="mt-1.5 text-[26px] font-semibold tabular-nums tracking-[-0.02em] text-[var(--text)] sm:text-[30px]">
@@ -474,10 +576,22 @@ function Section({ title, note, children }: { title: string; note?: string; chil
   );
 }
 
-function Panel({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
+function Panel({
+  title,
+  children,
+  className = "",
+}: {
+  title?: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <div className={`rounded-2xl bg-[var(--surface)] p-4 ${className}`}>
-      {title && <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{title}</div>}
+      {title && (
+        <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          {title}
+        </div>
+      )}
       <div className="space-y-1">{children}</div>
     </div>
   );
@@ -508,7 +622,9 @@ function LeaderRow({ title, sub, value }: { title: string; sub: string; value: s
         <div className="truncate text-[13px] font-medium text-[var(--text)]">{title}</div>
         <div className="truncate text-[11px] text-[var(--text-muted)]">{sub}</div>
       </div>
-      <span className="shrink-0 text-[13px] font-semibold tabular-nums text-[var(--text)]">{value}</span>
+      <span className="shrink-0 text-[13px] font-semibold tabular-nums text-[var(--text)]">
+        {value}
+      </span>
     </div>
   );
 }

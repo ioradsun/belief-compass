@@ -39,81 +39,81 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
 
         try {
           try {
-          for await (const m of iterateAllMarkets()) {
-            if (!m.onChainMarketId) continue;
-            seen++;
-            marketRows.push({
-              onchain_id: m.onChainMarketId,
-              pov_uuid: m.id ?? null,
-              title: m.title ?? null,
-              pov_slug: m.slug ?? null,
+            for await (const m of iterateAllMarkets()) {
+              if (!m.onChainMarketId) continue;
+              seen++;
+              marketRows.push({
+                onchain_id: m.onChainMarketId,
+                pov_uuid: m.id ?? null,
+                title: m.title ?? null,
+                pov_slug: m.slug ?? null,
 
-              category: m.categorySlug ?? null,
-              author_wallet: m.author?.walletAddress?.toLowerCase() ?? null,
-              author_name: m.author?.displayName ?? null,
-              author_pfp: m.author?.pfpUrl ?? null,
-              agent_opinions: m.agentOpinions ?? null,
-              source: "pov",
-              created_at: m.createdAt ?? null,
-            });
-            stateRows.push({
-              onchain_id: m.onChainMarketId,
-              yes_price_usd: m.yesPriceUsd ?? null,
-              no_price_usd: m.noPriceUsd ?? null,
-              money_yes_pct: m.yesPercentage ?? null,
-              volume_total_usd: m.volumeTotalUsd ?? null,
-              yes_capital_usd: m.yesMarketCapUsd ?? null,
-              no_capital_usd: m.noMarketCapUsd ?? null,
-              volume_24h_usd: m.volume24hUsd ?? null,
-              boost_score: m.boostScore ?? null,
-              trending_score: m.trendingScore ?? null,
-              updated_at: new Date().toISOString(),
-            });
-            snapshotRows.push({
-              onchain_id: m.onChainMarketId,
-              yes_price_usd: m.yesPriceUsd ?? null,
-              no_price_usd: m.noPriceUsd ?? null,
-              money_yes_pct: m.yesPercentage ?? null,
-            });
-            // One canonical market_created event per market, EVER. The
-            // deterministic source_key + insert-ignore-duplicates means repeated
-            // polls of an unchanged market never produce a second event. We only
-            // emit when POV gives an authoritative creation time — occurred_at
-            // must be real event time, never ingestion time. Markets with no
-            // source creation time are skipped (kept out of recency ranking) and
-            // reported; see the report's deferred limitations.
-            if (m.createdAt) {
-              eventRows.push({
-                source_key: marketCreatedSourceKey(m.onChainMarketId),
+                category: m.categorySlug ?? null,
+                author_wallet: m.author?.walletAddress?.toLowerCase() ?? null,
+                author_name: m.author?.displayName ?? null,
+                author_pfp: m.author?.pfpUrl ?? null,
+                agent_opinions: m.agentOpinions ?? null,
                 source: "pov",
-                kind: "market_created",
-                market_id: String(m.onChainMarketId),
-                wallet: m.author?.walletAddress?.toLowerCase() ?? null,
-                occurred_at: m.createdAt,
-                payload: { created_at_source: "pov" },
+                created_at: m.createdAt ?? null,
               });
-            } else {
-              createdEventsSkippedNoTime++;
-            }
-            // The author profile rides along on every market — cache it so the
-            // conviction feed can show a real pic without an extra API call.
-            const authorWallet = m.author?.walletAddress?.toLowerCase();
-            if (authorWallet) {
-              profileRows.push({
-                wallet: authorWallet,
-                username: m.author?.username ?? null,
-                display_name: m.author?.displayName ?? null,
-                pfp_url: m.author?.pfpUrl ?? null,
-                not_found: false,
-                fetched_at: new Date().toISOString(),
+              stateRows.push({
+                onchain_id: m.onChainMarketId,
+                yes_price_usd: m.yesPriceUsd ?? null,
+                no_price_usd: m.noPriceUsd ?? null,
+                money_yes_pct: m.yesPercentage ?? null,
+                volume_total_usd: m.volumeTotalUsd ?? null,
+                yes_capital_usd: m.yesMarketCapUsd ?? null,
+                no_capital_usd: m.noMarketCapUsd ?? null,
+                volume_24h_usd: m.volume24hUsd ?? null,
+                boost_score: m.boostScore ?? null,
+                trending_score: m.trendingScore ?? null,
+                updated_at: new Date().toISOString(),
               });
+              snapshotRows.push({
+                onchain_id: m.onChainMarketId,
+                yes_price_usd: m.yesPriceUsd ?? null,
+                no_price_usd: m.noPriceUsd ?? null,
+                money_yes_pct: m.yesPercentage ?? null,
+              });
+              // One canonical market_created event per market, EVER. The
+              // deterministic source_key + insert-ignore-duplicates means repeated
+              // polls of an unchanged market never produce a second event. We only
+              // emit when POV gives an authoritative creation time — occurred_at
+              // must be real event time, never ingestion time. Markets with no
+              // source creation time are skipped (kept out of recency ranking) and
+              // reported; see the report's deferred limitations.
+              if (m.createdAt) {
+                eventRows.push({
+                  source_key: marketCreatedSourceKey(m.onChainMarketId),
+                  source: "pov",
+                  kind: "market_created",
+                  market_id: String(m.onChainMarketId),
+                  wallet: m.author?.walletAddress?.toLowerCase() ?? null,
+                  occurred_at: m.createdAt,
+                  payload: { created_at_source: "pov" },
+                });
+              } else {
+                createdEventsSkippedNoTime++;
+              }
+              // The author profile rides along on every market — cache it so the
+              // conviction feed can show a real pic without an extra API call.
+              const authorWallet = m.author?.walletAddress?.toLowerCase();
+              if (authorWallet) {
+                profileRows.push({
+                  wallet: authorWallet,
+                  username: m.author?.username ?? null,
+                  display_name: m.author?.displayName ?? null,
+                  pfp_url: m.author?.pfpUrl ?? null,
+                  not_found: false,
+                  fetched_at: new Date().toISOString(),
+                });
+              }
+              // Flush in batches
+              if (marketRows.length >= 200) {
+                await flush();
+              }
             }
-            // Flush in batches
-            if (marketRows.length >= 200) {
-              await flush();
-            }
-          }
-          await flush();
+            await flush();
           } catch (e: unknown) {
             // POV is an external provider. When it is unreachable we do NOT fail
             // the job: nearly everything the app shows is derived from Base
@@ -161,7 +161,10 @@ export const Route = createFileRoute("/api/public/jobs/pov-poller")({
               // market_created event per market across all polls.
               const ev = await sb
                 .from("events")
-                .upsert(dedupeBy(eventRows, "source_key"), { onConflict: "source_key", ignoreDuplicates: true })
+                .upsert(dedupeBy(eventRows, "source_key"), {
+                  onConflict: "source_key",
+                  ignoreDuplicates: true,
+                })
                 .select("id");
               if (ev.error) throw ev.error;
               createdEvents += ev.data?.length ?? 0;

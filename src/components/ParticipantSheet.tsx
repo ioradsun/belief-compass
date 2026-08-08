@@ -153,11 +153,7 @@ export function ParticipantSheet({
           <span className="text-[13px] font-semibold text-[var(--text)]">
             Participants ({total.toLocaleString("en-US")})
           </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[12px] text-[var(--text-muted)]"
-          >
+          <button type="button" onClick={onClose} className="text-[12px] text-[var(--text-muted)]">
             Close
           </button>
         </div>

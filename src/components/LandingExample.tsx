@@ -74,94 +74,92 @@ export function LandingExampleCard({
         className="rounded-[14px] bg-[var(--panel)] p-4 lg:p-5"
         style={{ border: "1px solid var(--hairline)" }}
       >
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-          Example
-        </span>
-        <span className="num text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          No expiry
-        </span>
-      </div>
-
-
-      <p className="mt-2.5 text-[16px] font-semibold leading-snug text-[var(--text)]">
-        {example.question}
-      </p>
-
-      <div className="mt-3 flex items-center gap-4 text-[12px] text-[var(--text-secondary)]">
-        <span>
-          <span className="num font-semibold text-[var(--text)]">{example.yesPeople}</span> people
-          back <span className="font-semibold text-[var(--yes)]">YES</span>
-        </span>
-        <span>
-          <span className="num font-semibold text-[var(--text)]">{example.noPeople}</span> people
-          back <span className="font-semibold text-[var(--no)]">NO</span>
-        </span>
-      </div>
-
-      <div className="mt-3.5 rounded-[10px] bg-[var(--surface)] px-3.5 py-3">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-          You backed <span className="text-[var(--yes)]">YES</span> early
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+            Example
+          </span>
+          <span className="num text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            No expiry
+          </span>
         </div>
-        <div className="mt-2 flex items-end justify-between gap-3">
-          <div>
-            <div className="text-[11px] text-[var(--text-muted)]">Your entry</div>
-            <div className="num text-[15px] text-[var(--text-secondary)]">{example.entry}</div>
+
+        <p className="mt-2.5 text-[16px] font-semibold leading-snug text-[var(--text)]">
+          {example.question}
+        </p>
+
+        <div className="mt-3 flex items-center gap-4 text-[12px] text-[var(--text-secondary)]">
+          <span>
+            <span className="num font-semibold text-[var(--text)]">{example.yesPeople}</span> people
+            back <span className="font-semibold text-[var(--yes)]">YES</span>
+          </span>
+          <span>
+            <span className="num font-semibold text-[var(--text)]">{example.noPeople}</span> people
+            back <span className="font-semibold text-[var(--no)]">NO</span>
+          </span>
+        </div>
+
+        <div className="mt-3.5 rounded-[10px] bg-[var(--surface)] px-3.5 py-3">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+            You backed <span className="text-[var(--yes)]">YES</span> early
           </div>
-          <div className="text-right">
-            <div className="text-[11px] text-[var(--text-muted)]">Current position</div>
-            <div className="num text-[26px] font-semibold leading-none text-[var(--text)]">
-              {example.current}
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <div>
+              <div className="text-[11px] text-[var(--text-muted)]">Your entry</div>
+              <div className="num text-[15px] text-[var(--text-secondary)]">{example.entry}</div>
             </div>
-            <div className="num mt-1 text-[13px] font-semibold leading-none text-[var(--gain)]">
-              {example.gain} <span className="text-[0.95em]">({example.gainPct})</span>
-              <span className="ml-1 text-[0.7em] align-middle">▲</span>
+            <div className="text-right">
+              <div className="text-[11px] text-[var(--text-muted)]">Current position</div>
+              <div className="num text-[26px] font-semibold leading-none text-[var(--text)]">
+                {example.current}
+              </div>
+              <div className="num mt-1 text-[13px] font-semibold leading-none text-[var(--gain)]">
+                {example.gain} <span className="text-[0.95em]">({example.gainPct})</span>
+                <span className="ml-1 text-[0.7em] align-middle">▲</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="mt-3.5">
-        <div className="text-[11px] font-medium text-[var(--text-secondary)]">
-          If more capital backs <span className="font-semibold text-[var(--yes)]">YES</span>:
+        <div className="mt-3.5">
+          <div className="text-[11px] font-medium text-[var(--text-secondary)]">
+            If more capital backs <span className="font-semibold text-[var(--yes)]">YES</span>:
+          </div>
+          <dl className="mt-1.5 space-y-1">
+            {example.growth.map((g) => (
+              <div
+                key={g.label}
+                className="flex items-center justify-between text-[12px] text-[var(--text-secondary)]"
+              >
+                <dt>{g.label}</dt>
+                <dd className="num text-[var(--text)]">{g.value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
-        <dl className="mt-1.5 space-y-1">
-          {example.growth.map((g) => (
-            <div
-              key={g.label}
-              className="flex items-center justify-between text-[12px] text-[var(--text-secondary)]"
-            >
-              <dt>{g.label}</dt>
-              <dd className="num text-[var(--text)]">{g.value}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={onEnter}
-          className="h-10 rounded-full text-[13px] font-semibold transition-opacity hover:opacity-90"
-          style={{ border: "1px solid var(--yes)", color: "var(--yes)" }}
-        >
-          Back YES
-        </button>
-        <button
-          type="button"
-          onClick={onEnter}
-          className="h-10 rounded-full text-[13px] font-semibold transition-opacity hover:opacity-90"
-          style={{ border: "1px solid var(--no)", color: "var(--no)" }}
-        >
-          Back NO
-        </button>
-      </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onEnter}
+            className="h-10 rounded-full text-[13px] font-semibold transition-opacity hover:opacity-90"
+            style={{ border: "1px solid var(--yes)", color: "var(--yes)" }}
+          >
+            Back YES
+          </button>
+          <button
+            type="button"
+            onClick={onEnter}
+            className="h-10 rounded-full text-[13px] font-semibold transition-opacity hover:opacity-90"
+            style={{ border: "1px solid var(--no)", color: "var(--no)" }}
+          >
+            Back NO
+          </button>
+        </div>
 
-      <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
-        Illustrative values only.
-      </p>
+        <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
+          Illustrative values only.
+        </p>
       </div>
     </div>
   );
-
 }

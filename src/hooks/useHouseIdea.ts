@@ -41,8 +41,7 @@ export function useHouseIdea(serverSuggestion: ReadySuggestion | null): HouseIde
   const token = wallet ? readSessionToken(wallet) : null;
 
   const [dismissedId, setDismissedId] = useState<string | null>(null);
-  const ready =
-    serverSuggestion && serverSuggestion.id !== dismissedId ? serverSuggestion : null;
+  const ready = serverSuggestion && serverSuggestion.id !== dismissedId ? serverSuggestion : null;
 
   const fire = useCallback((fn: () => Promise<unknown>) => {
     void fn().catch(() => undefined); // analytics must never surface to the viewer
@@ -57,7 +56,6 @@ export function useHouseIdea(serverSuggestion: ReadySuggestion | null): HouseIde
     },
     [wallet, fire],
   );
-
 
   const onShown = useCallback(() => {
     if (!ready || !wallet || !token) return;

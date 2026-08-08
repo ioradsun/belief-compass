@@ -307,15 +307,18 @@ export const RECEIPTS = {
  * did not already believe, and the exception is the row that explains why the
  * percentage is not 100.
  */
-export function receipts(
-  input: readonly ReceiptInput[],
-  opts: { limit?: number } = {},
-): Receipts {
+export function receipts(input: readonly ReceiptInput[], opts: { limit?: number } = {}): Receipts {
   const rows: ReceiptRow[] = input
     .filter((r) => r.title?.trim())
     .map((r) => ({ ...r, agree: r.viewerSide === r.personSide }));
   if (rows.length < RECEIPTS.minToList) {
-    return { rows: [], groups: [], allAligned: rows.every((r) => r.agree), footer: null, hidden: 0 };
+    return {
+      rows: [],
+      groups: [],
+      allAligned: rows.every((r) => r.agree),
+      footer: null,
+      hidden: 0,
+    };
   }
 
   rows.sort((a, b) => Number(a.agree) - Number(b.agree) || a.marketId - b.marketId);
@@ -351,9 +354,7 @@ export function receipts(
     rows: shown,
     groups: groups.length >= 2 ? groups : [],
     allAligned,
-    footer: allAligned
-      ? `Together on all ${total}`
-      : `Together on ${together} of ${total}`,
+    footer: allAligned ? `Together on all ${total}` : `Together on ${together} of ${total}`,
     hidden: Math.max(0, total - shown.length),
   };
 }

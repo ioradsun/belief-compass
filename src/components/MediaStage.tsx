@@ -180,7 +180,6 @@ export function MediaStage({
             gliding && !drag.current && media
               ? "transform 260ms cubic-bezier(.22,.61,.36,1)"
               : "none",
-
         }}
       >
         {/* Page 1 — the market, exactly as it was. `overflow-y-scroll` (not auto)
@@ -218,7 +217,6 @@ export function MediaStage({
             <Evidence media={media} />
           </div>
         )}
-
       </div>
     </div>
   );

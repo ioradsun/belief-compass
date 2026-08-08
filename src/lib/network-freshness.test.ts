@@ -57,7 +57,6 @@ describe("the viewer's network cannot silently go stale", () => {
     expect(ROUTER).toMatch(/refetchOnReconnect:\s*true/);
   });
 
-
   /**
    * Those two defaults only fire for a query the observer considers STALE, so a
    * staleTime of Infinity — or of an hour — would quietly disable the whole

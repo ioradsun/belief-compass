@@ -31,7 +31,10 @@ export const saveProfileOverride = createServerFn({ method: "POST" })
         wallet: addr,
         signer: addr,
         nonce: z.string().min(8).max(80),
-        signature: z.string().regex(/^0x[a-fA-F0-9]+$/).max(4000),
+        signature: z
+          .string()
+          .regex(/^0x[a-fA-F0-9]+$/)
+          .max(4000),
         displayName: z.string().trim().max(MAX_DISPLAY_NAME).nullable(),
         avatarUrl: z
           .string()

@@ -23,8 +23,11 @@ Emitter.EventEmitter = Emitter;
 export const EventEmitter = Emitter;
 export const once = (emitter: EventEmitter3, event: string | symbol) =>
   new Promise<unknown[]>((resolve) => emitter.once(event, (...args: unknown[]) => resolve(args)));
-export const on = (emitter: EventEmitter3, event: string | symbol, listener: (...args: unknown[]) => void) =>
-  emitter.on(event, listener);
+export const on = (
+  emitter: EventEmitter3,
+  event: string | symbol,
+  listener: (...args: unknown[]) => void,
+) => emitter.on(event, listener);
 export const captureRejectionSymbol = Symbol.for("nodejs.rejection");
 export const errorMonitor = Symbol.for("events.errorMonitor");
 export const defaultMaxListeners = 10;

@@ -153,7 +153,9 @@ function SideBlock({
   return (
     <div
       className={`rounded-lg border p-3 transition-colors duration-500 ${
-        isYes ? "border-[var(--yes)]/25 bg-[var(--yes)]/5" : "border-[var(--no)]/25 bg-[var(--no)]/5"
+        isYes
+          ? "border-[var(--yes)]/25 bg-[var(--yes)]/5"
+          : "border-[var(--no)]/25 bg-[var(--no)]/5"
       } ${flash ? (isYes ? "ring-2 ring-[var(--yes)]/50" : "ring-2 ring-[var(--no)]/50") : ""}`}
     >
       <div className="flex items-center justify-between">
@@ -442,7 +444,9 @@ export function MarketCard({
             >
               {current && <Face p={current} />}
               <span className="min-w-0 flex-1 truncate">
-                <span className={current?.side === "YES" ? "text-[var(--yes)]" : "text-[var(--no)]"}>
+                <span
+                  className={current?.side === "YES" ? "text-[var(--yes)]" : "text-[var(--no)]"}
+                >
                   {pulseLine(current!, ethUsd)}
                 </span>
                 <span className="text-muted-foreground"> · {ago(current!.at)} ago</span>

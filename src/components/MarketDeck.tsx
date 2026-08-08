@@ -438,7 +438,6 @@ export function MarketDeck({
         </div>
       ) : null}
 
-
       {/* One-time nudge: the first real match, surfaced to explore. */}
       <DnaFirstReveal viewerWallet={viewerWallet} onSelectPerson={onSelectPerson} />
     </>

@@ -52,10 +52,9 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
       if (!wallet) return null;
       // Free action: never prompt for a signature just to walk away.
       return bestEffort(() =>
-        withSession(
-          (session) => finalizePass({ data: { wallet, marketId, session } }),
-          { interactive: false },
-        ),
+        withSession((session) => finalizePass({ data: { wallet, marketId, session } }), {
+          interactive: false,
+        }),
       );
     },
     onSuccess: onDecided,

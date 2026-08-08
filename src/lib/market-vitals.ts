@@ -213,15 +213,27 @@ export function marketBadge(i: BadgeInput): Badge | null {
   // Founder's Corner: almost all liquidity is still the creator's (provable only
   // when the caller supplies the share).
   if (i.creatorCapitalShare != null && i.creatorCapitalShare >= FOUNDER_SHARE) {
-    return { emoji: "🏛", label: "Founder's Corner", note: "Almost all capital came from the creator." };
+    return {
+      emoji: "🏛",
+      label: "Founder's Corner",
+      note: "Almost all capital came from the creator.",
+    };
   }
   // Diamond Hands: high circulation AND long average hold (needs avg hold).
   if (p.level === "alive" && i.avgHoldDays != null && i.avgHoldDays >= DIAMOND_HOLD_DAYS) {
-    return { emoji: "🧠", label: "Diamond Hands", note: "Heavy trading, yet holders stay for the long run." };
+    return {
+      emoji: "🧠",
+      label: "Diamond Hands",
+      note: "Heavy trading, yet holders stay for the long run.",
+    };
   }
   // Battlefield: capital constantly changing hands.
   if (p.level === "alive") {
-    return { emoji: "🔥", label: "Battlefield", note: "People keep challenging each other's conviction." };
+    return {
+      emoji: "🔥",
+      label: "Battlefield",
+      note: "People keep challenging each other's conviction.",
+    };
   }
   // Crowd Favorite: a real crowd has gathered.
   if (i.believers >= CROWD_FAVORITE_BELIEVERS) {

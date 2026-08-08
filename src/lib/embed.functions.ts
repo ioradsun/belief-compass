@@ -18,7 +18,8 @@ const OEMBED: Partial<Record<EmbedPlatform, (url: string) => string>> = {
   youtube: (u) => `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(u)}`,
   tiktok: (u) => `https://www.tiktok.com/oembed?url=${encodeURIComponent(u)}`,
   spotify: (u) => `https://open.spotify.com/oembed?url=${encodeURIComponent(u)}`,
-  x: (u) => `https://publish.twitter.com/oembed?omit_script=1&dnt=true&url=${encodeURIComponent(u)}`,
+  x: (u) =>
+    `https://publish.twitter.com/oembed?omit_script=1&dnt=true&url=${encodeURIComponent(u)}`,
 };
 
 async function withTimeout(url: string, ms = 4000): Promise<Response | null> {
@@ -93,7 +94,9 @@ export const resolveEmbed = createServerFn({ method: "POST" })
 
 /** Store the resolved embed against a draft market. */
 export const attachMarketEmbed = createServerFn({ method: "POST" })
-  .inputValidator((data: { wallet: string; token: string; questionId: string; url: string }) => data)
+  .inputValidator(
+    (data: { wallet: string; token: string; questionId: string; url: string }) => data,
+  )
   .handler(async ({ data }) => {
     const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
     const wallet = await assertWalletOwnership(data.wallet, data.token);

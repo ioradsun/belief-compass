@@ -359,4 +359,3 @@ export function convictionMap(positions: readonly PersonPosition[]): ConvictionT
   }
   return out;
 }
-

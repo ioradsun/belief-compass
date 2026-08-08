@@ -45,7 +45,6 @@ export const Route = createFileRoute("/api/public/jobs/suggestion-generator")({
           skipped: Object.values(skipped).reduce((a, b) => a + b, 0),
           skippedBy: skipped,
         });
-
       },
     },
   },

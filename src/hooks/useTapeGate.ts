@@ -103,7 +103,8 @@ export function useTapeGate<T extends Arrival>(
   }, []);
 
   const collapse = useCallback(
-    <R extends Arrival>(rows: readonly R[]): R[] => (groupByMarket ? groupArrivals(rows) : [...rows]),
+    <R extends Arrival>(rows: readonly R[]): R[] =>
+      groupByMarket ? groupArrivals(rows) : [...rows],
     [groupByMarket],
   );
 

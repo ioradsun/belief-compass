@@ -66,7 +66,6 @@ function usdShort(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
-
 export function LiveTape({
   wallet,
   onSelect,
@@ -81,7 +80,6 @@ export function LiveTape({
   holdUpdates = false,
   label,
   initial,
-
 }: {
   wallet?: string;
   /**
@@ -125,7 +123,6 @@ export function LiveTape({
    * seed can never become the tape.
    */
   initial?: LiveResult | null;
-
 }) {
   const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
   const qc = useQueryClient();
@@ -188,7 +185,6 @@ export function LiveTape({
     // signed-out tape. Anything scoped or personal must show its own rows.
     placeholderData: (prev) =>
       prev ?? (scopeKey === null && side == null && !wallet ? (initial ?? undefined) : undefined),
-
   });
   // Sticky: the tape holds its rows until fresh ones arrive.
   const sticky = useStickyRows(data?.rows);
@@ -426,7 +422,6 @@ export function LiveTape({
                   onPointerEnter={navigable ? () => warm(target) : undefined}
                   onFocus={navigable ? () => warm(target) : undefined}
                   onClick={navigable ? () => onSelect?.(target) : undefined}
-
                   onKeyDown={
                     navigable
                       ? (event) => {

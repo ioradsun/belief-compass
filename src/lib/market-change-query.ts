@@ -45,7 +45,6 @@ export function baselinesQO(marketId: number) {
  */
 export { nowFromRow } from "@/domain/market-change";
 
-
 /**
  * What moved on this market over the on-screen window.
  *

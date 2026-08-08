@@ -57,4 +57,3 @@ export function awayMs(): number {
 export function shouldRevalidateOnReturn(): boolean {
   return allowThisReturn;
 }
-
