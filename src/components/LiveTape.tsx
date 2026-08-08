@@ -420,7 +420,17 @@ export function LiveTape({
                 <div
                   role={navigable ? "button" : undefined}
                   tabIndex={navigable ? 0 : undefined}
+                  // WARM ON TOUCH, NOT ON TAP. A tape row can point at any
+                  // market in the system, so the tap used to start from a cold
+                  // cache and the centre had nothing to draw. `pointerdown`
+                  // fires while the finger is still down — enough of a head
+                  // start that the market is usually ready by the time the
+                  // column switches to it.
+                  onPointerDown={navigable ? () => warm(target) : undefined}
+                  onPointerEnter={navigable ? () => warm(target) : undefined}
+                  onFocus={navigable ? () => warm(target) : undefined}
                   onClick={navigable ? () => onSelect?.(target) : undefined}
+
                   onKeyDown={
                     navigable
                       ? (event) => {
