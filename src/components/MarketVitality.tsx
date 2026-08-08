@@ -281,10 +281,25 @@ function MomentumMetric({
             </span>
           </span>
           {/* People before statistics: when this metric has faces, the space
-          under the count belongs to them. */}
+          under the count belongs to them.
+
+          THE ROW IS RESERVED, NOT CONDITIONAL. The faces arrive on their own
+          request, a beat after the counts, and a market with nobody familiar
+          in it has none at all — so rendering them only when they exist made
+          this card two different heights, and everything under it (capital,
+          the Case File line, the dock) moved as each market's roster landed.
+          One face is 26–30px of a card that is otherwise identical on every
+          market; holding that space costs nothing and removes the last thing
+          in the centre that moves by itself. */}
           {faces ? (
-            <ParticipantProof faces={faces} total={facesTotal ?? faces.length} dense={dense} />
+            <div
+              style={{ minHeight: "calc(var(--mom-face, 26px) + 8px)" }}
+              className="flex items-end"
+            >
+              <ParticipantProof faces={faces} total={facesTotal ?? faces.length} dense={dense} />
+            </div>
           ) : null}
+
         </span>
         <span className="shrink-0 text-right">
           <span
