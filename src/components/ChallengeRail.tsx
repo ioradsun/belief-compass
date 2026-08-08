@@ -88,7 +88,15 @@ export function ChallengeRail({
   now: ReactNode;
 }) {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>("challenge");
+  /**
+   * A SIGNED-OUT READER HAS NO CHALLENGES, so opening on that tab shows them
+   * "connect a wallet to see who wants you at the table" and nothing else —
+   * which is now the first screen on a phone. Without a wallet the rail opens
+   * on Now, the one thing that is true for everyone. Connecting a wallet still
+   * lands on Challenge, because then there is something there.
+   */
+  const [tab, setTab] = useState<Tab>(wallet ? "challenge" : "now");
+
   /**
    * Which side is showing. Seeded from the cache so "See yours", pressed in the
    * panel ABOVE this one, lands here — the two are siblings with no prop path

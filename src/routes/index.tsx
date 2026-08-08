@@ -32,6 +32,8 @@ import {
   type FeedQueue,
 } from "@/domain/feed-queue";
 import { LiveTape } from "@/components/LiveTape";
+import { getWarmTape } from "@/lib/live.functions";
+
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { SimilarMarkets } from "@/components/SimilarMarkets";
 import { ChallengeRail } from "@/components/ChallengeRail";
@@ -303,12 +305,18 @@ export const Route = createFileRoute("/")({
       // that read cost 10s of TTFB and the landing page could not paint at all.
       // A warm isolate still SSRs a real market; a cold one ships the shell now
       // and the client's own query fills the deck a moment later.
-      const feed = await getWarmFeed();
-      return { feed, fetchedAt: Date.now() };
+      //
+      // THE TAPE RIDES ALONG, and on a phone it is the FIRST thing seen: mobile
+      // opens on "Crowd", so the tape is above the fold before the deck is. Same
+      // rule — warm read only, never a build, and in parallel so it can never
+      // add to the shell's budget.
+      const [feed, tape] = await Promise.all([getWarmFeed(), getWarmTape()]);
+      return { feed, tape, fetchedAt: Date.now() };
     } catch {
-      return { feed: null, fetchedAt: Date.now() };
+      return { feed: null, tape: null, fetchedAt: Date.now() };
     }
   },
+
 
   staleTime: 10_000,
   component: Feed,
@@ -616,7 +624,16 @@ function Feed() {
   // deck-window store; the feed, the left rail and every metric read it here, so
   // selecting 1W can never leave a "24H" label or a 24h delta on screen.
   const win = useDeckWindow() as VolumeWindow;
-  const [tab, setTab] = useState<MobileTab>("belief");
+  /**
+   * THE PHONE OPENS ON NOW. A visitor arriving on a phone lands on the Crowd
+   * column — "what's moving, and who's behind it" — because it is the one view
+   * that is true the second it paints and needs no choice from the reader.
+   * Its rows are seeded by the SSR warm tape below, so it has something to say
+   * on arrival rather than a skeleton. Desktop shows all three columns and is
+   * unaffected by this.
+   */
+  const [tab, setTab] = useState<MobileTab>("room");
+
   const [menuOpen, setMenuOpen] = useState(false);
 
   /** How many people are waiting on this reader — badged on the menu's Room
@@ -1525,7 +1542,9 @@ function Feed() {
                         excludeMarketId={shownId ?? undefined}
                         holdUpdates
                         label="Now"
+                        initial={loaderData?.tape ?? null}
                       />
+
                     </div>
                   }
                 />

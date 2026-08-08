@@ -86,6 +86,8 @@ export function LiveTape({
   skeletonRows = 8,
   holdUpdates = false,
   label,
+  initial,
+
 }: {
   wallet?: string;
   /**
@@ -121,6 +123,15 @@ export function LiveTape({
    * below for why that placement is the whole point.
    */
   label?: string;
+  /**
+   * ROWS FROM THE SERVER, for paint only. The shared signed-out tape is built
+   * once and cached server-side, so SSR can hand the first rows down and the
+   * column has real content the instant it mounts. Adopted as PLACEHOLDER, never
+   * as initial data: the query still runs immediately and replaces it, so a
+   * seed can never become the tape.
+   */
+  initial?: LiveResult | null;
+
 }) {
   const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
   const qc = useQueryClient();
@@ -177,7 +188,11 @@ export function LiveTape({
      * between markets no longer costs a request.
      */
     staleTime: 60_000,
-    placeholderData: (prev) => prev,
+    // The seed only answers the question it was built for: the unscoped,
+    // signed-out tape. Anything scoped or personal must show its own rows.
+    placeholderData: (prev) =>
+      prev ?? (scopeKey === null && side == null && !wallet ? (initial ?? undefined) : undefined),
+
   });
   // Sticky: the tape holds its rows until fresh ones arrive.
   const sticky = useStickyRows(data?.rows);
