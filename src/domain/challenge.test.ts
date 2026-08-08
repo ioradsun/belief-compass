@@ -20,6 +20,8 @@ const call = (over: Partial<CallEvidence> = {}): CallEvidence => ({
   caller: p("Mike"),
   relation: "opp",
   act: "trade",
+  together: null,
+  shared: null,
   callerSide: "YES",
   atMs: T0,
   ...over,
@@ -54,7 +56,10 @@ describe("a call that cannot name its caller is not a call", () => {
   });
 
   it("refuses a market with no title", () => {
-    expect(reasonFor(call({ title: "  " }))).toBeNull();
+    // The gate lives in composeChallenges now, not in the sentence. call-line
+    // never sees a title, so asserting this on `reasonFor` would have quietly
+    // stopped testing anything the moment composition moved out.
+    expect(composeChallenges([call({ title: "  " })])).toEqual([]);
   });
 
   it("drops the unjustifiable instead of softening it", () => {
@@ -69,10 +74,13 @@ describe("a call that cannot name its caller is not a call", () => {
  * side yet, and claiming one would be inventing a position they do not hold.
  */
 describe("a Challenge never implies a side the viewer has not taken", () => {
-  it("states the caller's side and asks for yours", () => {
-    expect(reasonFor(call({ caller: p("Mike"), relation: "opp", callerSide: "YES" }))).toBe(
-      "Mike, your Rival, took YES. What's your call?",
-    );
+  it("states who called and what they did", () => {
+    // The exact sentence is call-line's business and varies by design — six open
+    // Challenges used to read as one row six times. What this file guards is
+    // that the CALL is stated: who, and what they did.
+    const r = reasonFor(call({ caller: p("Mike"), relation: "opp", callerSide: "YES" })) as string;
+    expect(r).toContain("Mike");
+    expect(r).toContain("YES");
   });
 
   it("needs no viewer side at all — there is no viewerSide to pass", () => {
@@ -91,17 +99,19 @@ describe("a Challenge never implies a side the viewer has not taken", () => {
     }
   });
 
-  it("uses the canonical vocabulary — opp reads Rival, inverse reads Opp", () => {
-    expect(reasonFor(call({ relation: "opp" }))).toContain("your Rival");
-    expect(reasonFor(call({ relation: "inverse" }))).toContain("your Opp");
-    expect(reasonFor(call({ relation: "twin" }))).toContain("your Twin");
-    expect(reasonFor(call({ relation: "tribe" }))).toContain("your Tribe");
+  it("no longer names the relation inside the sentence", () => {
+    // The card carries TRIBE / RIVAL as a badge. Saying it again mid-sentence
+    // was the redundancy that made every row look alike.
+    for (const relation of CALLER_RELATIONS) {
+      const r = reasonFor(call({ relation, caller: p("Mike") })) as string;
+      expect(r).not.toMatch(/your (Twin|Tribe|Rival|Opp)\b/);
+    }
   });
 
   it("treats a creation as a question asked, not a side taken", () => {
     const r = reasonFor(call({ act: "market_created", callerSide: null, caller: p("Ana") }))!;
-    expect(r).toBe("Ana, your Rival, asked this. What's your call?");
-    expect(r).not.toMatch(/took/);
+    expect(r).toContain("Ana");
+    expect(r).not.toMatch(/took|backed|went|already in/);
   });
 });
 
