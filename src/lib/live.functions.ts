@@ -16,6 +16,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { serviceClient } from "@/lib/supabase-clients";
+import { peekSwr, swrCache } from "@/lib/server-cache";
+
 import { aliasFor } from "@/lib/wallet-identity";
 import { showedUpInMarket } from "@/domain/dependability";
 import {
