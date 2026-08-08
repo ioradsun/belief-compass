@@ -48,7 +48,6 @@ import { DEFAULT_CURVE, useCreateEconomics, useCreateMarket } from "@/chain/mark
 import { weiToEth } from "@/domain/money";
 import {
   AmountField,
-  
   PrimaryAction,
   SideButton,
   useSpendableBalance,
@@ -63,7 +62,6 @@ import {
 type Attachment = { kind: "embed"; media: EmbedMedia };
 
 const MIN_QUESTION = 8;
-
 
 export function CreateMarket({
   ethUsd,
@@ -97,8 +95,9 @@ export function CreateMarket({
   const [linkOpen, setLinkOpen] = useState(false);
   /** Null until the creator picks. The AI's read is shown, never silently kept. */
   const [category, setCategory] = useState<CategorySlug | null>(saved.category);
-
-
+  /** Chips hidden until asked for. A creator who already chose stays expanded, so
+   *  a deliberate choice is never buried behind a tap they already made. */
+  const [catOpen, setCatOpen] = useState(saved.category != null);
 
   const minSeedEth = econ.minSeedWei == null ? null : weiToEth(econ.minSeedWei);
   const minUsd = minSeedEth != null && ethUsd > 0 ? minSeedEth * ethUsd : null;
@@ -112,9 +111,6 @@ export function CreateMarket({
   const belowMin = econ.minSeedWei != null && seedWei < econ.minSeedWei;
   const overBalance = balance.wei != null && seedWei > balance.wei;
   const availUsd = balance.eth != null && ethUsd > 0 ? balance.eth * ethUsd : null;
-
-
-
 
   // Debounced AI review + duplicate search. Advisory only — never blocks the button.
   const [debounced, setDebounced] = useState("");
@@ -163,8 +159,6 @@ export function CreateMarket({
   const suggestedCategory = normalizeCategory(review?.review.category);
   const activeCategory = category ?? suggestedCategory;
 
-
-
   const submit = useMutation({
     mutationFn: async () => {
       if (!address) throw new Error("Connect a wallet first.");
@@ -195,7 +189,6 @@ export function CreateMarket({
             data: { wallet: address, token, questionId, url: attachment.media.url },
           });
         }
-
 
         const result = await create({ questionId, yes: side === "YES", seedWei });
         await finalizeMarketCreate({
@@ -270,7 +263,6 @@ export function CreateMarket({
 
   return (
     <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[600px] flex-col">
-
       {/* 1 · Compact header — pinned. Title carries the earn promise; the
           provenance tag sits inline, top-right. */}
       <div className="flex shrink-0 items-start gap-2">
@@ -278,11 +270,6 @@ export function CreateMarket({
           Create a Market. Earn 4.5% on Every Trade.
         </h2>
       </div>
-
-
-
-
-
 
       {/* Scrolls only on short (mobile) viewports; on desktop the whole form fits. */}
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-3">
@@ -364,39 +351,67 @@ export function CreateMarket({
           )}
         </div>
 
-        {/* 2b · Where this belongs.
-            Small, but it is the difference between a market that can be found
-            and one that only the AI has an opinion about. The chip the reviewer
-            suggests is pre-highlighted, so agreeing costs nothing and
-            disagreeing costs one tap. */}
+        {/* 2b · WHERE THIS BELONGS — collapsed, because the creator does not care.
+            Somebody writing "Do I love UFC and Dana White?" is expressing a
+            conviction, not filling in a CMS form, and they have no opinion about
+            whether the system files that under Entertainment or Culture. Eight
+            chips across the primary flow was the most visually expensive element
+            on the surface and the least load-bearing decision on it.
+
+            SO WHY IS IT STILL HERE AT ALL, rather than deleted? Because a CLICK is
+            the only thing that stamps `category_source: "creator"`, and that stamp
+            is the single signal separating a category a human confirmed from one
+            the AI guessed and nobody read. Delete the chips and the classifier
+            permanently loses its ground truth — so this is demoted, not removed.
+            One line at rest, the full set one tap away, and the guess is already
+            correct almost always. */}
         <div>
-          <StepLabel>
-            {category ? "Category" : suggestedCategory ? "Category · our guess" : "Category"}
-          </StepLabel>
-          <div className="flex flex-wrap gap-1.5">
-            {CREATOR_CATEGORIES.map((slug) => {
-              const on = activeCategory === slug;
-              const guessed = on && !category;
-              return (
-                <button
-                  key={slug}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => setCategory(slug)}
-                  className="rounded-full border px-2.5 py-1 text-[12px] leading-none transition-colors"
-                  style={{
-                    // A guess reads as an outline, a choice reads as a fill —
-                    // the creator can tell at a glance whether anyone decided.
-                    borderColor: on ? "var(--text)" : "var(--border)",
-                    background: guessed ? "transparent" : on ? "var(--text)" : "transparent",
-                    color: guessed ? "var(--text)" : on ? "var(--bg)" : "var(--text-muted)",
-                  }}
-                >
-                  {CATEGORY_LABEL[slug]}
-                </button>
-              );
-            })}
-          </div>
+          {catOpen ? (
+            <>
+              <StepLabel>
+                {category ? "Category" : suggestedCategory ? "Category · our guess" : "Category"}
+              </StepLabel>
+              <div className="flex flex-wrap gap-1.5">
+                {CREATOR_CATEGORIES.map((slug) => {
+                  const on = activeCategory === slug;
+                  const guessed = on && !category;
+                  return (
+                    <button
+                      key={slug}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setCategory(slug)}
+                      className="rounded-full border px-2.5 py-1 text-[12px] leading-none transition-colors"
+                      style={{
+                        // A guess reads as an outline, a choice reads as a fill —
+                        // the creator can tell at a glance whether anyone decided.
+                        borderColor: on ? "var(--text)" : "var(--border)",
+                        background: guessed ? "transparent" : on ? "var(--text)" : "transparent",
+                        color: guessed ? "var(--text)" : on ? "var(--bg)" : "var(--text-muted)",
+                      }}
+                    >
+                      {CATEGORY_LABEL[slug]}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            /* AT REST. Names the answer rather than asking the question — and
+               says nothing at all until the reviewer has one, so an untouched
+               form carries no category row whatsoever. */
+            activeCategory && (
+              <button
+                type="button"
+                onClick={() => setCatOpen(true)}
+                className="text-[11.5px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+              >
+                {CATEGORY_LABEL[activeCategory]}
+                {category ? "" : " · our guess"}
+                <span className="ml-1 opacity-60">change</span>
+              </button>
+            )
+          )}
         </div>
 
         {/* 3 · Position + amount — grouped by spacing, not by extra chrome. */}
@@ -444,7 +459,6 @@ export function CreateMarket({
           </div>
         </div>
 
-
         {errorText && !belowMin && !overBalance && (
           <p className="text-[12px] text-[var(--loss)]">{errorText}</p>
         )}
@@ -470,12 +484,10 @@ export function CreateMarket({
             Terms
           </button>
         </p>
-
       </div>
 
       {/* Direct uploads are intentionally disabled in this version — a market's
           evidence is always a link to a post that lives on its own platform. */}
-
     </div>
   );
 }
@@ -546,24 +558,33 @@ function EmbedPicker({
     const parsed = parseEmbed(value);
     if (parsed) {
       preconnectEmbed(parsed.platform);
-      setMedia({ kind: "embed", ...parsed, title: null, author: null, thumbnail: instantThumbnail(parsed) });
+      setMedia({
+        kind: "embed",
+        ...parsed,
+        title: null,
+        author: null,
+        thumbnail: instantThumbnail(parsed),
+      });
       setError(null);
     }
-    const t = setTimeout(async () => {
-      try {
-        const res = await resolveEmbed({ data: { url: value } });
-        if (seq.current !== id) return;
-        if (res.media) {
-          setMedia(res.media);
-          setError(null);
-        } else if (!parsed) {
-          setMedia(null);
-          setError(res.error);
+    const t = setTimeout(
+      async () => {
+        try {
+          const res = await resolveEmbed({ data: { url: value } });
+          if (seq.current !== id) return;
+          if (res.media) {
+            setMedia(res.media);
+            setError(null);
+          } else if (!parsed) {
+            setMedia(null);
+            setError(res.error);
+          }
+        } catch {
+          if (seq.current === id && !parsed) setError("Couldn't read that link.");
         }
-      } catch {
-        if (seq.current === id && !parsed) setError("Couldn't read that link.");
-      }
-    }, parsed ? 250 : 500);
+      },
+      parsed ? 250 : 500,
+    );
     return () => clearTimeout(t);
   }, [raw]);
 
@@ -634,6 +655,5 @@ function MediaChip({ attachment, onRemove }: { attachment: Attachment; onRemove:
     </div>
   );
 }
-
 
 export { kindForMime };
