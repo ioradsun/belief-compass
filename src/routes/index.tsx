@@ -1534,7 +1534,7 @@ function Feed() {
               className="absolute inset-0 bg-black/60"
             />
             <div
-              className="absolute inset-y-0 left-0 w-64 bg-[var(--panel)] p-4"
+              className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-[var(--panel)] p-4"
               style={{ borderRight: "1px solid var(--hairline)" }}
             >
               <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
