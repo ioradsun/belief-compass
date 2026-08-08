@@ -60,14 +60,23 @@ export const getDependability = createServerFn({ method: "GET" })
     return Object.fromEntries(await dependabilityFor(data.viewer, data.wallets));
   });
 
-/** How many qualified people this viewer's conviction is eligible to reach. */
+/**
+ * How many qualified people this viewer's conviction is eligible to reach.
+ * Scoped to a market when one is given, so people already holding a position
+ * there are not counted as reachable.
+ */
 export const getCallReach = createServerFn({ method: "GET" })
-  .inputValidator((raw: unknown) => z.object({ wallet: WALLET.nullish() }).parse(raw ?? {}))
+  .inputValidator((raw: unknown) =>
+    z
+      .object({ wallet: WALLET.nullish(), marketId: z.number().int().nonnegative().nullish() })
+      .parse(raw ?? {}),
+  )
   .handler(async ({ data }): Promise<CallReach> => {
     if (!data.wallet) return { tribe: 0, rivals: 0 };
     const { callReachFor } = await import("@/lib/challenge.server");
-    return callReachFor(data.wallet);
+    return callReachFor(data.wallet, data.marketId ?? undefined);
   });
+
 
 /**
  * "I answered" — close every open call addressed to this wallet in this market.
