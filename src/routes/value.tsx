@@ -272,106 +272,111 @@ function ValuePage() {
               </div>
             </Section>
 
-            {/* CREATOR ECONOMY */}
-            <Section
-              title="Creator Economy"
-              note="What believers' volume earns the markets they back"
-            >
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Panel>
-                  <Kpi
-                    label="Total Creator Earnings"
-                    value={creatorEarningsUsd == null ? "—" : fmtUsd(creatorEarningsUsd)}
-                  />
-                  <Kpi label="Avg Earnings / Market" value={fmtUsd(avgEarningsPerMarket)} />
-                </Panel>
-                <Panel title="Highest-Earning Markets">
-                  {topEarningMarkets.map((m) => (
-                    <LeaderRow
-                      key={m.onchainId}
-                      title={m.title}
-                      sub={categoryLabel(m.category) ?? "—"}
-                      value={fmtUsd(m.earningsUsd)}
+            {/* CREATOR ECONOMY and below — desktop only. On a phone the report
+                stops after Growth: the leaderboards and tables are wide, dense
+                reading that a narrow column can't serve. */}
+            <div className="hidden space-y-12 lg:block">
+              {/* CREATOR ECONOMY */}
+              <Section
+                title="Creator Economy"
+                note="What believers' volume earns the markets they back"
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Panel>
+                    <Kpi
+                      label="Total Creator Earnings"
+                      value={creatorEarningsUsd == null ? "—" : fmtUsd(creatorEarningsUsd)}
                     />
-                  ))}
-                </Panel>
-              </div>
-              <Panel className="mt-3" title="Top Creators">
-                {topCreators.length === 0 ? (
-                  <Empty>No creators yet.</Empty>
-                ) : (
-                  topCreators.map((c) => (
-                    <LeaderRow
-                      key={c.wallet}
-                      title={c.name ?? short(c.wallet)}
-                      sub={`${c.markets} market${c.markets === 1 ? "" : "s"} · ${fmtUsd(c.volumeUsd)} volume`}
-                      value={fmtUsd(c.earningsUsd)}
-                    />
-                  ))
-                )}
-              </Panel>
-            </Section>
-
-            {/* LEADERBOARDS */}
-            <Section title="Leaderboards">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Panel title="Highest-Volume Markets">
-                  {topMarketsByVolume.map((m) => (
-                    <LeaderRow
-                      key={m.onchainId}
-                      title={m.title}
-                      sub={`${fmtNum(m.trades)} trades`}
-                      value={fmtUsd(m.volumeUsd)}
-                    />
-                  ))}
-                </Panel>
-                <Panel title="Most Active Categories">
-                  {data.categories.slice(0, 8).map((c) => (
-                    <LeaderRow
-                      key={c.category}
-                      title={categoryLabel(c.category) ?? c.category}
-                      sub={`${c.markets} markets · ${c.creators} creators`}
-                      value={fmtUsd(c.volumeUsd)}
-                    />
-                  ))}
-                </Panel>
-              </div>
-            </Section>
-
-            {/* CATEGORIES */}
-            <Section title="Categories" note="Connected-wallet activity by theme">
-              <div className="overflow-hidden rounded-2xl bg-[var(--surface)]">
-                <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                  <span>Category</span>
-                  <span className="text-right">Markets</span>
-                  <span className="text-right">Trades</span>
-                  <span className="text-right">Volume</span>
+                    <Kpi label="Avg Earnings / Market" value={fmtUsd(avgEarningsPerMarket)} />
+                  </Panel>
+                  <Panel title="Highest-Earning Markets">
+                    {topEarningMarkets.map((m) => (
+                      <LeaderRow
+                        key={m.onchainId}
+                        title={m.title}
+                        sub={categoryLabel(m.category) ?? "—"}
+                        value={fmtUsd(m.earningsUsd)}
+                      />
+                    ))}
+                  </Panel>
                 </div>
-                {data.categories.map((c, i) => (
-                  <div
-                    key={c.category}
-                    className={`grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 px-4 py-3 text-[13px] tabular-nums ${i > 0 ? "border-t border-[var(--hairline)]" : ""}`}
-                  >
-                    <span className="truncate font-medium text-[var(--text)]">
-                      {categoryLabel(c.category) ?? c.category}
-                    </span>
-                    <span className="text-right text-[var(--text-secondary)]">
-                      {fmtNum(c.markets)}
-                    </span>
-                    <span className="text-right text-[var(--text-secondary)]">
-                      {fmtNum(c.trades)}
-                    </span>
-                    <span className="text-right font-semibold text-[var(--text)]">
-                      {fmtUsd(c.volumeUsd)}
-                    </span>
+                <Panel className="mt-3" title="Top Creators">
+                  {topCreators.length === 0 ? (
+                    <Empty>No creators yet.</Empty>
+                  ) : (
+                    topCreators.map((c) => (
+                      <LeaderRow
+                        key={c.wallet}
+                        title={c.name ?? short(c.wallet)}
+                        sub={`${c.markets} market${c.markets === 1 ? "" : "s"} · ${fmtUsd(c.volumeUsd)} volume`}
+                        value={fmtUsd(c.earningsUsd)}
+                      />
+                    ))
+                  )}
+                </Panel>
+              </Section>
+
+              {/* LEADERBOARDS */}
+              <Section title="Leaderboards">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Panel title="Highest-Volume Markets">
+                    {topMarketsByVolume.map((m) => (
+                      <LeaderRow
+                        key={m.onchainId}
+                        title={m.title}
+                        sub={`${fmtNum(m.trades)} trades`}
+                        value={fmtUsd(m.volumeUsd)}
+                      />
+                    ))}
+                  </Panel>
+                  <Panel title="Most Active Categories">
+                    {data.categories.slice(0, 8).map((c) => (
+                      <LeaderRow
+                        key={c.category}
+                        title={categoryLabel(c.category) ?? c.category}
+                        sub={`${c.markets} markets · ${c.creators} creators`}
+                        value={fmtUsd(c.volumeUsd)}
+                      />
+                    ))}
+                  </Panel>
+                </div>
+              </Section>
+
+              {/* CATEGORIES */}
+              <Section title="Categories" note="Connected-wallet activity by theme">
+                <div className="overflow-hidden rounded-2xl bg-[var(--surface)]">
+                  <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                    <span>Category</span>
+                    <span className="text-right">Markets</span>
+                    <span className="text-right">Trades</span>
+                    <span className="text-right">Volume</span>
                   </div>
-                ))}
-              </div>
-            </Section>
+                  {data.categories.map((c, i) => (
+                    <div
+                      key={c.category}
+                      className={`grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-2 px-4 py-3 text-[13px] tabular-nums ${i > 0 ? "border-t border-[var(--hairline)]" : ""}`}
+                    >
+                      <span className="truncate font-medium text-[var(--text)]">
+                        {categoryLabel(c.category) ?? c.category}
+                      </span>
+                      <span className="text-right text-[var(--text-secondary)]">
+                        {fmtNum(c.markets)}
+                      </span>
+                      <span className="text-right text-[var(--text-secondary)]">
+                        {fmtNum(c.trades)}
+                      </span>
+                      <span className="text-right font-semibold text-[var(--text)]">
+                        {fmtUsd(c.volumeUsd)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            </div>
           </div>
 
           {/* LIVE ACTIVITY — sticky rail */}
-          <aside className="lg:sticky lg:top-6 lg:h-max">
+          <aside className="hidden lg:sticky lg:top-6 lg:block lg:h-max">
             <Section title="Live Activity" note="Newest first">
               <div className="space-y-2.5">
                 {data.recentActivity.map((a) => (
