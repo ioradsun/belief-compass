@@ -86,6 +86,8 @@ export function LiveTape({
   skeletonRows = 8,
   holdUpdates = false,
   label,
+  initial,
+
 }: {
   wallet?: string;
   /**
