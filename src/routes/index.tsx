@@ -626,10 +626,13 @@ function Feed() {
    * unaffected by this.
    */
   const [tab, setTab] = useState<MobileTab>(tabParam ?? "room");
-  // Arriving from the menu on a standing page carries the column with it.
+  // Arriving from the menu on a standing page carries the column with it — and
+  // it is an explicit destination, so the intro panel gets out of the way.
   useEffect(() => {
-    if (tabParam) setTab(tabParam);
-  }, [tabParam]);
+    if (!tabParam) return;
+    setTab(tabParam);
+    landing.collapse();
+  }, [tabParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [menuOpen, setMenuOpen] = useState(false);
 
