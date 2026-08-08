@@ -121,7 +121,9 @@ function HowItWorks() {
                       (
                         e.currentTarget.closest("details") as HTMLDetailsElement | null
                       )?.removeAttribute("open");
+                      jumpTo(e, n.id);
                     }}
+
                     className="block rounded-lg px-3 py-2.5 text-[14px]"
                     style={
                       active === n.id
