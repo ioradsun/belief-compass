@@ -126,8 +126,25 @@ export async function swrCache<T>(key: string, opts: SwrOptions, fn: () => Promi
   return started;
 }
 
+/**
+ * A NON-BLOCKING READ. Returns the cached value if this isolate already has one
+ * — fresh OR stale — and `undefined` otherwise. It never computes, never awaits
+ * and never joins an in-flight build.
+ *
+ * This exists for the SSR path. The HTML shell must not be hostage to a cold
+ * build: on the serverless runtime a cold isolate has nothing cached, the build
+ * is a multi-query round trip, and awaiting it turned TTFB into the whole page
+ * budget (measured: 10s in production, exactly the in-flight watchdog). A peek
+ * lets a warm isolate serve real content instantly and a cold one ship the
+ * shell immediately and let the browser fetch the feed in the background.
+ */
+export function peekSwr<T>(key: string): T | undefined {
+  return (store.get(key) as Entry<T> | undefined)?.value;
+}
+
 /** Test-only: drop all cached entries and any computation in flight. */
 export function _clearSwrCache(): void {
   store.clear();
   inflight.clear();
 }
+
