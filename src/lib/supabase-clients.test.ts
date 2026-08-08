@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { serviceClientOrNull } from "./supabase-clients";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { serviceClient, serviceClientOrNull, missingServiceSecrets } from "./supabase-clients";
 
 const KEY = "SUPABASE_SERVICE_ROLE_KEY";
 const original = process.env[KEY];
@@ -34,5 +34,49 @@ describe("a missing service key costs detail, not the page", () => {
     process.env.SUPABASE_URL = "https://example.supabase.co";
     process.env[KEY] = "";
     expect(serviceClientOrNull()).toBeNull();
+  });
+});
+
+/**
+ * WHEN THE JOB CANNOT RUN, IT MUST SAY SO IN THE OPERATOR'S WORDS.
+ *
+ * `createClient` throws "supabaseKey is required": a message about a function
+ * argument, naming no deployment variable and no product consequence. It reached
+ * the logs as an anonymous 500 on a path whose visible symptom is an empty room,
+ * which is how a missing secret can survive in production unnoticed.
+ */
+describe("a missing service key is named, loudly", () => {
+  it("names the missing variable in the error", () => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    delete process.env[KEY];
+    expect(() => serviceClient()).toThrow(/SUPABASE_SERVICE_ROLE_KEY/);
+  });
+
+  it("logs as well as throws — a caller can swallow one, not both", () => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    delete process.env[KEY];
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      serviceClient();
+    } catch {
+      /* expected */
+    }
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("SUPABASE_SERVICE_ROLE_KEY"));
+    spy.mockRestore();
+  });
+
+  it("never puts the secret's value in the message", () => {
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env[KEY] = "super-secret-value";
+    // Present → no throw at all, so there is no message to leak into.
+    expect(() => serviceClient()).not.toThrow();
+    expect(missingServiceSecrets()).toEqual([]);
+  });
+
+  it("reports missing names, never values", () => {
+    delete process.env.SUPABASE_URL;
+    process.env[KEY] = "super-secret-value";
+    expect(missingServiceSecrets()).toEqual(["SUPABASE_URL"]);
+    expect(missingServiceSecrets().join()).not.toContain("super-secret-value");
   });
 });

@@ -99,7 +99,7 @@ export function ChallengeRail({
     // Pure cache seam, no request behind it — but React Query still warns
     // ("No queryFn was passed") on every render without one, which spammed the
     // console dozens of times per load. An identity fn keeps it silent.
-    queryFn: () => (qc.getQueryData<Side>(railSideKey) ?? "challenged"),
+    queryFn: () => qc.getQueryData<Side>(railSideKey) ?? "challenged",
     enabled: false,
     initialData: "challenged",
   });
@@ -137,7 +137,7 @@ export function ChallengeRail({
   // The open queue, minus anything this reader has waved off. The count follows
   // the list rather than the payload, so the badge always equals what is on
   // screen — three means three people are actually waiting on you.
-  const { lock, open, failed } = useOpenCalls(wallet);
+  const { lock, open, failed, lockUnknown } = useOpenCalls(wallet);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -159,7 +159,11 @@ export function ChallengeRail({
             }`}
           >
             {t === "challenge" ? "Challenge" : "Now"}
-            {t === "challenge" && !lock.unlocked && <span aria-label="locked">🔒</span>}
+            {/* No padlock while the lock is unknown — the tab strip must not
+                claim a state the panel below it is refusing to claim. */}
+            {t === "challenge" && !lock.unlocked && !lockUnknown && (
+              <span aria-label="locked">🔒</span>
+            )}
             {t === "challenge" && lock.unlocked && open.length > 0 && (
               <span className="num text-[11px] opacity-70">{open.length}</span>
             )}
@@ -200,6 +204,17 @@ export function ChallengeRail({
       ) : !wallet ? (
         <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
           Connect a wallet to see who wants you at the table.
+        </p>
+      ) : lockUnknown ? (
+        /* THE LOCK IS A CLAIM ABOUT THE READER'S OWN HISTORY, so it may only be
+           made from an answer. `challengeLock` reads `expressedBeliefs`, and an
+           unread payload becomes 0 via `?? 0` — which renders the first-run
+           sentence, "Take 5 sides and we'll work out who your people are", to
+           somebody who has taken forty. That is worse than an error message: it
+           is a confident, welcoming, wrong statement about what they have done.
+           Silence has to be earned by an answer, and so does onboarding. */
+        <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+          Could not load your people. This is a fault on our side — try again in a moment.
         </p>
       ) : !lock.unlocked ? (
         <LockedPanel lock={lock} />

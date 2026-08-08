@@ -110,6 +110,21 @@ export interface OpenCalls {
    * exists, because the surface would look completely healthy the whole time.
    */
   failed: boolean;
+  /**
+   * THE READ BEHIND THE LOCK FAILED — which is not the same as an unstarted
+   * reader, and telling them apart matters more than the queue itself.
+   *
+   * `lock` is computed from `expressedBeliefs`, and an unread payload makes that
+   * `0` via `?? 0`. Zero is not a missing number here, it is a MEANING: it renders
+   * "Take 5 sides and we'll work out who your people are" — the first-run
+   * onboarding sentence — to somebody who took forty. `Number(null) === 0` turned
+   * an outage into a confident, welcoming, completely wrong claim about the
+   * reader's own history.
+   *
+   * The server now throws instead of counting a failed read as no beliefs; this
+   * carries that distinction the last step, to the only place that can say it.
+   */
+  lockUnknown: boolean;
 }
 
 /**
@@ -120,8 +135,11 @@ export interface OpenCalls {
  */
 export function useOpenCalls(wallet?: string): OpenCalls {
   // The same cached observer DnaFirstReveal uses — the lock costs no round trip.
-  const { data: net } = useQuery({ ...networkQO(wallet), enabled: !!wallet });
+  const { data: net, isError: netError } = useQuery({ ...networkQO(wallet), enabled: !!wallet });
   const lock = challengeLock(net?.summary.expressedBeliefs ?? 0, (net?.summary.twinCount ?? 0) > 0);
+  // `placeholderData` keeps the last good payload on screen through a refetch, so
+  // a failure only makes the lock UNKNOWN when there is nothing behind it.
+  const lockUnknown = netError && !net;
 
   const { data: challenges, isError } = useQuery({
     queryKey: ["challenges", wallet ?? null],
@@ -135,5 +153,6 @@ export function useOpenCalls(wallet?: string): OpenCalls {
     lock,
     open: (challenges ?? []).filter((c) => !dismissed.has(String(c.marketId))),
     failed: isError,
+    lockUnknown,
   };
 }
