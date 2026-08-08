@@ -58,7 +58,7 @@ const NAV: { id: string; label: string }[] = [
  * link would stack a history entry per jump, so "Close" would walk back through
  * the sections instead of returning the reader to where they came from.
  */
-function jumpTo(e: React.MouseEvent<HTMLAnchorElement>, id: string) {
+function jumpTo(e: MouseEvent<HTMLAnchorElement>, id: string) {
   const el = document.getElementById(id);
   if (!el) return;
   e.preventDefault();
