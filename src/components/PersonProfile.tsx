@@ -187,47 +187,76 @@ export function PersonProfile({
 
   return (
     <div className="space-y-7">
-      {/* ── I · YOU + THEM ─────────────────────────────────────────────────
-          The relationship before the person: nobody becomes curious about a
-          stranger through statistics, they become curious the moment they
-          recognise a point of contact.
+      {/* ── I · THE TWO OF YOU ─────────────────────────────────────────────
+          The two faces ARE the heading. A label reading "YOU + RASOUL" over
+          two anonymous paragraphs made the reader assemble the pair from text;
+          seeing your own picture next to theirs does it in one glance, and the
+          words underneath can then get on with saying something.
 
-          THE COUNT IS NOT SMALLER THAN THE PERCENTAGE while the record is thin.
-          100% built on one market is arithmetic; "1 of 1 together" is the fact. */}
-      {story && (
-        <section aria-label={`You and ${first}`}>
-          <SectionTitle>You + {first.toUpperCase()}</SectionTitle>
-          {story.matchPct != null && story.evidence ? (
+          Signed out, there is no pair: the header collapses to one person and
+          claims no relationship. */}
+      <header className="space-y-4">
+        <div className="flex items-start gap-4">
+          {data.hasViewer && (
             <>
-              <div className="flex items-baseline gap-2.5">
-                <span
-                  className={`num font-semibold text-[var(--text)] ${
-                    data.sharedBeliefs < 8 ? "text-[20px]" : "text-[28px]"
-                  }`}
-                >
-                  {story.matchPct}%
-                </span>
-                <span
-                  className={`num text-[var(--text-secondary)] ${
-                    data.sharedBeliefs < 8 ? "text-[16px] font-semibold" : "text-[13px]"
-                  }`}
-                >
-                  {story.evidence}
-                </span>
-              </div>
-              <p className="mt-0.5 text-[11px] font-medium tracking-wide text-[var(--text-muted)] uppercase">
-                Conviction Match
-              </p>
+              <Face
+                name={data.viewerName ?? "You"}
+                avatarUrl={data.viewerAvatarUrl}
+                seed={viewer ?? data.wallet}
+                label="You"
+              />
+              <span
+                className="mt-5 h-px w-6 shrink-0 bg-[var(--border)] sm:w-10"
+                aria-hidden="true"
+              />
             </>
-          ) : null}
-          <p className="mt-2 text-[14px] leading-relaxed text-[var(--text)]">{story.primary}</p>
-          {story.supporting && (
-            <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">
-              {story.supporting}
-            </p>
           )}
-        </section>
-      )}
+          <Face
+            name={data.displayName}
+            avatarUrl={data.avatarUrl}
+            seed={data.wallet}
+            label={data.hasViewer ? "Them" : null}
+          />
+        </div>
+
+        {/* THE COUNT IS NOT SMALLER THAN THE PERCENTAGE while the record is
+            thin. 100% built on one market is arithmetic; "1 of 1 together" is
+            the fact. */}
+        {story && (
+          <div aria-label={`You and ${first}`}>
+            {story.matchPct != null && story.evidence ? (
+              <>
+                <div className="flex items-baseline gap-2.5">
+                  <span
+                    className={`num font-semibold text-[var(--text)] ${
+                      data.sharedBeliefs < 8 ? "text-[20px]" : "text-[28px]"
+                    }`}
+                  >
+                    {story.matchPct}%
+                  </span>
+                  <span
+                    className={`num text-[var(--text-secondary)] ${
+                      data.sharedBeliefs < 8 ? "text-[16px] font-semibold" : "text-[13px]"
+                    }`}
+                  >
+                    {story.evidence}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-[11px] font-medium tracking-wide text-[var(--text-muted)] uppercase">
+                  Conviction Match
+                </p>
+              </>
+            ) : null}
+            <p className="mt-2 text-[14px] leading-relaxed text-[var(--text)]">{story.primary}</p>
+            {story.supporting && (
+              <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">
+                {story.supporting}
+              </p>
+            )}
+          </div>
+        )}
+      </header>
+
 
       {/* ── THE RECEIPTS ───────────────────────────────────────────────────
           Directly under the claim, because the claim is only as good as this. */}
