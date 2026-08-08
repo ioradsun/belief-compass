@@ -106,6 +106,15 @@ interface DnaRow {
   opp_matches: unknown;
   inverse_matches: unknown;
 }
+interface Market {
+  onchain_id: number;
+  title: string | null;
+}
+/** One entry of a DNA bucket, as `qualifiedCallers` reads it. */
+interface CachedRelationship {
+  wallet?: string | null;
+}
+
 
 const out: string[] = [];
 const lc = (v: unknown) => String(v ?? "").toLowerCase();
