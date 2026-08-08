@@ -171,7 +171,9 @@ function HowItWorks() {
                   <li key={n.id}>
                     <a
                       href={`#${n.id}`}
+                      onClick={(e) => jumpTo(e, n.id)}
                       className="block rounded-lg px-3 py-1.5 text-[13px] transition-colors"
+
                       style={
                         active === n.id
                           ? { background: "var(--surface)", color: "var(--text)" }
