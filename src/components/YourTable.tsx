@@ -32,6 +32,16 @@ import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 
 export const tableKey = (wallet?: string) => ["table", wallet ?? null] as const;
 
+/**
+ * WHICH SIDE THE RAIL IS SHOWING — a handoff, not a fetch.
+ *
+ * "See yours" is pressed in `PutOnTable`, which sits ABOVE the rail as a sibling
+ * rather than inside it, so there is no prop path between them. The cache is the
+ * seam, exactly as it already is for the callers a trade just closed: written by
+ * one component, read by another, with no request behind it.
+ */
+export const railSideKey = ["challenge-side"] as const;
+
 /** What is on this wallet's table right now — the count the capacity line reads. */
 export function useTable(wallet?: string) {
   return useQuery({

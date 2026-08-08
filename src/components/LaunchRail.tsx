@@ -35,6 +35,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getCallReach } from "@/lib/challenge.functions";
 import { callReachLine, type NamedPerson } from "@/domain/challenge";
+import { PutOnTable } from "@/components/PutOnTable";
 import { showedUpFor } from "@/domain/dependability";
 import { closedCallsKey } from "@/hooks/useAnswerCalls";
 
@@ -42,12 +43,15 @@ export function LaunchRail({
   wallet,
   kind = "created",
   marketId,
+  onSeeTable,
   onDone,
 }: {
   wallet?: string;
   kind?: "created" | "backed";
   /** Which market just happened — how the backward line finds who was answered. */
   marketId?: number;
+  /** Take me to Yours — the only place a Challenge can actually be managed. */
+  onSeeTable?: () => void;
   /** Dismiss the moment — the market is just a market now. */
   onDone: () => void;
 }) {
@@ -119,6 +123,12 @@ export function LaunchRail({
           You earn 4.5% of every trade in it, for as long as it runs.
         </p>
       )}
+
+      {/* ONE ACTION, BOTH PATHS. Creating a market and backing an existing one are
+          different acts producing the same opportunity — a conviction worth asking
+          your people about. Two Challenge architectures for those two moments
+          would be two lifecycles, two caps and two sets of copy drifting apart. */}
+      <PutOnTable wallet={wallet} marketId={marketId} onSeeTable={onSeeTable} />
 
       <button
         type="button"
