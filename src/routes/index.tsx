@@ -625,18 +625,22 @@ function Feed() {
    * on arrival rather than a skeleton. Desktop shows all three columns and is
    * unaffected by this.
    */
-  const [tab, setTab] = useState<MobileTab>(tabParam ?? "room");
+  const [tab, setTab] = useState<MobileTab>(
+    tabParam ??
+      (selectedMarket || selectedPerson || createOpen || dashOpen || dnaOpen ? "belief" : "room"),
+  );
   // Arriving from the menu on a standing page carries the column with it — and
   // it is an explicit destination, so the intro panel gets out of the way. The
-  // same is true of any deep link to a center destination: landing on a link to
-  // a market, a person, or the create form behind the intro panel is a dead end.
-  const deepLinked =
-    !!tabParam || !!selectedMarket || !!selectedPerson || !!createOpen || !!dashOpen || !!dnaOpen;
+  // same is true of any deep link to a center destination: a link to a market, a
+  // person, or the create form must also SELECT the column that renders it —
+  // otherwise the phone sits on "Crowd" and the destination is invisible.
+  const deepCenter = !!selectedMarket || !!selectedPerson || !!createOpen || !!dashOpen || !!dnaOpen;
   useEffect(() => {
-    if (!deepLinked) return;
-    if (tabParam) setTab(tabParam);
+    if (!tabParam && !deepCenter) return;
+    setTab(tabParam ?? "belief");
     landing.collapse();
-  }, [tabParam, deepLinked]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabParam, deepCenter]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
 
   const [menuOpen, setMenuOpen] = useState(false);
