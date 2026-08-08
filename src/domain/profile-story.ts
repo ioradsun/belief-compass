@@ -242,3 +242,118 @@ export function themAct(
     hidden: Math.max(0, rows.length - DENSITY.preview),
   };
 }
+
+/* ─────────────────────────── ACT I-b · THE RECEIPTS ───────────────────────
+ *
+ * The proof under the headline, and it belongs directly under the headline.
+ * A hero that claims "9 of 11 together" and then makes the reader scroll past
+ * a bio, a recommendation and a conviction list before showing the eleven
+ * markets is asking to be taken on faith.
+ *
+ * TWO SHAPES, because aligned rows and split rows are different information.
+ * When every row agrees, "You YES · Them YES" eleven times is noise — the
+ * pattern is the point, so the rows compress to titles and one closing count.
+ * The moment sides differ, the sides ARE the story and every row shows them.
+ */
+
+export interface ReceiptInput {
+  marketId: number;
+  title: string;
+  viewerSide: Side;
+  personSide: Side;
+  /** Canonical shared-market domain, display-cased. Null when uncategorised. */
+  domain?: string | null;
+}
+
+export interface ReceiptRow extends ReceiptInput {
+  agree: boolean;
+}
+
+export interface ReceiptGroup {
+  domain: string;
+  rows: ReceiptRow[];
+  together: number;
+  total: number;
+}
+
+export interface Receipts {
+  /** Flat, disagreements first. Empty when there is nothing to prove. */
+  rows: ReceiptRow[];
+  /** Domain groups, or empty when grouping would not help. */
+  groups: ReceiptGroup[];
+  /** True when every shared market landed the same way. */
+  allAligned: boolean;
+  /** "Together on all 4" / "Together on 9 of 11". Null with no rows. */
+  footer: string | null;
+  /** Rows beyond the preview cap. */
+  hidden: number;
+}
+
+export const RECEIPTS = {
+  /** Below this the list only repeats the count the hero already printed. */
+  minToList: 2,
+  /** Rows before the section offers to expand. */
+  preview: 6,
+  /** Shared markets before domain grouping is navigation and not decoration. */
+  groupAt: 8,
+  /** Shared markets a domain needs before it earns its own heading. */
+  minPerGroup: 2,
+} as const;
+
+/**
+ * The shared record, ordered so the interesting row is first.
+ *
+ * DISAGREEMENTS LEAD. A list ordered by agreement teaches nobody anything they
+ * did not already believe, and the exception is the row that explains why the
+ * percentage is not 100.
+ */
+export function receipts(
+  input: readonly ReceiptInput[],
+  opts: { limit?: number } = {},
+): Receipts {
+  const rows: ReceiptRow[] = input
+    .filter((r) => r.title?.trim())
+    .map((r) => ({ ...r, agree: r.viewerSide === r.personSide }));
+  if (rows.length < RECEIPTS.minToList) {
+    return { rows: [], groups: [], allAligned: rows.every((r) => r.agree), footer: null, hidden: 0 };
+  }
+
+  rows.sort((a, b) => Number(a.agree) - Number(b.agree) || a.marketId - b.marketId);
+  const total = rows.length;
+  const together = rows.filter((r) => r.agree).length;
+  const allAligned = together === total;
+  const limit = Math.max(1, opts.limit ?? RECEIPTS.preview);
+  const shown = rows.slice(0, limit);
+
+  const groups: ReceiptGroup[] = [];
+  if (total >= RECEIPTS.groupAt) {
+    const by = new Map<string, ReceiptRow[]>();
+    for (const r of rows) {
+      const d = r.domain?.trim();
+      if (!d) continue;
+      const list = by.get(d) ?? [];
+      list.push(r);
+      by.set(d, list);
+    }
+    for (const [domain, list] of by) {
+      if (list.length < RECEIPTS.minPerGroup) continue;
+      groups.push({
+        domain,
+        rows: list,
+        together: list.filter((r) => r.agree).length,
+        total: list.length,
+      });
+    }
+    groups.sort((a, b) => b.total - a.total || a.domain.localeCompare(b.domain));
+  }
+
+  return {
+    rows: shown,
+    groups: groups.length >= 2 ? groups : [],
+    allAligned,
+    footer: allAligned
+      ? `Together on all ${total}`
+      : `Together on ${together} of ${total}`,
+    hidden: Math.max(0, total - shown.length),
+  };
+}

@@ -1,71 +1,74 @@
 /**
- * PROFILE — three acts, and nothing that has not earned its existence.
+ * PROFILE — a relationship story first, a profile second.
  *
- * THE FAILURE V2 HAD. It narrated the database. A person with one conviction
- * was described six ways: "their story is still taking shape", "taken a side in
- * 1 market", Start Here (that market), Convictions That Define Them (that
- * market), Their Conviction Map (that market, under a taxonomy heading), and
- * "1 active conviction" in the footer. Eleven sections designed for the maximum
- * amount of data, shown emaciated to almost everybody.
+ * THE FAILURE. The page narrated the database. It could show Conviction Match,
+ * a shared count, relationship copy, Start Here, Their Convictions, Where
+ * You've Met, a conviction map, active-conviction stats, people around them and
+ * a Showing Up history — with the EVIDENCE for the headline number sitting
+ * below all of it. A reader had to scroll past a stranger's whole inventory to
+ * find the four markets that produced "100% Conviction Match".
  *
- * V3 asks what a human actually wants to know, in order, and each section is
- * the only place its question is answered:
+ * THE ORDER IS THE PRODUCT:
  *
- *   I    YOU + THEM     what are we?              null when you have never met
- *   II   NEXT           what could we do now?     null when there is nothing
- *   III  THEIR CONVICTIONS   what do they believe?
+ *   YOU + THEM        what are we?            one narrative sentence, owned by
+ *                                             @/domain/relationship-narrative
+ *   THE RECEIPTS      why does it say that?   the shared markets, immediately
+ *   BETWEEN YOU       have we shown up?       only with real call history
+ *   CALLED YOU/JOIN   what could we do now?   only with a live opportunity
+ *   THEM              who are they?           name, face, one line
+ *   THEIR CONVICTIONS what do they believe?   one canonical section
+ *   PEOPLE AROUND     who else is here?       only when it aids discovery
  *
- * Everything else is subordinate to those and appears only when the
- * relationship is rich enough to carry it: the shared-market receipts, the call
- * history, the people around them.
+ * relationship → evidence → history → opportunity → person → world.
  *
- * THIN RELATIONSHIP → THIN PROFILE. No section is padded with a fallback. The
- * page gets SHORTER when there is less to say, and earns complexity as the
- * person accumulates history — which is why the conviction list is flat until
- * there is enough of it for a taxonomy to be navigation rather than ceremony.
+ * NEVER MAKE THE READER HUNT FOR THE EVIDENCE BEHIND THE HEADLINE. The claim
+ * and its proof are adjacent, always.
  *
- * "START HERE" WAS WRONG AND IS GONE. It recommended their biggest position
- * whether or not you had already taken a side there, so it meant "their largest
- * holding" rather than "the best place to meet this person". Act II only offers
- * markets you have never answered, and an outstanding call from them outranks
- * any position — someone asking you directly is the one thing here with a
- * deadline.
+ * THIN RELATIONSHIP → THIN PROFILE. Every section returns nothing when it has
+ * nothing true to say; the page contracts rather than padding itself. A person
+ * with one conviction gets no taxonomy, no "largest conviction", no map.
  *
- * FOLLOW IS GONE. Showing up is the relationship model on this platform;
- * a subscribe button inherited from another social network sat next to
- * Conviction Match and shared history saying something entirely different.
+ * ONE NARRATIVE OWNER. JSX never composes a competing story: it renders exactly
+ * what the engine chose, and the accessible reading matches it word for word.
  *
- * All judgement lives in @/domain/profile-story, including the refusals.
+ * NO FOLLOW. Showing up is the relationship model here; a subscribe button
+ * inherited from another network sat beside Conviction Match saying something
+ * else entirely.
  */
 import { useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getPersonProfile, listPersonConvictions } from "@/lib/dna.functions";
-import { ago, RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
+import { ago } from "@/lib/dna-labels";
 import { getCallsWithPerson, getChallenges } from "@/lib/challenge.functions";
 import { historyRows } from "@/domain/dependability";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { categoryToDomain } from "@/domain/categories";
 import {
   definingConvictions,
-  introduction,
   convictionMap,
-  sharedCuriosity,
   allConvictions,
   tenureText,
   type PersonPosition,
-  type SharedRow,
   type ConvictionTheme,
 } from "@/domain/person-profile";
 import { rankStartCandidates, type StartCandidate } from "@/domain/profile-start-here";
 import { peopleAround, type ConnectedPerson } from "@/domain/person-network";
 import {
-  usAct,
   nextAct,
   themAct,
+  receipts,
   DENSITY,
+  RECEIPTS,
   type NextAct,
+  type Receipts,
+  type ReceiptRow,
   type ThemPosition,
 } from "@/domain/profile-story";
+import {
+  relationshipNarrative,
+  type DomainRecord,
+  type Narrative,
+} from "@/domain/relationship-narrative";
 
 export function PersonProfile({
   wallet,
@@ -97,8 +100,7 @@ export function PersonProfile({
 
   /**
    * The viewer's OPEN calls, filtered to this person. An unanswered call from
-   * the person you are looking at is the strongest thing this page can offer,
-   * and it is the only signal Act II ranks above a position.
+   * the person you are looking at is the strongest thing this page can offer.
    */
   const { data: challenges } = useQuery({
     queryKey: ["challenges", viewer ?? null],
@@ -107,39 +109,43 @@ export function PersonProfile({
     staleTime: 60_000,
   });
 
-  const all = useInfiniteQuery({
-    queryKey: ["person-convictions", wallet.toLowerCase()],
-    enabled: allOpen,
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) =>
-      listPersonConvictions({ data: { wallet, offset: pageParam as number, limit: ALL_PAGE } }),
-    getNextPageParam: (last, pages) => {
-      const loaded = pages.reduce((n, p) => n + p.positions.length, 0);
-      return loaded < last.total ? loaded : undefined;
-    },
-  });
-
   if (isLoading || !data) {
     return <div className="h-40 animate-pulse rounded-xl bg-[var(--surface-2)]" />;
   }
 
   const first = data.displayName.split(" ")[0] || data.displayName;
-  const intro = introduction(data.positions, { marketsParticipated: data.positions.length });
 
-  /* ── ACT I ─────────────────────────────────────────────────────────────── */
-  const us = data.hasViewer
-    ? usAct({
+  /* ── The shared record, once, and everything relational reads from it ───── */
+  const sharedRows = [...data.sharedBoth, ...data.opposing].map((m) => ({
+    marketId: Number(m.marketId),
+    title: m.title,
+    viewerSide: m.viewerSide,
+    personSide: m.personSide,
+    domain: m.domain ?? null,
+  }));
+  const proof = receipts(sharedRows, {
+    limit: allShared ? sharedRows.length : RECEIPTS.preview,
+  });
+
+  /* ── ACT I · YOU + THEM ─────────────────────────────────────────────────── */
+  // Showing up is counted from the call ledger, never inferred from sides.
+  const theyShowed = (pair?.theirs.answered ?? 0) > 0;
+  const youShowed = (pair?.yours.answered ?? 0) > 0;
+  const story: Narrative | null = data.hasViewer
+    ? relationshipNarrative({
+        name: first,
         shared: data.sharedBeliefs,
         together: data.together,
         apart: data.apart,
-        alignedTopics: data.alignedDomains.map((d) => d.domain),
+        domains: domainRecords(sharedRows),
+        theyShowed,
+        youShowed,
       })
     : null;
 
-  /* ── ACT II ────────────────────────────────────────────────────────────── */
-  // Only markets the viewer has never answered are eligible, which is the whole
-  // correction: an invitation to a market you already took a side in is not an
-  // invitation. Ranking then picks the one most worth opening.
+  /* ── OPPORTUNITY ────────────────────────────────────────────────────────── */
+  // Only markets the viewer has never answered are eligible: an invitation to a
+  // market you already took a side in is not an invitation.
   const viewerHeld = new Set(data.viewerMarketIds);
   const unexplored = candidatesFrom(data).filter((c) => !viewerHeld.has(c.marketId));
   const joinPick = data.hasViewer
@@ -164,7 +170,7 @@ export function PersonProfile({
         : null,
   });
 
-  /* ── ACT III ───────────────────────────────────────────────────────────── */
+  /* ── THEM ───────────────────────────────────────────────────────────────── */
   const them = themAct(data.positions as ThemPosition[], {
     total: data.positionsTotal,
     medianDays: data.personMedianDays,
@@ -173,186 +179,72 @@ export function PersonProfile({
   const themes = them.grouped ? convictionMap(data.positions) : [];
   const flat = them.rows.slice(0, DENSITY.preview);
   const every = allConvictions(data.positions);
-  const everyLoaded = allConvictions(
-    all.data ? all.data.pages.flatMap((p) => p.positions) : data.positions,
-  );
 
-  /* ── Subordinate, and only when the relationship carries them ──────────── */
-  const agreed = data.sharedBoth.map((m) => ({
-    marketId: Number(m.marketId),
-    title: m.title,
-    viewerSide: m.viewerSide,
-    personSide: m.personSide,
-  }));
-  const opposed = data.opposing.map((m) => ({
-    marketId: Number(m.marketId),
-    title: m.title,
-    viewerSide: m.viewerSide,
-    personSide: m.personSide,
-  }));
-  const sharedTotal = agreed.length + opposed.length;
-  // Two or fewer shared markets are already fully described by "1 of 1
-  // together" — listing them would be the same fact wearing a list.
-  const showShared = sharedTotal >= MIN_SHARED_LIST;
-  const shared = showShared
-    ? sharedCuriosity(agreed, opposed, allShared ? sharedTotal : SHARED_PREVIEW)
-    : [];
   const history = historyRows(pair?.history ?? [], data.displayName);
   const around = peopleAround(data.around);
+  /** Where most of their conviction lives — one line, only when it is true. */
+  const home = concentration(data.positions);
 
   return (
     <div className="space-y-7">
-      {/* ── I · YOU + THEM ───────────────────────────────────────────────────
-          The relationship before the person, because nobody becomes curious
-          about a stranger through statistics — they become curious the moment
-          they recognise a point of contact.
+      {/* ── I · YOU + THEM ─────────────────────────────────────────────────
+          The relationship before the person: nobody becomes curious about a
+          stranger through statistics, they become curious the moment they
+          recognise a point of contact.
 
           THE COUNT IS NOT SMALLER THAN THE PERCENTAGE while the record is thin.
-          A 100% built on one market is arithmetic; "1 of 1 together" is the
-          fact. Making the percentage the loudest thing on a one-market record
-          would be the unfalsifiable compatibility score this page replaced. */}
-      {us && (
-        <section>
-          <SectionTitle>
-            You + {first.toUpperCase() === first ? first : first.toUpperCase()}
-          </SectionTitle>
-          <div className="flex items-baseline gap-2.5">
-            <span
-              className={`num font-semibold text-[var(--text)] ${us.thin ? "text-[20px]" : "text-[28px]"}`}
-            >
-              {us.matchPct != null ? `${us.matchPct}%` : "—"}
-            </span>
-            <span
-              className={`num text-[var(--text-secondary)] ${us.thin ? "text-[16px] font-semibold" : "text-[13px]"}`}
-            >
-              {us.evidence}
-            </span>
-          </div>
-          <p className="mt-0.5 text-[11px] font-medium tracking-wide text-[var(--text-muted)] uppercase">
-            Conviction Match
-          </p>
-          {us.sentence && (
-            <p className="mt-2 text-[14px] leading-relaxed text-[var(--text)]">{us.sentence}</p>
-          )}
-          {data.relationship !== "insufficient" && data.relationship !== "neutral" && (
-            <p
-              className="mt-1.5 text-[10px] font-semibold tracking-wide uppercase"
-              style={{ color: relationshipTone(data.relationship).fg }}
-            >
-              {RELATIONSHIP_TEXT[data.relationship]}
+          100% built on one market is arithmetic; "1 of 1 together" is the fact. */}
+      {story && (
+        <section aria-label={`You and ${first}`}>
+          <SectionTitle>You + {first.toUpperCase()}</SectionTitle>
+          {story.matchPct != null && story.evidence ? (
+            <>
+              <div className="flex items-baseline gap-2.5">
+                <span
+                  className={`num font-semibold text-[var(--text)] ${
+                    data.sharedBeliefs < 8 ? "text-[20px]" : "text-[28px]"
+                  }`}
+                >
+                  {story.matchPct}%
+                </span>
+                <span
+                  className={`num text-[var(--text-secondary)] ${
+                    data.sharedBeliefs < 8 ? "text-[16px] font-semibold" : "text-[13px]"
+                  }`}
+                >
+                  {story.evidence}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] font-medium tracking-wide text-[var(--text-muted)] uppercase">
+                Conviction Match
+              </p>
+            </>
+          ) : null}
+          <p className="mt-2 text-[14px] leading-relaxed text-[var(--text)]">{story.primary}</p>
+          {story.supporting && (
+            <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">
+              {story.supporting}
             </p>
           )}
         </section>
       )}
 
-      {/* ── WHO ──────────────────────────────────────────────────────────────
-          A name, a face, one line. When there is no pattern to claim yet it
-          says exactly that, once — the market count lives in Act III. */}
-      <header className="flex items-start gap-3">
-        {data.avatarUrl ? (
-          <img
-            src={data.avatarUrl}
-            alt=""
-            className="h-12 w-12 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <span
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-semibold text-white"
-            style={{ background: `hsl(${hueFor(data.wallet)} 45% 45%)` }}
-            aria-hidden
-          >
-            {initialsFor(data.displayName)}
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-semibold text-[var(--text)]">{data.displayName}</h1>
-          <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">
-            {/* Provisional profiles get ONE sentence. The second was "they have
-                taken a side in 1 market", which Act III already states. */}
-            {(intro.provisional ? intro.lines.slice(0, 1) : intro.lines).join(" ")}
-          </p>
-        </div>
-      </header>
-
-      {/* ── II · NEXT ────────────────────────────────────────────────────────
-          One thing to do together, or nothing at all. Never a filler row. */}
-      {next && <NextCard next={next} name={first} onSelect={onSelectMarket} />}
-
-      {/* ── III · THEIR CONVICTIONS ──────────────────────────────────────────
-          One section where three used to be. Grouped by theme only once there
-          are enough positions for the grouping to help someone navigate. */}
-      {(them.rows.length > 0 || every.length > 0) && (
-        <section>
-          <SectionTitle>Their convictions</SectionTitle>
-          {them.grouped ? (
-            <div className="space-y-4">
-              {themes.map((t) => (
-                <ThemeGroup key={t.theme} theme={t} onSelect={onSelectMarket} />
-              ))}
-            </div>
-          ) : (
-            <ul className="space-y-0.5">
-              {flat.map((p) => (
-                <li key={p.marketId}>
-                  <ConvictionRow p={p as PersonPosition} onSelect={onSelectMarket} />
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="num mt-2 px-2 text-[11px] text-[var(--text-muted)]">{them.summary}</p>
-          {/* The unabridged list — what makes everything above trustworthy. It
-              only offers itself when there is more than the section shows. */}
-          {data.positionsTotal > (them.grouped ? themes.length : flat.length) && (
-            <>
-              <MoreButton onClick={() => setAllOpen((v) => !v)}>
-                {allOpen ? "Hide all convictions" : `Show all ${data.positionsTotal}`}
-              </MoreButton>
-              {allOpen && (
-                <>
-                  <ul className="mt-2 space-y-0.5">
-                    {everyLoaded.map((p) => (
-                      <li key={p.marketId}>
-                        <ConvictionRow p={p} onSelect={onSelectMarket} />
-                      </li>
-                    ))}
-                  </ul>
-                  {all.hasNextPage && (
-                    <MoreButton onClick={() => void all.fetchNextPage()}>
-                      {all.isFetchingNextPage
-                        ? "Loading…"
-                        : `Show more — ${everyLoaded.length} of ${data.positionsTotal}`}
-                    </MoreButton>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </section>
+      {/* ── THE RECEIPTS ───────────────────────────────────────────────────
+          Directly under the claim, because the claim is only as good as this. */}
+      {proof.rows.length > 0 && (
+        <ReceiptsSection
+          proof={proof}
+          name={first}
+          onSelect={onSelectMarket}
+          onExpand={() => setAllShared(true)}
+        />
       )}
 
-      {/* ── Receipts. Only when they say something Act I did not. ──────────── */}
-      {showShared && shared.length > 0 && (
-        <section>
-          <SectionTitle>Where you have met</SectionTitle>
-          <ul className="space-y-0.5">
-            {shared.map((s) => (
-              <li key={s.marketId}>
-                <SharedMarketRow s={s} onSelect={onSelectMarket} />
-              </li>
-            ))}
-          </ul>
-          {sharedTotal > shared.length && (
-            <MoreButton onClick={() => setAllShared(true)}>
-              Show all {sharedTotal} shared markets
-            </MoreButton>
-          )}
-        </section>
-      )}
-
-      {/* Who showed up for whom, both directions. */}
+      {/* ── BETWEEN YOU ────────────────────────────────────────────────────
+          Who showed up for whom. Never declines, never expiries as shame. */}
       {history.length > 0 && (
         <section>
-          <SectionTitle>Your history</SectionTitle>
+          <SectionTitle>Between you</SectionTitle>
           <ul className="space-y-1.5">
             {history.map((h) => (
               <li key={`${h.direction}-${h.marketId}`}>
@@ -387,7 +279,73 @@ export function PersonProfile({
         </section>
       )}
 
-      {/* Person → market → person, once there is a room around them to describe. */}
+      {/* ── WHAT CAN WE DO NEXT ────────────────────────────────────────────
+          One thing, or nothing at all. Never a filler row. */}
+      {next && <NextCard next={next} name={first} onSelect={onSelectMarket} />}
+
+      {/* ── THEM ───────────────────────────────────────────────────────────
+          Only now does the page become about them as an individual. */}
+      <header className="flex items-start gap-3">
+        {data.avatarUrl ? (
+          <img
+            src={data.avatarUrl}
+            alt=""
+            className="h-12 w-12 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <span
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-semibold text-white"
+            style={{ background: `hsl(${hueFor(data.wallet)} 45% 45%)` }}
+            aria-hidden
+          >
+            {initialsFor(data.displayName)}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-lg font-semibold text-[var(--text)]">{data.displayName}</h1>
+          {home && (
+            <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">{home}</p>
+          )}
+        </div>
+      </header>
+
+      {/* ── THEIR CONVICTIONS ──────────────────────────────────────────────
+          One canonical section where four overlapping ones used to be. */}
+      {(them.rows.length > 0 || every.length > 0) && (
+        <section>
+          <SectionTitle>Their convictions</SectionTitle>
+          {them.grouped ? (
+            <div className="space-y-4">
+              {themes.map((t) => (
+                <ThemeGroup key={t.theme} theme={t} onSelect={onSelectMarket} />
+              ))}
+            </div>
+          ) : (
+            <ul className="space-y-0.5">
+              {flat.map((p) => (
+                <li key={p.marketId}>
+                  <ConvictionRow p={p as PersonPosition} onSelect={onSelectMarket} />
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="num mt-2 px-2 text-[11px] text-[var(--text-muted)]">{them.summary}</p>
+          {/* The unabridged list — what makes everything above checkable. */}
+          {data.positionsTotal > (them.grouped ? themes.length : flat.length) && (
+            <AllConvictions
+              wallet={wallet}
+              total={data.positionsTotal}
+              open={allOpen}
+              onToggle={() => setAllOpen((v) => !v)}
+              fallback={every}
+              onSelect={onSelectMarket}
+            />
+          )}
+        </section>
+      )}
+
+      {/* ── PEOPLE AROUND THEIR CONVICTIONS ────────────────────────────────
+          One line each. It aids discovery; it does not compete with Act I. */}
       {around.length >= MIN_AROUND && onSelectPerson && (
         <section>
           <SectionTitle>People around their convictions</SectionTitle>
@@ -402,6 +360,40 @@ export function PersonProfile({
       )}
     </div>
   );
+}
+
+
+
+/**
+ * Per-domain agreement over the SAME shared markets the receipts print, so a
+ * domain sentence can never claim evidence a reader cannot count below it.
+ */
+function domainRecords(
+  rows: readonly { domain: string | null; viewerSide: string; personSide: string }[],
+): DomainRecord[] {
+  const by = new Map<string, DomainRecord>();
+  for (const r of rows) {
+    const d = r.domain?.trim();
+    if (!d) continue;
+    const rec = by.get(d) ?? { domain: d, together: 0, apart: 0 };
+    if (r.viewerSide === r.personSide) rec.together += 1;
+    else rec.apart += 1;
+    by.set(d, rec);
+  }
+  return [...by.values()];
+}
+
+/** Where most of their conviction lives — only when a majority actually does. */
+function concentration(positions: readonly PersonPosition[]): string | null {
+  if (positions.length < 4) return null;
+  const counts = new Map<string, number>();
+  for (const p of positions) {
+    const d = categoryToDomain(p.category);
+    if (d) counts.set(d, (counts.get(d) ?? 0) + 1);
+  }
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (!top || top[1] / positions.length < 0.5) return null;
+  return `${top[0]} is where most of their conviction lives.`;
 }
 
 /**
@@ -435,8 +427,7 @@ function candidatesFrom(data: {
       tenureIsFloor: p.tenureIsFloor,
       againstPct: against,
       participants: p.participants,
-      // Every candidate here is one the viewer has never answered — that is the
-      // filter applied before ranking, so there is no viewer side to carry.
+      // Every candidate here is one the viewer has never answered.
       viewerSide: null,
       category: p.category,
       topicUsuallyAligned: domain != null && alignedTopics.has(domain),
@@ -446,10 +437,6 @@ function candidatesFrom(data: {
   });
 }
 
-/** Shared markets shown before the reader asks for the rest. */
-const SHARED_PREVIEW = 6;
-/** Below this, the shared list only repeats what Act I already said. */
-const MIN_SHARED_LIST = 3;
 /** Below this there is no room around them worth naming. */
 const MIN_AROUND = 3;
 /** Convictions per page of the unabridged list. */
@@ -468,9 +455,160 @@ function MoreButton({ onClick, children }: { onClick: () => void; children: Reac
   );
 }
 
+/** The unabridged inventory, paged, and only fetched once somebody asks. */
+function AllConvictions({
+  wallet,
+  total,
+  open,
+  onToggle,
+  fallback,
+  onSelect,
+}: {
+  wallet: string;
+  total: number;
+  open: boolean;
+  onToggle: () => void;
+  fallback: PersonPosition[];
+  onSelect: (id: number) => void;
+}) {
+  const q = useInfiniteQuery({
+    queryKey: ["person-convictions", wallet.toLowerCase()],
+    enabled: open,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      listPersonConvictions({ data: { wallet, offset: pageParam as number, limit: ALL_PAGE } }),
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((n, p) => n + p.positions.length, 0);
+      return loaded < last.total ? loaded : undefined;
+    },
+  });
+  const loaded = allConvictions(q.data ? q.data.pages.flatMap((p) => p.positions) : fallback);
+
+  return (
+    <>
+      <MoreButton onClick={onToggle}>
+        {open ? "Hide all convictions" : `Show all ${total}`}
+      </MoreButton>
+      {open && (
+        <>
+          <ul className="mt-2 space-y-0.5">
+            {loaded.map((p) => (
+              <li key={p.marketId}>
+                <ConvictionRow p={p} onSelect={onSelect} />
+              </li>
+            ))}
+          </ul>
+          {q.hasNextPage && (
+            <MoreButton onClick={() => void q.fetchNextPage()}>
+              {q.isFetchingNextPage ? "Loading…" : `Show more — ${loaded.length} of ${total}`}
+            </MoreButton>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 /**
- * ACT II. The only element on the page allowed to be loud, because a page with
- * two primary actions has none — and a call outranks an invitation.
+ * THE RECEIPTS. Two shapes, because agreement and disagreement are different
+ * information: a column of "You YES · Them YES" repeated eleven times hides the
+ * pattern it is meant to prove, while a single differing row is the whole story
+ * of why the number is not 100.
+ */
+function ReceiptsSection({
+  proof,
+  name,
+  onSelect,
+  onExpand,
+}: {
+  proof: Receipts;
+  name: string;
+  onSelect: (id: number) => void;
+  onExpand: () => void;
+}) {
+  return (
+    <section>
+      <SectionTitle>The receipts</SectionTitle>
+      {proof.groups.length > 0 ? (
+        <div className="space-y-3.5">
+          {proof.groups.map((g) => (
+            <div key={g.domain}>
+              <h3 className="mb-1 text-[11px] font-medium tracking-wide text-[var(--text-secondary)] uppercase">
+                {g.domain} — {g.together} of {g.total} together
+              </h3>
+              <ul className="space-y-0.5">
+                {g.rows.map((r) => (
+                  <li key={r.marketId}>
+                    <ReceiptLine r={r} name={name} onSelect={onSelect} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <ul className="space-y-0.5">
+          {proof.rows.map((r) => (
+            <li key={r.marketId}>
+              <ReceiptLine r={r} name={name} onSelect={onSelect} />
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-1.5 flex items-baseline gap-3 px-2">
+        {proof.footer && (
+          <span className="num text-[11px] text-[var(--text-muted)]">{proof.footer}</span>
+        )}
+        {proof.hidden > 0 && proof.groups.length === 0 && (
+          <MoreButton onClick={onExpand}>Show all {proof.rows.length + proof.hidden}</MoreButton>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** One shared market. Sides appear only when they differ — then they lead. */
+function ReceiptLine({
+  r,
+  name,
+  onSelect,
+}: {
+  r: ReceiptRow;
+  name: string;
+  onSelect: (id: number) => void;
+}) {
+  const tone = (v: "YES" | "NO") => (v === "YES" ? "var(--yes)" : "var(--no)");
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(r.marketId)}
+      className="block w-full rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-2)]"
+    >
+      <span className="flex items-baseline gap-2">
+        {r.agree && (
+          <span className="shrink-0 text-[11px] text-[var(--text-muted)]" aria-hidden>
+            ✓
+          </span>
+        )}
+        <span className="min-w-0 flex-1 text-[13px] leading-snug text-[var(--text)]">{r.title}</span>
+      </span>
+      {!r.agree && (
+        <span className="mt-0.5 flex items-center gap-3 pl-0 text-[11px] text-[var(--text-muted)]">
+          <span>
+            You <span style={{ color: tone(r.viewerSide) }}>{r.viewerSide}</span>
+          </span>
+          <span>
+            {name} <span style={{ color: tone(r.personSide) }}>{r.personSide}</span>
+          </span>
+        </span>
+      )}
+    </button>
+  );
+}
+
+/**
+ * The opportunity. The only element on the page allowed to be loud, because a
+ * page with two primary actions has none — and a call outranks an invitation.
  */
 function NextCard({
   next,
@@ -590,30 +728,7 @@ function ThemeGroup({
   );
 }
 
-/** One market you both took a side in, with both sides shown. */
-function SharedMarketRow({ s, onSelect }: { s: SharedRow; onSelect: (id: number) => void }) {
-  const tone = (v: "YES" | "NO") => (v === "YES" ? "var(--yes)" : "var(--no)");
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(s.marketId)}
-      className="block w-full rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
-    >
-      <span className="block text-[13px] leading-snug text-[var(--text)]">{s.title}</span>
-      <span className="mt-0.5 flex items-center gap-3 text-[11px] text-[var(--text-muted)]">
-        <span>
-          You <span style={{ color: tone(s.viewerSide) }}>{s.viewerSide}</span>
-        </span>
-        <span>
-          Them <span style={{ color: tone(s.personSide) }}>{s.personSide}</span>
-        </span>
-        {!s.agree && <span className="text-[var(--text-secondary)]">— you differ here</span>}
-      </span>
-    </button>
-  );
-}
-
-/** One connected person. The pattern colours the row and nothing else. */
+/** One connected person. One line, so this cannot compete with Act I. */
 function PersonRow({ p, onSelect }: { p: ConnectedPerson; onSelect: (w: string) => void }) {
   const tone =
     p.pattern === "aligned"
@@ -625,17 +740,13 @@ function PersonRow({ p, onSelect }: { p: ConnectedPerson; onSelect: (w: string) 
     <button
       type="button"
       onClick={() => onSelect(p.wallet)}
-      className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
+      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-[var(--surface-2)]"
     >
       {p.avatarUrl ? (
-        <img
-          src={p.avatarUrl}
-          alt=""
-          className="mt-0.5 h-7 w-7 shrink-0 rounded-full object-cover"
-        />
+        <img src={p.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
       ) : (
         <span
-          className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
           style={{ background: `hsl(${hueFor(p.wallet)} 45% 45%)` }}
           aria-hidden
         >
@@ -643,16 +754,12 @@ function PersonRow({ p, onSelect }: { p: ConnectedPerson; onSelect: (w: string) 
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="block text-[13px] font-medium text-[var(--text)]">{p.name}</span>
-        {p.lines.map((line, i) => (
-          <span
-            key={line}
-            className="block text-[11px] leading-snug"
-            style={{ color: i === 1 ? tone : "var(--text-muted)" }}
-          >
-            {line}
+        <span className="block truncate text-[13px] font-medium text-[var(--text)]">{p.name}</span>
+        {p.lines[0] && (
+          <span className="block truncate text-[11px] leading-snug" style={{ color: tone }}>
+            {p.lines[0]}
           </span>
-        ))}
+        )}
       </span>
     </button>
   );

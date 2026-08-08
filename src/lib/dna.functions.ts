@@ -500,6 +500,8 @@ export type SharedMarket = {
   title: string;
   viewerSide: "YES" | "NO";
   personSide: "YES" | "NO";
+  /** Canonical domain, so the receipts can group without a second taxonomy. */
+  domain?: string | null;
 };
 
 /**
@@ -1059,12 +1061,14 @@ export const getPersonProfile = createServerFn({ method: "GET" })
         title: titles.get(b.id) ?? marketTitleFallback(b.id),
         viewerSide: b.side,
         personSide: b.side,
+        domain: domainOf.get(Number(b.id)) ?? null,
       })),
       opposing: opp.slice(0, SHARED_CAP).map((o) => ({
         marketId: String(o.id),
         title: titles.get(o.id) ?? marketTitleFallback(o.id),
         viewerSide: o.vSide,
         personSide: o.pSide,
+        domain: domainOf.get(Number(o.id)) ?? null,
       })),
       recentActivity,
       positions: evidence.positions,
