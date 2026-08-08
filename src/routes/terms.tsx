@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { TermsContent } from "@/components/TermsContent";
+import { InfoPageHeader } from "@/components/InfoPageHeader";
+
 
 export const Route = createFileRoute("/terms")({
   head: () => ({
