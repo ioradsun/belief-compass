@@ -171,7 +171,7 @@ function TestingScene() {
 
   const set = (next: Partial<{ scene: string; role: Role; who: string }>) =>
     void navigate({
-      search: (s: Record<string, unknown>) => ({ ...s, ...next }),
+      search: (s: { scene: string; role: Role; who: string | undefined }) => ({ ...s, ...next }),
       replace: true,
     });
 
