@@ -141,6 +141,24 @@ describe("no arithmetic can mint a word the model is not ready to say", () => {
     ).toEqual(["Rival", "Tribe"]);
   });
 
+  it("has no dormant definition of Twin or Opp anywhere in the model", () => {
+    // THE RULE: if the product does not currently use a relationship rule, the
+    // code must not pretend that rule exists. `EARNED_LABELS` was left dormant
+    // for exactly one revision — an authoritative-looking constant with no
+    // consumer, which a reader would reasonably take for part of the active
+    // model and a reviver would rebuild Twin from instead of re-deriving it.
+    //
+    // Source-level rather than behavioural on purpose: the failure is a
+    // definition EXISTING, and no input can demonstrate the presence of one.
+    const config = readFileSync(join(process.cwd(), "src/domain/dna/config.ts"), "utf8");
+    const live = config.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    expect(live).not.toMatch(/EARNED_LABELS|EarnedLabelConfig|minTopics/);
+    // And the thresholds the engine keeps are the ONLY place Twin/Opp can come
+    // back from, so they stay — unreferenced by any display path today.
+    expect(live).toMatch(/twin:\s*\{/);
+    expect(live).toMatch(/inverse:\s*\{/);
+  });
+
   it("takes its direction from the engine and nowhere else", () => {
     expect(bandFor("tribe")).toBe("tribe");
     expect(bandFor("rival")).toBe("rival");

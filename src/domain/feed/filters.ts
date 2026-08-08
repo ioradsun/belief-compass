@@ -36,16 +36,16 @@ export const NETWORK_OPTIONS: { key: FeedNetwork; label: string; blurb: string }
    * people "Tribe" and "Rival" (`bandLabel`) — two vocabularies for one
    * relationship, one tab apart. `check` below holds them together.
    *
-   * WHERE ARE TWIN AND OPPONENT? Inside these. The spectrum does not have four
-   * peer levels: `bandFor` returns "twin" only when the relationship ALSO
-   * carries the earned badge, and "tribe" for everyone else on the same positive
-   * side — so twin ⊆ tribe and opponent ⊆ rival BY CONSTRUCTION. Narrowing to
-   * Tribe already includes your Twins.
+   * WHERE ARE TWIN AND OPPONENT? They do not exist as bands at all any more, so
+   * there is nothing here to offer. The visible spectrum is Tribe and Rival; the
+   * rare words are withheld until production evidence supports reintroducing
+   * them through the canonical classifier, and the entire platform contained ONE
+   * pair that would have qualified as Twin when that was measured.
    *
-   * Offering them as separate choices would also mean offering choices that are
-   * empty for almost everyone: `EARNED_LABELS.twin` demands 90% agreement across
-   * FIFTEEN shared convictions in three topics, on a platform whose busiest
-   * market has 37 participants. And the feed could not honour them anyway — the
+   * Even when they return they will not belong in this list, and the reason is
+   * unchanged: they would be choices that are empty for almost everyone, on a
+   * platform whose busiest market has 37 participants. And the feed could not
+   * honour them anyway — the
    * DNA overlay deliberately collapses `closest ∪ tribe` into one aligned bucket
    * and `inverse ∪ opp` into one opposed bucket, so `tribe_count` / `opp_count`
    * are the only per-market relationship figures that exist.

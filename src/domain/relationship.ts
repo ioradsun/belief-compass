@@ -20,7 +20,6 @@
  * only shapes them into an honest, human story. ZERO IO, pure, fully tested.
  */
 import {
-  EARNED_LABELS,
   MATURE_MIN_SHARED,
   RELATIONSHIP_LIST_MIN_SHARED,
   confidenceFor,
@@ -150,7 +149,7 @@ const count = (v: number): number => (Number.isFinite(v) && v > 0 ? Math.floor(v
  * plus its evidence into something a person can read.
  *
  * A SECOND interpretation used to sit on top of that. `earnedFor` re-tested the
- * GROUP against its own thresholds (EARNED_LABELS: 90% over 15 shared), so a
+ * GROUP against its own thresholds (90% over 15 shared, now deleted), so a
  * pair the engine called `tribe` could still display "Twin" — two definitions of
  * the same word, and the looser one won. It is gone. There is one path.
  */

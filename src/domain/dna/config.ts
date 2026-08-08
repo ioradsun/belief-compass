@@ -84,26 +84,26 @@ export const PAST_WEIGHT = 0.25;
 export const DOMAIN_MIN_SHARED = 5;
 
 /**
- * EARNED top-tier relationship labels — Twin (proven alike) and Opp (proven
- * opposite). These are NOT navigation; they are rare, hard-won badges. A label is
- * earned only when alignment, evidence AND topic breadth all clear the bar, so
- * "4 agreements out of 4" can never mint a Twin. One owner for these thresholds.
+ * WHERE TWIN AND OPP ARE DEFINED: NOWHERE, DELIBERATELY.
+ *
+ * `EARNED_LABELS` used to sit here — a second set of thresholds for Twin and Opp
+ * (90% over 15 shared across 3 topics) layered on top of `DNA_THRESHOLDS.twin`
+ * and `.inverse`. Because the presentation layer re-tested the GROUP rather than
+ * the engine's label, the two definitions were both live and the looser one won:
+ * a pair the engine called `tribe` could display "Twin".
+ *
+ * It is deleted rather than left dormant. A constant that looks authoritative and
+ * has no consumer is worse than an absence — the next reader reasonably assumes
+ * it is part of the active model, and whoever revives Twin would rebuild it from
+ * a partial definition written against evidence that has since moved.
+ *
+ * THE VISIBLE SPECTRUM IS TRIBE AND RIVAL ONLY. Twin and Opp are withheld until
+ * production evidence supports reintroducing them THROUGH THE CANONICAL
+ * CLASSIFIER — measured at the time of writing, the entire platform contained one
+ * pair that would have qualified as Twin and none that would have qualified as
+ * Opp. When they return, topic breadth joins whatever single source of truth
+ * exists then; it does not wait here in the meantime.
  */
-export interface EarnedLabelConfig {
-  /** Alignment (for twin) or opposition (for opp), 0–100. */
-  minStrength: number;
-  /** Minimum shared directional convictions (evidence). */
-  minShared: number;
-  /** Minimum distinct belief topics compared (breadth). */
-  minTopics: number;
-  /** Minimum confidence (evidence-depth shrink). */
-  minConfidence: number;
-}
-
-export const EARNED_LABELS: { twin: EarnedLabelConfig; opp: EarnedLabelConfig } = {
-  twin: { minStrength: 90, minShared: 15, minTopics: 3, minConfidence: 0.65 },
-  opp: { minStrength: 85, minShared: 15, minTopics: 3, minConfidence: 0.65 },
-};
 
 /**
  * Evidence floor to appear in the primary Tribe / Rivals lists at all. Below this
