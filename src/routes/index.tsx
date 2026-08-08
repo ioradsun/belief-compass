@@ -35,6 +35,7 @@ import { LiveTape } from "@/components/LiveTape";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { SimilarMarkets } from "@/components/SimilarMarkets";
 import { ChallengeRail } from "@/components/ChallengeRail";
+import { IdeasRail } from "@/components/IdeasRail";
 import { useOpenCalls } from "@/lib/open-calls";
 import { LaunchRail } from "@/components/LaunchRail";
 import { MarketDeck } from "@/components/MarketDeck";
@@ -1476,26 +1477,41 @@ function Feed() {
                   onDone={() => setBackedId(null)}
                 />
               ) : null}
+              {/* THE RAILS CHANGE JOBS AS THE STORY MOVES.
+                  While a market is being written the right column is a SPARK, not
+                  a recruiting desk: asking "who should show up?" before the
+                  question exists is premature, and the moment it publishes the
+                  LaunchRail above answers exactly that. Left says "already out
+                  there?", centre says "what do you believe?", right says "need an
+                  angle?" — and then right becomes "your people". */}
               {/* CHALLENGE | NOW — the two social questions, kept apart.
                 Challenge is "where are my people waiting for my take"; Now is
                 "what is happening across Conviction". Anything that cannot tell
                 those apart belongs in the tape, which is why the tape is passed
                 in rather than owned here. */}
-              <ChallengeRail
-                wallet={wallet}
-                onSelect={selectMarket}
-                now={
-                  <div className="min-h-0 flex-1 overflow-hidden">
-                    <LiveTape
-                      wallet={wallet}
-                      onSelect={selectMarket}
-                      excludeMarketId={shownId ?? undefined}
-                      holdUpdates
-                      label="Now"
-                    />
-                  </div>
-                }
-              />
+              {createOpen ? (
+                <IdeasRail
+                  suggestion={houseIdea.suggestion}
+                  onUse={() => acceptIdea(false)}
+                  onDismiss={houseIdea.onDismiss}
+                />
+              ) : (
+                <ChallengeRail
+                  wallet={wallet}
+                  onSelect={selectMarket}
+                  now={
+                    <div className="min-h-0 flex-1 overflow-hidden">
+                      <LiveTape
+                        wallet={wallet}
+                        onSelect={selectMarket}
+                        excludeMarketId={shownId ?? undefined}
+                        holdUpdates
+                        label="Now"
+                      />
+                    </div>
+                  }
+                />
+              )}
             </>
           )}
         </aside>
