@@ -58,7 +58,6 @@ export function LaunchRail({
     staleTime: 60_000,
   });
 
-
   // Written by useAnswerCalls when the trade settled. No queryFn: this is a
   // handoff, not a fetch — there is nothing to go and ask for, and a request
   // here would race the write it is waiting on.
@@ -106,6 +105,18 @@ export function LaunchRail({
            still stands; it simply has no relationships pointing at it. */
         <p className="mt-1 text-[11.5px] leading-snug text-[var(--text-secondary)]">
           As your Tribe and Rivals form, questions like this one reach them automatically.
+        </p>
+      )}
+
+      {/* WHAT THE CREATOR NOW EARNS — moved here from the create form's title,
+          which read "Create a Market. Earn 4.5% on Every Trade." over an empty
+          question. As a heading it was a pitch to somebody who had already
+          decided; here it is a fact about a market that exists, arriving at the
+          moment it becomes true. Creators only, because only a creator earns the
+          fee — a backer taking a side is told nothing about revenue. */}
+      {kind === "created" && (
+        <p className="mt-1.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
+          You earn 4.5% of every trade in it, for as long as it runs.
         </p>
       )}
 
