@@ -115,7 +115,7 @@ export function ChallengeRail({
         now
       ) : !wallet ? (
         <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
-          Connect a wallet to see who is waiting on your take.
+          Connect a wallet to see who wants you at the table.
         </p>
       ) : !lock.unlocked ? (
         <LockedPanel lock={lock} />
@@ -137,9 +137,10 @@ export function ChallengeRail({
             <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
               {/* Honest, and deliberately not "no challenges yet!" — the reason
                   is that nobody has qualified, which is a fact about the graph
-                  rather than about the reader. */}
-              Nobody is waiting on you right now. As your Tribe and Rivals take sides, their open
-              questions land here.
+                  rather than about the reader. Quiet, not broken — the sentence
+                  promises the room rather than apologising for it. */}
+              Your people are quiet. For now. When your Tribe or Rivals want your take, their
+              open questions land here.
             </p>
           ) : (
             <ul className="space-y-2">
