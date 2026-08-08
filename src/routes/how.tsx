@@ -105,26 +105,57 @@ function HowItWorks() {
           </a>
         </div>
 
-        {/* Mobile jump nav — a scrollable chip row. */}
-        <nav
-          className="flex gap-1.5 overflow-x-auto px-4 pb-2 lg:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          aria-label="Sections"
-        >
-          {NAV.map((n) => (
-            <a
-              key={n.id}
-              href={`#${n.id}`}
-              className="shrink-0 rounded-full px-3 py-1 text-[12px] font-medium transition-colors"
-              style={
-                active === n.id
-                  ? { background: "var(--text)", color: "var(--bg)" }
-                  : { border: "1px solid var(--border)", color: "var(--text-secondary)" }
-              }
+        {/* Mobile jump nav — a dropdown, so ten sections cost one line, not a
+            horizontal scroll the reader has to fish through. */}
+        <div className="px-4 pb-2 lg:hidden">
+          <details className="group relative" onClick={() => {}}>
+            <summary
+              className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-3 py-2 text-[13px] font-medium text-[var(--text)] [&::-webkit-details-marker]:hidden"
+              style={{ border: "1px solid var(--border)", background: "var(--surface)" }}
+              aria-label="Jump to a section"
             >
-              {n.label}
-            </a>
-          ))}
-        </nav>
+              <span className="truncate">
+                {NAV.find((n) => n.id === active)?.label ?? "Jump to a section"}
+              </span>
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="h-4 w-4 shrink-0 text-[var(--text-muted)] transition-transform group-open:rotate-180"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </summary>
+            <ul
+              className="absolute left-0 right-0 z-40 mt-1.5 max-h-[60dvh] overflow-y-auto rounded-xl p-1 shadow-xl"
+              style={{ border: "1px solid var(--border)", background: "var(--panel)" }}
+            >
+              {NAV.map((n) => (
+                <li key={n.id}>
+                  <a
+                    href={`#${n.id}`}
+                    onClick={(e) => {
+                      (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute(
+                        "open",
+                      );
+                    }}
+                    className="block rounded-lg px-3 py-2.5 text-[14px]"
+                    style={
+                      active === n.id
+                        ? { background: "var(--surface)", color: "var(--text)" }
+                        : { color: "var(--text-secondary)" }
+                    }
+                  >
+                    {n.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </div>
+
       </header>
 
       <div className="mx-auto max-w-[1180px] px-4 lg:px-8">
