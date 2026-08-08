@@ -1,18 +1,12 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate, useRouter } from "@tanstack/react-router";
+import { AppMenu, type AppTab } from "@/components/AppMenu";
 import { BrandMark } from "@/components/BrandMark";
 import { OmniHeader } from "@/components/OmniHeader";
 import { ProfileMenu } from "@/components/ProfileMenu";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { requestConnect } from "@/lib/connect-bridge";
 import { walletIntent } from "@/lib/wagmi";
-
-/** The standing pages, same list and order as the phone menu on the feed. */
-const PAGES: { to: string; label: string; sub: string }[] = [
-  { to: "/how", label: "How it works", sub: "the idea, in plain language" },
-  { to: "/value", label: "Why it matters", sub: "what this adds to the ecosystem" },
-  { to: "/terms", label: "Terms & risk", sub: "what you're agreeing to" },
-];
 
 /**
  * ONE HEADER EVERYWHERE. The standing reading pages (How it works, Why it
@@ -111,66 +105,13 @@ export function InfoPageHeader({ label, children }: { label: string; children?: 
         {children}
       </header>
 
-      {menuOpen && (
-        <div className="fixed inset-0 z-50">
-          <button
-            type="button"
-            aria-label="Close menu"
-            onClick={() => setMenuOpen(false)}
-            className="absolute inset-0 bg-black/60"
-          />
-          <div
-            className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-[var(--panel)] p-4"
-            style={{ borderRight: "1px solid var(--hairline)" }}
-          >
-            <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-              Menu
-            </div>
-            <div className="space-y-1">
-              <button
-                type="button"
-                onClick={() => goHome()}
-                className="flex w-full items-start gap-2 rounded-md px-3 py-2.5 text-left"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium text-[var(--text)]">
-                    Back to Conviction
-                  </span>
-                  <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">
-                    the live feed
-                  </span>
-                </span>
-              </button>
-
-              {PAGES.map((p) => {
-                const current = here === p.to;
-                return (
-                  <a
-                    key={p.to}
-                    href={p.to}
-                    onClick={() => setMenuOpen(false)}
-                    aria-current={current ? "page" : undefined}
-                    className={`flex w-full items-start gap-2 rounded-md px-3 py-2.5 text-left ${
-                      current ? "bg-[var(--surface)]" : ""
-                    }`}
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className={`block text-sm font-medium ${current ? "text-[var(--text)]" : "text-[var(--text-muted)]"}`}
-                      >
-                        {p.label}
-                      </span>
-                      <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">
-                        {p.sub}
-                      </span>
-                    </span>
-                  </a>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      <AppMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onHome={() => goHome()}
+        onSelectTab={(t: AppTab) => goHome({ tab: t })}
+        currentPath={here}
+      />
     </>
   );
 }
