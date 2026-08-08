@@ -17,7 +17,17 @@ import { peopleYesPct } from "../src/lib/market-state/read-model";
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !key) {
-  console.error("Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY");
+  console.error(
+    // NAME WHICH ONE. "Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY" was
+    // reported as this script hanging, because a message that lists both when
+    // only one is absent reads as a broken environment rather than a missing
+    // key. It exits in well under a second; it just never said what to do.
+    `Missing ${[!url && "SUPABASE_URL", !key && "SUPABASE_SERVICE_ROLE_KEY"]
+      .filter(Boolean)
+      .join(
+        " and ",
+      )}.\n\nThis check reads tables the publishable key cannot see, so there is no\ndegraded mode — it needs the service role key or nothing it prints is true.`,
+  );
   process.exit(2);
 }
 const sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });

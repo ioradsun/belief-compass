@@ -103,7 +103,7 @@ async function realSlices(reach: Map<number, number>) {
     .slice(0, POOL.slices.participants.fetch)
     .map(([id]) => id);
 
-  const [active, fresh, classified, believed, deep, capital] = await Promise.all([
+  const [active, fresh, classified, believed, deep, capital, moving] = await Promise.all([
     q()
       .gte("last_trade_at", sinceActive)
       .order("last_trade_at", { ascending: false, nullsFirst: false })
@@ -125,12 +125,16 @@ async function realSlices(reach: Map<number, number>) {
     q()
       .order("capital_usd", { ascending: false, nullsFirst: false })
       .limit(POOL.slices.capital.fetch),
+    q()
+      .gt("trade_count_24h", 0)
+      .order("trade_count_24h", { ascending: false, nullsFirst: false })
+      .limit(POOL.slices.moving.fetch),
   ]);
   const participants = topParticipantIds.length
     ? await q().in("onchain_id", topParticipantIds)
     : { data: [], error: null };
 
-  const results = { active, fresh, classified, believed, deep, capital, participants };
+  const results = { active, fresh, classified, believed, deep, capital, moving, participants };
   const broken: string[] = [];
   const bySlice: Partial<Record<PoolSlice, { onchainId: number }[]>> = {};
   for (const [name, r] of Object.entries(results) as [PoolSlice, typeof active][]) {
