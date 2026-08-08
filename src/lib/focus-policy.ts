@@ -26,10 +26,25 @@ const COOLDOWN_MS = 30_000;
 
 let hiddenAt: number | null = null;
 let lastRevalidateAt = 0;
+/**
+ * Decision for the CURRENT return, computed once when the tab becomes visible.
+ * React Query asks the predicate once per observer, so the answer must be the
+ * same for every query in one focus event — otherwise the first query to ask
+ * would eat the cooldown and every other panel would silently stop refreshing.
+ */
+let allowThisReturn = false;
 
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") hiddenAt = Date.now();
+    if (document.visibilityState === "hidden") {
+      hiddenAt = Date.now();
+      allowThisReturn = false;
+      return;
+    }
+    const now = Date.now();
+    allowThisReturn = awayMs() >= MIN_AWAY_MS && now - lastRevalidateAt >= COOLDOWN_MS;
+    if (allowThisReturn) lastRevalidateAt = now;
+    hiddenAt = null;
   });
 }
 
@@ -38,15 +53,8 @@ export function awayMs(): number {
   return hiddenAt == null ? 0 : Date.now() - hiddenAt;
 }
 
-/**
- * True when a tab-return is worth re-reading the world for. Consumes the
- * cooldown, so callers should only ask when they intend to act on the answer.
- */
+/** True when this tab-return is worth re-reading the world for. */
 export function shouldRevalidateOnReturn(): boolean {
-  const now = Date.now();
-  if (awayMs() < MIN_AWAY_MS) return false;
-  if (now - lastRevalidateAt < COOLDOWN_MS) return false;
-  lastRevalidateAt = now;
-  hiddenAt = null;
-  return true;
+  return allowThisReturn;
 }
+

@@ -170,7 +170,11 @@ function TestingScene() {
   }
 
   const set = (next: Partial<{ scene: string; role: Role; who: string }>) =>
-    void navigate({ search: (s) => ({ ...s, ...next }), replace: true });
+    void navigate({
+      search: (s: Record<string, unknown>) => ({ ...s, ...next }),
+      replace: true,
+    });
+
 
   const mine = challengerView(world);
   const seen = subject ? challengedView(world, subject) : null;
