@@ -32,6 +32,8 @@ import {
   type FeedQueue,
 } from "@/domain/feed-queue";
 import { LiveTape } from "@/components/LiveTape";
+import { getWarmTape } from "@/lib/live.functions";
+
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { SimilarMarkets } from "@/components/SimilarMarkets";
 import { ChallengeRail } from "@/components/ChallengeRail";
