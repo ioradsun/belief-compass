@@ -75,7 +75,7 @@ async function checkMarket(ms: Record<string, unknown>, nowMs: number, poolCount
     if (ageH != null && ageH > OPP.NEW_MARKET_MAX_HOURS) c.new_older_than_threshold += 1;
   }
   if (storedType === "conviction") {
-    const ev = (ms.opportunity_evidence ?? {}) as Record<string, unknown>;
+    const ev = (ms.opportunity_evidence ?? {}) as unknown as Record<string, unknown>;
     const challenge = Number(ev.circulation_7d ?? 0) > 0 || Number(ev.sell_rate_24h ?? 0) > 0;
     if (!challenge) c.conviction_without_challenge += 1;
   }
@@ -109,7 +109,7 @@ async function run() {
       .select(COLS)
       .eq("onchain_id", onlyMarket)
       .maybeSingle();
-    if (data) await checkMarket(data as Record<string, unknown>, nowMs, pool);
+    if (data) await checkMarket(data as unknown as Record<string, unknown>, nowMs, pool);
   } else {
     let last = -1;
     for (;;) {
@@ -129,8 +129,8 @@ async function run() {
       if (error) throw new Error(error.message);
       const rows = data ?? [];
       if (rows.length === 0) break;
-      for (const r of rows) await checkMarket(r as Record<string, unknown>, nowMs, pool);
-      last = Number(rows[rows.length - 1].onchain_id);
+      for (const r of rows) await checkMarket(r as unknown as Record<string, unknown>, nowMs, pool);
+      last = Number((rows[rows.length - 1] as unknown as Record<string, unknown>).onchain_id);
     }
   }
 

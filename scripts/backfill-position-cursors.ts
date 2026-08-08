@@ -36,6 +36,13 @@ function rowFromDb(r: Record<string, unknown>): BeliefRow {
     yes_cost: Number(r.yes_cost ?? 0),
     no_cost: Number(r.no_cost ?? 0),
     expressed_side: (r.expressed_side as BeliefRow["expressed_side"]) ?? "INACTIVE",
+    // Required by BeliefRow and previously omitted — invisible because scripts/
+    // was never typechecked. It is the side that SURVIVES an exit, so dropping
+    // it would have silently rebuilt cursors against a missing survivor.
+    last_directional_side:
+      r.last_directional_side === "YES" || r.last_directional_side === "NO"
+        ? r.last_directional_side
+        : null,
     directional_since: r.directional_since ? new Date(r.directional_since as string) : null,
     first_backed_at: r.first_backed_at ? new Date(r.first_backed_at as string) : null,
     last_trade_at: r.last_trade_at ? new Date(r.last_trade_at as string) : null,

@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
+    "check:types": "tsc --noEmit && tsc -p tsconfig.scripts.json --noEmit",
     "format": "prettier --write .",
     "verify:reducer": "tsx scripts/verify-reducer.ts",
     "check:data-flow": "tsx scripts/check-data-flow.ts",

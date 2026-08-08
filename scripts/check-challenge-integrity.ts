@@ -106,6 +106,14 @@ interface DnaRow {
   opp_matches: unknown;
   inverse_matches: unknown;
 }
+interface Market {
+  onchain_id: number;
+  title: string | null;
+}
+/** One entry of a DNA bucket, as `qualifiedCallers` reads it. */
+interface CachedRelationship {
+  wallet?: string | null;
+}
 
 const out: string[] = [];
 const lc = (v: unknown) => String(v ?? "").toLowerCase();
@@ -135,7 +143,7 @@ async function main() {
   const sinceMs = Date.now() - WINDOW_DAYS * 86_400_000;
   const since = new Date(sinceMs).toISOString();
 
-  const [calls, events, beliefs, dna] = await Promise.all([
+  const [calls, events, beliefs, dna, markets] = await Promise.all([
     page<Call>(
       "market_calls",
       "market_id,caller_wallet,responder_wallet,relation_at_call,called_at,responded_at",
@@ -150,6 +158,9 @@ async function main() {
       "viewer_dna_cache",
       "viewer_wallet,twin_matches,tribe_matches,opp_matches,inverse_matches",
     ),
+    // Section 0 needs titles: `buildChallenges` drops a candidate whose market
+    // has no title, so a supply count that ignored them would overstate.
+    page<Market>("markets", "onchain_id,title"),
   ]);
 
   const unreadable: string[] = [];
@@ -157,6 +168,7 @@ async function main() {
   if (events.blocked) unreadable.push(`events — ${events.why}`);
   if (beliefs.blocked) unreadable.push(`wallet_beliefs — ${beliefs.why}`);
   if (dna.blocked) unreadable.push(`viewer_dna_cache — ${dna.why}`);
+  if (markets.blocked) unreadable.push(`markets — ${markets.why}`);
   if (unreadable.length > 0) {
     console.error("Could not read:\n  " + unreadable.join("\n  "));
     process.exit(1);
@@ -166,6 +178,7 @@ async function main() {
   const EVENTS = events.rows as Event[];
   const BELIEFS = beliefs.rows as Belief[];
   const DNA = dna.rows as DnaRow[];
+  const MARKETS = markets.rows as Market[];
 
   /** Every canonical directional trade, keyed wallet|market, earliest first. */
   const tradesBy = new Map<string, Event[]>();
@@ -179,6 +192,14 @@ async function main() {
   /** Canonical CURRENT stance, keyed wallet|market. */
   const stanceBy = new Map<string, string>();
   for (const b of BELIEFS) stanceBy.set(pairKey(b.wallet, String(b.onchain_id)), lc(b.stance_side));
+
+  /**
+   * Gates every ledger-dependent section below. `scripts/` is NOT in tsconfig's
+   * `include`, so this identifier was referenced five times while undeclared and
+   * `tsc --noEmit` still passed — the file is never typechecked. Worth knowing
+   * before trusting any "tsc clean" claim about anything in this directory.
+   */
+  const ledgerEmpty = CALLS.length === 0;
 
   /** viewer → qualified counterparties, from the cache the server reads. */
   const qualified = new Map<string, Set<string>>();
@@ -207,123 +228,162 @@ async function main() {
   line();
 
   // ─────────────────────────────────────────────────────────────────────────
-  /**
-   * SECTION 0 EXISTS BECAUSE THIS REPORT ONCE PASSED ITSELF.
-   *
-   * The first production run came back exit 0 with sections 1, 2, 3 and 5
-   * reporting no violations — and was read as a clean bill of health. It was
-   * not. `market_calls` held ZERO rows, so those four sections had nothing to
-   * find, and "no violations" and "no data" printed identically.
-   *
-   * That is the confident zero this script's own header claims to prevent,
-   * committed one layer up: it distinguished BLOCKED from READABLE and then
-   * treated READABLE-AND-EMPTY as a pass. An empty ledger is not a healthy
-   * ledger, it is a feature that has never fired.
-   *
-   * So the first question is now whether the loop is running at all, and the
-   * numbers below separate the two very different reasons it might not be:
-   * STARVED (nothing qualifies, the derivation is honestly empty) versus BROKEN
-   * (Challenges are derivable and the rows are not being written).
-   */
-  const ledgerEmpty = CALLS.length === 0;
-  line("0 · IS THE LOOP FIRING AT ALL?");
-  line("   An empty ledger and a clean ledger print the same zeros. They are not");
-  line("   the same thing, and every section below depends on which one this is.");
+  // SECTION 0 — the question every other section depends on.
+  //
+  // Sections 1–6 all read `market_calls`. An empty ledger makes every one of
+  // them print a clean zero, and a clean zero has two completely different
+  // causes that demand opposite responses:
+  //
+  //   STARVED — the derivation produces nothing, because no viewer has a
+  //             qualified caller with a fresh act in an unanswered, titled
+  //             market. Nothing is broken; there is simply no supply, and the
+  //             nine-item list of fixes is premature.
+  //   BROKEN  — supply exists and the ledger is still empty, which means the
+  //             surfacing/writing path is not running. Then the list is urgent.
+  //
+  // This re-derives supply the way `buildChallenges` does — DNA buckets for
+  // callers, canonical acts inside the window, minus markets the viewer has
+  // already taken a side in, minus untitled markets, one call per market,
+  // capped at a railful.
+  line("0 · IS THE LEDGER EMPTY BECAUSE IT IS STARVED, OR BECAUSE IT IS BROKEN?");
   line();
   {
-    // The unlock gate is five expressed beliefs. Approximated here from
-    // directional stances, which is what an expressed belief becomes.
-    const beliefsPer = new Map<string, number>();
-    for (const b of BELIEFS) {
-      const s = lc(b.stance_side);
-      if (s !== "yes" && s !== "no") continue;
-      const w = lc(b.wallet);
-      beliefsPer.set(w, (beliefsPer.get(w) ?? 0) + 1);
-    }
-    const unlocked = [...beliefsPer.entries()].filter(([, n]) => n >= 5).map(([w]) => w);
-    const withCallers = unlocked.filter((w) => (qualified.get(w)?.size ?? 0) > 0);
+    const PEOPLE_PER_BUCKET = 40;
+    const MAX_OPEN = 6;
 
-    /** Markets each wallet has already taken a side in — the exclusion. */
-    const answeredBy = new Map<string, Set<string>>();
-    for (const b of BELIEFS) {
-      const s = lc(b.stance_side);
-      if (s !== "yes" && s !== "no") continue;
-      const w = lc(b.wallet);
-      (answeredBy.get(w) ?? answeredBy.set(w, new Set()).get(w)!).add(String(b.onchain_id));
-    }
-    /** Markets each wallet acted in inside the window — the candidate source. */
-    const actedIn = new Map<string, Set<string>>();
+    const titleOf = new Map(
+      MARKETS.filter((m) => String(m.title ?? "").trim()).map((m) => [Number(m.onchain_id), true]),
+    );
+
+    /** Acts inside the window that could become a call, keyed by wallet. */
+    const actsBy = new Map<string, { marketId: number; side: string | null; kind: string }[]>();
     for (const e of EVENTS) {
       const mid = Number(e.market_id);
       if (!Number.isFinite(mid)) continue;
       const w = lc(e.wallet);
-      (actedIn.get(w) ?? actedIn.set(w, new Set()).get(w)!).add(String(mid));
+      if (!w) continue;
+      (actsBy.get(w) ?? actsBy.set(w, []).get(w)!).push({
+        marketId: mid,
+        side: e.side,
+        kind: e.kind,
+      });
     }
 
-    // The full conjunction `buildChallenges` applies, reproduced offline: a
-    // qualified caller acted in the window, in a market this viewer has not
-    // answered. If this is non-zero while the ledger is empty, the derivation
-    // works and the WRITE is what is failing.
+    /** Markets each viewer has already taken a side in — the exclusion. */
+    const answeredBy = new Map<string, Set<number>>();
+    for (const b of BELIEFS) {
+      const s = String(b.stance_side ?? "").toUpperCase();
+      if (s !== "YES" && s !== "NO") continue;
+      const w = lc(b.wallet);
+      (answeredBy.get(w) ?? answeredBy.set(w, new Set()).get(w)!).add(Number(b.onchain_id));
+    }
+
+    const bucketWallets = (row: DnaRow): string[] => {
+      const seen = new Set<string>();
+      for (const bucket of [
+        row.twin_matches,
+        row.inverse_matches,
+        row.opp_matches,
+        row.tribe_matches,
+      ]) {
+        for (const r of ((bucket as CachedRelationship[] | null) ?? []).slice(
+          0,
+          PEOPLE_PER_BUCKET,
+        )) {
+          const w = r?.wallet ? lc(r.wallet) : null;
+          if (w) seen.add(w);
+        }
+      }
+      return [...seen];
+    };
+
+    let viewersWithCallers = 0;
+    let viewersWithSupply = 0;
     let derivable = 0;
-    const derivableViewers: string[] = [];
-    for (const v of withCallers) {
-      const mine = answeredBy.get(v) ?? new Set();
-      let open = 0;
-      for (const caller of qualified.get(v) ?? []) {
-        for (const m of actedIn.get(caller) ?? []) if (!mine.has(m)) open += 1;
+    let droppedAnswered = 0;
+    let droppedUntitled = 0;
+    let droppedNoAct = 0;
+
+    for (const row of DNA) {
+      const viewer = lc(row.viewer_wallet);
+      const callers = bucketWallets(row).filter((w) => w !== viewer);
+      if (callers.length === 0) continue;
+      viewersWithCallers += 1;
+
+      const answered = answeredBy.get(viewer) ?? new Set<number>();
+      const openMarkets = new Set<number>();
+      let sawAnyAct = false;
+      for (const caller of callers) {
+        for (const a of actsBy.get(caller) ?? []) {
+          sawAnyAct = true;
+          if (answered.has(a.marketId)) {
+            droppedAnswered += 1;
+            continue;
+          }
+          if (!titleOf.has(a.marketId)) {
+            droppedUntitled += 1;
+            continue;
+          }
+          // A trade whose side we cannot name is refused by the domain; a
+          // creation legitimately has no side.
+          if (a.kind === "trade" && a.side !== "YES" && a.side !== "NO") continue;
+          openMarkets.add(a.marketId);
+        }
       }
-      if (open > 0) {
-        derivable += open;
-        derivableViewers.push(v);
+      if (!sawAnyAct) droppedNoAct += 1;
+      if (openMarkets.size > 0) {
+        viewersWithSupply += 1;
+        derivable += Math.min(openMarkets.size, MAX_OPEN);
       }
     }
 
-    line(`   wallets with any directional belief   ${beliefsPer.size}`);
-    line(`   past the 5-belief unlock              ${unlocked.length}`);
-    line(`   ...and with a qualified caller        ${withCallers.length}`);
-    line(`   ...with a DERIVABLE open Challenge    ${derivableViewers.length}`);
-    line(`   derivable (viewer, market) calls      ${derivable}`);
-    line(`   rows actually in market_calls         ${CALLS.length}`);
+    line(`   ${DNA.length} wallets with a DNA cache row`);
+    line(`   with at least one qualified caller  ${viewersWithCallers}`);
+    line(`   whose callers acted in the window   ${viewersWithCallers - droppedNoAct}`);
+    line(`   with at least one derivable call    ${viewersWithSupply}`);
+    line(`   DERIVABLE OPEN CALLS (railful cap)  ${derivable}`);
+    line(`   acts dropped — viewer already answered  ${droppedAnswered}`);
+    line(`   acts dropped — market has no title      ${droppedUntitled}`);
     line();
 
-    if (ledgerEmpty && derivable === 0) {
-      line("   VERDICT: STARVED, not broken.");
-      line("   Nothing qualifies right now — no qualified caller has acted inside the");
-      line("   window in a market their counterpart has not already answered. The write");
-      line("   path is untested rather than proven wrong, and sections 1, 2, 3 and 5");
-      line("   below have nothing to measure. That is a supply problem, and no amount");
-      line("   of correctness work on the card changes it.");
-    } else if (ledgerEmpty && derivable > 0) {
-      line("   VERDICT: SUPPLY EXISTS AND NOTHING WAS WRITTEN.");
-      line(
-        `   ${derivable} call${derivable === 1 ? " is" : "s are"} derivable right now and NONE have been recorded.`,
-      );
-      line();
-      line("   THREE CAUSES FIT THIS EQUALLY, and SQL cannot tell them apart — the");
-      line("   ledger looks the same under all three, which is the actual problem:");
+    const verdict =
+      derivable === 0
+        ? "STARVED"
+        : CALLS.length === 0
+          ? "BROKEN — or never rendered"
+          : "SUPPLIED AND WRITING";
+    line(`   VERDICT: ${verdict}`);
+    line();
+    if (verdict === "STARVED") {
+      line("   The ledger is empty because the derivation has nothing to write, not");
+      line("   because writing fails. Every zero in sections 1, 2, 3, 5 and 6 is a");
+      line("   zero about an absent population, and the fixes they describe cannot be");
+      line("   validated by this report until supply exists. Section 4 is the one");
+      line("   number here measured against real positions rather than the ledger.");
+    } else if (verdict.startsWith("BROKEN")) {
+      line("   Supply exists and the ledger has nothing in it. THREE causes fit this");
+      line("   equally and SQL cannot separate them — the ledger looks identical under");
+      line("   all three, which is the actual problem:");
       line();
       line("     a) NEVER RENDERED. `recordCalls` runs only inside `buildChallenges`,");
       line("        which runs only when a qualifying viewer loads the panel. With a");
-      line("        population this small that is entirely plausible and is NOT a bug.");
+      line("        population this small that is plausible, and is NOT a bug.");
       line();
       line("     b) THE READ THREW. `buildChallenges` opens with an unguarded");
       line("        `serviceClient()`, and `createClient` throws SYNCHRONOUSLY on a");
-      line("        missing key. A deployment without SUPABASE_SERVICE_ROLE_KEY fails");
-      line("        every call — and until the rail learned to say so, it rendered");
-      line('        "Nobody is waiting on you right now" while that happened. Check the');
-      line("        deployed worker's env before reading anything else here.");
+      line("        missing key — so a deployment without SUPABASE_SERVICE_ROLE_KEY");
+      line("        fails every call. Until the rail learned to say so it rendered");
+      line('        "Nobody is waiting on you right now" throughout. CHECK THE DEPLOYED');
+      line("        WORKER'S ENV FIRST: it is the cheapest of the three to rule out,");
+      line("        and if it is the cause then every other service-role server");
+      line("        function is failing the same silent way.");
       line();
       line("     c) THE INSERT FAILED. `recordCalls` is fire-and-forget and swallows");
       line("        23505, so a rejected insert is invisible. Distinguished only by a");
-      line("        server log for `[challenge] could not record calls`.");
-      line();
-      line("   Do NOT read this as (c). It was written asserting (c) and that was an");
-      line("   over-claim of exactly the kind this script exists to catch.");
-    } else if (derivable > 0 && CALLS.length > 0) {
-      line("   VERDICT: firing. Sections below are measuring real data.");
+      line("        server log for '[challenge] could not record calls'.");
     } else {
-      line("   VERDICT: the ledger holds history but nothing is derivable today.");
-      line("   Sections below describe the past, not the current state.");
+      line("   Supply exists and rows are being written. The sections below are now");
+      line("   measuring a real population rather than an empty one.");
     }
   }
   line();
