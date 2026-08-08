@@ -337,7 +337,7 @@ export function PersonProfile({
               total={data.positionsTotal}
               open={allOpen}
               onToggle={() => setAllOpen((v) => !v)}
-              fallback={everyLoaded}
+              fallback={every}
               onSelect={onSelectMarket}
             />
           )}
