@@ -500,6 +500,8 @@ export type SharedMarket = {
   title: string;
   viewerSide: "YES" | "NO";
   personSide: "YES" | "NO";
+  /** Canonical domain, so the receipts can group without a second taxonomy. */
+  domain?: string | null;
 };
 
 /**
@@ -911,6 +913,12 @@ export type PersonProfile = {
    * two best Start Here reasons. Empty for a signed-out visitor.
    */
   viewerMarketIds: number[];
+  /**
+   * The VIEWER'S own face and name, so the page can put the two people side by
+   * side at the top. Null when signed out — the header then shows one person.
+   */
+  viewerName: string | null;
+  viewerAvatarUrl: string | null;
 };
 
 function personSummary(aligned: { domain: string }[], opposed: { domain: string }[]): string {
@@ -931,8 +939,11 @@ export const getPersonProfile = createServerFn({ method: "GET" })
     const target = data.wallet.toLowerCase();
     const viewer = data.viewer?.toLowerCase() ?? null;
 
-    const profiles = await resolvePeople(sb, [target]);
+    const profiles = await resolvePeople(sb, viewer ? [target, viewer] : [target]);
     const prof = profiles.get(target);
+    const viewerProf = viewer ? profiles.get(viewer) : undefined;
+    const viewerName = viewer ? (viewerProf?.name ?? aliasFor(viewer)) : null;
+    const viewerAvatarUrl = viewer ? (viewerProf?.avatarUrl ?? null) : null;
 
     const [targetFactors, viewerFactors] = await Promise.all([
       loadFactors(sb, target),
@@ -989,6 +1000,8 @@ export const getPersonProfile = createServerFn({ method: "GET" })
       positionsTotal: evidence.positionsTotal,
       viewerTopics: [],
       viewerMarketIds: [],
+      viewerName,
+      viewerAvatarUrl,
     };
     if (!viewer || viewerFactors.length === 0) return base;
 
@@ -1059,12 +1072,14 @@ export const getPersonProfile = createServerFn({ method: "GET" })
         title: titles.get(b.id) ?? marketTitleFallback(b.id),
         viewerSide: b.side,
         personSide: b.side,
+        domain: domainOf.get(Number(b.id)) ?? null,
       })),
       opposing: opp.slice(0, SHARED_CAP).map((o) => ({
         marketId: String(o.id),
         title: titles.get(o.id) ?? marketTitleFallback(o.id),
         viewerSide: o.vSide,
         personSide: o.pSide,
+        domain: domainOf.get(Number(o.id)) ?? null,
       })),
       recentActivity,
       positions: evidence.positions,
@@ -1085,6 +1100,8 @@ export const getPersonProfile = createServerFn({ method: "GET" })
         return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([d]) => d);
       })(),
       viewerMarketIds: viewerMarkets,
+      viewerName,
+      viewerAvatarUrl,
     };
   });
 

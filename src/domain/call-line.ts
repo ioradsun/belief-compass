@@ -140,6 +140,7 @@ const PULLS: readonly (() => string)[] = [
   () => `What do you think?`,
   () => `Your read is the one missing.`,
   () => `Take it and we will both know.`,
+  () => `You're part of this one.`,
   () => `Say where you land.`,
 ] as const;
 

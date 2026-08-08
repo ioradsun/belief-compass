@@ -1545,7 +1545,7 @@ function Feed() {
                       <span
                         className="num rounded-full px-1.5 py-0.5 text-[11px] font-semibold"
                         style={{ background: "var(--surface-2)", color: "var(--text)" }}
-                        aria-label={`${openCalls} waiting on you`}
+                        aria-label={`${openCalls} people want your take`}
                       >
                         {openCalls}
                       </span>

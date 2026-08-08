@@ -191,7 +191,7 @@ describe("what the card renders is what the payload can prove", () => {
 });
 
 describe("a failed read is not an empty room", () => {
-  it("distinguishes 'could not load' from 'nobody is waiting'", () => {
+  it("distinguishes 'could not load' from a quiet room", () => {
     // `buildChallenges` opens with an unguarded serviceClient(), and createClient
     // throws SYNCHRONOUSLY without a key — so a deployment missing the service
     // role key threw on every call while this panel rendered the calm empty
@@ -200,7 +200,7 @@ describe("a failed read is not an empty room", () => {
     expect(c).toMatch(/failed \?/);
     expect(c).toMatch(/Could not load who is waiting on you/);
     // The empty state must sit BEHIND the failure check, never in front of it.
-    expect(c.indexOf("failed ?")).toBeLessThan(c.indexOf("Nobody is waiting on you"));
+    expect(c.indexOf("failed ?")).toBeLessThan(c.indexOf("Your people are quiet"));
   });
 
   it("surfaces the error from the shared hook rather than swallowing it", () => {

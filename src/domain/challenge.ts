@@ -292,8 +292,8 @@ export function challengeLock(decisions: number, hasTwinCandidate = false): Chal
     total,
     detail:
       d === 0
-        ? `Take ${total} sides to start finding your Tribe and Rivals.`
-        : `${need} more to start finding your Tribe and Rivals.`,
+        ? `Take ${total} sides and we'll work out who your people are.`
+        : `${need} more and we'll know who your Tribe and Rivals are.`,
   };
 }
 
