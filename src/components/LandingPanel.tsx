@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { BrandMark } from "@/components/BrandMark";
 import { LandingExampleCard } from "@/components/LandingExample";
 import { HowItWorksSheet } from "@/components/HowItWorksSheet";
 import type { LandingPanelState } from "@/hooks/useLandingPanelState";
+
 
 /**
  * One continuous brand component that changes shape between two states.
@@ -43,6 +45,8 @@ export function LandingPanel({
 }) {
   const expanded = state === "expanded";
   const [howOpen, setHowOpen] = useState(false);
+  const [exampleOpen, setExampleOpen] = useState(false);
+
 
   return (
     <header
@@ -144,15 +148,15 @@ export function LandingPanel({
           aria-hidden={!expanded}
         >
           <div className="overflow-hidden">
-            <div className="pt-5 lg:pt-7">
-              {/* hero — 55 / 45 on desktop, stacked on mobile */}
-              <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)] lg:gap-12">
+            <div className="pt-4 lg:pt-7">
+              {/* hero — 55 / 45 on desktop; on mobile one screen, no scroll */}
+              <div className="grid min-h-[calc(100svh-190px)] content-center items-center gap-8 lg:min-h-0 lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)] lg:gap-12">
                 <div className="min-w-0">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
                     Live conviction markets
                   </div>
 
-                  <h1 className="mt-3 max-w-[14ch] text-[38px] font-semibold leading-[1.02] tracking-[-0.03em] text-[var(--text)] sm:text-[52px] lg:text-[62px]">
+                  <h1 className="mt-3 max-w-[14ch] text-[40px] font-semibold leading-[1.02] tracking-[-0.03em] text-[var(--text)] sm:text-[52px] lg:text-[62px]">
                     Conviction needs company.
                   </h1>
 
@@ -168,7 +172,7 @@ export function LandingPanel({
                     Conviction builds wealth.
                   </p>
 
-                  <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <div className="mt-6 flex flex-col items-stretch gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                     <button
                       type="button"
                       onClick={(e) => {
@@ -176,15 +180,27 @@ export function LandingPanel({
                         onEnter();
                       }}
                       tabIndex={expanded ? 0 : -1}
-                      className="h-11 rounded-full bg-[var(--text)] px-6 text-[14px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] motion-reduce:transition-none"
+                      className="h-12 rounded-full bg-[var(--text)] px-6 text-[15px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] motion-reduce:transition-none sm:h-11 sm:text-[14px]"
                     >
                       Enter Conviction Market
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExampleOpen(true);
+                      }}
+                      tabIndex={expanded ? 0 : -1}
+                      className="h-12 rounded-full px-6 text-[15px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)] lg:hidden"
+                      style={{ border: "1px solid var(--hairline)" }}
+                    >
+                      See an example
                     </button>
                   </div>
                 </div>
 
                 <div
-                  className="flex min-w-0 justify-start lg:justify-end"
+                  className="hidden min-w-0 justify-start lg:flex lg:justify-end"
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
                   role="presentation"
@@ -193,11 +209,13 @@ export function LandingPanel({
                 </div>
               </div>
 
-              {/* trust strip */}
+
+              {/* trust strip — single tidy row on mobile, never overflowing */}
               <div
-                className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-3 pt-4 text-[12px] text-[var(--text-muted)] lg:mt-8"
+                className="mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 pt-4 text-[11px] text-[var(--text-muted)] sm:text-[12px] lg:mt-8 lg:justify-start lg:gap-x-8 lg:gap-y-3"
                 style={{ borderTop: "1px solid var(--hairline)" }}
               >
+
                 <span className="inline-flex items-center gap-2">
                   <svg
                     viewBox="0 0 24 24"
@@ -229,7 +247,7 @@ export function LandingPanel({
                     setHowOpen(true);
                   }}
                   tabIndex={expanded ? 0 : -1}
-                  className="ml-auto inline-flex items-center gap-2 text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+                  className="ml-auto hidden items-center gap-2 text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] lg:inline-flex"
                 >
                   <svg
                     viewBox="0 0 24 24"
@@ -257,6 +275,45 @@ export function LandingPanel({
       </div>
 
       {howOpen && <HowItWorksSheet onClose={() => setHowOpen(false)} />}
+
+      {exampleOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-end lg:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Example conviction market"
+            onClick={() => setExampleOpen(false)}
+          >
+            <div className="absolute inset-0 bg-[color-mix(in_oklab,var(--bg)_78%,transparent)] backdrop-blur-sm" />
+            <div
+              className="relative max-h-[92svh] w-full overflow-y-auto overscroll-contain rounded-t-[20px] bg-[var(--panel)] px-4 pb-8 pt-3"
+              style={{ borderTop: "1px solid var(--hairline)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--hairline)]" />
+              <div className="mb-3 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setExampleOpen(false)}
+                  className="rounded-full px-3 py-1.5 text-[13px] text-[var(--text-secondary)]"
+                  style={{ border: "1px solid var(--hairline)" }}
+                >
+                  ✕ Close
+                </button>
+              </div>
+              <LandingExampleCard
+                onEnter={() => {
+                  setExampleOpen(false);
+                  onEnter();
+                }}
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
+
     </header>
   );
 }
