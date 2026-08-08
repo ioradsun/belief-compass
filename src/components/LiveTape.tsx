@@ -188,7 +188,11 @@ export function LiveTape({
      * between markets no longer costs a request.
      */
     staleTime: 60_000,
-    placeholderData: (prev) => prev,
+    // The seed only answers the question it was built for: the unscoped,
+    // signed-out tape. Anything scoped or personal must show its own rows.
+    placeholderData: (prev) =>
+      prev ?? (scopeKey === null && side == null && !wallet ? (initial ?? undefined) : undefined),
+
   });
   // Sticky: the tape holds its rows until fresh ones arrive.
   const sticky = useStickyRows(data?.rows);
