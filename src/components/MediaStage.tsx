@@ -177,7 +177,10 @@ export function MediaStage({
         style={{
           transform: `translate3d(calc(${offset}% + ${dx}px), 0, 0)`,
           transition:
-            drag.current || !media ? "none" : "transform 260ms cubic-bezier(.22,.61,.36,1)",
+            gliding && !drag.current && media
+              ? "transform 260ms cubic-bezier(.22,.61,.36,1)"
+              : "none",
+
         }}
       >
         {/* Page 1 — the market, exactly as it was. `overflow-y-scroll` (not auto)
