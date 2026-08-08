@@ -96,6 +96,10 @@ export function ChallengeRail({
    */
   const { data: wanted } = useQuery<Side>({
     queryKey: railSideKey,
+    // Pure cache seam, no request behind it — but React Query still warns
+    // ("No queryFn was passed") on every render without one, which spammed the
+    // console dozens of times per load. An identity fn keeps it silent.
+    queryFn: () => (qc.getQueryData<Side>(railSideKey) ?? "challenged"),
     enabled: false,
     initialData: "challenged",
   });

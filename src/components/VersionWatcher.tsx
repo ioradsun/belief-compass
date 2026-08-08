@@ -61,12 +61,30 @@ export function VersionWatcher() {
       }
     };
 
+    /**
+     * The FIRST answer is a baseline, never a reason to reload.
+     *
+     * The server and the client bundle are built separately, so a freshly
+     * loaded page can legitimately disagree with the endpoint. Reloading on
+     * that first mismatch is what made the preview "start, revert, start
+     * again" — a reload that produces the same mismatch teaches nothing and
+     * costs the reader a whole cold start. Only a build id that CHANGES while
+     * this tab is open means a genuinely newer deploy shipped.
+     */
+    let baseline: string | null = null;
+
     const check = async () => {
       try {
         const res = await fetch("/api/public/build-id", { cache: "no-store" });
         if (!res.ok) return;
         const { buildId } = (await res.json()) as { buildId?: string };
         if (cancelled || !buildId || buildId === BUILD_ID) return;
+        if (baseline === null) {
+          baseline = buildId; // first sighting — remember, don't act
+          return;
+        }
+        if (buildId === baseline) return;
+        baseline = buildId;
         if (alreadyReloadedFor(buildId)) return;
         const url = new URL(window.location.href);
         url.searchParams.set("_v", buildId);
