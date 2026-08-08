@@ -688,19 +688,30 @@ export async function warmAnonFeed(): Promise<OpportunityFeedResult | null> {
   return readSeed();
 }
 
-/** The shape the SSR shell asks for: anonymous, 24h, no filters, no lens. */
+/**
+ * The shape the SSR shell asks for: anonymous, 24h, no filters, default lens.
+ *
+ * THE DEFAULTS COUNT AS ABSENT, and this is why the snapshot used to stay
+ * empty. The browser never omits `lens`, `mode` or `sensitivity` — it sends the
+ * DEFAULT value of each ("for_you", "for_you", "everything"). Testing for
+ * absence therefore rejected the exact request the cache exists to hold, so
+ * nothing ever filled it and SSR peeked at an empty slot forever.
+ */
 function isAnonDefault(input: OpportunityFeedInput): boolean {
+  const dflt = (v: string | undefined | null, d: string) => !v || v === d;
   return (
     !input.wallet &&
     !input.sessionToken &&
     (input.window ?? "24h") === "24h" &&
-    !input.lens &&
-    !input.mode &&
+    dflt(input.lens, "for_you") &&
+    dflt(input.mode, "for_you") &&
+    dflt(input.sensitivity, "everything") &&
     !input.originMarketId &&
     !(input.networks?.length || input.topics?.length || input.momentum?.length) &&
     !(input.seenIds?.length || input.queuedIds?.length)
   );
 }
+
 
 /**
  * The client's build, which ALSO fills the SSR slot. That is what makes the
