@@ -24,12 +24,15 @@ export const Route = createFileRoute("/terms")({
 
 function Terms() {
   return (
-    <main className="mx-auto min-h-[100dvh] max-w-[720px] bg-[var(--bg)] px-6 py-16 text-[var(--text)]">
-      <h1 className="mb-3 text-[32px] font-semibold tracking-[-0.02em]">Terms &amp; risk</h1>
-      <TermsContent />
-      <a href="/" className="mt-12 inline-block text-[13px] text-[var(--text-muted)] underline">
-        Back to Conviction
-      </a>
-    </main>
+    <div className="h-[100dvh] w-full overflow-x-hidden overflow-y-auto bg-[var(--bg)] text-[var(--text)] [-webkit-overflow-scrolling:touch]">
+      <InfoPageHeader label="Terms & risk" />
+      <main className="mx-auto w-full max-w-[720px] px-5 py-10 sm:px-6 sm:py-14">
+        <h1 className="mb-3 text-[28px] font-semibold tracking-[-0.02em] sm:text-[32px]">
+          Terms &amp; risk
+        </h1>
+        <TermsContent />
+      </main>
+    </div>
   );
 }
+
