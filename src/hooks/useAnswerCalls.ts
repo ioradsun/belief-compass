@@ -23,7 +23,11 @@
  * second trade in the same market changes nothing already recorded.
  */
 import { useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { answerCalls } from "@/lib/challenge.functions";
+
+/** Where the just-closed callers wait for the panel that names them. */
+export const closedCallsKey = (marketId: number) => ["calls-closed", marketId] as const;
 
 export function useAnswerCalls(
   wallet: string | undefined,
@@ -34,12 +38,20 @@ export function useAnswerCalls(
   // Keyed by wallet+market rather than a bare boolean: the deck keeps its shell
   // mounted across market changes, so a `useRef(false)` reset by a separate
   // effect would race the confirmation on a fast swap.
+  const qc = useQueryClient();
   const done = useRef<string | null>(null);
   useEffect(() => {
     if (!confirmed || !wallet || !Number.isFinite(marketId)) return;
     const key = `${wallet.toLowerCase()}:${marketId}`;
     if (done.current === key) return;
     done.current = key;
-    void answerCalls({ data: { wallet, marketId } }).catch(() => undefined);
-  }, [confirmed, wallet, marketId]);
+    void answerCalls({ data: { wallet, marketId } })
+      .then((r) => {
+        // WHO was just answered, parked where the post-order panel can find it.
+        // The panel is a sibling of the deck, not a child, so the cache is the
+        // seam — and it is the same cache the panel already reads its reach from.
+        if (r.closed.length > 0) qc.setQueryData(closedCallsKey(marketId), r.closed);
+      })
+      .catch(() => undefined);
+  }, [confirmed, wallet, marketId, qc]);
 }

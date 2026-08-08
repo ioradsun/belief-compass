@@ -12,12 +12,13 @@
  * V2 keeps the order a curious visitor actually asks in, and gives every
  * section somewhere to go:
  *
- *   1  WHAT CONNECTS YOU     the bridge, before anything about them
+ *   1  YOU + THEM            the relationship, before anything about them
  *   2  WHO THEY ARE          observable patterns, never personality
  *   3  WHY FOLLOW THEM       what arrives in your feed, not how well they did
  *   4  START HERE            ONE market, with the reason. The front door.
  *   5  CONVICTIONS           the positions that most reveal them
  *   6  BOTH CARE ABOUT       the evidence under the bridge
+ *  6b  YOUR HISTORY          who showed up for whom, both directions
  *   7  CONVICTION MAP        everything they back, by theme — browsable
  *   8  EXPLORE               more markets, each explaining itself
  *   9  PEOPLE AROUND THEM    person → market → person
@@ -46,11 +47,27 @@
  * be able to check. Every position they hold and every market the two of you
  * share is reachable from this page, collapsed rather than hidden.
  *
- * WHAT IS DELIBERATELY ABSENT. A relationship percentage (it told a visitor
- * they were 68% compatible without naming one thing they would disagree about).
- * A Together/Apart stat pair. A per-topic bar chart. Returns, rank, profit,
- * follower counts — outcomes, and an outcome is not a reason to listen to
- * someone.
+ * THE PERCENTAGE CAME BACK, AND WHY THAT IS NOT A REGRESSION. This page removed
+ * a relationship score once, for a good reason: it told a visitor they were "68%
+ * compatible" without naming one thing they would disagree about. The objection
+ * was never to the number, it was to the number ARRIVING ALONE.
+ *
+ * Section 1 now answers that by construction. The bonds render in the same block,
+ * so a figure is physically unable to appear without the concrete detail beneath
+ * it, and the order is deliberate: the sentence about the two of you comes first,
+ * then TRIBE and the percentage as the machinery that explains it. Leading with
+ * the machinery would make a reader decode before they feel anything.
+ *
+ * TWO DIMENSIONS, NEVER BLENDED. Shared DNA answers "do we see the world the same
+ * way"; showing up answers "are they there when I call". A person at 92% DNA who
+ * never shows, and one at 28% who always does, are the two most interesting
+ * relationships on this platform — averaging them into one "compatibility" score
+ * would erase exactly what makes them worth reading. The two calculations never
+ * touch; see @/domain/dependability.
+ *
+ * STILL DELIBERATELY ABSENT. A Together/Apart stat pair. A per-topic bar chart.
+ * Returns, rank, profit, follower counts — outcomes, and an outcome is not a
+ * reason to listen to someone.
  *
  * WHAT COULD NOT BE BUILT HONESTLY. "Recently increased" — the events log
  * records becoming directional, changing side, going mixed and going inactive,
@@ -65,7 +82,9 @@
 import { useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getPersonProfile, listPersonConvictions } from "@/lib/dna.functions";
-import { ago } from "@/lib/dna-labels";
+import { ago, RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
+import { getCallsWithPerson } from "@/lib/challenge.functions";
+import { bondFor, historyRows, EMPTY_TALLY } from "@/domain/dependability";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { FollowButton } from "@/components/FollowButton";
 import { categoryToDomain } from "@/domain/categories";
@@ -124,6 +143,21 @@ export function PersonProfile({
   });
 
   /**
+   * DID WE SHOW UP FOR EACH OTHER — both directions, the whole history.
+   *
+   * Its own query rather than a wider `getPersonProfile`, for the same reason
+   * the People rail keeps it separate: this reads a different table on a
+   * different cadence, and folding it in would make every profile view wait on
+   * it. The page paints, and the relationship arrives a beat later.
+   */
+  const { data: pair } = useQuery({
+    queryKey: ["calls-with", viewer ?? null, wallet.toLowerCase()],
+    queryFn: () => getCallsWithPerson({ data: { viewer: viewer ?? null, person: wallet } }),
+    enabled: !!viewer,
+    staleTime: 60_000,
+  });
+
+  /**
    * The unabridged list, paged, and fetched ONLY once somebody opens it — the
    * profile payload is loaded for every person you look at, and most visitors
    * never ask for all 260 rows. `getNextPageParam` returning undefined at the
@@ -174,6 +208,11 @@ export function PersonProfile({
     data.displayName,
   );
   const around = peopleAround(data.around);
+
+  // The relationship, from two counted directions. Null pair (signed out, or the
+  // read has not landed) yields the silent state rather than a zero.
+  const bond = bondFor(data.displayName, pair?.theirs ?? EMPTY_TALLY, pair?.yours ?? EMPTY_TALLY);
+  const history = historyRows(pair?.history ?? [], data.displayName);
 
   const agreed = data.sharedBoth.map((m) => ({
     marketId: Number(m.marketId),
@@ -253,8 +292,39 @@ export function PersonProfile({
           no one is worse than starting with the person. */}
       {data.hasViewer && (
         <section>
-          <SectionTitle>What connects you</SectionTitle>
-          <p className="text-[14px] leading-relaxed font-medium text-[var(--text)]">
+          {/* ACT I. The emotional answer BEFORE the mechanics, which is the one
+              change to this section since it was written.
+
+              This page once carried a relationship percentage and it was removed
+              for a good reason recorded above: it told a visitor they were "68%
+              compatible" without naming one thing they would disagree about. The
+              number is back, and that objection is answered by CONSTRUCTION —
+              the bonds render in this same block, so the figure is physically
+              unable to appear on its own.
+
+              Order matters. "You show up for each other" is a fact about the two
+              of you; TRIBE and 82% are the machinery that explains it. Leading
+              with the machinery would make a reader decode before they feel. */}
+          <SectionTitle>You + {data.displayName.split(" ")[0] || data.displayName}</SectionTitle>
+          {bond?.sentence && (
+            <p className="text-[15px] leading-snug font-semibold text-[var(--text)]">
+              {bond.sentence}
+            </p>
+          )}
+          <div className={`flex items-baseline gap-2 ${bond?.sentence ? "mt-1.5" : ""}`}>
+            <span
+              className="text-[10px] font-semibold uppercase tracking-wide"
+              style={{ color: relationshipTone(data.relationship).fg }}
+            >
+              {RELATIONSHIP_TEXT[data.relationship]}
+            </span>
+            {data.sharedBeliefs > 0 && Number.isFinite(data.agreement) && (
+              <span className="num text-[12px] text-[var(--text-secondary)]">
+                {Math.round(data.agreement)}% Shared DNA
+              </span>
+            )}
+          </div>
+          <p className="mt-2.5 text-[14px] leading-relaxed font-medium text-[var(--text)]">
             {link.opening}
           </p>
           <ul className="mt-2 space-y-1">
@@ -274,6 +344,15 @@ export function PersonProfile({
             <p className="mt-2 text-[12px] leading-relaxed text-[var(--text-muted)]">
               Open one of their convictions below to find where your thinking overlaps — or where it
               does not.
+            </p>
+          )}
+          {/* The receipt, last and quiet. It says "13 of 17 times" rather than a
+              percentage on purpose: a reader can count the rows in the history
+              below and get the same answer, which is what makes the claim
+              checkable instead of magical. */}
+          {bond?.evidence && (
+            <p className="mt-2 text-[12px] leading-relaxed text-[var(--text-secondary)]">
+              {bond.evidence}
             </p>
           )}
         </section>
@@ -389,6 +468,56 @@ export function PersonProfile({
               )}
             </>
           )}
+        </section>
+      )}
+
+      {/* ── 6b · YOUR HISTORY ────────────────────────────────────────────────
+          ACT II — the receipts under Act I's claim.
+
+          BOTH DIRECTIONS, because a relationship is not one person's record of
+          the other. The reverse rows have been written since the first day and
+          nothing ever read them, so half of every relationship on this platform
+          was invisible.
+
+          THREE STATES, NOT FOUR. A call that has left the derivation window is
+          simply absent — it is neither a success nor a failure, its caller can
+          no longer see it either, and naming it would teach a reader a database
+          lifecycle they should never have to know exists. The counting keeps it
+          out of the denominator; the story keeps it out of view. */}
+      {history.length > 0 && (
+        <section>
+          <SectionTitle>Your history</SectionTitle>
+          <ul className="space-y-1.5">
+            {history.map((h) => (
+              <li key={`${h.direction}-${h.marketId}`}>
+                <button
+                  type="button"
+                  onClick={() => onSelectMarket(h.marketId)}
+                  className="w-full rounded-[10px] px-2 py-2 text-left transition-colors hover:bg-[var(--surface)]"
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span
+                      className="shrink-0 text-[10px] font-semibold uppercase tracking-wide"
+                      style={{
+                        color:
+                          h.direction === "waiting_on_them"
+                            ? "var(--text-muted)"
+                            : "var(--text-secondary)",
+                      }}
+                    >
+                      {h.label}
+                    </span>
+                    <span className="num shrink-0 text-[10px] text-[var(--text-muted)]">
+                      {ago(new Date(h.atMs).toISOString())}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-[var(--text)]">
+                    {h.title}
+                  </p>
+                </button>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

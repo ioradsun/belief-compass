@@ -26,33 +26,28 @@
 import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
-import { getAnsweredCalls, getChallenges } from "@/lib/challenge.functions";
+import { getChallenges } from "@/lib/challenge.functions";
 import { challengeLock, type Challenge } from "@/domain/challenge";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
 import { PersonAvatar } from "@/components/PersonAvatar";
 
 type Tab = "challenge" | "now";
 
-/** Acknowledged "showed up" notices, so an answer is celebrated once. */
-const ACK_KEY = "conviction:call-ack";
-function acknowledged(): Set<string> {
-  try {
-    return new Set(JSON.parse(window.localStorage.getItem(ACK_KEY) ?? "[]") as string[]);
-  } catch {
-    return new Set();
-  }
-}
-function acknowledge(id: string) {
-  try {
-    const next = acknowledged();
-    next.add(id);
-    // Bounded: this is a courtesy list, not a history, and an unbounded one
-    // would grow forever in storage a reader never asked us to use.
-    window.localStorage.setItem(ACK_KEY, JSON.stringify([...next].slice(-100)));
-  } catch {
-    /* storage unavailable — the notice simply reappears, which is harmless */
-  }
-}
+/**
+ * WHY THERE IS NO ACKNOWLEDGEMENT STATE HERE ANY MORE.
+ *
+ * This file used to keep a localStorage set (`conviction:call-ack`) so that a
+ * "SARAH SHOWED UP" card could be dismissed with an ×. That treated the most
+ * durable social evidence the platform produces as a notification — the one fact
+ * worth keeping forever was the one fact a tap could delete.
+ *
+ * Somebody answering your call now accumulates into the relationship itself: the
+ * People card says it in a sentence and the profile keeps every instance. Nothing
+ * needs dismissing, because nothing is interrupting.
+ *
+ * What is left here is an ACTION QUEUE. A queue with completed items in it is a
+ * to-do list, so an answered call simply stops being derivable and leaves.
+ */
 
 export function ChallengeRail({
   wallet,
@@ -70,9 +65,6 @@ export function ChallengeRail({
 }) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("challenge");
-  const [acks, setAcks] = useState<Set<string>>(() =>
-    typeof window === "undefined" ? new Set() : acknowledged(),
-  );
 
   // The same cached observer DnaFirstReveal uses — the lock costs no round trip.
   const { data: net } = useQuery({ ...networkQO(wallet), enabled: !!wallet });
@@ -85,20 +77,7 @@ export function ChallengeRail({
     staleTime: 60_000,
   });
 
-  const { data: answers } = useQuery({
-    queryKey: ["answered-calls", wallet ?? null],
-    queryFn: () => getAnsweredCalls({ data: { wallet: wallet ?? null } }),
-    enabled: !!wallet && lock.unlocked,
-    staleTime: 60_000,
-  });
-
   const open = challenges ?? [];
-  const fresh = (answers ?? []).filter((a) => !acks.has(`${a.marketId}`));
-
-  const dismiss = (marketId: number) => {
-    acknowledge(String(marketId));
-    setAcks(new Set([...acks, String(marketId)]));
-  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -138,42 +117,6 @@ export function ChallengeRail({
         <LockedPanel lock={lock} />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {/* SOMEBODY SHOWED UP — above the open calls, briefly. It is the one
-              thing here with no action in it, so it must not hold an actionable
-              slot permanently; dismissing files it as history. */}
-          {fresh.map((a) => (
-            <div
-              key={`ans-${a.marketId}`}
-              className="mb-2 rounded-xl border p-2.5"
-              style={{
-                borderColor: "var(--border-strong,var(--border))",
-                background: "color-mix(in oklab, var(--yes) 8%, transparent)",
-              }}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text)]">
-                  {a.headline}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => dismiss(a.marketId)}
-                  aria-label="Dismiss"
-                  className="px-1 text-[13px] leading-none text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-                >
-                  ×
-                </button>
-              </div>
-              <p className="mt-0.5 text-[11.5px] text-[var(--text-secondary)]">{a.body}</p>
-              <button
-                type="button"
-                onClick={() => onSelect(a.marketId)}
-                className="mt-1 line-clamp-2 text-left text-[12.5px] leading-snug text-[var(--text)] underline underline-offset-2"
-              >
-                {a.title}
-              </button>
-            </div>
-          ))}
-
           {open.length === 0 ? (
             <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
               {/* Honest, and deliberately not "no challenges yet!" — the reason
@@ -194,7 +137,6 @@ export function ChallengeRail({
             type="button"
             onClick={() => {
               void qc.invalidateQueries({ queryKey: ["challenges", wallet] });
-              void qc.invalidateQueries({ queryKey: ["answered-calls", wallet] });
             }}
             className="mt-2 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
           >

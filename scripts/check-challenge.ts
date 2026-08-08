@@ -205,6 +205,47 @@ async function main() {
     byRelation.set(k, cur);
   });
 
+  /* ── 2b · RELATIONSHIPS — does anyone show up for anyone, repeatedly? ──── */
+
+  // THE QUESTION THAT ACTUALLY MATTERS, and the one a call count cannot answer.
+  // "Calls made" measures how hard the system worked. What we need to know is
+  // whether one person's conviction causes another person to participate, and
+  // then whether that keeps happening between the same two people — because a
+  // relationship is repeat behaviour, not a single coincidence.
+  const pairKey = (c: Call) =>
+    `${String(c.caller_wallet).toLowerCase()}>${String(c.responder_wallet).toLowerCase()}`;
+  const pairs = new Map<string, { called: number; answered: number }>();
+  for (const c of callRows) {
+    const k = pairKey(c);
+    const cur = pairs.get(k) ?? { called: 0, answered: 0 };
+    cur.called += 1;
+    if (c.responded_at) cur.answered += 1;
+    pairs.set(k, cur);
+  }
+  const answeredPairs = [...pairs.values()].filter((p) => p.answered > 0);
+  const atLeast = (n: number) => answeredPairs.filter((p) => p.answered >= n).length;
+
+  // RECIPROCITY — the product's highest state, and the only one worth optimising
+  // for. A→B and B→A both carrying an answer means two people showed up for each
+  // other, which is what "you are not alone" is made of.
+  const answeredEdges = new Set(callRows.filter((c) => c.responded_at).map((c) => pairKey(c)));
+  const mutual =
+    [...answeredEdges].filter((k) => {
+      const [a, b] = k.split(">");
+      return answeredEdges.has(`${b}>${a}`);
+      // Counted twice (once per direction), halved below.
+    }).length / 2;
+
+  // HOW LONG SOMEONE TAKES TO SHOW UP. Median, not mean: one person answering
+  // after three weeks would drag an average into meaninglessness.
+  const latencies = callRows
+    .filter((c) => c.responded_at)
+    .map((c) => Date.parse(c.responded_at as string) - Date.parse(c.called_at))
+    .filter((ms) => Number.isFinite(ms) && ms >= 0)
+    .sort((a, b) => a - b);
+  const medianLatencyH =
+    latencies.length > 0 ? latencies[Math.floor(latencies.length / 2)] / 3_600_000 : null;
+
   /* ── 3 · CONSOLIDATION — the signal that never existed ─────────────────── */
 
   const eventRows = events.rows ?? [];
@@ -232,6 +273,15 @@ async function main() {
       backed,
       markets: calledMarkets.length,
       byRelation: Object.fromEntries(byRelation),
+    },
+    relationships: {
+      blocked: calls.blocked,
+      pairs: pairs.size,
+      answeredPairs: answeredPairs.length,
+      repeat: atLeast(3),
+      strong: atLeast(5),
+      mutual,
+      medianLatencyH: medianLatencyH == null ? null : Number(medianLatencyH.toFixed(1)),
     },
     consolidation: { blocked: events.blocked, diversions, markets: divertedMarkets.size },
   };
@@ -299,6 +349,25 @@ async function main() {
       }
     }
 
+    console.log("\nRELATIONSHIPS  (the only thing worth optimising for)");
+    if (calls.blocked) {
+      console.log("  COULD NOT READ — this section is unknown, not zero.");
+    } else if (answeredPairs.length === 0) {
+      // Not a failure. It takes a qualified relationship, a surfaced call and a
+      // subsequent trade — and the median pair on this platform shares one market.
+      console.log("  Nobody has shown up for anybody yet.");
+    } else {
+      console.log(`  pairs where someone showed up  ${num(answeredPairs.length, 5)}`);
+      console.log(`  ...3+ times                    ${num(atLeast(3), 5)}`);
+      console.log(`  ...5+ times                    ${num(atLeast(5), 5)}`);
+      console.log(
+        `  MUTUAL (show up for each other)${num(mutual, 5)}   ← the product's highest state`,
+      );
+      if (medianLatencyH != null) {
+        console.log(`  median time to show up         ${num(medianLatencyH.toFixed(1), 5)}h`);
+      }
+    }
+
     console.log("\nCONSOLIDATION  (joins from the similar-markets panel)");
     if (events.blocked) {
       console.log("  COULD NOT READ — this section is unknown, not zero.");
@@ -325,7 +394,10 @@ async function main() {
         "    not delivered — there is no notification channel, so the ledger records\n" +
         "    that the row was eligible to be seen, not that anyone saw it. Arrival\n" +
         "    is observable; persuasion is not.\n" +
-        "  · Anyone who never connected a wallet.",
+        "  · Anyone who never connected a wallet.\n" +
+        "  · Whether a call that left the 30-day window was ever seen. It is counted\n" +
+        "    as made, and excluded from every rate — nobody is scored on a market\n" +
+        "    they can no longer reach.",
     );
     console.log("");
   }
