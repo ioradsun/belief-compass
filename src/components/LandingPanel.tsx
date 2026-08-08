@@ -5,6 +5,12 @@ import { LandingExampleCard } from "@/components/LandingExample";
 import { HowItWorksSheet } from "@/components/HowItWorksSheet";
 import type { LandingPanelState } from "@/hooks/useLandingPanelState";
 
+/** The `lg:` breakpoint, read at interaction time rather than render time. */
+function isDesktopViewport() {
+  return typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+}
+
+
 
 /**
  * One continuous brand component that changes shape between two states.
@@ -60,18 +66,24 @@ export function LandingPanel({
         tabIndex={0}
         aria-expanded={expanded}
         aria-label={expanded ? "Collapse introduction" : "Expand introduction"}
-        onClick={expanded ? onCollapse : onExpand}
+        onClick={() => {
+          if (expanded) onCollapse();
+          // On a phone the header is only a header: the intro is re-opened
+          // from "Home" in the menu, so a stray tap can never re-expand it.
+          else if (isDesktopViewport()) onExpand();
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             if (expanded) onCollapse();
-            else onExpand();
+            else if (isDesktopViewport()) onExpand();
           }
         }}
-        className={`mx-auto w-full max-w-[1180px] cursor-pointer px-4 transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none motion-reduce:transition-none lg:px-8 ${
-          expanded ? "py-4 lg:py-5" : "py-2.5"
+        className={`mx-auto w-full max-w-[1180px] px-4 transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none motion-reduce:transition-none lg:cursor-pointer lg:px-8 ${
+          expanded ? "cursor-pointer py-4 lg:py-5" : "py-2.5"
         }`}
       >
+
         {/* identity row — persists across both states */}
         <div className="flex items-center gap-4">
           <div
