@@ -152,7 +152,7 @@ export function MediaStage({
   const onUp = () => {
     const d = drag.current;
     drag.current = null;
-    if (d?.axis === "x" && Math.abs(dx) > FLIP) setPage(dx < 0 ? 1 : 0);
+    if (d?.axis === "x" && Math.abs(dx) > FLIP) turn(dx < 0 ? 1 : 0);
     setDx(0);
   };
 
