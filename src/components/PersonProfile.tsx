@@ -38,7 +38,7 @@
 import { useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getPersonProfile, listPersonConvictions } from "@/lib/dna.functions";
-import { ago } from "@/lib/dna-labels";
+import { ago } from "@/domain/relative-time";
 import { getCallsWithPerson, getChallenges } from "@/lib/challenge.functions";
 import { historyRows } from "@/domain/dependability";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
