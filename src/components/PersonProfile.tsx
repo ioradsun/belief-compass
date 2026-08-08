@@ -312,37 +312,18 @@ export function PersonProfile({
           One thing, or nothing at all. Never a filler row. */}
       {next && <NextCard next={next} name={first} onSelect={onSelectMarket} />}
 
-      {/* ── THEM ───────────────────────────────────────────────────────────
-          Only now does the page become about them as an individual. */}
-      <header className="flex items-start gap-3">
-        {data.avatarUrl ? (
-          <img
-            src={data.avatarUrl}
-            alt=""
-            className="h-12 w-12 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <span
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-semibold text-white"
-            style={{ background: `hsl(${hueFor(data.wallet)} 45% 45%)` }}
-            aria-hidden
-          >
-            {initialsFor(data.displayName)}
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-semibold text-[var(--text)]">{data.displayName}</h1>
-          {home && (
-            <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">{home}</p>
-          )}
-        </div>
-      </header>
-
       {/* ── THEIR CONVICTIONS ──────────────────────────────────────────────
-          One canonical section where four overlapping ones used to be. */}
+          One canonical section where four overlapping ones used to be. The
+          face and name moved to the top of the page, so all that is left of
+          "them as an individual" is the one true line about where their
+          conviction lives. */}
       {(them.rows.length > 0 || every.length > 0) && (
         <section>
           <SectionTitle>Their convictions</SectionTitle>
+          {home && (
+            <p className="mb-2 text-[13px] leading-relaxed text-[var(--text-secondary)]">{home}</p>
+          )}
+
           {them.grouped ? (
             <div className="space-y-4">
               {themes.map((t) => (
