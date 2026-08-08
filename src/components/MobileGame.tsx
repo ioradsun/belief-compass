@@ -823,7 +823,7 @@ function SideDetailSheet({
       />
 
       <div
-        className="relative mt-auto flex max-h-[88vh] min-h-0 w-full flex-col overflow-hidden rounded-t-[18px] border-t bg-[var(--bg)] pt-3"
+        className="relative mt-auto flex max-h-full min-h-0 w-full flex-col overflow-hidden rounded-t-[18px] border-t bg-[var(--bg)] pt-3"
         style={{ borderColor: color }}
       >
         <div className="mb-2 flex shrink-0 items-center justify-between px-4">
