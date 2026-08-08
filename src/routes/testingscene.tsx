@@ -175,7 +175,6 @@ function TestingScene() {
       replace: true,
     });
 
-
   const mine = challengerView(world);
   const seen = subject ? challengedView(world, subject) : null;
 

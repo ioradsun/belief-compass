@@ -181,7 +181,6 @@ export function LandingPanel({
                       Enter Conviction Market
                     </button>
                   </div>
-
                 </div>
 
                 <div
@@ -243,14 +242,15 @@ export function LandingPanel({
                     strokeWidth="2"
                   >
                     <circle cx="12" cy="12" r="9" />
-                    <path d="M9.6 9.2a2.5 2.5 0 1 1 3.2 2.4c-.6.2-.8.7-.8 1.3v.4" strokeLinecap="round" />
+                    <path
+                      d="M9.6 9.2a2.5 2.5 0 1 1 3.2 2.4c-.6.2-.8.7-.8 1.3v.4"
+                      strokeLinecap="round"
+                    />
                     <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none" />
                   </svg>
                   How it works
                 </button>
               </div>
-
-
             </div>
           </div>
         </div>
@@ -260,4 +260,3 @@ export function LandingPanel({
     </header>
   );
 }
-

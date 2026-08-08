@@ -43,9 +43,7 @@ describe("thin evidence says 'so far' and infers nothing", () => {
   });
 
   it("never claims a domain story from thin evidence", () => {
-    const n = relationshipNarrative(
-      facts({ shared: 2, together: 2, domains: [dom("Crypto", 2)] }),
-    );
+    const n = relationshipNarrative(facts({ shared: 2, together: 2, domains: [dom("Crypto", 2)] }));
     expect(n.kind).toBe("thin");
   });
 });
@@ -65,9 +63,7 @@ describe("alignment across topics", () => {
   });
 
   it("does not say 'different topics' when all the evidence is one topic", () => {
-    const n = relationshipNarrative(
-      facts({ shared: 6, together: 6, domains: [dom("Crypto", 6)] }),
-    );
+    const n = relationshipNarrative(facts({ shared: 6, together: 6, domains: [dom("Crypto", 6)] }));
     expect(n.kind).toBe("domain_click");
     expect(n.primary).toBe("Crypto is where you two click.");
   });

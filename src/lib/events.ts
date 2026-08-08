@@ -22,7 +22,12 @@
 
 /** JSON-serializable value (matches what crosses the serverFn boundary). */
 export type JsonValue =
-  string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 // ── Taxonomy ────────────────────────────────────────────────────────────────
 // The schema allows any string, so future kinds need no code change here; these

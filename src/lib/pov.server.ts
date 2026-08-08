@@ -1,11 +1,7 @@
 /**
  * POV API client — server only. Never import into client code.
  */
-import {
-  assertPovAvailable,
-  recordPovFailure,
-  recordPovSuccess,
-} from "@/lib/pov-health.server";
+import { assertPovAvailable, recordPovFailure, recordPovSuccess } from "@/lib/pov-health.server";
 
 export interface PovMarket {
   onChainMarketId: number | string;

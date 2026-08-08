@@ -38,23 +38,47 @@ const stubWalletConnectorsOnServer = {
     const real = (() => {
       try {
         const src = readFileSync(
-          fileURLToPath(new URL("./node_modules/@wagmi/connectors/dist/esm/exports/index.js", import.meta.url)),
+          fileURLToPath(
+            new URL("./node_modules/@wagmi/connectors/dist/esm/exports/index.js", import.meta.url),
+          ),
           "utf8",
         );
         return [...src.matchAll(/export\s*{([^}]*)}/g)].flatMap((m) =>
-          m[1].split(",").map((s: string) => s.trim().split(/\s+as\s+/).pop()!.trim()).filter(Boolean),
+          m[1]
+            .split(",")
+            .map((s: string) =>
+              s
+                .trim()
+                .split(/\s+as\s+/)
+                .pop()!
+                .trim(),
+            )
+            .filter(Boolean),
         );
       } catch {
         return [];
       }
     })();
-    const names = [...new Set([...real, "injected", "mock", "coinbaseWallet", "baseAccount", "walletConnect", "metaMask", "safe", "porto", "gemini", "tempoWallet", "version"])];
+    const names = [
+      ...new Set([
+        ...real,
+        "injected",
+        "mock",
+        "coinbaseWallet",
+        "baseAccount",
+        "walletConnect",
+        "metaMask",
+        "safe",
+        "porto",
+        "gemini",
+        "tempoWallet",
+        "version",
+      ]),
+    ];
     return `const clientOnly = () => { throw new Error("wallet connectors are client-only"); };
 ${names.map((n) => `export const ${n} = clientOnly;`).join("\n")}
 export default {};`;
   },
-
-
 };
 
 /**
@@ -178,7 +202,3 @@ export default defineConfig({
     plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer, stubWalletConnectorsModule],
   },
 });
-
-
-
-

@@ -26,10 +26,7 @@ function Row({
   hint?: string;
 }) {
   return (
-    <div
-      className="rounded-[14px] p-3"
-      style={{ background: "var(--surface)" }}
-    >
+    <div className="rounded-[14px] p-3" style={{ background: "var(--surface)" }}>
       <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
         {label}
       </div>

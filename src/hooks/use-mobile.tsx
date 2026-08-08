@@ -43,6 +43,5 @@ export function useIsDesktop() {
     return () => mql.removeEventListener("change", onChange);
   }, []);
 
-
   return isDesktop;
 }

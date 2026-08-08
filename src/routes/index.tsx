@@ -317,7 +317,6 @@ export const Route = createFileRoute("/")({
     }
   },
 
-
   staleTime: 10_000,
   component: Feed,
   errorComponent: ({ error }) => (
@@ -358,7 +357,6 @@ const MENU_PAGES: { to: string; label: string; sub: string }[] = [
   { to: "/value", label: "Why it matters", sub: "what this adds to the ecosystem" },
   { to: "/terms", label: "Terms & risk", sub: "what you're agreeing to" },
 ];
-
 
 /** The center-panel destination, as the URL expresses it. `case` is a display
  *  toggle rather than a destination, so it is deliberately not part of it. */
@@ -709,7 +707,6 @@ function Feed() {
         : { initialData: initialFeed, initialDataUpdatedAt: loaderData?.fetchedAt ?? Date.now() }
       : {}),
   });
-
 
   // First principle: once a valid contract-backed market snapshot reaches the
   // browser, it is durable for this page lifetime. Query retries, wallet
@@ -1583,7 +1580,6 @@ function Feed() {
                         label="Now"
                         initial={loaderData?.tape ?? null}
                       />
-
                     </div>
                   }
                 />
@@ -1677,7 +1673,6 @@ function Feed() {
                   </Link>
                 ))}
               </div>
-
             </div>
           </div>
         )}

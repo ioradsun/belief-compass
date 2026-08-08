@@ -136,8 +136,11 @@ export function relationshipNarrative(facts: NarrativeFacts): Narrative {
 
   const thin = shared < NARRATIVE.thinBelow;
   const evidence = `${together} of ${shared} together${thin ? " so far" : ""}`;
-  const out = (kind: NarrativeKind, primary: string, supporting: string | null = null): Narrative =>
-    ({ kind, primary, supporting, matchPct, evidence });
+  const out = (
+    kind: NarrativeKind,
+    primary: string,
+    supporting: string | null = null,
+  ): Narrative => ({ kind, primary, supporting, matchPct, evidence });
 
   /* 1 · MUTUAL SHOWING UP — the strongest story in the system. */
   if (facts.theyShowed && facts.youShowed) {
@@ -222,5 +225,4 @@ export function relationshipNarrative(facts: NarrativeFacts): Narrative {
   return out("mixed", "You're still figuring each other out.");
 }
 
-const word = (n: number): string =>
-  n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
+const word = (n: number): string => (n === 1 ? "once" : n === 2 ? "twice" : `${n} times`);

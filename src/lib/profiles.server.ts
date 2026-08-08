@@ -29,7 +29,10 @@ export async function resolveProfiles(
   // name and picture the UI actually renders. Nothing else leaves this function.
   const sb = serviceClientOrNull();
   const { data: cached } = sb
-    ? await sb.from("profiles").select("wallet, display_name, pfp_url, not_found").in("wallet", list)
+    ? await sb
+        .from("profiles")
+        .select("wallet, display_name, pfp_url, not_found")
+        .in("wallet", list)
     : { data: null };
   const known = new Set<string>();
   for (const p of cached ?? []) {
@@ -38,7 +41,6 @@ export async function resolveProfiles(
     if (!p.not_found)
       map.set(w, { displayName: p.display_name ?? null, pfpUrl: p.pfp_url ?? null });
   }
-
 
   const misses = list.filter((w) => !known.has(w)).slice(0, lazyCap);
   if (misses.length === 0) {
@@ -97,4 +99,3 @@ async function applyOverrides(map: Map<string, WalletProfile>, wallets: string[]
     /* overrides are best-effort */
   }
 }
-

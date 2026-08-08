@@ -69,7 +69,6 @@ export function useScheduledRows<T extends SchedulableRow>(
    */
   revealKey = 0,
 ): ScheduledView<T> {
-
   const [shown, setShown] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [pending, setPending] = useState(0);
 
@@ -219,7 +218,6 @@ export function useScheduledRows<T extends SchedulableRow>(
     state.current = createScheduleState(Date.now());
     setPending(0);
   }, [revealKey]);
-
 
   useEffect(
     () => () => {

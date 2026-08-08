@@ -36,13 +36,7 @@ export function preconnectEmbed(platform: EmbedMedia["platform"]) {
   }
 }
 
-export function MediaEmbed({
-  media,
-  className = "",
-}: {
-  media: EmbedMedia;
-  className?: string;
-}) {
+export function MediaEmbed({ media, className = "" }: { media: EmbedMedia; className?: string }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

@@ -32,6 +32,10 @@ async function matches(input: string, expected: string) {
 }
 
 async function requireAdmin() {
+  // Not a React hook: `useSession` is TanStack's server-side session reader. The
+  // rules-of-hooks lint only sees the `use` prefix, so it is silenced here rather
+  // than left as the repo's one standing lint error.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const session = await useSession<AdminSession>(sessionConfig());
   if (!session.data.unlocked) throw new Error("Locked.");
   return session;
@@ -72,7 +76,9 @@ export const adminQueue = createServerFn({ method: "GET" }).handler(async () => 
       .limit(100),
     db
       .from("conviction_markets")
-      .select("question_id, onchain_id, question, creator_wallet, hidden, moderation_status, status, created_at")
+      .select(
+        "question_id, onchain_id, question, creator_wallet, hidden, moderation_status, status, created_at",
+      )
       .order("created_at", { ascending: false })
       .limit(100),
   ]);

@@ -89,24 +89,48 @@ describe("marketVitals — the four signs in one story", () => {
 
 describe("marketBadge — one badge, only when earned", () => {
   it("high circulation → Battlefield", () => {
-    expect(marketBadge({ volumeUsd: 985, yesCapitalUsd: 140, noCapitalUsd: 118, believers: 10, yesPct: 52 })?.label).toBe(
-      "Battlefield",
-    );
+    expect(
+      marketBadge({
+        volumeUsd: 985,
+        yesCapitalUsd: 140,
+        noCapitalUsd: 118,
+        believers: 10,
+        yesPct: 52,
+      })?.label,
+    ).toBe("Battlefield");
   });
   it("pool ≈ volume → Ghost Town", () => {
-    expect(marketBadge({ volumeUsd: 276, yesCapitalUsd: 130, noCapitalUsd: 134, believers: 3, yesPct: 50 })?.label).toBe(
-      "Ghost Town",
-    );
+    expect(
+      marketBadge({
+        volumeUsd: 276,
+        yesCapitalUsd: 130,
+        noCapitalUsd: 134,
+        believers: 3,
+        yesPct: 50,
+      })?.label,
+    ).toBe("Ghost Town");
   });
   it("Diamond Hands needs BOTH high circulation and a long hold — never invented", () => {
-    const base = { volumeUsd: 985, yesCapitalUsd: 140, noCapitalUsd: 118, believers: 10, yesPct: 52 };
+    const base = {
+      volumeUsd: 985,
+      yesCapitalUsd: 140,
+      noCapitalUsd: 118,
+      believers: 10,
+      yesPct: 52,
+    };
     expect(marketBadge({ ...base })?.label).toBe("Battlefield"); // no hold data → not Diamond
     expect(marketBadge({ ...base, avgHoldDays: 60 })?.label).toBe("Diamond Hands");
   });
   it("Founder's Corner only when the creator share is provably dominant", () => {
     expect(
-      marketBadge({ volumeUsd: 50, yesCapitalUsd: 900, noCapitalUsd: 100, believers: 2, yesPct: 90, creatorCapitalShare: 0.9 })
-        ?.label,
+      marketBadge({
+        volumeUsd: 50,
+        yesCapitalUsd: 900,
+        noCapitalUsd: 100,
+        believers: 2,
+        yesPct: 90,
+        creatorCapitalShare: 0.9,
+      })?.label,
     ).toBe("Founder's Corner");
   });
 });

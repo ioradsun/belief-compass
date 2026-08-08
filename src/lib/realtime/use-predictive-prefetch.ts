@@ -63,7 +63,6 @@ export function usePredictivePrefetch(ids: number[], activeIdx: number): void {
         // still only for the market they are most likely to see next.
         if (i === 0) void qc.prefetchQuery(evidenceQO(id));
       });
-
     };
 
     // requestIdleCallback isn't in every target lib; feature-detect via a cast.

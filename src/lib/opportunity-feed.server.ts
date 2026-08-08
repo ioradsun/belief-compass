@@ -653,12 +653,14 @@ async function writeSeed(feed: OpportunityFeedResult): Promise<void> {
     if (!feed.items.some((i) => i.kind === "market")) return;
     const sb = serviceClientOrNull();
     if (!sb) return;
-    await sb
-      .from("feed_snapshot")
-      .upsert(
-        { key: SEED_KEY, payload: trimToSeed(feed) as unknown as never, updated_at: new Date().toISOString() },
-        { onConflict: "key" },
-      );
+    await sb.from("feed_snapshot").upsert(
+      {
+        key: SEED_KEY,
+        payload: trimToSeed(feed) as unknown as never,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
   } catch {
     // A cache that fails to write must never fail the feed.
   }
@@ -712,15 +714,12 @@ function isAnonDefault(input: OpportunityFeedInput): boolean {
   );
 }
 
-
 /**
  * The client's build, which ALSO fills the SSR slot. That is what makes the
  * peek above pay off: the first browser fetch on a fresh isolate warms the
  * snapshot every later SSR request on that isolate serves for free.
  */
-export async function opportunityFeed(
-  input: OpportunityFeedInput,
-): Promise<OpportunityFeedResult> {
+export async function opportunityFeed(input: OpportunityFeedInput): Promise<OpportunityFeedResult> {
   if (!isAnonDefault(input)) return buildOpportunityFeed(input);
   return swrCache(SSR_FEED_KEY, { ttlMs: 15_000 }, async () => {
     const feed = await buildOpportunityFeed(input);
@@ -730,4 +729,3 @@ export async function opportunityFeed(
     return feed;
   });
 }
-

@@ -163,7 +163,6 @@ export function startRealtime(qc: QueryClient): () => void {
   window.addEventListener("online", onOnline);
   document.addEventListener("visibilitychange", onVisible);
 
-
   // Dynamic import keeps supabase-js off the first-paint critical path.
   void import("@/integrations/supabase/client")
     .then(({ supabase }) => {

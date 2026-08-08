@@ -9,7 +9,11 @@ import { decodeEventLog, parseAbiItem, type Log, type Hex } from "viem";
 import abi from "./abi.json" with { type: "json" };
 import meta from "./abi.meta.json" with { type: "json" };
 
-type AbiEvent = { type: "event"; name: string; inputs: { name: string; type: string; indexed?: boolean }[] };
+type AbiEvent = {
+  type: "event";
+  name: string;
+  inputs: { name: string; type: string; indexed?: boolean }[];
+};
 
 const EVENTS = (abi as unknown as AbiEvent[]).filter((x) => x.type === "event");
 
@@ -19,13 +23,14 @@ for (const name of REQUIRED) {
   if (!evt) {
     throw new Error(
       `[chain/decoder] ABI missing required event "${name}" — refusing to guess. ` +
-      `Re-pin ABI for impl ${meta.impl_address} on chain ${meta.chain_id}.`,
+        `Re-pin ABI for impl ${meta.impl_address} on chain ${meta.chain_id}.`,
     );
   }
   // Sanity-check the required fields exist.
-  const need = name === "TokensBought"
-    ? ["marketId", "buyer", "yes", "amount", "ethSpent"]
-    : ["marketId", "seller", "yes", "amount", "proceeds"];
+  const need =
+    name === "TokensBought"
+      ? ["marketId", "buyer", "yes", "amount", "ethSpent"]
+      : ["marketId", "seller", "yes", "amount", "proceeds"];
   for (const f of need) {
     if (!evt.inputs.find((i) => i.name === f)) {
       throw new Error(`[chain/decoder] Event ${name} missing field "${f}". ABI drift.`);
@@ -37,8 +42,12 @@ export const PROXY_ADDRESS = meta.proxy_address.toLowerCase() as `0x${string}`;
 export const CHAIN_ID = meta.chain_id;
 export const ABI = abi as unknown as readonly AbiEvent[];
 export const TRADE_EVENTS = [
-  parseAbiItem("event TokensBought(uint256 indexed marketId, address indexed buyer, string questionId, bool yes, uint256 amount, uint256 ethSpent, uint256 fee, uint256 agentFee, uint256 creatorFee, uint256 treasuryFee, uint256 newPrice)"),
-  parseAbiItem("event TokensSold(uint256 indexed marketId, address indexed seller, string questionId, bool yes, uint256 amount, uint256 proceeds, uint256 newPrice)"),
+  parseAbiItem(
+    "event TokensBought(uint256 indexed marketId, address indexed buyer, string questionId, bool yes, uint256 amount, uint256 ethSpent, uint256 fee, uint256 agentFee, uint256 creatorFee, uint256 treasuryFee, uint256 newPrice)",
+  ),
+  parseAbiItem(
+    "event TokensSold(uint256 indexed marketId, address indexed seller, string questionId, bool yes, uint256 amount, uint256 proceeds, uint256 newPrice)",
+  ),
 ] as const;
 
 export interface CanonicalTrade {
@@ -46,12 +55,12 @@ export interface CanonicalTrade {
   log_index: number;
   block_number: number;
   block_hash: string;
-  onchain_id: string;   // uint256 as decimal string
-  wallet: string;       // lowercase hex
+  onchain_id: string; // uint256 as decimal string
+  wallet: string; // lowercase hex
   side: "YES" | "NO";
   direction: "BUY" | "SELL";
   token_amount: string; // decimal string (wei of belief-token)
-  eth_amount: string;   // decimal string (wei ETH)
+  eth_amount: string; // decimal string (wei ETH)
   price: string | null; // post-trade price (newPrice), decimal string; null if absent
   raw_log: unknown;
 }

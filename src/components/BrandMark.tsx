@@ -7,13 +7,7 @@
  * each. It reads first as two opposing Cs, and only afterwards hints at a
  * financial glyph. Pure vector — no raster, no font character.
  */
-export function BrandMark({
-  size = 28,
-  className,
-}: {
-  size?: number;
-  className?: string;
-}) {
+export function BrandMark({ size = 28, className }: { size?: number; className?: string }) {
   return (
     <svg
       width={size}

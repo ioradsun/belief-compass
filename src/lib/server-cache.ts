@@ -147,4 +147,3 @@ export function _clearSwrCache(): void {
   store.clear();
   inflight.clear();
 }
-

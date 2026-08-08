@@ -63,9 +63,7 @@ export function CreatorEarnings({ ethUsd = 0 }: { ethUsd?: number }) {
         onClaim={() => claim("referral")}
       />
 
-      {!onBase && (
-        <p className="text-[11px] text-[var(--text-muted)]">Switch to Base to claim.</p>
-      )}
+      {!onBase && <p className="text-[11px] text-[var(--text-muted)]">Switch to Base to claim.</p>}
       {isMining && <p className="text-[11px] text-[var(--text-muted)]">Claim confirming…</p>}
       {isSuccess && (
         <p className="text-[11px] text-[var(--text)]">

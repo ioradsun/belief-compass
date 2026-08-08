@@ -8,7 +8,6 @@ import { linkMessage } from "@/lib/wallet-link";
 
 const addr = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
 
-
 export const getWalletLink = createServerFn({ method: "GET" })
   .inputValidator((data) => z.object({ wallet: addr }).parse(data))
   .handler(async ({ data }) => {
@@ -31,7 +30,10 @@ export const linkWallet = createServerFn({ method: "POST" })
         connected: addr,
         linked: addr,
         nonce: z.string().min(8).max(80),
-        signature: z.string().regex(/^0x[a-fA-F0-9]+$/).max(4000),
+        signature: z
+          .string()
+          .regex(/^0x[a-fA-F0-9]+$/)
+          .max(4000),
       })
       .parse(data),
   )
@@ -49,17 +51,15 @@ export const linkWallet = createServerFn({ method: "POST" })
     if (!ok) throw new Error("Signature did not match the trading wallet.");
 
     const { serviceClient } = await import("@/lib/supabase-clients");
-    const { error } = await serviceClient()
-      .from("wallet_links")
-      .upsert(
-        {
-          connected_wallet: connected,
-          linked_wallet: linked,
-          signature: data.signature,
-          verified_at: new Date().toISOString(),
-        },
-        { onConflict: "connected_wallet,linked_wallet" },
-      );
+    const { error } = await serviceClient().from("wallet_links").upsert(
+      {
+        connected_wallet: connected,
+        linked_wallet: linked,
+        signature: data.signature,
+        verified_at: new Date().toISOString(),
+      },
+      { onConflict: "connected_wallet,linked_wallet" },
+    );
     if (error) throw new Error(error.message);
     return { ok: true, linked };
   });

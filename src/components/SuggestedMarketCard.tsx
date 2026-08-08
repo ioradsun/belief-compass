@@ -36,7 +36,6 @@ export function SuggestedMarketCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestion.id]);
 
-
   return (
     <div className="flex h-full min-h-0 flex-col gap-3" aria-label="The House has an idea">
       {/* Identity — the deck's own header rhythm. */}
@@ -104,9 +103,7 @@ export function SuggestedMarketCard({
 
       {/* Decision dock — CREATE and PASS sit exactly where YES and NO sit. */}
       <div className="shrink-0">
-        <div
-          className="flex items-center gap-2 rounded-[16px] bg-[var(--surface)] p-3"
-        >
+        <div className="flex items-center gap-2 rounded-[16px] bg-[var(--surface)] p-3">
           <div className="flex flex-1 gap-2">
             <button
               type="button"

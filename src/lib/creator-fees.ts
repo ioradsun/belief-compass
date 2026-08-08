@@ -11,12 +11,7 @@
  */
 import { useState } from "react";
 import { parseAbi } from "viem";
-import {
-  useAccount,
-  useReadContract,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
 import { isUserRejection } from "@/lib/chain-trade";
 

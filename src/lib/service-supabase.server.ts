@@ -13,7 +13,10 @@ export function getServiceSupabase(): SupabaseClient {
 export function assertIngestBearer(req: Request): void {
   const need = process.env.INGEST_RUN_SECRET;
   if (!need) throw new Error("INGEST_RUN_SECRET not configured");
-  const got = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+  const got = req.headers
+    .get("authorization")
+    ?.replace(/^Bearer\s+/i, "")
+    .trim();
   if (got !== need) {
     throw new Response("Unauthorized", { status: 401 });
   }

@@ -277,9 +277,14 @@ export async function pendingAnalysisTargets(limit: number): Promise<MarketMeani
     sb.from("market_ai_analysis").select("onchain_id, content_hash, status, attempts"),
   ]);
   const byId = new Map(
-    ((rows ?? []) as { onchain_id: number; content_hash: string; status: string; attempts: number }[]).map(
-      (r) => [Number(r.onchain_id), r],
-    ),
+    (
+      (rows ?? []) as {
+        onchain_id: number;
+        content_hash: string;
+        status: string;
+        attempts: number;
+      }[]
+    ).map((r) => [Number(r.onchain_id), r]),
   );
   const out: MarketMeaningInput[] = [];
   for (const m of (markets ?? []) as {

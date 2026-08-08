@@ -93,5 +93,3 @@ export async function bestEffort<T>(run: () => Promise<T>): Promise<T | null> {
     throw err;
   }
 }
-
-

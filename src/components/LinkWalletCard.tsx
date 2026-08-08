@@ -25,7 +25,13 @@ export function LinkWalletCard() {
 
   function go(addr: string) {
     // The wallet view is the home "You" panel — focus the feed on this wallet.
-    void navigate({ to: "/", search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({ ...prev, wallet: addr }) });
+    void navigate({
+      to: "/",
+      search: (prev: { wallet?: string; m?: number; p?: string; dna?: boolean }) => ({
+        ...prev,
+        wallet: addr,
+      }),
+    });
   }
 
   function remember() {
@@ -52,9 +58,7 @@ export function LinkWalletCard() {
     if (connected !== target) {
       // Still on the login wallet — remember it and hand off to the wallet app.
       window.sessionStorage.setItem(PENDING, connected);
-      setMsg(
-        "Now switch your wallet to the trading address and press “Verify by signing” again.",
-      );
+      setMsg("Now switch your wallet to the trading address and press “Verify by signing” again.");
       return;
     }
 
@@ -136,11 +140,7 @@ export function LinkWalletCard() {
           disabled={!valid || !isConnected || busy}
           className="rounded-md border border-primary bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
         >
-          {busy
-            ? "Waiting for signature…"
-            : switched
-              ? "Sign to verify"
-              : "Verify by signing"}
+          {busy ? "Waiting for signature…" : switched ? "Sign to verify" : "Verify by signing"}
         </button>
         <button
           type="button"

@@ -35,9 +35,7 @@ function reloadOnce(): void {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function lazyRetry<T extends ComponentType<any>>(
-  factory: () => Promise<{ default: T }>,
-) {
+export function lazyRetry<T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) {
   return lazy(() =>
     factory().catch(async (err) => {
       if (!isChunkError(err)) throw err;

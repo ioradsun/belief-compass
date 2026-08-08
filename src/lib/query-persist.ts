@@ -54,7 +54,6 @@ const PERSIST_PREFIXES = new Set([
   "wallet-link",
 ]);
 
-
 const persistable = (queryKey: readonly unknown[]): boolean =>
   typeof queryKey[0] === "string" && PERSIST_PREFIXES.has(queryKey[0]);
 

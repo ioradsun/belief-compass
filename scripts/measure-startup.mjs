@@ -129,9 +129,8 @@ async function measure(browser, name, viewport) {
     // The app's outermost element: inside every provider, created once, and
     // never waiting on a query. Scripts injected by the framework are skipped.
     const root =
-      [...document.body.children].find(
-        (el) => el.tagName !== "SCRIPT" && el.tagName !== "STYLE",
-      ) ?? null;
+      [...document.body.children].find((el) => el.tagName !== "SCRIPT" && el.tagName !== "STYLE") ??
+      null;
     window.__anchor = root;
     window.__anchorAt = Math.round(performance.now());
     return { at: window.__anchorAt, tag: root?.tagName ?? null, id: root?.id || null };
@@ -220,9 +219,7 @@ for (const r of report.runs) {
   );
   const real = r.duplicates.filter((d) => d.kind === "duplicate-success");
   const retried = r.duplicates.filter((d) => d.kind === "retry-after-failure");
-  console.log(
-    `           repeats: ${real.length} genuine, ${retried.length} retry-after-failure`,
-  );
+  console.log(`           repeats: ${real.length} genuine, ${retried.length} retry-after-failure`);
   for (const d of real)
     console.log(`           ×${d.n} GENUINE  ${label(d.url)}  at ${d.at.join("ms, ")}ms`);
   for (const d of retried)

@@ -134,7 +134,6 @@ describe("a change of mind is recorded, never inferred", () => {
   });
 });
 
-
 describe("tenure never overclaims", () => {
   it("marks a floor", () => {
     expect(tenureText(512, true)).toBe("512+ days");
@@ -146,7 +145,6 @@ describe("tenure never overclaims", () => {
 });
 
 // ── V2 ───────────────────────────────────────────────────────────────────────
-
 
 describe("their conviction map", () => {
   const map = (list: PersonPosition[]) => convictionMap(list).map((t) => t.theme);
@@ -196,7 +194,6 @@ describe("their conviction map", () => {
     expect(convictionMap([])).toEqual([]);
   });
 });
-
 
 /**
  * The map interprets; this does not. A visitor who suspects the highlights were

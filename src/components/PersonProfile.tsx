@@ -162,7 +162,11 @@ export function PersonProfile({
   const next = nextAct({
     name: first,
     callFromThem: callFromThem
-      ? { marketId: callFromThem.marketId, title: callFromThem.title, side: callFromThem.callerSide }
+      ? {
+          marketId: callFromThem.marketId,
+          title: callFromThem.title,
+          side: callFromThem.callerSide,
+        }
       : null,
     joinCandidate:
       joinPick && joinSide
@@ -257,7 +261,6 @@ export function PersonProfile({
           </div>
         )}
       </header>
-
 
       {/* ── THE RECEIPTS ───────────────────────────────────────────────────
           Directly under the claim, because the claim is only as good as this. */}
@@ -372,8 +375,6 @@ export function PersonProfile({
     </div>
   );
 }
-
-
 
 /**
  * Per-domain agreement over the SAME shared markets the receipts print, so a
@@ -601,7 +602,9 @@ function ReceiptLine({
             ✓
           </span>
         )}
-        <span className="min-w-0 flex-1 text-[13px] leading-snug text-[var(--text)]">{r.title}</span>
+        <span className="min-w-0 flex-1 text-[13px] leading-snug text-[var(--text)]">
+          {r.title}
+        </span>
       </span>
       {!r.agree && (
         <span className="mt-0.5 flex items-center gap-3 pl-0 text-[11px] text-[var(--text-muted)]">
@@ -732,7 +735,6 @@ function Face({
     </div>
   );
 }
-
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (

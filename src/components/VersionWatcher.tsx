@@ -99,7 +99,6 @@ export function VersionWatcher() {
     window.addEventListener("focus", onFocus);
     void check();
 
-
     return () => {
       cancelled = true;
       window.clearInterval(id);
@@ -111,4 +110,3 @@ export function VersionWatcher() {
 
   return null;
 }
-

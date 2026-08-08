@@ -109,7 +109,14 @@ interface AttributedValue {
   since: string | null;
   perMarket: Array<{ marketId: string; trades: number; buyWei: string }>;
   byDay: Array<{ day: string; trades: number; buyWei: string }>;
-  recent: Array<{ marketId: string; wallet: string; side: string | null; action: string | null; amountEth: string; at: string }>;
+  recent: Array<{
+    marketId: string;
+    wallet: string;
+    side: string | null;
+    action: string | null;
+    amountEth: string;
+    at: string;
+  }>;
 }
 
 const SHARE_DAYS = 90;
@@ -122,7 +129,10 @@ async function build(): Promise<EcosystemValue> {
     sb.rpc("conviction_attributed_value", { p_growth_days: GROWTH_DAYS }),
     sb.rpc("conviction_ecosystem_share", { p_days: SHARE_DAYS }),
     // "Markets Created" — the one supply-side figure: markets born on conviction.company.
-    sb.from("markets").select("onchain_id", { count: "exact", head: true }).eq("source", "conviction"),
+    sb
+      .from("markets")
+      .select("onchain_id", { count: "exact", head: true })
+      .eq("source", "conviction"),
   ]);
   // Null when unpriced. Every USD figure on the report card is this rate times
   // an ETH figure, so a zero here would publish "the ecosystem is worth $0".
@@ -135,7 +145,12 @@ async function build(): Promise<EcosystemValue> {
    */
   const ethUsd = ethUsdRate;
   const rate = ethUsdRate ?? 0;
-  const share = buildShare((shareRpc.data ?? null) as ShareRpc | null, rate, Date.now(), SHARE_DAYS);
+  const share = buildShare(
+    (shareRpc.data ?? null) as ShareRpc | null,
+    rate,
+    Date.now(),
+    SHARE_DAYS,
+  );
 
   // If the RPC isn't present yet (migration not applied), degrade to honest zeros
   // rather than crash or fall back to numbers we can't attribute.
@@ -145,7 +160,12 @@ async function build(): Promise<EcosystemValue> {
       ethUsd,
       since: null,
       share,
-      totals: { volumeUsd: 0, marketsCreated: convictionMarkets ?? 0, tradesExecuted: 0, activeTraders: 0 },
+      totals: {
+        volumeUsd: 0,
+        marketsCreated: convictionMarkets ?? 0,
+        tradesExecuted: 0,
+        activeTraders: 0,
+      },
       categories: [],
       markets: [],
       growth: [],
@@ -158,14 +178,28 @@ async function build(): Promise<EcosystemValue> {
   // Market metadata (title/category/author) for every market we routed a trade on —
   // works for pov- and conviction-born markets alike, since `markets` holds both.
   const marketIds = cv.perMarket.map((p) => Number(p.marketId)).filter((n) => Number.isFinite(n));
-  const metaById = new Map<number, { title: string | null; category: string | null; author_wallet: string | null; author_name: string | null }>();
+  const metaById = new Map<
+    number,
+    {
+      title: string | null;
+      category: string | null;
+      author_wallet: string | null;
+      author_name: string | null;
+    }
+  >();
   if (marketIds.length) {
     const { data: meta } = await sb
       .from("markets")
       .select("onchain_id, title, category, author_wallet, author_name")
       .in("onchain_id", marketIds)
       .limit(5000);
-    for (const m of (meta ?? []) as Array<{ onchain_id: number | string; title: string | null; category: string | null; author_wallet: string | null; author_name: string | null }>)
+    for (const m of (meta ?? []) as Array<{
+      onchain_id: number | string;
+      title: string | null;
+      category: string | null;
+      author_wallet: string | null;
+      author_name: string | null;
+    }>)
       metaById.set(Number(m.onchain_id), m);
   }
 
@@ -186,7 +220,10 @@ async function build(): Promise<EcosystemValue> {
     .sort((a, b) => b.volumeUsd - a.volumeUsd);
 
   // Categories — aggregated from the trades we routed.
-  const catMap = new Map<string, { markets: number; volumeUsd: number; trades: number; creators: Set<string> }>();
+  const catMap = new Map<
+    string,
+    { markets: number; volumeUsd: number; trades: number; creators: Set<string> }
+  >();
   for (const m of markets) {
     const c = m.category ?? "Other";
     const e = catMap.get(c) ?? { markets: 0, volumeUsd: 0, trades: 0, creators: new Set<string>() };
@@ -197,12 +234,19 @@ async function build(): Promise<EcosystemValue> {
     catMap.set(c, e);
   }
   const categories: CategoryStat[] = [...catMap.entries()]
-    .map(([category, e]) => ({ category, markets: e.markets, volumeUsd: e.volumeUsd, trades: e.trades, creators: e.creators.size }))
+    .map(([category, e]) => ({
+      category,
+      markets: e.markets,
+      volumeUsd: e.volumeUsd,
+      trades: e.trades,
+      creators: e.creators.size,
+    }))
     .sort((a, b) => b.volumeUsd - a.volumeUsd);
 
   // Growth — cumulative buy volume + trades per UTC day over the window.
   const byDay = new Map<string, { vol: number; trades: number }>();
-  for (const d of cv.byDay) byDay.set(d.day, { vol: weiToEth(d.buyWei) * rate, trades: num(d.trades) });
+  for (const d of cv.byDay)
+    byDay.set(d.day, { vol: weiToEth(d.buyWei) * rate, trades: num(d.trades) });
   const growth: GrowthPoint[] = [];
   {
     let cumV = 0;

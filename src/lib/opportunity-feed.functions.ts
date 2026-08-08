@@ -63,7 +63,6 @@ export const getWarmFeed = createServerFn({ method: "GET" }).handler(
   },
 );
 
-
 const eventInput = z.object({
   wallet: z.string().min(3),
   marketId: z.number().int().nonnegative(),
