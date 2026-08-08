@@ -17,6 +17,8 @@
  * bundle — the socket opens after the snapshot is already on screen.
  */
 import type { QueryClient } from "@tanstack/react-query";
+import { shouldRevalidateOnReturn } from "@/lib/focus-policy";
+
 import {
   applyMarketStateBatch,
   affectedPulseKeys,
@@ -151,12 +153,16 @@ export function startRealtime(qc: QueryClient): () => void {
 
   // The browser's own reconnect signals: coming back online, or a hidden tab
   // becoming visible again (mobile suspends the socket in the background).
+  // A quick glance away — flipping to chat and back on a phone — is NOT a gap:
+  // the socket never dropped, and reconciling on every flip is what turns a few
+  // tab switches into a pile of round-trips. Same gate as query focus refetch.
   const onOnline = () => reconcileSoon();
   const onVisible = () => {
-    if (document.visibilityState === "visible") reconcileSoon();
+    if (document.visibilityState === "visible" && shouldRevalidateOnReturn()) reconcileSoon();
   };
   window.addEventListener("online", onOnline);
   document.addEventListener("visibilitychange", onVisible);
+
 
   // Dynamic import keeps supabase-js off the first-paint critical path.
   void import("@/integrations/supabase/client")
