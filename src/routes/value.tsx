@@ -19,6 +19,8 @@ import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
 import { getEcosystemValue, type EcosystemValue } from "@/lib/ecosystem-value.functions";
 import { categoryLabel } from "@/domain/categories";
 import { ago } from "@/domain/relative-time";
+import { InfoPageHeader } from "@/components/InfoPageHeader";
+
 
 export const Route = createFileRoute("/value")({
   head: () => ({
