@@ -12,7 +12,7 @@
  * hairline borders, green YES / red NO), so the relationship feels immediate.
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { BrandMark } from "@/components/BrandMark";
 import { InfoPageHeader } from "@/components/InfoPageHeader";
 
@@ -52,6 +52,20 @@ const NAV: { id: string; label: string }[] = [
   { id: "details", label: "Fees, agents & boosts" },
   { id: "ownership", label: "Ownership & safety" },
 ];
+
+/**
+ * Jump to a section by scrolling, not by pushing "#id" onto history. A hash
+ * link would stack a history entry per jump, so "Close" would walk back through
+ * the sections instead of returning the reader to where they came from.
+ */
+function jumpTo(e: MouseEvent<HTMLAnchorElement>, id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  e.preventDefault();
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+
 
 function HowItWorks() {
   const [active, setActive] = useState(NAV[0].id);
@@ -121,7 +135,9 @@ function HowItWorks() {
                       (
                         e.currentTarget.closest("details") as HTMLDetailsElement | null
                       )?.removeAttribute("open");
+                      jumpTo(e, n.id);
                     }}
+
                     className="block rounded-lg px-3 py-2.5 text-[14px]"
                     style={
                       active === n.id
@@ -169,7 +185,9 @@ function HowItWorks() {
                   <li key={n.id}>
                     <a
                       href={`#${n.id}`}
+                      onClick={(e) => jumpTo(e, n.id)}
                       className="block rounded-lg px-3 py-1.5 text-[13px] transition-colors"
+
                       style={
                         active === n.id
                           ? { background: "var(--surface)", color: "var(--text)" }
