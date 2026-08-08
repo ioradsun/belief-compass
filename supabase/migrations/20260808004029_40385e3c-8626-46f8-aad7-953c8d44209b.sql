@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.find_match_candidates(text, integer, integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.find_match_candidates(text, integer, integer) TO service_role;
