@@ -137,9 +137,9 @@ function HowItWorks() {
                   <a
                     href={`#${n.id}`}
                     onClick={(e) => {
-                      (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute(
-                        "open",
-                      );
+                      (
+                        e.currentTarget.closest("details") as HTMLDetailsElement | null
+                      )?.removeAttribute("open");
                     }}
                     className="block rounded-lg px-3 py-2.5 text-[14px]"
                     style={
@@ -155,7 +155,6 @@ function HowItWorks() {
             </ul>
           </details>
         </div>
-
       </header>
 
       <div className="mx-auto max-w-[1180px] px-4 lg:px-8">
