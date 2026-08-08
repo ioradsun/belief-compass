@@ -627,12 +627,17 @@ function Feed() {
    */
   const [tab, setTab] = useState<MobileTab>(tabParam ?? "room");
   // Arriving from the menu on a standing page carries the column with it — and
-  // it is an explicit destination, so the intro panel gets out of the way.
+  // it is an explicit destination, so the intro panel gets out of the way. The
+  // same is true of any deep link to a center destination: landing on a link to
+  // a market, a person, or the create form behind the intro panel is a dead end.
+  const deepLinked =
+    !!tabParam || !!selectedMarket || !!selectedPerson || !!createOpen || !!dashOpen || !!dnaOpen;
   useEffect(() => {
-    if (!tabParam) return;
-    setTab(tabParam);
+    if (!deepLinked) return;
+    if (tabParam) setTab(tabParam);
     landing.collapse();
-  }, [tabParam]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabParam, deepLinked]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   const [menuOpen, setMenuOpen] = useState(false);
 
