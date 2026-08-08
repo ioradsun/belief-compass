@@ -164,9 +164,44 @@ const SHOWED_UP_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 /** Rows per fetch. Already one per market, so this is a second, gentler cap. */
 const SHOWED_UP_MAX = 4;
 
+/**
+ * THE SHARED TAPE IS ONE ANSWER, NOT ONE PER READER.
+ *
+ * The unscoped, signed-out tape is identical for every visitor, and building it
+ * is several reads plus the whole grammar pass. Cached under one key it is
+ * built once per window and handed to everyone else — which is what lets SSR
+ * peek at it (see `getWarmTape`) and the phone paint "Now" on arrival instead of
+ * waiting a round trip for it.
+ *
+ * A wallet, a market scope, a side or a delta `since` is a DIFFERENT question
+ * and never touches this cache.
+ */
+export const TAPE_KEY = "tape:anon";
+const TAPE_TTL_MS = 10_000;
+
+function isSharedTape(data: z.output<typeof input>): boolean {
+  return !data?.wallet && !data?.marketIds?.length && !data?.side && !data?.since;
+}
+
 export const listLiveEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof input>) => input.parse(d ?? {}))
   .handler(async ({ data }) => {
+    if (!isSharedTape(data)) return buildTape(data);
+    return swrCache(`${TAPE_KEY}:${data?.limit ?? 120}`, { ttlMs: TAPE_TTL_MS }, () =>
+      buildTape(data),
+    );
+  });
+
+/**
+ * The SSR read: this isolate's warm tape, or null. NEVER builds — a shell that
+ * waits on the tape is the stall this whole path exists to remove.
+ */
+export const getWarmTape = createServerFn({ method: "GET" }).handler(async () => {
+  return peekSwr<Awaited<ReturnType<typeof buildTape>>>(`${TAPE_KEY}:120`) ?? null;
+});
+
+async function buildTape(data: z.output<typeof input>) {
+
     const sb = serviceClient();
     const limit = data?.limit ?? 120;
     const viewer = data?.wallet?.toLowerCase() ?? null;
