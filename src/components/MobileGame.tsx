@@ -776,7 +776,7 @@ function BothSides({
                       </ul>
                     </div>
                   )}
-                </div>
+                </SideDetailSheet>
               )}
             </div>
           );
