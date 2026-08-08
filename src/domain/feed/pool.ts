@@ -70,7 +70,8 @@ export type PoolSlice =
   | "believed"
   | "deep"
   | "capital"
-  | "participants";
+  | "participants"
+  | "moving";
 
 /** Every slice, in the order they claim their quota. */
 export const POOL_SLICES: PoolSlice[] = [
@@ -81,6 +82,7 @@ export const POOL_SLICES: PoolSlice[] = [
   "deep",
   "capital",
   "participants",
+  "moving",
 ];
 
 export interface SliceSpec {
@@ -157,6 +159,26 @@ export const POOL: { total: number; slices: Record<PoolSlice, SliceSpec> } = {
      * @/domain/participants).
      */
     participants: { fetch: 60, quota: 30 },
+    /**
+     * WHAT IS ACTUALLY MOVING — what the "Moving" lens promises.
+     *
+     * The third time this exact bug has been found, and the reasoning is
+     * identical to `capital` above: a lens label was true only of the markets
+     * the other orderings happened to admit. Measured by check:lens-coverage,
+     * the Moving lens saw 19 of the platform's true top 20.
+     *
+     * `active` is NOT a substitute, and the difference is easy to miss because
+     * both sound like "busy". `active` orders by `last_trade_at` — WHEN a market
+     * last traded — while Moving's truth is `trade_count_24h`, HOW MUCH it
+     * traded. A market that took forty trades this morning and none since noon
+     * ranks near the bottom of a recency ordering and at the top of a volume
+     * one. Fetching ninety by recency therefore cannot guarantee the top twenty
+     * by count, and the market it missed was exactly that shape.
+     *
+     * The smallest slice, because the two orderings do overlap heavily — this
+     * only has to carry the ones recency drops.
+     */
+    moving: { fetch: 40, quota: 20 },
   },
 };
 

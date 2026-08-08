@@ -115,7 +115,6 @@ interface CachedRelationship {
   wallet?: string | null;
 }
 
-
 const out: string[] = [];
 const lc = (v: unknown) => String(v ?? "").toLowerCase();
 const pct = (n: number, d: number) => (d > 0 ? (100 * n) / d : 0);
@@ -126,6 +125,19 @@ const shortWallet = (w: string) => `${w.slice(0, 6)}…${w.slice(-4)}`;
 
 /** `${a}|${b}` with both sides lowercased — the pair key used throughout. */
 const pairKey = (a: string, b: string) => `${lc(a)}|${lc(b)}`;
+
+/**
+ * What a ledger-dependent section prints when there is no ledger.
+ *
+ * NOT ZEROS. A section that says "0 unearned answers" over an empty table is
+ * indistinguishable from one that checked and found none, and the first
+ * production run of this script was read exactly that way.
+ */
+const noLedger = () => {
+  line("   NO DATA — `market_calls` is empty, so this section checked nothing.");
+  line("   This is not a pass. See section 0 for whether that is starvation or a");
+  line("   broken write path.");
+};
 
 async function main() {
   const sinceMs = Date.now() - WINDOW_DAYS * 86_400_000;
@@ -150,7 +162,6 @@ async function main() {
     // has no title, so a supply count that ignored them would overstate.
     page<Market>("markets", "onchain_id,title"),
   ]);
-
 
   const unreadable: string[] = [];
   if (calls.blocked) unreadable.push(`market_calls — ${calls.why}`);
@@ -181,6 +192,33 @@ async function main() {
   /** Canonical CURRENT stance, keyed wallet|market. */
   const stanceBy = new Map<string, string>();
   for (const b of BELIEFS) stanceBy.set(pairKey(b.wallet, String(b.onchain_id)), lc(b.stance_side));
+
+  /**
+   * Gates every ledger-dependent section below. `scripts/` is NOT in tsconfig's
+   * `include`, so this identifier was referenced five times while undeclared and
+   * `tsc --noEmit` still passed — the file is never typechecked. Worth knowing
+   * before trusting any "tsc clean" claim about anything in this directory.
+   */
+  const ledgerEmpty = CALLS.length === 0;
+
+  /** viewer → qualified counterparties, from the cache the server reads. */
+  const qualified = new Map<string, Set<string>>();
+  {
+    const take = (viewer: string, rows: unknown) => {
+      for (const r of (rows as { wallet?: string | null }[] | null) ?? []) {
+        const w = lc(r?.wallet);
+        if (w && w !== viewer)
+          (qualified.get(viewer) ?? qualified.set(viewer, new Set()).get(viewer)!).add(w);
+      }
+    };
+    for (const d of DNA) {
+      const v = lc(d.viewer_wallet);
+      take(v, d.twin_matches);
+      take(v, d.inverse_matches);
+      take(v, d.opp_matches);
+      take(v, d.tribe_matches);
+    }
+  }
 
   line("CHALLENGE INTEGRITY");
   line("===================");
@@ -323,11 +361,26 @@ async function main() {
       line("   validated by this report until supply exists. Section 4 is the one");
       line("   number here measured against real positions rather than the ledger.");
     } else if (verdict.startsWith("BROKEN")) {
-      line("   Supply exists and the ledger has nothing in it. `recordCalls` only runs");
-      line("   inside `buildChallenges`, fire-and-forget — so either no viewer with");
-      line("   supply has loaded the panel since the table was created, or the write");
-      line("   is failing silently. Both are urgent, and they are distinguished by");
-      line("   server logs for '[challenge] could not record calls', not by SQL.");
+      line("   Supply exists and the ledger has nothing in it. THREE causes fit this");
+      line("   equally and SQL cannot separate them — the ledger looks identical under");
+      line("   all three, which is the actual problem:");
+      line();
+      line("     a) NEVER RENDERED. `recordCalls` runs only inside `buildChallenges`,");
+      line("        which runs only when a qualifying viewer loads the panel. With a");
+      line("        population this small that is plausible, and is NOT a bug.");
+      line();
+      line("     b) THE READ THREW. `buildChallenges` opens with an unguarded");
+      line("        `serviceClient()`, and `createClient` throws SYNCHRONOUSLY on a");
+      line("        missing key — so a deployment without SUPABASE_SERVICE_ROLE_KEY");
+      line("        fails every call. Until the rail learned to say so it rendered");
+      line('        "Nobody is waiting on you right now" throughout. CHECK THE DEPLOYED');
+      line("        WORKER'S ENV FIRST: it is the cheapest of the three to rule out,");
+      line("        and if it is the cause then every other service-role server");
+      line("        function is failing the same silent way.");
+      line();
+      line("     c) THE INSERT FAILED. `recordCalls` is fire-and-forget and swallows");
+      line("        23505, so a rejected insert is invisible. Distinguished only by a");
+      line("        server log for '[challenge] could not record calls'.");
     } else {
       line("   Supply exists and rows are being written. The sections below are now");
       line("   measuring a real population rather than an empty one.");
@@ -335,13 +388,12 @@ async function main() {
   }
   line();
 
-
-
   // ─────────────────────────────────────────────────────────────────────────
   line("1 · ANSWERS NOBODY CAN PROVE");
   line('   "Mike showed up for you" — is there a position behind every one?');
   line();
-  {
+  if (ledgerEmpty) noLedger();
+  else {
     const answered = CALLS.filter((c) => c.responded_at);
     let noPosition = 0;
     let beforeCall = 0;
@@ -391,7 +443,8 @@ async function main() {
   line("2 · CALLS NOBODY WAS SHOWN");
   line('   "Surfacing IS the call" — but the server never learns it was seen.');
   line();
-  {
+  if (ledgerEmpty) noLedger();
+  else {
     const open = CALLS.filter((c) => !c.responded_at);
     const perResponder = new Map<string, number>();
     for (const c of open) {
@@ -428,7 +481,8 @@ async function main() {
   line("3 · CARDS THAT MISSTATE WHAT SOMEBODY BELIEVES");
   line('   "Sarah believes YES" — against the caller\'s CURRENT canonical stance.');
   line();
-  {
+  if (ledgerEmpty) noLedger();
+  else {
     const sells = EVENTS.filter((e) => e.kind === "trade" && lc(e.action) === "sell").length;
     const trades = EVENTS.filter((e) => e.kind === "trade").length;
     line(`   ${trades} trade events in window · ${sells} are SELL (${fmtPct(pct(sells, trades))})`);
@@ -496,22 +550,6 @@ async function main() {
   line('   "Now your people can show up for you. 8 Tribe · 2 Rivals"');
   line();
   {
-    /** viewer → qualified counterparties, from the same cache the server reads. */
-    const qualified = new Map<string, Set<string>>();
-    const take = (viewer: string, rows: unknown) => {
-      for (const r of (rows as { wallet?: string | null }[] | null) ?? []) {
-        const w = lc(r?.wallet);
-        if (w && w !== viewer)
-          (qualified.get(viewer) ?? qualified.set(viewer, new Set()).get(viewer)!).add(w);
-      }
-    };
-    for (const d of DNA) {
-      const v = lc(d.viewer_wallet);
-      take(v, d.twin_matches);
-      take(v, d.inverse_matches);
-      take(v, d.opp_matches);
-      take(v, d.tribe_matches);
-    }
     /** Everyone holding a directional position, per market. */
     const inMarket = new Map<string, Set<string>>();
     for (const b of BELIEFS) {
@@ -562,7 +600,8 @@ async function main() {
   line("   composeChallenges keeps the strongest caller per market. Only that row");
   line("   is persisted, so every other qualifying caller gets no credit.");
   line();
-  {
+  if (ledgerEmpty) noLedger();
+  else {
     // Per (responder, market), how many DISTINCT callers are recorded? Today the
     // answer is almost always 1 by construction. The interesting number is how
     // many COULD have qualified — reconstructed the same way the server does.
@@ -576,22 +615,6 @@ async function main() {
     line(`   with more than one recorded caller  ${multi}`);
     line();
 
-    /** viewer → qualified counterparties (rebuilt; same source as section 4). */
-    const qualified = new Map<string, Set<string>>();
-    const take = (viewer: string, rows: unknown) => {
-      for (const r of (rows as { wallet?: string | null }[] | null) ?? []) {
-        const w = lc(r?.wallet);
-        if (w && w !== viewer)
-          (qualified.get(viewer) ?? qualified.set(viewer, new Set()).get(viewer)!).add(w);
-      }
-    };
-    for (const d of DNA) {
-      const v = lc(d.viewer_wallet);
-      take(v, d.twin_matches);
-      take(v, d.inverse_matches);
-      take(v, d.opp_matches);
-      take(v, d.tribe_matches);
-    }
     /** Who acted in each market inside the window — the candidate pool. */
     const actedIn = new Map<string, Set<string>>();
     for (const e of EVENTS) {
@@ -639,7 +662,8 @@ async function main() {
   line("   The badge counts open Challenge MARKETS. The code comment claims");
   line('   "three means three people are actually waiting on you."');
   line();
-  {
+  if (ledgerEmpty) noLedger();
+  else {
     const open = CALLS.filter((c) => !c.responded_at);
     const byResponder = new Map<string, Call[]>();
     for (const c of open) {

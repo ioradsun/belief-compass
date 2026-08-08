@@ -156,41 +156,50 @@ async function poolRows(
   const q = () => sb.from("market_state").select(FEED_COLUMNS);
   const sinceActive = new Date(Date.now() - POOL_ACTIVE_MS).toISOString();
 
-  const [active, fresh, classified, believed, deep, capital, participationRes] = await Promise.all([
-    // What is alive. `last_trade_at` descending is the ordering the old pool had
-    // no way to express, and it is the feed's first question.
-    q()
-      .gte("last_trade_at", sinceActive)
-      .order("last_trade_at", { ascending: false, nullsFirst: false })
-      .limit(POOL.slices.active.fetch),
-    // What is new. Structurally impossible to reach through a volume ordering.
-    q()
-      .order("market_created_at", { ascending: false, nullsFirst: false })
-      .limit(POOL.slices.fresh.fetch),
-    // What the opportunity engine already flagged — output the pool that
-    // consumes it was mostly excluding.
-    q()
-      .not("opportunity_type", "is", null)
-      .order("opportunity_score", { ascending: false, nullsFirst: false })
-      .limit(POOL.slices.classified.fetch),
-    // Where people actually are — the substrate every social signal needs.
-    q()
-      .gt("directional_believers", 0)
-      .order("directional_believers", { ascending: false, nullsFirst: false })
-      .limit(POOL.slices.believed.fetch),
-    // The old pool, kept whole: a big book is still a real reason to look.
-    q()
-      .order("volume_total_usd", { ascending: false, nullsFirst: false })
-      .limit(POOL.slices.deep.fetch),
-    // WHERE THE MONEY IS STANDING — what "Most Capital" promises. `capital_usd`
-    // is the stored sum of the two sides (PostgREST cannot order on an
-    // expression); see the migration for why it is a generated column. Volume is
-    // NOT a substitute: the top forty by each share only five markets.
-    q()
-      .order("capital_usd", { ascending: false, nullsFirst: false })
-      .limit(POOL.slices.capital.fetch),
-    participationP,
-  ]);
+  const [active, fresh, classified, believed, deep, capital, moving, participationRes] =
+    await Promise.all([
+      // What is alive. `last_trade_at` descending is the ordering the old pool had
+      // no way to express, and it is the feed's first question.
+      q()
+        .gte("last_trade_at", sinceActive)
+        .order("last_trade_at", { ascending: false, nullsFirst: false })
+        .limit(POOL.slices.active.fetch),
+      // What is new. Structurally impossible to reach through a volume ordering.
+      q()
+        .order("market_created_at", { ascending: false, nullsFirst: false })
+        .limit(POOL.slices.fresh.fetch),
+      // What the opportunity engine already flagged — output the pool that
+      // consumes it was mostly excluding.
+      q()
+        .not("opportunity_type", "is", null)
+        .order("opportunity_score", { ascending: false, nullsFirst: false })
+        .limit(POOL.slices.classified.fetch),
+      // Where people actually are — the substrate every social signal needs.
+      q()
+        .gt("directional_believers", 0)
+        .order("directional_believers", { ascending: false, nullsFirst: false })
+        .limit(POOL.slices.believed.fetch),
+      // The old pool, kept whole: a big book is still a real reason to look.
+      q()
+        .order("volume_total_usd", { ascending: false, nullsFirst: false })
+        .limit(POOL.slices.deep.fetch),
+      // WHERE THE MONEY IS STANDING — what "Most Capital" promises. `capital_usd`
+      // is the stored sum of the two sides (PostgREST cannot order on an
+      // expression); see the migration for why it is a generated column. Volume is
+      // NOT a substitute: the top forty by each share only five markets.
+      q()
+        .order("capital_usd", { ascending: false, nullsFirst: false })
+        .limit(POOL.slices.capital.fetch),
+      // WHAT IS ACTUALLY MOVING — what the "Moving" lens promises. `active` is
+      // not a substitute: it orders by WHEN a market last traded, this orders by
+      // HOW MUCH it traded today. Forty trades this morning and none since noon
+      // sinks in the first ordering and tops the second.
+      q()
+        .gt("trade_count_24h", 0)
+        .order("trade_count_24h", { ascending: false, nullsFirst: false })
+        .limit(POOL.slices.moving.fetch),
+      participationP,
+    ]);
 
   /**
    * WHERE THE PEOPLE ARE — a complete platform-wide ranking, for free.
@@ -215,7 +224,7 @@ async function poolRows(
 
   // A hard failure of the WHOLE read must throw so it is never cached; one slice
   // erroring while others answer is a degraded pool, not a broken feed.
-  const results = { active, fresh, classified, believed, deep, capital, participants };
+  const results = { active, fresh, classified, believed, deep, capital, moving, participants };
   const errs = Object.values(results).filter((r) => r.error);
   if (errs.length === Object.keys(results).length) {
     throw new Error(errs[0]!.error!.message);
@@ -238,7 +247,9 @@ async function poolRows(
         ? ' — the Explore "Most Capital" lens is now ranking an incomplete pool'
         : slice === "participants"
           ? ' — the Explore "Most Participants" lens is now ranking an incomplete pool'
-          : "";
+          : slice === "moving"
+            ? ' — the Explore "Moving" lens is now ranking an incomplete pool'
+            : "";
     console.error(`[feed] candidate pool slice "${slice}" failed: ${r.error.message}${backs}`);
   }
 

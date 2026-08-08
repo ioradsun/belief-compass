@@ -188,16 +188,15 @@ describe("the pool can back every lens label", () => {
   it("every slice can still claim its floor when they all overflow", () => {
     // The guarantee is only real if a slice's quota survives six rivals.
     const rows = (base: number) => Array.from({ length: 90 }, (_, i) => ({ onchainId: base + i }));
+    // Derived from POOL_SLICES rather than listed. A hand-written literal here
+    // silently gave a newly added slice ZERO rows, so the floor it is supposed
+    // to prove was measured against an empty fixture — the test would have
+    // failed for the wrong reason, or worse, passed one.
     const { claimed } = buildPool({
-      bySlice: {
-        active: rows(1000),
-        fresh: rows(2000),
-        classified: rows(3000),
-        believed: rows(4000),
-        deep: rows(5000),
-        capital: rows(6000),
-        participants: rows(7000),
-      },
+      bySlice: POOL_SLICES.reduce(
+        (acc, s, i) => ((acc[s] = rows((i + 1) * 1000)), acc),
+        {} as Record<PoolSlice, { onchainId: number }[]>,
+      ),
     });
     for (const s of POOL_SLICES) {
       expect(claimed[s], s).toBeGreaterThanOrEqual(POOL.slices[s].quota);

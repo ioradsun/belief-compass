@@ -1,0 +1,25 @@
+/*
+ * TYPECHECKING FOR scripts/ — which nothing was doing.
+ *
+ * `check-challenge-integrity.ts` referenced an undeclared `ledgerEmpty` FIVE
+ * times and `npx tsc --noEmit` still reported clean, because the root config's
+ * `include` is `src/**` plus two config files. Every "tsc clean" ever claimed
+ * about a diagnostic script was true only of code the compiler never opened.
+ *
+ * WHY A SEPARATE CONFIG rather than widening the root `include`. These files
+ * have no imports and no exports, so TypeScript classifies them as global
+ * SCRIPTS rather than modules — and then every top-level `const url` in one
+ * collides with every other, producing a wall of TS2451 that says nothing about
+ * any real defect. `moduleDetection: "force"` treats each file as its own
+ * module, which is what they actually are at runtime under tsx.
+ *
+ * Run:  npm run check:types   (root config + this one)
+ */
+{
+  "extends": "./tsconfig.json",
+  "include": ["scripts/**/*.ts"],
+  "compilerOptions": {
+    "moduleDetection": "force",
+    "types": ["node"]
+  }
+}
