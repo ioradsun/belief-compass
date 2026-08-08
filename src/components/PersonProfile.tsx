@@ -216,6 +216,7 @@ export function PersonProfile({
             avatarUrl={data.avatarUrl}
             seed={data.wallet}
             label={data.hasViewer ? "Them" : null}
+            heading
           />
         </div>
 
@@ -697,12 +698,16 @@ function Face({
   avatarUrl,
   seed,
   label,
+  heading = false,
 }: {
   name: string;
   avatarUrl: string | null;
   seed: string;
   label: string | null;
+  /** The person this page is about gets the document heading; the reader does not. */
+  heading?: boolean;
 }) {
+  const Name = heading ? "h1" : "p";
   return (
     <div className="flex min-w-0 flex-1 items-center gap-3">
       {avatarUrl ? (
@@ -722,7 +727,7 @@ function Face({
             {label}
           </p>
         )}
-        <p className="truncate text-[15px] font-semibold text-[var(--text)]">{name}</p>
+        <Name className="truncate text-[15px] font-semibold text-[var(--text)]">{name}</Name>
       </div>
     </div>
   );
