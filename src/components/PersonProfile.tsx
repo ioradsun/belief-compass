@@ -234,7 +234,7 @@ export function PersonProfile({
           {us.sentence && (
             <p className="mt-2 text-[14px] leading-relaxed text-[var(--text)]">{us.sentence}</p>
           )}
-          {data.relationship !== "none" && (
+          {data.relationship !== "insufficient" && data.relationship !== "neutral" && (
             <p
               className="mt-1.5 text-[10px] font-semibold tracking-wide uppercase"
               style={{ color: relationshipTone(data.relationship).fg }}
