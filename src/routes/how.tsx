@@ -134,9 +134,10 @@ function HowItWorks() {
             </ul>
           </details>
         </div>
-      </header>
+      </InfoPageHeader>
 
-      <div className="mx-auto max-w-[1180px] px-4 lg:px-8">
+      <div className="mx-auto w-full max-w-[1180px] px-4 lg:px-8">
+
         <div className="lg:grid lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-14">
           {/* ── Sticky table of contents (desktop) ──────────────────────────── */}
           <nav className="hidden lg:block">
