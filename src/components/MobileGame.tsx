@@ -787,6 +787,68 @@ function BothSides({
 }
 
 /**
+ * SIDE DETAIL — a full-screen sheet, above everything.
+ *
+ * On a phone the Both Sides region is a short middle band between the question
+ * and the order dock. Expanding a side inside it left the roster and activity
+ * clipped by that band. The detail is portalled to the body instead, so the
+ * content the reader asked for owns the screen while it is open.
+ */
+function SideDetailSheet({
+  side,
+  color,
+  onClose,
+  children,
+}: {
+  side: OrderSide;
+  color: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[120] flex flex-col" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/60"
+      />
+      <div
+        className="relative mt-auto flex max-h-[88vh] min-h-0 w-full flex-col overflow-hidden rounded-t-[18px] border-t bg-[var(--bg)] pt-3"
+        style={{ borderColor: color }}
+      >
+        <div className="mb-2 flex shrink-0 items-center justify-between px-4">
+          <span className="text-[13px] font-semibold" style={{ color }}>
+            {side} · the detail
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="-mr-1 rounded-full px-2 py-1 text-[16px] leading-none text-[var(--text-muted)]"
+          >
+            ×
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 pb-[max(20px,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch]">
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/**
  * One bar, split by believers. The share arrives already computed beside the
  * numbers (see `comparisonStrip`) so the bar and the counts under it cannot
  * disagree.
