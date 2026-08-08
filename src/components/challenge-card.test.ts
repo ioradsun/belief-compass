@@ -44,6 +44,25 @@ describe("the Challenge card shows the relationship, not a market tile", () => {
     expect(rail()).toMatch(/together\}? of \{?c\.shared|c\.together\} of \{c\.shared\}/);
   });
 
+  it("tells the story in order: person, then belief, then evidence", () => {
+    // The order IS the argument — here is a person, here is what they hold, and
+    // here is what your history with them says about whether you'll hold it too.
+    // The evidence used to sit between the question and the belief, which made
+    // the card read as a statistic that happened to mention somebody's position.
+    const c = rail();
+    const name = c.indexOf("{c.caller.name}");
+    const title = c.indexOf("{c.title}");
+    const belief = c.indexOf("{c.reason}");
+    // The RENDERED evidence line, not the screen-reader label — the aria string
+    // assembled at the top of the button also names Conviction Match, and it is
+    // deliberately ordered for a different reader.
+    const evidence = c.indexOf("% Conviction Match ·");
+    expect(name).toBeGreaterThan(-1);
+    expect(title).toBeGreaterThan(name);
+    expect(belief).toBeGreaterThan(title);
+    expect(evidence).toBeGreaterThan(belief);
+  });
+
   it("never shows a wager", () => {
     // "Mike put $500 down" turns a social signal into financial pressure, and
     // would make the loudest voice the wealthiest one. The market shows size to
@@ -85,8 +104,8 @@ describe("dismissal is private, and costs nothing", () => {
   it("keeps the dismissal viewer-local rather than writing it down", () => {
     // The one place localStorage is CORRECT: a preference owed to nobody, whose
     // worst failure mode is a card reappearing. Contrast the acknowledgement set
-    // this file deleted — that hid durable evidence somebody else had earned.
-    const c = rail();
+    // this feature deleted — that hid durable evidence somebody else had earned.
+    const c = code("src/lib/open-calls.ts");
     expect(c).toMatch(/localStorage/);
     expect(c).toMatch(/calls-hidden/);
   });
@@ -94,10 +113,10 @@ describe("dismissal is private, and costs nothing", () => {
   it("tells nobody and records nothing", () => {
     // No server call on the dismissal path: no caller notification, no Now row,
     // no relationship number moving. Absence is the whole feature.
-    const c = rail();
+    const c = code("src/lib/open-calls.ts");
     const dismissBlock = c.slice(
-      c.indexOf("function hide("),
-      c.indexOf("export function ChallengeRail"),
+      c.indexOf("export function hideCall("),
+      c.indexOf("export function useHiddenCalls("),
     );
     expect(dismissBlock).not.toMatch(/await|fetch|Fn\(|serverFn|mutate/);
   });
@@ -105,7 +124,34 @@ describe("dismissal is private, and costs nothing", () => {
   it("removes the card from the count, not just from view", () => {
     // The badge must equal what is on screen — three means three people are
     // actually waiting, which is what makes the number worth having.
-    expect(rail()).toMatch(/challenges \?\? \[\]\)\.filter\(\(c\) => !dismissed\.has/);
+    expect(code("src/lib/open-calls.ts")).toMatch(
+      /challenges \?\? \[\]\)\.filter\(\(c\) => !dismissed\.has/,
+    );
+  });
+
+  it("gives the phone a hit target a thumb can actually find", () => {
+    // The × sits on top of a card whose entire body opens the market, so a
+    // near-miss dismisses the call instead — and nothing undoes a dismissal.
+    // 32px square is the floor; the glyph itself stays quiet.
+    const dismiss = rail().slice(rail().indexOf("onDismiss(c.marketId)"));
+    expect(dismiss).toMatch(/h-8 w-8/);
+    // No hover-only reveal: a phone has no hover, so opacity-50 hover:opacity-100
+    // left it permanently at half strength exactly where it was hardest to hit.
+    expect(dismiss).not.toMatch(/opacity-50/);
+  });
+});
+
+describe("one count, two surfaces", () => {
+  it("badges the mobile menu from the same hook the rail renders from", () => {
+    // On a phone the rail is two taps inside a menu, and the count used to live
+    // only on the segmented control INSIDE it — you had to already be there to
+    // learn you should go. Deriving the badge separately would let the menu say
+    // 3 while the rail shows 2, which makes the number not worth believing.
+    const route = code("src/routes/index.tsx");
+    expect(route).toMatch(/useOpenCalls\(wallet\)\.open\.length/);
+    expect(rail()).toMatch(/useOpenCalls\(wallet\)/);
+    // The rail must not keep a second private copy of the dismissed set.
+    expect(rail()).not.toMatch(/localStorage/);
   });
 });
 
