@@ -362,10 +362,7 @@ export function PersonProfile({
   );
 }
 
-/** Placeholder so the hook order above stays flat; the real paging lives below. */
-function all(_open: boolean, _wallet: string, _total: number): { positions?: PersonPosition[] } {
-  return {};
-}
+
 
 /**
  * Per-domain agreement over the SAME shared markets the receipts print, so a
