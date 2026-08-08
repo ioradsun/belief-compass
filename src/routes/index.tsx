@@ -335,11 +335,19 @@ function BackLink({ onClick }: { onClick: () => void }) {
 
 type MobileTab = "mine" | "belief" | "room";
 
-const TABS: { key: MobileTab; label: string }[] = [
-  { key: "mine", label: "Mine" },
-  { key: "belief", label: "Belief" },
-  { key: "room", label: "The Room" },
+const TABS: { key: MobileTab; label: string; sub: string }[] = [
+  { key: "mine", label: "Mine", sub: "where you stand, and why" },
+  { key: "belief", label: "Back", sub: "one belief, right now" },
+  { key: "room", label: "Crowd", sub: "what's moving, and who's behind it" },
 ];
+
+/** The standing pages, reachable from the phone menu like everything else. */
+const MENU_PAGES: { to: string; label: string; sub: string }[] = [
+  { to: "/how", label: "How it works", sub: "the idea, in plain language" },
+  { to: "/value", label: "Why it matters", sub: "what this adds to the ecosystem" },
+  { to: "/terms", label: "Terms & risk", sub: "what you're agreeing to" },
+];
+
 
 /** The center-panel destination, as the URL expresses it. `case` is a display
  *  toggle rather than a destination, so it is deliberately not part of it. */
