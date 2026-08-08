@@ -122,7 +122,7 @@ async function main() {
   const sinceMs = Date.now() - WINDOW_DAYS * 86_400_000;
   const since = new Date(sinceMs).toISOString();
 
-  const [calls, events, beliefs, dna] = await Promise.all([
+  const [calls, events, beliefs, dna, markets] = await Promise.all([
     page<Call>(
       "market_calls",
       "market_id,caller_wallet,responder_wallet,relation_at_call,called_at,responded_at",
@@ -137,7 +137,11 @@ async function main() {
       "viewer_dna_cache",
       "viewer_wallet,twin_matches,tribe_matches,opp_matches,inverse_matches",
     ),
+    // Section 0 needs titles: `buildChallenges` drops a candidate whose market
+    // has no title, so a supply count that ignored them would overstate.
+    page<Market>("markets", "onchain_id,title"),
   ]);
+
 
   const unreadable: string[] = [];
   if (calls.blocked) unreadable.push(`market_calls — ${calls.why}`);
