@@ -424,8 +424,3 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
 
   return { items, engineVersion: FEED_ENGINE_VERSION, excluded, exhausted };
 }
-
-/** Forward-only: the id after `currentIdx`, or null when the queue is done. */
-export function nextMarketId(ids: number[], currentIdx: number): number | null {
-  return ids[currentIdx + 1] ?? null;
-}

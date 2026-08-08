@@ -66,14 +66,6 @@ export function isAfterCursor(
   return ev.log_index > cursor.log_index;
 }
 
-/** Is the event at OR before the cursor (already absorbed)? */
-export function isAtOrBeforeCursor(
-  ev: { block_number: number; log_index: number },
-  cursor: PositionCursor,
-): boolean {
-  return !isAfterCursor(ev, cursor);
-}
-
 // ── Validity ─────────────────────────────────────────────────────────────────
 export function isValidTradeEvent(ev: TradeEventForApply): boolean {
   return Boolean(

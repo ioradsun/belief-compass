@@ -25,8 +25,3 @@ export function marketTitle(raw: string | null | undefined, id: number | string)
   const t = typeof raw === "string" ? raw.trim() : "";
   return t || marketTitleFallback(id);
 }
-
-/** True when a string is the placeholder rather than a real question. */
-export function isFallbackTitle(title: string | null | undefined): boolean {
-  return /^Market #\d+$/.test((title ?? "").trim());
-}

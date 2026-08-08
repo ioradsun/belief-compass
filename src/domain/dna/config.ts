@@ -189,12 +189,6 @@ export const DNA_LIMITS = {
   maxPerGroup: 30,
 } as const;
 
-/** A directional-state or conviction change this large is "match-relevant". */
-export const CONVICTION_MATERIAL_DELTA = 0.05;
-
-/** A relationship event fires only when agreement moves at least this much. */
-export const MATERIAL_SCORE_DELTA = 5;
-
 /** Viewer cache TTL for active viewers. */
 export const DNA_CACHE_TTL_MS = 15 * 60 * 1000;
 

@@ -280,28 +280,6 @@ const SLOT_RANK: Record<ProfileSlot, number> = {
 };
 
 /**
- * Which (slot, market) pairs survive the repetition budget.
- *
- * Returns the set of slots each market keeps. The caller filters its sections
- * against this rather than each section guessing about the others — the reason
- * V1's duplication was invisible is that no single section could see the page.
- */
-export function limitRepeats(
-  claims: readonly { slot: ProfileSlot; marketId: number }[],
-  max: number = REPEAT.maxAppearances,
-): Set<string> {
-  const seen = new Map<number, number>();
-  const keep = new Set<string>();
-  for (const c of [...claims].sort((a, b) => SLOT_RANK[a.slot] - SLOT_RANK[b.slot])) {
-    const n = seen.get(c.marketId) ?? 0;
-    if (n >= max) continue;
-    seen.set(c.marketId, n + 1);
-    keep.add(`${c.slot}:${c.marketId}`);
-  }
-  return keep;
-}
-
-/**
  * EVERY position they currently hold, biggest commitment first.
  *
  * The map above INTERPRETS — it groups, it truncates, it leads with the theme

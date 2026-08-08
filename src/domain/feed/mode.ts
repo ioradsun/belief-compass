@@ -39,12 +39,6 @@ import type { EvidenceLevel } from "@/domain/dna/config";
 
 export type FeedMode = "for_you" | "tribe" | "rivals";
 
-export const FEED_MODES = {
-  for_you: { label: "For You", question: "What is worth your attention right now?" },
-  tribe: { label: "Tribe", question: "What are people you align with backing?" },
-  rivals: { label: "Rivals", question: "What are people who challenge you backing?" },
-} as const satisfies Record<FeedMode, { label: string; question: string }>;
-
 export const MODE_TUNING = {
   /**
    * Qualified relationships needed before a mode is offered at all.

@@ -147,8 +147,3 @@ export function isRateStale(updatedAtMs: number | null | undefined, nowMs: numbe
   if (updatedAtMs == null || !Number.isFinite(updatedAtMs)) return true;
   return nowMs - updatedAtMs > RATE_STALE_MS;
 }
-
-/** The short unit tag for a header/label, e.g. "USD" or "ETH". */
-export function unitLabel(unit: DisplayUnit): string {
-  return unit;
-}

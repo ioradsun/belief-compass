@@ -49,11 +49,6 @@ export function takePendingConnect(): boolean {
   return p;
 }
 
-/** Clear the intent once it has been handled by a mounted listener. */
-export function clearPendingConnect() {
-  pendingConnect = false;
-}
-
 export function requestDisconnect() {
   if (typeof window === "undefined") return;
   // Signing out withdraws the intent too, or the next connector swap would

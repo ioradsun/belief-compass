@@ -35,21 +35,3 @@ export function relationshipTone(label: RelationshipLabel): { fg: string; bg: st
       };
   }
 }
-
-export const EVIDENCE_TEXT: Record<EvidenceLevel, string> = {
-  insufficient: "Insufficient",
-  early: "Early",
-  growing: "Growing",
-  established: "Established",
-};
-
-/** e.g. "Maya, Tribe relationship, 94 percent Conviction Match across 41 shared convictions". */
-export function relationshipAria(
-  name: string,
-  label: RelationshipLabel,
-  agreement: number,
-  shared: number,
-): string {
-  const rel = RELATIONSHIP_TEXT[label];
-  return `${name}, ${rel} relationship, ${agreement} percent Conviction Match across ${shared} shared convictions`;
-}
