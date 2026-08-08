@@ -299,14 +299,17 @@ export const Route = createFileRoute("/")({
   // skeleton forever. Never start server work you do not wait for.
   loader: async () => {
     try {
-      const feed = await getOpportunityFeed({ data: { window: "24h" } });
-      // fetchedAt travels with the payload so the client can age the snapshot
-      // correctly instead of treating it as "fetched at hydration time".
+      // WARM-ONLY. The shell must not wait on the feed build: on a cold isolate
+      // that read cost 10s of TTFB and the landing page could not paint at all.
+      // A warm isolate still SSRs a real market; a cold one ships the shell now
+      // and the client's own query fills the deck a moment later.
+      const feed = await getWarmFeed();
       return { feed, fetchedAt: Date.now() };
     } catch {
       return { feed: null, fetchedAt: Date.now() };
     }
   },
+
   staleTime: 10_000,
   component: Feed,
   errorComponent: ({ error }) => (
