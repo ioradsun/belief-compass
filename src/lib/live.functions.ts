@@ -1315,5 +1315,6 @@ async function buildTape(data: z.output<typeof input>) {
       }
     }
 
-    return { rows: material, standing, error: null };
-  });
+  return { rows: material, standing, error: null };
+}
+
