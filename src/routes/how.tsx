@@ -12,7 +12,7 @@
  * hairline borders, green YES / red NO), so the relationship feels immediate.
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { BrandMark } from "@/components/BrandMark";
 import { InfoPageHeader } from "@/components/InfoPageHeader";
 
