@@ -1,50 +1,53 @@
 /**
- * YOUR PEOPLE GOT THE CALL — what a creator sees the moment a market is live.
+ * THE MOMENT SOMEONE SHOWS UP — the emotional peak of the product.
  *
- * WHAT THIS REPLACED, and the replacement is mostly deletion. This was a
- * recruitment panel: five audiences, an Invite button per person, a stored
- * invitation each, and a Launch Progress ladder measuring what came of them. It
- * asked a creator to do casting before anyone had read their question.
+ * Every conviction answers calls behind you and creates calls ahead of you, and
+ * this is the only surface that can say both halves in one breath:
  *
- * Challenge makes all of that unnecessary. Publishing a market ALREADY calls
- * everyone who qualifies — the market becomes eligible for their Challenge
- * surface the moment it exists — so there is nothing to send and nothing to
- * pick. What is left is the one useful thing: telling the creator that it
- * happened.
+ *     You showed up for Sarah.               ← backward: you were counted on
+ *     Now your people can show up for you.   ← forward: their turn, not a delivery
  *
- * CREATION AND PARTICIPATION USE THE SAME SENTENCE. Taking a side calls your
- * people exactly as creating a market does, so this component renders after
- * both. Two recruitment systems collapse into one line of feedback.
+ * "CAN show up", not "have your call". The forward half describes an OPPORTUNITY
+ * that now exists, not a message that went out — nothing was delivered, and a
+ * sentence implying otherwise would be the notification claim wearing softer
+ * words. It also mirrors the backward half exactly, which is the point: the same
+ * act that let you show up for Sarah is what lets Sarah show up for you.
  *
- * NEVER "NOTIFIED". There is no notification channel on this platform: no
- * email, no push, no service worker, no inbox. "Got the call" is true in the
- * only sense available — this market is now eligible for their Challenge
- * surface — and `callReachLine` refuses to render a zero rather than showing
- * "0 Tribe · 0 Rivals", which reads as a scoreboard the creator is losing when
- * the truth is that a network is still forming.
+ * NEVER "YOU TOOK A SIDE". The trade confirmation two inches away already said
+ * that, and repeating it spends the one moment in the product that could have said
+ * something that matters instead.
+ *
+ * WHAT THIS REPLACED, and the replacement is mostly deletion. It was a recruitment
+ * panel: five audiences, an Invite button per person, a stored invitation each, and
+ * a Launch Progress ladder measuring what came of them. It asked a creator to do
+ * casting before anyone had read their question. Publishing already calls everyone
+ * who qualifies, so there is nothing to send and nothing to pick.
+ *
+ * NEVER "NOTIFIED". There is no notification channel on this platform: no email, no
+ * push, no service worker, no inbox. "Have your call" is true in the only sense
+ * available — the market is now eligible for their Challenge surface — and
+ * `callReachLine` returns null rather than "0 Tribe · 0 Rivals", which reads as a
+ * scoreboard the reader is losing when the truth is that a network is still forming.
+ *
+ * EVERY LINE IS INDEPENDENTLY ABSENT. Nobody called → no backward line. Nobody
+ * qualifies yet → no reach line. Neither is ever rendered as a zero.
  */
 import { useQuery } from "@tanstack/react-query";
 import { getCallReach } from "@/lib/challenge.functions";
-import { callReachLine } from "@/domain/challenge";
-
-/**
- * WHICH ACT JUST HAPPENED. Only the first line differs — the reach sentence,
- * the empty-network sentence and the dismissal are identical, because the
- * underlying fact is identical: qualified people can now see this market on
- * their Challenge surface because of something this viewer did.
- */
-const HEADLINE: Record<"created" | "backed", string> = {
-  created: "Your market is live.",
-  backed: "You took a side.",
-};
+import { callReachLine, type NamedPerson } from "@/domain/challenge";
+import { showedUpFor } from "@/domain/dependability";
+import { closedCallsKey } from "@/hooks/useAnswerCalls";
 
 export function LaunchRail({
   wallet,
   kind = "created",
+  marketId,
   onDone,
 }: {
   wallet?: string;
   kind?: "created" | "backed";
+  /** Which market just happened — how the backward line finds who was answered. */
+  marketId?: number;
   /** Dismiss the moment — the market is just a market now. */
   onDone: () => void;
 }) {
@@ -55,8 +58,21 @@ export function LaunchRail({
     staleTime: 60_000,
   });
 
+  // Written by useAnswerCalls when the trade settled. No queryFn: this is a
+  // handoff, not a fetch — there is nothing to go and ask for, and a request
+  // here would race the write it is waiting on.
+  const { data: closed } = useQuery<NamedPerson[]>({
+    queryKey: closedCallsKey(marketId ?? -1),
+    enabled: false,
+    initialData: [],
+  });
+
   if (!wallet) return null;
+
   const line = reach ? callReachLine(reach) : null;
+  // Creating a market answers nobody — a creator was not called into their own
+  // question — so the backward line belongs to a taken side only.
+  const answered = kind === "backed" ? showedUpFor((closed ?? []).map((p) => p.name ?? "")) : null;
 
   return (
     <section
@@ -66,21 +82,32 @@ export function LaunchRail({
         background: "color-mix(in oklab, var(--yes) 8%, transparent)",
       }}
     >
-      <p className="text-[13px] font-semibold leading-snug text-[var(--text)]">{HEADLINE[kind]}</p>
+      {/* THE PAYOFF LEADS when there is one. Being counted on is a bigger fact
+          than having published, so it outranks the headline rather than sitting
+          under it. */}
+      {answered ? (
+        <p className="text-[13px] font-semibold leading-snug text-[var(--text)]">{answered}</p>
+      ) : (
+        <p className="text-[13px] font-semibold leading-snug text-[var(--text)]">
+          {kind === "created" ? "Your market is live." : "Your conviction is out there."}
+        </p>
+      )}
+
       {line ? (
         <>
-          <p className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
-            Your people got the call.
+          <p className="mt-1 text-[11.5px] leading-snug text-[var(--text-secondary)]">
+            Now your people can show up for you.
           </p>
           <p className="num mt-1 text-[12px] text-[var(--text)]">{line}</p>
         </>
       ) : (
         /* Nobody qualifies yet, and saying so plainly beats a zero. The market
            still stands; it simply has no relationships pointing at it. */
-        <p className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
+        <p className="mt-1 text-[11.5px] leading-snug text-[var(--text-secondary)]">
           As your Tribe and Rivals form, questions like this one reach them automatically.
         </p>
       )}
+
       <button
         type="button"
         onClick={onDone}

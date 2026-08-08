@@ -13,7 +13,9 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import type { AnsweredNotice, CallReach, Challenge } from "@/domain/challenge";
+import type { CallReach, Challenge, NamedPerson } from "@/domain/challenge";
+import type { PairCalls } from "@/lib/challenge.server";
+import type { Tally } from "@/domain/dependability";
 
 const WALLET = z.string().min(3).max(80);
 
@@ -28,13 +30,34 @@ export const getChallenges = createServerFn({ method: "GET" })
     return buildChallenges(data.wallet);
   });
 
-/** Calls your own conviction created, that somebody answered. */
-export const getAnsweredCalls = createServerFn({ method: "GET" })
-  .inputValidator((raw: unknown) => z.object({ wallet: WALLET.nullish() }).parse(raw ?? {}))
-  .handler(async ({ data }): Promise<AnsweredNotice[]> => {
-    if (!data.wallet) return [];
-    const { answeredForMe } = await import("@/lib/challenge.server");
-    return answeredForMe(data.wallet);
+/**
+ * ONE RELATIONSHIP, BOTH DIRECTIONS — what the profile's history reads.
+ *
+ * Replaces `getAnsweredCalls`, which returned three dismissible notices about one
+ * direction. Reading your own relationship with somebody grants nothing and names
+ * nobody who is not already on the page, so it stays unsigned.
+ */
+export const getCallsWithPerson = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) =>
+    z.object({ viewer: WALLET.nullish(), person: WALLET }).parse(raw),
+  )
+  .handler(async ({ data }): Promise<PairCalls | null> => {
+    // Signed out there is no relationship to describe — null rather than an empty
+    // shape, so the UI renders nothing instead of "no history yet".
+    if (!data.viewer) return null;
+    const { callsWithPerson } = await import("@/lib/challenge.server");
+    return callsWithPerson(data.viewer, data.person);
+  });
+
+/** The same counts for a screenful of people — one round trip, not one each. */
+export const getDependability = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) =>
+    z.object({ viewer: WALLET.nullish(), wallets: z.array(WALLET).max(120) }).parse(raw),
+  )
+  .handler(async ({ data }): Promise<Record<string, { theirs: Tally; yours: Tally }>> => {
+    if (!data.viewer || data.wallets.length === 0) return {};
+    const { dependabilityFor } = await import("@/lib/challenge.server");
+    return Object.fromEntries(await dependabilityFor(data.viewer, data.wallets));
   });
 
 /** How many qualified people this viewer's conviction is eligible to reach. */
@@ -56,8 +79,10 @@ export const answerCalls = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
     z.object({ wallet: WALLET, marketId: z.number().int().nonnegative() }).parse(raw),
   )
-  .handler(async ({ data }): Promise<{ ok: true }> => {
+  .handler(async ({ data }): Promise<{ closed: NamedPerson[] }> => {
     const { markCallsAnswered } = await import("@/lib/challenge.server");
-    await markCallsAnswered(data.wallet, data.marketId);
-    return { ok: true };
+    // WHO this trade just answered, not merely that it succeeded. It is the one
+    // moment the product can tell somebody they were counted on, and a bare
+    // `{ ok: true }` threw that away at the exact instant it was true.
+    return { closed: await markCallsAnswered(data.wallet, data.marketId) };
   });

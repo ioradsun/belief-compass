@@ -23,14 +23,21 @@
 import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import {
+  CHALLENGE,
   composeChallenges,
-  answeredNotices,
-  type AnsweredNotice,
   type CallEvidence,
   type CallerRelation,
   type Challenge,
   type CallReach,
 } from "@/domain/challenge";
+import {
+  EMPTY_TALLY,
+  tally,
+  type CallFact,
+  type HistoryEntry,
+  type Tally,
+} from "@/domain/dependability";
+import type { NamedPerson } from "@/domain/challenge";
 
 /** Bounds. A panel of six open questions is not a feed builder. */
 const READ = {
@@ -38,10 +45,17 @@ const READ = {
   peoplePerBucket: 40,
   /** Recent events read across all qualified callers. */
   callerEvents: 400,
-  /** How far back an act can be and still be a live call. */
-  windowDays: 30,
-  /** Answered-call notices read. */
-  answers: 20,
+  /**
+   * How far back an act can be and still be a live call.
+   *
+   * NOT A LOCAL 30. It reads the domain constant because the profile timeline and
+   * the showing-up denominator apply the same window, and a second copy here is
+   * the version that drifts — the day it did, a profile would show somebody
+   * waiting on a call their caller can no longer see.
+   */
+  windowDays: CHALLENGE.windowDays,
+  /** Calls read for one pair's history. */
+  pairCalls: 200,
 } as const;
 
 /** jsonb rows in viewer_dna_cache carry more than this; only these are read. */
@@ -227,20 +241,39 @@ async function recordCalls(sb: Sb, responder: string, open: readonly Challenge[]
  * "when did they show up" into "when were they last here", which is a different
  * and much less useful fact.
  */
-export async function markCallsAnswered(wallet: string, marketId: number): Promise<void> {
+export async function markCallsAnswered(wallet: string, marketId: number): Promise<NamedPerson[]> {
   const sb = serviceClient();
-  const { error } = await sb
+  // `.select()` on the UPDATE returns exactly the rows this call closed — the
+  // ones that were still open a moment ago. Reading them separately afterwards
+  // would race a second tab and could name somebody this trade did not answer.
+  const { data, error } = await sb
     .from("market_calls")
     .update({ responded_at: new Date().toISOString() })
     .eq("market_id", marketId)
     .eq("responder_wallet", wallet.toLowerCase())
-    .is("responded_at", null);
+    .is("responded_at", null)
+    .select("caller_wallet");
   if (error) {
     console.error("[challenge] could not stamp answers", {
       code: error.code,
       message: error.message,
     });
+    return [];
   }
+  const wallets = [
+    ...new Set(
+      ((data ?? []) as { caller_wallet: string }[]).map((r) =>
+        String(r.caller_wallet).toLowerCase(),
+      ),
+    ),
+  ];
+  if (wallets.length === 0) return [];
+  const { resolveProfiles } = await import("@/lib/profiles.server");
+  const profiles = await resolveProfiles(wallets, 0);
+  return wallets.map((w) => ({
+    wallet: w,
+    name: profiles.get(w)?.displayName?.trim() || aliasFor(w),
+  }));
 }
 
 /**
@@ -264,26 +297,224 @@ export async function callReachFor(wallet: string): Promise<CallReach> {
 }
 
 /**
- * SARAH SHOWED UP — calls this viewer's own conviction created, that somebody
- * answered.
+ * ONE RELATIONSHIP, BOTH DIRECTIONS.
  *
- * This is the only event that counts toward Dependability, and the precision is
- * the point: not "Sarah participated in something I participated in", which on
- * a small platform is ordinary coincidence, but "my act created a call for
- * Sarah and Sarah answered it". The ledger holds the causal edge; this reads it.
+ * WHAT THIS REPLACED. `answeredForMe` read one direction — calls I made that
+ * somebody answered — capped at three, to fill a dismissible card at the top of
+ * the rail. That is half a relationship reported as if it were the whole thing.
+ * A relationship is not one person's record of the other, and the reverse rows
+ * have been written since the first day without anything ever reading them.
+ *
+ * So this reads both: what they did when I called, and what I did when they
+ * called. Two indexed queries, `market_calls_caller_idx` and
+ * `market_calls_responder_idx`, each already covering its direction.
  */
-export async function answeredForMe(wallet: string): Promise<AnsweredNotice[]> {
-  const me = wallet.toLowerCase();
+export interface PairCalls {
+  /** Calls I made, addressed to them. The denominator for "do they show up". */
+  theirs: Tally;
+  /** Calls they made, addressed to me. Counted so reciprocity is provable. */
+  yours: Tally;
+  /** The merged timeline, unlabelled — the domain names each row. */
+  history: HistoryEntry[];
+}
+
+const EMPTY_PAIR: PairCalls = {
+  theirs: { ...EMPTY_TALLY },
+  yours: { ...EMPTY_TALLY },
+  history: [],
+};
+
+interface CallRow {
+  market_id: number;
+  caller_wallet: string;
+  responder_wallet: string;
+  called_at: string;
+  responded_at: string | null;
+}
+
+const CALL_COLUMNS = "market_id, caller_wallet, responder_wallet, called_at, responded_at";
+
+const factOf = (r: CallRow): CallFact => ({
+  calledAtMs: Date.parse(r.called_at),
+  respondedAtMs: r.responded_at ? Date.parse(r.responded_at) : null,
+});
+
+export async function callsWithPerson(viewer: string, person: string): Promise<PairCalls> {
+  const me = viewer.toLowerCase();
+  const them = person.toLowerCase();
+  if (!me || !them || me === them) return EMPTY_PAIR;
+  const sb = serviceClient();
+
+  const [mine, hers] = await Promise.all([
+    sb
+      .from("market_calls")
+      .select(CALL_COLUMNS)
+      .eq("caller_wallet", me)
+      .eq("responder_wallet", them)
+      .order("called_at", { ascending: false })
+      .limit(READ.pairCalls),
+    sb
+      .from("market_calls")
+      .select(CALL_COLUMNS)
+      .eq("caller_wallet", them)
+      .eq("responder_wallet", me)
+      .order("called_at", { ascending: false })
+      .limit(READ.pairCalls),
+  ]);
+
+  // Loudly, then degrade. A blocked read here must not become "you have no
+  // history with this person", which is the confident-zero this codebase keeps
+  // paying for — and here it would erase a real relationship.
+  for (const [label, res] of [["theirs", mine] as const, ["yours", hers] as const]) {
+    if (res.error) {
+      console.error(`[challenge] pair calls unreadable (${label})`, {
+        code: res.error.code,
+        message: res.error.message,
+      });
+      return EMPTY_PAIR;
+    }
+  }
+
+  const now = Date.now();
+  const mineRows = (mine.data ?? []) as CallRow[];
+  const hersRows = (hers.data ?? []) as CallRow[];
+  const theirs = tally(mineRows.map(factOf), now);
+  const yours = tally(hersRows.map(factOf), now);
+
+  const ids = [...new Set([...mineRows, ...hersRows].map((r) => Number(r.market_id)))];
+  const titleOf = await titlesFor(sb, ids);
+
+  const history: HistoryEntry[] = [];
+  for (const r of mineRows) {
+    const title = titleOf.get(Number(r.market_id));
+    if (!title) continue;
+    const answeredMs = r.responded_at ? Date.parse(r.responded_at) : null;
+    // An unanswered call that left the window is neither waiting nor a failure —
+    // it is simply not part of the story, exactly as it is not part of the count.
+    if (answeredMs == null && tally([factOf(r)], now).outOfReach > 0) continue;
+    history.push({
+      marketId: Number(r.market_id),
+      title,
+      direction: answeredMs == null ? "waiting_on_them" : "they_answered",
+      atMs: answeredMs ?? Date.parse(r.called_at),
+    });
+  }
+  for (const r of hersRows) {
+    const title = titleOf.get(Number(r.market_id));
+    // Only MY answers appear from this side. A call they made that I never
+    // answered is not something to show them waiting on me for — this page is
+    // about the relationship, not a list of my own outstanding obligations.
+    if (!title || !r.responded_at) continue;
+    history.push({
+      marketId: Number(r.market_id),
+      title,
+      direction: "you_answered",
+      atMs: Date.parse(r.responded_at),
+    });
+  }
+
+  return { theirs, yours, history };
+}
+
+/**
+ * The same counts for many people at once — what the People cards read.
+ *
+ * Two queries total regardless of how many people are on screen, because a
+ * per-person round trip would put the rail's render cost on the network.
+ */
+export async function dependabilityFor(
+  viewer: string,
+  wallets: readonly string[],
+): Promise<Map<string, { theirs: Tally; yours: Tally }>> {
+  const me = viewer.toLowerCase();
+  const them = [...new Set(wallets.map((w) => w.toLowerCase()).filter((w) => w && w !== me))];
+  const out = new Map<string, { theirs: Tally; yours: Tally }>();
+  if (!me || them.length === 0) return out;
+  const sb = serviceClient();
+
+  const [mine, hers] = await Promise.all([
+    sb
+      .from("market_calls")
+      .select(CALL_COLUMNS)
+      .eq("caller_wallet", me)
+      .in("responder_wallet", them),
+    sb
+      .from("market_calls")
+      .select(CALL_COLUMNS)
+      .eq("responder_wallet", me)
+      .in("caller_wallet", them),
+  ]);
+  if (mine.error || hers.error) {
+    console.error("[challenge] batch pair calls unreadable", {
+      code: mine.error?.code ?? hers.error?.code,
+      message: mine.error?.message ?? hers.error?.message,
+    });
+    return out;
+  }
+
+  const now = Date.now();
+  const ensure = (w: string) => {
+    let e = out.get(w);
+    if (!e) {
+      e = { theirs: { ...EMPTY_TALLY }, yours: { ...EMPTY_TALLY } };
+      out.set(w, e);
+    }
+    return e;
+  };
+  for (const r of (mine.data ?? []) as CallRow[]) {
+    const e = ensure(String(r.responder_wallet).toLowerCase());
+    const t = tally([factOf(r)], now);
+    e.theirs.answered += t.answered;
+    e.theirs.waiting += t.waiting;
+    e.theirs.outOfReach += t.outOfReach;
+  }
+  for (const r of (hers.data ?? []) as CallRow[]) {
+    const e = ensure(String(r.caller_wallet).toLowerCase());
+    const t = tally([factOf(r)], now);
+    e.yours.answered += t.answered;
+    e.yours.waiting += t.waiting;
+    e.yours.outOfReach += t.outOfReach;
+  }
+  return out;
+}
+
+/**
+ * SOMEBODY SHOWED UP — recent answers to this viewer's calls, ONE ROW PER MARKET.
+ *
+ * The aggregation is the feature. Three people answering in the same market is
+ * one thing that happened to you; three rows would be a notification inbox in the
+ * tape's clothing, getting loudest on the reader's best day and saying nothing new
+ * by the third line.
+ *
+ * Read from the ledger rather than from `events` because the causal claim is the
+ * point: not "somebody traded in a market I am also in", which on a platform this
+ * size is ordinary coincidence, but "my conviction created a call for them and
+ * they answered it".
+ */
+export interface ShowedUp {
+  marketId: number;
+  title: string;
+  people: NamedPerson[];
+  /** The most recent answer in this market — what the row is dated by. */
+  atMs: number;
+}
+
+export async function showedUpForMe(viewer: string, sinceMs: number): Promise<ShowedUp[]> {
+  const me = viewer.toLowerCase();
+  if (!me) return [];
   const sb = serviceClient();
   const { data, error } = await sb
     .from("market_calls")
     .select("market_id, responder_wallet, responded_at")
     .eq("caller_wallet", me)
     .not("responded_at", "is", null)
+    .gte("responded_at", new Date(sinceMs).toISOString())
     .order("responded_at", { ascending: false })
-    .limit(READ.answers);
+    .limit(READ.pairCalls);
   if (error) {
-    console.error("[challenge] answered calls unreadable", {
+    // Loudly, then degrade — the tape keeps working without this family rather
+    // than the whole read failing over a social row.
+    console.error("[challenge] showed-up rows unreadable", {
       code: error.code,
       message: error.message,
     });
@@ -297,36 +528,48 @@ export async function answeredForMe(wallet: string): Promise<AnsweredNotice[]> {
   }[];
   if (rows.length === 0) return [];
 
+  const byMarket = new Map<number, { wallets: string[]; atMs: number }>();
+  for (const r of rows) {
+    const id = Number(r.market_id);
+    const at = Date.parse(r.responded_at);
+    if (!Number.isFinite(id) || !Number.isFinite(at)) continue;
+    const cur = byMarket.get(id) ?? { wallets: [], atMs: 0 };
+    const w = String(r.responder_wallet).toLowerCase();
+    if (!cur.wallets.includes(w)) cur.wallets.push(w);
+    cur.atMs = Math.max(cur.atMs, at);
+    byMarket.set(id, cur);
+  }
+
   const { resolveProfiles } = await import("@/lib/profiles.server");
-  const [{ data: markets }, profiles] = await Promise.all([
-    sb
-      .from("markets")
-      .select("onchain_id, title")
-      .in("onchain_id", [...new Set(rows.map((r) => Number(r.market_id)))]),
-    resolveProfiles(
-      rows.map((r) => String(r.responder_wallet).toLowerCase()),
-      0,
-    ),
+  const [titleOf, profiles] = await Promise.all([
+    titlesFor(sb, [...byMarket.keys()]),
+    resolveProfiles([...new Set(rows.map((r) => String(r.responder_wallet).toLowerCase()))], 0),
   ]);
-  const titleOf = new Map(
-    ((markets ?? []) as { onchain_id: number; title: string | null }[])
+
+  const out: ShowedUp[] = [];
+  for (const [marketId, v] of byMarket) {
+    const title = titleOf.get(marketId);
+    if (!title) continue;
+    out.push({
+      marketId,
+      title,
+      people: v.wallets.map((w) => ({
+        wallet: w,
+        name: profiles.get(w)?.displayName?.trim() || aliasFor(w),
+      })),
+      atMs: v.atMs,
+    });
+  }
+  return out.sort((a, b) => b.atMs - a.atMs || a.marketId - b.marketId);
+}
+
+/** Titles for a set of markets, dropping the ones that do not resolve. */
+async function titlesFor(sb: Sb, ids: readonly number[]): Promise<Map<number, string>> {
+  if (ids.length === 0) return new Map();
+  const { data } = await sb.from("markets").select("onchain_id, title").in("onchain_id", ids);
+  return new Map(
+    ((data ?? []) as { onchain_id: number; title: string | null }[])
       .filter((m) => m.title)
       .map((m) => [Number(m.onchain_id), String(m.title)]),
-  );
-
-  return answeredNotices(
-    rows.flatMap((r) => {
-      const title = titleOf.get(Number(r.market_id));
-      if (!title) return [];
-      const w = String(r.responder_wallet).toLowerCase();
-      return [
-        {
-          marketId: Number(r.market_id),
-          title,
-          responder: { wallet: w, name: profiles.get(w)?.displayName?.trim() || aliasFor(w) },
-          respondedAtMs: Date.parse(r.responded_at),
-        },
-      ];
-    }),
   );
 }

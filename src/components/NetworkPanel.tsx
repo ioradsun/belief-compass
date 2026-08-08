@@ -43,6 +43,8 @@ import { type NetworkPersonRow } from "@/lib/dna.functions";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { WalletConnectButton } from "@/components/WalletConnect";
 import { presentRelationship, type RelationshipPresentation } from "@/domain/relationship";
+import { getDependability } from "@/lib/challenge.functions";
+import { bondFor, EMPTY_TALLY, type Bond, type Tally } from "@/domain/dependability";
 import {
   place,
   bandLabel,
@@ -58,6 +60,8 @@ import {
 interface PersonView {
   row: NetworkPersonRow;
   rel: RelationshipPresentation;
+  /** Whether they show up for you. Undefined until the batch read lands. */
+  bond?: Bond;
   spot: SpectrumPlace;
 }
 
@@ -125,9 +129,41 @@ export function NetworkPanel({
     [data],
   );
 
+  /**
+   * DO THEY SHOW UP FOR YOU — one batch read for the whole rail.
+   *
+   * A SEPARATE QUERY, NOT A WIDER `getNetwork`. `networkQO` is one cache entry
+   * read by several surfaces, so adding a field there would change all of them
+   * and invalidate a cache the feed depends on. This joins client-side instead,
+   * which also means the cards paint immediately from the network read and the
+   * sentence arrives a beat later rather than holding the list back.
+   */
+  const wallets = useMemo(() => everyone.map((v) => v.row.wallet), [everyone]);
+  const { data: bonds } = useQuery({
+    queryKey: ["dependability", wallet ?? null, wallets.length],
+    queryFn: () => getDependability({ data: { viewer: wallet ?? null, wallets } }),
+    enabled: !!wallet && wallets.length > 0,
+    staleTime: 60_000,
+  });
+
   const list = useMemo(
-    () => everyone.filter((v) => matchesFilter(v.spot.band, filter)),
-    [everyone, filter],
+    () =>
+      everyone
+        .filter((v) => matchesFilter(v.spot.band, filter))
+        .map((v) => {
+          const pair = bonds?.[v.row.wallet.toLowerCase()];
+          return {
+            ...v,
+            // No call history is a real state and the most common one — `bondFor`
+            // answers it with silence rather than a zero.
+            bond: bondFor(
+              v.row.displayName,
+              (pair?.theirs ?? EMPTY_TALLY) as Tally,
+              (pair?.yours ?? EMPTY_TALLY) as Tally,
+            ),
+          };
+        }),
+    [everyone, filter, bonds],
   );
 
   // The tab's count is the whole network, never what the filter left behind:
@@ -184,7 +220,7 @@ export function NetworkPanel({
         ) : (
           <ul className="flex flex-col gap-0.5">
             {list.map((v) => (
-              <PersonRow
+              <PersonCard
                 key={v.row.wallet}
                 v={v}
                 selected={selectedPerson?.toLowerCase() === v.row.wallet.toLowerCase()}
@@ -290,18 +326,32 @@ const FILTER_DOT: Record<SpectrumFilter, string> = {
 };
 
 /**
- * One person, two answers:
+ * A PERSON IS A POSITION.
  *
- *   WHO IS THIS?        the name
- *   HOW DO WE RELATE?   the ring around their face, and the match behind it
+ * The anatomy is `ConvictionCard`'s, one for one, because the Positions rail
+ * already solved this exact layout problem in this exact width and the two rails
+ * should read as one system:
  *
- * The relationship WORD is gone from the row. It was the widest thing on the
- * line and the first thing to get cut off, and it said less than the colour it
- * sat next to. The ring carries the whole continuum — deep blue through neutral
- * to deep amber — so the text is left with only what colour cannot say: how
- * often you agree, and on how much.
+ *   the question      → the person
+ *   what changed      → what this relationship is right now
+ *   value / return    → how much you agree
+ *   "you also back NO"→ nothing; the sentence already carried it
+ *
+ * THE SENTENCE IS THE HERO. "You show up for each other" is the payoff of the
+ * entire Challenge system — it is where the software stops describing people and
+ * starts describing a relationship — so it gets the weight, and the number below
+ * merely explains why. A dashboard of two percentages says the same thing and
+ * says it coldly.
+ *
+ * ONE NUMBER, NOT TWO. The showing-up truth is already in the sentence; printing
+ * "76% Dependable" beside it states the same fact twice and in the worse of the
+ * two languages. The count that backs it lives one level down, on the profile.
+ *
+ * QUIET BEATS MANUFACTURED. No history renders no sentence — not "no calls yet",
+ * not a zero. Most relationships on this platform have no call history and saying
+ * so on every card would be noise with a false note in it.
  */
-function PersonRow({
+function PersonCard({
   v,
   selected,
   onSelect,
@@ -310,59 +360,82 @@ function PersonRow({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const { row, rel, spot } = v;
+  const { row, rel, spot, bond } = v;
   const word = bandLabel(spot.band) ?? "Neutral";
   const tone = spectrumColor(spot.position);
   const ring = spectrumRing(spot.position);
-  const shared = rel.sharedConvictions;
   const [imgFailed, setImgFailed] = useState(false);
   const showImg = Boolean(row.avatarUrl) && !imgFailed;
+  const agreement = Number.isFinite(rel.alignmentPct) ? Math.round(rel.alignmentPct) : null;
 
   return (
     <li>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onSelect}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
         aria-current={selected ? "true" : undefined}
-        aria-label={`${row.displayName}, ${word}. ${shared} shared conviction${shared === 1 ? "" : "s"}.`}
-        title={word}
-        className="flex w-full items-center gap-3 rounded-[10px] px-2 py-2.5 text-left transition-colors hover:bg-[var(--surface)]"
-        style={selected ? { background: "var(--surface)" } : undefined}
+        aria-label={`${row.displayName}, ${word}.${bond?.sentence ? ` ${bond.sentence}` : ""}`}
+        className="block w-full cursor-pointer rounded-[14px] p-3.5 text-left transition-colors hover:bg-[var(--surface-2)]"
+        style={{ background: selected ? "var(--surface-2)" : "var(--surface)" }}
       >
-        <span
-          className="grid shrink-0 place-items-center rounded-full"
-          style={{ padding: ring.width, background: ring.color }}
-          aria-hidden
-        >
-          {showImg ? (
-            <img
-              src={row.avatarUrl!}
-              alt=""
-              onError={() => setImgFailed(true)}
-              className="h-9 w-9 rounded-full object-cover"
-              style={{ outline: "2px solid var(--bg)", outlineOffset: -1 }}
-            />
-          ) : (
-            <span
-              className="grid h-9 w-9 place-items-center rounded-full text-[11px] font-semibold text-white"
-              style={{ background: `hsl(${hueFor(row.wallet)} 45% 45%)` }}
-            >
-              {initialsFor(row.displayName)}
-            </span>
-          )}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13.5px] font-medium text-[var(--text)]">
+        {/* 1 — Who. The ring keeps carrying the continuum; the word names it. */}
+        <div className="flex items-center gap-2.5">
+          <span
+            className="grid shrink-0 place-items-center rounded-full"
+            style={{ padding: ring.width, background: ring.color }}
+            aria-hidden
+          >
+            {showImg ? (
+              <img
+                src={row.avatarUrl!}
+                alt=""
+                onError={() => setImgFailed(true)}
+                className="h-8 w-8 rounded-full object-cover"
+                style={{ outline: "2px solid var(--bg)", outlineOffset: -1 }}
+              />
+            ) : (
+              <span
+                className="grid h-8 w-8 place-items-center rounded-full text-[10px] font-semibold text-white"
+                style={{ background: `hsl(${hueFor(row.wallet)} 45% 45%)` }}
+              >
+                {initialsFor(row.displayName)}
+              </span>
+            )}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[var(--text)]">
             {row.displayName}
           </span>
-          <span className="mt-1 flex items-baseline gap-1.5 text-[11.5px]">
-            <span className="shrink-0 font-semibold" style={{ color: tone }}>
-              {word}
-            </span>
-            <span className="num truncate text-[var(--text-muted)]">· {shared} shared</span>
+          <span
+            className="shrink-0 text-[10px] font-semibold uppercase tracking-wide"
+            style={{ color: tone }}
+          >
+            {word}
           </span>
-        </span>
-      </button>
+        </div>
+
+        {/* 2 — The story. Absent, never zeroed. */}
+        {bond?.sentence && (
+          <p className="mt-2 text-[12.5px] leading-snug text-[var(--text)]">{bond.sentence}</p>
+        )}
+
+        {/* 3 — Why. One number, under its own label, exactly as a position states
+            its value. Never rendered when there is no overlap to measure. */}
+        {agreement != null && rel.sharedConvictions > 0 && (
+          <div className="mt-2.5">
+            <div className="num text-[16px] font-semibold leading-none text-[var(--text)]">
+              {agreement}%
+            </div>
+            <div className="mt-1 text-[10px] text-[var(--text-muted)]">Shared DNA</div>
+          </div>
+        )}
+      </div>
     </li>
   );
 }

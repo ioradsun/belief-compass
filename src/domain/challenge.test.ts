@@ -3,7 +3,6 @@ import {
   composeChallenges,
   reasonFor,
   challengeLock,
-  answeredNotices,
   callReachLine,
   CHALLENGE,
   CALLER_RELATIONS,
@@ -205,32 +204,13 @@ describe("the lock opens at the stage the DNA engine already defines", () => {
   });
 });
 
-describe("the reverse event is causal, and temporary", () => {
-  const answer = (name: string | null, atMs = T0, marketId = 1) => ({
-    marketId,
-    title: "Will ETH outperform BTC?",
-    responder: p(name),
-    respondedAtMs: atMs,
-  });
-
-  it("says who showed up and what they answered", () => {
-    const [n] = answeredNotices([answer("Sarah")]);
-    expect(n.headline).toBe("SARAH SHOWED UP");
-    expect(n.body).toBe("Sarah answered your call.");
-    expect(n.title).toBe("Will ETH outperform BTC?");
-  });
-
-  it("drops an answer it cannot attribute", () => {
-    expect(answeredNotices([answer(null)])).toEqual([]);
-  });
-
-  it("shows the newest first and does not accumulate forever", () => {
-    const many = Array.from({ length: 10 }, (_, i) => answer(`P${i}`, T0 + i * 1000, i + 1));
-    const out = answeredNotices(many);
-    expect(out).toHaveLength(CHALLENGE.maxAnswered);
-    expect(out[0].respondedAtMs).toBeGreaterThan(out[1].respondedAtMs);
-  });
-});
+/**
+ * WHERE THE REVERSE EVENT WENT. `answeredNotices` used to be tested here — it
+ * composed a dismissible "SARAH SHOWED UP" card for the top of the rail. The fact
+ * was right and the lifespan was wrong, so it moved to @/domain/dependability
+ * where it accumulates into a relationship rather than expiring into localStorage.
+ * Its tests moved with it; see "the ladder, and what each rung costs".
+ */
 
 describe("call reach is honest about a channel that does not exist", () => {
   it("names who became eligible", () => {

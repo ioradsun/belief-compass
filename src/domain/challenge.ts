@@ -108,10 +108,18 @@ export const CHALLENGE = {
    * one tab across.
    */
   maxOpen: 6,
-  /** Answered-call notices shown before they become history. */
-  maxAnswered: 3,
   /** The stage at which the social system unlocks. */
   unlockAt: "recognizable" as DnaStage,
+  /**
+   * How far back a caller's act can be and still be a live call — and therefore
+   * how long a call stays reachable at all.
+   *
+   * IT LIVES HERE BECAUSE THREE THINGS MUST AGREE ON IT: what the rail derives,
+   * which calls are still waiting rather than out of reach, and what the
+   * showing-up denominator counts. It was a server-only constant, which meant a
+   * profile could show someone waiting on a call their caller can no longer see.
+   */
+  windowDays: 30,
 } as const;
 
 /** "your Twin" / "your Rival" — the possessive is what makes it a call. */
@@ -268,55 +276,17 @@ export function challengeLock(decisions: number, hasTwinCandidate = false): Chal
 
 /* ── The reverse event ───────────────────────────────────────────────────── */
 
-export interface AnsweredCall {
-  marketId: number;
-  title: string;
-  responder: NamedPerson;
-  respondedAtMs: number;
-}
-
-export interface AnsweredNotice {
-  marketId: number;
-  title: string;
-  /** "SARAH SHOWED UP" */
-  headline: string;
-  /** "Sarah answered your call." */
-  body: string;
-  respondedAtMs: number;
-}
-
 /**
- * Somebody answered a call your own participation created.
+ * IT MOVED, RATHER THAN BEING DELETED. `answeredNotices` composed a dismissible
+ * "SARAH SHOWED UP" card that sat above the open list and was acknowledged into
+ * localStorage. That was the wrong shape for the right fact: somebody answering a
+ * call your conviction created is the most durable social evidence this platform
+ * produces, and it was being thrown away when a reader tapped ×.
  *
- * THIS IS THE ONLY EVENT THAT COUNTS TOWARD DEPENDABILITY, and the precision
- * matters. Not "Sarah happened to participate in something I participated in" —
- * that is a coincidence, and on a small platform coincidences are common. The
- * claim is causal: my participation created a call for Sarah, and Sarah
- * subsequently answered it. The server proves the ordering; this only speaks it.
- *
- * It occupies the top of the panel briefly and then becomes history. An
- * acknowledgement that never leaves is an actionable slot permanently spent on
- * something with no action in it.
+ * It now lives in @/domain/dependability, where it accumulates into a relationship
+ * instead of expiring. Nothing replaced it here — the rail is an action queue, and
+ * a queue with completed items in it is a to-do list.
  */
-export function answeredNotices(
-  answers: readonly AnsweredCall[],
-  max = CHALLENGE.maxAnswered,
-): AnsweredNotice[] {
-  return answers
-    .filter((a) => !!a.responder.name?.trim() && !!a.title.trim())
-    .sort((a, b) => b.respondedAtMs - a.respondedAtMs || a.marketId - b.marketId)
-    .slice(0, max)
-    .map((a) => {
-      const name = a.responder.name!.trim();
-      return {
-        marketId: a.marketId,
-        title: a.title,
-        headline: `${name.toUpperCase()} SHOWED UP`,
-        body: `${name} answered your call.`,
-        respondedAtMs: a.respondedAtMs,
-      };
-    });
-}
 
 /* ── Call feedback ───────────────────────────────────────────────────────── */
 

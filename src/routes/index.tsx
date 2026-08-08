@@ -1456,9 +1456,19 @@ function Feed() {
                   market is live" is the larger fact, and a creator who backs
                   their own question should not have it downgraded. */}
               {launchId != null && launchId === shownId ? (
-                <LaunchRail wallet={wallet} kind="created" onDone={closeLaunch} />
+                <LaunchRail
+                  wallet={wallet}
+                  kind="created"
+                  marketId={launchId}
+                  onDone={closeLaunch}
+                />
               ) : backedId != null && backedId === shownId ? (
-                <LaunchRail wallet={wallet} kind="backed" onDone={() => setBackedId(null)} />
+                <LaunchRail
+                  wallet={wallet}
+                  kind="backed"
+                  marketId={backedId}
+                  onDone={() => setBackedId(null)}
+                />
               ) : null}
               {/* CHALLENGE | NOW — the two social questions, kept apart.
                 Challenge is "where are my people waiting for my take"; Now is
