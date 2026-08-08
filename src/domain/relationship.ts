@@ -20,7 +20,7 @@
  * only shapes them into an honest, human story. ZERO IO, pure, fully tested.
  */
 import {
-  MATURE_MIN_SHARED,
+  RELATIONSHIP_MIN_SHARED,
   RELATIONSHIP_LIST_MIN_SHARED,
   confidenceFor,
   type RelationshipLabel as EngineLabel,
@@ -232,7 +232,7 @@ export function presentRelationship(input: RelationshipInput): RelationshipPrese
   // Maturity is an EVIDENCE question — "may this row lead with a percentage?" —
   // so it reads current-equivalent convictions. Twelve shared markets that are
   // all memories should not license the precision that twelve live ones do.
-  const tier: EvidenceTier = evidence >= MATURE_MIN_SHARED ? "mature" : "low";
+  const tier: EvidenceTier = evidence >= RELATIONSHIP_MIN_SHARED ? "mature" : "low";
 
   return {
     group,

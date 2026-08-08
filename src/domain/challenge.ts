@@ -147,21 +147,23 @@ export const CHALLENGE = {
  * "X, your Rival, asked this. What's your call?" — so six open Challenges read
  * as six near-identical rows and the eye stopped on none of them. Composition
  * moved to @/domain/call-line, which builds a line from what they did plus what
- * is at stake between these two people specifically. A Twin you agree with nine
- * times in eleven and a Rival you almost never agree with are different social
- * events and now read as different ones.
- *
- * The relation is no longer named in the sentence — the card shows it as a badge,
- * and saying it twice was the redundancy that made every row look alike.
+ * SIDE-BLIND BY CONSTRUCTION. The sentence used to vary by relationship, arguing
+ * agreement in both directions — "This could be the one you split on" to a Tribe
+ * member, "Agreeing here would be new" to a Rival. Both made a Challenge sound
+ * like a question about matching. It is not: it means I saw this and I want to
+ * know where you land, and YES and NO satisfy it identically. `callLine` no longer
+ * receives the relation at all, so the copy cannot drift back.
  */
 export function reasonFor(e: CallEvidence): string | null {
+  // The relationship and the shared record are DELIBERATELY not passed. A
+  // Challenge asks one thing — where do you land — and answering YES or NO
+  // satisfies it identically, so the sentence must have no way to argue about
+  // agreement. `together`/`shared` still travel on the Challenge itself, where
+  // the card prints them as the Conviction Match line.
   return callLine({
     name: e.caller.name ?? "",
-    relation: e.relation,
     act: e.act,
     side: e.callerSide,
-    together: e.together,
-    shared: e.shared,
     marketId: e.marketId,
     callerWallet: e.caller.wallet,
   });

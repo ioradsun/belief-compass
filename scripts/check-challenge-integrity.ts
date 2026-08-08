@@ -692,6 +692,53 @@ async function main() {
   }
   line();
 
+  // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * SHARED MARKETS CREATED — the metric Challenge is actually for.
+   *
+   * Not response agreement. Challenge's job is to MANUFACTURE OVERLAP: Sarah saw
+   * a market, she wants to know where John lands, John answers, and now the pair
+   * has one more common market than the feed would have given them. Whether they
+   * answered the same way is a question for Conviction Match, and a Challenge that
+   * produced a disagreement did its job perfectly.
+   *
+   * DEFINED FROM ANSWERED CALLS, NEVER FROM CO-PARTICIPATION. Two people landing
+   * in the same market independently is organic overlap and would flatter this
+   * number enormously — measured, 5,706 pairs share at least one market with no
+   * Challenge involved anywhere. Only a `market_calls` row with `responded_at` set
+   * is overlap Challenge can take credit for.
+   */
+  line("7 · SHARED MARKETS CREATED BY CHALLENGE");
+  line("   The metric Challenge is for — overlap it MANUFACTURED, not overlap that");
+  line("   happened. Side-blind by definition: a disagreement counts in full.");
+  line();
+  if (ledgerEmpty) noLedger();
+  else {
+    const answered = CALLS.filter((c) => c.responded_at);
+    const created = new Set(
+      answered.map((c) => pairKey(c.caller_wallet, c.responder_wallet) + `|${c.market_id}`),
+    );
+    const pairsTouched = new Set(
+      answered.map((c) => {
+        const a = lc(c.caller_wallet);
+        const b = lc(c.responder_wallet);
+        return a < b ? `${a}|${b}` : `${b}|${a}`;
+      }),
+    );
+    line(`   SHARED MARKETS CREATED   ${created.size}`);
+    line(`   across pairs             ${pairsTouched.size}`);
+    line(
+      `   per pair                 ${pairsTouched.size ? (created.size / pairsTouched.size).toFixed(2) : "0"}`,
+    );
+    line();
+    // The point of the whole redesign: both outcomes are wins for the metric.
+    line("   Agreement is deliberately NOT reported here. It belongs to Conviction");
+    line("   Match, which reads these same markets afterwards and asks the different");
+    line("   question — when you two see the same world, how often do you see it the");
+    line("   same way. Challenge creates the overlap; DNA interprets it.");
+  }
+  line();
+
   line("─".repeat(72));
   line("NOT MEASURABLE FROM THE LEDGER, and saying so rather than implying a pass:");
   line();

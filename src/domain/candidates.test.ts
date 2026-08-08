@@ -32,10 +32,15 @@ describe("candidate generation", () => {
   });
 
   it("MIXED/INACTIVE beliefs are not directional shared evidence", () => {
+    // Two directional and four MIXED. If MIXED counted as shared evidence the
+    // pair would clear the canonical gate of three; because it does not, they sit
+    // at two and are pruned. The fixture is sized to the gate on purpose — at the
+    // old floor of five this passed for the wrong reason, since FIVE directional
+    // rows were also below it.
     const rows: SharedBeliefRow[] = range(6).map((i) => ({
       wallet: "0xc",
       onchain_id: i,
-      stance_side: (i <= 4 ? "YES" : "MIXED") as SharedBeliefRow["stance_side"],
+      stance_side: (i <= 1 ? "YES" : "MIXED") as SharedBeliefRow["stance_side"],
       conviction: 0.8,
     }));
     expect(aggregateCandidates(viewerSides, viewerConv, rows, pop)).toHaveLength(0);

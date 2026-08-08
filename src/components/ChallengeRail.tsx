@@ -28,7 +28,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
 import { type Challenge, type CallerRelation } from "@/domain/challenge";
 import { convictionMatch } from "@/domain/relationship";
-import { MATURE_MIN_SHARED } from "@/domain/dna/config";
+import { RELATIONSHIP_MIN_SHARED } from "@/domain/dna/config";
 import { relationshipTone } from "@/lib/dna-labels";
 import { PersonAvatar } from "@/components/PersonAvatar";
 
@@ -194,7 +194,7 @@ const BADGE: Record<CallerRelation, string> = {
  *
  *     Sarah · TRIBE
  *     Will AI replace software engineers?
- *     Sarah believes YES. This could be the one you split on.
+ *     Sarah believes YES. Take this one.
  *     82% Conviction Match · 9 of 11 together
  *
  * The belief now sits ABOVE the evidence, and the order is the argument: here is
@@ -228,7 +228,7 @@ function ChallengeRow({
   // The SAME calculation the People card and the profile use. A pair cannot be
   // 82% in one surface and 79% in another, so nothing is recomputed here.
   const match = convictionMatch(c.together ?? 0, c.shared ?? 0);
-  const showMatch = match != null && (c.shared ?? 0) >= MATURE_MIN_SHARED;
+  const showMatch = match != null && (c.shared ?? 0) >= RELATIONSHIP_MIN_SHARED;
 
   return (
     <li className="relative">

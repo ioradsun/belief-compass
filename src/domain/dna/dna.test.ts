@@ -77,27 +77,79 @@ const rel = (a: DnaFactor[], b: DnaFactor[], prev?: RelationshipLabel): Relation
     .relationship;
 
 describe("classifyRelationship", () => {
-  it("insufficient evidence gate (<5 shared) → insufficient", () => {
+  it("insufficient evidence gate (<3 shared) → insufficient", () => {
     expect(
       rel(
-        range(4).map((i) => f(i, "YES")),
-        range(4).map((i) => f(i, "YES")),
+        range(2).map((i) => f(i, "YES")),
+        range(2).map((i) => f(i, "YES")),
       ),
     ).toBe("insufficient");
   });
-  it("Twin entry: ≥93% over ≥20 shared, high confidence", () => {
-    const a = range(24).map((i) => f(i, "YES"));
-    const b = range(24).map((i) => f(i, i <= 23 ? "YES" : "NO")); // 23/24 ≈ 96%
-    expect(rel(a, b)).toBe("twin");
+
+  /**
+   * THE BOUNDARY TABLE. Three shared markets, every reachable outcome.
+   *
+   * This is the whole argument for three rather than a lower number: at TWO the
+   * reachable Matches are 0%, 50% and 100%, and 50% cannot be placed by any cut
+   * that is not arbitrary — measured, 44% of two-market pairs sit exactly there.
+   * At three they are 0 / 33 / 67 / 100, and all four land on a side.
+   */
+  it.each([
+    [3, "tribe"],
+    [2, "tribe"],
+    [1, "opp"],
+    [0, "opp"],
+  ] as const)("3 shared, %i together → %s", (together, expected) => {
+    const a = range(3).map((i) => f(i, "YES"));
+    const b = range(3).map((i) => f(i, i <= together ? "YES" : "NO"));
+    expect(rel(a, b)).toBe(expected);
   });
-  it("Twin does NOT form on <20 shared even at 100%", () => {
-    const a = range(12).map((i) => f(i, "YES"));
+
+  it("labels the number it displays, at the thirds", () => {
+    // `agreement` is unrounded; `convictionMatch` rounds. At three shared the
+    // outcomes ARE the thirds — 66.67% and 33.33% — so comparing unrounded
+    // against 67/33 put "67% Conviction Match" beside no label on the exact case
+    // that makes three the right gate. Caught by the boundary table above.
+    const a = range(3).map((i) => f(i, "YES"));
+    const twoOfThree = scoreRelationship(
+      a,
+      range(3).map((i) => f(i, i <= 2 ? "YES" : "NO")),
+    );
+    expect(twoOfThree.agreement).toBeCloseTo(66.67, 1);
+    expect(Math.round(twoOfThree.agreement)).toBe(DNA_THRESHOLDS.tribe.enter);
     expect(
       rel(
         a,
-        range(12).map((i) => f(i, "YES")),
+        range(3).map((i) => f(i, i <= 2 ? "YES" : "NO")),
       ),
-    ).toBe("tribe"); // strong but only Tribe-grade evidence
+    ).toBe("tribe");
+  });
+
+  it("2 shared is never placed, whatever the outcome", () => {
+    for (const together of [0, 1, 2]) {
+      const a = range(2).map((i) => f(i, "YES"));
+      const b = range(2).map((i) => f(i, i <= together ? "YES" : "NO"));
+      expect(rel(a, b), `2 shared / ${together} together`).toBe("insufficient");
+    }
+  });
+
+  it("never mints a Twin or an Inverse, at any score or any depth", () => {
+    // Their threshold bands are deleted, not dormant. A perfect pair over
+    // twenty-four markets is a Tribe member — the strongest thing the product is
+    // currently willing to say — and a total opposite is a Rival.
+    const a = range(24).map((i) => f(i, "YES"));
+    expect(
+      rel(
+        a,
+        range(24).map((i) => f(i, "YES")),
+      ),
+    ).toBe("tribe");
+    expect(
+      rel(
+        a,
+        range(24).map((i) => f(i, "NO")),
+      ),
+    ).toBe("opp");
   });
   it("Tribe entry: ≥77% over ≥8 shared", () => {
     const a = range(10).map((i) => f(i, "YES"));
@@ -109,42 +161,45 @@ describe("classifyRelationship", () => {
     const b = range(10).map((i) => f(i, i <= 2 ? "YES" : "NO")); // 20%
     expect(rel(a, b)).toBe("opp");
   });
-  it("Inverse entry: ≤10% over ≥20 shared", () => {
-    const a = range(24).map((i) => f(i, "YES"));
-    const b = range(24).map((i) => f(i, i <= 1 ? "YES" : "NO")); // ~8%
-    expect(rel(a, b)).toBe("inverse");
-  });
   it("Neutral: enough evidence, no strong lean", () => {
     const a = range(10).map((i) => f(i, "YES"));
     const b = range(10).map((i) => f(i, i <= 5 ? "YES" : "NO")); // 60%
     expect(rel(a, b)).toBe("neutral");
   });
 
-  it("Twin hysteresis: held Twin survives at ~91.7% (exit 90) but a fresh one is only Tribe", () => {
-    const a = range(24).map((i) => f(i, "YES"));
-    const b = range(24).map((i) => f(i, i <= 22 ? "YES" : "NO")); // 22/24 = 91.7%
-    expect(rel(a, b, "twin")).toBe("twin"); // held → stays
-    expect(rel(a, b, undefined)).toBe("tribe"); // fresh → only Tribe
-  });
-  it("Twin exit: drops below 90% → Tribe", () => {
-    const a = range(24).map((i) => f(i, "YES"));
-    const b = range(24).map((i) => f(i, i <= 21 ? "YES" : "NO")); // 21/24 = 87.5% < exit 90
-    expect(rel(a, b, "twin")).toBe("tribe");
-  });
   it("Opp hysteresis: held Opp survives at 35% (exit 38) but a fresh one is Neutral", () => {
     const a = range(20).map((i) => f(i, "YES"));
     const b = range(20).map((i) => f(i, i <= 7 ? "YES" : "NO")); // 7/20 = 35% (between enter 33 and exit 38)
     expect(rel(a, b, "opp")).toBe("opp");
     expect(rel(a, b, undefined)).toBe("neutral");
   });
-  it("confidence gate: 100% over 5 shared cannot be Tribe (needs ≥8)", () => {
+  it("confidence is no longer a labelling input, and never was one", () => {
+    // `minConfidence` was removed because confidence is `shared / (shared + 8)` —
+    // a monotone function of the SAME count `minShared` already tested. tribe's
+    // 0.4 implied shared ≥ 6 against a demand of 8; twin's 0.7 implied 19 against
+    // 20. Every confidence gate was strictly weaker than the count gate beside
+    // it, so not one of them ever changed a classification.
+    const K = DNA_THRESHOLDS.confidenceK;
+    for (const [minShared, minConfidence] of [
+      [8, 0.4],
+      [20, 0.7],
+    ] as const) {
+      let implied = 0;
+      while (implied / (implied + K) < minConfidence) implied++;
+      expect(
+        implied,
+        `minConfidence ${minConfidence} vs minShared ${minShared}`,
+      ).toBeLessThanOrEqual(minShared);
+    }
+    // 100% over five is now a Tribe member: five clears the canonical gate of
+    // three, and nothing else has a say.
     const a = range(5).map((i) => f(i, "YES"));
     expect(
       rel(
         a,
         range(5).map((i) => f(i, "YES")),
       ),
-    ).toBe("neutral");
+    ).toBe("tribe");
   });
 });
 
@@ -265,12 +320,12 @@ describe("convictions people have left", () => {
     // Two people who agreed 20 times and have since closed most of those markets.
     const many = (n: number, side: "YES" | "NO", past: boolean) =>
       Array.from({ length: n }, (_, i) => f(i + 1, side, past));
-    const live = many(4, "YES", false);
+    const live = many(2, "YES", false);
     const gone = Array.from({ length: 20 }, (_, i) => f(i + 100, "YES", true));
     const s = scoreRelationship([...live, ...gone], [...live, ...gone]);
-    expect(s.evidence).toBeGreaterThanOrEqual(DNA_THRESHOLDS.tribe.minShared);
+    expect(s.evidence).toBeGreaterThanOrEqual(DNA_THRESHOLDS.minSharedOverall);
     expect(classifyRelationship({ currentScore: s }).relationship).not.toBe("insufficient");
-    // Four live convictions alone would not have been enough.
+    // Two live convictions alone are below the canonical gate of three.
     const liveOnly = scoreRelationship(live, live);
     expect(classifyRelationship({ currentScore: liveOnly }).relationship).toBe("insufficient");
   });

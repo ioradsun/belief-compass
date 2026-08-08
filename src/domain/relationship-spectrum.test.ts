@@ -153,10 +153,17 @@ describe("no arithmetic can mint a word the model is not ready to say", () => {
     const config = readFileSync(join(process.cwd(), "src/domain/dna/config.ts"), "utf8");
     const live = config.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
     expect(live).not.toMatch(/EARNED_LABELS|EarnedLabelConfig|minTopics/);
-    // And the thresholds the engine keeps are the ONLY place Twin/Opp can come
-    // back from, so they stay — unreferenced by any display path today.
-    expect(live).toMatch(/twin:\s*\{/);
-    expect(live).toMatch(/inverse:\s*\{/);
+    // AND THE SAME RULE NOW REACHES THE THRESHOLD TABLE. This once asserted the
+    // OPPOSITE — that `twin:` and `inverse:` bands must stay, as the one place
+    // Twin/Opp could come back from. That was the same mistake one level up: a
+    // live classifier path whose output no surface could show. At the canonical
+    // gate of three, `twin` would additionally have claimed every 3-of-3 pair,
+    // which is precisely the badge three shared markets must not buy. The enum
+    // members remain because the cache columns and the stage ladder are keyed on
+    // them; the RULES do not.
+    expect(live).not.toMatch(/twin:\s*\{/);
+    expect(live).not.toMatch(/inverse:\s*\{/);
+    expect(live).not.toMatch(/minConfidence/);
   });
 
   it("takes its direction from the engine and nowhere else", () => {
