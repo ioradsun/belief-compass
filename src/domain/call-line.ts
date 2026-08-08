@@ -59,34 +59,30 @@
  *
  * ZERO IO, pure, fully testable.
  */
-import type { CallerRelation } from "@/domain/challenge";
 
+/**
+ * WHAT THE LINE IS ALLOWED TO KNOW — and the omissions are the design.
+ *
+ * `relation`, `together` and `shared` were all inputs here and are all gone. Not
+ * because they were unused after the pull pools collapsed, but because a sentence
+ * that CANNOT SEE the relationship cannot accidentally start arguing about it.
+ * Side-blindness stops being a rule somebody has to remember and becomes a fact
+ * about the type: there is no channel through which Tribe-ness or Rival-ness
+ * could reach this copy.
+ *
+ * The relationship still reaches the reader — as the badge and the Conviction
+ * Match line on the card, where it is a measured fact rather than a nudge.
+ */
 export interface CallLineInput {
   /** Display name. Empty means no line at all — the row does not exist. */
   name: string;
-  relation: CallerRelation;
   act: "trade" | "market_created";
-  /** The side they took. Null for a creation. */
+  /** The side they took. Null for a creation. Stated, never argued with. */
   side: "YES" | "NO" | null;
-  /** Same-side count and shared total, when the pair has enough history. */
-  together?: number | null;
-  shared?: number | null;
   /** Stable seed — the market and caller this call is about. */
   marketId: number;
   callerWallet: string;
 }
-
-/** Twin and Tribe land with you; Rival and Opp land apart. */
-const ALIGNED: ReadonlySet<CallerRelation> = new Set(["twin", "tribe"]);
-
-/**
- * The evidence bar for a pull that claims a PATTERN between the two of you.
- *
- * Deliberately the same five that gates every other earned statement in this
- * product. "You two usually land the same way" is a claim about history and
- * needs some; below the bar the pull falls back to one that needs none.
- */
-const MIN_SHARED_FOR_PATTERN = 5;
 
 /**
  * WHAT THEY BELIEVE — not what they transacted.
@@ -116,75 +112,37 @@ const ACTS = {
 } as const;
 
 /**
- * Why it involves you. Four pools, and which one applies is a fact about the
- * pair rather than a tone the copy chose.
+ * WHY IT INVOLVES YOU — and it is never about agreeing.
  *
- * NO PULL QUOTES THE ARITHMETIC. Two of these used to read "You've landed
- * together 9 of 11 times", which the card then printed again on its own line as
- * "82% Conviction Match · 9 of 11 together" — the same numbers twice, one line
- * apart, whenever a pair cleared MATURE_MIN_SHARED. The evidence line is the
- * canonical home for the count, so this clause says the thing the count cannot:
- * what it MEANS that this particular person is asking.
+ * These clauses used to argue agreement in both directions: "This could be the
+ * one you split on" to a Tribe member, "Agreeing here would be new" to a Rival.
+ * Both framed a Challenge as a question about whether two people match, and that
+ * is the wrong question — it made the caller sound like they wanted a particular
+ * answer, and it quietly implied that the same answer was the good outcome.
+ *
+ * A Challenge means one thing: I SAW THIS, AND I WANT TO KNOW WHERE YOU LAND.
+ * Answering YES and answering NO satisfy it identically, so nothing here may hint
+ * otherwise. Disagreement is not a failure of the mechanism — it is one of the two
+ * results that make the relationship legible, and the more interesting one.
+ *
+ * WHAT CHALLENGE IS ACTUALLY FOR: creating another shared market. Conviction Match
+ * reads how the two of you answered it afterwards; Tribe and Rival describe the
+ * pattern across all of them. Three separate jobs, and this clause only has the
+ * first one — which is why the pools no longer split on relation at all. The
+ * caller's relationship shows in the badge and the match line, where it is a
+ * measured fact rather than a nudge.
  */
-const PULLS = {
-  /**
-   * You usually land together, with enough history to claim a pattern.
-   *
-   * DISJOINT FROM `opposedPattern`, by test. Once a pair has a record, the
-   * sentence a reader sees must be specific to WHICH record it is — a Tribe
-   * member you land with nine times in eleven and a Rival you almost never do
-   * are different social events, and a pull that could belong to either would
-   * quietly erase the distinction the whole rail exists to draw.
-   */
-  alignedPattern: [
-    (n: string) => `${n} wants you at the table.`,
-    () => `You two usually land the same way.`,
-    // Not "Worth knowing if you disagree" — `knowing` contains `win`, which the
-    // banned-word guard matches as a substring. It was right to fail: the guard
-    // cannot read intent, and a looser one would stop catching the real thing.
-    () => `Worth a look if you'd disagree.`,
-    (n: string) => `${n} saved you a seat.`,
-    () => `This could be the one you split on.`,
-    () => `Your Tribe wants your read.`,
-  ],
-  /** You usually land together, but there is not enough history to claim it. */
-  alignedThin: [
-    (n: string) => `${n} wants you at the table.`,
-    (n: string) => `${n} wants your take on this one.`,
-    (n: string) => `${n} saved you a seat.`,
-    () => `You're part of this one.`,
-    () => `Your read is the one missing.`,
-  ],
-  /** You usually land apart, with enough history to claim a pattern. */
-  opposedPattern: [
-    () => `Your read is the one being asked for.`,
-    () => `You two rarely land the same way.`,
-    () => `Agreeing here would be new.`,
-    (n: string) => `${n} wants your side of this.`,
-    // Not "And still wants your read" — a pull that opens with a conjunction
-    // dangles off the belief clause with no subject of its own. Every fragment
-    // here stands up alone, because the two clauses are drawn independently and
-    // any pull may follow any belief.
-    (n: string) => `${n} wants to know where you land.`,
-    () => `The disagreement is the point.`,
-  ],
-  /**
-   * You usually land apart, thin history.
-   *
-   * The thin pools stay generic where the pair has no record — but the
-   * INVITATION does not depend on a record. "Mike wants your side of this" is
-   * true the moment Mike's conviction qualified to reach this reader, so the
-   * warm fragments appear here too; only the pattern claims are withheld.
-   */
-  opposedThin: [
-    () => `Your read is the one being asked for.`,
-    (n: string) => `${n} wants your side of this.`,
-    (n: string) => `${n} wants to know where you land.`,
-    () => `Different conclusions, same question.`,
-    () => `Say where you land.`,
-  ],
-} as const;
-
+const PULLS: readonly (() => string)[] = [
+  () => `Take this one.`,
+  () => `Where do you land?`,
+  () => `Waiting on your read.`,
+  () => `Your call.`,
+  () => `What do you think?`,
+  () => `Your read is the one missing.`,
+  () => `Take it and we will both know.`,
+  () => `You're part of this one.`,
+  () => `Say where you land.`,
+] as const;
 
 /**
  * FNV-1a over the pair. Small, stable, and dependency-free — the only property
@@ -231,33 +189,10 @@ export function callLine(e: CallLineInput): string | null {
   const acts = created ? ACTS.created : ACTS.trade;
   const act = acts[hAct % acts.length](name, e.side ?? "");
 
-  const together = Number.isFinite(e.together as number) ? (e.together as number) : null;
-  const shared = Number.isFinite(e.shared as number) ? (e.shared as number) : null;
-  // A pattern is claimable only when both counts are present, reconcilable and
-  // deep enough. `together > shared` would be a broken payload, not a fact.
-  const hasPattern =
-    together != null &&
-    shared != null &&
-    shared >= MIN_SHARED_FOR_PATTERN &&
-    together >= 0 &&
-    together <= shared;
-
-  const aligned = ALIGNED.has(e.relation);
-  const pool = hasPattern
-    ? aligned
-      ? PULLS.alignedPattern
-      : PULLS.opposedPattern
-    : aligned
-      ? PULLS.alignedThin
-      : PULLS.opposedThin;
-
-  // THE PULL MAY NAME THE CALLER — and the warmest ones do. This clause used to
-  // refuse the name on the grounds that the belief clause had just used it, and
-  // the cost was that the sentence carrying the whole feeling ("Sarah wants you
-  // at the table") could not be said at all. Repeating a first name across two
-  // short sentences is how people actually talk; a nameless "Your call." is not.
-  const pull = pool[hPull % pool.length](name);
-
+  // The pull NEVER re-names the caller: the belief clause just did, and "Sarah
+  // believes YES. Sarah is waiting on your read." reads like a bug. Every pull
+  // addresses the reader or describes the pair instead.
+  const pull = PULLS[hPull % PULLS.length]();
   return `${act} ${pull}`;
 }
 

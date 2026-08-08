@@ -157,7 +157,7 @@ describe("one count, two surfaces", () => {
 
 describe("what the card renders is what the payload can prove", () => {
   it("withholds the percentage on thin evidence rather than inventing one", () => {
-    expect(rail()).toMatch(/MATURE_MIN_SHARED/);
+    expect(rail()).toMatch(/RELATIONSHIP_MIN_SHARED/);
   });
 
   it("agrees with the People card for the same pair", () => {

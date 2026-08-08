@@ -25,18 +25,19 @@ const make = (o: Partial<RelationshipInput>): RelationshipInput => ({
 
 describe("alignment vs evidence separation", () => {
   it("low-evidence positive relationship: ranked, never PLACED, never a Twin", () => {
-    // 75% over four shared convictions. This used to read "Tribe" on the strength
-    // of a flat 55% cut; the engine wants 77% over eight, so the honest answer is
-    // that we cannot place them yet — and the row says so in ranking language
-    // rather than going silent or claiming a group it has not earned.
+    // TWO shared convictions — below the canonical gate of three, and below it for
+    // a structural reason rather than a chosen one: at two the only reachable
+    // Matches are 0%, 50% and 100%, so the middle case cannot be placed by any
+    // non-arbitrary cut. This fixture used to be four at 75%, which the new model
+    // places as Tribe, correctly.
     const p = presentRelationship(
-      make({ agreement: 75, sharedConvictions: 4, together: 3, apart: 1, topicCount: 2 }),
+      make({ agreement: 50, sharedConvictions: 2, together: 1, apart: 1, topicCount: 2 }),
     );
     expect(p.group).toBe("neutral");
     expect(p.placed).toBe(false);
     expect(p.tier).toBe("low");
     expect(p.earnedLabel).toBeNull();
-    expect(relationshipInsight(p)).toBe("3 together · 1 apart");
+    expect(relationshipInsight(p)).toBe("1 together · 1 apart");
     // No mature percentage leaked into the primary insight.
     expect(relationshipInsight(p)).not.toMatch(/%/);
     expect(relationshipLabel(p)?.text).toBe("Closest so far");
@@ -44,25 +45,27 @@ describe("alignment vs evidence separation", () => {
   });
 
   it("low-evidence inverse relationship: ranked, never PLACED, never an Opp", () => {
+    // Two, not three: three at 0% is now a placed Rival, which is the whole point
+    // of the new gate — 0-of-3 is exactly the pattern the product wants to name.
     const p = presentRelationship(
-      make({ agreement: 0, sharedConvictions: 3, together: 0, apart: 3, topicCount: 2 }),
+      make({ agreement: 0, sharedConvictions: 2, together: 0, apart: 2, topicCount: 2 }),
     );
     expect(p.group).toBe("neutral");
     expect(p.placed).toBe(false);
     expect(p.tier).toBe("low");
     expect(p.earnedLabel).toBeNull();
-    expect(relationshipInsight(p)).toBe("Opposite on all 3");
+    expect(relationshipInsight(p)).toBe("Opposite on all 2");
     expect(relationshipInsight(p)).not.toMatch(/%/);
     expect(relationshipLabel(p)?.text).toBe("Most opposite so far");
   });
 
-  it("never turns a shared count into a percentage (4 shared ≠ 4%)", () => {
+  it("never turns a shared count into a percentage (2 shared ≠ 2%)", () => {
     const p = presentRelationship(
-      make({ agreement: 100, sharedConvictions: 4, together: 4, apart: 0 }),
+      make({ agreement: 100, sharedConvictions: 2, together: 2, apart: 0 }),
     );
-    expect(relationshipInsight(p)).toBe("Together on all 4");
+    expect(relationshipInsight(p)).toBe("Together on all 2");
     expect(p.alignmentPct).toBe(100); // alignment is 100% ...
-    expect(p.tier).toBe("low"); // ... but the EVIDENCE is thin, so no mature %
+    expect(p.tier).toBe("low"); // ... but TWO is below the gate, so no mature %
   });
 });
 
@@ -326,10 +329,12 @@ describe("one authority decides placement", () => {
   });
 
   it("never places anyone the engine calls unplaceable, however perfect the score", () => {
-    // 100% agreement on four shared convictions is the shape that used to mint a
-    // Tribe member out of a coin flip, on every surface but the engine.
+    // 100% agreement on TWO shared convictions. The point survives the new gate
+    // unchanged — a perfect score is still not evidence, and the presentation layer
+    // must not out-vote the engine on it. Only the count moves: four at 100% is now
+    // a placed Tribe member, deliberately, because 4-of-4 is a pattern.
     const p = presentRelationship(
-      make({ agreement: 100, sharedConvictions: 4, together: 4, apart: 0, topicCount: 4 }),
+      make({ agreement: 100, sharedConvictions: 2, together: 2, apart: 0, topicCount: 4 }),
     );
     expect(p.placed).toBe(false);
     expect(p.earnedLabel).toBeNull();

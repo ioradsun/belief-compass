@@ -240,3 +240,49 @@ describe("call reach is honest about a channel that does not exist", () => {
     expect(line).not.toMatch(/sent|alert|messag/i);
   });
 });
+
+/**
+ * THE INVARIANT THE WHOLE MECHANISM RESTS ON.
+ *
+ * Challenge manufactures shared experience. Conviction Match measures similarity
+ * WITHIN that experience. Tribe/Rival describes the resulting pattern. Three jobs,
+ * and Challenge only has the first — so answering YES and answering NO must
+ * satisfy a Challenge in exactly the same way, at every layer.
+ */
+describe("answering YES or NO satisfies a Challenge identically", () => {
+  it("composes the same row whichever side the caller took", () => {
+    const yes = composeChallenges([call({ callerSide: "YES" })])[0];
+    const no = composeChallenges([call({ callerSide: "NO" })])[0];
+    // Everything except the stated side is identical: same relation, same record,
+    // same eligibility. The side is reported, never acted on.
+    expect({ ...yes, reason: null, callerSide: null }).toEqual({
+      ...no,
+      reason: null,
+      callerSide: null,
+    });
+  });
+
+  it("keeps the sentence free of any agreement framing, on every relation", () => {
+    // The two clauses this replaced: "This could be the one you split on" and
+    // "Agreeing here would be new". Both implied a Challenge wanted a particular
+    // answer. `callLine` no longer receives the relation at all, so the whole
+    // relation axis cannot reach the copy.
+    for (const relation of CALLER_RELATIONS)
+      for (const callerSide of ["YES", "NO"] as const) {
+        const [row] = composeChallenges([call({ relation, callerSide })]);
+        const r = row.reason.toLowerCase();
+        for (const w of ["agree", "disagree", "split on", "same way", "tribe", "rival"])
+          expect(r, `"${row.reason}" (${relation}/${callerSide})`).not.toContain(w);
+      }
+  });
+
+  it("never lets the relationship change the sentence", () => {
+    // Same market, same caller, four different relations → one sentence. The
+    // relationship reaches the reader through the badge and the Conviction Match
+    // line, where it is a measured fact rather than a nudge.
+    const lines = new Set(
+      CALLER_RELATIONS.map((relation) => composeChallenges([call({ relation })])[0].reason),
+    );
+    expect(lines.size).toBe(1);
+  });
+});

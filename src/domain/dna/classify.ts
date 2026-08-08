@@ -54,8 +54,19 @@ function bandHolds(
   hold: boolean,
 ): boolean {
   const threshold = hold ? band.exit : band.enter;
-  const agreeOk = isHigh ? s.agreement >= threshold : s.agreement <= threshold;
-  return agreeOk && s.evidence >= band.minShared && s.confidence >= band.minConfidence;
+  // Match alone. The per-band `minShared` is gone because `minSharedOverall` is
+  // now the ONE gate every label passes through, and `minConfidence` is gone
+  // because confidence is `shared / (shared + K)` — a monotone function of the
+  // same count, so it never once bound a classification the count had not.
+  //
+  // ROUNDED, BECAUSE THE LABEL MUST AGREE WITH THE NUMBER ON SCREEN. `agreement`
+  // is unrounded while `convictionMatch` — the only percentage a reader ever sees
+  // — rounds. At three shared markets the outcomes are exactly the thirds, 66.67%
+  // and 33.33%, so an unrounded comparison against 67/33 would have put a card
+  // reading "67% Conviction Match" next to no label at all, on the single case
+  // that justifies making three the gate. Classify the number you display.
+  const match = Math.round(s.agreement);
+  return isHigh ? match >= threshold : match <= threshold;
 }
 
 /**
@@ -70,10 +81,11 @@ export function labelFor(
 ): RelationshipLabel {
   const t = thresholds ?? DNA_THRESHOLDS;
   const prev = previousRelationship;
+  // THE ONLY EVIDENCE GATE. Three shared markets, and then two cuts on Conviction
+  // Match. `twin` and `inverse` are not tested: they are withheld from every
+  // surface, and at this gate `twin` would have claimed every 3-of-3 pair.
   if (s.evidence < t.minSharedOverall) return "insufficient";
-  if (bandHolds(t.twin, true, s, prev === "twin")) return "twin";
   if (bandHolds(t.tribe, true, s, prev === "tribe")) return "tribe";
-  if (bandHolds(t.inverse, false, s, prev === "inverse")) return "inverse";
   if (bandHolds(t.opp, false, s, prev === "opp")) return "opp";
   return "neutral";
 }

@@ -20,37 +20,87 @@ export type RelationshipLabel = "twin" | "tribe" | "neutral" | "opp" | "inverse"
 /** User-facing evidence tiers, derived from shared directional-belief count. */
 export type EvidenceLevel = "insufficient" | "early" | "growing" | "established";
 
+/**
+ * THE CANONICAL RELATIONSHIP EVIDENCE GATE. One number, one meaning.
+ *
+ * Three constants used to encode this single product idea at three different
+ * values — `MATURE_MIN_SHARED` (10) decided when a percentage could be shown,
+ * `DOMAIN_MIN_SHARED` (5) when a Circle was real, `MIN_SHARED_FOR_PATTERN` (5) in
+ * call-line when a pattern could be claimed — and `DNA_THRESHOLDS` added a fourth
+ * at 5 plus per-band floors of 8 and 20. Six numbers for "how much shared history
+ * is enough". That is implementation leaking into the product, and it leaked in
+ * the worst direction: the strictest gate won, so almost nothing was ever said.
+ *
+ * WHY THREE, and this is a structural argument rather than a lowered bar.
+ * Conviction Match is `together / shared`, so `shared` fixes which percentages
+ * are even reachable:
+ *
+ *     2 shared →   0% ·  50% · 100%
+ *     3 shared →   0% ·  33% ·  67% · 100%
+ *
+ * At two, the middle outcome is 50% — dead centre of the unlabelled band, and
+ * unreachable by any cut that is not arbitrary. Measured in production, 419 of
+ * the 959 two-market pairs sit exactly there: **44% of them are unplaceable by
+ * construction, not by lack of evidence.** At three, every reachable outcome
+ * falls cleanly on one side or the other of 67/33. Three is the smallest shared
+ * count at which the model can say something about every possible pair.
+ *
+ * Measured: gate 3 labels 813 relationships against 71 at gate 10, and Rival —
+ * the one worth having — goes from 5 to 198.
+ */
+export const RELATIONSHIP_MIN_SHARED = 3;
+
 export interface RelationshipBand {
   /** agreement to ENTER the label. */
   enter: number;
   /** agreement to keep the label once held (hysteresis; wider than enter). */
   exit: number;
-  /** minimum shared directional beliefs. */
-  minShared: number;
-  /** minimum confidence. */
-  minConfidence: number;
 }
 
 export interface DnaThresholdConfig {
   /** Below this many shared directional beliefs → no relationship at all. */
   minSharedOverall: number;
-  /** Shared beliefs / (shared + K). */
+  /** Shared beliefs / (shared + K). Ranking and reporting only — NOT labelling. */
   confidenceK: number;
-  twin: RelationshipBand;
   tribe: RelationshipBand;
   opp: RelationshipBand;
-  inverse: RelationshipBand;
 }
 
+/**
+ * TWO CUTS ON ONE NUMBER, AND NOTHING ELSE.
+ *
+ * The old table had four bands, each carrying its own `minShared` AND its own
+ * `minConfidence`, over a `minSharedOverall` — nine numbers deciding one thing.
+ *
+ * `minConfidence` is gone, and the audit is worth recording because the answer
+ * was stronger than "it no longer matters": confidence is `shared / (shared + 8)`,
+ * a MONOTONE FUNCTION OF THE SAME `shared` that `minShared` already tested. So
+ * tribe's 0.4 implied shared ≥ 6 while its `minShared` demanded 8, and twin's 0.7
+ * implied 19 against a demand of 20. **Every gate was strictly weaker than the
+ * one beside it, so `minConfidence` never once changed a classification.** It was
+ * a second authoritative-looking definition of a rule already enforced.
+ * `confidenceFor` survives for ranking and reporting; it no longer touches a
+ * label.
+ *
+ * TWIN AND INVERSE ARE GONE FROM THE TABLE, not held dormant. They were withheld
+ * from display already, so keeping their bands meant a live classifier path whose
+ * output no surface could show — and at the canonical gate of three, `twin` would
+ * have claimed every 3-of-3 pair, which is exactly the label the product does not
+ * want to hand out on three markets. The enum members remain because the cache
+ * columns and the DNA stage ladder are keyed on them; the THRESHOLDS do not,
+ * because a rule the product does not apply must not look like one it does.
+ *
+ * The bands are deliberately broad. This is social discovery, not personality
+ * testing — the job is to say something interesting enough to prompt another
+ * interaction, and a band narrow enough to be defensible is too narrow to fire.
+ */
 export const DNA_THRESHOLDS: DnaThresholdConfig = {
-  minSharedOverall: 5,
+  minSharedOverall: RELATIONSHIP_MIN_SHARED,
   confidenceK: 8,
-  // High-confidence bands (Twin/Inverse) require ≥20 shared → confidence ≥0.71.
-  twin: { enter: 93, exit: 90, minShared: 20, minConfidence: 0.7 },
-  inverse: { enter: 10, exit: 15, minShared: 20, minConfidence: 0.7 },
-  // Standard bands (Tribe/Opp) require ≥8 shared → confidence ≥0.5.
-  tribe: { enter: 77, exit: 72, minShared: 8, minConfidence: 0.4 },
-  opp: { enter: 33, exit: 38, minShared: 8, minConfidence: 0.4 },
+  // 67% and 33% are the thirds, which is the whole reason THREE is the gate —
+  // see RELATIONSHIP_MIN_SHARED. Exit widens by five points for hysteresis.
+  tribe: { enter: 67, exit: 62 },
+  opp: { enter: 33, exit: 38 },
 };
 
 /**
@@ -80,8 +130,13 @@ export const DNA_THRESHOLDS: DnaThresholdConfig = {
  */
 export const PAST_WEIGHT = 0.25;
 
-/** Per-domain (Circle) evidence floor — one shared market never makes a Circle. */
-export const DOMAIN_MIN_SHARED = 5;
+/**
+ * Per-domain (Circle) evidence floor. Points at the canonical gate rather than
+ * holding its own number — a Circle is a relationship claim about a topic, and
+ * "enough shared history to say something" cannot mean two different things
+ * depending on which surface is asking.
+ */
+export const DOMAIN_MIN_SHARED = RELATIONSHIP_MIN_SHARED;
 
 /**
  * WHERE TWIN AND OPP ARE DEFINED: NOWHERE, DELIBERATELY.
@@ -112,13 +167,6 @@ export const DOMAIN_MIN_SHARED = 5;
  * percentage (and earned labels) still wait for real evidence.
  */
 export const RELATIONSHIP_LIST_MIN_SHARED = 1;
-
-/**
- * At/above this many shared convictions a relationship is "mature" enough to lead
- * with a percentage; below it we show honest counts (together/apart) instead of
- * false precision. Aligns with evidenceLevelFor's growing/established tiers.
- */
-export const MATURE_MIN_SHARED = 10;
 
 /**
  * "Closest people" floor — the graceful fallback when no one crosses a real
