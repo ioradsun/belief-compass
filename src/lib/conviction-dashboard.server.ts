@@ -8,6 +8,7 @@
  * read on-chain by the client; everything here is indexed read-only.
  */
 import { serviceClient } from "@/lib/supabase-clients";
+import { rowsOf } from "@/lib/supabase-read";
 import { loadWindowChanges, pricePct } from "@/lib/window-change.server";
 import { positionValueUsd } from "@/domain/position-value";
 import { readWalletTradesAscending } from "@/lib/conviction-dashboard.trades.server";
@@ -118,12 +119,14 @@ export async function buildConvictionDashboard(
   const rate = ethUsd ?? 0;
 
   // --- Holdings (unrealized) + today's portfolio move -----------------------
-  const { data: beliefsData } = await sb
-    .from("wallet_beliefs")
-    .select("onchain_id, yes_cost, no_cost, yes_value_usd, no_value_usd, first_backed_at")
-    .eq("wallet", wallet)
-    .limit(500);
-  const beliefs = (beliefsData ?? []) as Array<{
+  const beliefs = rowsOf(
+    await sb
+      .from("wallet_beliefs")
+      .select("onchain_id, yes_cost, no_cost, yes_value_usd, no_value_usd, first_backed_at")
+      .eq("wallet", wallet)
+      .limit(500),
+    "this wallet's positions",
+  ) as Array<{
     onchain_id: number | string;
     yes_cost: unknown;
     no_cost: unknown;
@@ -137,7 +140,7 @@ export async function buildConvictionDashboard(
   const chgById = new Map<number, { yes: number; no: number }>();
   const heldTitle = new Map<number, string>();
   if (heldIds.length) {
-    const [{ data: st }, { data: mk }] = await Promise.all([
+    const [stRes, { data: mk }] = await Promise.all([
       sb
         .from("market_state")
         .select(
@@ -150,9 +153,15 @@ export async function buildConvictionDashboard(
     // window" (src/lib/window-change.server) rather than the stored
     // `chg_24h_*` percentages, so the dashboard, the cards and the market
     // panels are the same subtraction over the same snapshot history.
+    // TODAY'S MOVE IS A NUMBER SOMEBODY READS ABOUT THEIR OWN MONEY, so a blocked
+    // state read must not become a flat 0%. `mk` below stays tolerant on purpose:
+    // it only supplies titles, and a missing one already degrades honestly to
+    // "Untitled market" without misstating anything.
     const changes = await loadWindowChanges(
       sb,
-      (st ?? []) as unknown as Array<Record<string, unknown>>,
+      rowsOf(stRes, "market state for this wallet's positions") as unknown as Array<
+        Record<string, unknown>
+      >,
       "24h",
     );
     for (const id of heldIds) {
@@ -255,12 +264,14 @@ export async function buildConvictionDashboard(
   const ideasBacked = new Set(dashTrades.map((t) => t.market)).size;
 
   // --- Created markets (attribution + volume + trades) ----------------------
-  const { data: createdData } = await sb
-    .from("markets")
-    .select("onchain_id, title, category")
-    .eq("author_wallet", wallet)
-    .limit(200);
-  const created = (createdData ?? []) as Array<{
+  const created = rowsOf(
+    await sb
+      .from("markets")
+      .select("onchain_id, title, category")
+      .eq("author_wallet", wallet)
+      .limit(200),
+    "the markets this wallet created",
+  ) as Array<{
     onchain_id: number | string;
     title: string | null;
     category: string | null;
@@ -270,16 +281,22 @@ export async function buildConvictionDashboard(
   const volById = new Map<number, number>();
   const tradesById = new Map<number, number>();
   if (createdIds.length) {
-    const { data: st } = await sb
-      .from("market_state")
-      .select("onchain_id, volume_total_usd")
-      .in("onchain_id", createdIds);
-    for (const s of st ?? []) volById.set(Number(s.onchain_id), num(s.volume_total_usd));
+    const st = rowsOf(
+      await sb
+        .from("market_state")
+        .select("onchain_id, volume_total_usd")
+        .in("onchain_id", createdIds),
+      "volume on the markets this wallet created",
+    ) as { onchain_id: number; volume_total_usd: unknown }[];
+    for (const s of st) volById.set(Number(s.onchain_id), num(s.volume_total_usd));
 
     // All-time trade counts per created market, from the same precomputed RPC the
     // feed uses (p_since = null → lifetime).
-    const vol = await sb.rpc("market_volume_window", { p_ids: createdIds, p_since: null });
-    for (const t of (vol.data ?? []) as { onchain_id: number; trade_count: number }[]) {
+    const vol = rowsOf(
+      await sb.rpc("market_volume_window", { p_ids: createdIds, p_since: null }),
+      "trade counts on the markets this wallet created",
+    ) as { onchain_id: number; trade_count: number }[];
+    for (const t of vol) {
       const id = Number(t.onchain_id);
       tradesById.set(id, (tradesById.get(id) ?? 0) + num(t.trade_count));
     }
@@ -303,21 +320,24 @@ export async function buildConvictionDashboard(
   let creatorLastWeekUsd = 0;
   if (createdIds.length) {
     const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
-    const { data: buys } = await sb
-      .from("events")
-      .select("occurred_at, payload")
-      .eq("is_canonical", true)
-      .eq("kind", "trade")
-      .eq("action", "BUY")
-      .in(
-        "market_id",
-        createdIds.map((id) => String(id)),
-      )
-      .gte("occurred_at", since)
-      .limit(8000);
+    const buys = rowsOf(
+      await sb
+        .from("events")
+        .select("occurred_at, payload")
+        .eq("is_canonical", true)
+        .eq("kind", "trade")
+        .eq("action", "BUY")
+        .in(
+          "market_id",
+          createdIds.map((id) => String(id)),
+        )
+        .gte("occurred_at", since)
+        .limit(8000),
+      "buys on the markets this wallet created",
+    ) as Array<{ occurred_at: string; payload: unknown }>;
 
     const entries: FeeEntry[] = [];
-    for (const row of (buys ?? []) as Array<{ occurred_at: string; payload: unknown }>) {
+    for (const row of buys) {
       const rawLog = (row.payload as { raw_log?: unknown } | null)?.raw_log;
       const feeWei = decodeBuyCreatorFeeWei(rawLog);
       if (feeWei == null || feeWei <= 0n) continue;
@@ -336,20 +356,23 @@ export async function buildConvictionDashboard(
   let uniqueTradersTodayCount = 0;
   let peopleReached = 0;
   if (createdIds.length) {
-    const { data: allTrades } = await sb
-      .from("events")
-      .select("wallet, occurred_at")
-      .eq("is_canonical", true)
-      .eq("kind", "trade")
-      .in(
-        "market_id",
-        createdIds.map((id) => String(id)),
-      )
-      .order("occurred_at", { ascending: false })
-      .limit(20_000);
+    const allTrades = rowsOf(
+      await sb
+        .from("events")
+        .select("wallet, occurred_at")
+        .eq("is_canonical", true)
+        .eq("kind", "trade")
+        .in(
+          "market_id",
+          createdIds.map((id) => String(id)),
+        )
+        .order("occurred_at", { ascending: false })
+        .limit(20_000),
+      "trades on the markets this wallet created",
+    ) as Array<{ wallet: string | null; occurred_at: string }>;
     const everyone = new Set<string>();
     const today = new Set<string>();
-    for (const r of (allTrades ?? []) as Array<{ wallet: string | null; occurred_at: string }>) {
+    for (const r of allTrades) {
       if (!r.wallet) continue;
       const w = r.wallet.toLowerCase();
       everyone.add(w);
@@ -364,15 +387,18 @@ export async function buildConvictionDashboard(
   // real cost on top of what was invested — disclosed, never double counted.
   let tradingFeesEth = 0;
   {
-    const { data: myBuys } = await sb
-      .from("events")
-      .select("payload")
-      .eq("is_canonical", true)
-      .eq("kind", "trade")
-      .eq("action", "BUY")
-      .eq("wallet", wallet)
-      .limit(5000);
-    for (const row of (myBuys ?? []) as Array<{ payload: unknown }>) {
+    const myBuys = rowsOf(
+      await sb
+        .from("events")
+        .select("payload")
+        .eq("is_canonical", true)
+        .eq("kind", "trade")
+        .eq("action", "BUY")
+        .eq("wallet", wallet)
+        .limit(5000),
+      "this wallet's own buys",
+    ) as Array<{ payload: unknown }>;
+    for (const row of myBuys) {
       const feeWei = decodeBuyTotalFeeWei((row.payload as { raw_log?: unknown } | null)?.raw_log);
       if (feeWei != null && feeWei > 0n) tradingFeesEth += weiToEth(feeWei);
     }

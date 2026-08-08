@@ -9,6 +9,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { serviceClient } from "@/lib/supabase-clients";
+import { rowsOf } from "@/lib/supabase-read";
 import { readEthUsd } from "@/lib/eth-usd.server";
 import { composeShareImpact, type ShareImpact } from "@/domain/share-impact";
 
@@ -187,8 +188,18 @@ export const getShareImpact = createServerFn({ method: "GET" })
     }
 
     const sb = serviceClient();
-    const { data: codeRows } = await sb.from("share_codes").select("code").eq("wallet", wallet);
-    const codes = (codeRows ?? []).map((r) => (r as { code: string }).code);
+    /**
+     * NOBODY CAME is a claim, and it is the one this whole function makes.
+     *
+     * Every read below feeds "3 people opened it, 1 backed it". A blocked read
+     * turned each of those into a zero, and zeros here compose into a finished
+     * sentence telling somebody their share did nothing — indistinguishable from
+     * the true version, and delivered with the same confidence.
+     */
+    const codes = rowsOf(
+      await sb.from("share_codes").select("code").eq("wallet", wallet),
+      "this wallet's share codes",
+    ).map((r) => (r as { code: string }).code);
     const scope: "market" | "all" = data.marketId != null ? "market" : "all";
     if (codes.length === 0) {
       return {
@@ -204,8 +215,7 @@ export const getShareImpact = createServerFn({ method: "GET" })
       .select("visitor_id, wallet, market_id")
       .in("ref_code", codes);
     if (data.marketId != null) visitsQ = visitsQ.eq("market_id", data.marketId);
-    const { data: visitRows } = await visitsQ;
-    const visits = (visitRows ?? []) as {
+    const visits = rowsOf(await visitsQ, "visits to this wallet's shares") as {
       visitor_id: string;
       wallet: string | null;
       market_id: number | null;
@@ -227,16 +237,19 @@ export const getShareImpact = createServerFn({ method: "GET" })
     let believers = 0;
     let ethCost = 0;
     for (const [marketId, wallets] of walletsByMarket) {
-      const { data: beliefs } = await sb
-        .from("wallet_beliefs")
-        .select("wallet, stance_side, yes_cost, no_cost")
-        .eq("onchain_id", marketId)
-        .in("wallet", [...wallets]);
-      for (const b of (beliefs ?? []) as {
+      const beliefs = rowsOf(
+        await sb
+          .from("wallet_beliefs")
+          .select("wallet, stance_side, yes_cost, no_cost")
+          .eq("onchain_id", marketId)
+          .in("wallet", [...wallets]),
+        "what the people who arrived went on to back",
+      ) as {
         stance_side: string | null;
         yes_cost: number | null;
         no_cost: number | null;
-      }[]) {
+      }[];
+      for (const b of beliefs) {
         if (b.stance_side !== "YES" && b.stance_side !== "NO") continue; // directional only
         believers += 1;
         ethCost += (Number(b.yes_cost) || 0) + (Number(b.no_cost) || 0);

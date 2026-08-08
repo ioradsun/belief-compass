@@ -11,6 +11,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decodeFunctionData, parseAbi } from "viem";
 import { serviceClient } from "@/lib/supabase-clients";
+import { rowsOf } from "@/lib/supabase-read";
 import { readViewerDnaCache } from "@/lib/dna/viewer-dna-cache.server";
 import { recordViewerDecision } from "@/lib/viewer-decisions.server";
 import {
@@ -101,15 +102,25 @@ async function marketCategory(sb: SupabaseClient, marketId: number): Promise<str
 }
 
 async function answerHistory(sb: SupabaseClient, wallet: string): Promise<AnswerRow[]> {
-  const { data } = await sb
-    .from("house_predictions")
-    .select("category, actual_action, predicted_action")
-    .eq("wallet", wallet)
-    .not("actual_action", "is", null)
-    .order("revealed_at", { ascending: false })
-    .limit(400);
+  /**
+   * THIS IS THE HOUSE'S EVIDENCE ABOUT YOU. Every read of it becomes a claim —
+   * how well it knows you, what it has seen you do, whether it has earned the
+   * right to guess. An empty list from a blocked read says "we have never seen
+   * you decide anything", which is the most confident thing this module can say
+   * and the easiest one to say by accident.
+   */
+  const rows = rowsOf(
+    await sb
+      .from("house_predictions")
+      .select("category, actual_action, predicted_action")
+      .eq("wallet", wallet)
+      .not("actual_action", "is", null)
+      .order("revealed_at", { ascending: false })
+      .limit(400),
+    "this wallet's answer history",
+  ) as AnswerRow[];
   // Normalize legacy SKIP → PASS so every downstream consumer sees new tokens.
-  return ((data ?? []) as AnswerRow[]).map((r) => ({
+  return rows.map((r) => ({
     category: r.category,
     actual_action: normAction(r.actual_action),
     predicted_action: normAction(r.predicted_action),
@@ -118,11 +129,14 @@ async function answerHistory(sb: SupabaseClient, wallet: string): Promise<Answer
 
 /** Foundation POV keys this wallet has already answered. */
 async function foundationKeys(sb: SupabaseClient, wallet: string): Promise<string[]> {
-  const { data } = await sb
-    .from("house_foundation_answers")
-    .select("foundation_key")
-    .eq("wallet", wallet);
-  return ((data ?? []) as { foundation_key: string }[]).map((r) => r.foundation_key);
+  // A blocked read here would re-ask questions this person has already answered,
+  // which reads as the product having forgotten them.
+  return (
+    rowsOf(
+      await sb.from("house_foundation_answers").select("foundation_key").eq("wallet", wallet),
+      "the foundation questions this wallet has answered",
+    ) as { foundation_key: string }[]
+  ).map((r) => r.foundation_key);
 }
 
 /**
