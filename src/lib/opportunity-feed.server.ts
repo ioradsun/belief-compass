@@ -606,9 +606,81 @@ export async function buildOpportunityFeed(
  */
 export const SSR_FEED_KEY = "feed:ssr:anon:24h";
 
-/** Warm read only — never computes, never awaits. */
-export function warmAnonFeed(): OpportunityFeedResult | null {
-  return peekSwr<OpportunityFeedResult>(SSR_FEED_KEY) ?? null;
+/**
+ * THE SEED — the first few cards, kept somewhere a cold isolate can reach.
+ *
+ * The peek above only pays off on a WARM isolate; a cold one had nothing and
+ * shipped a skeleton. The feed build is far too expensive to await there, but a
+ * single-row read of a stored snapshot is not — so every successful anonymous
+ * build leaves the first few finished cards behind in `feed_snapshot`, and a
+ * cold SSR reads that one row. The reader gets a real first market immediately
+ * while the browser fetches the full feed in the background.
+ *
+ * The seed is marked `partial`, which is the whole contract: the client adopts
+ * it for paint only and must still fetch. Trimmed to SEED_ITEMS so the row stays
+ * small enough that reading it is never a second page budget.
+ */
+const SEED_KEY = "anon:24h";
+const SEED_ITEMS = 3;
+/** A seed that cannot be read quickly is not a seed. Bound the SSR read. */
+const SEED_READ_MS = 700;
+
+function trimToSeed(feed: OpportunityFeedResult): OpportunityFeedResult {
+  const items = feed.items.filter((i) => i.kind === "market").slice(0, SEED_ITEMS);
+  const rows: Record<number, FeedRowPayload> = {};
+  for (const it of items) {
+    const row = feed.rows[(it as { onchainId: number }).onchainId];
+    if (row) rows[(it as { onchainId: number }).onchainId] = row;
+  }
+  return {
+    ...feed,
+    items: items.map((it, n) => ({ ...it, position: n })),
+    rows,
+    // Ideas are a session decision, never a cached one.
+    idea: null,
+    excluded: [],
+    partial: true,
+  };
+}
+
+async function writeSeed(feed: OpportunityFeedResult): Promise<void> {
+  try {
+    if (!feed.items.some((i) => i.kind === "market")) return;
+    const sb = serviceClientOrNull();
+    if (!sb) return;
+    await sb
+      .from("feed_snapshot")
+      .upsert(
+        { key: SEED_KEY, payload: trimToSeed(feed) as unknown as never, updated_at: new Date().toISOString() },
+        { onConflict: "key" },
+      );
+  } catch {
+    // A cache that fails to write must never fail the feed.
+  }
+}
+
+async function readSeed(): Promise<OpportunityFeedResult | null> {
+  try {
+    const sb = serviceClientOrNull();
+    if (!sb) return null;
+    const read = sb.from("feed_snapshot").select("payload").eq("key", SEED_KEY).maybeSingle();
+    const res = await Promise.race([
+      read,
+      new Promise<null>((r) => setTimeout(() => r(null), SEED_READ_MS)),
+    ]);
+    const payload = (res as { data?: { payload?: unknown } } | null)?.data?.payload;
+    if (!payload || typeof payload !== "object") return null;
+    return { ...(payload as OpportunityFeedResult), partial: true };
+  } catch {
+    return null;
+  }
+}
+
+/** Warm read first, stored seed second — never a build, never a long await. */
+export async function warmAnonFeed(): Promise<OpportunityFeedResult | null> {
+  const warm = peekSwr<OpportunityFeedResult>(SSR_FEED_KEY);
+  if (warm) return warm;
+  return readSeed();
 }
 
 /** The shape the SSR shell asks for: anonymous, 24h, no filters, no lens. */
@@ -634,5 +706,12 @@ export async function opportunityFeed(
   input: OpportunityFeedInput,
 ): Promise<OpportunityFeedResult> {
   if (!isAnonDefault(input)) return buildOpportunityFeed(input);
-  return swrCache(SSR_FEED_KEY, { ttlMs: 15_000 }, () => buildOpportunityFeed(input));
+  return swrCache(SSR_FEED_KEY, { ttlMs: 15_000 }, async () => {
+    const feed = await buildOpportunityFeed(input);
+    // Awaited on purpose: work left running after a response is cancelled by
+    // the runtime, and a seed that never lands is a seed that never helps.
+    await writeSeed(feed);
+    return feed;
+  });
 }
+
