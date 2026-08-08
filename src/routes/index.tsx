@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { lazyRetry } from "@/lib/lazy-retry";
 
