@@ -46,6 +46,20 @@ describe("a call reads differently every time", () => {
     expect(distinct.size).toBeGreaterThan(30);
   });
 
+  it("states a BELIEF, never a transaction", () => {
+    // "Sarah took YES" describes what happened at the contract; "Sarah believes
+    // YES" describes the person. Challenge is one person's conviction reaching
+    // another, so the clause names what they HOLD — which is the thing the
+    // reader is actually being asked to answer.
+    for (const l of corpus())
+      for (const w of ["took", "backed", "bought", "went ", "is already in on", "put $"])
+        expect(l.toLowerCase(), `"${l}" describes a transaction`).not.toContain(w);
+  });
+
+  it("uses the plain form somewhere — this is the sentence the product means", () => {
+    expect(corpus().some((l) => /\bbelieves (YES|NO)\./.test(l))).toBe(true);
+  });
+
   it("varies across markets for the same person", () => {
     const lines = new Set(
       Array.from({ length: 12 }, (_, i) => callLine(call({ marketId: i + 1 }))),
@@ -86,22 +100,25 @@ describe("a call reads differently every time", () => {
 });
 
 describe("the pull is about THIS pair, not about markets in general", () => {
-  it("quotes the shared record when there is one deep enough to quote", () => {
-    const lines = new Set(
-      Array.from({ length: 40 }, (_, i) =>
-        callLine(call({ relation: "tribe", together: 9, shared: 11, marketId: i + 1 })),
-      ),
-    );
-    expect([...lines].some((l) => l!.includes("9 of 11"))).toBe(true);
+  it("never quotes the arithmetic, because the card prints it one line below", () => {
+    // The card renders "82% Conviction Match · 9 of 11 together" directly under
+    // this sentence. A pull that also said "You've landed together 9 of 11
+    // times" put the same numbers on screen twice, one line apart, for every
+    // pair past MATURE_MIN_SHARED. The evidence line owns the count; this
+    // sentence owns what the count MEANS.
+    for (const l of corpus()) expect(l, `"${l}" quotes the record`).not.toMatch(/\d+\s+of\s+\d+/);
   });
 
-  it("never quotes a record too thin to mean anything", () => {
-    // 1 of 1 is the modal pair on this platform. Quoting it would be the same
-    // false precision the People card refuses.
-    for (let m = 1; m <= 40; m++) {
-      const l = callLine(call({ together: 1, shared: 1, marketId: m })) as string;
-      expect(l).not.toMatch(/1 of 1/);
-    }
+  it("still claims a pattern only when there is history behind it", () => {
+    // "You two usually land the same way" is a claim about a record and needs
+    // one. 1 of 1 is the modal pair on this platform, and letting it earn that
+    // sentence would be the same false precision the People card refuses.
+    const thin = new Set(
+      Array.from({ length: 40 }, (_, i) =>
+        callLine(call({ relation: "tribe", together: 1, shared: 1, marketId: i + 1 })),
+      ),
+    );
+    for (const l of thin) expect(l).not.toMatch(/usually land|rarely land|would be new/);
   });
 
   it("says something different to an aligned pair than to an opposed one", () => {
@@ -121,9 +138,17 @@ describe("the pull is about THIS pair, not about markets in general", () => {
       { length: 40 },
       (_, i) => callLine(call({ relation: "opp", marketId: i + 1 })) as string,
     );
-    expect(opposed.some((l) => /still wants your read|rarely land|would be new/.test(l))).toBe(
-      true,
-    );
+    expect(opposed.some((l) => /rarely land|would be new|being asked for/.test(l))).toBe(true);
+  });
+
+  it("never opens the pull with a conjunction", () => {
+    // The two clauses are drawn independently, so any pull may follow any
+    // belief. "And still wants your read." dangles off whatever came before it
+    // with no subject of its own — every fragment has to stand up alone.
+    for (const l of corpus()) {
+      const [, ...rest] = l.split(". ");
+      for (const pull of rest) expect(pull, `"${l}"`).not.toMatch(/^(And|But|So|Yet)\b/);
+    }
   });
 });
 
@@ -171,12 +196,13 @@ describe("the rule it inherits: no reason, no row", () => {
     for (const l of corpus()) expect(l).not.toMatch(/other side|your YES|your NO/i);
   });
 
-  it("survives a broken payload rather than printing nonsense", () => {
-    // together > shared cannot happen from one score, so the record is dropped
-    // rather than rendered as "12 of 3 together".
+  it("survives a broken payload rather than claiming a pattern from it", () => {
+    // together > shared cannot happen from one score. It must not be treated as
+    // deep history — a payload that cannot be reconciled earns no claim about
+    // how this pair usually lands.
     for (let m = 1; m <= 20; m++) {
       const l = callLine(call({ together: 12, shared: 3, marketId: m })) as string;
-      expect(l).not.toMatch(/12 of 3/);
+      expect(l).not.toMatch(/usually land|rarely land|would be new/);
     }
   });
 });

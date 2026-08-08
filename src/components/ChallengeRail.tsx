@@ -24,10 +24,9 @@
  * what is actually true rather than implying something is broken.
  */
 import { useState, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { networkQO } from "@/lib/network-query";
-import { getChallenges } from "@/lib/challenge.functions";
-import { challengeLock, type Challenge, type CallerRelation } from "@/domain/challenge";
+import { useQueryClient } from "@tanstack/react-query";
+import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
+import { type Challenge, type CallerRelation } from "@/domain/challenge";
 import { convictionMatch } from "@/domain/relationship";
 import { MATURE_MIN_SHARED } from "@/domain/dna/config";
 import { relationshipTone } from "@/lib/dna-labels";
@@ -58,42 +57,10 @@ type Tab = "challenge" | "now";
  * an explanation rather than a shrug. That one acknowledged "SARAH SHOWED UP"
  * notices, and it was wrong because somebody answering your call is the most
  * DURABLE evidence this platform produces — a tap must never be able to delete
- * it.
- *
- * A dismissal is the exact opposite kind of fact. "Not for me" is a private
- * preference about one reader's own queue, it grants nothing, it is owed to
- * nobody, and it must NEVER become a record: no caller is told, no relationship
- * number moves, and nothing enters Now. Persisting it server-side would be
- * building a ledger of who declined whom, which is precisely the thing this
- * product decided not to keep score of.
- *
- * So localStorage is not a shortcut here, it is the correct home — the storage
- * whose worst failure mode is that a card reappears. And no schema change: the
- * call row stays open and honest, because the caller's conviction really is
- * still out there whether or not this reader wants it in their column today.
+ * it. A dismissal is the exact opposite kind of fact, and the reasoning now lives
+ * beside the store in `lib/open-calls`, which owns both the query and the
+ * dismissed set so the rail and the mobile menu badge can never disagree.
  */
-const HIDDEN_KEY = "conviction:calls-hidden";
-
-function hidden(): Set<string> {
-  try {
-    return new Set(JSON.parse(window.localStorage.getItem(HIDDEN_KEY) ?? "[]") as string[]);
-  } catch {
-    return new Set();
-  }
-}
-
-function hide(marketId: number) {
-  try {
-    const next = hidden();
-    next.add(String(marketId));
-    // Bounded: a preference list, not a history. Oldest fall off, and the worst
-    // consequence of that is a card the reader dismissed months ago coming back.
-    window.localStorage.setItem(HIDDEN_KEY, JSON.stringify([...next].slice(-200)));
-  } catch {
-    /* storage unavailable — the card simply stays, which is harmless */
-  }
-}
-
 export function ChallengeRail({
   wallet,
   onSelect,
@@ -110,30 +77,11 @@ export function ChallengeRail({
 }) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("challenge");
-  const [dismissed, setDismissed] = useState<Set<string>>(() =>
-    typeof window === "undefined" ? new Set() : hidden(),
-  );
-
-  // The same cached observer DnaFirstReveal uses — the lock costs no round trip.
-  const { data: net } = useQuery({ ...networkQO(wallet), enabled: !!wallet });
-  const lock = challengeLock(net?.summary.expressedBeliefs ?? 0, (net?.summary.twinCount ?? 0) > 0);
-
-  const { data: challenges } = useQuery({
-    queryKey: ["challenges", wallet ?? null],
-    queryFn: () => getChallenges({ data: { wallet: wallet ?? null } }),
-    enabled: !!wallet && lock.unlocked,
-    staleTime: 60_000,
-  });
 
   // The open queue, minus anything this reader has waved off. The count follows
   // the list rather than the payload, so the badge always equals what is on
   // screen — three means three people are actually waiting on you.
-  const open = (challenges ?? []).filter((c) => !dismissed.has(String(c.marketId)));
-
-  const dismiss = (marketId: number) => {
-    hide(marketId);
-    setDismissed(new Set([...dismissed, String(marketId)]));
-  };
+  const { lock, open } = useOpenCalls(wallet);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -188,7 +136,7 @@ export function ChallengeRail({
                   key={c.marketId}
                   challenge={c}
                   onSelect={onSelect}
-                  onDismiss={dismiss}
+                  onDismiss={hideCall}
                 />
               ))}
             </ul>
@@ -230,11 +178,20 @@ const BADGE: Record<CallerRelation, string> = {
 };
 
 /**
- * ONE CARD, THREE ANSWERS: who called me, why do I care, what are they asking?
+ * ONE CARD, ONE STORY: PERSON → BELIEF → RELATIONSHIP EVIDENCE.
  *
- * The market is the subject; the RELATIONSHIP is the reason to open it. So the
- * hierarchy is person → question → the record between you → the call. Nothing
- * else earns space, and two things are deliberately absent:
+ *     Sarah · TRIBE
+ *     Will AI replace software engineers?
+ *     Sarah believes YES. This could be the one you split on.
+ *     82% Conviction Match · 9 of 11 together
+ *
+ * The belief now sits ABOVE the evidence, and the order is the argument: here is
+ * a person, here is what they hold, and here is what your history with them says
+ * about whether you will hold it too. The evidence used to sit between the
+ * question and the belief, which made the card read as a statistic about a
+ * relationship that happened to mention somebody's position.
+ *
+ * Nothing else earns space, and two things are deliberately absent:
  *
  *  • The wager. "Mike put $500 down" turns a social signal into financial
  *    pressure and would make the loudest voice the wealthiest one. The market
@@ -277,49 +234,62 @@ function ChallengeRow({
         ]
           .filter(Boolean)
           .join(". ")}
-        className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 pr-7 text-left transition-colors hover:border-[var(--border-strong)]"
+        className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 pr-9 text-left transition-colors hover:border-[var(--border-strong)]"
       >
-        <div className="flex items-start gap-2">
+        {/* WHO — named here rather than only inside the sentence below, so the
+            card has a subject before it has a claim. */}
+        <div className="flex items-center gap-2">
           <PersonAvatar wallet={c.caller.wallet} name={c.caller.name ?? undefined} size={22} />
-          <div className="min-w-0 flex-1">
-            <span
-              className="inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-              style={{ color: tone.fg, background: tone.bg }}
-            >
-              {badge}
-            </span>
-            <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-[var(--text)]">
-              {c.title}
-            </p>
-          </div>
+          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[var(--text)]">
+            {c.caller.name}
+          </span>
+          <span
+            className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+            style={{ color: tone.fg, background: tone.bg }}
+          >
+            {badge}
+          </span>
         </div>
 
-        {/* WHY THIS PERSON'S CALL — the record between the two of you, and the
-            arithmetic that proves it. Withheld below the evidence bar rather
-            than shown as a confident percentage over one shared conviction. */}
+        {/* WHAT THEY WERE ASKED */}
+        <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-[var(--text)]">{c.title}</p>
+
+        {/* WHAT THEY BELIEVE. It never names a side the reader has not taken. */}
+        <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-[var(--text-secondary)]">
+          {c.reason}
+        </p>
+
+        {/* WHY THEIR BELIEF IS WORTH YOUR TIME — the record between the two of
+            you, and the arithmetic that proves it. Last, because it explains the
+            line above rather than competing with it. Withheld below the evidence
+            bar rather than shown as a confident percentage over one shared
+            conviction. */}
         {showMatch && (
           <p className="num mt-1.5 text-[11px] text-[var(--text-muted)]">
             {match}% Conviction Match · {c.together} of {c.shared} together
           </p>
         )}
-
-        {/* THE CALL ITSELF. It never names a side the reader has not taken. */}
-        <p className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-[var(--text-secondary)]">
-          {c.reason}
-        </p>
       </button>
 
       {/* NOT FOR ME — quiet, and private. Never "Decline": nothing is reported
           to the caller, nothing is written down, and no relationship number
           moves. Showing up is worth celebrating; not showing up is simply the
           absence of that, and a product that ledgered it would be keeping score
-          of the wrong thing. */}
+          of the wrong thing.
+
+          SIZED FOR A THUMB. The glyph stays small, but the hit area is a full
+          32px square: this control sits on top of a card whose entire body is
+          the affordance, so on a phone a near-miss dismisses the call instead of
+          opening it — and dismissal is deliberately undoable by nothing. The
+          opacity is no longer hover-only for the same reason. A phone has no
+          hover, so `opacity-50 hover:opacity-100` left the × permanently at half
+          strength on the surface where it was hardest to hit. */}
       <button
         type="button"
         onClick={() => onDismiss(c.marketId)}
         aria-label={`Hide this call from ${c.caller.name ?? "them"}`}
         title="Not for me"
-        className="absolute right-1.5 top-1.5 px-1 text-[13px] leading-none text-[var(--text-muted)] opacity-50 transition-opacity hover:opacity-100"
+        className="absolute right-0 top-0 flex h-8 w-8 items-center justify-center text-[15px] leading-none text-[var(--text-muted)] opacity-60 transition-opacity hover:opacity-100"
       >
         ×
       </button>
@@ -328,7 +298,7 @@ function ChallengeRow({
 }
 
 /** The destination, shown rather than hidden. */
-function LockedPanel({ lock }: { lock: ReturnType<typeof challengeLock> }) {
+function LockedPanel({ lock }: { lock: OpenCalls["lock"] }) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
       <p className="text-[13px] font-semibold text-[var(--text)]">{lock.title}</p>

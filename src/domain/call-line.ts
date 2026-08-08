@@ -12,24 +12,34 @@
  * never agree with are completely different social events, and they were being
  * narrated in the same words.
  *
- * TWO CLAUSES, COMBINED. Rather than one long list of sentences, a line is an
- * ACT ("what they did") plus a PULL ("why that involves you"):
+ * TWO CLAUSES, COMBINED. Rather than one long list of sentences, a line is a
+ * BELIEF ("what they hold") plus a PULL ("why that involves you"):
  *
- *     Sarah is already in on YES.  ·  You've landed together 9 of 11 times.
- *     Mike asked this.             ·  You two rarely land the same way.
+ *     Sarah believes YES.      ·  This could be the one you split on.
+ *     Mike's read is NO.       ·  You two rarely land the same way.
  *
- * Four acts against four or five pulls per segment gives roughly forty distinct
- * lines from a dozen fragments, and every pairing is grammatical because the act
- * always names the caller and the pull never does — it addresses the reader or
- * describes the pair. No pronouns anywhere either: a name does not tell you
- * somebody's pronouns, and "they" reads oddly beside a single named person.
+ * Four beliefs against five or six pulls per segment gives roughly forty distinct
+ * lines from a dozen fragments, and every pairing is grammatical because the
+ * belief always names the caller and the pull never does — it addresses the
+ * reader or describes the pair. No pronouns anywhere either: a name does not tell
+ * you somebody's pronouns, and "they" reads oddly beside a single named person.
+ *
+ * BELIEF, NOT TRANSACTION. The first clause used to read "Sarah took YES", and
+ * `took` describes what happened at the contract. Challenge is not a receipt —
+ * it is one person's conviction arriving at another — so the clause names what
+ * Sarah HOLDS, which is the thing the reader is being asked to answer.
  *
  * WHERE THE PULL COMES FROM, and this is the part that could not exist before.
  * Conviction Match is now on the Challenge payload, so the line can say the one
  * thing that actually makes a call urgent — what is at stake between these two
  * people specifically. "This could be the one you split on" is only sayable to
- * someone who agrees with the caller almost always. "And still wants your read"
+ * someone who agrees with the caller almost always. "Agreeing here would be new"
  * is only sayable to someone who almost never does.
+ *
+ * THE PULL NEVER QUOTES THE COUNT. The card prints "82% Conviction Match · 9 of
+ * 11 together" on its own line directly beneath, so a pull that also said "You've
+ * landed together 9 of 11 times" printed the same numbers twice, one line apart.
+ * The evidence line owns the arithmetic; this clause owns what it means.
  *
  * EVERY FRAGMENT IS A FACT. Nothing here claims a market is closing, that anyone
  * is running out of time, that others have answered, or that the reader is
@@ -70,64 +80,108 @@ export interface CallLineInput {
 const ALIGNED: ReadonlySet<CallerRelation> = new Set(["twin", "tribe"]);
 
 /**
- * The evidence bar for a pull clause that quotes the record.
+ * The evidence bar for a pull that claims a PATTERN between the two of you.
  *
  * Deliberately the same five that gates every other earned statement in this
- * product. Below it the pull clauses fall back to the ones that need no history,
- * rather than quoting "1 of 1" as though it meant something.
+ * product. "You two usually land the same way" is a claim about history and
+ * needs some; below the bar the pull falls back to one that needs none.
  */
-const MIN_SHARED_FOR_RECORD = 5;
+const MIN_SHARED_FOR_PATTERN = 5;
 
-/** What they did. Always literally true, never softened. */
+/**
+ * WHAT THEY BELIEVE — not what they transacted.
+ *
+ * These verbs used to be `took`, `backed`, `went`, `is already in on`: all four
+ * describe a trade. But a Challenge is not a notification that somebody spent
+ * money, it is one person's conviction reaching another, and "Sarah believes YES"
+ * describes the PERSON where "Sarah took YES" describes the transaction. The card
+ * reads person → belief → relationship evidence, and this clause is the belief.
+ *
+ * Every variant here is belief-framed for that reason; `believes` is the plain
+ * form and the others are the same statement in this product's own vocabulary.
+ */
 const ACTS = {
   trade: [
-    (n: string, s: string) => `${n} took ${s}.`,
-    (n: string, s: string) => `${n} is already in on ${s}.`,
-    (n: string, s: string) => `${n} backed ${s}.`,
-    (n: string, s: string) => `${n} went ${s}.`,
+    (n: string, s: string) => `${n} believes ${s}.`,
+    (n: string, s: string) => `${n}'s read is ${s}.`,
+    (n: string, s: string) => `${n} stands on ${s}.`,
+    (n: string, s: string) => `${n} is convinced it's ${s}.`,
   ],
   created: [
     (n: string) => `${n} asked this.`,
+    (n: string) => `${n} wants to know.`,
     (n: string) => `${n} opened this question.`,
     (n: string) => `${n} put this one up.`,
-    (n: string) => `${n} wrote this question.`,
   ],
 } as const;
 
 /**
  * Why it involves you. Four pools, and which one applies is a fact about the
  * pair rather than a tone the copy chose.
+ *
+ * NO PULL QUOTES THE ARITHMETIC. Two of these used to read "You've landed
+ * together 9 of 11 times", which the card then printed again on its own line as
+ * "82% Conviction Match · 9 of 11 together" — the same numbers twice, one line
+ * apart, whenever a pair cleared MATURE_MIN_SHARED. The evidence line is the
+ * canonical home for the count, so this clause says the thing the count cannot:
+ * what it MEANS that this particular person is asking.
  */
 const PULLS = {
-  /** You usually land together, and there is a record to quote. */
-  alignedRecord: [
-    (t: number, s: number) => `You've landed together ${t} of ${s} times.`,
+  /**
+   * You usually land together, with enough history to claim a pattern.
+   *
+   * DISJOINT FROM `opposedPattern`, by test. Once a pair has a record, the
+   * sentence a reader sees must be specific to WHICH record it is — a Tribe
+   * member you land with nine times in eleven and a Rival you almost never do
+   * are different social events, and a pull that could belong to either would
+   * quietly erase the distinction the whole rail exists to draw.
+   */
+  alignedPattern: [
     () => `This could be the one you split on.`,
     () => `You two usually land the same way.`,
-    (t: number, s: number) => `${t} of ${s} together so far — your call.`,
+    // Not "Worth knowing if you disagree" — `knowing` contains `win`, which the
+    // banned-word guard matches as a substring. It was right to fail: the guard
+    // cannot read intent, and a looser one would stop catching the real thing.
+    () => `Worth a look if you'd disagree.`,
     () => `Waiting on your read.`,
+    () => `Your call.`,
+    () => `Where do you land?`,
   ],
-  /** You usually land together, but the record is too thin to quote. */
+  /** You usually land together, but there is not enough history to claim it. */
   alignedThin: [
     () => `Your call.`,
     () => `Waiting on your read.`,
     () => `What do you think?`,
     () => `Where do you land?`,
+    () => `Your read is the one missing.`,
   ],
-  /** You usually land apart, and there is a record to quote. */
-  opposedRecord: [
+  /** You usually land apart, with enough history to claim a pattern. */
+  opposedPattern: [
     () => `Your read is the one being asked for.`,
     () => `You two rarely land the same way.`,
     () => `Agreeing here would be new.`,
-    (t: number, s: number) => `You've landed together ${t} of ${s} times — and here you are.`,
     () => `Different conclusions, same question.`,
+    // Not "And still wants your read" — a pull that opens with a conjunction
+    // dangles off the belief clause with no subject of its own. Every fragment
+    // here stands up alone, because the two clauses are drawn independently and
+    // any pull may follow any belief.
+    () => `Say where you land.`,
+    () => `The disagreement is the point.`,
   ],
-  /** You usually land apart, thin record. */
+  /**
+   * You usually land apart, thin history.
+   *
+   * The thin pools DO share their generic fragments with `alignedThin`, and that
+   * is correct rather than sloppy: with no record between two people there is
+   * nothing relationship-specific to say, and inventing a distinction here would
+   * be claiming evidence the pair has not produced.
+   */
   opposedThin: [
     () => `Your read is the one being asked for.`,
     () => `Your call.`,
     () => `What do you think?`,
     () => `Different conclusions, same question.`,
+    () => `Where do you land?`,
   ],
 } as const;
 
@@ -178,28 +232,28 @@ export function callLine(e: CallLineInput): string | null {
 
   const together = Number.isFinite(e.together as number) ? (e.together as number) : null;
   const shared = Number.isFinite(e.shared as number) ? (e.shared as number) : null;
-  // A record is quotable only when both counts are present, reconcilable and
+  // A pattern is claimable only when both counts are present, reconcilable and
   // deep enough. `together > shared` would be a broken payload, not a fact.
-  const hasRecord =
+  const hasPattern =
     together != null &&
     shared != null &&
-    shared >= MIN_SHARED_FOR_RECORD &&
+    shared >= MIN_SHARED_FOR_PATTERN &&
     together >= 0 &&
     together <= shared;
 
   const aligned = ALIGNED.has(e.relation);
-  const pool = hasRecord
+  const pool = hasPattern
     ? aligned
-      ? PULLS.alignedRecord
-      : PULLS.opposedRecord
+      ? PULLS.alignedPattern
+      : PULLS.opposedPattern
     : aligned
       ? PULLS.alignedThin
       : PULLS.opposedThin;
 
-  // The pull NEVER re-names the caller: the act clause just did, and "Sarah took
-  // YES. Sarah is waiting on your read." reads like a bug. Every pull addresses
-  // the reader or describes the pair instead.
-  const pull = pool[hPull % pool.length](together ?? 0, shared ?? 0);
+  // The pull NEVER re-names the caller: the belief clause just did, and "Sarah
+  // believes YES. Sarah is waiting on your read." reads like a bug. Every pull
+  // addresses the reader or describes the pair instead.
+  const pull = pool[hPull % pool.length]();
   return `${act} ${pull}`;
 }
 

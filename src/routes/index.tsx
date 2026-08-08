@@ -35,6 +35,7 @@ import { LiveTape } from "@/components/LiveTape";
 import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { SimilarMarkets } from "@/components/SimilarMarkets";
 import { ChallengeRail } from "@/components/ChallengeRail";
+import { useOpenCalls } from "@/lib/open-calls";
 import { LaunchRail } from "@/components/LaunchRail";
 import { MarketDeck } from "@/components/MarketDeck";
 import { MobileGame } from "@/components/MobileGame";
@@ -605,6 +606,11 @@ function Feed() {
   const win = useDeckWindow() as VolumeWindow;
   const [tab, setTab] = useState<MobileTab>("belief");
   const [menuOpen, setMenuOpen] = useState(false);
+
+  /** How many people are waiting on this reader — badged on the menu's Room
+   *  item, because on a phone the Challenge rail is two taps out of sight. Same
+   *  hook the rail renders from, so the two can never disagree. */
+  const openCalls = useOpenCalls(wallet).open.length;
 
   /**
    * The reader's own lens — network groups and topics, combined. A SERVER
@@ -1520,13 +1526,30 @@ function Feed() {
                       setMenuOpen(false);
                     }}
                     aria-current={tab === t.key ? "page" : undefined}
-                    className={`block w-full rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                    className={`flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                       tab === t.key
                         ? "bg-[var(--surface)] text-[var(--text)]"
                         : "text-[var(--text-muted)]"
                     }`}
                   >
-                    {t.label}
+                    <span className="flex-1">{t.label}</span>
+                    {/* HOW A PHONE LEARNS SOMEBODY IS WAITING.
+                        Desktop keeps the Challenge rail on screen permanently, so
+                        "3 people are waiting on you" is ambient. On a phone the
+                        rail is two taps inside this menu, and the count lived only
+                        on the segmented control INSIDE it — you had to already be
+                        there to find out you should go. The number comes from the
+                        same `useOpenCalls` the rail renders from, so the badge and
+                        the list cannot disagree, and a dismissal updates both. */}
+                    {t.key === "room" && openCalls > 0 && (
+                      <span
+                        className="num rounded-full px-1.5 py-0.5 text-[11px] font-semibold"
+                        style={{ background: "var(--surface-2)", color: "var(--text)" }}
+                        aria-label={`${openCalls} waiting on you`}
+                      >
+                        {openCalls}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
