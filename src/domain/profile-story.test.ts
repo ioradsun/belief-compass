@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { usAct, nextAct, themAct, DENSITY, type ThemPosition } from "./profile-story";
+import {
+  usAct,
+  nextAct,
+  themAct,
+  receipts,
+  DENSITY,
+  RECEIPTS,
+  type ThemPosition,
+} from "./profile-story";
 
 const pos = (o: Partial<ThemPosition> & { marketId: number }): ThemPosition => ({
   title: `Market ${o.marketId}`,
@@ -119,5 +127,61 @@ describe("the non-repetition invariant", () => {
     const many = Array.from({ length: 20 }, (_, i) => pos({ marketId: i + 1 }));
     const t = themAct(many, { excludeMarketId: 2 });
     expect(t.rows).toHaveLength(20);
+  });
+});
+
+describe("THE RECEIPTS — the proof under the headline", () => {
+  const r = (id: number, v: "YES" | "NO", p: "YES" | "NO", domain: string | null = null) => ({
+    marketId: id,
+    title: `Market ${id}`,
+    viewerSide: v,
+    personSide: p,
+    domain,
+  });
+
+  it("says nothing when the count in the hero already said it", () => {
+    expect(receipts([r(1, "YES", "YES")]).rows).toEqual([]);
+  });
+
+  it("closes an all-aligned list with the pattern, not a verdict", () => {
+    const out = receipts([r(1, "YES", "YES"), r(2, "NO", "NO"), r(3, "YES", "YES")]);
+    expect(out.allAligned).toBe(true);
+    expect(out.footer).toBe("Together on all 3");
+    expect(out.rows.every((x) => x.agree)).toBe(true);
+  });
+
+  it("leads with the row that explains the percentage", () => {
+    const out = receipts([r(1, "YES", "YES"), r(2, "YES", "NO"), r(3, "NO", "NO")]);
+    expect(out.rows.map((x) => x.marketId)).toEqual([2, 1, 3]);
+    expect(out.footer).toBe("Together on 2 of 3");
+  });
+
+  it("caps the visible rows and keeps the rest countable", () => {
+    const many = Array.from({ length: 11 }, (_, i) => r(i + 1, "YES", "YES"));
+    const out = receipts(many);
+    expect(out.rows).toHaveLength(RECEIPTS.preview);
+    expect(out.hidden).toBe(11 - RECEIPTS.preview);
+  });
+
+  it("does not group a short shared record", () => {
+    const out = receipts([
+      r(1, "YES", "YES", "Crypto"),
+      r(2, "YES", "YES", "Crypto"),
+      r(3, "NO", "NO", "Culture"),
+    ]);
+    expect(out.groups).toEqual([]);
+  });
+
+  it("groups by domain once there is enough to navigate", () => {
+    const rows = [
+      ...Array.from({ length: 6 }, (_, i) => r(i + 1, "YES", "YES", "Crypto")),
+      r(7, "YES", "NO", "Culture"),
+      r(8, "NO", "YES", "Culture"),
+    ];
+    const out = receipts(rows);
+    expect(out.groups.map((g) => [g.domain, g.together, g.total])).toEqual([
+      ["Crypto", 6, 6],
+      ["Culture", 0, 2],
+    ]);
   });
 });
