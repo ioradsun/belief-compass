@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ValueRouteImport } from './routes/value'
+import { Route as TestingsceneRouteImport } from './routes/testingscene'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as HowRouteImport } from './routes/how'
@@ -33,6 +34,11 @@ import { Route as ApiPublicJobsBeliefRollupRouteImport } from './routes/api/publ
 const ValueRoute = ValueRouteImport.update({
   id: '/value',
   path: '/value',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TestingsceneRoute = TestingsceneRouteImport.update({
+  id: '/testingscene',
+  path: '/testingscene',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -145,6 +151,7 @@ export interface FileRoutesByFullPath {
   '/how': typeof HowRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/testingscene': typeof TestingsceneRoute
   '/value': typeof ValueRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
@@ -167,6 +174,7 @@ export interface FileRoutesByTo {
   '/how': typeof HowRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/testingscene': typeof TestingsceneRoute
   '/value': typeof ValueRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
@@ -190,6 +198,7 @@ export interface FileRoutesById {
   '/how': typeof HowRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
+  '/testingscene': typeof TestingsceneRoute
   '/value': typeof ValueRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
@@ -214,6 +223,7 @@ export interface FileRouteTypes {
     | '/how'
     | '/sitemap.xml'
     | '/terms'
+    | '/testingscene'
     | '/value'
     | '/dev/rail'
     | '/dev/transitions'
@@ -236,6 +246,7 @@ export interface FileRouteTypes {
     | '/how'
     | '/sitemap.xml'
     | '/terms'
+    | '/testingscene'
     | '/value'
     | '/dev/rail'
     | '/dev/transitions'
@@ -258,6 +269,7 @@ export interface FileRouteTypes {
     | '/how'
     | '/sitemap.xml'
     | '/terms'
+    | '/testingscene'
     | '/value'
     | '/dev/rail'
     | '/dev/transitions'
@@ -281,6 +293,7 @@ export interface RootRouteChildren {
   HowRoute: typeof HowRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsRoute: typeof TermsRoute
+  TestingsceneRoute: typeof TestingsceneRoute
   ValueRoute: typeof ValueRoute
   DevRailRoute: typeof DevRailRoute
   DevTransitionsRoute: typeof DevTransitionsRoute
@@ -305,6 +318,13 @@ declare module '@tanstack/react-router' {
       path: '/value'
       fullPath: '/value'
       preLoaderRoute: typeof ValueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/testingscene': {
+      id: '/testingscene'
+      path: '/testingscene'
+      fullPath: '/testingscene'
+      preLoaderRoute: typeof TestingsceneRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -449,6 +469,7 @@ const rootRouteChildren: RootRouteChildren = {
   HowRoute: HowRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsRoute: TermsRoute,
+  TestingsceneRoute: TestingsceneRoute,
   ValueRoute: ValueRoute,
   DevRailRoute: DevRailRoute,
   DevTransitionsRoute: DevTransitionsRoute,
