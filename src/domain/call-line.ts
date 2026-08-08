@@ -137,22 +137,22 @@ const PULLS = {
    * quietly erase the distinction the whole rail exists to draw.
    */
   alignedPattern: [
-    () => `This could be the one you split on.`,
+    (n: string) => `${n} wants you at the table.`,
     () => `You two usually land the same way.`,
     // Not "Worth knowing if you disagree" — `knowing` contains `win`, which the
     // banned-word guard matches as a substring. It was right to fail: the guard
     // cannot read intent, and a looser one would stop catching the real thing.
     () => `Worth a look if you'd disagree.`,
-    () => `Waiting on your read.`,
-    () => `Your call.`,
-    () => `Where do you land?`,
+    (n: string) => `${n} saved you a seat.`,
+    () => `This could be the one you split on.`,
+    () => `Your Tribe wants your read.`,
   ],
   /** You usually land together, but there is not enough history to claim it. */
   alignedThin: [
-    () => `Your call.`,
-    () => `Waiting on your read.`,
-    () => `What do you think?`,
-    () => `Where do you land?`,
+    (n: string) => `${n} wants you at the table.`,
+    (n: string) => `${n} wants your take on this one.`,
+    (n: string) => `${n} saved you a seat.`,
+    () => `You're part of this one.`,
     () => `Your read is the one missing.`,
   ],
   /** You usually land apart, with enough history to claim a pattern. */
@@ -160,30 +160,31 @@ const PULLS = {
     () => `Your read is the one being asked for.`,
     () => `You two rarely land the same way.`,
     () => `Agreeing here would be new.`,
-    () => `Different conclusions, same question.`,
+    (n: string) => `${n} wants your side of this.`,
     // Not "And still wants your read" — a pull that opens with a conjunction
     // dangles off the belief clause with no subject of its own. Every fragment
     // here stands up alone, because the two clauses are drawn independently and
     // any pull may follow any belief.
-    () => `Say where you land.`,
+    (n: string) => `${n} wants to know where you land.`,
     () => `The disagreement is the point.`,
   ],
   /**
    * You usually land apart, thin history.
    *
-   * The thin pools DO share their generic fragments with `alignedThin`, and that
-   * is correct rather than sloppy: with no record between two people there is
-   * nothing relationship-specific to say, and inventing a distinction here would
-   * be claiming evidence the pair has not produced.
+   * The thin pools stay generic where the pair has no record — but the
+   * INVITATION does not depend on a record. "Mike wants your side of this" is
+   * true the moment Mike's conviction qualified to reach this reader, so the
+   * warm fragments appear here too; only the pattern claims are withheld.
    */
   opposedThin: [
     () => `Your read is the one being asked for.`,
-    () => `Your call.`,
-    () => `What do you think?`,
+    (n: string) => `${n} wants your side of this.`,
+    (n: string) => `${n} wants to know where you land.`,
     () => `Different conclusions, same question.`,
-    () => `Where do you land?`,
+    () => `Say where you land.`,
   ],
 } as const;
+
 
 /**
  * FNV-1a over the pair. Small, stable, and dependency-free — the only property
