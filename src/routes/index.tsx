@@ -255,14 +255,18 @@ export const Route = createFileRoute("/")({
     // back/forward resolve the same object: ?m market, ?p person, ?dna overview.
     m: search.m != null && Number.isFinite(Number(search.m)) ? Number(search.m) : undefined,
     p: typeof search.p === "string" && search.p.length > 3 ? search.p : undefined,
-    dna: search.dna === true || search.dna === "1" ? true : undefined,
-    create:
-      search.create === true || search.create === "1" || search.create === 1 ? true : undefined,
-    terms: search.terms === true || search.terms === "1" ? true : undefined,
+    // ONE TRUTH TABLE FOR EVERY FLAG. `?dash=1` arrives PARSED — the router
+    // JSON-decodes it, so the value is the NUMBER 1, not the string. Only
+    // `create` happened to cover that, so every other deep link (`?dash=1`,
+    // `?dna=1`, `?terms=1`) validated to undefined and the router bounced the
+    // visitor to a bare `/` — a link that silently went nowhere.
+    dna: flag(search.dna),
+    create: flag(search.create),
+    terms: flag(search.terms),
     // Case File mode — preserved in the URL so it survives market switches + back/forward.
-    case: search.case === true || search.case === "1" ? true : undefined,
+    case: flag(search.case),
     // Conviction Dashboard — the financial story, a center-panel destination.
-    dash: search.dash === true || search.dash === "1" ? true : undefined,
+    dash: flag(search.dash),
     launch:
       search.launch != null && Number.isFinite(Number(search.launch))
         ? Number(search.launch)
