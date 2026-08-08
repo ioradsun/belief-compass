@@ -358,7 +358,20 @@ function PersonCard({
   onSelect: () => void;
 }) {
   const { row, rel, spot, bond } = v;
-  const word = bandLabel(spot.band) ?? "Neutral";
+  /**
+   * NO WORD IS A STATE, NOT A MISSING VALUE.
+   *
+   * This read `?? "Neutral"`, which put the literal word NEUTRAL in the corner of
+   * every card the model could not place — re-introducing the exact word
+   * `bandLabel` returns null to avoid. It was survivable while placement was
+   * loose. It is not now: with Conviction Match driving placement, most people a
+   * reader knows have no label, and a rail of NEUTRAL badges reads as broken
+   * rather than as honest.
+   *
+   * So the slot is simply absent, and the card still says everything true about
+   * the relationship — the percentage and the count it comes from.
+   */
+  const word = bandLabel(spot.band);
   const tone = spectrumColor(spot.position);
   const ring = spectrumRing(spot.position);
   const [imgFailed, setImgFailed] = useState(false);
@@ -380,7 +393,16 @@ function PersonCard({
           }
         }}
         aria-current={selected ? "true" : undefined}
-        aria-label={`${row.displayName}, ${word}.${bond?.sentence ? ` ${bond.sentence}` : ""}`}
+        aria-label={[
+          row.displayName,
+          word,
+          match != null
+            ? `${match} percent Conviction Match, ${rel.together} of ${rel.sharedConvictions} together`
+            : null,
+          bond?.sentence,
+        ]
+          .filter(Boolean)
+          .join(". ")}
         className="block w-full cursor-pointer rounded-[14px] p-3.5 text-left transition-colors hover:bg-[var(--surface-2)]"
         style={{ background: selected ? "var(--surface-2)" : "var(--surface)" }}
       >
@@ -411,12 +433,14 @@ function PersonCard({
           <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[var(--text)]">
             {row.displayName}
           </span>
-          <span
-            className="shrink-0 text-[10px] font-semibold uppercase tracking-wide"
-            style={{ color: tone }}
-          >
-            {word}
-          </span>
+          {word && (
+            <span
+              className="shrink-0 text-[10px] font-semibold uppercase tracking-wide"
+              style={{ color: tone }}
+            >
+              {word}
+            </span>
+          )}
         </div>
 
         {/* 2 — The story. Absent, never zeroed. */}
