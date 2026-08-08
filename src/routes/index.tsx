@@ -1363,16 +1363,23 @@ function Feed() {
                 </Suspense>
               </div>
             ) : createOpen ? (
-              <PanelBoundary label="Create market" onDismiss={closeCreate}>
-                <Suspense fallback={<DeckSkeleton />}>
-                  <CreateMarket
-                    ethUsd={stableFeed?.ethUsd ?? 0}
-                    onCreated={(marketId) => marketCreated(marketId)}
-                    onCancel={closeCreate}
-                    onOpenTerms={openTerms}
-                  />
-                </Suspense>
-              </PanelBoundary>
+              /* THE WAY OUT IS ALWAYS ON SCREEN. The form itself never rendered
+                 its `onCancel`, so on mobile — where the header's create button
+                 is the only other exit — this was a dead end. */
+              <div className="flex min-h-0 flex-1 flex-col">
+                <BackLink onClick={closeCreate} />
+                <PanelBoundary label="Create market" onDismiss={closeCreate}>
+                  <Suspense fallback={<DeckSkeleton />}>
+                    <CreateMarket
+                      ethUsd={stableFeed?.ethUsd ?? 0}
+                      onCreated={(marketId) => marketCreated(marketId)}
+                      onCancel={closeCreate}
+                      onOpenTerms={openTerms}
+                    />
+                  </Suspense>
+                </PanelBoundary>
+              </div>
+
             ) : selectedPerson ? (
               /* The exit lives here rather than inside the panel: both of these
                  components have several early returns (loading, no wallet, not
