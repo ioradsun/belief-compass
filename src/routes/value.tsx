@@ -18,6 +18,7 @@ import { parseAbi } from "viem";
 import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
 import { getEcosystemValue, type EcosystemValue } from "@/lib/ecosystem-value.functions";
 import { categoryLabel } from "@/domain/categories";
+import { ago } from "@/domain/relative-time";
 
 export const Route = createFileRoute("/value")({
   head: () => ({
@@ -435,15 +436,6 @@ function ActivityRow({ a }: { a: EcosystemValue["recentActivity"][number] }) {
   );
 }
 
-function ago(iso: string): string {
-  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
-  const hr = Math.floor(m / 60);
-  if (hr < 24) return `${hr}h`;
-  return `${Math.floor(hr / 24)}d`;
-}
 
 // --- small presentational pieces -------------------------------------------
 function Hero({

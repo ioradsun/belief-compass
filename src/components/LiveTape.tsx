@@ -33,6 +33,7 @@ import { useTapeGate } from "@/hooks/useTapeGate";
 import { arrivalLabel } from "@/domain/tape-arrivals";
 import { mixFeed } from "@/domain/feed-cadence";
 import type { BeatTone } from "@/domain/story";
+import { ago } from "@/domain/relative-time";
 
 type LiveResult = {
   rows: LiveRow[];
@@ -63,15 +64,6 @@ function usdShort(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
-function ago(iso: string): string {
-  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  return `${Math.floor(h / 24)}d`;
-}
 
 export function LiveTape({
   wallet,
