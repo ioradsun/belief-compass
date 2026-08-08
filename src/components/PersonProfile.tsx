@@ -685,6 +685,50 @@ function ConvictionRow({ p, onSelect }: { p: PersonPosition; onSelect: (id: numb
   );
 }
 
+/**
+ * ONE PERSON IN THE PAIR — face, name, and who they are to the reader.
+ *
+ * The label is the whole point: two pictures with no labels is a puzzle, and
+ * "You" over your own face is the cheapest possible way to make the page feel
+ * like it is about a relationship rather than about a record.
+ */
+function Face({
+  name,
+  avatarUrl,
+  seed,
+  label,
+}: {
+  name: string;
+  avatarUrl: string | null;
+  seed: string;
+  label: string | null;
+}) {
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-3">
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
+      ) : (
+        <span
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-semibold text-white"
+          style={{ background: `hsl(${hueFor(seed)} 45% 45%)` }}
+          aria-hidden
+        >
+          {initialsFor(name)}
+        </span>
+      )}
+      <div className="min-w-0">
+        {label && (
+          <p className="text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+            {label}
+          </p>
+        )}
+        <p className="truncate text-[15px] font-semibold text-[var(--text)]">{name}</p>
+      </div>
+    </div>
+  );
+}
+
+
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="mb-2 text-[11px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
