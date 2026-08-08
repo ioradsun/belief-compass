@@ -24,8 +24,3 @@ export function focusPerson(wallet: string | null | undefined): void {
   if (!wallet || !handler) return;
   handler(wallet);
 }
-
-/** Whether a profile can currently be opened (used to keep avatars inert if not). */
-export function canFocusPerson(): boolean {
-  return handler != null;
-}

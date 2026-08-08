@@ -546,24 +546,3 @@ function round(n: number, dp: number): number {
   const f = 10 ** dp;
   return Math.round(n * f) / f;
 }
-
-/**
- * Explainability (item 31): full per-type candidacy + eligibility + final result
- * for one market. Pure — for tuning + the debug endpoint, never product copy.
- */
-export function debugEvaluate(input: OpportunityInput, ctx: OpportunityContext) {
-  return {
-    eligibility: eligibility(input, ctx),
-    percentilesAvailable: ctx.eligibleMarketCount >= OPP.MIN_MARKETS_FOR_PERCENTILES,
-    concentration: concentration(input),
-    candidates: {
-      hot: hotCandidate(input),
-      contested: contestedCandidate(input),
-      conviction: convictionCandidate(input),
-      early: earlyCandidate(input),
-      hidden: hiddenCandidate(input),
-      new: newCandidate(input),
-    },
-    result: evaluateOpportunity(input, ctx),
-  };
-}

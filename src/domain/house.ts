@@ -120,8 +120,6 @@ export const BAND_COPY: Record<HouseConfidenceBand, { headline: string; line: st
   },
 };
 
-export const HOUSE_TAGLINE = "The crowd predicts the market. The House predicts you.";
-
 function noRead(kind: NoReadKind, title: string, body: string, detail: string[] = []): HouseRead {
   return {
     action: null,
@@ -506,12 +504,3 @@ export function nextFoundation(answeredKeys: string[]): FoundationMapping | null
   const done = new Set(answeredKeys);
   return FOUNDATION_MAPPINGS.find((m) => !done.has(m.key)) ?? null;
 }
-
-/** Per-step copy shown while the foundation is being built (index 0 = after 1st). */
-export const FOUNDATION_PROGRESS_COPY = [
-  "The House noticed its first tell.",
-  "A pattern is beginning to form.",
-  "You’re giving the House something to work with.",
-  "One more move before the House takes its first shot.",
-  "House Read unlocked.",
-] as const;

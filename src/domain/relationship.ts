@@ -271,14 +271,6 @@ export function sortRivals(a: RelationshipPresentation, b: RelationshipPresentat
  * One place owns every relationship word, so the app never drifts between "Opp"
  * and "Opponent" or shows a percentage without its evidence. */
 
-export const RELATIONSHIP_TERMS = {
-  tribe: "Tribe",
-  rivals: "Rivals",
-  rival: "Rival",
-  twin: "Twin",
-  opp: "Opp",
-} as const;
-
 /** "4 convictions in common" / "1 conviction in common". */
 export function formatSharedConvictions(n: number): string {
   const c = count(n);

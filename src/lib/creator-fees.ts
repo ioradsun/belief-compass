@@ -53,18 +53,6 @@ export function useFeeBalances(wallet?: `0x${string}`) {
   };
 }
 
-/** Fees earned so far by a single market (wei) — lifetime, not unclaimed. */
-export function useMarketCreatorFees(marketId: number | null) {
-  const q = useReadContract({
-    ...CONTRACT,
-    functionName: "creatorFeesPerMarket",
-    args: marketId != null ? [BigInt(marketId)] : undefined,
-    chainId: CHAIN_ID,
-    query: { enabled: marketId != null },
-  });
-  return { fees: (q.data as bigint | undefined) ?? null, isLoading: q.isLoading };
-}
-
 type ClaimKind = "creator" | "referral";
 
 /** Sends the claim from the connected wallet and tracks it to a receipt. */

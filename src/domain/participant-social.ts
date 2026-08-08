@@ -88,17 +88,6 @@ export function participantSocial(people: SocialParticipant[], total: number): P
 }
 
 /**
- * The viewer's DNA label, reduced to the only distinction this row makes.
- * Twins are tribe; opps and inverses are rivals; everything else is "other" —
- * the row never renders an "insufficient evidence" state as a relationship.
- */
-export function relationFromLabel(label?: string | null): ParticipantRelation {
-  if (label === "tribe" || label === "twin") return "tribe";
-  if (label === "opp" || label === "inverse") return "rival";
-  return "other";
-}
-
-/**
  * The SAME grouping the Tribe/Rivals tabs use, reduced to this row's vocabulary.
  *
  * The stored DNA label is not what the app calls a Tribe member: everywhere else
