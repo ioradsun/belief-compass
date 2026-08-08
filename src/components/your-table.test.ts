@@ -105,3 +105,58 @@ describe("a pass reaches the server now, and still tells nobody", () => {
     expect(c).toMatch(/calls-hidden/);
   });
 });
+
+/**
+ * WHEN SOMEBODY HAS MORE THAN A RAILFUL.
+ *
+ * Every open call is now a deliberate request rather than an inference, so the
+ * old behaviour — quietly cutting at six and discarding the rest — stopped being
+ * defensible. It is not that six is wrong; it is that the seventh person asked.
+ */
+describe("more than fits", () => {
+  it("shows a railful and says how many are behind it", () => {
+    const c = rail();
+    expect(c).toMatch(/open\.slice\(0, shown\)/);
+    expect(c).toMatch(/\{open\.length - shown\} more waiting/);
+  });
+
+  it("reveals a railful at a time rather than everything at once", () => {
+    // Past a railful it stops reading as a set of things waiting for you and
+    // starts reading as a feed — and the feed already exists one tab across.
+    expect(rail()).toMatch(/setShown\(\(n\) => n \+ CHALLENGE\.maxOpen\)/);
+  });
+
+  it("has no pass-all, and that is a decision", () => {
+    // A pass is durable and per-question: each one tells a different creator
+    // that somebody considered their question and moved on. A bulk gesture would
+    // convert one reader's fatigue into N false signals about N questions —
+    // "I had a full queue" rendered to each of them as "1 passed". The relief
+    // valve is that unanswered calls are not urgent, not that they can be
+    // cleared in one stroke.
+    const c = rail();
+    for (const w of ["dismissAll", "passAll", "Clear all", "Dismiss all"])
+      expect(c).not.toContain(w);
+  });
+});
+
+describe("the derived path is gone, not disabled", () => {
+  it("reads calls somebody made rather than inferring them from trades", () => {
+    const c = code("src/lib/challenge.server.ts");
+    expect(c).toMatch(/\.not\("challenge_id", "is", null\)/);
+    // The event scan, its window, its cap and the surfacing write are all gone.
+    expect(c).not.toMatch(/recordCalls|callerEvents|kind", \["trade", "market_created"\]/);
+  });
+
+  it("keeps a Challenge alive when its caller has since exited", () => {
+    // Putting it on the table is the thing they did, and it stays true. Without
+    // this the row silently vanished and took a deliberate request with it.
+    const c = code("src/lib/challenge.server.ts");
+    expect(c).toMatch(/act: side \? "trade" : "market_created"/);
+  });
+
+  it("throws rather than rendering an empty room on a failed read", () => {
+    const c = code("src/lib/challenge.server.ts");
+    const build = c.slice(c.indexOf("export async function buildChallenges"));
+    expect(build).toMatch(/throw new Error\(error\.message\)/);
+  });
+});
