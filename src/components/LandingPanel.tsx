@@ -242,7 +242,7 @@ export function LandingPanel({
                     setHowOpen(true);
                   }}
                   tabIndex={expanded ? 0 : -1}
-                  className="ml-auto inline-flex items-center gap-2 text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+                  className="ml-auto hidden items-center gap-2 text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] lg:inline-flex"
                 >
                   <svg
                     viewBox="0 0 24 24"
