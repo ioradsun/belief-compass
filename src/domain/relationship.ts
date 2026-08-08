@@ -53,13 +53,29 @@ function groupFor(label: EngineLabel): RelationshipGroup {
 
 /** The two primary groups — plus the states that keep someone OUT of them. */
 export type RelationshipGroup = "tribe" | "rival" | "neutral" | "insufficient";
-/** Earned top-tier badges. Never a navigation filter. */
-export type EarnedLabel = "twin" | "opp" | null;
+/**
+ * WHERE TWIN AND OPP WENT.
+ *
+ * They are held back, not deleted. Production has ONE pair that would qualify as
+ * Twin and ZERO that would qualify as Opp — four labels describing a population
+ * that supports two. Worse, they were defined TWICE (see below), so the system
+ * could not tell a single coherent story about how Twin is earned.
+ *
+ * When the distributions grow they return from ONE place — `DNA_THRESHOLDS.twin`
+ * and `.inverse` in dna/config — and rarity is what will make them mean anything.
+ */
+export type EarnedLabel = null;
 /** Low evidence → counts; mature → a percentage with its evidence. */
 export type EvidenceTier = "low" | "mature";
 
 export interface RelationshipInput {
-  /** Conviction-weighted same-side fraction, 0–100 (the engine's `agreement`). */
+  /**
+   * The engine's conviction-weighted same-side fraction, 0–100.
+   *
+   * NO LONGER WHAT A READER SEES, and no longer what places the relationship —
+   * see `convictionMatch`. Kept because the engine still computes it and the
+   * ordering key still reads it, but nothing renders it.
+   */
   agreement: number;
   /** Shared directional convictions — the evidence count. */
   sharedConvictions: number;
@@ -91,7 +107,13 @@ export interface RelationshipPresentation {
   group: RelationshipGroup;
   earnedLabel: EarnedLabel;
   tier: EvidenceTier;
-  /** Round alignment, 0–100. */
+  /**
+   * CONVICTION MATCH — the one number a reader sees, and the one that places
+   * the relationship. `together / shared`, rounded. Null when there is no shared
+   * history to divide, which renders as nothing rather than as 0%.
+   */
+  matchPct: number | null;
+  /** Round alignment, 0–100. Equal to `matchPct` whenever that is non-null. */
   alignmentPct: number;
   /** 100 − alignment. */
   oppositionPct: number;
@@ -127,40 +149,50 @@ const count = (v: number): number => (Number.isFinite(v) && v > 0 ? Math.floor(v
  * engine's one rule — and then does what it is actually for: turning a label
  * plus its evidence into something a person can read.
  *
- * The rare words are still EARNED on top (see `earnedFor`), because topic
- * breadth is a requirement no single scalar can express, and that layering was
- * always the intent.
+ * A SECOND interpretation used to sit on top of that. `earnedFor` re-tested the
+ * GROUP against its own thresholds (EARNED_LABELS: 90% over 15 shared), so a
+ * pair the engine called `tribe` could still display "Twin" — two definitions of
+ * the same word, and the looser one won. It is gone. There is one path.
  */
 
-/** Does this relationship clear an earned badge's alignment + evidence + breadth? */
-function earnedFor(p: {
-  group: RelationshipGroup;
-  alignmentPct: number;
-  oppositionPct: number;
-  sharedConvictions: number;
-  topicCount: number;
-  confidence: number;
-}): EarnedLabel {
-  if (p.group === "tribe") {
-    const c = EARNED_LABELS.twin;
-    if (
-      p.alignmentPct >= c.minStrength &&
-      p.sharedConvictions >= c.minShared &&
-      p.topicCount >= c.minTopics &&
-      p.confidence >= c.minConfidence
-    )
-      return "twin";
-  } else if (p.group === "rival") {
-    const c = EARNED_LABELS.opp;
-    if (
-      p.oppositionPct >= c.minStrength &&
-      p.sharedConvictions >= c.minShared &&
-      p.topicCount >= c.minTopics &&
-      p.confidence >= c.minConfidence
-    )
-      return "opp";
-  }
-  return null;
+/**
+ * CONVICTION MATCH — the whole measurement, in one division.
+ *
+ *     together / shared
+ *
+ * WHAT THIS REPLACED, and why the sophistication had to go. The number a reader
+ * saw used to be the engine's conviction-WEIGHTED agreement: each shared market
+ * counted `√(convictionA × convictionB)`, quartered if either had exited. It
+ * encodes something real — a question you both staked heavily on says more than
+ * one you each dipped into — and it produced this, in production:
+ *
+ *     RIVAL · 15% Conviction Match · 7 of 8 together
+ *
+ * A pair who landed on the SAME SIDE in seven of eight shared markets, called a
+ * Rival, because the one market they split on carried nearly all the weight.
+ * There is no honest card there: print 88% and the label is nonsense, print 15%
+ * and the arithmetic visibly lies. Measured across the 36 pairs the engine can
+ * judge at all, only 17% would have seen a percentage matching the count under it.
+ *
+ * So the number describes what happened, and it is checkable: a reader can count
+ * the rows on the profile and get the same answer. That is the entire point, and
+ * it is worth more than the weighting it cost.
+ *
+ * NULL, NEVER ZERO. No shared history is not 0% agreement — it is nothing to
+ * divide. `Number(null) === 0` is the failure this codebase keeps paying for.
+ */
+export function convictionMatch(together: number, shared: number, apart?: number): number | null {
+  if (!Number.isFinite(together) || !Number.isFinite(shared)) return null;
+  if (shared <= 0) return null;
+  // THE FORGOTTEN-FIELD GUARD, and it uses a real invariant rather than a hunch:
+  // `scoreRelationship` guarantees sameSide + opposite === shared. So when a
+  // caller supplies `apart` and the three do not reconcile, the counts did not
+  // come from one score — most likely `together` was never populated — and the
+  // honest answer is "cannot say" rather than a confident 0%. `0 of 10` still
+  // reconciles (0 + 10 === 10) and still reads 0%, because that is a real state.
+  if (apart != null && Number.isFinite(apart) && together + apart !== shared) return null;
+  const t = Math.max(0, Math.min(shared, together));
+  return Math.round((t / shared) * 100);
 }
 
 export function presentRelationship(input: RelationshipInput): RelationshipPresentation {
@@ -168,7 +200,14 @@ export function presentRelationship(input: RelationshipInput): RelationshipPrese
   const together = count(input.together);
   const apart = count(input.apart);
   const topicCount = count(input.topicCount);
-  const alignmentPct = clampPct(input.agreement);
+  // THE ONE NUMBER. Conviction Match places the relationship and Conviction Match
+  // is what the card shows — so a label can no longer contradict the count under
+  // it, structurally rather than by convention. When there is no shared history
+  // to divide, placement falls back to the engine's agreement so a caller that
+  // never populated together/apart degrades to its old behaviour rather than to
+  // a confident 0%.
+  const matchPct = convictionMatch(together, shared, apart);
+  const alignmentPct = matchPct ?? clampPct(input.agreement);
   const oppositionPct = 100 - alignmentPct;
   // Current-equivalent evidence. Falls back to the raw count, which is the same
   // number for a relationship where nothing has been exited.
@@ -195,19 +234,13 @@ export function presentRelationship(input: RelationshipInput): RelationshipPrese
   // so it reads current-equivalent convictions. Twelve shared markets that are
   // all memories should not license the precision that twelve live ones do.
   const tier: EvidenceTier = evidence >= MATURE_MIN_SHARED ? "mature" : "low";
-  const earnedLabel = earnedFor({
-    group,
-    alignmentPct,
-    oppositionPct,
-    sharedConvictions: evidence,
-    topicCount,
-    confidence,
-  });
 
   return {
     group,
-    earnedLabel,
+    // Twin and Opp are held back until production can support them; see EarnedLabel.
+    earnedLabel: null,
     tier,
+    matchPct,
     alignmentPct,
     oppositionPct,
     sharedConvictions: shared,
@@ -304,8 +337,6 @@ export function relationshipLabel(
   p: RelationshipPresentation,
   isTop = true,
 ): RelationshipLabel | null {
-  if (p.earnedLabel === "twin") return { text: "Twin", kind: "earned", tone: "aligned" };
-  if (p.earnedLabel === "opp") return { text: "Opp", kind: "earned", tone: "opposed" };
   // Never met → nothing to rank, so nothing to say.
   if (p.group === "insufficient") return null;
 

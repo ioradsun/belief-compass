@@ -58,12 +58,18 @@
  * then TRIBE and the percentage as the machinery that explains it. Leading with
  * the machinery would make a reader decode before they feel anything.
  *
- * TWO DIMENSIONS, NEVER BLENDED. Shared DNA answers "do we see the world the same
- * way"; showing up answers "are they there when I call". A person at 92% DNA who
- * never shows, and one at 28% who always does, are the two most interesting
+ * TWO DIMENSIONS, NEVER BLENDED. Conviction Match answers "do we land on the same
+ * side"; showing up answers "are they there when I call". A person at 92% Match
+ * who never shows, and one at 28% who always does, are the two most interesting
  * relationships on this platform — averaging them into one "compatibility" score
  * would erase exactly what makes them worth reading. The two calculations never
  * touch; see @/domain/dependability.
+ *
+ * AND THE PERCENTAGE IS THE ARITHMETIC. Conviction Match is `together ÷ shared`
+ * and the line under it states that sum, so a reader can count the rows in Act II
+ * and get the same answer. It replaced a conviction-weighted figure that could
+ * not be checked — and that, in production, called a pair who agreed on 7 of 8
+ * shared markets a Rival. See @/domain/relationship.
  *
  * STILL DELIBERATELY ABSENT. A Together/Apart stat pair. A per-topic bar chart.
  * Returns, rank, profit, follower counts — outcomes, and an outcome is not a
@@ -111,6 +117,7 @@ import {
 } from "@/domain/profile-start-here";
 import { peopleAround, type ConnectedPerson } from "@/domain/person-network";
 import { whatConnectsYou } from "@/domain/what-connects-you";
+import { convictionMatch } from "@/domain/relationship";
 
 export function PersonProfile({
   wallet,
@@ -213,6 +220,9 @@ export function PersonProfile({
   // read has not landed) yields the silent state rather than a zero.
   const bond = bondFor(data.displayName, pair?.theirs ?? EMPTY_TALLY, pair?.yours ?? EMPTY_TALLY);
   const history = historyRows(pair?.history ?? [], data.displayName);
+
+  // Conviction Match — together ÷ shared, the number the evidence line proves.
+  const match = convictionMatch(data.together, data.sharedBeliefs);
 
   const agreed = data.sharedBoth.map((m) => ({
     marketId: Number(m.marketId),
@@ -318,9 +328,9 @@ export function PersonProfile({
             >
               {RELATIONSHIP_TEXT[data.relationship]}
             </span>
-            {data.sharedBeliefs > 0 && Number.isFinite(data.agreement) && (
+            {match != null && (
               <span className="num text-[12px] text-[var(--text-secondary)]">
-                {Math.round(data.agreement)}% Shared DNA
+                {match}% Conviction Match
               </span>
             )}
           </div>
@@ -350,8 +360,16 @@ export function PersonProfile({
               percentage on purpose: a reader can count the rows in the history
               below and get the same answer, which is what makes the claim
               checkable instead of magical. */}
+          {/* The arithmetic behind the percentage, and the showing-up receipt.
+              Two independent facts about the same person: how often you land
+              together, and whether they turn up when you call. */}
+          {match != null && (
+            <p className="num mt-2 text-[12px] leading-relaxed text-[var(--text-secondary)]">
+              {data.together} of {data.sharedBeliefs} together
+            </p>
+          )}
           {bond?.evidence && (
-            <p className="mt-2 text-[12px] leading-relaxed text-[var(--text-secondary)]">
+            <p className="mt-1 text-[12px] leading-relaxed text-[var(--text-secondary)]">
               {bond.evidence}
             </p>
           )}

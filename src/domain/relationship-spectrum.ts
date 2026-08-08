@@ -68,7 +68,13 @@ import { confidenceFor } from "./dna/config";
 import type { EarnedLabel, RelationshipGroup } from "./relationship";
 
 /** A word for a region of the continuum. Never a container, never a filter. */
-export type SpectrumBand = "twin" | "tribe" | "neutral" | "rival" | "opponent";
+/**
+ * TWO WORDS AND A SILENCE. `twin` and `opponent` are gone with the earned
+ * layer — production has one pair that would earn Twin and none that would earn
+ * Opp, and `opponent` was also the second noun for a label `dna-labels` already
+ * calls "Opp". One engine label must not render as two different words.
+ */
+export type SpectrumBand = "tribe" | "neutral" | "rival";
 
 export interface SpectrumInput {
   /** Conviction-weighted same-side fraction, 0–100. */
@@ -79,7 +85,9 @@ export interface SpectrumInput {
    */
   confidence: number;
   /**
-   * The earned badge, if the relationship has one. Carries the evidence and
+   * @deprecated Twin/Opp are held back; this is always null. Kept on the input
+   * so callers do not all have to change on the same day.
+   * Carries nothing. Formerly the evidence and
    * topic-breadth requirements a single scalar cannot express, which is why the
    * two extreme words are gated on it rather than on a cutoff. See the header.
    */
@@ -160,7 +168,7 @@ export function place(input: SpectrumInput): SpectrumPlace {
   return {
     position,
     matchPct: Math.round(alignment),
-    band: bandFor(input.group, input.earned ?? null),
+    band: bandFor(input.group),
   };
 }
 
@@ -174,9 +182,9 @@ export function place(input: SpectrumInput): SpectrumPlace {
  * turns out it could not reliably know the direction either, because the damping
  * that makes it a good SORT key also drags genuine relationships into the middle.
  */
-export function bandFor(group: RelationshipGroup, earned: EarnedLabel = null): SpectrumBand {
-  if (group === "tribe") return earned === "twin" ? "twin" : "tribe";
-  if (group === "rival") return earned === "opp" ? "opponent" : "rival";
+export function bandFor(group: RelationshipGroup): SpectrumBand {
+  if (group === "tribe") return "tribe";
+  if (group === "rival") return "rival";
   return "neutral";
 }
 
@@ -187,14 +195,10 @@ export function bandFor(group: RelationshipGroup, earned: EarnedLabel = null): S
  */
 export function bandLabel(band: SpectrumBand): string | null {
   switch (band) {
-    case "twin":
-      return "Twin";
     case "tribe":
       return "Tribe";
     case "rival":
       return "Rival";
-    case "opponent":
-      return "Opponent";
     default:
       return null;
   }
@@ -252,13 +256,18 @@ export function spectrumRing(position: number): { color: string; width: number }
 /** The one filter the people list exposes: which region of the continuum. */
 export type SpectrumFilter = "all" | SpectrumBand;
 
+/**
+ * NOT "UNPLACED". That is what the model calls someone; it is not what they are.
+ * A reader filtering their own people should see a state that is about the
+ * relationship — it has not settled into a shape yet — rather than a report on
+ * the classifier's confidence. The absence of a label is already the message on
+ * the card; this only has to name the same absence in a way a person would.
+ */
 export const SPECTRUM_FILTERS: readonly { id: SpectrumFilter; label: string }[] = [
   { id: "all", label: "Everyone" },
-  { id: "twin", label: "Twins" },
   { id: "tribe", label: "Tribe" },
-  { id: "neutral", label: "Unplaced" },
   { id: "rival", label: "Rivals" },
-  { id: "opponent", label: "Opponents" },
+  { id: "neutral", label: "Still forming" },
 ] as const;
 
 export function matchesFilter(band: SpectrumBand, filter: SpectrumFilter): boolean {

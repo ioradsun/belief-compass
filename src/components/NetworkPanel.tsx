@@ -75,7 +75,7 @@ const present = (row: NetworkPersonRow): PersonView => {
     strongestAlignedTopic: row.strongestAlignedDomain?.name ?? null,
     strongestOpposedTopic: row.strongestOpposedDomain?.name ?? null,
   });
-  // The spectrum reads the relationship's own group, confidence and earned badge
+  // The spectrum reads the relationship's own group and confidence
   // — it re-derives NOTHING, so the word on the row and the word the engine chose
   // cannot disagree. It contributes the ordering and the colour, only.
   return {
@@ -84,7 +84,6 @@ const present = (row: NetworkPersonRow): PersonView => {
     spot: place({
       alignmentPct: rel.alignmentPct,
       confidence: rel.confidence,
-      earned: rel.earnedLabel,
       group: rel.group,
     }),
   };
@@ -318,11 +317,9 @@ function SpectrumFilterControl({
 /** The menu's dots are the continuum itself: deep blue → neutral → deep amber. */
 const FILTER_DOT: Record<SpectrumFilter, string> = {
   all: "linear-gradient(90deg, var(--yes), var(--text-muted), var(--no))",
-  twin: spectrumColor(0.9),
   tribe: spectrumColor(0.4),
-  neutral: "var(--text-muted)",
   rival: spectrumColor(-0.4),
-  opponent: spectrumColor(-0.9),
+  neutral: "var(--text-muted)",
 };
 
 /**
@@ -366,7 +363,9 @@ function PersonCard({
   const ring = spectrumRing(spot.position);
   const [imgFailed, setImgFailed] = useState(false);
   const showImg = Boolean(row.avatarUrl) && !imgFailed;
-  const agreement = Number.isFinite(rel.alignmentPct) ? Math.round(rel.alignmentPct) : null;
+  // CONVICTION MATCH — null when there is nothing to divide, and null renders
+  // nothing. A person you have met once has no percentage, not a 0%.
+  const match = rel.matchPct;
 
   return (
     <li>
@@ -425,14 +424,18 @@ function PersonCard({
           <p className="mt-2 text-[12.5px] leading-snug text-[var(--text)]">{bond.sentence}</p>
         )}
 
-        {/* 3 — Why. One number, under its own label, exactly as a position states
-            its value. Never rendered when there is no overlap to measure. */}
-        {agreement != null && rel.sharedConvictions > 0 && (
+        {/* 3 — Why, and the arithmetic that proves it. The percentage IS
+            together ÷ shared, so the line beneath it is not a footnote — it is
+            the sum, and a reader can check it against the profile's history. */}
+        {match != null && (
           <div className="mt-2.5">
             <div className="num text-[16px] font-semibold leading-none text-[var(--text)]">
-              {agreement}%
+              {match}%
             </div>
-            <div className="mt-1 text-[10px] text-[var(--text-muted)]">Shared DNA</div>
+            <div className="mt-1 text-[10px] text-[var(--text-muted)]">Conviction Match</div>
+            <div className="num mt-1 text-[10px] text-[var(--text-muted)]">
+              {rel.together} of {rel.sharedConvictions} together
+            </div>
           </div>
         )}
       </div>
