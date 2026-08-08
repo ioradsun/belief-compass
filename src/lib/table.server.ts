@@ -24,7 +24,15 @@
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { qualifiedCallers, type Sb } from "@/lib/challenge.server";
-import { TABLE_SLOTS, tableProgress, shouldAutoClose, type RecipientFact } from "@/domain/table";
+import {
+  TABLE_SLOTS,
+  tableProgress,
+  shouldAutoClose,
+  finishedVisible,
+  FINISHED_WINDOW_MS,
+  type RecipientFact,
+  type CloseReason,
+} from "@/domain/table";
 
 export interface TableRow {
   id: number;
@@ -33,6 +41,17 @@ export interface TableRow {
   createdAtMs: number;
   /** Everyone it reached, in the state they are in now. */
   recipients: RecipientFact[];
+  /**
+   * ENDED, AND STILL WORTH SEEING. Null while it is live.
+   *
+   * A finished Challenge is not a deleted one. It stays on its author's table for
+   * a week so they actually find out what happened, and it does NOT occupy a slot
+   * — the thing it was holding is over. Both halves matter: without the row the
+   * creator never learns, and without freeing the slot a week of good outcomes
+   * would lock them out of asking anything else.
+   */
+  closedAtMs: number | null;
+  closeReason: CloseReason | null;
 }
 
 interface ChallengeRecord {
@@ -41,6 +60,7 @@ interface ChallengeRecord {
   slot_no: number;
   created_at: string;
   closed_at: string | null;
+  close_reason: string | null;
 }
 
 /** Postgres unique violation — a taken slot, or a market already up. */
@@ -193,11 +213,21 @@ export async function tableFor(wallet: string): Promise<TableRow[]> {
   const sb = serviceClient();
   const me = wallet.toLowerCase();
 
+  /**
+   * OPEN, PLUS WHAT RECENTLY ENDED.
+   *
+   * This used to read `.is("closed_at", null)` alone, and that one clause was the
+   * bug: combined with the auto-close below, a Challenge everybody answered was
+   * closed and dropped in the SAME pass. The creator opened Yours and found
+   * nothing — the best outcome the product can produce, deleted before its author
+   * ever saw it. A week of history costs one predicate.
+   */
+  const cutoff = new Date(Date.now() - FINISHED_WINDOW_MS).toISOString();
   const { data: rows, error } = await sb
     .from("challenges")
-    .select("id, market_id, slot_no, created_at, closed_at")
+    .select("id, market_id, slot_no, created_at, closed_at, close_reason")
     .eq("challenger_wallet", me)
-    .is("closed_at", null)
+    .or(`closed_at.is.null,closed_at.gte.${cutoff}`)
     .order("created_at", { ascending: false });
   // Loudly, then empty. A failed read here must never be reported as "nothing on
   // your table" — that is the confident zero this codebase keeps paying for.
@@ -238,29 +268,52 @@ export async function tableFor(wallet: string): Promise<TableRow[]> {
     ]),
   );
 
+  const now = Date.now();
   const out: TableRow[] = [];
   for (const r of active) {
     const recipients = byChallenge.get(Number(r.id)) ?? [];
+    let closedAtMs = r.closed_at ? Date.parse(r.closed_at) : null;
+    let closeReason = (r.close_reason ?? null) as CloseReason | null;
+
     // Everyone answered — it has done its job, so it stops occupying a slot. Fire
-    // and forget: a failed close costs one stale row, never this render.
-    if (shouldAutoClose(recipients)) {
+    // and forget: a failed close costs one stale row, never this render. The row
+    // itself SURVIVES the close, now marked finished, because the creator has not
+    // been told yet and this render is the telling.
+    if (closedAtMs == null && shouldAutoClose(recipients)) {
       void takeOffTable(me, Number(r.id), "all_responded");
-      continue;
+      closedAtMs = now;
+      closeReason = "all_responded";
     }
+    // Aged out. The relationship keeps the record; the table does not keep a
+    // souvenir.
+    if (closedAtMs != null && !finishedVisible(closedAtMs, now)) continue;
+
     out.push({
       id: Number(r.id),
       marketId: Number(r.market_id),
       title: titleOf.get(Number(r.market_id)) ?? null,
       createdAtMs: Date.parse(r.created_at),
       recipients,
+      closedAtMs,
+      closeReason,
     });
   }
   return out;
 }
 
-/** How many slots are in use right now — the number the capacity line reads. */
+/**
+ * How many slots are in use right now — the number the capacity line reads.
+ *
+ * FINISHED ROWS DO NOT COUNT, and this is the reason the distinction exists in the
+ * payload at all. A week of successful Challenges must never read as a full table:
+ * the whole point of closing is that the slot came back.
+ */
+export function activeRows(rows: readonly TableRow[]): TableRow[] {
+  return rows.filter((r) => r.closedAtMs == null);
+}
+
 export async function activeCount(wallet: string): Promise<number> {
-  return (await tableFor(wallet)).length;
+  return activeRows(await tableFor(wallet)).length;
 }
 
 /** Re-exported so callers never reach past this module for the shape. */

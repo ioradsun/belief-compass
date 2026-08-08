@@ -154,15 +154,21 @@ export function challengedView(w: World, who: Participant): ChallengedView {
  * check instead of a page nobody happened to open.
  */
 export function tableRowsFor(w: World, now = 0): TableRow[] {
-  if (w.activeChallenges <= 0) return [];
+  // A CLOSED CHALLENGE STILL HAS A ROW. It is the only way its author ever learns
+  // what happened, so `closed` changes the row's state rather than removing it —
+  // which is exactly the bug this models: `tableFor` used to drop it.
+  const first: TableRow = {
+    id: 1,
+    marketId: 1,
+    title: w.question,
+    createdAtMs: now,
+    recipients: w.audience.map(facts),
+    closedAtMs: w.closed ? now : null,
+    closeReason: w.closed,
+  };
+  if (w.activeChallenges <= 0) return w.closed ? [first] : [];
   return [
-    {
-      id: 1,
-      marketId: 1,
-      title: w.question,
-      createdAtMs: now,
-      recipients: w.audience.map(facts),
-    },
+    first,
     // The rest exist only to reach the capacity the scene asked for. The first row
     // is the one with a story; these are what a full table looks like around it.
     ...Array.from({ length: w.activeChallenges - 1 }, (_, i) => ({
@@ -171,6 +177,8 @@ export function tableRowsFor(w: World, now = 0): TableRow[] {
       title: `Another question already on the table (${i + 2})`,
       createdAtMs: now,
       recipients: [],
+      closedAtMs: null,
+      closeReason: null,
     })),
   ];
 }
@@ -425,6 +433,49 @@ export const SCENES: Record<string, { label: string; world: World }> = {
       audience: [person("Mike", "opp", 2, 9, "open")],
       activeChallenges: 3,
       closed: null,
+    },
+  },
+  /**
+   * THE ENDING THE CREATOR NEVER USED TO SEE. `tableFor` closed this and dropped
+   * it in the same pass, so the best outcome the product can produce was the one
+   * its author was least likely to witness. Reachable in one click now, precisely
+   * so it stays visible.
+   */
+  everyoneShowed: {
+    label: "Finished — everyone showed up",
+    world: {
+      question: "Will ETH outperform BTC this year?",
+      challenger: { name: "Sarah", wallet: "0xsarah", side: "NO" },
+      audience: [
+        person("Mike", "opp", 2, 9, "showed_up"),
+        person("Priya", "tribe", 23, 25, "showed_up"),
+        person("Rasoul", "tribe", 9, 11, "showed_up"),
+      ],
+      activeChallenges: 0,
+      closed: "all_responded",
+    },
+  },
+  nobodyShowed: {
+    label: "Finished — nobody did",
+    world: {
+      question: "Will quantum computing break RSA before 2030?",
+      challenger: { name: "Sarah", wallet: "0xsarah", side: "YES" },
+      audience: [person("Mike", "opp", 2, 9, "passed"), person("Priya", "tribe", 23, 25, "passed")],
+      activeChallenges: 0,
+      closed: "all_responded",
+    },
+  },
+  tookItDown: {
+    label: "You took it off the table",
+    world: {
+      question: "Will the Fed cut rates twice this year?",
+      challenger: { name: "Sarah", wallet: "0xsarah", side: "YES" },
+      audience: [
+        person("Mike", "opp", 2, 9, "showed_up"),
+        person("Priya", "tribe", 23, 25, "open"),
+      ],
+      activeChallenges: 0,
+      closed: "creator",
     },
   },
   crowd: {

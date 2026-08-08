@@ -152,7 +152,11 @@ describe("what the lab hands to the real components", () => {
   it("gives the creator exactly the rows the scene put up", () => {
     for (const key of SCENE_KEYS) {
       const w = SCENES[key].world;
-      expect(tableRowsFor(w), key).toHaveLength(w.activeChallenges);
+      // A CLOSED CHALLENGE STILL HAS A ROW. It occupies no slot, but it is the
+      // only way its author ever learns what happened — `tableFor` used to close
+      // it and drop it in the same pass, deleting the best outcome the product
+      // produces before the person who asked for it could see it.
+      expect(tableRowsFor(w), key).toHaveLength(w.activeChallenges + (w.closed ? 1 : 0));
     }
     expect(tableRowsFor({ ...SCENES.quiet.world, activeChallenges: 0 })).toEqual([]);
   });

@@ -138,3 +138,38 @@ describe("passing stays a Challenge fact and nothing more", () => {
     expect(get).not.toMatch(/assertWalletOwnership|session/);
   });
 });
+
+/**
+ * THE ROW MUST SURVIVE ITS OWN CLOSE.
+ *
+ * `tableFor` read `.is("closed_at", null)` AND auto-closed anything everyone had
+ * answered — in the same pass. So the best outcome this product can produce was
+ * deleted in the render that discovered it, and the creator opened Yours to
+ * nothing. Source-level, because the defect is the shape of a query.
+ */
+describe("a finished Challenge is not a deleted one", () => {
+  const src = code("src/lib/table.server.ts");
+
+  it("asks for what recently ended, not only for what is open", () => {
+    expect(src).toMatch(/closed_at\.is\.null,closed_at\.gte\./);
+  });
+
+  it("keeps the row when it auto-closes instead of skipping it", () => {
+    const fn = src.slice(src.indexOf("export async function tableFor"));
+    // The old shape. `continue` here means the creator never finds out.
+    expect(fn).not.toMatch(/all_responded"\);\s*continue;/);
+    expect(fn).toMatch(/closeReason = "all_responded"/);
+  });
+
+  it("drops it only once it has aged out", () => {
+    const fn = src.slice(src.indexOf("export async function tableFor"));
+    expect(fn).toMatch(/!finishedVisible\(closedAtMs, now\)\) continue/);
+  });
+
+  it("counts only live rows against the cap", () => {
+    // Without this, a week of good outcomes reads as a full table — the exact
+    // opposite of what closing a Challenge means.
+    expect(src).toMatch(/export function activeRows/);
+    expect(src).toMatch(/activeRows\(await tableFor\(wallet\)\)\.length/);
+  });
+});

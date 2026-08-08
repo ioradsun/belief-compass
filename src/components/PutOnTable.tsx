@@ -55,8 +55,17 @@ export function PutOnTable({
 
   if (!wallet || marketId == null) return null;
 
-  const active = table?.length ?? 0;
-  const alreadyUp = (table ?? []).some((r) => r.marketId === marketId);
+  /**
+   * LIVE ONLY, IN BOTH ANSWERS. `getTable` now also returns Challenges that ended
+   * in the last week, so their author finds out what happened — and a finished row
+   * must not be mistaken for an occupied slot or for "this one is already up".
+   * Reading `table.length` here would have told somebody with three good outcomes
+   * that their table was full, and offered "On the table." for a question that
+   * finished on Tuesday.
+   */
+  const live = (table ?? []).filter((r) => r.closedAtMs == null);
+  const active = live.length;
+  const alreadyUp = live.some((r) => r.marketId === marketId);
   const result = put.data;
 
   // ON THE TABLE ALREADY — the same market cannot take a second slot, and saying

@@ -181,6 +181,57 @@ export function progressLine(p: TableProgress): string | null {
 }
 
 /**
+ * HOW LONG A FINISHED CHALLENGE STAYS ON YOUR TABLE.
+ *
+ * THE BUG THIS NUMBER EXISTS TO FIX. `tableFor` reads only open rows, and it
+ * auto-closes anything everyone has answered — in the same pass that discovers it.
+ * So the sequence for a creator was: put a question up, everyone answers, open
+ * Yours, and the row is GONE. No count, no sentence, no trace. The single most
+ * valuable event this product can produce — people showed up because you asked —
+ * was the one event most likely to be deleted before its own author saw it.
+ *
+ * A week, and then it goes quiet on its own. No dismiss button, no "mark as read",
+ * no badge: an outcome you have to file away is an inbox, and the durable record
+ * was never here anyway — it is in the relationship, where somebody showing up for
+ * you belongs permanently. This surface only has to make sure you FIND OUT.
+ */
+export const FINISHED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Is a closed Challenge still worth showing its author? */
+export function finishedVisible(closedAtMs: number | null, nowMs: number): boolean {
+  return closedAtMs != null && nowMs - closedAtMs < FINISHED_WINDOW_MS;
+}
+
+/**
+ * WHAT BECAME OF IT — the past-tense line, once a Challenge has ended.
+ *
+ * `progressLine` is a live count of something still happening; this is the ending,
+ * and endings read differently. "3 of 8 showed up" beside a finished thing invites
+ * the question "and the other five?", which has an answer nobody needs: they ran
+ * out of time. The finished voice states the outcome and stops.
+ *
+ * NOBODY IS BLAMED IN ANY BRANCH, and the empty one is where that is tested. A
+ * Challenge everyone passed on is not a person being turned down — the product's
+ * own rule is that a pass is a choice about a QUESTION — so the sentence puts it
+ * on the question and keeps the asking worthwhile. No count of passes here either:
+ * a tally of who would not is a ledger of rejection with a different label on it.
+ */
+export function finishedLine(p: TableProgress, reason: CloseReason): string {
+  if (reason === "creator") {
+    return p.showedUp > 0
+      ? `You took it off the table. ${p.showedUp} of ${p.reached} showed up.`
+      : "You took it off the table.";
+  }
+  if (p.showedUp === 0) return "Quiet one. Not every question finds its people.";
+  if (p.showedUp === p.reached) {
+    // "Everyone" needs a crowd to mean anything; at one person it is a flourish
+    // about a single human being, which reads as the system trying too hard.
+    return p.reached === 1 ? "They showed up." : "Everyone showed up.";
+  }
+  return `${p.showedUp} of ${p.reached} showed up.`;
+}
+
+/**
  * Words this surface must never use.
  *
  * A pass is a choice about a question, not a verdict on a person — so nothing here
