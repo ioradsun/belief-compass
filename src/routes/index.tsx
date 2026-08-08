@@ -1542,7 +1542,9 @@ function Feed() {
                         excludeMarketId={shownId ?? undefined}
                         holdUpdates
                         label="Now"
+                        initial={loaderData?.tape ?? null}
                       />
+
                     </div>
                   }
                 />
