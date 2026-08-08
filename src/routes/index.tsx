@@ -247,6 +247,12 @@ type Search = {
   tab?: MobileTab;
 };
 
+/** A URL boolean, however it arrives: `?x`, `?x=1`, `?x=true`, parsed or raw. */
+const flag = (v: unknown): true | undefined =>
+  v === true || v === 1 || v === "1" || v === "true" || v === "" ? true : undefined;
+
+
+
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>): Search => ({
     wallet:
@@ -255,14 +261,18 @@ export const Route = createFileRoute("/")({
     // back/forward resolve the same object: ?m market, ?p person, ?dna overview.
     m: search.m != null && Number.isFinite(Number(search.m)) ? Number(search.m) : undefined,
     p: typeof search.p === "string" && search.p.length > 3 ? search.p : undefined,
-    dna: search.dna === true || search.dna === "1" ? true : undefined,
-    create:
-      search.create === true || search.create === "1" || search.create === 1 ? true : undefined,
-    terms: search.terms === true || search.terms === "1" ? true : undefined,
+    // ONE TRUTH TABLE FOR EVERY FLAG. `?dash=1` arrives PARSED — the router
+    // JSON-decodes it, so the value is the NUMBER 1, not the string. Only
+    // `create` happened to cover that, so every other deep link (`?dash=1`,
+    // `?dna=1`, `?terms=1`) validated to undefined and the router bounced the
+    // visitor to a bare `/` — a link that silently went nowhere.
+    dna: flag(search.dna),
+    create: flag(search.create),
+    terms: flag(search.terms),
     // Case File mode — preserved in the URL so it survives market switches + back/forward.
-    case: search.case === true || search.case === "1" ? true : undefined,
+    case: flag(search.case),
     // Conviction Dashboard — the financial story, a center-panel destination.
-    dash: search.dash === true || search.dash === "1" ? true : undefined,
+    dash: flag(search.dash),
     launch:
       search.launch != null && Number.isFinite(Number(search.launch))
         ? Number(search.launch)
@@ -625,14 +635,23 @@ function Feed() {
    * on arrival rather than a skeleton. Desktop shows all three columns and is
    * unaffected by this.
    */
-  const [tab, setTab] = useState<MobileTab>(tabParam ?? "room");
+  const [tab, setTab] = useState<MobileTab>(
+    tabParam ??
+      (selectedMarket || selectedPerson || createOpen || dashOpen || dnaOpen ? "belief" : "room"),
+  );
   // Arriving from the menu on a standing page carries the column with it — and
-  // it is an explicit destination, so the intro panel gets out of the way.
+  // it is an explicit destination, so the intro panel gets out of the way. The
+  // same is true of any deep link to a center destination: a link to a market, a
+  // person, or the create form must also SELECT the column that renders it —
+  // otherwise the phone sits on "Crowd" and the destination is invisible.
+  const deepCenter = !!selectedMarket || !!selectedPerson || !!createOpen || !!dashOpen || !!dnaOpen;
   useEffect(() => {
-    if (!tabParam) return;
-    setTab(tabParam);
+    if (!tabParam && !deepCenter) return;
+    setTab(tabParam ?? "belief");
     landing.collapse();
-  }, [tabParam]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabParam, deepCenter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+
 
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -1187,11 +1206,14 @@ function Feed() {
               wallet ? (
                 <button
                   type="button"
-                  onClick={openCreate}
+                  onClick={createOpen ? closeCreate : openCreate}
+                  aria-expanded={createOpen}
                   className="inline-flex h-9 max-w-full items-center gap-1 truncate rounded-full border border-[var(--border-strong)] px-4 text-[13px] font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--text)] hover:text-[var(--text)]"
                 >
-                  <span aria-hidden="true">+</span> Conviction
+                  <span aria-hidden="true">{createOpen ? "✕" : "+"}</span>{" "}
+                  {createOpen ? "Close" : "Conviction"}
                 </button>
+
               ) : (
                 <button
                   type="button"
@@ -1363,16 +1385,23 @@ function Feed() {
                 </Suspense>
               </div>
             ) : createOpen ? (
-              <PanelBoundary label="Create market" onDismiss={closeCreate}>
-                <Suspense fallback={<DeckSkeleton />}>
-                  <CreateMarket
-                    ethUsd={stableFeed?.ethUsd ?? 0}
-                    onCreated={(marketId) => marketCreated(marketId)}
-                    onCancel={closeCreate}
-                    onOpenTerms={openTerms}
-                  />
-                </Suspense>
-              </PanelBoundary>
+              /* THE WAY OUT IS ALWAYS ON SCREEN. The form itself never rendered
+                 its `onCancel`, so on mobile — where the header's create button
+                 is the only other exit — this was a dead end. */
+              <div className="flex min-h-0 flex-1 flex-col">
+                <BackLink onClick={closeCreate} />
+                <PanelBoundary label="Create market" onDismiss={closeCreate}>
+                  <Suspense fallback={<DeckSkeleton />}>
+                    <CreateMarket
+                      ethUsd={stableFeed?.ethUsd ?? 0}
+                      onCreated={(marketId) => marketCreated(marketId)}
+                      onCancel={closeCreate}
+                      onOpenTerms={openTerms}
+                    />
+                  </Suspense>
+                </PanelBoundary>
+              </div>
+
             ) : selectedPerson ? (
               /* The exit lives here rather than inside the panel: both of these
                  components have several early returns (loading, no wallet, not
