@@ -27,7 +27,36 @@ export function publicClient() {
   });
 }
 
+/**
+ * The secrets a service-role path cannot run without. Names only — this module
+ * never reads a VALUE into anything that could be returned or logged.
+ */
+export const SERVICE_ROLE_SECRETS = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"] as const;
+
+/** Which of them the runtime is missing. Empty means the runtime is equipped. */
+export function missingServiceSecrets(): string[] {
+  return SERVICE_ROLE_SECRETS.filter((k) => !process.env[k]);
+}
+
+/**
+ * SAY IT OUT LOUD. `createClient` throws "supabaseKey is required" — a message
+ * from a library, about an argument, naming nothing an operator can act on. It
+ * surfaced as a 500 with no clue which deployment variable was absent, on a path
+ * whose product-visible symptom is an empty room.
+ *
+ * So the failure is named here instead, once, in the operator's vocabulary. The
+ * string is stable and greppable on purpose: it is what you search the worker
+ * logs for, and what `/api/public/health` reports as a missing name.
+ */
 export function serviceClient() {
+  const missing = missingServiceSecrets();
+  if (missing.length > 0) {
+    const message = `service-role unavailable: missing ${missing.join(", ")}`;
+    // A throw alone can be swallowed by a caller; the log cannot. Both, always —
+    // the whole point is that this never becomes a quiet empty state.
+    console.error(`[env] ${message}`);
+    throw new Error(message);
+  }
   const url = process.env.SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });

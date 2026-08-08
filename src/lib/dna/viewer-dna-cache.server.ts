@@ -129,10 +129,22 @@ export async function readViewerDnaCache(
   viewer: string,
 ): Promise<ViewerDnaCache | null> {
   const w = viewer.toLowerCase();
-  const [{ data }, currentVersion] = await Promise.all([
+  const [{ data, error }, currentVersion] = await Promise.all([
     sb.from("viewer_dna_cache").select("*").eq("viewer_wallet", w).maybeSingle(),
     getViewerDnaVersion(sb, w),
   ]);
+  /**
+   * A BLOCKED READ AND A COLD CACHE ARE DIFFERENT ANSWERS. Both used to arrive
+   * here as `data == null` and leave as `null`, and `getNetwork` reads null as
+   * "not computed yet" — it asks the worker for a build and renders the empty
+   * shell. That is the right response to a genuine miss and a lie about a
+   * failure: the reader is told their network is still forming, forever, while
+   * every request errors.
+   *
+   * `maybeSingle()` returns `{ data: null, error: null }` for no row, so an error
+   * being present is unambiguous.
+   */
+  if (error) throw new Error(`dna: viewer_dna_cache read failed for ${w} — ${error.message}`);
   if (!data) return null;
   return shape(data as unknown as Row, currentVersion);
 }

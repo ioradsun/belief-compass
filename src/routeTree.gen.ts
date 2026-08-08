@@ -20,6 +20,7 @@ import { Route as MMidRouteImport } from './routes/m.$mid'
 import { Route as DevTransitionsRouteImport } from './routes/dev.transitions'
 import { Route as DevRailRouteImport } from './routes/dev.rail'
 import { Route as OgMarketMidRouteImport } from './routes/og/market.$mid'
+import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
 import { Route as ApiPublicJobsSuggestionGeneratorRouteImport } from './routes/api/public/jobs/suggestion-generator'
 import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
@@ -84,6 +85,11 @@ const DevRailRoute = DevRailRouteImport.update({
 const OgMarketMidRoute = OgMarketMidRouteImport.update({
   id: '/og/market/$mid',
   path: '/og/market/$mid',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicHealthRoute = ApiPublicHealthRouteImport.update({
+  id: '/api/public/health',
+  path: '/api/public/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicBuildIdRoute = ApiPublicBuildIdRouteImport.update({
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/dev/transitions': typeof DevTransitionsRoute
   '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
   '/og/market/$mid': typeof OgMarketMidRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -180,6 +187,7 @@ export interface FileRoutesByTo {
   '/dev/transitions': typeof DevTransitionsRoute
   '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
   '/og/market/$mid': typeof OgMarketMidRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -204,6 +212,7 @@ export interface FileRoutesById {
   '/dev/transitions': typeof DevTransitionsRoute
   '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
   '/og/market/$mid': typeof OgMarketMidRoute
   '/api/public/jobs/belief-rollup': typeof ApiPublicJobsBeliefRollupRoute
   '/api/public/jobs/chain-poller': typeof ApiPublicJobsChainPollerRoute
@@ -229,6 +238,7 @@ export interface FileRouteTypes {
     | '/dev/transitions'
     | '/m/$mid'
     | '/api/public/build-id'
+    | '/api/public/health'
     | '/og/market/$mid'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -252,6 +262,7 @@ export interface FileRouteTypes {
     | '/dev/transitions'
     | '/m/$mid'
     | '/api/public/build-id'
+    | '/api/public/health'
     | '/og/market/$mid'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -275,6 +286,7 @@ export interface FileRouteTypes {
     | '/dev/transitions'
     | '/m/$mid'
     | '/api/public/build-id'
+    | '/api/public/health'
     | '/og/market/$mid'
     | '/api/public/jobs/belief-rollup'
     | '/api/public/jobs/chain-poller'
@@ -299,6 +311,7 @@ export interface RootRouteChildren {
   DevTransitionsRoute: typeof DevTransitionsRoute
   MMidRoute: typeof MMidRoute
   ApiPublicBuildIdRoute: typeof ApiPublicBuildIdRoute
+  ApiPublicHealthRoute: typeof ApiPublicHealthRoute
   OgMarketMidRoute: typeof OgMarketMidRoute
   ApiPublicJobsBeliefRollupRoute: typeof ApiPublicJobsBeliefRollupRoute
   ApiPublicJobsChainPollerRoute: typeof ApiPublicJobsChainPollerRoute
@@ -390,6 +403,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OgMarketMidRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/health': {
+      id: '/api/public/health'
+      path: '/api/public/health'
+      fullPath: '/api/public/health'
+      preLoaderRoute: typeof ApiPublicHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/build-id': {
       id: '/api/public/build-id'
       path: '/api/public/build-id'
@@ -475,6 +495,7 @@ const rootRouteChildren: RootRouteChildren = {
   DevTransitionsRoute: DevTransitionsRoute,
   MMidRoute: MMidRoute,
   ApiPublicBuildIdRoute: ApiPublicBuildIdRoute,
+  ApiPublicHealthRoute: ApiPublicHealthRoute,
   OgMarketMidRoute: OgMarketMidRoute,
   ApiPublicJobsBeliefRollupRoute: ApiPublicJobsBeliefRollupRoute,
   ApiPublicJobsChainPollerRoute: ApiPublicJobsChainPollerRoute,
