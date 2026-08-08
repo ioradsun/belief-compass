@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { lazyRetry } from "@/lib/lazy-retry";
 
@@ -335,11 +335,19 @@ function BackLink({ onClick }: { onClick: () => void }) {
 
 type MobileTab = "mine" | "belief" | "room";
 
-const TABS: { key: MobileTab; label: string }[] = [
-  { key: "mine", label: "Mine" },
-  { key: "belief", label: "Belief" },
-  { key: "room", label: "The Room" },
+const TABS: { key: MobileTab; label: string; sub: string }[] = [
+  { key: "mine", label: "Mine", sub: "where you stand, and why" },
+  { key: "belief", label: "Back", sub: "one belief, right now" },
+  { key: "room", label: "Crowd", sub: "what's moving, and who's behind it" },
 ];
+
+/** The standing pages, reachable from the phone menu like everything else. */
+const MENU_PAGES: { to: string; label: string; sub: string }[] = [
+  { to: "/how", label: "How it works", sub: "the idea, in plain language" },
+  { to: "/value", label: "Why it matters", sub: "what this adds to the ecosystem" },
+  { to: "/terms", label: "Terms & risk", sub: "what you're agreeing to" },
+];
+
 
 /** The center-panel destination, as the URL expresses it. `case` is a display
  *  toggle rather than a destination, so it is deliberately not part of it. */
@@ -1526,7 +1534,7 @@ function Feed() {
               className="absolute inset-0 bg-black/60"
             />
             <div
-              className="absolute inset-y-0 left-0 w-64 bg-[var(--panel)] p-4"
+              className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-[var(--panel)] p-4"
               style={{ borderRight: "1px solid var(--hairline)" }}
             >
               <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
@@ -1542,13 +1550,22 @@ function Feed() {
                       setMenuOpen(false);
                     }}
                     aria-current={tab === t.key ? "page" : undefined}
-                    className={`flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors ${
-                      tab === t.key
-                        ? "bg-[var(--surface)] text-[var(--text)]"
-                        : "text-[var(--text-muted)]"
+                    className={`flex w-full items-start gap-2 rounded-md px-3 py-2.5 text-left transition-colors ${
+                      tab === t.key ? "bg-[var(--surface)]" : ""
                     }`}
                   >
-                    <span className="flex-1">{t.label}</span>
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className={`block text-sm font-medium ${
+                          tab === t.key ? "text-[var(--text)]" : "text-[var(--text-muted)]"
+                        }`}
+                      >
+                        {t.label}
+                      </span>
+                      <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">
+                        {t.sub}
+                      </span>
+                    </span>
                     {/* HOW A PHONE LEARNS SOMEBODY IS WAITING.
                         Desktop keeps the Challenge rail on screen permanently, so
                         "3 people are waiting on you" is ambient. On a phone the
@@ -1569,6 +1586,30 @@ function Feed() {
                   </button>
                 ))}
               </div>
+
+              {/* The standing pages. They are real routes, not panels, so they
+                  live below a rule rather than among the three views. */}
+              <div
+                className="mt-4 space-y-1 pt-3"
+                style={{ borderTop: "1px solid var(--hairline)" }}
+              >
+                {MENU_PAGES.map((p) => (
+                  <Link
+                    key={p.to}
+                    to={p.to}
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-md px-3 py-2.5 text-left"
+                  >
+                    <span className="block text-sm font-medium text-[var(--text-muted)]">
+                      {p.label}
+                    </span>
+                    <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">
+                      {p.sub}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+
             </div>
           </div>
         )}
