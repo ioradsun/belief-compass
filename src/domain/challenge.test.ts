@@ -185,13 +185,13 @@ describe("the lock opens at the stage the DNA engine already defines", () => {
     expect(lock.title).toBe("Find Your People");
     expect(lock.filled).toBe(3);
     expect(lock.total).toBe(5);
-    expect(lock.detail).toBe("2 more to start finding your Tribe and Rivals.");
+    expect(lock.detail).toBe("2 more and we'll know who your Tribe and Rivals are.");
   });
 
   it("speaks to someone who has done nothing yet without shaming them", () => {
     const lock = challengeLock(0);
     expect(lock.filled).toBe(0);
-    expect(lock.detail).toBe("Take 5 sides to start finding your Tribe and Rivals.");
+    expect(lock.detail).toBe("Take 5 sides and we'll work out who your people are.");
     expect(lock.detail).not.toMatch(/^0\b/);
   });
 
