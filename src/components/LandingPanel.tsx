@@ -144,15 +144,15 @@ export function LandingPanel({
           aria-hidden={!expanded}
         >
           <div className="overflow-hidden">
-            <div className="pt-5 lg:pt-7">
-              {/* hero — 55 / 45 on desktop, stacked on mobile */}
-              <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)] lg:gap-12">
+            <div className="pt-4 lg:pt-7">
+              {/* hero — 55 / 45 on desktop; on mobile one screen, no scroll */}
+              <div className="grid min-h-[calc(100svh-190px)] content-center items-center gap-8 lg:min-h-0 lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)] lg:gap-12">
                 <div className="min-w-0">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">
                     Live conviction markets
                   </div>
 
-                  <h1 className="mt-3 max-w-[14ch] text-[38px] font-semibold leading-[1.02] tracking-[-0.03em] text-[var(--text)] sm:text-[52px] lg:text-[62px]">
+                  <h1 className="mt-3 max-w-[14ch] text-[40px] font-semibold leading-[1.02] tracking-[-0.03em] text-[var(--text)] sm:text-[52px] lg:text-[62px]">
                     Conviction needs company.
                   </h1>
 
@@ -168,7 +168,7 @@ export function LandingPanel({
                     Conviction builds wealth.
                   </p>
 
-                  <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <div className="mt-6 flex flex-col items-stretch gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                     <button
                       type="button"
                       onClick={(e) => {
@@ -176,15 +176,27 @@ export function LandingPanel({
                         onEnter();
                       }}
                       tabIndex={expanded ? 0 : -1}
-                      className="h-11 rounded-full bg-[var(--text)] px-6 text-[14px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] motion-reduce:transition-none"
+                      className="h-12 rounded-full bg-[var(--text)] px-6 text-[15px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-strong)] motion-reduce:transition-none sm:h-11 sm:text-[14px]"
                     >
                       Enter Conviction Market
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExampleOpen(true);
+                      }}
+                      tabIndex={expanded ? 0 : -1}
+                      className="h-12 rounded-full px-6 text-[15px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text)] lg:hidden"
+                      style={{ border: "1px solid var(--hairline)" }}
+                    >
+                      See an example
                     </button>
                   </div>
                 </div>
 
                 <div
-                  className="flex min-w-0 justify-start lg:justify-end"
+                  className="hidden min-w-0 justify-start lg:flex lg:justify-end"
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
                   role="presentation"
@@ -192,6 +204,7 @@ export function LandingPanel({
                   <LandingExampleCard onEnter={onEnter} />
                 </div>
               </div>
+
 
               {/* trust strip */}
               <div
