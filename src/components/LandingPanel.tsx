@@ -206,11 +206,12 @@ export function LandingPanel({
               </div>
 
 
-              {/* trust strip */}
+              {/* trust strip — single tidy row on mobile, never overflowing */}
               <div
-                className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-3 pt-4 text-[12px] text-[var(--text-muted)] lg:mt-8"
+                className="mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 pt-4 text-[11px] text-[var(--text-muted)] sm:text-[12px] lg:mt-8 lg:justify-start lg:gap-x-8 lg:gap-y-3"
                 style={{ borderTop: "1px solid var(--hairline)" }}
               >
+
                 <span className="inline-flex items-center gap-2">
                   <svg
                     viewBox="0 0 24 24"
