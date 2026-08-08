@@ -77,7 +77,6 @@ export const getCallReach = createServerFn({ method: "GET" })
     return callReachFor(data.wallet, data.marketId ?? undefined);
   });
 
-
 /**
  * "I answered" — close every open call addressed to this wallet in this market.
  *
@@ -88,10 +87,13 @@ export const answerCalls = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
     z.object({ wallet: WALLET, marketId: z.number().int().nonnegative() }).parse(raw),
   )
-  .handler(async ({ data }): Promise<{ closed: NamedPerson[] }> => {
+  .handler(async ({ data }): Promise<{ closed: NamedPerson[]; pending: boolean }> => {
     const { markCallsAnswered } = await import("@/lib/challenge.server");
     // WHO this trade just answered, not merely that it succeeded. It is the one
     // moment the product can tell somebody they were counted on, and a bare
     // `{ ok: true }` threw that away at the exact instant it was true.
-    return { closed: await markCallsAnswered(data.wallet, data.marketId) };
+    // `pending` travels with the result rather than being flattened away: the
+    // caller needs to tell "nobody was waiting" from "we could not prove it yet",
+    // and those are the same empty array otherwise.
+    return markCallsAnswered(data.wallet, data.marketId);
   });

@@ -72,13 +72,13 @@ interface CachedRelationship {
 }
 
 /** A qualified caller: how they relate, and the record the two of you have. */
-interface Caller {
+export interface Caller {
   relation: CallerRelation;
   together: number | null;
   shared: number | null;
 }
 
-type Sb = ReturnType<typeof serviceClient>;
+export type Sb = ReturnType<typeof serviceClient>;
 
 /**
  * The viewer's qualified callers, by canonical relationship.
@@ -87,7 +87,7 @@ type Sb = ReturnType<typeof serviceClient>;
  * strongest claim, and the buckets are read strongest-first so the first write
  * wins — the same precedence the domain module applies when ranking.
  */
-async function qualifiedCallers(sb: Sb, viewer: string): Promise<Map<string, Caller>> {
+export async function qualifiedCallers(sb: Sb, viewer: string): Promise<Map<string, Caller>> {
   const { data } = await sb
     .from("viewer_dna_cache")
     .select("twin_matches, tribe_matches, opp_matches, inverse_matches")
@@ -265,8 +265,64 @@ async function recordCalls(sb: Sb, responder: string, open: readonly Challenge[]
  * "when did they show up" into "when were they last here", which is a different
  * and much less useful fact.
  */
-export async function markCallsAnswered(wallet: string, marketId: number): Promise<NamedPerson[]> {
+/**
+ * DID THIS WALLET ACTUALLY TAKE A POSITION HERE?
+ *
+ * `answerCalls` is an unsigned POST carrying `{ wallet, marketId }`, and it used
+ * to stamp on the client's word alone. That was survivable while Showing Up was a
+ * quiet relationship fact. It stops being survivable the moment a creator reads
+ * "3 of 8 showed up", because anyone could have made any of those three true with
+ * a curl command — and a fabricated one is a permanent claim about a real person.
+ *
+ * So the server proves the public fact it is being asked to record. Two sources,
+ * either sufficient: the canonical current stance, or a canonical directional
+ * trade. Neither is the client talking.
+ */
+async function tookAPosition(sb: Sb, wallet: string, marketId: number): Promise<boolean> {
+  const w = wallet.toLowerCase();
+  const [{ data: stance }, { data: trade }] = await Promise.all([
+    sb
+      .from("wallet_beliefs")
+      .select("stance_side")
+      .eq("wallet", w)
+      .eq("onchain_id", marketId)
+      .in("stance_side", ["YES", "NO"])
+      .maybeSingle(),
+    sb
+      .from("events")
+      .select("id")
+      .eq("wallet", w)
+      .eq("market_id", String(marketId))
+      .eq("kind", "trade")
+      .eq("is_canonical", true)
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  return !!stance || !!trade;
+}
+
+/**
+ * @returns the callers this answer closed, and whether it could be proved at all.
+ *
+ * `pending` is the honest third outcome, and it exists because a bare gate would
+ * have broken the feature it protects. This runs the instant a trade confirms in
+ * the wallet, which can be BEFORE the indexer has written the event — so refusing
+ * outright would reject real answers during exactly the window the product cares
+ * about. Pending means "not proved YET": nothing is stamped, nothing is lost, and
+ * the next call once the position is visible closes it for real. Idempotent by the
+ * `responded_at IS NULL` filter, so retrying costs nothing.
+ */
+export async function markCallsAnswered(
+  wallet: string,
+  marketId: number,
+): Promise<{ closed: NamedPerson[]; pending: boolean }> {
   const sb = serviceClient();
+  if (!(await tookAPosition(sb, wallet, marketId))) {
+    // Not a failure and not a forgery — just not visible yet. Said out loud so a
+    // persistent gap in the logs is distinguishable from a quiet one.
+    console.warn("[challenge] answer not provable yet, nothing stamped", { wallet, marketId });
+    return { closed: [], pending: true };
+  }
   // `.select()` on the UPDATE returns exactly the rows this call closed — the
   // ones that were still open a moment ago. Reading them separately afterwards
   // would race a second tab and could name somebody this trade did not answer.
@@ -282,7 +338,7 @@ export async function markCallsAnswered(wallet: string, marketId: number): Promi
       code: error.code,
       message: error.message,
     });
-    return [];
+    return { closed: [], pending: false };
   }
   const wallets = [
     ...new Set(
@@ -291,13 +347,16 @@ export async function markCallsAnswered(wallet: string, marketId: number): Promi
       ),
     ),
   ];
-  if (wallets.length === 0) return [];
+  if (wallets.length === 0) return { closed: [], pending: false };
   const { resolveProfiles } = await import("@/lib/profiles.server");
   const profiles = await resolveProfiles(wallets, 0);
-  return wallets.map((w) => ({
-    wallet: w,
-    name: profiles.get(w)?.displayName?.trim() || aliasFor(w),
-  }));
+  return {
+    closed: wallets.map((w) => ({
+      wallet: w,
+      name: profiles.get(w)?.displayName?.trim() || aliasFor(w),
+    })),
+    pending: false,
+  };
 }
 
 /**
@@ -347,7 +406,6 @@ export async function callReachFor(wallet: string, marketId?: number): Promise<C
   }
   return { tribe, rivals };
 }
-
 
 /**
  * ONE RELATIONSHIP, BOTH DIRECTIONS.
