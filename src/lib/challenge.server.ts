@@ -58,9 +58,24 @@ const READ = {
   pairCalls: 200,
 } as const;
 
-/** jsonb rows in viewer_dna_cache carry more than this; only these are read. */
+/**
+ * What the cache rows carry that this path needs.
+ *
+ * IT USED TO READ ONLY `wallet` and throw the rest away — which meant the
+ * Challenge card could not show Conviction Match even though the numbers were
+ * already sitting in the row it had just fetched. Same query, same bytes.
+ */
 interface CachedRelationship {
   wallet?: string | null;
+  sameSideBeliefs?: number | null;
+  sharedBeliefs?: number | null;
+}
+
+/** A qualified caller: how they relate, and the record the two of you have. */
+interface Caller {
+  relation: CallerRelation;
+  together: number | null;
+  shared: number | null;
 }
 
 type Sb = ReturnType<typeof serviceClient>;
@@ -72,18 +87,25 @@ type Sb = ReturnType<typeof serviceClient>;
  * strongest claim, and the buckets are read strongest-first so the first write
  * wins — the same precedence the domain module applies when ranking.
  */
-async function qualifiedCallers(sb: Sb, viewer: string): Promise<Map<string, CallerRelation>> {
+async function qualifiedCallers(sb: Sb, viewer: string): Promise<Map<string, Caller>> {
   const { data } = await sb
     .from("viewer_dna_cache")
     .select("twin_matches, tribe_matches, opp_matches, inverse_matches")
     .eq("viewer_wallet", viewer)
     .maybeSingle();
 
-  const out = new Map<string, CallerRelation>();
+  const out = new Map<string, Caller>();
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
   const take = (rows: unknown, relation: CallerRelation) => {
     for (const r of ((rows as CachedRelationship[] | null) ?? []).slice(0, READ.peoplePerBucket)) {
       const w = r?.wallet ? String(r.wallet).toLowerCase() : null;
-      if (w && w !== viewer && !out.has(w)) out.set(w, relation);
+      if (w && w !== viewer && !out.has(w))
+        out.set(w, {
+          relation,
+          together: num(r?.sameSideBeliefs),
+          shared: num(r?.sharedBeliefs),
+        });
     }
   };
   take(data?.twin_matches, "twin");
@@ -182,8 +204,8 @@ export async function buildChallenges(viewer: string): Promise<Challenge[]> {
   const evidence: CallEvidence[] = [];
   for (const a of candidates) {
     const title = titleOf.get(a.marketId);
-    const relation = callers.get(a.wallet);
-    if (!title || !relation) continue;
+    const caller = callers.get(a.wallet);
+    if (!title || !caller) continue;
     evidence.push({
       marketId: a.marketId,
       title,
@@ -194,9 +216,11 @@ export async function buildChallenges(viewer: string): Promise<Challenge[]> {
         wallet: a.wallet,
         name: profiles.get(a.wallet)?.displayName?.trim() || aliasFor(a.wallet),
       },
-      relation,
+      relation: caller.relation,
       act: a.act,
       callerSide: a.side,
+      together: caller.together,
+      shared: caller.shared,
       atMs: Number.isFinite(a.atMs) ? a.atMs : Date.now(),
     });
   }
@@ -289,7 +313,7 @@ export async function callReachFor(wallet: string): Promise<CallReach> {
   const callers = await qualifiedCallers(sb, wallet.toLowerCase());
   let tribe = 0;
   let rivals = 0;
-  for (const relation of callers.values()) {
+  for (const { relation } of callers.values()) {
     if (relation === "twin" || relation === "tribe") tribe += 1;
     else rivals += 1;
   }

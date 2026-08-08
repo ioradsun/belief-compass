@@ -33,7 +33,7 @@
  * ZERO IO, pure, fully testable.
  */
 import type { RelationshipLabel } from "@/domain/dna/config";
-import { RELATIONSHIP_TEXT } from "@/lib/dna-labels";
+import { callLine } from "@/domain/call-line";
 import {
   dnaStage,
   decisionsToNextStage,
@@ -87,6 +87,17 @@ export interface CallEvidence {
   act: CallAct;
   /** The side they took. Null for a creation, and null is not a failure. */
   callerSide: "YES" | "NO" | null;
+  /**
+   * The pair's shared record — same-side count and shared total.
+   *
+   * Already sitting in `viewer_dna_cache` as `sameSideBeliefs`/`sharedBeliefs`
+   * and thrown away by `qualifiedCallers`, which read the buckets for wallets
+   * and dropped everything else. Carrying it costs nothing and is what lets the
+   * card show Conviction Match and the line say what is at stake between these
+   * two people rather than a generic prompt.
+   */
+  together: number | null;
+  shared: number | null;
   atMs: number;
 }
 
@@ -96,6 +107,9 @@ export interface Challenge {
   caller: NamedPerson;
   relation: CallerRelation;
   callerSide: "YES" | "NO" | null;
+  /** Same-side count and shared total. Null when the pair has no record. */
+  together: number | null;
+  shared: number | null;
   /** Why THIS person. Never empty — a row without one does not exist. */
   reason: string;
   atMs: number;
@@ -122,36 +136,35 @@ export const CHALLENGE = {
   windowDays: 30,
 } as const;
 
-/** "your Twin" / "your Rival" — the possessive is what makes it a call. */
-function possessive(relation: CallerRelation): string {
-  return `your ${RELATIONSHIP_TEXT[relation]}`;
-}
-
 /**
  * THE RULE. The sentence that makes this a call, or null.
  *
- * WHAT CHANGED FROM `for-you.ts`, and it is the substantive change rather than
- * a rename. The old Rival row required `viewerSide` — it could only say "took
- * the other side of your YES" — and returned null without one. That is exactly
- * backwards for Challenge, which by definition targets markets you have NOT
- * answered. There is no "other side" yet, because you have not taken one.
+ * The rule itself is unchanged and is the one the whole surface rests on: a row
+ * may appear only if the system can state why THIS person, with no fallback
+ * string anywhere. What changed is the sentence.
  *
- * So the sentence states what THEY did and asks for yours. It never implies a
- * position you do not hold.
+ * IT USED TO HAVE TWO SHAPES — "X, your Tribe, took YES. What's your call?" and
+ * "X, your Rival, asked this. What's your call?" — so six open Challenges read
+ * as six near-identical rows and the eye stopped on none of them. Composition
+ * moved to @/domain/call-line, which builds a line from what they did plus what
+ * is at stake between these two people specifically. A Twin you agree with nine
+ * times in eleven and a Rival you almost never agree with are different social
+ * events and now read as different ones.
+ *
+ * The relation is no longer named in the sentence — the card shows it as a badge,
+ * and saying it twice was the redundancy that made every row look alike.
  */
 export function reasonFor(e: CallEvidence): string | null {
-  const name = e.caller.name?.trim();
-  if (!name) return null;
-  if (!e.title.trim()) return null;
-
-  if (e.act === "market_created") {
-    return `${name}, ${possessive(e.relation)}, asked this. What's your call?`;
-  }
-
-  // A trade with no side is not evidence of anything answerable — a caller who
-  // did something we cannot name cannot be quoted asking you a question.
-  if (e.callerSide !== "YES" && e.callerSide !== "NO") return null;
-  return `${name}, ${possessive(e.relation)}, took ${e.callerSide}. What's your call?`;
+  return callLine({
+    name: e.caller.name ?? "",
+    relation: e.relation,
+    act: e.act,
+    side: e.callerSide,
+    together: e.together,
+    shared: e.shared,
+    marketId: e.marketId,
+    callerWallet: e.caller.wallet,
+  });
 }
 
 export interface ComposeOptions {
@@ -186,6 +199,12 @@ export function composeChallenges(
 
   for (const e of evidence) {
     if (answered.has(e.marketId)) continue;
+    // A CALL WITH NO QUESTION IS NOT A CALL. This gate used to live inside the
+    // sentence composer, which is where it stopped being obvious — the composer
+    // moved to call-line, which never sees the title, and the guard would have
+    // gone with it. A card whose only market identity is blank is worse than no
+    // card: the reader is asked to weigh in on nothing.
+    if (!e.title.trim()) continue;
     const reason = reasonFor(e);
     if (!reason) continue;
     const row: Challenge = {
@@ -194,6 +213,8 @@ export function composeChallenges(
       caller: e.caller,
       relation: e.relation,
       callerSide: e.callerSide,
+      together: e.together,
+      shared: e.shared,
       reason,
       atMs: e.atMs,
     };

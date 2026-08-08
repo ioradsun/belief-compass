@@ -27,8 +27,10 @@ import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
 import { getChallenges } from "@/lib/challenge.functions";
-import { challengeLock, type Challenge } from "@/domain/challenge";
-import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
+import { challengeLock, type Challenge, type CallerRelation } from "@/domain/challenge";
+import { convictionMatch } from "@/domain/relationship";
+import { MATURE_MIN_SHARED } from "@/domain/dna/config";
+import { relationshipTone } from "@/lib/dna-labels";
 import { PersonAvatar } from "@/components/PersonAvatar";
 
 type Tab = "challenge" | "now";
@@ -49,6 +51,49 @@ type Tab = "challenge" | "now";
  * to-do list, so an answered call simply stops being derivable and leaves.
  */
 
+/**
+ * NOT FOR ME — dismissal, and why it is viewer-local ON PURPOSE.
+ *
+ * This file deleted a localStorage set one revision ago, so the shape deserves
+ * an explanation rather than a shrug. That one acknowledged "SARAH SHOWED UP"
+ * notices, and it was wrong because somebody answering your call is the most
+ * DURABLE evidence this platform produces — a tap must never be able to delete
+ * it.
+ *
+ * A dismissal is the exact opposite kind of fact. "Not for me" is a private
+ * preference about one reader's own queue, it grants nothing, it is owed to
+ * nobody, and it must NEVER become a record: no caller is told, no relationship
+ * number moves, and nothing enters Now. Persisting it server-side would be
+ * building a ledger of who declined whom, which is precisely the thing this
+ * product decided not to keep score of.
+ *
+ * So localStorage is not a shortcut here, it is the correct home — the storage
+ * whose worst failure mode is that a card reappears. And no schema change: the
+ * call row stays open and honest, because the caller's conviction really is
+ * still out there whether or not this reader wants it in their column today.
+ */
+const HIDDEN_KEY = "conviction:calls-hidden";
+
+function hidden(): Set<string> {
+  try {
+    return new Set(JSON.parse(window.localStorage.getItem(HIDDEN_KEY) ?? "[]") as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
+function hide(marketId: number) {
+  try {
+    const next = hidden();
+    next.add(String(marketId));
+    // Bounded: a preference list, not a history. Oldest fall off, and the worst
+    // consequence of that is a card the reader dismissed months ago coming back.
+    window.localStorage.setItem(HIDDEN_KEY, JSON.stringify([...next].slice(-200)));
+  } catch {
+    /* storage unavailable — the card simply stays, which is harmless */
+  }
+}
+
 export function ChallengeRail({
   wallet,
   onSelect,
@@ -65,6 +110,9 @@ export function ChallengeRail({
 }) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("challenge");
+  const [dismissed, setDismissed] = useState<Set<string>>(() =>
+    typeof window === "undefined" ? new Set() : hidden(),
+  );
 
   // The same cached observer DnaFirstReveal uses — the lock costs no round trip.
   const { data: net } = useQuery({ ...networkQO(wallet), enabled: !!wallet });
@@ -77,7 +125,15 @@ export function ChallengeRail({
     staleTime: 60_000,
   });
 
-  const open = challenges ?? [];
+  // The open queue, minus anything this reader has waved off. The count follows
+  // the list rather than the payload, so the badge always equals what is on
+  // screen — three means three people are actually waiting on you.
+  const open = (challenges ?? []).filter((c) => !dismissed.has(String(c.marketId)));
+
+  const dismiss = (marketId: number) => {
+    hide(marketId);
+    setDismissed(new Set([...dismissed, String(marketId)]));
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -128,7 +184,12 @@ export function ChallengeRail({
           ) : (
             <ul className="space-y-2">
               {open.map((c) => (
-                <ChallengeRow key={c.marketId} challenge={c} onSelect={onSelect} />
+                <ChallengeRow
+                  key={c.marketId}
+                  challenge={c}
+                  onSelect={onSelect}
+                  onDismiss={dismiss}
+                />
               ))}
             </ul>
           )}
@@ -149,20 +210,74 @@ export function ChallengeRail({
 }
 
 /** One open call. The question, who is asking, and the way in. */
+/**
+ * WHICH RELATION WORDS THIS CARD MAY SAY.
+ *
+ * `RELATIONSHIP_TEXT` still maps twin→"Twin" and inverse→"Opp", and rendering
+ * those here would put words on the Challenge rail that the People rail
+ * deliberately withholds — the same person reading "Twin" in one column and no
+ * label in the other. Twin and Opp are held back until production evidence
+ * supports them, and "held back" has to mean everywhere.
+ *
+ * So a caller shows the word for the DIRECTION they qualify in. Nothing is lost:
+ * the relation still decides who may call and in what order.
+ */
+const BADGE: Record<CallerRelation, string> = {
+  twin: "Tribe",
+  tribe: "Tribe",
+  opp: "Rival",
+  inverse: "Rival",
+};
+
+/**
+ * ONE CARD, THREE ANSWERS: who called me, why do I care, what are they asking?
+ *
+ * The market is the subject; the RELATIONSHIP is the reason to open it. So the
+ * hierarchy is person → question → the record between you → the call. Nothing
+ * else earns space, and two things are deliberately absent:
+ *
+ *  • The wager. "Mike put $500 down" turns a social signal into financial
+ *    pressure and would make the loudest voice the wealthiest one. The market
+ *    itself shows position and size to anyone who opens it.
+ *  • An Accept button. Opening is not accepting — TAKING A SIDE is. A CTA here
+ *    would add a step before the only step that means anything.
+ *
+ * THE CARD IS THE AFFORDANCE. Clicking anywhere opens the market in the centre,
+ * which is where the decision belongs.
+ */
 function ChallengeRow({
   challenge: c,
   onSelect,
+  onDismiss,
 }: {
   challenge: Challenge;
   onSelect: (marketId: number) => void;
+  onDismiss: (marketId: number) => void;
 }) {
+  const badge = BADGE[c.relation];
   const tone = relationshipTone(c.relation);
+  // The SAME calculation the People card and the profile use. A pair cannot be
+  // 82% in one surface and 79% in another, so nothing is recomputed here.
+  const match = convictionMatch(c.together ?? 0, c.shared ?? 0);
+  const showMatch = match != null && (c.shared ?? 0) >= MATURE_MIN_SHARED;
+
   return (
-    <li>
+    <li className="relative">
       <button
         type="button"
         onClick={() => onSelect(c.marketId)}
-        className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left transition-colors hover:border-[var(--border-strong)]"
+        aria-label={[
+          c.caller.name,
+          badge,
+          c.title,
+          showMatch
+            ? `${match} percent Conviction Match, ${c.together} of ${c.shared} together`
+            : null,
+          c.reason,
+        ]
+          .filter(Boolean)
+          .join(". ")}
+        className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 pr-7 text-left transition-colors hover:border-[var(--border-strong)]"
       >
         <div className="flex items-start gap-2">
           <PersonAvatar wallet={c.caller.wallet} name={c.caller.name ?? undefined} size={22} />
@@ -171,18 +286,42 @@ function ChallengeRow({
               className="inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
               style={{ color: tone.fg, background: tone.bg }}
             >
-              {RELATIONSHIP_TEXT[c.relation]}
+              {badge}
             </span>
             <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-[var(--text)]">
               {c.title}
             </p>
           </div>
         </div>
-        {/* THE CALL ITSELF — what they did, and the question back to you. It
-            never names a side you have not taken. */}
-        <p className="mt-1.5 line-clamp-2 text-[11.5px] leading-snug text-[var(--text-secondary)]">
+
+        {/* WHY THIS PERSON'S CALL — the record between the two of you, and the
+            arithmetic that proves it. Withheld below the evidence bar rather
+            than shown as a confident percentage over one shared conviction. */}
+        {showMatch && (
+          <p className="num mt-1.5 text-[11px] text-[var(--text-muted)]">
+            {match}% Conviction Match · {c.together} of {c.shared} together
+          </p>
+        )}
+
+        {/* THE CALL ITSELF. It never names a side the reader has not taken. */}
+        <p className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-[var(--text-secondary)]">
           {c.reason}
         </p>
+      </button>
+
+      {/* NOT FOR ME — quiet, and private. Never "Decline": nothing is reported
+          to the caller, nothing is written down, and no relationship number
+          moves. Showing up is worth celebrating; not showing up is simply the
+          absence of that, and a product that ledgered it would be keeping score
+          of the wrong thing. */}
+      <button
+        type="button"
+        onClick={() => onDismiss(c.marketId)}
+        aria-label={`Hide this call from ${c.caller.name ?? "them"}`}
+        title="Not for me"
+        className="absolute right-1.5 top-1.5 px-1 text-[13px] leading-none text-[var(--text-muted)] opacity-50 transition-opacity hover:opacity-100"
+      >
+        ×
       </button>
     </li>
   );
