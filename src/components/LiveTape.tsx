@@ -21,6 +21,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useWarmMarket } from "@/lib/realtime/warm-market";
+
 import { PersonStack } from "@/components/PersonStack";
 import { listLiveEvents } from "@/lib/live.functions";
 import { useStickyRows } from "@/hooks/useSticky";
@@ -135,6 +137,8 @@ export function LiveTape({
 }) {
   const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
   const qc = useQueryClient();
+  // A tap on a row opens that market — warm it the moment the finger lands.
+  const warm = useWarmMarket();
   const key = ["live-tape", wallet ?? null, scopeKey, side ?? null, limit ?? null];
   const { data, isLoading } = useQuery({
     queryKey: key,
@@ -420,7 +424,17 @@ export function LiveTape({
                 <div
                   role={navigable ? "button" : undefined}
                   tabIndex={navigable ? 0 : undefined}
+                  // WARM ON TOUCH, NOT ON TAP. A tape row can point at any
+                  // market in the system, so the tap used to start from a cold
+                  // cache and the centre had nothing to draw. `pointerdown`
+                  // fires while the finger is still down — enough of a head
+                  // start that the market is usually ready by the time the
+                  // column switches to it.
+                  onPointerDown={navigable ? () => warm(target) : undefined}
+                  onPointerEnter={navigable ? () => warm(target) : undefined}
+                  onFocus={navigable ? () => warm(target) : undefined}
                   onClick={navigable ? () => onSelect?.(target) : undefined}
+
                   onKeyDown={
                     navigable
                       ? (event) => {
