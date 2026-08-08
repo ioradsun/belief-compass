@@ -56,7 +56,7 @@ export function LandingPanel({
 
   return (
     <header
-      className={`relative z-30 shrink-0 bg-[var(--panel)] transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+      className={`relative z-30 shrink-0 bg-[var(--panel)] lg:transition-[padding] lg:duration-500 lg:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
         expanded ? "max-h-[100svh] overflow-y-auto overscroll-contain" : ""
       }`}
       style={{ borderBottom: "1px solid var(--hairline)" }}
@@ -79,7 +79,7 @@ export function LandingPanel({
             else if (isDesktopViewport()) onExpand();
           }
         }}
-        className={`mx-auto w-full max-w-[1180px] px-4 transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none motion-reduce:transition-none lg:cursor-pointer lg:px-8 ${
+        className={`mx-auto w-full max-w-[1180px] px-4 focus-visible:outline-none motion-reduce:transition-none lg:cursor-pointer lg:px-8 lg:transition-[padding] lg:duration-500 lg:ease-[cubic-bezier(0.22,1,0.36,1)] ${
           expanded ? "cursor-pointer py-4 lg:py-5" : "py-2.5"
         }`}
       >
@@ -87,7 +87,7 @@ export function LandingPanel({
         {/* identity row — persists across both states */}
         <div className="flex items-center gap-4">
           <div
-            className={`flex min-w-0 flex-1 items-center transition-[gap] duration-500 motion-reduce:transition-none ${
+            className={`flex min-w-0 flex-1 items-center motion-reduce:transition-none lg:transition-[gap] lg:duration-500 ${
               expanded ? "gap-3" : "gap-2.5"
             }`}
           >
@@ -154,7 +154,7 @@ export function LandingPanel({
 
         {/* expanding region — same component, changing shape */}
         <div
-          className={`grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+          className={`grid motion-reduce:transition-none lg:transition-[grid-template-rows,opacity] lg:duration-500 lg:ease-[cubic-bezier(0.22,1,0.36,1)] ${
             expanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
           }`}
           aria-hidden={!expanded}
