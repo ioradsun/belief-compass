@@ -251,10 +251,13 @@ export function callLine(e: CallLineInput): string | null {
       ? PULLS.alignedThin
       : PULLS.opposedThin;
 
-  // The pull NEVER re-names the caller: the belief clause just did, and "Sarah
-  // believes YES. Sarah is waiting on your read." reads like a bug. Every pull
-  // addresses the reader or describes the pair instead.
-  const pull = pool[hPull % pool.length]();
+  // THE PULL MAY NAME THE CALLER — and the warmest ones do. This clause used to
+  // refuse the name on the grounds that the belief clause had just used it, and
+  // the cost was that the sentence carrying the whole feeling ("Sarah wants you
+  // at the table") could not be said at all. Repeating a first name across two
+  // short sentences is how people actually talk; a nameless "Your call." is not.
+  const pull = pool[hPull % pool.length](name);
+
   return `${act} ${pull}`;
 }
 
