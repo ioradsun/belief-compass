@@ -42,13 +42,43 @@
  * state, and a call that aged out of reach leaves the denominator entirely rather
  * than counting against someone who was never shown it again.
  *
+ * ────────────────────────────────────────────────────────────────────────────
+ * SHOWING UP IS PARTICIPATION. IT IS NEVER AGREEMENT.
+ * ────────────────────────────────────────────────────────────────────────────
+ *
+ * The invariant this module exists to protect, and the one most likely to be
+ * eroded by a well-meaning future change. Sarah answering your call means SHE TOOK
+ * A SIDE — nothing more. Whether it was your side is not merely irrelevant here,
+ * it is the property of a different question entirely:
+ *
+ *     Conviction Match / Shared DNA   do we reach the same conclusions?
+ *     Showing up                      are you there when I call?
+ *
+ * A Rival who answers every call is the single most valuable relationship this
+ * product can surface: someone who disagrees with you about everything and turns
+ * up anyway. If YES/NO ever leaked into this calculation, that person would score
+ * as unreliable and the most interesting relationship on the platform would be
+ * rendered as a failure.
+ *
+ * IT IS ENFORCED STRUCTURALLY, not by discipline. `CallFact` carries two
+ * timestamps and no side; `market_calls` has no side column; nothing in this
+ * module's inputs can express one. A future change that wanted to weight by
+ * agreement would have to add a field to get there, and the tests assert the shape
+ * as well as the behaviour so that addition cannot pass quietly.
+ *
  * ZERO IO, pure, fully testable.
  */
 import { CHALLENGE } from "@/domain/challenge";
 
-/** A call, reduced to only what the ladder needs. */
+/**
+ * A call, reduced to only what the ladder needs.
+ *
+ * TWO TIMESTAMPS AND DELIBERATELY NO SIDE. Answering is participation; which side
+ * they took is Conviction Match's question and never this one. The absence is the
+ * enforcement — see the invariant at the top of this file.
+ */
 export interface CallFact {
-  /** Null while nobody has answered. */
+  /** Null while nobody has answered. Not "answered in agreement" — answered. */
   respondedAtMs: number | null;
   /** When the call was surfaced — what decides whether it is still reachable. */
   calledAtMs: number;
@@ -222,6 +252,30 @@ export function showedUpFor(names: readonly string[]): string | null {
   if (clean.length === 1) return `You showed up for ${clean[0]}.`;
   if (clean.length === 2) return `You showed up for ${clean[0]} and ${clean[1]}.`;
   return `You showed up for ${clean.length} people.`;
+}
+
+/* ── Somebody showed up, in Now ──────────────────────────────────────────── */
+
+/**
+ * ONE MARKET, ONE ROW — the anti-spam rule, and the reason this is aggregated
+ * rather than emitted per answer.
+ *
+ * Three people answering your call in the same market is ONE thing that happened
+ * to you, not three. Emitting a row each would be a notification inbox wearing a
+ * tape's clothes: the surface would get louder exactly when a reader was having
+ * their best day, and the third row would say nothing the first did not.
+ *
+ * NAMED WHILE NAMING IS MEANINGFUL. Up to two people get their names, because
+ * "Sarah and Mike showed up for you" is a fact about two people you know. Past
+ * that the names stop carrying and the count starts: "4 people showed up for
+ * you" is both shorter and truer than a list nobody reads to the end.
+ */
+export function showedUpInMarket(names: readonly string[]): string | null {
+  const clean = names.map((n) => n.trim()).filter(Boolean);
+  if (clean.length === 0) return null;
+  if (clean.length === 1) return `${clean[0]} showed up for you.`;
+  if (clean.length === 2) return `${clean[0]} and ${clean[1]} showed up for you.`;
+  return `${clean.length} people showed up for you.`;
 }
 
 /* ── Your history ────────────────────────────────────────────────────────── */

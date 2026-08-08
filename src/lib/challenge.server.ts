@@ -478,6 +478,91 @@ export async function dependabilityFor(
   return out;
 }
 
+/**
+ * SOMEBODY SHOWED UP — recent answers to this viewer's calls, ONE ROW PER MARKET.
+ *
+ * The aggregation is the feature. Three people answering in the same market is
+ * one thing that happened to you; three rows would be a notification inbox in the
+ * tape's clothing, getting loudest on the reader's best day and saying nothing new
+ * by the third line.
+ *
+ * Read from the ledger rather than from `events` because the causal claim is the
+ * point: not "somebody traded in a market I am also in", which on a platform this
+ * size is ordinary coincidence, but "my conviction created a call for them and
+ * they answered it".
+ */
+export interface ShowedUp {
+  marketId: number;
+  title: string;
+  people: NamedPerson[];
+  /** The most recent answer in this market — what the row is dated by. */
+  atMs: number;
+}
+
+export async function showedUpForMe(viewer: string, sinceMs: number): Promise<ShowedUp[]> {
+  const me = viewer.toLowerCase();
+  if (!me) return [];
+  const sb = serviceClient();
+  const { data, error } = await sb
+    .from("market_calls")
+    .select("market_id, responder_wallet, responded_at")
+    .eq("caller_wallet", me)
+    .not("responded_at", "is", null)
+    .gte("responded_at", new Date(sinceMs).toISOString())
+    .order("responded_at", { ascending: false })
+    .limit(READ.pairCalls);
+  if (error) {
+    // Loudly, then degrade — the tape keeps working without this family rather
+    // than the whole read failing over a social row.
+    console.error("[challenge] showed-up rows unreadable", {
+      code: error.code,
+      message: error.message,
+    });
+    return [];
+  }
+
+  const rows = (data ?? []) as {
+    market_id: number;
+    responder_wallet: string;
+    responded_at: string;
+  }[];
+  if (rows.length === 0) return [];
+
+  const byMarket = new Map<number, { wallets: string[]; atMs: number }>();
+  for (const r of rows) {
+    const id = Number(r.market_id);
+    const at = Date.parse(r.responded_at);
+    if (!Number.isFinite(id) || !Number.isFinite(at)) continue;
+    const cur = byMarket.get(id) ?? { wallets: [], atMs: 0 };
+    const w = String(r.responder_wallet).toLowerCase();
+    if (!cur.wallets.includes(w)) cur.wallets.push(w);
+    cur.atMs = Math.max(cur.atMs, at);
+    byMarket.set(id, cur);
+  }
+
+  const { resolveProfiles } = await import("@/lib/profiles.server");
+  const [titleOf, profiles] = await Promise.all([
+    titlesFor(sb, [...byMarket.keys()]),
+    resolveProfiles([...new Set(rows.map((r) => String(r.responder_wallet).toLowerCase()))], 0),
+  ]);
+
+  const out: ShowedUp[] = [];
+  for (const [marketId, v] of byMarket) {
+    const title = titleOf.get(marketId);
+    if (!title) continue;
+    out.push({
+      marketId,
+      title,
+      people: v.wallets.map((w) => ({
+        wallet: w,
+        name: profiles.get(w)?.displayName?.trim() || aliasFor(w),
+      })),
+      atMs: v.atMs,
+    });
+  }
+  return out.sort((a, b) => b.atMs - a.atMs || a.marketId - b.marketId);
+}
+
 /** Titles for a set of markets, dropping the ones that do not resolve. */
 async function titlesFor(sb: Sb, ids: readonly number[]): Promise<Map<number, string>> {
   if (ids.length === 0) return new Map();

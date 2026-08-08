@@ -10,7 +10,9 @@ import {
   rateFor,
   rungFor,
   showedUpFor,
+  showedUpInMarket,
   tally,
+  type CallFact,
   type Tally,
 } from "./dependability";
 
@@ -159,6 +161,43 @@ describe("the moment someone shows up", () => {
   });
 });
 
+/**
+ * ONE MARKET, ONE ROW — the anti-spam rule for the Now tape.
+ *
+ * Three people answering the same call is one thing that happened to you. A row
+ * each would make the surface loudest on the reader's best day and say nothing new
+ * by the third line, which is a notification inbox wearing a tape's clothes.
+ */
+describe("somebody showed up, aggregated", () => {
+  it("names one or two, and counts beyond that", () => {
+    expect(showedUpInMarket(["Sarah"])).toBe("Sarah showed up for you.");
+    expect(showedUpInMarket(["Sarah", "Mike"])).toBe("Sarah and Mike showed up for you.");
+    expect(showedUpInMarket(["Sarah", "Mike", "Priya"])).toBe("3 people showed up for you.");
+  });
+
+  it("collapses a crowd into one sentence rather than growing with it", () => {
+    // The property that matters: sentence length stops growing while the crowd
+    // does. Ten answers is still one line, and still one row.
+    const ten = Array.from({ length: 10 }, (_, i) => `P${i}`);
+    expect(showedUpInMarket(ten)).toBe("10 people showed up for you.");
+    const words = (names: string[]) => showedUpInMarket(names)!.split(" ").length;
+    expect(words(ten)).toBeLessThan(words(["Sarah", "Mike"]) + 2);
+  });
+
+  it("says nothing rather than 'somebody showed up'", () => {
+    // An unnamed row is the feeling without the person, which is worse than
+    // silence — the reader cannot tell whether it is even about anyone they know.
+    expect(showedUpInMarket([])).toBeNull();
+    expect(showedUpInMarket(["", "   "])).toBeNull();
+  });
+
+  it("is about being answered, never about being agreed with", () => {
+    for (const names of [["Sarah"], ["Sarah", "Mike"], ["a", "b", "c"]]) {
+      expect(showedUpInMarket(names)!).not.toMatch(/agree|side|YES|NO\b|backed/);
+    }
+  });
+});
+
 describe("your history tells three states, not four", () => {
   const entries = [
     { marketId: 1, title: "Will ETH outperform BTC?", direction: "they_answered", atMs: 300 },
@@ -257,6 +296,11 @@ describe("no string this module can emit names the machinery or blames anyone", 
         .filter(Boolean) as string[]),
     );
     out.push(
+      ...([["Sarah"], ["Sarah", "Mike"], ["a", "b", "c", "d"]]
+        .map(showedUpInMarket)
+        .filter(Boolean) as string[]),
+    );
+    out.push(
       ...historyRows(
         [
           { marketId: 1, title: "T", direction: "they_answered", atMs: 3 },
@@ -286,6 +330,62 @@ describe("no string this module can emit names the machinery or blames anyone", 
     // one, because "you can count on Sarah" and "76%" are the same claim and the
     // words are the better one.
     for (const s of everything()) expect(s).not.toMatch(/%/);
+  });
+});
+
+/**
+ * SHOWING UP IS PARTICIPATION, NEVER AGREEMENT.
+ *
+ * The invariant most likely to be eroded by a well-meaning future change, so it is
+ * asserted on the SHAPE of the inputs rather than only on behaviour — a behavioural
+ * test cannot fail for a side that no type can express, which is exactly the point.
+ *
+ * The relationship at stake: a Rival who answers every call is the most valuable
+ * thing this product can surface — somebody who disagrees with you about everything
+ * and turns up anyway. Let YES/NO into this calculation and that person renders as
+ * unreliable.
+ */
+describe("answering is taking a side, not taking YOUR side", () => {
+  it("cannot express a side anywhere in its inputs", () => {
+    // Structural, not behavioural. `CallFact` is two timestamps; a future change
+    // that wanted to weight by agreement would have to ADD a field to get there,
+    // and it would land on this assertion on the way.
+    const fact: CallFact = { respondedAtMs: 1, calledAtMs: 0 };
+    expect(Object.keys(fact).sort()).toEqual(["calledAtMs", "respondedAtMs"]);
+    for (const k of Object.keys(fact)) {
+      expect(k).not.toMatch(/side|yes|no|agree|match|same|oppos/i);
+    }
+  });
+
+  it("counts two answers identically however they voted", () => {
+    // The whole invariant in one assertion: this module cannot tell the difference
+    // between an ally showing up and a rival showing up, because there is nothing
+    // in what it receives that could carry the distinction.
+    const now = 10_000 * 86_400_000;
+    const ally = { respondedAtMs: now, calledAtMs: now - 86_400_000 };
+    const rival = { respondedAtMs: now, calledAtMs: now - 86_400_000 };
+    expect(tally([ally], now)).toEqual(tally([rival], now));
+  });
+
+  it("lets a Rival reach the highest rung", () => {
+    // Relationship classification is not this module's input either, so nothing
+    // here can cap a Rival below a Twin. `each_other` is reachable by anyone.
+    expect(rungFor(t(9, 1), t(4))).toBe("each_other");
+    expect(bondFor("Mike", t(9, 1), t(4)).sentence).toBe("You show up for each other.");
+  });
+
+  it("never speaks about agreement in any sentence it emits", () => {
+    for (const [theirs, yours] of [
+      [t(1), NONE],
+      [t(3, 7), NONE],
+      [t(8, 2), NONE],
+      [t(9, 1), t(4)],
+    ] as const) {
+      const b = bondFor("Mike", theirs, yours);
+      for (const s of [b.sentence, b.evidence].filter(Boolean) as string[]) {
+        expect(s).not.toMatch(/agree|disagree|same side|your side|YES|NO\b/);
+      }
+    }
   });
 });
 

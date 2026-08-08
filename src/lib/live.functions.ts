@@ -17,6 +17,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
+import { showedUpInMarket } from "@/domain/dependability";
 import {
   flattenStory,
   groupLiveRows,
@@ -157,6 +158,11 @@ type Momentum = {
  * wallet_beliefs read the tape already needs), so the depth is close to free.
  */
 const STANDING_RESERVE = 18;
+
+/** How far back an answered call can be and still be news. */
+const SHOWED_UP_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+/** Rows per fetch. Already one per market, so this is a second, gentler cap. */
+const SHOWED_UP_MAX = 4;
 
 export const listLiveEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof input>) => input.parse(d ?? {}))
@@ -1206,6 +1212,70 @@ export const listLiveEvents = createServerFn({ method: "GET" })
           text: `${story.headline} — ${story.body}`,
           pace: { perishability: "standing", weight: f.strength >= 0.65 ? 2 : 3 },
           payload: { significance: f.strength },
+        });
+      }
+    }
+
+    // ── SOMEBODY SHOWED UP ───────────────────────────────────────────────────
+    // The one family in this tape that is about the READER rather than a market:
+    // people who answered a call the reader's own conviction created.
+    //
+    // AGGREGATED, ONE ROW PER MARKET. Three people answering the same question is
+    // one thing that happened to you, not three, and a row each would turn the
+    // tape into a notification inbox that gets loudest on your best day. The
+    // domain composes the sentence; see showedUpInMarket.
+    //
+    // Unscoped only: inside a market panel the reader is already looking at the
+    // question, and a "somebody showed up here" row would be talking about the
+    // thing on screen. Full fetches only, like standing facts — a delta poll
+    // merges into a tail that already carries them.
+    if (!scoped && viewer && data?.since == null) {
+      const { showedUpForMe } = await import("@/lib/challenge.server");
+      const since = Date.now() - SHOWED_UP_WINDOW_MS;
+      const answers = await showedUpForMe(viewer, since).catch(() => []);
+      for (const a of answers.slice(0, SHOWED_UP_MAX)) {
+        const body = showedUpInMarket(a.people.map((p) => p.name ?? ""));
+        // The domain refuses to speak about people it cannot name, and an
+        // unnamed row here would read as "somebody showed up", which is worse
+        // than silence — it is the feeling without the person.
+        if (!body) continue;
+        material.push({
+          id: `showed-up:${a.marketId}:${a.atMs}`,
+          kind: "showed_up",
+          marketId: String(a.marketId),
+          marketTitle: a.title,
+          occurredAt: new Date(a.atMs).toISOString(),
+          startedAt: new Date(a.atMs).toISOString(),
+          // Answering is PARTICIPATION. Which side they took is Conviction
+          // Match's question and never this one, so no side is carried here.
+          side: null,
+          walletCount: a.people.length,
+          tradeCount: null,
+          amountEth: null,
+          amountUsd: null,
+          wallet: a.people.length === 1 ? a.people[0].wallet : null,
+          people: a.people.map((p) => ({ wallet: p.wallet, name: p.name, avatarUrl: null })),
+          story: {
+            category: "tribe",
+            headline: "Showed up",
+            body,
+            attribution: null,
+            // NEUTRAL, and not merely because "positive" is not a BeatTone. The
+            // other tones are `yes` and `no` — they carry a SIDE, and tinting
+            // this row by one would say the answer counted because of which way
+            // it went. Showing up is participation; the side is Conviction
+            // Match's question and never this one.
+            tone: "neutral",
+            // The "about you" wash, and the one row in the tape that has earned
+            // it most: this did not merely involve your network, it happened
+            // BECAUSE of something you did.
+            personal: true,
+          },
+          text: `Showed up — ${body}`,
+          // Newsworthy but not urgent: it stays true all day, and it should
+          // never preempt a market that is actually moving right now.
+          pace: { perishability: "soon", weight: 1 },
+          payload: { significance: 0.9 },
         });
       }
     }

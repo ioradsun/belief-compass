@@ -4,8 +4,14 @@
  * Every conviction answers calls behind you and creates calls ahead of you, and
  * this is the only surface that can say both halves in one breath:
  *
- *     You showed up for Sarah.        ← backward: you were counted on
- *     Now your people have your call. ← forward: someone is counting on you
+ *     You showed up for Sarah.               ← backward: you were counted on
+ *     Now your people can show up for you.   ← forward: their turn, not a delivery
+ *
+ * "CAN show up", not "have your call". The forward half describes an OPPORTUNITY
+ * that now exists, not a message that went out — nothing was delivered, and a
+ * sentence implying otherwise would be the notification claim wearing softer
+ * words. It also mirrors the backward half exactly, which is the point: the same
+ * act that let you show up for Sarah is what lets Sarah show up for you.
  *
  * NEVER "YOU TOOK A SIDE". The trade confirmation two inches away already said
  * that, and repeating it spends the one moment in the product that could have said
@@ -90,7 +96,7 @@ export function LaunchRail({
       {line ? (
         <>
           <p className="mt-1 text-[11.5px] leading-snug text-[var(--text-secondary)]">
-            Now your people have your call.
+            Now your people can show up for you.
           </p>
           <p className="num mt-1 text-[12px] text-[var(--text)]">{line}</p>
         </>
