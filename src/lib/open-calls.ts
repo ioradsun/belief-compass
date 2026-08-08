@@ -12,14 +12,17 @@
  * a real subscribable store rather than component state, so a dismissal on the
  * card updates the menu in the same commit.
  *
- * WHY THE DISMISSED SET IS VIEWER-LOCAL, kept from the rail that used to own it:
- * "not for me" is a private preference about one reader's own queue. It grants
- * nothing, it is owed to nobody, and it must NEVER become a record — no caller is
- * told, no relationship number moves, nothing enters Now. Persisting it
- * server-side would be building a ledger of who declined whom, which is precisely
- * what this product decided not to keep score of. localStorage is not a shortcut
- * here, it is the correct home: the storage whose worst failure mode is that a
- * card reappears.
+ * WHY THE DISMISSED SET IS STILL LOCAL, NOW THAT A PASS IS ALSO DURABLE.
+ *
+ * This comment used to say a pass must NEVER become a record, and that was right
+ * while nobody was owed an answer. It changed when the creator started seeing what
+ * became of the thing they put up: "1 passed" cannot be honest if a pass exists
+ * only in one browser. The reversal is deliberate and bounded — see `hideCall`.
+ *
+ * The local set survives the change and earns its place twice over: the card
+ * leaves INSTANTLY rather than after a round trip, and a failed write can never
+ * mean it comes back. The server write is the durable fact; this is the responsive
+ * one, and neither is waiting on the other.
  */
 import { useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -54,7 +57,21 @@ function subscribe(fn: () => void): () => void {
   };
 }
 
-/** Wave one call off. Tells nobody, writes nothing to the server. */
+/**
+ * WAVE ONE CALL OFF — locally, and now also durably.
+ *
+ * The local set stays, because it is what makes the card leave INSTANTLY without
+ * waiting on a round trip, and because a failed write must never mean the card
+ * comes back. What changed is that the server learns too: a creator is now shown
+ * "1 passed", and that sentence cannot be honest if a pass only ever existed in
+ * one browser's localStorage.
+ *
+ * The limits from the original decision are intact. It is Challenge lifecycle
+ * only — Conviction Match cannot see it and Showing Up cannot see it — and the
+ * creator is told a COUNT, never a name. Nobody is ever told that a particular
+ * person passed on them, because a pass is a choice about a question rather than
+ * a verdict on a person.
+ */
 export function hideCall(marketId: number) {
   const next = new Set(snapshot());
   next.add(String(marketId));

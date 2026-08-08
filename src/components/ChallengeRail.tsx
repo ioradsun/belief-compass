@@ -24,8 +24,11 @@
  * what is actually true rather than implying something is broken.
  */
 import { useState, type ReactNode } from "react";
+import { YourTable, useTable } from "@/components/YourTable";
 import { useQueryClient } from "@tanstack/react-query";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
+import { passOnCall } from "@/lib/table.functions";
+import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { type Challenge, type CallerRelation } from "@/domain/challenge";
 import { convictionMatch } from "@/domain/relationship";
 import { RELATIONSHIP_MIN_SHARED } from "@/domain/dna/config";
@@ -33,6 +36,15 @@ import { relationshipTone } from "@/lib/dna-labels";
 import { PersonAvatar } from "@/components/PersonAvatar";
 
 type Tab = "challenge" | "now";
+/**
+ * WHOSE TABLE, and the words are chosen against two wrong pairs.
+ *
+ * NOT Sent/Received — that is messaging, and a Challenge is not a message. NOT
+ * Outbound/Inbound — that is plumbing described to a user. The parent surface
+ * already says Challenge, so these only have to say whose: the ones you put up,
+ * and the ones put in front of you.
+ */
+type Side = "yours" | "challenged";
 
 /**
  * WHY THERE IS NO ACKNOWLEDGEMENT STATE HERE ANY MORE.
@@ -77,6 +89,31 @@ export function ChallengeRail({
 }) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("challenge");
+  const [side, setSide] = useState<Side>("challenged");
+  const { ensureSession } = useWalletSession();
+
+  /**
+   * NOT FOR ME — hidden here instantly, recorded there eventually.
+   *
+   * The local hide is what the reader feels; the server write is what makes the
+   * creator's "1 passed" true. Best-effort and non-interactive on purpose: waving
+   * a card off must never open a wallet prompt, and a failed write costs one
+   * uncounted pass rather than a card that refuses to leave.
+   */
+  const pass = (marketId: number) => {
+    hideCall(marketId);
+    if (!wallet) return;
+    void bestEffort(async () =>
+      passOnCall({
+        data: {
+          wallet,
+          session: await ensureSession({ interactive: false }),
+          marketId,
+        },
+      }),
+    );
+  };
+  const { data: table } = useTable(wallet);
 
   // The open queue, minus anything this reader has waved off. The count follows
   // the list rather than the payload, so the badge always equals what is on
@@ -111,6 +148,31 @@ export function ChallengeRail({
         ))}
       </div>
 
+      {/* WHOSE TABLE. Only once there is a second side to show — a person with
+          nothing up has no choice to make, and a control offering one is a
+          question the surface is asking for its own benefit. */}
+      {tab === "challenge" && wallet && lock.unlocked && (table?.length ?? 0) > 0 && (
+        <div className="mb-2 flex shrink-0 gap-3 text-[11px]" role="tablist" aria-label="Whose">
+          {(["challenged", "yours"] as Side[]).map((sd) => (
+            <button
+              key={sd}
+              role="tab"
+              aria-selected={side === sd}
+              type="button"
+              onClick={() => setSide(sd)}
+              className={`font-medium uppercase tracking-wide transition-colors ${
+                side === sd ? "text-[var(--text)]" : "text-[var(--text-muted)]"
+              }`}
+            >
+              {sd === "yours" ? "Yours" : "Challenged"}
+              <span className="num ml-1 opacity-70">
+                {sd === "yours" ? (table?.length ?? 0) : open.length}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {tab === "now" ? (
         now
       ) : !wallet ? (
@@ -121,7 +183,9 @@ export function ChallengeRail({
         <LockedPanel lock={lock} />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {failed ? (
+          {side === "yours" ? (
+            <YourTable wallet={wallet} onSelect={onSelect} />
+          ) : failed ? (
             /* A FAILED READ IS NOT AN EMPTY GRAPH.
                `buildChallenges` opens with an unguarded `serviceClient()`, and
                `createClient` throws SYNCHRONOUSLY without a key — so a
@@ -139,18 +203,13 @@ export function ChallengeRail({
                   is that nobody has qualified, which is a fact about the graph
                   rather than about the reader. Quiet, not broken — the sentence
                   promises the room rather than apologising for it. */}
-              Your people are quiet. For now. When your Tribe or Rivals want your take, their
-              open questions land here.
+              Your people are quiet. For now. When your Tribe or Rivals want your take, their open
+              questions land here.
             </p>
           ) : (
             <ul className="space-y-2">
               {open.map((c) => (
-                <ChallengeRow
-                  key={c.marketId}
-                  challenge={c}
-                  onSelect={onSelect}
-                  onDismiss={hideCall}
-                />
+                <ChallengeRow key={c.marketId} challenge={c} onSelect={onSelect} onDismiss={pass} />
               ))}
             </ul>
           )}
