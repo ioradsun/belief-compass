@@ -11,6 +11,11 @@ node_modules
 dist
 dist-ssr
 .output
+
+# This project's lockfile is bun.lock. Running npm here produces a competing
+# package-lock.json; committing it would give the repo two lockfiles that can
+# disagree about the same dependency tree.
+package-lock.json
 .vinxi
 .tanstack/**
 .nitro
