@@ -123,6 +123,15 @@ export function LiveTape({
    * below for why that placement is the whole point.
    */
   label?: string;
+  /**
+   * ROWS FROM THE SERVER, for paint only. The shared signed-out tape is built
+   * once and cached server-side, so SSR can hand the first rows down and the
+   * column has real content the instant it mounts. Adopted as PLACEHOLDER, never
+   * as initial data: the query still runs immediately and replaces it, so a
+   * seed can never become the tape.
+   */
+  initial?: LiveResult | null;
+
 }) {
   const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
   const qc = useQueryClient();
