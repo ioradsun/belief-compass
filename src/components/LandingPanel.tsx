@@ -5,6 +5,12 @@ import { LandingExampleCard } from "@/components/LandingExample";
 import { HowItWorksSheet } from "@/components/HowItWorksSheet";
 import type { LandingPanelState } from "@/hooks/useLandingPanelState";
 
+/** The `lg:` breakpoint, read at interaction time rather than render time. */
+function isDesktopViewport() {
+  return typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+}
+
+
 
 /**
  * One continuous brand component that changes shape between two states.
