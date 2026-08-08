@@ -45,13 +45,37 @@ export function useAnswerCalls(
     const key = `${wallet.toLowerCase()}:${marketId}`;
     if (done.current === key) return;
     done.current = key;
-    void answerCalls({ data: { wallet, marketId } })
-      .then((r) => {
-        // WHO was just answered, parked where the post-order panel can find it.
-        // The panel is a sibling of the deck, not a child, so the cache is the
-        // seam — and it is the same cache the panel already reads its reach from.
-        if (r.closed.length > 0) qc.setQueryData(closedCallsKey(marketId), r.closed);
-      })
-      .catch(() => undefined);
+    /**
+     * THE SERVER MAY NOT BE ABLE TO SEE THE POSITION YET.
+     *
+     * Answers are now PROVED server-side rather than taken on the client's word,
+     * because "3 of 8 showed up" is a permanent claim about real people. But this
+     * fires the instant the wallet confirms, which can precede the indexer writing
+     * the event — so `pending` means "true, just not visible yet", and dropping it
+     * would silently lose exactly the answers the feature exists for.
+     *
+     * A few bounded retries, not a poll: the gap is indexer lag measured in
+     * seconds, and if it outlasts these the next page load tries again from a
+     * clean guard. Nothing is lost either way — the stamp is idempotent.
+     */
+    const attempt = (left: number, waitMs: number) => {
+      void answerCalls({ data: { wallet, marketId } })
+        .then((r) => {
+          // WHO was just answered, parked where the post-order panel can find it.
+          // The panel is a sibling of the deck, not a child, so the cache is the
+          // seam — and it is the same cache the panel already reads its reach from.
+          if (r.closed.length > 0) qc.setQueryData(closedCallsKey(marketId), r.closed);
+          if (r.pending && left > 0) {
+            // Let the guard go, so a genuine retry is not mistaken for a repeat.
+            done.current = null;
+            setTimeout(() => {
+              done.current = key;
+              attempt(left - 1, waitMs * 2);
+            }, waitMs);
+          }
+        })
+        .catch(() => undefined);
+    };
+    attempt(3, 4000);
   }, [confirmed, wallet, marketId, qc]);
 }
