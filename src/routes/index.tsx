@@ -1104,6 +1104,23 @@ function Feed() {
 
   const currentRow: MarketRow | null = shownRow.current;
   const shownId = currentRow ? Number(currentRow.onchain_id) : null;
+  // Record, for the NEXT render, whether the market scene was actually on
+  // screen: the centre can be a person, the dashboard, Terms, the create form
+  // — and on a phone the whole column can be the tape or Mine. Read during
+  // render above (see the third exemption), written after commit here, so it
+  // always describes the frame the reader last saw rather than this one.
+  const sceneShowing =
+    (isDesktop || tab === "belief") &&
+    currentRow != null &&
+    !selectedPerson &&
+    !dnaOpen &&
+    !createOpen &&
+    !termsOpen &&
+    !dashOpen;
+  useEffect(() => {
+    sceneWasVisible.current = sceneShowing;
+  });
+
   // A market opened from outside the loaded feed slice (search, a link, a market
   // just created) has no row in `rowsById`, so the playlist would label it
   // "Market #76". Its row IS on screen in the centre — register it here so
