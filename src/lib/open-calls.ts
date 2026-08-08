@@ -77,6 +77,22 @@ export interface OpenCalls {
   lock: ReturnType<typeof challengeLock>;
   /** The queue minus anything this reader has waved off. */
   open: Challenge[];
+  /**
+   * THE READ FAILED — which is NOT the same as nobody waiting.
+   *
+   * `buildChallenges` opens with an unguarded `serviceClient()`, and
+   * `createClient` throws SYNCHRONOUSLY on a missing key. So a deployment
+   * without SUPABASE_SERVICE_ROLE_KEY makes `getChallenges` throw on every
+   * call — and without this flag the rail read `data` as undefined, computed an
+   * empty queue, and rendered "Nobody is waiting on you right now."
+   *
+   * A calm, honest-sounding sentence, produced by a request that never
+   * completed. That is this codebase's signature failure — a blocked read
+   * destructured as `{ data }` becoming "nothing happened" — and it is the
+   * leading explanation for `market_calls` holding zero rows while supply
+   * exists, because the surface would look completely healthy the whole time.
+   */
+  failed: boolean;
 }
 
 /**
@@ -90,7 +106,7 @@ export function useOpenCalls(wallet?: string): OpenCalls {
   const { data: net } = useQuery({ ...networkQO(wallet), enabled: !!wallet });
   const lock = challengeLock(net?.summary.expressedBeliefs ?? 0, (net?.summary.twinCount ?? 0) > 0);
 
-  const { data: challenges } = useQuery({
+  const { data: challenges, isError } = useQuery({
     queryKey: ["challenges", wallet ?? null],
     queryFn: () => getChallenges({ data: { wallet: wallet ?? null } }),
     enabled: !!wallet && lock.unlocked,
@@ -101,5 +117,6 @@ export function useOpenCalls(wallet?: string): OpenCalls {
   return {
     lock,
     open: (challenges ?? []).filter((c) => !dismissed.has(String(c.marketId))),
+    failed: isError,
   };
 }

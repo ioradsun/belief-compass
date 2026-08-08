@@ -81,7 +81,7 @@ export function ChallengeRail({
   // The open queue, minus anything this reader has waved off. The count follows
   // the list rather than the payload, so the badge always equals what is on
   // screen — three means three people are actually waiting on you.
-  const { lock, open } = useOpenCalls(wallet);
+  const { lock, open, failed } = useOpenCalls(wallet);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -121,7 +121,19 @@ export function ChallengeRail({
         <LockedPanel lock={lock} />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {open.length === 0 ? (
+          {failed ? (
+            /* A FAILED READ IS NOT AN EMPTY GRAPH.
+               `buildChallenges` opens with an unguarded `serviceClient()`, and
+               `createClient` throws SYNCHRONOUSLY without a key — so a
+               deployment missing SUPABASE_SERVICE_ROLE_KEY threw on every call
+               while this panel rendered the calm sentence below, indefinitely.
+               Nobody was told, no row was written, and the surface looked
+               perfectly healthy. Silence has to be earned by an answer. */
+            <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+              Could not load who is waiting on you. This is a fault on our side, not an empty room —
+              try again in a moment.
+            </p>
+          ) : open.length === 0 ? (
             <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
               {/* Honest, and deliberately not "no challenges yet!" — the reason
                   is that nobody has qualified, which is a fact about the graph

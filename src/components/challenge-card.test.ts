@@ -189,3 +189,23 @@ describe("what the card renders is what the payload can prove", () => {
     expect(composeChallenges([ev({ title: "   " })])).toEqual([]);
   });
 });
+
+describe("a failed read is not an empty room", () => {
+  it("distinguishes 'could not load' from 'nobody is waiting'", () => {
+    // `buildChallenges` opens with an unguarded serviceClient(), and createClient
+    // throws SYNCHRONOUSLY without a key — so a deployment missing the service
+    // role key threw on every call while this panel rendered the calm empty
+    // sentence, indefinitely. Nobody was told and no row was written.
+    const c = rail();
+    expect(c).toMatch(/failed \?/);
+    expect(c).toMatch(/Could not load who is waiting on you/);
+    // The empty state must sit BEHIND the failure check, never in front of it.
+    expect(c.indexOf("failed ?")).toBeLessThan(c.indexOf("Nobody is waiting on you"));
+  });
+
+  it("surfaces the error from the shared hook rather than swallowing it", () => {
+    const c = code("src/lib/open-calls.ts");
+    expect(c).toMatch(/isError/);
+    expect(c).toMatch(/failed: isError/);
+  });
+});

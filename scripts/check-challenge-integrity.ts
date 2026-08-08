@@ -294,13 +294,31 @@ async function main() {
       line("   below have nothing to measure. That is a supply problem, and no amount");
       line("   of correctness work on the card changes it.");
     } else if (ledgerEmpty && derivable > 0) {
-      line("   VERDICT: BROKEN. This is the serious one.");
+      line("   VERDICT: SUPPLY EXISTS AND NOTHING WAS WRITTEN.");
       line(
-        `   ${derivable} call${derivable === 1 ? " is" : "s are"} derivable right now and NONE have been written.`,
+        `   ${derivable} call${derivable === 1 ? " is" : "s are"} derivable right now and NONE have been recorded.`,
       );
-      line("   `recordCalls` is fire-and-forget (`void recordCalls(...)`) and swallows");
-      line("   23505, so a failing insert is invisible from the outside. Every sentence");
-      line("   this product wants to say about showing up depends on those rows.");
+      line();
+      line("   THREE CAUSES FIT THIS EQUALLY, and SQL cannot tell them apart — the");
+      line("   ledger looks the same under all three, which is the actual problem:");
+      line();
+      line("     a) NEVER RENDERED. `recordCalls` runs only inside `buildChallenges`,");
+      line("        which runs only when a qualifying viewer loads the panel. With a");
+      line("        population this small that is entirely plausible and is NOT a bug.");
+      line();
+      line("     b) THE READ THREW. `buildChallenges` opens with an unguarded");
+      line("        `serviceClient()`, and `createClient` throws SYNCHRONOUSLY on a");
+      line("        missing key. A deployment without SUPABASE_SERVICE_ROLE_KEY fails");
+      line("        every call — and until the rail learned to say so, it rendered");
+      line('        "Nobody is waiting on you right now" while that happened. Check the');
+      line("        deployed worker's env before reading anything else here.");
+      line();
+      line("     c) THE INSERT FAILED. `recordCalls` is fire-and-forget and swallows");
+      line("        23505, so a rejected insert is invisible. Distinguished only by a");
+      line("        server log for `[challenge] could not record calls`.");
+      line();
+      line("   Do NOT read this as (c). It was written asserting (c) and that was an");
+      line("   over-claim of exactly the kind this script exists to catch.");
     } else if (derivable > 0 && CALLS.length > 0) {
       line("   VERDICT: firing. Sections below are measuring real data.");
     } else {
