@@ -118,6 +118,19 @@ const shortWallet = (w: string) => `${w.slice(0, 6)}…${w.slice(-4)}`;
 /** `${a}|${b}` with both sides lowercased — the pair key used throughout. */
 const pairKey = (a: string, b: string) => `${lc(a)}|${lc(b)}`;
 
+/**
+ * What a ledger-dependent section prints when there is no ledger.
+ *
+ * NOT ZEROS. A section that says "0 unearned answers" over an empty table is
+ * indistinguishable from one that checked and found none, and the first
+ * production run of this script was read exactly that way.
+ */
+const noLedger = () => {
+  line("   NO DATA — `market_calls` is empty, so this section checked nothing.");
+  line("   This is not a pass. See section 0 for whether that is starvation or a");
+  line("   broken write path.");
+};
+
 async function main() {
   const sinceMs = Date.now() - WINDOW_DAYS * 86_400_000;
   const since = new Date(sinceMs).toISOString();
@@ -167,6 +180,25 @@ async function main() {
   const stanceBy = new Map<string, string>();
   for (const b of BELIEFS) stanceBy.set(pairKey(b.wallet, String(b.onchain_id)), lc(b.stance_side));
 
+  /** viewer → qualified counterparties, from the cache the server reads. */
+  const qualified = new Map<string, Set<string>>();
+  {
+    const take = (viewer: string, rows: unknown) => {
+      for (const r of (rows as { wallet?: string | null }[] | null) ?? []) {
+        const w = lc(r?.wallet);
+        if (w && w !== viewer)
+          (qualified.get(viewer) ?? qualified.set(viewer, new Set()).get(viewer)!).add(w);
+      }
+    };
+    for (const d of DNA) {
+      const v = lc(d.viewer_wallet);
+      take(v, d.twin_matches);
+      take(v, d.inverse_matches);
+      take(v, d.opp_matches);
+      take(v, d.tribe_matches);
+    }
+  }
+
   line("CHALLENGE INTEGRITY");
   line("===================");
   line(
@@ -175,10 +207,115 @@ async function main() {
   line();
 
   // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * SECTION 0 EXISTS BECAUSE THIS REPORT ONCE PASSED ITSELF.
+   *
+   * The first production run came back exit 0 with sections 1, 2, 3 and 5
+   * reporting no violations — and was read as a clean bill of health. It was
+   * not. `market_calls` held ZERO rows, so those four sections had nothing to
+   * find, and "no violations" and "no data" printed identically.
+   *
+   * That is the confident zero this script's own header claims to prevent,
+   * committed one layer up: it distinguished BLOCKED from READABLE and then
+   * treated READABLE-AND-EMPTY as a pass. An empty ledger is not a healthy
+   * ledger, it is a feature that has never fired.
+   *
+   * So the first question is now whether the loop is running at all, and the
+   * numbers below separate the two very different reasons it might not be:
+   * STARVED (nothing qualifies, the derivation is honestly empty) versus BROKEN
+   * (Challenges are derivable and the rows are not being written).
+   */
+  const ledgerEmpty = CALLS.length === 0;
+  line("0 · IS THE LOOP FIRING AT ALL?");
+  line("   An empty ledger and a clean ledger print the same zeros. They are not");
+  line("   the same thing, and every section below depends on which one this is.");
+  line();
+  {
+    // The unlock gate is five expressed beliefs. Approximated here from
+    // directional stances, which is what an expressed belief becomes.
+    const beliefsPer = new Map<string, number>();
+    for (const b of BELIEFS) {
+      const s = lc(b.stance_side);
+      if (s !== "yes" && s !== "no") continue;
+      const w = lc(b.wallet);
+      beliefsPer.set(w, (beliefsPer.get(w) ?? 0) + 1);
+    }
+    const unlocked = [...beliefsPer.entries()].filter(([, n]) => n >= 5).map(([w]) => w);
+    const withCallers = unlocked.filter((w) => (qualified.get(w)?.size ?? 0) > 0);
+
+    /** Markets each wallet has already taken a side in — the exclusion. */
+    const answeredBy = new Map<string, Set<string>>();
+    for (const b of BELIEFS) {
+      const s = lc(b.stance_side);
+      if (s !== "yes" && s !== "no") continue;
+      const w = lc(b.wallet);
+      (answeredBy.get(w) ?? answeredBy.set(w, new Set()).get(w)!).add(String(b.onchain_id));
+    }
+    /** Markets each wallet acted in inside the window — the candidate source. */
+    const actedIn = new Map<string, Set<string>>();
+    for (const e of EVENTS) {
+      const mid = Number(e.market_id);
+      if (!Number.isFinite(mid)) continue;
+      const w = lc(e.wallet);
+      (actedIn.get(w) ?? actedIn.set(w, new Set()).get(w)!).add(String(mid));
+    }
+
+    // The full conjunction `buildChallenges` applies, reproduced offline: a
+    // qualified caller acted in the window, in a market this viewer has not
+    // answered. If this is non-zero while the ledger is empty, the derivation
+    // works and the WRITE is what is failing.
+    let derivable = 0;
+    const derivableViewers: string[] = [];
+    for (const v of withCallers) {
+      const mine = answeredBy.get(v) ?? new Set();
+      let open = 0;
+      for (const caller of qualified.get(v) ?? []) {
+        for (const m of actedIn.get(caller) ?? []) if (!mine.has(m)) open += 1;
+      }
+      if (open > 0) {
+        derivable += open;
+        derivableViewers.push(v);
+      }
+    }
+
+    line(`   wallets with any directional belief   ${beliefsPer.size}`);
+    line(`   past the 5-belief unlock              ${unlocked.length}`);
+    line(`   ...and with a qualified caller        ${withCallers.length}`);
+    line(`   ...with a DERIVABLE open Challenge    ${derivableViewers.length}`);
+    line(`   derivable (viewer, market) calls      ${derivable}`);
+    line(`   rows actually in market_calls         ${CALLS.length}`);
+    line();
+
+    if (ledgerEmpty && derivable === 0) {
+      line("   VERDICT: STARVED, not broken.");
+      line("   Nothing qualifies right now — no qualified caller has acted inside the");
+      line("   window in a market their counterpart has not already answered. The write");
+      line("   path is untested rather than proven wrong, and sections 1, 2, 3 and 5");
+      line("   below have nothing to measure. That is a supply problem, and no amount");
+      line("   of correctness work on the card changes it.");
+    } else if (ledgerEmpty && derivable > 0) {
+      line("   VERDICT: BROKEN. This is the serious one.");
+      line(
+        `   ${derivable} call${derivable === 1 ? " is" : "s are"} derivable right now and NONE have been written.`,
+      );
+      line("   `recordCalls` is fire-and-forget (`void recordCalls(...)`) and swallows");
+      line("   23505, so a failing insert is invisible from the outside. Every sentence");
+      line("   this product wants to say about showing up depends on those rows.");
+    } else if (derivable > 0 && CALLS.length > 0) {
+      line("   VERDICT: firing. Sections below are measuring real data.");
+    } else {
+      line("   VERDICT: the ledger holds history but nothing is derivable today.");
+      line("   Sections below describe the past, not the current state.");
+    }
+  }
+  line();
+
+  // ─────────────────────────────────────────────────────────────────────────
   line("1 · ANSWERS NOBODY CAN PROVE");
   line('   "Mike showed up for you" — is there a position behind every one?');
   line();
-  {
+  if (ledgerEmpty) noLedger();
+  else {
     const answered = CALLS.filter((c) => c.responded_at);
     let noPosition = 0;
     let beforeCall = 0;
@@ -228,7 +365,8 @@ async function main() {
   line("2 · CALLS NOBODY WAS SHOWN");
   line('   "Surfacing IS the call" — but the server never learns it was seen.');
   line();
-  {
+  if (ledgerEmpty) noLedger();
+  else {
     const open = CALLS.filter((c) => !c.responded_at);
     const perResponder = new Map<string, number>();
     for (const c of open) {
@@ -265,7 +403,8 @@ async function main() {
   line("3 · CARDS THAT MISSTATE WHAT SOMEBODY BELIEVES");
   line('   "Sarah believes YES" — against the caller\'s CURRENT canonical stance.');
   line();
-  {
+  if (ledgerEmpty) noLedger();
+  else {
     const sells = EVENTS.filter((e) => e.kind === "trade" && lc(e.action) === "sell").length;
     const trades = EVENTS.filter((e) => e.kind === "trade").length;
     line(`   ${trades} trade events in window · ${sells} are SELL (${fmtPct(pct(sells, trades))})`);
@@ -333,22 +472,6 @@ async function main() {
   line('   "Now your people can show up for you. 8 Tribe · 2 Rivals"');
   line();
   {
-    /** viewer → qualified counterparties, from the same cache the server reads. */
-    const qualified = new Map<string, Set<string>>();
-    const take = (viewer: string, rows: unknown) => {
-      for (const r of (rows as { wallet?: string | null }[] | null) ?? []) {
-        const w = lc(r?.wallet);
-        if (w && w !== viewer)
-          (qualified.get(viewer) ?? qualified.set(viewer, new Set()).get(viewer)!).add(w);
-      }
-    };
-    for (const d of DNA) {
-      const v = lc(d.viewer_wallet);
-      take(v, d.twin_matches);
-      take(v, d.inverse_matches);
-      take(v, d.opp_matches);
-      take(v, d.tribe_matches);
-    }
     /** Everyone holding a directional position, per market. */
     const inMarket = new Map<string, Set<string>>();
     for (const b of BELIEFS) {
@@ -399,7 +522,8 @@ async function main() {
   line("   composeChallenges keeps the strongest caller per market. Only that row");
   line("   is persisted, so every other qualifying caller gets no credit.");
   line();
-  {
+  if (ledgerEmpty) noLedger();
+  else {
     // Per (responder, market), how many DISTINCT callers are recorded? Today the
     // answer is almost always 1 by construction. The interesting number is how
     // many COULD have qualified — reconstructed the same way the server does.
@@ -413,22 +537,6 @@ async function main() {
     line(`   with more than one recorded caller  ${multi}`);
     line();
 
-    /** viewer → qualified counterparties (rebuilt; same source as section 4). */
-    const qualified = new Map<string, Set<string>>();
-    const take = (viewer: string, rows: unknown) => {
-      for (const r of (rows as { wallet?: string | null }[] | null) ?? []) {
-        const w = lc(r?.wallet);
-        if (w && w !== viewer)
-          (qualified.get(viewer) ?? qualified.set(viewer, new Set()).get(viewer)!).add(w);
-      }
-    };
-    for (const d of DNA) {
-      const v = lc(d.viewer_wallet);
-      take(v, d.twin_matches);
-      take(v, d.inverse_matches);
-      take(v, d.opp_matches);
-      take(v, d.tribe_matches);
-    }
     /** Who acted in each market inside the window — the candidate pool. */
     const actedIn = new Map<string, Set<string>>();
     for (const e of EVENTS) {
@@ -476,7 +584,8 @@ async function main() {
   line("   The badge counts open Challenge MARKETS. The code comment claims");
   line('   "three means three people are actually waiting on you."');
   line();
-  {
+  if (ledgerEmpty) noLedger();
+  else {
     const open = CALLS.filter((c) => !c.responded_at);
     const byResponder = new Map<string, Call[]>();
     for (const c of open) {
