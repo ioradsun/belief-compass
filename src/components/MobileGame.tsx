@@ -929,9 +929,32 @@ function Screen({ children }: { children: React.ReactNode }) {
 }
 
 function Dock({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  /**
+   * THE ORDER BAR IS NEVER COVERED.
+   *
+   * Opening a side's detail put a full-screen sheet over everything, dock
+   * included — so the one thing a reader wants after reading a side ("back it")
+   * was under a backdrop and every tap died there. The dock publishes its own
+   * height so any sheet can stop exactly above it instead of guessing.
+   */
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const publish = () =>
+      document.documentElement.style.setProperty("--dock-h", `${Math.round(el.offsetHeight)}px`);
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty("--dock-h");
+    };
+  }, []);
   return (
     <div
-      className="sticky bottom-0 z-20 mt-auto shrink-0 pt-2"
+      ref={ref}
+      className="sticky bottom-0 z-[130] mt-auto shrink-0 pt-2"
       style={{
         paddingBottom: "max(env(safe-area-inset-bottom), 8px)",
         background: "var(--bg)",
@@ -941,6 +964,7 @@ function Dock({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
 
 function Rule() {
   return <div className="border-t border-[var(--border)]" aria-hidden />;
