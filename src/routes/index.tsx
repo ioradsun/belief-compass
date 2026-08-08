@@ -303,12 +303,18 @@ export const Route = createFileRoute("/")({
       // that read cost 10s of TTFB and the landing page could not paint at all.
       // A warm isolate still SSRs a real market; a cold one ships the shell now
       // and the client's own query fills the deck a moment later.
-      const feed = await getWarmFeed();
-      return { feed, fetchedAt: Date.now() };
+      //
+      // THE TAPE RIDES ALONG, and on a phone it is the FIRST thing seen: mobile
+      // opens on "Crowd", so the tape is above the fold before the deck is. Same
+      // rule — warm read only, never a build, and in parallel so it can never
+      // add to the shell's budget.
+      const [feed, tape] = await Promise.all([getWarmFeed(), getWarmTape()]);
+      return { feed, tape, fetchedAt: Date.now() };
     } catch {
-      return { feed: null, fetchedAt: Date.now() };
+      return { feed: null, tape: null, fetchedAt: Date.now() };
     }
   },
+
 
   staleTime: 10_000,
   component: Feed,
