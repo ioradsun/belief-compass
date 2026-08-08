@@ -196,7 +196,7 @@ export function MediaStage({
             so the body below it starts at the same y on every market. */}
           <div className="min-h-[17px] shrink-0">
             {media && (
-              <Hint side="right" onClick={() => setPage(1)}>
+              <Hint side="right" onClick={() => turn(1)}>
                 {label} →
               </Hint>
             )}
@@ -211,7 +211,7 @@ export function MediaStage({
             style={{ gap: "var(--deck-gap, 12px)" }}
           >
             <div className="min-h-[17px] shrink-0">
-              <Hint side="left" onClick={() => setPage(0)}>
+              <Hint side="left" onClick={() => turn(0)}>
                 ← Market
               </Hint>
             </div>
