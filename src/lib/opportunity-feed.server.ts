@@ -38,6 +38,7 @@ import {
 } from "@/domain/feed/momentum";
 import { orderForLens, toLens, type Lens, type LensCandidate } from "@/domain/feed/lens";
 import { participantCount } from "@/domain/participants";
+import { peekSwr, swrCache } from "@/lib/server-cache";
 import { shouldInsertSuggestion } from "@/domain/market-suggestion";
 import { listFeed, type VolumeWindow } from "@/lib/markets.functions";
 import {
@@ -586,4 +587,52 @@ export async function buildOpportunityFeed(
     excluded,
     error: feed.error ?? null,
   };
+}
+
+/**
+ * THE SSR SNAPSHOT — the only feed read the HTML shell is allowed to make.
+ *
+ * First principles: the landing page's first byte must not depend on any
+ * database work. `buildOpportunityFeed` is a multi-query assembly; on a cold
+ * serverless isolate awaiting it made TTFB the entire page budget (measured in
+ * production: 10.0s, i.e. the in-flight watchdog firing). So SSR PEEKS. If this
+ * isolate already holds a snapshot the shell paints real markets for free; if
+ * not, the shell ships instantly with `null` and the browser fetches the feed
+ * in the background, exactly like any other panel.
+ *
+ * Nothing is started here on a miss: background work belonging to a request
+ * that has already responded is cancelled by the runtime, and a cancelled build
+ * is what wedged the shared cache before.
+ */
+export const SSR_FEED_KEY = "feed:ssr:anon:24h";
+
+/** Warm read only — never computes, never awaits. */
+export function warmAnonFeed(): OpportunityFeedResult | null {
+  return peekSwr<OpportunityFeedResult>(SSR_FEED_KEY) ?? null;
+}
+
+/** The shape the SSR shell asks for: anonymous, 24h, no filters, no lens. */
+function isAnonDefault(input: OpportunityFeedInput): boolean {
+  return (
+    !input.wallet &&
+    !input.sessionToken &&
+    (input.window ?? "24h") === "24h" &&
+    !input.lens &&
+    !input.mode &&
+    !input.originMarketId &&
+    !(input.networks?.length || input.topics?.length || input.momentum?.length) &&
+    !(input.seenIds?.length || input.queuedIds?.length)
+  );
+}
+
+/**
+ * The client's build, which ALSO fills the SSR slot. That is what makes the
+ * peek above pay off: the first browser fetch on a fresh isolate warms the
+ * snapshot every later SSR request on that isolate serves for free.
+ */
+export async function opportunityFeed(
+  input: OpportunityFeedInput,
+): Promise<OpportunityFeedResult> {
+  if (!isAnonDefault(input)) return buildOpportunityFeed(input);
+  return swrCache(SSR_FEED_KEY, { ttlMs: 15_000 }, () => buildOpportunityFeed(input));
 }
