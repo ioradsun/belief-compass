@@ -624,7 +624,16 @@ function Feed() {
   // deck-window store; the feed, the left rail and every metric read it here, so
   // selecting 1W can never leave a "24H" label or a 24h delta on screen.
   const win = useDeckWindow() as VolumeWindow;
-  const [tab, setTab] = useState<MobileTab>("belief");
+  /**
+   * THE PHONE OPENS ON NOW. A visitor arriving on a phone lands on the Crowd
+   * column — "what's moving, and who's behind it" — because it is the one view
+   * that is true the second it paints and needs no choice from the reader.
+   * Its rows are seeded by the SSR warm tape below, so it has something to say
+   * on arrival rather than a skeleton. Desktop shows all three columns and is
+   * unaffected by this.
+   */
+  const [tab, setTab] = useState<MobileTab>("room");
+
   const [menuOpen, setMenuOpen] = useState(false);
 
   /** How many people are waiting on this reader — badged on the menu's Room
