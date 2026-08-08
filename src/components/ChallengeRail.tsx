@@ -23,9 +23,9 @@
  * of wallets have no Tribe and no wallet has a Rival — so the empty copy says
  * what is actually true rather than implying something is broken.
  */
-import { useState, type ReactNode } from "react";
-import { YourTable, useTable } from "@/components/YourTable";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, type ReactNode } from "react";
+import { YourTable, useTable, railSideKey } from "@/components/YourTable";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
 import { passOnCall } from "@/lib/table.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
@@ -89,7 +89,20 @@ export function ChallengeRail({
 }) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("challenge");
+  /**
+   * Which side is showing. Seeded from the cache so "See yours", pressed in the
+   * panel ABOVE this one, lands here — the two are siblings with no prop path
+   * between them, and the cache is the seam this file already uses for handoffs.
+   */
+  const { data: wanted } = useQuery<Side>({
+    queryKey: railSideKey,
+    enabled: false,
+    initialData: "challenged",
+  });
   const [side, setSide] = useState<Side>("challenged");
+  useEffect(() => {
+    if (wanted) setSide(wanted);
+  }, [wanted]);
   const { ensureSession } = useWalletSession();
 
   /**
@@ -159,7 +172,10 @@ export function ChallengeRail({
               role="tab"
               aria-selected={side === sd}
               type="button"
-              onClick={() => setSide(sd)}
+              onClick={() => {
+                qc.setQueryData(railSideKey, sd);
+                setSide(sd);
+              }}
               className={`font-medium uppercase tracking-wide transition-colors ${
                 side === sd ? "text-[var(--text)]" : "text-[var(--text-muted)]"
               }`}
