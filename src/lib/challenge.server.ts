@@ -307,18 +307,47 @@ export async function markCallsAnswered(wallet: string, marketId: number): Promi
  * has been surfaced to anyone yet, so the ledger is empty and would report zero.
  * This answers the different and correct question — how many qualified people
  * this market is now eligible to reach.
+ *
+ * MARKET-SCOPED. Somebody already holding a directional position in this market
+ * cannot receive a call into it — they have already answered the question. When
+ * a market id is given, those people are removed from the count, so a backing of
+ * an existing market stops overstating the opportunity. A newly created market
+ * has no participants, so the number is unchanged there.
  */
-export async function callReachFor(wallet: string): Promise<CallReach> {
+export async function callReachFor(wallet: string, marketId?: number): Promise<CallReach> {
   const sb = serviceClient();
-  const callers = await qualifiedCallers(sb, wallet.toLowerCase());
+  const me = wallet.toLowerCase();
+  const callers = await qualifiedCallers(sb, me);
+
+  const already = new Set<string>();
+  if (typeof marketId === "number" && Number.isFinite(marketId) && callers.size > 0) {
+    const { data, error } = await sb
+      .from("wallet_beliefs")
+      .select("wallet, stance_side")
+      .eq("onchain_id", marketId)
+      .in("stance_side", ["YES", "NO"])
+      .in("wallet", [...callers.keys()]);
+    if (error) {
+      console.error("[challenge] could not scope reach to market", {
+        code: error.code,
+        message: error.message,
+      });
+    }
+    for (const r of (data ?? []) as { wallet: string }[]) {
+      already.add(String(r.wallet).toLowerCase());
+    }
+  }
+
   let tribe = 0;
   let rivals = 0;
-  for (const { relation } of callers.values()) {
+  for (const [caller, { relation }] of callers.entries()) {
+    if (already.has(caller.toLowerCase())) continue;
     if (relation === "twin" || relation === "tribe") tribe += 1;
     else rivals += 1;
   }
   return { tribe, rivals };
 }
+
 
 /**
  * ONE RELATIONSHIP, BOTH DIRECTIONS.

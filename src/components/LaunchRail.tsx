@@ -52,11 +52,12 @@ export function LaunchRail({
   onDone: () => void;
 }) {
   const { data: reach } = useQuery({
-    queryKey: ["call-reach", wallet ?? null],
-    queryFn: () => getCallReach({ data: { wallet: wallet ?? null } }),
+    queryKey: ["call-reach", wallet ?? null, marketId ?? null],
+    queryFn: () => getCallReach({ data: { wallet: wallet ?? null, marketId: marketId ?? null } }),
     enabled: !!wallet,
     staleTime: 60_000,
   });
+
 
   // Written by useAnswerCalls when the trade settled. No queryFn: this is a
   // handoff, not a fetch — there is nothing to go and ask for, and a request
