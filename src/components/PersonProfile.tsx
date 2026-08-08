@@ -187,47 +187,77 @@ export function PersonProfile({
 
   return (
     <div className="space-y-7">
-      {/* ── I · YOU + THEM ─────────────────────────────────────────────────
-          The relationship before the person: nobody becomes curious about a
-          stranger through statistics, they become curious the moment they
-          recognise a point of contact.
+      {/* ── I · THE TWO OF YOU ─────────────────────────────────────────────
+          The two faces ARE the heading. A label reading "YOU + RASOUL" over
+          two anonymous paragraphs made the reader assemble the pair from text;
+          seeing your own picture next to theirs does it in one glance, and the
+          words underneath can then get on with saying something.
 
-          THE COUNT IS NOT SMALLER THAN THE PERCENTAGE while the record is thin.
-          100% built on one market is arithmetic; "1 of 1 together" is the fact. */}
-      {story && (
-        <section aria-label={`You and ${first}`}>
-          <SectionTitle>You + {first.toUpperCase()}</SectionTitle>
-          {story.matchPct != null && story.evidence ? (
+          Signed out, there is no pair: the header collapses to one person and
+          claims no relationship. */}
+      <header className="space-y-4">
+        <div className="flex items-start gap-4">
+          {data.hasViewer && (
             <>
-              <div className="flex items-baseline gap-2.5">
-                <span
-                  className={`num font-semibold text-[var(--text)] ${
-                    data.sharedBeliefs < 8 ? "text-[20px]" : "text-[28px]"
-                  }`}
-                >
-                  {story.matchPct}%
-                </span>
-                <span
-                  className={`num text-[var(--text-secondary)] ${
-                    data.sharedBeliefs < 8 ? "text-[16px] font-semibold" : "text-[13px]"
-                  }`}
-                >
-                  {story.evidence}
-                </span>
-              </div>
-              <p className="mt-0.5 text-[11px] font-medium tracking-wide text-[var(--text-muted)] uppercase">
-                Conviction Match
-              </p>
+              <Face
+                name={data.viewerName ?? "You"}
+                avatarUrl={data.viewerAvatarUrl}
+                seed={viewer ?? data.wallet}
+                label="You"
+              />
+              <span
+                className="mt-5 h-px w-6 shrink-0 bg-[var(--border)] sm:w-10"
+                aria-hidden="true"
+              />
             </>
-          ) : null}
-          <p className="mt-2 text-[14px] leading-relaxed text-[var(--text)]">{story.primary}</p>
-          {story.supporting && (
-            <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">
-              {story.supporting}
-            </p>
           )}
-        </section>
-      )}
+          <Face
+            name={data.displayName}
+            avatarUrl={data.avatarUrl}
+            seed={data.wallet}
+            label={data.hasViewer ? "Them" : null}
+            heading
+          />
+        </div>
+
+        {/* THE COUNT IS NOT SMALLER THAN THE PERCENTAGE while the record is
+            thin. 100% built on one market is arithmetic; "1 of 1 together" is
+            the fact. */}
+        {story && (
+          <div aria-label={`You and ${first}`}>
+            {story.matchPct != null && story.evidence ? (
+              <>
+                <div className="flex items-baseline gap-2.5">
+                  <span
+                    className={`num font-semibold text-[var(--text)] ${
+                      data.sharedBeliefs < 8 ? "text-[20px]" : "text-[28px]"
+                    }`}
+                  >
+                    {story.matchPct}%
+                  </span>
+                  <span
+                    className={`num text-[var(--text-secondary)] ${
+                      data.sharedBeliefs < 8 ? "text-[16px] font-semibold" : "text-[13px]"
+                    }`}
+                  >
+                    {story.evidence}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-[11px] font-medium tracking-wide text-[var(--text-muted)] uppercase">
+                  Conviction Match
+                </p>
+              </>
+            ) : null}
+            <p className="mt-2 text-[14px] leading-relaxed text-[var(--text)]">{story.primary}</p>
+            {story.supporting && (
+              <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">
+                {story.supporting}
+              </p>
+            )}
+          </div>
+        )}
+      </header>
+
 
       {/* ── THE RECEIPTS ───────────────────────────────────────────────────
           Directly under the claim, because the claim is only as good as this. */}
@@ -283,37 +313,18 @@ export function PersonProfile({
           One thing, or nothing at all. Never a filler row. */}
       {next && <NextCard next={next} name={first} onSelect={onSelectMarket} />}
 
-      {/* ── THEM ───────────────────────────────────────────────────────────
-          Only now does the page become about them as an individual. */}
-      <header className="flex items-start gap-3">
-        {data.avatarUrl ? (
-          <img
-            src={data.avatarUrl}
-            alt=""
-            className="h-12 w-12 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <span
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-semibold text-white"
-            style={{ background: `hsl(${hueFor(data.wallet)} 45% 45%)` }}
-            aria-hidden
-          >
-            {initialsFor(data.displayName)}
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-semibold text-[var(--text)]">{data.displayName}</h1>
-          {home && (
-            <p className="mt-1 text-[13px] leading-relaxed text-[var(--text-secondary)]">{home}</p>
-          )}
-        </div>
-      </header>
-
       {/* ── THEIR CONVICTIONS ──────────────────────────────────────────────
-          One canonical section where four overlapping ones used to be. */}
+          One canonical section where four overlapping ones used to be. The
+          face and name moved to the top of the page, so all that is left of
+          "them as an individual" is the one true line about where their
+          conviction lives. */}
       {(them.rows.length > 0 || every.length > 0) && (
         <section>
           <SectionTitle>Their convictions</SectionTitle>
+          {home && (
+            <p className="mb-2 text-[13px] leading-relaxed text-[var(--text-secondary)]">{home}</p>
+          )}
+
           {them.grouped ? (
             <div className="space-y-4">
               {themes.map((t) => (
@@ -674,6 +685,54 @@ function ConvictionRow({ p, onSelect }: { p: PersonPosition; onSelect: (id: numb
     </button>
   );
 }
+
+/**
+ * ONE PERSON IN THE PAIR — face, name, and who they are to the reader.
+ *
+ * The label is the whole point: two pictures with no labels is a puzzle, and
+ * "You" over your own face is the cheapest possible way to make the page feel
+ * like it is about a relationship rather than about a record.
+ */
+function Face({
+  name,
+  avatarUrl,
+  seed,
+  label,
+  heading = false,
+}: {
+  name: string;
+  avatarUrl: string | null;
+  seed: string;
+  label: string | null;
+  /** The person this page is about gets the document heading; the reader does not. */
+  heading?: boolean;
+}) {
+  const Name = heading ? "h1" : "p";
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-3">
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
+      ) : (
+        <span
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-semibold text-white"
+          style={{ background: `hsl(${hueFor(seed)} 45% 45%)` }}
+          aria-hidden
+        >
+          {initialsFor(name)}
+        </span>
+      )}
+      <div className="min-w-0">
+        {label && (
+          <p className="text-[10px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+            {label}
+          </p>
+        )}
+        <Name className="truncate text-[15px] font-semibold text-[var(--text)]">{name}</Name>
+      </div>
+    </div>
+  );
+}
+
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
