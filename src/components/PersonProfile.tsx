@@ -179,9 +179,6 @@ export function PersonProfile({
   const themes = them.grouped ? convictionMap(data.positions) : [];
   const flat = them.rows.slice(0, DENSITY.preview);
   const every = allConvictions(data.positions);
-  const everyLoaded = allConvictions(
-    all(allOpen, wallet, data.positionsTotal).positions ?? data.positions,
-  );
 
   const history = historyRows(pair?.history ?? [], data.displayName);
   const around = peopleAround(data.around);
