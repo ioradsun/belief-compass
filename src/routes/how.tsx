@@ -53,6 +53,20 @@ const NAV: { id: string; label: string }[] = [
   { id: "ownership", label: "Ownership & safety" },
 ];
 
+/**
+ * Jump to a section by scrolling, not by pushing "#id" onto history. A hash
+ * link would stack a history entry per jump, so "Close" would walk back through
+ * the sections instead of returning the reader to where they came from.
+ */
+function jumpTo(e: React.MouseEvent<HTMLAnchorElement>, id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  e.preventDefault();
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+
+
 function HowItWorks() {
   const [active, setActive] = useState(NAV[0].id);
   const [filter, setFilter] = useState("");
