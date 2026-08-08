@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { lazyRetry } from "@/lib/lazy-retry";
 
@@ -370,6 +370,7 @@ const CLEARED_CENTER: CenterView = {
 
 function Feed() {
   const {
+    tab: tabParam,
     wallet: searchWallet,
     m: selectedMarket,
     p: selectedPerson,
@@ -624,7 +625,11 @@ function Feed() {
    * on arrival rather than a skeleton. Desktop shows all three columns and is
    * unaffected by this.
    */
-  const [tab, setTab] = useState<MobileTab>("room");
+  const [tab, setTab] = useState<MobileTab>(tabParam ?? "room");
+  // Arriving from the menu on a standing page carries the column with it.
+  useEffect(() => {
+    if (tabParam) setTab(tabParam);
+  }, [tabParam]);
 
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -1199,29 +1204,6 @@ function Feed() {
         }
         profile={
           <div className="flex items-center gap-2">
-            {/* Always-on help: the guided "How it works" story, one tap from anywhere. */}
-            <a
-              href="/how"
-              aria-label="How Conviction Company works"
-              title="How Conviction Company works"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--border)] text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
-            >
-              <svg
-                aria-hidden
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-              >
-                <circle cx="12" cy="12" r="9" />
-                <path
-                  d="M9.6 9.2a2.4 2.4 0 1 1 3.3 2.2c-.7.3-1.1.9-1.1 1.6v.4"
-                  strokeLinecap="round"
-                />
-                <circle cx="11.8" cy="16.6" r="0.05" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </a>
             {wallet ? (
               <ProfileMenu
                 wallet={wallet}
