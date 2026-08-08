@@ -13,7 +13,7 @@
  * desktop deck uses (marketBook / evidence / house read), so the
  * two experiences can never disagree.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
@@ -807,15 +807,23 @@ function SideDetailSheet({
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-[120] flex flex-col" role="dialog" aria-modal="true">
+    // Stops at the top of the order dock (`--dock-h`, published by <Dock/>), so
+    // backing a side stays one tap away while you are reading about it.
+    <div
+      className="fixed inset-x-0 top-0 z-[120] flex flex-col"
+      style={{ bottom: "var(--dock-h, 0px)" }}
+      role="dialog"
+      aria-modal="false"
+    >
       <button
         type="button"
         aria-label="Close"
         onClick={onClose}
         className="absolute inset-0 bg-black/60"
       />
+
       <div
-        className="relative mt-auto flex max-h-[88vh] min-h-0 w-full flex-col overflow-hidden rounded-t-[18px] border-t bg-[var(--bg)] pt-3"
+        className="relative mt-auto flex max-h-full min-h-0 w-full flex-col overflow-hidden rounded-t-[18px] border-t bg-[var(--bg)] pt-3"
         style={{ borderColor: color }}
       >
         <div className="mb-2 flex shrink-0 items-center justify-between px-4">
@@ -929,9 +937,32 @@ function Screen({ children }: { children: React.ReactNode }) {
 }
 
 function Dock({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  /**
+   * THE ORDER BAR IS NEVER COVERED.
+   *
+   * Opening a side's detail put a full-screen sheet over everything, dock
+   * included — so the one thing a reader wants after reading a side ("back it")
+   * was under a backdrop and every tap died there. The dock publishes its own
+   * height so any sheet can stop exactly above it instead of guessing.
+   */
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const publish = () =>
+      document.documentElement.style.setProperty("--dock-h", `${Math.round(el.offsetHeight)}px`);
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty("--dock-h");
+    };
+  }, []);
   return (
     <div
-      className="sticky bottom-0 z-20 mt-auto shrink-0 pt-2"
+      ref={ref}
+      className="sticky bottom-0 z-[130] mt-auto shrink-0 pt-2"
       style={{
         paddingBottom: "max(env(safe-area-inset-bottom), 8px)",
         background: "var(--bg)",
@@ -941,6 +972,7 @@ function Dock({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
 
 function Rule() {
   return <div className="border-t border-[var(--border)]" aria-hidden />;
