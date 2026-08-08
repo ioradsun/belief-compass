@@ -47,17 +47,23 @@ export function usePredictivePrefetch(ids: number[], activeIdx: number): void {
       targets.forEach((id, i) => {
         // Deck-core for every neighbor; prefetchQuery no-ops when already fresh.
         void qc.prefetchQuery(marketChangeQO(id));
-        // The full trio only for the likely-next market — keep neighbor warming
-        // cheap (no whole-catalog preload).
-        if (i === 0) {
-          void qc.prefetchQuery(evidenceQO(id));
-          void qc.prefetchQuery({
-            queryKey: ["conviction-market", id],
-            queryFn: () => getConvictionMarket({ data: { onchainId: id } }),
-            staleTime: 5 * 60_000,
-          });
-        }
+        // CREATOR + EVIDENCE FOR EVERY NEIGHBOR, not just the likely-next.
+        // This lookup decides whether the market has an evidence page at all,
+        // so when it lands after paint the stage grows a second page and the
+        // whole market appears to slide sideways on arrival. It is one small,
+        // five-minute-cached row per market: warming it for all three
+        // neighbours means the shape of the next market is known before it is
+        // shown, which is the difference between a switch and a lurch.
+        void qc.prefetchQuery({
+          queryKey: ["conviction-market", id],
+          queryFn: () => getConvictionMarket({ data: { onchainId: id } }),
+          staleTime: 5 * 60_000,
+        });
+        // Evidence (the believer roster behind the faces) is the heavy one —
+        // still only for the market they are most likely to see next.
+        if (i === 0) void qc.prefetchQuery(evidenceQO(id));
       });
+
     };
 
     // requestIdleCallback isn't in every target lib; feature-detect via a cast.
