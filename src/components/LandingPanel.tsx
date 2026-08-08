@@ -45,6 +45,8 @@ export function LandingPanel({
 }) {
   const expanded = state === "expanded";
   const [howOpen, setHowOpen] = useState(false);
+  const [exampleOpen, setExampleOpen] = useState(false);
+
 
   return (
     <header
