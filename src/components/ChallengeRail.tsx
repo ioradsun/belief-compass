@@ -344,7 +344,17 @@ function ChallengeRow({
         {/* WHO — named here rather than only inside the sentence below, so the
             card has a subject before it has a claim. */}
         <div className="flex items-center gap-2">
-          <PersonAvatar wallet={c.caller.wallet} name={c.caller.name ?? undefined} size={22} />
+          {/* NOT ITS OWN TARGET. The whole card is a button, so a clickable face
+              inside it would be a button inside a button — invalid markup that
+              breaks hydration, and a second destination on a card whose entire
+              body is meant to open the market. The face identifies; it does not
+              navigate. */}
+          <PersonAvatar
+            wallet={c.caller.wallet}
+            name={c.caller.name ?? undefined}
+            size={22}
+            interactive={false}
+          />
           <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[var(--text)]">
             {c.caller.name}
           </span>

@@ -31,7 +31,8 @@
     "check:startup": "node scripts/measure-startup.mjs",
     "check:feed-archetypes": "tsx scripts/check-feed-archetypes.ts",
     "check:rail": "node scripts/measure-rail.mjs",
-    "check:lens-coverage": "tsx scripts/check-lens-coverage.ts"
+    "check:lens-coverage": "tsx scripts/check-lens-coverage.ts",
+    "check:scene": "node scripts/check-scene.mjs"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.11",
