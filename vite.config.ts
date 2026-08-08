@@ -118,11 +118,52 @@ export default defineConfig({
       "import.meta.env.VITE_BUILD_ID": JSON.stringify(BUILD_ID),
     },
     optimizeDeps: {
+      // WHY THIS LIST IS EXHAUSTIVE — it is the fix for "the preview stalls,
+      // reverts, and reloads forever".
+      //
+      // Vite pre-bundles deps on demand. Anything NOT listed here is discovered
+      // mid-load, and the moment it is, Vite logs "✨ optimized dependencies
+      // changed. reloading" and pushes a full page reload over the HMR socket.
+      // In the preview iframe that socket frequently cannot connect at all
+      // (cross-origin proxy), so one of two things happens — both look like a
+      // stall:
+      //   • the reload lands → the boot we were two seconds into is thrown away
+      //     and starts over, on every cold start;
+      //   • the reload never lands → the tab keeps requesting the OLD dep URLs,
+      //     gets 504 "Outdated Optimize Dep", dynamic imports reject, and the
+      //     page sits on the skeleton.
+      //
+      // The wallet SDKs are the worst offenders precisely because they are
+      // lazy: they are discovered the first time someone taps Connect, so the
+      // re-optimization is triggered by a user action mid-session. Listing them
+      // pre-bundles them once at server start instead.
+      //
+      // Keep in sync with node_modules/.vite/deps/_metadata.json, and only list
+      // packages that are actually installed — a missing entry causes the very
+      // re-optimization this list exists to prevent.
       include: [
+        "react",
+        "react-dom",
+        "react-dom/client",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+        "@tanstack/react-query",
+        "@tanstack/router-core",
+        "@tanstack/router-core/isServer",
+        "@tanstack/router-core/ssr/client",
+        "@tanstack/react-router > @tanstack/react-store",
+        "seroval",
+        "@supabase/supabase-js",
+        "lucide-react",
+        "zod",
+        "viem",
+        "viem/chains",
+        "wagmi",
+        "wagmi/actions",
+        "wagmi/chains",
+        "@rainbow-me/rainbowkit",
+        "@rainbow-me/rainbowkit/wallets",
         "eventemitter3",
-        // NOTE: only list packages that are actually installed — a missing entry
-        // makes Vite re-run dep optimization and reload the page mid-load.
-
         "@coinbase/wallet-sdk",
         "@walletconnect/time",
         "@walletconnect/environment",
@@ -133,6 +174,7 @@ export default defineConfig({
         "pino",
       ],
     },
+
     plugins: [eventsShimInBrowser, stubWalletConnectorsOnServer, stubWalletConnectorsModule],
   },
 });
