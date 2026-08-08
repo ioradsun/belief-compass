@@ -284,6 +284,11 @@ export interface OpportunityFeedResult {
   /** Why each dropped market was dropped — feed diagnostics, never rendered. */
   excluded: { onchainId: number; reason: string | null }[];
   error: string | null;
+  /**
+   * A SEED, not the feed: the first few cards only, served so a cold server can
+   * paint something real. The client adopts it for paint and still fetches.
+   */
+  partial?: boolean;
 }
 
 export async function buildOpportunityFeed(
