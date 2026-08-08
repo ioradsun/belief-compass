@@ -98,15 +98,35 @@ export function MediaStage({
   // one drag (or one hint tap) to the left.
   const [page, setPage] = useState<0 | 1>(1);
   const [dx, setDx] = useState(0);
+  /**
+   * ANIMATE ONLY WHAT THE READER DID.
+   *
+   * A market's media is not known at first paint — it arrives with the creator
+   * lookup, a beat after the body is already on screen. Until then this stage
+   * has one page and sits at offset 0; the moment the lookup lands it becomes a
+   * two-page stage sitting at −100%, and with a transition on that property the
+   * reader sees the whole market slide sideways on its own. That slide is the
+   * "jumping" between markets: nobody asked for it, and it says nothing.
+   *
+   * So travel is animated for exactly one cause — a drag or a hint tap. Every
+   * other change of page (media arriving, a new market) is a cut.
+   */
+  const [gliding, setGliding] = useState(false);
+  const turn = (p: 0 | 1) => {
+    setGliding(true);
+    setPage(p);
+  };
   // A new market's evidence is a new stage: open on it again. Keyed on the URL
   // so switching markets can't strand you on the previous one's page.
   const mediaKey = media?.url ?? null;
   const lastMedia = useRef<string | null>(mediaKey);
   if (lastMedia.current !== mediaKey) {
     lastMedia.current = mediaKey;
+    if (gliding) setGliding(false);
     if (page !== 1) setPage(1);
     if (dx !== 0) setDx(0);
   }
+
   const drag = useRef<{ x: number; y: number; axis: "" | "x" | "y" } | null>(null);
   const width = useRef(1);
 
