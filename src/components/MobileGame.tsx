@@ -807,13 +807,21 @@ function SideDetailSheet({
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-[120] flex flex-col" role="dialog" aria-modal="true">
+    // Stops at the top of the order dock (`--dock-h`, published by <Dock/>), so
+    // backing a side stays one tap away while you are reading about it.
+    <div
+      className="fixed inset-x-0 top-0 z-[120] flex flex-col"
+      style={{ bottom: "var(--dock-h, 0px)" }}
+      role="dialog"
+      aria-modal="false"
+    >
       <button
         type="button"
         aria-label="Close"
         onClick={onClose}
         className="absolute inset-0 bg-black/60"
       />
+
       <div
         className="relative mt-auto flex max-h-[88vh] min-h-0 w-full flex-col overflow-hidden rounded-t-[18px] border-t bg-[var(--bg)] pt-3"
         style={{ borderColor: color }}
