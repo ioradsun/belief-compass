@@ -14,6 +14,7 @@
  * two experiences can never disagree.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
 import { useSwitchChain } from "wagmi";
