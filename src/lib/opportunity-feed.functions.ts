@@ -51,9 +51,10 @@ export const getOpportunityFeed = createServerFn({ method: "GET" })
   });
 
 /**
- * The SSR read. Warm-only by construction: it returns whatever snapshot this
- * isolate already holds and `null` otherwise, so the HTML shell never waits on
- * a database round trip. The browser fetches the real feed right after.
+ * The SSR read. Never builds: it returns this isolate's warm snapshot, and on a
+ * cold isolate falls back to the stored SEED — the first few finished cards,
+ * one indexed row — so the shell still paints a real market. Either way the
+ * browser fetches the full feed right after.
  */
 export const getWarmFeed = createServerFn({ method: "GET" }).handler(
   async (): Promise<OpportunityFeedResult | null> => {

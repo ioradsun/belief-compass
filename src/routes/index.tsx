@@ -680,12 +680,19 @@ function Feed() {
     ...feedQO(wallet, win, filters, originMarket, sensitivity, lens),
     // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
     // React Query ages it against staleTime instead of refetching on hydration.
+    //
+    // A SEED IS NEVER initialData. `partial` means the server sent the first
+    // few cards so the page could paint on a cold isolate; adopting it as
+    // initial data would date it as fresh and the real feed would never be
+    // fetched, leaving the reader on three cards. As placeholder it paints and
+    // is replaced the moment the full feed lands.
     ...(initialFeed
-      ? wallet
+      ? wallet || initialFeed.partial
         ? { placeholderData: initialFeed }
         : { initialData: initialFeed, initialDataUpdatedAt: loaderData?.fetchedAt ?? Date.now() }
       : {}),
   });
+
 
   // First principle: once a valid contract-backed market snapshot reaches the
   // browser, it is durable for this page lifetime. Query retries, wallet
