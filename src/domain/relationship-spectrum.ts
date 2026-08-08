@@ -43,19 +43,18 @@
  * (`confidenceFor` = shared / (shared + 8)) that is wrong twice over:
  *
  *   - A cut at 0.35 mints a Twin at 90% over EIGHT shared convictions (0.40) and
- *     at 80% over fifteen (0.39). `EARNED_LABELS.twin` demands 90% AND fifteen
- *     shared AND three topics. The band would be handing out, by arithmetic, the
- *     badge the rest of the model calls rare and hard-won — the exact thing
- *     `relationship.ts` says must never happen: "4 agreements out of 4 is 100%
+ *     at 80% over fifteen (0.39) — handing out by arithmetic the badge the rest
+ *     of the model calls rare and hard-won. "4 agreements out of 4 is 100%
  *     ALIGNED on thin EVIDENCE — not a Twin."
  *   - And a genuinely earned Twin always lands at 0.52 or above, so the cut
  *     could never bind against a real one. It is a constant with no reachable
  *     effect in the direction it was written for.
  *
- * So the continuum owns three regions — with you, not yet placed, against you —
- * and TWIN and OPPONENT stay what they already are: earned overlays, carrying
- * the topic-breadth and evidence requirements a single scalar cannot express.
- * The spectrum decides ORDER and COLOUR for everybody; the rare word stays rare.
+ * So the continuum owns three regions — with you, not yet placed, against you.
+ * TWIN and OPPONENT are not bands here and are not defined anywhere else either:
+ * they are withheld until production evidence supports reintroducing them through
+ * the canonical classifier. The spectrum decides ORDER and COLOUR for everybody;
+ * the rare word stays rare by not existing yet.
  *
  * THE COLOUR IS THE PRODUCT'S OWN LANGUAGE, not a new one. `--yes` is blue and
  * `--no` is amber, so a spectrum from deep blue through neutral to deep amber
