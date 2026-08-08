@@ -83,3 +83,52 @@ describe("category is the system's business, not the creator's", () => {
     expect(c).toMatch(/activeCategory && \(/);
   });
 });
+
+/**
+ * THE FORM IS A CONVICTION, NOT A CMS RECORD.
+ *
+ * Everything below is copy that was in the primary flow and is not any more,
+ * asserted absent — because subtraction is only real if it cannot quietly return.
+ */
+describe("the centre stops selling and asks one thing", () => {
+  it("names the act in the title instead of pitching the fee", () => {
+    // "Create a Market. Earn 4.5% on Every Trade." put a revenue pitch in the
+    // most valuable line on the surface, addressed to somebody who had already
+    // decided to create.
+    const c = code("src/components/CreateMarket.tsx");
+    expect(c).toMatch(/>\s*Create a Market\s*</);
+    expect(c).not.toMatch(/4\.5%/);
+  });
+
+  it("moves the earn promise to the moment it becomes true", () => {
+    // Not deleted — relocated. It lands when the market is live, as a fact about
+    // something that exists rather than an inducement to make it.
+    const c = code("src/components/LaunchRail.tsx");
+    expect(c).toMatch(/4\.5%/);
+    // Creators only: a backer taking a side earns no fee and is told nothing.
+    expect(c).toMatch(/kind === "created" &&/);
+  });
+
+  it("drops the badge that congratulated the system", () => {
+    // "✓ AI-checked" gave the reader no decision and spent the gain colour on
+    // housekeeping. The one affordance with an action behind it survives.
+    const c = code("src/components/CreateMarket.tsx");
+    expect(c).not.toMatch(/AI-checked/);
+    expect(c).toMatch(/Polish/);
+  });
+
+  it("leaves only the legal line under the primary action", () => {
+    // Positioning copy directly beneath the commit button is the one place a
+    // reader is deciding rather than being persuaded.
+    const c = code("src/components/CreateMarket.tsx");
+    expect(c).not.toMatch(/pov\.co|Exclusive/);
+    expect(c).toMatch(/Terms/);
+  });
+
+  it("keeps the link secondary, inside the field", () => {
+    // "Add a link" is an affordance on the question, not a step of its own.
+    const c = code("src/components/CreateMarket.tsx");
+    expect(c).toMatch(/<AddMedia/);
+    expect(c).not.toMatch(/StepLabel>\s*(Add a link|Link|Evidence)/);
+  });
+});

@@ -263,11 +263,15 @@ export function CreateMarket({
 
   return (
     <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[600px] flex-col">
-      {/* 1 · Compact header — pinned. Title carries the earn promise; the
-          provenance tag sits inline, top-right. */}
+      {/* 1 · THE TITLE NAMES THE ACT, AND STOPS SELLING.
+          It read "Create a Market. Earn 4.5% on Every Trade." — a revenue pitch
+          in the most valuable line on the surface, addressed to somebody who has
+          already decided to create. The earn promise is not deleted; it MOVED to
+          `LaunchRail`, where it lands the moment the market is live and reads as
+          a reward for something done rather than an inducement to do it. */}
       <div className="flex shrink-0 items-start gap-2">
         <h2 className="flex-1 text-[15px] font-semibold leading-snug text-[var(--text)]">
-          Create a Market. Earn 4.5% on Every Trade.
+          Create a Market
         </h2>
       </div>
 
@@ -329,20 +333,22 @@ export function CreateMarket({
           )}
 
           {/* AI check / polish — subtle, advisory. */}
+          {/* "✓ AI-checked" is gone. It was a badge congratulating the system for
+              having run, on a surface where the reader has no decision to make
+              about it — and it sat in the green earn/gain colour, spending the
+              loudest tone in the palette on housekeeping. What survives is the
+              only part with an action behind it: one tap to a better sentence,
+              and the plain reason when the question will not work. */}
           {review && (
             <div className="mt-1 flex items-center gap-1.5 text-[11.5px]">
-              {review.review.ok && <span className="text-[var(--gain)]">✓ AI-checked</span>}
               {review.review.suggestion && (
-                <>
-                  {review.review.ok && <span className="text-[var(--text-muted)]">·</span>}
-                  <button
-                    type="button"
-                    onClick={() => setQuestion(review.review.suggestion!)}
-                    className="text-[var(--text)] underline"
-                  >
-                    Polish
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={() => setQuestion(review.review.suggestion!)}
+                  className="text-[var(--text)] underline"
+                >
+                  Polish
+                </button>
               )}
               {!review.review.ok && !review.review.suggestion && review.review.reason && (
                 <span className="text-[var(--text-muted)]">{review.review.reason}</span>
@@ -473,9 +479,11 @@ export function CreateMarket({
           {ctaLabel}
         </PrimaryAction>
 
-        {/* 6 · Disclosure — one compact line. */}
+        {/* 6 · Disclosure — the legal line, and only the legal line.
+            "Conviction Company Exclusive. Not available on pov.co yet." was
+            positioning copy standing directly under the primary action, which is
+            the one place a reader is committing rather than being persuaded. */}
         <p className="text-center text-[11px] text-[var(--text-muted)]">
-          Conviction Company Exclusive. Not available on pov.co yet.{" "}
           <button
             type="button"
             onClick={() => (onOpenTerms ? onOpenTerms() : window.open("/terms", "_blank"))}
