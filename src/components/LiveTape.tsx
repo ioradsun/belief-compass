@@ -135,6 +135,8 @@ export function LiveTape({
 }) {
   const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
   const qc = useQueryClient();
+  // A tap on a row opens that market — warm it the moment the finger lands.
+  const warm = useWarmMarket();
   const key = ["live-tape", wallet ?? null, scopeKey, side ?? null, limit ?? null];
   const { data, isLoading } = useQuery({
     queryKey: key,
