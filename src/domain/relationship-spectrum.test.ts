@@ -8,8 +8,9 @@ import {
   compareSpectrum,
   spectrumColor,
   SPECTRUM,
+  type SpectrumBand,
 } from "./relationship-spectrum";
-import { confidenceFor, EARNED_LABELS } from "./dna/config";
+import { confidenceFor } from "./dna/config";
 import { presentRelationship } from "./relationship";
 
 /**
@@ -18,11 +19,10 @@ import { presentRelationship } from "./relationship";
  * passing a chosen one is the point — these tests would otherwise assert what
  * the spectrum does with an input nobody sends it.
  */
-const person = (alignmentPct: number, shared: number, earned: "twin" | "opp" | null = null) =>
+const person = (alignmentPct: number, shared: number) =>
   place({
     alignmentPct,
     confidence: confidenceFor(shared),
-    earned,
     group: groupOf(alignmentPct, shared),
   });
 
@@ -63,8 +63,8 @@ describe("the one number is MATCH, never flipped", () => {
    * that is a lie, so an opposed person's card still shows how often you AGREE.
    */
   it("shows how often you agree, even for the most opposed person", () => {
-    expect(person(8, 30, "opp").matchPct).toBe(8);
-    expect(person(8, 30, "opp").matchPct).not.toBe(92);
+    expect(person(8, 30).matchPct).toBe(8);
+    expect(person(8, 30).matchPct).not.toBe(92);
   });
 
   it("rounds rather than inventing precision, and never leaves 0–100", () => {
@@ -102,42 +102,50 @@ describe("confidence shrinks you toward the middle", () => {
   });
 });
 
-describe("the rare words stay earned", () => {
-  /**
-   * A cutoff on position alone hands out "Twin" at 90%-over-8-shared and at
-   * 80%-over-15, while EARNED_LABELS.twin demands 90% AND 15 shared AND three
-   * topics. This is the regression guard for that: strong-but-unearned reads
-   * "Tribe", and no arithmetic can promote it.
-   */
-  it("does not mint a Twin from alignment and evidence alone", () => {
+/**
+ * TWIN AND OPPONENT ARE HELD BACK, and this is the guard that keeps them out.
+ *
+ * They were defined TWICE — `DNA_THRESHOLDS.twin` (93% over 20) and
+ * `EARNED_LABELS.twin` (90% over 15 plus three topics) — and because the earned
+ * layer re-tested the GROUP rather than the engine's label, the looser one won.
+ * A pair the engine called `tribe` could display "Twin".
+ *
+ * Measured against production, the whole taxonomy was worth ONE Twin and ZERO
+ * Opps. So there is now one classification path and two visible words, and no
+ * amount of alignment or evidence can produce a third.
+ */
+describe("no arithmetic can mint a word the model is not ready to say", () => {
+  it("keeps the strongest possible alignment inside Tribe", () => {
     expect(person(90, 8).band).toBe("tribe");
     expect(person(80, 15).band).toBe("tribe");
     expect(person(100, 60).band).toBe("tribe");
   });
 
-  it("does not mint an Opponent from alignment and evidence alone", () => {
+  it("keeps the strongest possible opposition inside Rival", () => {
     expect(person(10, 8).band).toBe("rival");
     expect(person(0, 60).band).toBe("rival");
   });
 
-  it("uses the earned badge the model already computes", () => {
-    expect(person(EARNED_LABELS.twin.minStrength, EARNED_LABELS.twin.minShared, "twin").band).toBe(
-      "twin",
-    );
+  it("has exactly three bands and two words", () => {
+    // Structural: a fourth band cannot be reached, because there is no fourth
+    // band to reach. The next person to add Twin has to add it to the engine.
+    const bands = new Set<string>();
+    for (let a = 0; a <= 100; a += 2)
+      for (const sh of [1, 5, 8, 15, 20, 40, 100]) bands.add(person(a, sh).band);
+    expect([...bands].sort()).toEqual(["neutral", "rival", "tribe"]);
     expect(
-      person(100 - EARNED_LABELS.opp.minStrength, EARNED_LABELS.opp.minShared, "opp").band,
-    ).toBe("opponent");
+      [...bands]
+        .map((b) => bandLabel(b as SpectrumBand))
+        .filter(Boolean)
+        .sort(),
+    ).toEqual(["Rival", "Tribe"]);
   });
 
-  /**
-   * The badge names a direction as well as a strength. An "opp" badge attached
-   * to an aligned position must not print "Opponent" over a positive match.
-   */
-  it("never lets a badge contradict the side the engine put them on", () => {
-    expect(bandFor("tribe", "opp")).toBe("tribe");
-    expect(bandFor("rival", "twin")).toBe("rival");
-    expect(bandFor("neutral", "twin")).toBe("neutral");
-    expect(bandFor("insufficient", "twin")).toBe("neutral");
+  it("takes its direction from the engine and nowhere else", () => {
+    expect(bandFor("tribe")).toBe("tribe");
+    expect(bandFor("rival")).toBe("rival");
+    expect(bandFor("neutral")).toBe("neutral");
+    expect(bandFor("insufficient")).toBe("neutral");
   });
 });
 
@@ -147,10 +155,8 @@ describe("a person we cannot place gets no word", () => {
   });
 
   it("names every band it can name", () => {
-    expect(bandLabel("twin")).toBe("Twin");
     expect(bandLabel("tribe")).toBe("Tribe");
     expect(bandLabel("rival")).toBe("Rival");
-    expect(bandLabel("opponent")).toBe("Opponent");
   });
 });
 

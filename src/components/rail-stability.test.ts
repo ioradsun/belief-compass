@@ -105,6 +105,40 @@ describe("nothing in the right rail changes height instantly", () => {
   });
 });
 
+/**
+ * THE MOST COMMON CARD IS THE ONE WITH NO LABEL.
+ *
+ * Conviction Match places a relationship on the same number it shows, and the
+ * evidence bar is eight shared convictions — so measured against production,
+ * 3,123 of 3,137 pairs have no label at all. That state is not an edge case to
+ * degrade into; it is the default, and it has to read as deliberate.
+ *
+ * The regression this guards is precise: the card used to fall back to the
+ * literal word "NEUTRAL", which `bandLabel` returns null specifically to avoid.
+ * It was survivable when almost everyone was placed. It would now put a grey
+ * badge saying nothing on almost every row.
+ */
+describe("a person with no label still has a card worth reading", () => {
+  const c = code("src/components/NetworkPanel.tsx");
+
+  it("never substitutes a word for the absence of one", () => {
+    expect(c).not.toMatch(/bandLabel\([^)]*\)\s*\?\?/);
+    expect(c).not.toMatch(/"Neutral"|'Neutral'|>Neutral</);
+  });
+
+  it("renders the label slot conditionally rather than always", () => {
+    // `{word && (...)}` — the badge is absent, not empty, so no stray padding.
+    expect(c).toMatch(/\{word && \(/);
+  });
+
+  it("still shows the match and the count it comes from", () => {
+    // What is left when the label goes: the number, its own name, and the
+    // arithmetic that proves it. That is a useful card on its own.
+    expect(c).toMatch(/Conviction Match/);
+    expect(c).toMatch(/together\}? of \{?rel\.sharedConvictions|of \{rel\.sharedConvictions\}/);
+  });
+});
+
 describe("the collapse primitive", () => {
   const c = code("src/components/Collapsible.tsx");
 

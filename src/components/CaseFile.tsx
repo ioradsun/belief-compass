@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { setDeckLens, useDeckLens } from "@/lib/deck-lens";
+import { convictionMatch } from "@/domain/relationship";
 import { useQuery } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
 import { type Believer } from "@/lib/evidence.functions";
@@ -397,7 +398,6 @@ export function CaseColumn({
           Fixed slot, no inner scroll — "See all" opens the full-height sheet. */}
         <CaseActivity marketId={marketId} side={side} viewerWallet={viewerWallet} />
       </div>
-
     </div>
   );
 }
@@ -547,7 +547,7 @@ function heldLabel(daysHeld: number): string {
 /** How many believers the panel previews before "See all N". */
 const PREVIEW = 3;
 
-/** The people, as one ranked roster — name, amount, and shared DNA when there is any. */
+/** The people, as one ranked roster — name, amount, and Conviction Match when there is any. */
 export function CaseRoster({
   side,
   believers,
@@ -557,7 +557,14 @@ export function CaseRoster({
 }: {
   side: Side;
   believers: Believer[];
-  people?: { wallet: string; relationship: string; agreement?: number; sharedBeliefs?: number }[];
+  people?: {
+    wallet: string;
+    relationship: string;
+    agreement?: number;
+    sharedBeliefs?: number;
+    /** Same-side count — what makes the percentage checkable rather than opaque. */
+    together?: number;
+  }[];
   /** Live price per share on this side — used to value positions the indexer hasn't priced. */
   priceUsd?: number | null;
   /** "compact" = Instagram-likers face pile (mobile); "list" = full roster. */
@@ -579,8 +586,8 @@ export function CaseRoster({
         const p = byWallet.get(b.wallet.toLowerCase());
         // Only a real overlap earns a DNA line — no "unmapped", no filler.
         const dna =
-          p && (p.sharedBeliefs ?? 0) > 0 && Number.isFinite(p.agreement)
-            ? `${Math.round(p.agreement as number)}% shared DNA`
+          p && convictionMatch(p.together ?? 0, p.sharedBeliefs ?? 0) != null
+            ? `${convictionMatch(p.together ?? 0, p.sharedBeliefs ?? 0)}% Conviction Match`
             : null;
         // The indexed value can be missing (no valuation pass yet) — fall back
         // to shares × the side's live price so an amount always shows.
@@ -623,7 +630,6 @@ export function CaseRoster({
   // full-height sheet rather than a cramped inner scroller.
   const allRows = renderRows(roster);
 
-
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
@@ -655,11 +661,7 @@ export function CaseRoster({
           <>
             <FacePile roster={roster} onOpenAll={() => setOpenAll(true)} />
             {openAll && (
-              <RosterSheet
-                side={side}
-                count={roster.length}
-                onClose={() => setOpenAll(false)}
-              >
+              <RosterSheet side={side} count={roster.length} onClose={() => setOpenAll(false)}>
                 {allRows}
               </RosterSheet>
             )}
@@ -695,17 +697,12 @@ export function CaseRoster({
           </div>
 
           {openAll && (
-            <RosterSheet
-              side={side}
-              count={roster.length}
-              onClose={() => setOpenAll(false)}
-            >
+            <RosterSheet side={side} count={roster.length} onClose={() => setOpenAll(false)}>
               {allRows}
             </RosterSheet>
           )}
         </>
       )}
-
     </div>
   );
 }
@@ -834,7 +831,6 @@ function CaseActivity({
 }) {
   const [openAll, setOpenAll] = useState(false);
 
-
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
@@ -864,10 +860,7 @@ function CaseActivity({
         </button>
       </div>
       {openAll && (
-        <SideSheet
-          title={`${side} activity`}
-          onClose={() => setOpenAll(false)}
-        >
+        <SideSheet title={`${side} activity`} onClose={() => setOpenAll(false)}>
           <LiveTape
             marketIds={[marketId]}
             side={side}

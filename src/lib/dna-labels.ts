@@ -43,7 +43,7 @@ export const EVIDENCE_TEXT: Record<EvidenceLevel, string> = {
   established: "Established",
 };
 
-/** e.g. "Maya, Twin relationship, 94 percent agreement across 41 shared beliefs". */
+/** e.g. "Maya, Tribe relationship, 94 percent Conviction Match across 41 shared convictions". */
 export function relationshipAria(
   name: string,
   label: RelationshipLabel,
@@ -51,7 +51,7 @@ export function relationshipAria(
   shared: number,
 ): string {
   const rel = RELATIONSHIP_TEXT[label];
-  return `${name}, ${rel} relationship, ${agreement} percent agreement across ${shared} shared beliefs`;
+  return `${name}, ${rel} relationship, ${agreement} percent Conviction Match across ${shared} shared convictions`;
 }
 
 export function ago(iso: string): string {

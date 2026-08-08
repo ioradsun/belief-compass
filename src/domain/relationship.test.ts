@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  convictionMatch,
   presentRelationship,
   relationshipInsight,
   relationshipLabel,
@@ -90,44 +91,96 @@ describe("mature relationships show the % WITH its evidence", () => {
   });
 });
 
-describe("earned Twin and Opp", () => {
-  it("earns Twin only with high alignment + evidence + topic breadth", () => {
-    const twin = presentRelationship(
-      make({ agreement: 93, sharedConvictions: 28, together: 26, apart: 2, topicCount: 5 }),
-    );
-    expect(twin.earnedLabel).toBe("twin");
-    expect(relationshipLabel(twin)).toEqual({ text: "Twin", kind: "earned", tone: "aligned" });
-
-    // Same alignment, too few topics → not yet a Twin.
-    const narrow = presentRelationship(
-      make({ agreement: 93, sharedConvictions: 28, together: 26, apart: 2, topicCount: 2 }),
-    );
-    expect(narrow.earnedLabel).toBeNull();
-
-    // High alignment, thin evidence → not a Twin.
-    const thin = presentRelationship(
-      make({ agreement: 100, sharedConvictions: 4, together: 4, apart: 0, topicCount: 4 }),
-    );
-    expect(thin.earnedLabel).toBeNull();
+/**
+ * CONVICTION MATCH — the number, and the promise that it is checkable.
+ *
+ * WHAT THIS REPLACED. These tests used to assert that Twin and Opp were EARNED
+ * through `EARNED_LABELS` — a second set of thresholds layered over the engine's
+ * own. Because that layer re-tested the GROUP rather than the engine's label, a
+ * pair the engine called `tribe` could display "Twin", and the system had two
+ * definitions of one word with the looser one winning.
+ *
+ * Both words are now held back until production can support them (measured: one
+ * pair would earn Twin, zero would earn Opp), and the layer is deleted rather
+ * than patched. What is asserted instead is the property that made the whole
+ * change necessary: the percentage a reader sees IS the count beneath it.
+ */
+describe("the percentage is the arithmetic", () => {
+  it("is exactly together ÷ shared", () => {
+    for (const [t, sh, want] of [
+      [7, 8, 88],
+      [9, 11, 82],
+      [23, 25, 92],
+      [5, 18, 28],
+      [1, 1, 100],
+      [0, 10, 0],
+    ] as const) {
+      expect(convictionMatch(t, sh, sh - t)).toBe(want);
+    }
   });
 
-  it("earns Opp only with high opposition + evidence + topic breadth", () => {
-    const opp = presentRelationship(
-      make({ agreement: 12, sharedConvictions: 24, together: 3, apart: 21, topicCount: 4 }),
+  it("places the relationship on the SAME number it displays", () => {
+    // The defect that forced this change: a pair who landed together in 7 of 8
+    // shared markets was classified Rival, because the one market they split on
+    // carried nearly all the conviction weight. Label and count could contradict.
+    const p = presentRelationship(
+      make({ agreement: 15, sharedConvictions: 8, together: 7, apart: 1, topicCount: 3 }),
     );
-    expect(opp.earnedLabel).toBe("opp");
-    expect(relationshipLabel(opp)?.tone).toBe("opposed");
+    expect(p.matchPct).toBe(88);
+    expect(p.alignmentPct).toBe(88);
+    expect(p.group).not.toBe("rival");
   });
 
-  it("labels EVERY qualifying relationship — never forces exactly one Twin", () => {
-    const a = presentRelationship(
-      make({ agreement: 95, sharedConvictions: 30, together: 29, apart: 1, topicCount: 4 }),
+  it("cannot label someone a Rival while showing a majority together", () => {
+    // The invariant, swept: no card may read Rival above 50% or Tribe below it.
+    for (let shared = 8; shared <= 30; shared++) {
+      for (let together = 0; together <= shared; together++) {
+        const p = presentRelationship(
+          make({
+            agreement: 50,
+            sharedConvictions: shared,
+            together,
+            apart: shared - together,
+            topicCount: 3,
+          }),
+        );
+        const m = p.matchPct as number;
+        if (p.group === "rival") expect(m, `${together} of ${shared}`).toBeLessThan(50);
+        if (p.group === "tribe") expect(m, `${together} of ${shared}`).toBeGreaterThan(50);
+      }
+    }
+  });
+
+  it("says nothing rather than 0% when there is nothing to divide", () => {
+    const none = presentRelationship(
+      make({ agreement: 0, sharedConvictions: 0, together: 0, apart: 0, topicCount: 0 }),
     );
-    const b = presentRelationship(
-      make({ agreement: 91, sharedConvictions: 22, together: 20, apart: 2, topicCount: 3 }),
-    );
-    expect(a.earnedLabel).toBe("twin");
-    expect(b.earnedLabel).toBe("twin");
+    expect(none.matchPct).toBeNull();
+  });
+
+  it("refuses a match whose counts do not reconcile", () => {
+    // together + apart must equal shared — `scoreRelationship` guarantees it. When
+    // they disagree the counts did not come from one score, and a caller that
+    // populated `shared` but forgot `together` must not get a confident 0%.
+    expect(convictionMatch(0, 20, 0)).toBeNull();
+    expect(convictionMatch(0, 20, 20)).toBe(0);
+  });
+
+  it("holds Twin and Opp back entirely", () => {
+    // No input can produce either word — not perfect alignment over a long
+    // history, not perfect opposition. They return from the engine, once.
+    for (const [t, sh] of [
+      [60, 60],
+      [0, 60],
+      [28, 30],
+    ] as const) {
+      const p = presentRelationship(
+        make({ agreement: 50, sharedConvictions: sh, together: t, apart: sh - t, topicCount: 8 }),
+      );
+      expect(p.earnedLabel).toBeNull();
+      expect(relationshipLabel(p)?.text).not.toBe("Twin");
+      expect(relationshipLabel(p)?.text).not.toBe("Opp");
+    }
   });
 });
 
@@ -234,8 +287,7 @@ describe("one authority decides placement", () => {
     }
   }
 
-  const side = (b: SpectrumBand) =>
-    b === "twin" || b === "tribe" ? "aligned" : b === "opponent" || b === "rival" ? "opposed" : "—";
+  const side = (b: SpectrumBand) => (b === "tribe" ? "aligned" : b === "rival" ? "opposed" : "—");
   const groupSide = (g: RelationshipGroup) =>
     g === "tribe" ? "aligned" : g === "rival" ? "opposed" : "—";
 
@@ -284,12 +336,16 @@ describe("one authority decides placement", () => {
     expect(place({ ...p, group: p.group, earned: p.earnedLabel }).band).toBe("neutral");
   });
 
-  it("still lets a genuinely earned badge through", () => {
+  it("sends the strongest relationship there is to Tribe, not past it", () => {
+    // 29 of 30 together is as aligned as production gets, and it stops at Tribe.
+    // The second authority that would have promoted it to Twin is deleted, not
+    // bypassed — there is nowhere further to go until the engine says so.
     const p = presentRelationship(
       make({ agreement: 95, sharedConvictions: 30, together: 29, apart: 1, topicCount: 4 }),
     );
     expect(p.group).toBe("tribe");
-    expect(p.earnedLabel).toBe("twin");
-    expect(place({ ...p, group: p.group, earned: p.earnedLabel }).band).toBe("twin");
+    expect(p.matchPct).toBe(97);
+    expect(p.earnedLabel).toBeNull();
+    expect(place({ ...p, group: p.group }).band).toBe("tribe");
   });
 });

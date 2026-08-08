@@ -31,7 +31,7 @@ import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
 import { relationFromGroup } from "@/domain/participant-social";
-import { presentRelationship } from "@/domain/relationship";
+import { convictionMatch, presentRelationship } from "@/domain/relationship";
 import { SharedConviction } from "@/components/SharedConviction";
 import { marketAgeCopy } from "@/domain/market-freshness";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
@@ -119,7 +119,7 @@ export function MarketDeck({
   const rr = row as Record<string, unknown>;
   const marketId = Number(row.onchain_id);
   const title = marketTitle(row.markets?.title, marketId);
-  
+
   // POV hosts the same market; the slug comes from their API via the poller.
   const povSlug = row.markets?.pov_slug ?? null;
   const povUrl = povSlug ? `https://pov.co/markets/${povSlug}` : "https://pov.co/";
@@ -198,8 +198,6 @@ export function MarketDeck({
   });
   // Evidence, when the creator attached any. Null keeps the layout untouched.
   const stageMedia = useMemo(() => stageMediaFrom(cm), [cm]);
-
-
 
   const connected = useEffectiveWallet();
   const viewer = viewerWallet ?? connected;
@@ -503,7 +501,6 @@ export function MarketDeck({
         </div>
       </div>
 
-
       {mobileCaseOpen ? (
         <MobileCaseView
           title={title}
@@ -523,7 +520,10 @@ export function MarketDeck({
           rebuilt the entire market body — visible as the panel blinking on
           exactly those transitions, and a wasted round of mounts. MediaStage
           now takes `null` and renders a plain single-page scroller. */
-        <MediaStage media={stageMedia} className="deck-stage flex min-h-0 flex-1 touch-pan-y flex-col">
+        <MediaStage
+          media={stageMedia}
+          className="deck-stage flex min-h-0 flex-1 touch-pan-y flex-col"
+        >
           {marketInner}
         </MediaStage>
       )}
@@ -536,8 +536,6 @@ export function MarketDeck({
         className="shrink-0 pb-[env(safe-area-inset-bottom)]"
         style={{ display: "grid", gap: "var(--deck-gap, 12px)" }}
         {...walletIntent}
-
-
       >
         {/* The controls. The analysis rail now lives inside the Total Market
           instrument above, so the dock is only the order surface. */}
@@ -637,14 +635,13 @@ function MarketByline({
 
   const clickable = !!onSelectPerson;
 
-
   const match =
     viewerWallet && viewerWallet.toLowerCase() !== c.wallet.toLowerCase()
       ? (net?.people ?? []).find((p) => p.wallet.toLowerCase() === c.wallet.toLowerCase())
       : undefined;
   const dna =
     match && match.relationship !== "insufficient"
-      ? `${RELATIONSHIP_TEXT[match.relationship]} · ${match.agreement}% agreement across ${match.sharedBeliefs} shared beliefs`
+      ? `${RELATIONSHIP_TEXT[match.relationship]} · ${convictionMatch(match.together, match.sharedBeliefs, match.apart) ?? "—"}% Conviction Match across ${match.sharedBeliefs} shared convictions`
       : null;
   const tone = match ? relationshipTone(match.relationship) : null;
 
@@ -653,7 +650,7 @@ function MarketByline({
       type="button"
       disabled={!clickable}
       onClick={() => onSelectPerson?.(c.wallet)}
-      title={dna ? `Your Conviction DNA with ${c.name}: ${dna}` : undefined}
+      title={dna ? `Your Conviction Match with ${c.name}: ${dna}` : undefined}
       className="group relative mt-2 flex items-center gap-2 text-left disabled:cursor-default"
     >
       {c.avatarUrl ? (

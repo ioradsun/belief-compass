@@ -389,7 +389,7 @@ describe("answering is taking a side, not taking YOUR side", () => {
   });
 });
 
-describe("showing up and Shared DNA never touch", () => {
+describe("showing up and Conviction Match never touch", () => {
   it("takes no DNA input at all, so no composite is expressible", () => {
     // The structural guarantee: `92% DNA / one-way` and `28% DNA / counts on you`
     // are the two most interesting relationships on the platform, and a blended
