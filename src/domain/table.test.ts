@@ -1,0 +1,198 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  TABLE_SLOTS,
+  TABLE_BANNED,
+  TERMINAL_STATES,
+  recipientState,
+  tableProgress,
+  shouldAutoClose,
+  spotsOpen,
+  canPutOnTable,
+  tableLine,
+  progressLine,
+  type RecipientFact,
+} from "./table";
+
+const open = (): RecipientFact => ({ respondedAtMs: null, passedAtMs: null });
+const showed = (): RecipientFact => ({ respondedAtMs: 1, passedAtMs: null });
+const passed = (): RecipientFact => ({ respondedAtMs: null, passedAtMs: 1 });
+const many = (n: number, f: () => RecipientFact) => Array.from({ length: n }, f);
+
+/**
+ * THE HARD INVARIANTS. Each of these is a sentence the product says out loud, and
+ * a thing that would quietly stop being true if somebody changed the wrong line.
+ */
+describe("three on the table", () => {
+  it("caps at three, from one canonical place", () => {
+    expect(TABLE_SLOTS).toBe(3);
+    expect(spotsOpen(0)).toBe(3);
+    expect(spotsOpen(2)).toBe(1);
+    expect(spotsOpen(3)).toBe(0);
+    expect(canPutOnTable(2)).toBe(true);
+    expect(canPutOnTable(3)).toBe(false);
+    // A fourth cannot be reasoned into existence by a bad count.
+    expect(spotsOpen(9)).toBe(0);
+    expect(canPutOnTable(9)).toBe(false);
+  });
+
+  it("reads as capacity, never as currency", () => {
+    // "2 / 3 USED" turns an editorial choice into a balance being spent.
+    expect(tableLine(2)).toBe("2 on the table · 1 spot open");
+    expect(tableLine(1)).toBe("1 on the table · 2 spots open");
+    // At capacity it stops mentioning room, because there is none to describe —
+    // and nothing warns until somebody actually tries to add a fourth.
+    expect(tableLine(3)).toBe("3 on the table");
+    // Nothing on the table is not "0 on the table"; it is no line at all.
+    expect(tableLine(0)).toBeNull();
+  });
+
+  it("never says the slot number out loud", () => {
+    // `slot_no` is bookkeeping that makes the cap race-safe. Nobody has a
+    // "Challenge #2", so no rendered string may contain one.
+    for (const n of [0, 1, 2, 3]) expect(tableLine(n) ?? "").not.toMatch(/#|slot/i);
+  });
+});
+
+describe("what became of one person's chance to weigh in", () => {
+  it("counts YES and NO identically", () => {
+    // The invariant the whole mechanism rests on, and the input type is what
+    // guarantees it: RecipientFact carries no side, so agreement CANNOT reach
+    // this decision however the code is later edited.
+    const keys = Object.keys(showed());
+    expect(keys).not.toContain("side");
+    expect(recipientState(showed())).toBe("showed_up");
+  });
+
+  it("treats viewing as not showing up", () => {
+    // Opening a question is not answering it. A recipient who looked and left is
+    // still open, and a Challenge must not close on the strength of a glance.
+    expect(recipientState(open())).toBe("open");
+    expect(TERMINAL_STATES.has("viewed")).toBe(false);
+    expect(TERMINAL_STATES.has("open")).toBe(false);
+  });
+
+  it("treats passing as terminal but never as showing up", () => {
+    expect(recipientState(passed())).toBe("passed");
+    expect(TERMINAL_STATES.has("passed")).toBe(true);
+    const p = tableProgress([passed(), passed()]);
+    expect(p.showedUp).toBe(0);
+    expect(p.passed).toBe(2);
+  });
+
+  it("lets taking a side outrank a pass, if somebody does both", () => {
+    // Waving a card off and then finding the market anyway is a real path.
+    // Taking a side is the larger fact and the one worth remembering.
+    expect(recipientState({ respondedAtMs: 2, passedAtMs: 1 })).toBe("showed_up");
+  });
+});
+
+describe("progress a creator can actually be told", () => {
+  it("counts against a frozen denominator", () => {
+    const p = tableProgress([showed(), showed(), showed(), passed(), ...many(4, open)]);
+    expect(p).toMatchObject({ reached: 8, showedUp: 3, passed: 1, waiting: 4 });
+    expect(progressLine(p)).toBe("3 of 8 showed up · 1 passed");
+  });
+
+  it("says nothing about a pass that did not happen", () => {
+    const p = tableProgress([showed(), open(), open()]);
+    expect(progressLine(p)).toBe("1 of 3 showed up");
+  });
+
+  it("claims nothing at all when it reached nobody", () => {
+    expect(progressLine(tableProgress([]))).toBeNull();
+  });
+
+  it("never claims a view, a believer or a dollar", () => {
+    // The only view signal this product has is client-reported and unverifiable,
+    // and capital/believer totals are market facts rather than Challenge effects.
+    // Printing either implies something the data cannot support.
+    const p = tableProgress([showed(), passed(), open()]);
+    const line = progressLine(p) ?? "";
+    for (const w of ["viewed", "looked", "believer", "$", "backed", "since"])
+      expect(line.toLowerCase(), `"${line}" claims "${w}"`).not.toContain(w);
+  });
+});
+
+describe("a Challenge ends when there is nothing left for it to do", () => {
+  it("closes once every recipient has answered one way or the other", () => {
+    expect(shouldAutoClose([showed(), showed(), passed()])).toBe(true);
+    expect(shouldAutoClose(many(3, showed))).toBe(true);
+    expect(shouldAutoClose(many(3, passed))).toBe(true);
+  });
+
+  it("stays open while anyone is still deciding", () => {
+    expect(shouldAutoClose([showed(), passed(), open()])).toBe(false);
+    expect(shouldAutoClose(many(3, open))).toBe(false);
+  });
+
+  it("does not close a Challenge that reached nobody", () => {
+    // Vacuously "all responded" would free the slot for a reason the creator
+    // would not recognise. It never started; it has not run its course.
+    expect(shouldAutoClose([])).toBe(false);
+    expect(tableProgress([]).allResponded).toBe(false);
+  });
+});
+
+describe("the vocabulary", () => {
+  it("never uses the words that would make a pass feel like a verdict", () => {
+    // The banned LIST necessarily contains the banned words, so it is excised
+    // before the source is searched — otherwise this assertion could only ever
+    // fail, which is a test that proves nothing.
+    const src = readFileSync(join(process.cwd(), "src/domain/table.ts"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "")
+      .replace(/export const TABLE_BANNED[\s\S]*?\];/, "");
+    // Rendered strings only — the banned list itself names these words.
+    for (const s of [tableLine(2), tableLine(3), progressLine(tableProgress([showed(), passed()]))])
+      for (const w of TABLE_BANNED)
+        expect((s ?? "").toLowerCase(), `"${s}" contains "${w}"`).not.toContain(w);
+    // And nothing in the module reaches for acceptance language internally either.
+    expect(src).not.toMatch(/\baccepted\b|\bdeclined\b|\brejected\b/);
+  });
+
+  it("bans the mechanics this product decided not to have", () => {
+    for (const w of ["credits", "tokens", "allowance", "streak", "invited"])
+      expect(TABLE_BANNED).toContain(w);
+  });
+});
+
+/**
+ * THE CAP IS THE DATABASE'S JOB, not a component's. Counting rows before inserting
+ * is a race two browser tabs win, so the guarantee lives in a partial unique index
+ * and this test pins the migration that provides it.
+ */
+describe("the cap survives two browser tabs", () => {
+  const sql = () =>
+    readFileSync(
+      join(process.cwd(), "supabase/migrations/20260904000000_challenges_on_the_table.sql"),
+      "utf8",
+    );
+
+  it("makes a fourth active Challenge impossible in the schema", () => {
+    const s = sql();
+    expect(s).toMatch(/slot_no\s+smallint\s+NOT NULL CHECK \(slot_no BETWEEN 1 AND 3\)/);
+    expect(s).toMatch(
+      /CREATE UNIQUE INDEX[\s\S]*?challenges \(challenger_wallet, slot_no\)\s*\n\s*WHERE closed_at IS NULL/,
+    );
+  });
+
+  it("makes one market consume at most one slot", () => {
+    expect(sql()).toMatch(
+      /CREATE UNIQUE INDEX[\s\S]*?challenges \(challenger_wallet, market_id\)\s*\n\s*WHERE closed_at IS NULL/,
+    );
+  });
+
+  it("keeps the recipient ledger a separate table", () => {
+    // One table answering two questions badly is the thing this avoids:
+    // `challenges` is market-level and closable, `market_calls` stays the
+    // relationship ledger and merely learns which Challenge produced a row.
+    const s = sql();
+    expect(s).toMatch(
+      /ALTER TABLE public\.market_calls\s*\n\s*ADD COLUMN IF NOT EXISTS challenge_id/,
+    );
+    expect(s).toMatch(/ADD COLUMN IF NOT EXISTS passed_at/);
+    expect(s).not.toMatch(/DROP TABLE|ALTER TABLE public\.market_calls\s+DROP/);
+  });
+});
