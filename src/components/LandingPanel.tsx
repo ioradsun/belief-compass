@@ -275,6 +275,45 @@ export function LandingPanel({
       </div>
 
       {howOpen && <HowItWorksSheet onClose={() => setHowOpen(false)} />}
+
+      {exampleOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-end lg:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Example conviction market"
+            onClick={() => setExampleOpen(false)}
+          >
+            <div className="absolute inset-0 bg-[color-mix(in_oklab,var(--bg)_78%,transparent)] backdrop-blur-sm" />
+            <div
+              className="relative max-h-[92svh] w-full overflow-y-auto overscroll-contain rounded-t-[20px] bg-[var(--panel)] px-4 pb-8 pt-3"
+              style={{ borderTop: "1px solid var(--hairline)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--hairline)]" />
+              <div className="mb-3 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setExampleOpen(false)}
+                  className="rounded-full px-3 py-1.5 text-[13px] text-[var(--text-secondary)]"
+                  style={{ border: "1px solid var(--hairline)" }}
+                >
+                  ✕ Close
+                </button>
+              </div>
+              <LandingExampleCard
+                onEnter={() => {
+                  setExampleOpen(false);
+                  onEnter();
+                }}
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
+
     </header>
   );
 }
