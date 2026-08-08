@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { BrandMark } from "@/components/BrandMark";
 import { LandingExampleCard } from "@/components/LandingExample";
 import { HowItWorksSheet } from "@/components/HowItWorksSheet";
 import type { LandingPanelState } from "@/hooks/useLandingPanelState";
+
 
 /**
  * One continuous brand component that changes shape between two states.
