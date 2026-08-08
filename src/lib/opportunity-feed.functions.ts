@@ -46,9 +46,22 @@ const input = z.object({
 export const getOpportunityFeed = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) => input.parse(raw ?? {}))
   .handler(async ({ data }): Promise<OpportunityFeedResult> => {
-    const { buildOpportunityFeed } = await import("@/lib/opportunity-feed.server");
-    return buildOpportunityFeed(data);
+    const { opportunityFeed } = await import("@/lib/opportunity-feed.server");
+    return opportunityFeed(data);
   });
+
+/**
+ * The SSR read. Warm-only by construction: it returns whatever snapshot this
+ * isolate already holds and `null` otherwise, so the HTML shell never waits on
+ * a database round trip. The browser fetches the real feed right after.
+ */
+export const getWarmFeed = createServerFn({ method: "GET" }).handler(
+  async (): Promise<OpportunityFeedResult | null> => {
+    const { warmAnonFeed } = await import("@/lib/opportunity-feed.server");
+    return warmAnonFeed();
+  },
+);
+
 
 const eventInput = z.object({
   wallet: z.string().min(3),
