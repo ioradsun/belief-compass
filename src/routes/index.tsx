@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { lazyRetry } from "@/lib/lazy-retry";
 
@@ -90,6 +90,7 @@ import { usePredictivePrefetch } from "@/lib/realtime/use-predictive-prefetch";
 import { useIsDesktop } from "@/hooks/use-mobile";
 import { registerPersonFocus } from "@/lib/person-focus";
 
+import { AppMenu, type AppTab } from "@/components/AppMenu";
 import { LandingPanel } from "@/components/LandingPanel";
 import { useLandingPanelState } from "@/hooks/useLandingPanelState";
 import { useDeckWindow } from "@/lib/deck-window";
@@ -242,6 +243,8 @@ type Search = {
   launch?: number;
   /** Share attribution code — who this visitor arrived via (?r=). */
   r?: string;
+  /** Which phone column to open on, when arriving from the menu on another page. */
+  tab?: MobileTab;
 };
 
 export const Route = createFileRoute("/")({
@@ -267,6 +270,10 @@ export const Route = createFileRoute("/")({
     // Attribution code carried from a shared link; kept in the URL so it
     // survives hydration and the arrival is recorded once.
     r: typeof search.r === "string" && search.r.length >= 3 ? search.r : undefined,
+    tab:
+      search.tab === "mine" || search.tab === "belief" || search.tab === "room"
+        ? (search.tab as MobileTab)
+        : undefined,
   }),
   head: () => ({
     meta: [
@@ -343,20 +350,7 @@ function BackLink({ onClick }: { onClick: () => void }) {
   );
 }
 
-type MobileTab = "mine" | "belief" | "room";
-
-const TABS: { key: MobileTab; label: string; sub: string }[] = [
-  { key: "mine", label: "Mine", sub: "where you stand, and why" },
-  { key: "belief", label: "Back", sub: "one belief, right now" },
-  { key: "room", label: "Crowd", sub: "what's moving, and who's behind it" },
-];
-
-/** The standing pages, reachable from the phone menu like everything else. */
-const MENU_PAGES: { to: string; label: string; sub: string }[] = [
-  { to: "/how", label: "How it works", sub: "the idea, in plain language" },
-  { to: "/value", label: "Why it matters", sub: "what this adds to the ecosystem" },
-  { to: "/terms", label: "Terms & risk", sub: "what you're agreeing to" },
-];
+type MobileTab = AppTab;
 
 /** The center-panel destination, as the URL expresses it. `case` is a display
  *  toggle rather than a destination, so it is deliberately not part of it. */
@@ -376,6 +370,7 @@ const CLEARED_CENTER: CenterView = {
 
 function Feed() {
   const {
+    tab: tabParam,
     wallet: searchWallet,
     m: selectedMarket,
     p: selectedPerson,
@@ -630,7 +625,14 @@ function Feed() {
    * on arrival rather than a skeleton. Desktop shows all three columns and is
    * unaffected by this.
    */
-  const [tab, setTab] = useState<MobileTab>("room");
+  const [tab, setTab] = useState<MobileTab>(tabParam ?? "room");
+  // Arriving from the menu on a standing page carries the column with it — and
+  // it is an explicit destination, so the intro panel gets out of the way.
+  useEffect(() => {
+    if (!tabParam) return;
+    setTab(tabParam);
+    landing.collapse();
+  }, [tabParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -1205,29 +1207,6 @@ function Feed() {
         }
         profile={
           <div className="flex items-center gap-2">
-            {/* Always-on help: the guided "How it works" story, one tap from anywhere. */}
-            <a
-              href="/how"
-              aria-label="How Conviction Company works"
-              title="How Conviction Company works"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--border)] text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
-            >
-              <svg
-                aria-hidden
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-              >
-                <circle cx="12" cy="12" r="9" />
-                <path
-                  d="M9.6 9.2a2.4 2.4 0 1 1 3.3 2.2c-.7.3-1.1.9-1.1 1.6v.4"
-                  strokeLinecap="round"
-                />
-                <circle cx="11.8" cy="16.6" r="0.05" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </a>
             {wallet ? (
               <ProfileMenu
                 wallet={wallet}
@@ -1588,113 +1567,21 @@ function Feed() {
           )}
         </aside>
 
-        {/* Mobile slide-in menu (replaces the bottom tab bar) */}
-        {menuOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden">
-            <button
-              type="button"
-              aria-label="Close menu"
-              onClick={() => setMenuOpen(false)}
-              className="absolute inset-0 bg-black/60"
-            />
-            <div
-              className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-[var(--panel)] p-4"
-              style={{ borderRight: "1px solid var(--hairline)" }}
-            >
-              <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                Menu
-              </div>
-              <div className="space-y-1">
-                {/* HOME. The intro panel no longer opens by tapping the header
-                    on a phone — it is a destination in the menu like anything
-                    else, so the header stays a plain header. */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    landing.expand();
-                    setMenuOpen(false);
-                  }}
-                  className="flex w-full items-start gap-2 rounded-md px-3 py-2.5 text-left transition-colors"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium text-[var(--text-muted)]">Home</span>
-                    <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">
-                      the intro, and an example
-                    </span>
-                  </span>
-                </button>
-
-                {TABS.map((t) => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => {
-                      setTab(t.key);
-                      setMenuOpen(false);
-                    }}
-                    aria-current={tab === t.key ? "page" : undefined}
-                    className={`flex w-full items-start gap-2 rounded-md px-3 py-2.5 text-left transition-colors ${
-                      tab === t.key ? "bg-[var(--surface)]" : ""
-                    }`}
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className={`block text-sm font-medium ${
-                          tab === t.key ? "text-[var(--text)]" : "text-[var(--text-muted)]"
-                        }`}
-                      >
-                        {t.label}
-                      </span>
-                      <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">
-                        {t.sub}
-                      </span>
-                    </span>
-                    {/* HOW A PHONE LEARNS SOMEBODY IS WAITING.
-                        Desktop keeps the Challenge rail on screen permanently, so
-                        "3 people are waiting on you" is ambient. On a phone the
-                        rail is two taps inside this menu, and the count lived only
-                        on the segmented control INSIDE it — you had to already be
-                        there to find out you should go. The number comes from the
-                        same `useOpenCalls` the rail renders from, so the badge and
-                        the list cannot disagree, and a dismissal updates both. */}
-                    {t.key === "room" && openCalls > 0 && (
-                      <span
-                        className="num rounded-full px-1.5 py-0.5 text-[11px] font-semibold"
-                        style={{ background: "var(--surface-2)", color: "var(--text)" }}
-                        aria-label={`${openCalls} people want your take`}
-                      >
-                        {openCalls}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* The standing pages. They are real routes, not panels, so they
-                  live below a rule rather than among the three views. */}
-              <div
-                className="mt-4 space-y-1 pt-3"
-                style={{ borderTop: "1px solid var(--hairline)" }}
-              >
-                {MENU_PAGES.map((p) => (
-                  <Link
-                    key={p.to}
-                    to={p.to}
-                    onClick={() => setMenuOpen(false)}
-                    className="block rounded-md px-3 py-2.5 text-left"
-                  >
-                    <span className="block text-sm font-medium text-[var(--text-muted)]">
-                      {p.label}
-                    </span>
-                    <span className="mt-0.5 block text-[12px] leading-snug text-[var(--text-muted)]">
-                      {p.sub}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* ONE MENU, EVERY PAGE — the same drawer the standing pages open. */}
+        <AppMenu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          tab={tab}
+          onSelectTab={(t) => {
+            setTab(t);
+            setMenuOpen(false);
+          }}
+          onHome={() => {
+            landing.expand();
+            setMenuOpen(false);
+          }}
+          openCalls={openCalls}
+        />
       </div>
     </div>
   );
