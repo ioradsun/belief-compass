@@ -500,6 +500,8 @@ export type SharedMarket = {
   title: string;
   viewerSide: "YES" | "NO";
   personSide: "YES" | "NO";
+  /** Canonical domain, so the receipts can group without a second taxonomy. */
+  domain?: string | null;
 };
 
 /**
