@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
+import { shouldRevalidateOnReturn } from "./lib/focus-policy";
 
 export const getRouter = () => {
   // One cache policy for the whole app, so no panel has to opt in to "don't
@@ -11,6 +12,11 @@ export const getRouter = () => {
   //  • retry with backoff   → a transient failure never erases visible data
   //                           (React Query keeps `data` through errors).
   //  • refetchOnReconnect   → coming back online resumes silently.
+  //  • refetchOnWindowFocus → ON, but gated: on mobile, flipping between chat
+  //                           and preview re-focuses the tab every few seconds,
+  //                           and refetching every stale query each time is what
+  //                           makes the preview crawl. shouldRevalidateOnReturn
+  //                           lets a genuine absence through and drops glances.
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -18,11 +24,12 @@ export const getRouter = () => {
         gcTime: 30 * 60_000,
         retry: 3,
         retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 15_000),
-        refetchOnWindowFocus: true,
+        refetchOnWindowFocus: () => shouldRevalidateOnReturn(),
         refetchOnReconnect: true,
       },
     },
   });
+
 
 
   const router = createRouter({

@@ -51,9 +51,12 @@ describe("the viewer's network cannot silently go stale", () => {
   });
 
   it("relies on focus and reconnect refetching, which must stay on", () => {
-    expect(ROUTER).toMatch(/refetchOnWindowFocus:\s*true/);
+    // Focus refetching is gated (not disabled): a genuine absence revalidates,
+    // a quick glance away does not. See src/lib/focus-policy.ts.
+    expect(ROUTER).toMatch(/refetchOnWindowFocus:\s*\(\)\s*=>\s*shouldRevalidateOnReturn\(\)/);
     expect(ROUTER).toMatch(/refetchOnReconnect:\s*true/);
   });
+
 
   /**
    * Those two defaults only fire for a query the observer considers STALE, so a
