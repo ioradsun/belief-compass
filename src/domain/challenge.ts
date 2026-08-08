@@ -121,6 +121,9 @@ export const CHALLENGE = {
    * waiting for you and starts reading as a feed — and the feed already exists,
    * one tab across.
    */
+  /** Shown at once. Beyond a railful it stops reading as a set of things waiting
+   *  for you and starts reading as a feed — so the rest are one tap away rather
+   *  than discarded. */
   maxOpen: 6,
   /** The stage at which the social system unlocks. */
   unlockAt: "recognizable" as DnaStage,
@@ -230,14 +233,22 @@ export function composeChallenges(
     }
   }
 
-  return [...best.values()]
-    .sort(
-      (a, b) =>
-        RELATION_RANK[b.relation] - RELATION_RANK[a.relation] ||
-        b.atMs - a.atMs ||
-        a.marketId - b.marketId,
-    )
-    .slice(0, opts.max ?? CHALLENGE.maxOpen);
+  return (
+    [...best.values()]
+      .sort(
+        (a, b) =>
+          RELATION_RANK[b.relation] - RELATION_RANK[a.relation] ||
+          b.atMs - a.atMs ||
+          a.marketId - b.marketId,
+      )
+      // NO SILENT TRUNCATION. This used to cut at a railful and throw the rest
+      // away, which was defensible when calls were inferred and roughly
+      // interchangeable. Now every one is somebody's deliberate act, and dropping
+      // it before the reader ever learns it exists loses a real request. The rail
+      // pages through them and says how many are behind; `max` remains for callers
+      // that genuinely want a bounded slice.
+      .slice(0, opts.max ?? Number.MAX_SAFE_INTEGER)
+  );
 }
 
 /* ── The lock ────────────────────────────────────────────────────────────── */

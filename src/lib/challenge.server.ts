@@ -1,5 +1,5 @@
 /**
- * CHALLENGE — deriving open calls, and recording the ones that were made.
+ * CHALLENGE — reading the calls people deliberately made.
  *
  * THE SPLIT THIS FILE IS BUILT AROUND:
  *
@@ -23,8 +23,8 @@
 import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import {
-  CHALLENGE,
   composeChallenges,
+  CALLER_RELATIONS,
   type CallEvidence,
   type CallerRelation,
   type Challenge,
@@ -43,17 +43,14 @@ import type { NamedPerson } from "@/domain/challenge";
 const READ = {
   /** People pulled from each DNA bucket. */
   peoplePerBucket: 40,
-  /** Recent events read across all qualified callers. */
-  callerEvents: 400,
   /**
-   * How far back an act can be and still be a live call.
+   * Open calls read for one reader.
    *
-   * NOT A LOCAL 30. It reads the domain constant because the profile timeline and
-   * the showing-up denominator apply the same window, and a second copy here is
-   * the version that drifts — the day it did, a profile would show somebody
-   * waiting on a call their caller can no longer see.
+   * Generous on purpose — it is the READ bound, not the display bound. The rail
+   * shows a railful and says how many more are behind it, which it can only do
+   * honestly if it has actually seen them.
    */
-  windowDays: CHALLENGE.windowDays,
+  openCalls: 200,
   /** Calls read for one pair's history. */
   pairCalls: 200,
 } as const;
@@ -116,145 +113,128 @@ export async function qualifiedCallers(sb: Sb, viewer: string): Promise<Map<stri
 }
 
 /**
- * OPEN CHALLENGES for one viewer, and the call rows they create.
+ * OPEN CHALLENGES for one viewer.
  *
  * Returns `[]` for a viewer with no qualified callers, which today is most of
  * them — 95% of wallets have no Tribe and no wallet has a Rival. An empty panel
  * is the correct state, not a failure, and nothing here manufactures a caller to
  * avoid it.
  */
+/**
+ * WHO WANTS YOU AT THE TABLE — read, not inferred.
+ *
+ * THIS USED TO GUESS. It scanned every qualified person's recent trades, found
+ * markets the viewer had not answered, and manufactured a "call" from the
+ * coincidence. Nobody had chosen anything, which is exactly why "Sarah wants you
+ * at the table" was a sentence the data could not support: Sarah had traded, and
+ * the system had decided that meant she wanted something from you.
+ *
+ * Now a call exists only because somebody put a question on the table. The rows
+ * were written once, at that moment, with the relationship frozen as it was — so
+ * this is a read of deliberate acts rather than a derivation from ambient ones.
+ * Roughly a hundred lines of inference are gone with it: the event scan, the
+ * window, the caller-event cap, the one-caller-per-market reduction and the
+ * fire-and-forget write that made surfacing itself the call.
+ *
+ * The card can now say who wants you there, and mean it.
+ */
 export async function buildChallenges(viewer: string): Promise<Challenge[]> {
   const me = viewer.toLowerCase();
   const sb = serviceClient();
 
-  const [callers, mine] = await Promise.all([
-    qualifiedCallers(sb, me),
-    // Every market the viewer has taken a side in. The exclusion that makes
-    // this a set of OPEN questions rather than a list of markets with friends.
-    sb
-      .from("wallet_beliefs")
-      .select("onchain_id")
-      .eq("wallet", me)
-      .in("stance_side", ["YES", "NO"]),
-  ]);
-  if (callers.size === 0) return [];
-
-  const answered = new Set(
-    ((mine.data ?? []) as { onchain_id: number }[]).map((r) => Number(r.onchain_id)),
-  );
-
-  const since = new Date(Date.now() - READ.windowDays * 86_400_000).toISOString();
-  const { data: acts, error } = await sb
-    .from("events")
-    .select("wallet, market_id, kind, side, occurred_at")
-    .in("wallet", [...callers.keys()])
-    .in("kind", ["trade", "market_created"])
-    .eq("is_canonical", true)
-    .gte("occurred_at", since)
-    .order("occurred_at", { ascending: false })
-    .limit(READ.callerEvents);
-  // Loudly, then degrade. A blocked or failed read comes back as `data: null`
-  // with an error set, and swallowing it turns the whole social surface off
-  // silently and forever — the failure shape this codebase keeps paying for.
+  // Open calls addressed to this reader, newest first. Answered and passed rows
+  // are already terminal and belong to nobody's action queue.
+  const { data: rows, error } = await sb
+    .from("market_calls")
+    .select("market_id, caller_wallet, relation_at_call, called_at")
+    .eq("responder_wallet", me)
+    .not("challenge_id", "is", null)
+    .is("responded_at", null)
+    .is("passed_at", null)
+    .order("called_at", { ascending: false })
+    .limit(READ.openCalls);
+  // Loudly, then degrade. A blocked read must never render as an empty room.
   if (error) {
-    console.error("[challenge] events unreadable — no calls can be derived", {
+    console.error("[challenge] open calls unreadable", {
       code: error.code,
       message: error.message,
     });
-    return [];
+    throw new Error(error.message);
   }
+  const calls = (rows ?? []) as {
+    market_id: number;
+    caller_wallet: string;
+    relation_at_call: string;
+    called_at: string;
+  }[];
+  if (calls.length === 0) return [];
 
-  type Act = {
-    wallet: string;
-    market_id: string | null;
-    kind: string;
-    side: string | null;
-    occurred_at: string;
-  };
-  // `events.market_id` is TEXT while `markets.onchain_id` is numeric, so this
-  // crosses a type boundary. A non-numeric id is dropped rather than becoming
-  // NaN and matching nothing downstream in a way nobody can see.
-  const candidates = ((acts ?? []) as Act[])
-    .map((a) => ({
-      wallet: String(a.wallet).toLowerCase(),
-      marketId: Number(a.market_id),
-      act: a.kind === "market_created" ? ("market_created" as const) : ("trade" as const),
-      // Narrowed here rather than trusted: `events.side` is a free text column
-      // and a trade whose side we cannot name is one the domain refuses.
-      side: a.side === "YES" || a.side === "NO" ? (a.side as "YES" | "NO") : null,
-      atMs: Date.parse(a.occurred_at),
-    }))
-    .filter((a) => Number.isFinite(a.marketId) && !answered.has(a.marketId));
-  if (candidates.length === 0) return [];
-
-  const marketIds = [...new Set(candidates.map((a) => a.marketId))];
-  const wallets = [...new Set(candidates.map((a) => a.wallet))];
+  const marketIds = [...new Set(calls.map((c) => Number(c.market_id)))];
+  const wallets = [...new Set(calls.map((c) => String(c.caller_wallet).toLowerCase()))];
 
   const { resolveProfiles } = await import("@/lib/profiles.server");
-  const [{ data: markets }, profiles] = await Promise.all([
+  const [{ data: markets }, { data: sides }, profiles, callers] = await Promise.all([
     sb.from("markets").select("onchain_id, title").in("onchain_id", marketIds),
+    // WHAT THE CALLER CURRENTLY HOLDS, not whichever event produced them. A
+    // caller who has since exited or flipped must not be quoted as believing
+    // something they no longer believe.
+    sb
+      .from("wallet_beliefs")
+      .select("wallet, onchain_id, stance_side")
+      .in("wallet", wallets)
+      .in("onchain_id", marketIds)
+      .in("stance_side", ["YES", "NO"]),
     resolveProfiles(wallets, 0),
+    qualifiedCallers(sb, me),
   ]);
+
   const titleOf = new Map(
     ((markets ?? []) as { onchain_id: number; title: string | null }[])
       .filter((m) => m.title)
       .map((m) => [Number(m.onchain_id), String(m.title)]),
   );
+  const stanceOf = new Map(
+    ((sides ?? []) as { wallet: string; onchain_id: number; stance_side: string }[]).map((r) => [
+      `${String(r.wallet).toLowerCase()}|${Number(r.onchain_id)}`,
+      r.stance_side === "NO" ? ("NO" as const) : ("YES" as const),
+    ]),
+  );
 
   const evidence: CallEvidence[] = [];
-  for (const a of candidates) {
-    const title = titleOf.get(a.marketId);
-    const caller = callers.get(a.wallet);
-    if (!title || !caller) continue;
+  for (const c of calls) {
+    const marketId = Number(c.market_id);
+    const wallet = String(c.caller_wallet).toLowerCase();
+    const title = titleOf.get(marketId);
+    if (!title) continue;
+    const relation = CALLER_RELATIONS.find((r: CallerRelation) => r === c.relation_at_call);
+    if (!relation) continue;
+    // The pair's record comes from the LIVE cache, not the frozen row: the
+    // relationship AT CALL decides who may call, and today's numbers are what a
+    // reader is owed beside a question they are about to answer.
+    const pair = callers.get(wallet);
+    // A CALLER WHO HAS SINCE EXITED STILL ASKED. Their current stance decides
+    // whether the card can say "Sarah believes YES" — but if they have gone
+    // MIXED or flat, the Challenge does not vanish, because putting it on the
+    // table is the thing they did and it remains true. The sentence falls back to
+    // the one that needs no side, rather than the row silently disappearing and
+    // taking somebody's deliberate request with it.
+    const side = stanceOf.get(`${wallet}|${marketId}`) ?? null;
     evidence.push({
-      marketId: a.marketId,
+      marketId,
       title,
-      // A wallet with no profile still has a stable readable handle. The domain
-      // refuses an unnamed caller, so passing the alias is what keeps a real
-      // relationship from being silently dropped for want of a display name.
       caller: {
-        wallet: a.wallet,
-        name: profiles.get(a.wallet)?.displayName?.trim() || aliasFor(a.wallet),
+        wallet,
+        name: profiles.get(wallet)?.displayName?.trim() || aliasFor(wallet),
       },
-      relation: caller.relation,
-      act: a.act,
-      callerSide: a.side,
-      together: caller.together,
-      shared: caller.shared,
-      atMs: Number.isFinite(a.atMs) ? a.atMs : Date.now(),
+      relation,
+      act: side ? "trade" : "market_created",
+      callerSide: side,
+      together: pair?.together ?? null,
+      shared: pair?.shared ?? null,
+      atMs: Date.parse(c.called_at),
     });
   }
-
-  const open = composeChallenges(evidence, { answered });
-  // Surfacing IS the call. Recorded fire-and-forget: a failed ledger write costs
-  // a future Dependability data point, never this render.
-  if (open.length > 0) void recordCalls(sb, me, open);
-  return open;
-}
-
-/**
- * Write the call rows for Challenges just surfaced.
- *
- * PLAIN INSERT, NOT UPSERT, and 23505 is swallowed on purpose — a repeat must
- * never rewrite `relation_at_call`, which is the one thing this table exists to
- * hold still. The primary key does the deduplication; this only has to not
- * fight it.
- */
-async function recordCalls(sb: Sb, responder: string, open: readonly Challenge[]): Promise<void> {
-  const { error } = await sb.from("market_calls").insert(
-    open.map((c) => ({
-      market_id: c.marketId,
-      caller_wallet: c.caller.wallet,
-      responder_wallet: responder,
-      relation_at_call: c.relation,
-    })),
-  );
-  if (error && error.code !== "23505") {
-    console.error("[challenge] could not record calls", {
-      code: error.code,
-      message: error.message,
-    });
-  }
+  return composeChallenges(evidence);
 }
 
 /**

@@ -159,9 +159,16 @@ describe("one market, one call, from whoever has most standing to ask", () => {
     expect(forward).toEqual([2, 5, 9]);
   });
 
-  it("stays a set of open questions rather than a second feed", () => {
+  it("keeps every call, and leaves the railful to the rail", () => {
+    // This used to assert truncation at CHALLENGE.maxOpen, which was defensible
+    // while calls were INFERRED and roughly interchangeable. Now each one is
+    // somebody's deliberate act — dropping it before the reader learns it exists
+    // loses a real request. The domain returns them all; the rail shows a railful
+    // and says how many are behind it.
     const many = Array.from({ length: 30 }, (_, i) => call({ marketId: i + 1 }));
-    expect(composeChallenges(many)).toHaveLength(CHALLENGE.maxOpen);
+    expect(composeChallenges(many)).toHaveLength(30);
+    // A caller that genuinely wants a bounded slice still asks for one.
+    expect(composeChallenges(many, { max: CHALLENGE.maxOpen })).toHaveLength(CHALLENGE.maxOpen);
   });
 
   it("is empty when nobody qualifies, which is most viewers today", () => {

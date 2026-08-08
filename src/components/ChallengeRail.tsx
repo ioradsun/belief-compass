@@ -29,7 +29,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
 import { passOnCall } from "@/lib/table.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
-import { type Challenge, type CallerRelation } from "@/domain/challenge";
+import { CHALLENGE, type Challenge, type CallerRelation } from "@/domain/challenge";
 import { convictionMatch } from "@/domain/relationship";
 import { RELATIONSHIP_MIN_SHARED } from "@/domain/dna/config";
 import { relationshipTone } from "@/lib/dna-labels";
@@ -100,6 +100,8 @@ export function ChallengeRail({
     initialData: "challenged",
   });
   const [side, setSide] = useState<Side>("challenged");
+  /** How many of the open calls are on screen. A railful, then a railful more. */
+  const [shown, setShown] = useState<number>(CHALLENGE.maxOpen);
   useEffect(() => {
     if (wanted) setSide(wanted);
   }, [wanted]);
@@ -224,10 +226,25 @@ export function ChallengeRail({
             </p>
           ) : (
             <ul className="space-y-2">
-              {open.map((c) => (
+              {open.slice(0, shown).map((c) => (
                 <ChallengeRow key={c.marketId} challenge={c} onSelect={onSelect} onDismiss={pass} />
               ))}
             </ul>
+          )}
+
+          {/* MORE, SAID OUT LOUD. A railful is what reads as a set of things
+              waiting for you; past that it becomes a feed, and the feed already
+              exists one tab across. But the rest are not discarded — a call is
+              somebody's deliberate request, and hiding it without saying so
+              would lose it. The count is exact because the server read them. */}
+          {open.length > shown && (
+            <button
+              type="button"
+              onClick={() => setShown((n) => n + CHALLENGE.maxOpen)}
+              className="mt-2 block text-[11.5px] text-[var(--text)] underline"
+            >
+              {open.length - shown} more waiting
+            </button>
           )}
 
           <button
