@@ -240,6 +240,7 @@ function dominancePenalty(
   walletCount: Map<string, number>,
   marketCount: Map<string, number>,
   motifCount: Map<string, number>,
+  shapeCount?: Map<string, number>,
 ): number {
   let p = 0;
   const m = marketCount.get(c.marketId) ?? 0;
@@ -255,6 +256,21 @@ function dominancePenalty(
   if (c.motif) {
     const k = motifCount.get(c.motif) ?? 0;
     if (k >= CADENCE.maxPerMotif) p += CADENCE.penalty.overCap * (1 + k - CADENCE.maxPerMotif);
+  }
+  // The same OBSERVATION, in different markets, with different copy. Same cost
+  // shape as the motif cap, and equally soft: a fourth genuine contradiction is
+  // quietened, never dropped, and breaking rows skip it entirely.
+  if (shapeCount) {
+    if (c.signalKind) {
+      const k = shapeCount.get(`kind:${c.signalKind}`) ?? 0;
+      if (k >= CADENCE.maxPerSignalKind)
+        p += CADENCE.penalty.overCap * (1 + k - CADENCE.maxPerSignalKind);
+    }
+    if (c.signalPrimary && c.signalPrimary !== "none") {
+      const k = shapeCount.get(`primary:${c.signalPrimary}`) ?? 0;
+      if (k >= CADENCE.maxPerSignalPrimary)
+        p += CADENCE.penalty.overCap * (1 + k - CADENCE.maxPerSignalPrimary);
+    }
   }
   return p;
 }
