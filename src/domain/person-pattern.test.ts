@@ -74,3 +74,41 @@ describe("findPersonPatterns", () => {
     expect(findPersonPatterns([...rows].reverse())).toEqual(one);
   });
 });
+
+describe("when the pattern is the story, it gets the headline", () => {
+  const r = (id: string, market: string, action: string, side: "YES" | "NO", at: string) => ({
+    id,
+    wallet: "0xk",
+    name: "Kodak",
+    marketId: market,
+    side,
+    action,
+    amountUsd: 20,
+    occurredAt: at,
+  });
+
+  it("leads with the person backing away", () => {
+    const p = findPersonPatterns([
+      r("a", "1", "exit", "YES", "2026-08-09T10:00:00.000Z"),
+      r("b", "2", "exit", "NO", "2026-08-09T09:00:00.000Z"),
+    ])[0]!;
+    expect(p.lead?.headline).toBe("KODAK is backing away");
+    expect(p.lead?.body).toContain("two positions");
+  });
+
+  it("leads with a one-way lean", () => {
+    const p = findPersonPatterns([
+      r("a", "1", "enter", "YES", "2026-08-09T10:00:00.000Z"),
+      r("b", "2", "enter", "YES", "2026-08-09T09:00:00.000Z"),
+    ])[0]!;
+    expect(p.lead?.headline).toBe("KODAK keeps leaning YES");
+  });
+
+  it("has no headline when we cannot name the person", () => {
+    const p = findPersonPatterns([
+      { ...r("a", "1", "exit", "YES", "2026-08-09T10:00:00.000Z"), name: null },
+      { ...r("b", "2", "exit", "NO", "2026-08-09T09:00:00.000Z"), name: null },
+    ])[0]!;
+    expect(p.lead).toBeNull();
+  });
+});

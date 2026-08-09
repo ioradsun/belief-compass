@@ -43,6 +43,16 @@ export interface DenominatorContext {
 
 export interface RetoldTransition extends TransitionCopy {
   level: CopyLevel;
+  /**
+   * TRUE WHEN THE ROW SHOULD NOT BE PRINTED AT ALL.
+   *
+   * The endpoint of the denominator rule. A percentage we cannot size, and a
+   * percentage computed over pocket change, are both rows whose only content is
+   * "this looked dramatic and wasn't". Publishing that spends a reader's
+   * attention explaining why something didn't matter. Hold it as a receipt in
+   * the data, keep it out of the feed.
+   */
+  suppress: boolean;
   /** The dollars the copy is standing on, when we could see them. */
   usd: number | null;
 }
@@ -109,7 +119,7 @@ export function retellTransition(
     /\b(money|capital|funded)\b/i.test(said) && !/re-rated|\bprice\b/i.test(said);
 
   if (!move || !aboutMoney) {
-    return { ...base, usd, level: hasFigure(base.detail) ? "observation" : "receipt" };
+    return { ...base, usd, suppress: false, level: hasFigure(base.detail) ? "observation" : "receipt" };
   }
 
   // A PERCENTAGE WE CANNOT SIZE. Demoted, not deleted — see the header.
@@ -122,6 +132,9 @@ export function retellTransition(
       detail: "The size behind it isn't confirmed yet.",
       usd: null,
       level: "receipt",
+      // If we cannot establish whether it matters, we do not make the reader
+      // evaluate the uncertainty on our behalf.
+      suppress: true,
     };
 
   const all = move.pct >= 99;
@@ -135,6 +148,9 @@ export function retellTransition(
         : `${money(usd)} arrived. That's what's there.`,
       usd,
       level: "receipt",
+      // True, and correctly quiet — but a card whose whole message is "the
+      // percentage was arithmetic on $1.94" is not worth a slot.
+      suppress: true,
     };
   }
 
@@ -149,6 +165,7 @@ export function retellTransition(
     detail,
     usd,
     level: usd >= MATERIAL_USD ? "observation" : "receipt",
+    suppress: false,
   };
 }
 

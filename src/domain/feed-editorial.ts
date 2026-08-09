@@ -59,7 +59,23 @@ export interface EditorialRow {
   rolling?: boolean | null;
   /** Event family, for capping how much of the feed one family may occupy. */
   family?: string | null;
+  /**
+   * The copy layer already decided this row should not be printed — chiefly a
+   * percentage it could not size, or a percentage over pocket change. See
+   * `retellTransition`. Editorial honours that verdict rather than re-deriving
+   * it, because only the copy layer knows what sentence would have shipped.
+   */
+  suppressed?: boolean | null;
+  /**
+   * Does the row carry a SECOND FACT — something beyond the bare structural
+   * announcement? "NO just got company" is an event type. "NO was empty, three
+   * wallets stepped in within the hour" is intelligence. First-participation
+   * rows without a second fact are ordinary, and ordinary is allowed at most
+   * one slot.
+   */
+  secondFact?: boolean | null;
 }
+
 
 export const EDITORIAL = {
   /**
@@ -96,8 +112,22 @@ export const EDITORIAL = {
    * without a cap a quiet day fills the feed with "back from the dead" and the
    * feed looks padded rather than alive.
    */
-  familyCaps: { market_reawakened: 2 } as Record<string, number>,
+  /**
+   * FIRST PARTICIPATION IS AN EVENT TYPE, NOT INTELLIGENCE. Every quiet side
+   * eventually gets its first backer, so a feed that treats each one as a story
+   * prints five versions of "just got company". One bare telling per feed; a
+   * telling that carries a second fact is exempt (see `capFamilies`).
+   */
+  familyCaps: {
+    market_reawakened: 2,
+    first_believer: 1,
+    side_opened: 1,
+    first_capital: 1,
+  } as Record<string, number>,
 } as const;
+
+/** The families whose cap only applies to the bare, single-fact telling. */
+const SECOND_FACT_EXEMPT = new Set(["first_believer", "side_opened", "first_capital"]);
 
 const num = (v: number | null | undefined): number =>
   v == null || !Number.isFinite(Number(v)) ? 0 : Math.abs(Number(v));
@@ -113,6 +143,9 @@ function magnitude(r: EditorialRow): number {
  * should not take a slot.
  */
 export function earnsSlot(r: EditorialRow): boolean {
+  // The copy layer already looked at the sentence this row would print and
+  // said it isn't worth printing. Nothing here overrides that.
+  if (r.suppressed) return false;
   // A row a reader cannot place — no question, no market — is a fact without a
   // subject. "NEW BELIEVER · Someone backed YES" of WHAT?
   if (r.context === false) return false;
@@ -132,6 +165,10 @@ export function capFamilies<T extends EditorialRow>(rows: readonly T[]): T[] {
   return rows.filter((r) => {
     const cap = r.family ? EDITORIAL.familyCaps[r.family] : undefined;
     if (cap == null) return true;
+    // A first-participation row that brought a second fact ("price hasn't
+    // moved", "your rival was one of the first two in") is no longer the
+    // generic announcement the cap exists to ration.
+    if (r.secondFact && SECOND_FACT_EXEMPT.has(r.family!)) return true;
     const n = (seen.get(r.family!) ?? 0) + 1;
     seen.set(r.family!, n);
     return n <= cap;
@@ -204,6 +241,44 @@ export function pruneRepeats<T extends EditorialRow>(rows: readonly T[]): T[] {
     else dropped.add(r.id);
   }
   return rows.filter((r) => !dropped.has(r.id));
+}
+
+/**
+ * THE CANONICAL RULE: IF THE SECOND SENTENCE DOES NOT CHANGE HOW YOU READ THE
+ * FIRST, IT IS NOT INTELLIGENCE.
+ *
+ * "NO JUST GOT COMPANY / First believers just stepped in." is one fact said
+ * twice. Intelligence needs the body to add something the kicker could not
+ * carry — a number, a person, a second side, a time, or a contradiction.
+ * Returns false when the body is a restatement, and the caller lowers the
+ * row's voice rather than dropping it.
+ */
+export function secondSentenceAdds(headline: string, detail: string): boolean {
+  const h = (headline ?? "").toLowerCase().trim();
+  const d = (detail ?? "").toLowerCase().trim();
+  if (!d) return false;
+  // A figure, a share, a name or a counterpoint is always new information.
+  if (/[\d$%]/.test(d)) return true;
+  if (/\b(but|while|without|yet|still|hasn't|hasn'|no one|nobody|first two)\b/.test(d)) return true;
+  /* Synonym families. A restatement rarely reuses the exact words — "NO just
+     got company" and "First believers just stepped in" share no vocabulary and
+     make the identical claim. Collapse each family to one token so the overlap
+     check sees the claim rather than the phrasing. */
+  const FAMILIES: Array<[RegExp, string]> = [
+    [/got company|first believers?|first backers?|stepped in|showed up|someone backed|opened up|no longer empty/g, "arrival"],
+    [/got heavier|piling in|money (came|went) (in|on)|capital arrived/g, "inflow"],
+    [/money (is )?leaving|money came off|capital left|thinned out|emptied/g, "outflow"],
+    [/back from the dead|woke up|reawakened|quiet again/g, "revival"],
+  ];
+  const fold = (t: string) => FAMILIES.reduce((acc, [re, tok]) => acc.replace(re, tok), t);
+  // Otherwise: does the body reuse the headline's own words and nothing else?
+  const stop = new Set(["the", "a", "an", "just", "is", "was", "in", "on", "it", "its", "to", "of", "and", "this", "that", "has", "have", "some", "into", "off", "up", "down", "now", "here", "they", "their"]);
+  const words = (t: string) => new Set(t.replace(/[^a-z\s]/g, " ").split(/\s+/).filter((w) => w && !stop.has(w)));
+  const hw = words(fold(h));
+  const dw = [...words(fold(d))];
+  if (dw.length === 0) return false;
+  const fresh = dw.filter((w) => !hw.has(w) && ![...hw].some((x) => x.startsWith(w) || w.startsWith(x)));
+  return fresh.length >= 2;
 }
 
 /** Both rules, in the order an editor applies them. */

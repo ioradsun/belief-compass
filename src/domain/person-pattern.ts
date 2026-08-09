@@ -26,6 +26,8 @@ export interface PatternRow {
   /** What the move did to their belief: enter | add | reduce | exit | flip … */
   action?: string | null;
   amountUsd?: number | null;
+  /** Display name, when we have one. Required for a promotable headline. */
+  name?: string | null;
   /** ISO. Newest row of the person is where the aside lands. */
   occurredAt: string;
 }
@@ -34,6 +36,17 @@ export interface PersonPattern {
   rowId: string;
   wallet: string;
   kind: PatternKind;
+  /**
+   * WHEN THE PATTERN IS THE STORY, IT SHOULD BE THE HEADLINE.
+   *
+   * "Not done / Another $0.02 on NO" with an italic aside underneath buries the
+   * only interesting thing in the row. Where the pattern out-informs the event
+   * — someone unwinding, someone leaning one way across questions, someone on a
+   * run — the caller may promote this pair into the row's kicker and body and
+   * leave the market underneath. Null when the pattern is mere context, or when
+   * we have no name to lead with.
+   */
+  lead: { headline: string; body: string } | null;
   /** The aside, already written. One sentence, no numbers the row repeats. */
   note: string;
 }
@@ -125,7 +138,36 @@ export function findPersonPatterns(rows: readonly PatternRow[]): PersonPattern[]
       note = `They have stepped back from ${count(exitMarkets.size)} questions ${when}.`;
     } else continue;
 
-    out.push({ rowId: anchor.id, wallet, kind, note });
+    /* A HEADLINE ONLY WHERE THE PATTERN OUT-INFORMS THE EVENT. A streak of
+       two ordinary entries is context; backing away from several positions,
+       leaning one way across questions, or sweeping a room is the story. */
+    const who = (anchor.name ?? list.find((r) => r.name)?.name ?? "").trim();
+    const NAME = who.toUpperCase();
+    let lead: PersonPattern["lead"] = null;
+    if (who) {
+      if (kind === "unwinding")
+        lead = {
+          headline: `${NAME} is backing away`,
+          body: `They've cut ${count(exitMarkets.size)} positions ${when}.`,
+        };
+      else if (kind === "one_way")
+        lead = {
+          headline: `${NAME} keeps leaning ${entries[0]!.side}`,
+          body: `That's their ${nth(entryMarkets.size)} ${entries[0]!.side} add across ${count(entryMarkets.size)} questions ${when}.`,
+        };
+      else if (kind === "sweep")
+        lead = {
+          headline: `${NAME} is working the room`,
+          body: `Their ${nth(entryMarkets.size)} question ${when}.`,
+        };
+      else if (kind === "rotation")
+        lead = {
+          headline: `${NAME} moved their conviction`,
+          body: `They sold out of one question and backed another ${when}.`,
+        };
+    }
+
+    out.push({ rowId: anchor.id, wallet, kind, note, lead });
   }
   return out;
 }

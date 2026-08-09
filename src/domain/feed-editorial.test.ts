@@ -5,6 +5,7 @@ import {
   earnsSlot,
   editFeed,
   pruneRepeats,
+  secondSentenceAdds,
   type EditorialRow,
 } from "./feed-editorial";
 
@@ -187,5 +188,43 @@ describe("small conviction counts are not global news", () => {
     expect(earnsSlot(row({ kind: "person_milestone", rung: 5 }))).toBe(false);
     expect(earnsSlot(row({ kind: "person_milestone", rung: 5, personal: true }))).toBe(true);
     expect(earnsSlot(row({ kind: "person_milestone", rung: 25 }))).toBe(true);
+  });
+});
+
+describe("the copy layer's verdict is final", () => {
+  it("drops a row the sizing pass refused to print", () => {
+    expect(earnsSlot(row({ suppressed: true }))).toBe(false);
+    expect(earnsSlot(row({ suppressed: false }))).toBe(true);
+  });
+});
+
+describe("first participation is an event type, not intelligence", () => {
+  it("keeps one bare 'just got company' and drops the rest", () => {
+    const rows = ["a", "b", "c"].map((id) => row({ id, marketId: id, family: "side_opened" }));
+    expect(capFamilies(rows).map((r) => r.id)).toEqual(["a"]);
+  });
+
+  it("exempts the ones that carry a second fact", () => {
+    const rows = [
+      row({ id: "a", marketId: "1", family: "side_opened" }),
+      row({ id: "b", marketId: "2", family: "side_opened", secondFact: true }),
+      row({ id: "c", marketId: "3", family: "side_opened" }),
+    ];
+    expect(capFamilies(rows).map((r) => r.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("if the second sentence doesn't change the first, it isn't intelligence", () => {
+  it("rejects a restatement", () => {
+    expect(secondSentenceAdds("NO just got company", "First believers just stepped in.")).toBe(false);
+    expect(secondSentenceAdds("YES got heavier", "")).toBe(false);
+  });
+
+  it("accepts a figure, a counterpoint or genuinely new nouns", () => {
+    expect(secondSentenceAdds("YES just got heavier", "Three people brought in $244.")).toBe(true);
+    expect(secondSentenceAdds("NO just got company", "The price hasn't moved.")).toBe(true);
+    expect(
+      secondSentenceAdds("THE PRICE MOVED. THE CROWD DIDN'T.", "YES re-rated with no new believers behind it."),
+    ).toBe(true);
   });
 });

@@ -48,7 +48,7 @@ import {
   isCovered,
   fallbackRate,
 } from "@/domain/significance";
-import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
+import { familyOf, VOICE_CEILING, type MixCandidate } from "@/domain/feed-cadence";
 import { signalVector } from "@/domain/signal-vector";
 import { factsForRow } from "@/domain/signal-facts";
 import {
@@ -56,7 +56,7 @@ import {
   priceProofSince,
   type PriceSample,
 } from "@/domain/price-proof";
-import { editFeed } from "@/domain/feed-editorial";
+import { editFeed, secondSentenceAdds } from "@/domain/feed-editorial";
 import { findPersonPatterns } from "@/domain/person-pattern";
 
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
@@ -890,6 +890,8 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
    * mixer applies it.
    */
   const copyLevel = new Map<string, CopyLevel>();
+  /** Rows the copy layer refuses to print at all — see `retellTransition`. */
+  const copySuppressed = new Set<string>();
 
   for (const r of live) {
     const w = r.wallet?.toLowerCase();
@@ -1020,6 +1022,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         side: r.side ?? null,
       });
       copyLevel.set(r.id, modern.level);
+      if (modern.suppress) copySuppressed.add(r.id);
       const kicker = modern.headline.trim();
       r.story = {
         category: "momentum",
@@ -1516,6 +1519,28 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     } satisfies MixCandidate;
   }
 
+  /* ── THE TWO LAYERS, MADE VISIBLE IN THE RANKING ────────────────────────
+     Insider is an intelligence layer with an activity layer under it. Two
+     things enforce that here, and both only ever lower a row:
+
+     1. THE CANONICAL RULE. If the second sentence does not change how you read
+        the first, the row is not intelligence. "NO JUST GOT COMPANY / First
+        believers just stepped in." is one fact printed twice, whatever the
+        market state around it looks like.
+     2. VOICE BANDS. A receipt may not outrank an observation, and an
+        observation may not outrank a clue, no matter how much boost the
+        reader's own money added. Contradictions, changes before price, unusual
+        behaviour and person patterns therefore sit at the top by construction. */
+  for (const r of material) {
+    if (!r.mix) continue;
+    if (
+      r.mix.voice === "intelligence" &&
+      !secondSentenceAdds(r.story?.headline ?? "", r.story?.body ?? "")
+    )
+      r.mix.voice = "observation";
+    r.mix.significance = Math.min(r.mix.significance, VOICE_CEILING[r.mix.voice ?? "receipt"]);
+  }
+
   /* The vector is computed once per row in `signalById` (above the scoring
      pass) and is now INFLUENTIAL through significance. It is still only
      ATTACHED to the shipped payload under SIGNAL_DIAGNOSTIC=1, so review keeps
@@ -1570,12 +1595,26 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
           // Every derived market read is a rolling-window statement ("in the
           // last hour"), so two of them are two looks at one state.
           rolling: r.kind === "market_transition",
-          family:
-            r.kind === "market_transition"
+          /* FAMILY IS THE CLAIM, NOT THE TABLE. Five "just got company" rows
+             arrive as three different kinds (a trade, a transition, a
+             milestone) and read as one sentence repeated. When the printed
+             kicker makes the first-participation claim, that IS the family, so
+             the cap can ration it. */
+          family: /got company|first believers?|first capital|stepped in/i.test(
+            r.story?.headline ?? "",
+          )
+            ? "side_opened"
+            : r.kind === "market_transition"
               ? ((r.payload as { type?: string } | null)?.type ?? null)
               : r.kind,
           // Market-scoped rows need the question to make sense standalone.
           context: r.marketId ? (r.marketTitle ?? "").trim().length > 0 : true,
+          suppressed: copySuppressed.has(r.id),
+          /* A first-participation row earns its slot when the body says
+             something the kicker didn't — a number, a person, a counterpoint.
+             Otherwise it is one of five identical "just got company" rows and
+             the family cap rations it to one. */
+          secondFact: secondSentenceAdds(r.story?.headline ?? "", r.story?.body ?? ""),
         })),
       ).map((r) => r.id),
     );
@@ -1600,11 +1639,35 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       side: r.side === "YES" || r.side === "NO" ? r.side : null,
       action: actionById.get(r.id) ?? null,
       amountUsd: r.amountUsd ?? null,
+      name: r.face?.name ?? null,
       occurredAt: r.occurredAt,
     })),
   )) {
     const target = material.find((r) => r.id === p.rowId);
-    if (target?.story) target.story = { ...target.story, pattern: p.note };
+    if (!target?.story) continue;
+    /* WHEN THE PATTERN IS THE INTERESTING PART, IT BECOMES THE STORY.
+       "Not done / Another $0.02 on NO" with the pattern as an italic footnote
+       buries the only clue in the row. Where the event itself is receipt-grade
+       and the pattern is promotable, the pattern takes the kicker and body and
+       the ordinary event drops to the aside — the market still renders
+       underneath, so nothing is lost. A row that already speaks at observation
+       or intelligence volume keeps its own headline and its footnote. */
+    if (p.lead && (target.mix?.voice ?? "receipt") === "receipt") {
+      target.story = {
+        ...target.story,
+        category: "momentum",
+        headline: p.lead.headline.toUpperCase(),
+        body: p.lead.body,
+        pattern: null,
+      };
+      target.text = flattenStory(target.story);
+      if (target.mix) {
+        target.mix.voice = "observation";
+        target.mix.significance = Math.max(target.mix.significance, 0.5);
+      }
+      continue;
+    }
+    target.story = { ...target.story, pattern: p.note };
   }
 
 
