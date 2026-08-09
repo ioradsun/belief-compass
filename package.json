@@ -33,7 +33,8 @@
     "check:rail": "node scripts/measure-rail.mjs",
     "check:lens-coverage": "tsx scripts/check-lens-coverage.ts",
     "check:scene": "node scripts/check-scene.mjs",
-    "check:deployed": "node scripts/check-deployed.mjs"
+    "check:deployed": "node scripts/check-deployed.mjs",
+    "check:signal-corpus": "tsx scripts/check-signal-corpus.ts"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.11",
