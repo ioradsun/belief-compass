@@ -51,6 +51,8 @@ import {
 } from "@/domain/significance";
 import { familyOf, VOICE_CEILING, type MixCandidate } from "@/domain/feed-cadence";
 import { signalVector } from "@/domain/signal-vector";
+import { tellNewMarketStory } from "@/domain/new-market-story";
+import { signalFromTransition, mergeSignals, dominantKey } from "@/domain/transition-signal";
 import { factsForRow } from "@/domain/signal-facts";
 import {
   groupPricePaths,
@@ -893,6 +895,13 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   const copyLevel = new Map<string, CopyLevel>();
   /** Rows the copy layer refuses to print at all — see `retellTransition`. */
   const copySuppressed = new Set<string>();
+  /**
+   * THE FLOOR, for rows whose evidence does not live in market state.
+   * A new market with a proven reaction is a clue, but the signal vector is
+   * deliberately blind to social kinds, so without a floor it would rank as a
+   * receipt. Only ever raises, and only where a fact was proven.
+   */
+  const voiceFloor = new Map<string, "observation" | "intelligence">();
 
   for (const r of live) {
     const w = r.wallet?.toLowerCase();
@@ -1038,9 +1047,47 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       continue;
     }
 
+    /* A NEW MARKET MUST ANSWER "WHO PUT IT THERE" AND "DID ANYONE REACT".
+       "ON THE TABLE / <question>" is inventory — it names a thing that exists
+       and nothing that happened. The creator wallet rides on the event, the
+       reaction is in market state, and the admission grade follows from which
+       of those facts exist. Nothing here manufactures either one: a bare
+       creation is receipt-grade and gets dropped from the primary surface. */
+    if (r.kind === "market_created") {
+      const m = momentumById.get(Number(r.marketId));
+      const openedMs = r.occurredAt ? Date.parse(r.occurredAt) : NaN;
+      const ageHours = Number.isFinite(openedMs) ? (Date.now() - openedMs) / 3_600_000 : null;
+      // Someone the reader knows who is already in — a fact, or nothing.
+      const known = (believersByMarket.get(Number(r.marketId)) ?? [])
+        .map((wallet) => namePerson(wallet, profiles, labelByWallet, aliasFor))
+        .find((p) => p.relationship != null && p.name);
+      const verdict = tellNewMarketStory({
+        creatorName: r.face?.name ?? null,
+        creatorRelationship: r.face?.relationship ?? null,
+        ageHours,
+        believersYes: m?.believersYes ?? null,
+        believersNo: m?.believersNo ?? null,
+        // Held capital is stored in ETH on this read model; the row does not
+        // claim a dollar figure it cannot prove, so reaction is counted in people.
+        capitalUsd: null,
+        personal: known
+          ? { name: known.name, relationship: String(known.relationship), side: null }
+          : null,
+      });
+      if (verdict.suppress) copySuppressed.add(r.id);
+      if (verdict.level === "receipt") copyLevel.set(r.id, "receipt");
+      else if (verdict.level === "observation") copyLevel.set(r.id, "observation");
+      else voiceFloor.set(r.id, "intelligence");
+      if (verdict.story) {
+        r.story = verdict.story;
+        r.text = flattenStory(r.story);
+      }
+      continue;
+    }
 
     // Milestone / surge rows are already final from grouping (no actor to name).
     if (r.kind === "believer_milestone" || r.kind === "tribe_doubled") continue;
+
 
     const market = momentumById.get(Number(r.marketId)) ?? null;
     const buySell = (r.payload as { action?: "BUY" | "SELL" }).action ?? null;
@@ -1228,7 +1275,38 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         ),
       ),
     );
+
+    /* A DERIVED READING CARRIES ITS OWN EVIDENCE (see transition-signal).
+       The vector above reads market state as it is NOW; a transition emitted
+       four hours ago was measured against windows that have since rolled, so
+       a proven contradiction was arriving with an all-zero vector — ranked as
+       a receipt and, worse, structurally unable to earn the open question.
+       The emitter's frozen type and significance are re-read here, decayed by
+       age, and merged so the live state still wins wherever it sees more. */
+    if (r.kind === "market_transition") {
+      const p = r.payload as { type?: string | null; significance?: number | null } | null;
+      const atMs = r.occurredAt ? Date.parse(r.occurredAt) : NaN;
+      const own = Number.isFinite(atMs)
+        ? signalFromTransition({
+            type: p?.type ?? null,
+            significance: p?.significance ?? null,
+            ageHours: (signalNowMs - atMs) / 3_600_000,
+          })
+        : null;
+      const live = signalById.get(r.id);
+      if (own && live) {
+        const merged = mergeSignals(live, own);
+        signalById.set(r.id, {
+          ...merged,
+          primary:
+            live.informationGain >= own.informationGain
+              ? live.primary
+              : (dominantKey(own) as typeof live.primary),
+        });
+      }
+    }
   }
+
 
   const derived = new Map<string, number>();
   // The tier the admission gate computes and used to discard. It is exactly
@@ -1510,7 +1588,17 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       /* The vector's level, CAPPED by what the printed copy can support. A row
          whose only claim is an unsized percentage cannot be Intelligence no
          matter what the market state around it looks like. */
-      voice: capVoice(voiceLevel(signalById.get(r.id) ?? null), copyLevel.get(r.id)),
+      voice: (() => {
+        const capped = capVoice(voiceLevel(signalById.get(r.id) ?? null), copyLevel.get(r.id));
+        /* A FLOOR, NOT A BOOST. Social kinds get an all-zero vector by design,
+           so a new market with a proven reaction (or a proven silence) would
+           rank as a receipt on a technicality. The floor is only ever set from
+           a fact the copy layer verified. */
+        const floor = voiceFloor.get(r.id);
+        if (!floor) return capped;
+        const RANK = { receipt: 0, observation: 1, intelligence: 2 } as const;
+        return RANK[floor] > RANK[capped] ? floor : capped;
+      })(),
       signalGain: signalById.get(r.id)?.informationGain ?? 0,
       /* THE SHAPE OF THE CLUE, capped window-wide (plan §11.8). The motif keys
          on composed copy, so the same observation across four markets reads as
