@@ -697,7 +697,17 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
        which is precisely what LAST BELIEVER LEFT already says. A capital fall
        with believers UNCHANGED is a real, separate story — a holder trimming —
        and still reports. */
-    if (m.metric === "capital" && m.direction === "down" && sw && sw.believerDelta < 0) return null;
+    /* …and the PRICE fall is the same event a third time: a believer leaving a
+       side is exactly what moves that side's price down. Whichever way the
+       market measures the departure, the reader is owed one telling of it —
+       the named one. */
+    if (
+      (m.metric === "capital" || m.metric === "price") &&
+      m.direction === "down" &&
+      sw &&
+      sw.believerDelta < 0
+    )
+      return null;
 
     const dir = m.direction === "up" ? "rose" : "fell";
     const pct = m.pct == null ? null : formatPct(m.pct);
