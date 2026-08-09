@@ -44,6 +44,8 @@ import {
   fallbackRate,
 } from "@/domain/significance";
 import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
+import { signalVector } from "@/domain/signal-vector";
+import { factsForRow } from "@/domain/signal-facts";
 import { editFeed } from "@/domain/feed-editorial";
 import { findPersonPatterns } from "@/domain/person-pattern";
 
