@@ -337,9 +337,8 @@ export function semanticQuestion(i: SemanticInput): string | null {
      above. Requiring either to quote the title is how the question layer ends
      up repeating the headline. Every other shape still has to earn it. */
   const grounded =
-    i.state === "back_from_dead" ||
-    i.state === "one_sided_persistence" ||
-    i.state === "side_got_company";
+    i.state === "back_from_dead" || i.state === "one_sided_persistence";
+
   const variants = variantsFor(i, title, shortTopic(frag)).filter(
     (v) =>
       v.length <= MAX_QUESTION_CHARS &&
