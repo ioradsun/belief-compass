@@ -86,6 +86,8 @@ export interface PositionStoryInput {
   side: Side;
   /** Believers on the held side, now. */
   believers: number | null;
+  /** Net holder change over the selected window, from authoritative snapshots. */
+  believerDelta?: number | null;
   /** The canonical market narrative for this market (single source of truth). */
   live?: CanonicalLine | null;
   /**
@@ -156,6 +158,7 @@ function ownerViewOfCanonical(
   side: Side,
   live: CanonicalLine,
   believers: number | null,
+  believerDelta: number | null,
 ): PositionStory | null {
   const kind = live.kind ?? "";
   const p = live.payload ?? {};
@@ -193,16 +196,22 @@ function ownerViewOfCanonical(
     const n = num((p as { wallets?: unknown }).wallets) ?? 0;
     if (n > 0) {
       const s = sideOf((p as { side?: unknown }).side);
-      if (s === side)
+      // `wallets` is gross first-time arrivals. It is not a side history until
+      // the snapshot delta can reconcile it with exits/flips. Lead with net;
+      // gross is supporting context only when both measures are available.
+      if (s === side && believerDelta != null && believerDelta !== 0) {
+        const d = Math.abs(believerDelta);
         return {
           kind: "believers_your_side",
-          headline: `${people(n)} joined ${side} ${win}.`,
-          body:
-            believers != null
-              ? `${believers.toLocaleString("en-US")} now back ${side}.`
-              : undefined,
-          tone: "up",
+          headline:
+            believerDelta > 0
+              ? `${side} gained ${people(d)} ${win}.`
+              : `${side} lost ${people(d)} ${win}.`,
+          body: `${people(n)} joined${believerDelta < n ? ", but even more left or flipped" : ""}. ${believers == null ? "" : `${believers.toLocaleString("en-US")} now back ${side}.`}`.trim(),
+          tone: believerDelta > 0 ? "up" : "down",
         };
+      }
+      if (s === side) return null;
       if (s === other(side))
         return {
           kind: "believers_other_side",
@@ -310,7 +319,7 @@ export function positionStory(input: PositionStoryInput): PositionStory {
   // 5 — THE CANONICAL MARKET STORY, told from the owner's seat — but only while
   // it is still true. A stale line is worse than no line: it invents news.
   if (input.live && isLineFresh(input.live, input.nowMs ?? Date.now())) {
-    const s = ownerViewOfCanonical(side, input.live, believers);
+    const s = ownerViewOfCanonical(side, input.live, believers, input.believerDelta ?? null);
     if (s) return s;
   }
 

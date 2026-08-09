@@ -220,13 +220,23 @@ export function CaseColumn({
     // Half a cent, expressed in ETH: anything smaller renders as $0.00, so it
     // must not generate a capital story.
     const capitalDust = ethUsd > 0 ? 0.005 / ethUsd : 1e-9;
-    const st = summary ? convictionStory(side, summary.series, { capitalDust, pricePct }) : null;
+    const st = summary
+      ? convictionStory(side, summary.series, {
+          capitalDust,
+          pricePct,
+          // The series is an event ledger: it knows who first bought, but not
+          // whether a sell fully closed a position. Narration therefore uses
+          // the same authoritative start→now deltas as the metric rows below.
+          believerDelta: belDelta,
+          capitalDeltaEth: capDelta == null || !(ethUsd > 0) ? null : capDelta / ethUsd,
+        })
+      : null;
     if (!st) return null;
     return {
       headline: st.headline,
       narrative: narrateStory(st, side, FLOW_WINDOW_PHRASE[win], money),
     };
-  }, [summary, side, win, money, ethUsd, pricePct]);
+  }, [summary, side, win, money, ethUsd, pricePct, belDelta, capDelta]);
 
   // Supporting copy only when something actually moved. "No change today" /
   // "Flat today" is filler — whitespace says it better.

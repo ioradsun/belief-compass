@@ -59,12 +59,34 @@ describe("positionStory — the CANONICAL line, told from the owner's seat", () 
       base({
         side: "YES",
         believers: 35,
+        believerDelta: 6,
         live: live("new_believers", { wallets: 6, side: "YES" }),
       }),
     );
     expect(s.kind).toBe("believers_your_side");
-    expect(s.headline).toBe("6 people joined YES today.");
-    expect(s.body).toBe("35 now back YES.");
+    expect(s.headline).toBe("YES gained 6 people today.");
+    expect(s.body).toBe("6 people joined. 35 now back YES.");
+  });
+
+  it("leads with a reconciled loss when gross arrivals hide larger exits", () => {
+    const s = positionStory(
+      base({
+        side: "YES",
+        believers: 1,
+        believerDelta: -4,
+        live: live("new_believers", { wallets: 5, side: "YES" }),
+      }),
+    );
+    expect(s.headline).toBe("YES lost 4 people today.");
+    expect(s.body).toBe("5 people joined, but even more left or flipped. 1 now back YES.");
+    expect(s.tone).toBe("down");
+  });
+
+  it("does not turn gross arrivals into a side story without a net delta", () => {
+    const s = positionStory(
+      base({ believers: 8, live: live("new_believers", { wallets: 5, side: "YES" }) }),
+    );
+    expect(s.kind).toBe("early");
   });
 
   it("new believers on the OTHER side is different news for an owner", () => {
@@ -78,9 +100,12 @@ describe("positionStory — the CANONICAL line, told from the owner's seat", () 
 
   it("uses the window the read model recorded, never a different one", () => {
     const s = positionStory(
-      base({ live: live("new_believers", { wallets: 1, side: "YES" }, "7d") }),
+      base({
+        believerDelta: 1,
+        live: live("new_believers", { wallets: 1, side: "YES" }, "7d"),
+      }),
     );
-    expect(s.headline).toBe("1 person joined YES in the last 7 days.");
+    expect(s.headline).toBe("YES gained 1 person in the last 7 days.");
   });
 
   it("an overtake toward your side is good news, away from it is bad", () => {
@@ -182,6 +207,7 @@ describe("staleness — a line is only told while it is still true", () => {
   it("tells a fresh 24h line", () => {
     const s = positionStory({
       ...base(),
+      believerDelta: 6,
       nowMs: NOW,
       live: { ...live("new_believers", { wallets: 6, side: "YES" }), occurredAt: at(5) },
     });

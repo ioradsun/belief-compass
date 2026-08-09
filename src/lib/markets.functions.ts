@@ -1636,6 +1636,8 @@ export const getWallet = createServerFn({ method: "GET" })
     const win: VolumeWindow = data.window ?? "24h";
     const chgYes = new Map<number, number>();
     const chgNo = new Map<number, number>();
+    const believerDeltaYes = new Map<number, number>();
+    const believerDeltaNo = new Map<number, number>();
     if (ids.length) {
       const stateRows = ids.map((id) => {
         const s = stateById.get(id);
@@ -1654,6 +1656,8 @@ export const getWallet = createServerFn({ method: "GET" })
         const n = pricePct(c, "NO");
         if (y != null) chgYes.set(id, y);
         if (n != null) chgNo.set(id, n);
+        if (c?.yes.believers.delta != null) believerDeltaYes.set(id, c.yes.believers.delta);
+        if (c?.no.believers.delta != null) believerDeltaNo.set(id, c.no.believers.delta);
       }
     }
 
@@ -1742,6 +1746,8 @@ export const getWallet = createServerFn({ method: "GET" })
         state: stateById.get(Number(r.onchain_id)) ?? null,
         chg_window_yes: chgYes.get(Number(r.onchain_id)) ?? null,
         chg_window_no: chgNo.get(Number(r.onchain_id)) ?? null,
+        believer_delta_yes_win: believerDeltaYes.get(Number(r.onchain_id)) ?? null,
+        believer_delta_no_win: believerDeltaNo.get(Number(r.onchain_id)) ?? null,
         // Believer intake over the SELECTED window (null when the tape can't
         // cover it, or on "All" where "new" has no meaning).
         new_believers_yes_win: newYesWin.get(Number(r.onchain_id)) ?? null,
