@@ -50,6 +50,7 @@ import {
   type CopyLevel,
 } from "@/domain/transition-denominator";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
+import { runNarrationPass } from "@/lib/insider/composition/narration-pass";
 import {
   buildCandidates,
   candidateMarkets,
@@ -384,290 +385,29 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
    */
   const beliefByKey = await deps.loadActorBeliefs(sb, actorWallets, marketIds);
 
-  /** Cohort members with their tenure kept — the face stack only needs names. */
-  const cohortPeople = new Map<string, CohortHolder[]>();
-  /**
-   * What each row did to a BELIEF, as the grammar below already worked it out.
-   * Recorded rather than re-derived, so the sentence a reader sees and the
-   * score that let it through can never disagree about what happened.
-   */
-  const actionById = new Map<string, ConvictionAction>();
-  /** Which rows the grammar classified as a moment rather than a transaction. */
-  const celebrationById = new Map<string, boolean>();
-  /**
-   * Cohort rows we cannot describe honestly (no kind, no rung, or nobody in
-   * them). Better silence than "undefined — 0 believers reached NaN months".
-   */
-  const unrenderable = new Set<string>();
-  /**
-   * THE CEILING A ROW'S OWN COPY PUTS ON ITS VOLUME.
-   *
-   * A "−100% over 24H" on $1.80, or a bare "first believers just stepped in",
-   * is factually fine and editorially a receipt (see transition-denominator).
-   * The signal vector cannot see this — it reads market state, not the sentence
-   * we ended up printing — so the copy pass records the ceiling here and the
-   * mixer applies it.
-   */
-  const copyLevel = new Map<string, CopyLevel>();
-  /** Rows the copy layer refuses to print at all — see `retellTransition`. */
-  const copySuppressed = new Set<string>();
-  /**
-   * THE FLOOR, for rows whose evidence does not live in market state.
-   * A new market with a proven reaction is a clue, but the signal vector is
-   * deliberately blind to social kinds, so without a floor it would rank as a
-   * receipt. Only ever raises, and only where a fact was proven.
-   */
-  const voiceFloor = new Map<string, "observation" | "intelligence">();
-
-  for (const r of live) {
-    const w = r.wallet?.toLowerCase();
-    // Name the actor / creator when we have one; tag the network relationship.
-    if (w) {
-      const { name, avatarUrl, relationship } = namePerson(w, profiles, labelByWallet, aliasFor);
-      r.face = { name, avatarUrl, relationship } satisfies LiveFace;
-    }
-
-    // The crowd behind a burst, named. Ordered by what they committed (the
-    // grouping already did that), with the viewer's own people pulled to the
-    // front so a familiar face is the first one they see.
-    //
-    // ONE PERSON, ONE FACE. When the row already has an actor (`r.face`), that
-    // wallet is dropped from the stack — the row was showing the same person
-    // twice, once as the subject of the sentence and again as "the crowd".
-    const stakes = burstStakes.get(r.id);
-    if (stakes && !r.people) {
-      const seen = new Set<string>(w ? [w] : []);
-      const named = stakes
-        .filter((s) => !seen.has(s.wallet) && (seen.add(s.wallet), true))
-        .map((s) => namePerson(s.wallet, profiles, labelByWallet, aliasFor));
-      if (named.length > 0) r.people = knownFirst(named);
-    } else if (!r.face && !r.people) {
-      // A market signal: no actor, no burst — the believers it is about.
-      const believers = believersByMarket.get(Number(r.marketId)) ?? [];
-      if (believers.length > 0) {
-        r.people = knownFirst(
-          believers.map((wallet) => namePerson(wallet, profiles, labelByWallet, aliasFor)),
-        );
-      }
-    }
-
-    // A CONVICTION COHORT — the people still holding. The event stored PEOPLE,
-    // not prose, precisely so the sentence can be written for where it is
-    // being read: this request knows whether it is the app-wide tape or one
-    // market's panel (`marketIds` is set only by the panel), so it strips the
-    // market title and the side exactly when the surrounding UI supplies them.
-    if (r.kind === "conviction_cohort") {
-      const p = r.payload as unknown as {
-        kind: CohortKind;
-        side: "YES" | "NO";
-        rung: HoldingRung;
-        significance: number;
-        crossedOn?: string;
-        people: CohortHolder[];
-      };
-      // A cohort sentence is only true if we know WHO, WHICH SIDE and HOW
-      // LONG. Missing any of the three, the row is dropped, never guessed.
-      if (
-        !p?.kind ||
-        !p?.side ||
-        !Number.isFinite(Number(p?.rung)) ||
-        !Array.isArray(p?.people) ||
-        p.people.length === 0
-      ) {
-        unrenderable.add(r.id);
-        continue;
-      }
-      const cohort: ConvictionCohort = {
-        kind: p.kind,
-        side: p.side,
-        rung: p.rung,
-        people: p.people ?? [],
-        fingerprint: `cohort:${p.side}:${p.kind}:${p.rung}:${p.crossedOn ?? ""}`,
-        crossedOn: p.crossedOn ?? "",
-        significance: p.significance ?? 0,
-      };
-      // VIEWER LENS, applied here and nowhere else. The stored event is
-      // universal; this labels the people against THIS reader's DNA cache and
-      // leads the stack with the ones they know. Identity is untouched — same
-      // row, same fingerprint, same members, same overflow count.
-      const mine = enrichPeople(cohort.people, labelByWallet);
-      cohort.people = orderForViewer(mine);
-      cohortPeople.set(r.id, cohort.people);
-      // "YOUR PEOPLE ARE HERE" is a claim about the READER, so it is decided
-      // here rather than stored. The emitter has no viewer and could never
-      // reach this kind — which is why the headline was unreachable until now.
-      cohort.kind = cohortKindForViewer(cohort);
-      const surface = scoped ? "panel" : "app";
-      const story = renderCohort(cohort, surface, r.marketTitle);
-      r.story = {
-        category: cohort.kind === "tribe_holding" ? "tribe" : "growing",
-        headline: story.headline,
-        body: story.body,
-        attribution: null,
-        tone: p.side === "YES" ? "yes" : "no",
-        personal: cohort.kind === "tribe_holding",
-      };
-      r.people = cohort.people;
-      r.text = flattenStory(r.story);
-      // Bounded, and only ever a nudge — see viewer-relationship.
-      viewerBoost.set(r.id, relationshipBoost(cohort.people));
-      continue;
-    }
-
-    // Market-wide transitions carry their own composed copy in the payload
-    // (the emitter already ran the interpretation + dedup) — render it directly.
-    if (r.kind === "market_transition") {
-      const p = r.payload as { headline?: string; detail?: string | null; type?: string | null };
-      /**
-       * THE EVENT OWNS ITS OWN ROW.
-       *
-       * "MAJOR MOVE / Money is leaving YES" spends the loudest line in the row
-       * on a category name and demotes the only interesting phrase to the
-       * subtitle. Both wrappers were generic by construction — every signal got
-       * one of two labels — which is exactly what makes a feed read as
-       * machine-generated. The composed headline IS the kicker now; the detail
-       * (the number and the window) is the sentence under it.
-       */
-      /* STORED COPY IS FROZEN AT EMIT TIME, so rows written before the PI voice
-         still speak the old product's language forever. modernizeTransitionCopy
-         recognises those labels at read time and re-says them in the current
-         voice, using only the numbers the stored detail already printed. */
-      /* AND THE PERCENTAGE GETS ITS DENOMINATOR BACK. The emitter froze
-         "−100% over 24H" without knowing whether that was $2,000 or $1.80; the
-         side's 24h capital movement is the money the percentage was computed
-         over, and it lives in market state, here. */
-      const mkt = momentumById.get(Number(r.marketId));
-      const delta = r.side === "NO" ? mkt?.noCapitalDelta24h : mkt?.yesCapitalDelta24h;
-      /* market_state's *_capital_delta_24h is already USD (derived from
-         yes/no_capital_usd against the 24h snapshot), unlike the sibling
-         capital_held_* columns which are ETH. No conversion here. */
-      const deltaUsd =
-        typeof delta === "number" && Number.isFinite(delta) ? Math.abs(delta) : null;
-      const modern = retellTransition(p.headline ?? "", p.detail ?? "", String(r.id), {
-        usd: deltaUsd,
-        side: r.side ?? null,
-      });
-      copyLevel.set(r.id, modern.level);
-      if (modern.suppress) copySuppressed.add(r.id);
-      const kicker = modern.headline.trim();
-      r.story = {
-        category: "momentum",
-        headline: kicker ? kicker.toUpperCase() : "MARKET SIGNAL",
-        body: modern.detail,
-        attribution: null,
-        tone: r.side === "YES" ? "yes" : r.side === "NO" ? "no" : "neutral",
-        personal: false,
-      };
-
-      r.text = flattenStory(r.story);
-      continue;
-    }
-
-    /* A NEW MARKET MUST ANSWER "WHO PUT IT THERE" AND "DID ANYONE REACT".
-       "ON THE TABLE / <question>" is inventory — it names a thing that exists
-       and nothing that happened. The creator wallet rides on the event, the
-       reaction is in market state, and the admission grade follows from which
-       of those facts exist. Nothing here manufactures either one: a bare
-       creation is receipt-grade and gets dropped from the primary surface. */
-    if (r.kind === "market_created") {
-      const m = momentumById.get(Number(r.marketId));
-      const openedMs = r.occurredAt ? Date.parse(r.occurredAt) : NaN;
-      const ageHours = Number.isFinite(openedMs) ? (Date.now() - openedMs) / 3_600_000 : null;
-      // Someone the reader knows who is already in — a fact, or nothing.
-      const known = (believersByMarket.get(Number(r.marketId)) ?? [])
-        .map((wallet) => namePerson(wallet, profiles, labelByWallet, aliasFor))
-        .find((p) => p.relationship != null && p.name);
-      const verdict = tellNewMarketStory({
-        creatorName: r.face?.name ?? null,
-        creatorRelationship: r.face?.relationship ?? null,
-        ageHours,
-        believersYes: m?.believersYes ?? null,
-        believersNo: m?.believersNo ?? null,
-        // Held capital is stored in ETH on this read model; the row does not
-        // claim a dollar figure it cannot prove, so reaction is counted in people.
-        capitalUsd: null,
-        personal: known
-          ? { name: known.name, relationship: String(known.relationship), side: null }
-          : null,
-      });
-      if (verdict.suppress) copySuppressed.add(r.id);
-      if (verdict.level === "receipt") copyLevel.set(r.id, "receipt");
-      else if (verdict.level === "observation") copyLevel.set(r.id, "observation");
-      else voiceFloor.set(r.id, "intelligence");
-      if (verdict.story) {
-        r.story = verdict.story;
-        r.text = flattenStory(r.story);
-      }
-      continue;
-    }
-
-    // Milestone / surge rows are already final from grouping (no actor to name).
-    if (r.kind === "believer_milestone" || r.kind === "tribe_doubled") continue;
-
-
-    const market = momentumById.get(Number(r.marketId)) ?? null;
-    const buySell = (r.payload as { action?: "BUY" | "SELL" }).action ?? null;
-    const actor = r.face ? { name: r.face.name, relationship: r.face.relationship } : null;
-    const belief = w ? beliefByKey.get(`${w}:${Number(r.marketId)}`) : undefined;
-
-    // WHAT THEY DID TO THEIR BELIEF, not which way the tokens went. A buy on
-    // top of an existing position is an ADD (doubling down); a sell that
-    // leaves nothing is an EXIT, one that leaves something is a REDUCE. The
-    // read model is the state AFTER the trade, so shares==0 means they're out.
-    const heldSide = r.side === "YES" ? belief?.yesShares : belief?.noShares;
-    const action: ConvictionAction =
-      r.kind === "market_created"
-        ? "open_market"
-        : r.kind === "believer_milestone"
-          ? "milestone"
-          : r.kind === "tribe_doubled"
-            ? "surge"
-            : r.kind === "side_shift"
-              ? "flip"
-              : r.kind === "round_trip"
-                ? "round_trip"
-                : buySell === "SELL"
-                  ? heldSide != null && heldSide > 0
-                    ? "reduce"
-                    : "exit"
-                  : belief?.enteredBefore
-                    ? "add"
-                    : "enter";
-
-    actionById.set(r.id, action);
-
-    const sideBelievers =
-      r.side === "YES" ? market?.believersYes : r.side === "NO" ? market?.believersNo : null;
-
-    // ONE CLASSIFICATION, USED TWICE. The grammar already decides whether this
-    // is a moment or a transaction; the mixer needed to know and was never
-    // told, so every celebration competed as an ordinary buy. See
-    // `familyOf` (src/domain/feed-cadence) for what that cost.
-    const convictionEvent = {
-      action,
-      side: r.side,
-      actor,
-      context: {
-        amountUsd: r.amountUsd,
-        // Only claim a tenure when this row has ONE actor we actually looked up.
-        daysHeld: belief?.daysHeld ?? null,
-        tenureIsFloor: belief?.tenureIsFloor ?? null,
-        heldBefore: belief?.enteredBefore ?? null,
-        sideBelieversAfter: sideBelievers ?? null,
-        peopleCount: r.walletCount,
-        question: r.kind === "market_created" ? r.marketTitle : null,
-        threshold:
-          r.kind === "believer_milestone"
-            ? Number((r.payload as { threshold?: number }).threshold ?? 0)
-            : null,
-      },
-    };
-    celebrationById.set(r.id, isCelebration(classifyConvictionEvent(convictionEvent)));
-    // Facts above, voice here — the PI layer only chooses HOW this is said
-    // (src/domain/pi-voice); the row id keeps that choice frozen per row.
-    r.story = tellPiStory(convictionEvent, r.id);
-    r.text = flattenStory(r.story);
-  }
+  /* THE NARRATION PASS. Facts in, sentences out — see
+     insider/composition/narration-pass. It mutates the rows (face, people,
+     story, text) and hands back the per-row judgements the ranking, editorial
+     and question layers read below. */
+  const {
+    cohortPeople,
+    actionById,
+    celebrationById,
+    unrenderable,
+    copyLevel,
+    copySuppressed,
+    voiceFloor,
+  } = runNarrationPass({
+    live,
+    profiles,
+    labelByWallet,
+    believersByMarket,
+    burstStakes,
+    beliefByKey,
+    momentumById,
+    scoped,
+    viewerBoost,
+  });
 
   // Materiality: the feed reports changes in conviction, not dust — "volume earns
   // attention only when it changes the meaning of the market". The importance
