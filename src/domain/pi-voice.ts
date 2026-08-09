@@ -37,7 +37,7 @@
  * vocabularies below.
  */
 import type { LiveCategory, LiveStory, NetworkLabel, Side, BeatTone } from "./story";
-import type { TensionKind, ConcentrationKind } from "./signal-vector";
+import type { TensionKind, ConcentrationKind, ClueStage } from "./signal-vector";
 import {
   classifyConvictionEvent,
   formatStoryMoney,
@@ -837,6 +837,10 @@ export type VoiceInput = {
   /** Which contradiction / which concentration — the angle layer needs the kind. */
   tensionKind?: TensionKind;
   concentrationKind?: ConcentrationKind;
+  /** Clue lifecycle (plan §9). Only ever past `new` when ordering was proven. */
+  clue?: ClueStage;
+  /** Signed relative move since the input, ONLY when proven from observations. */
+  provenMoveSinceInput?: number;
 };
 
 /**
@@ -856,7 +860,13 @@ export function voiceLevel(v: VoiceInput | null | undefined): VoiceLevel {
   // `building` alone is the default state of a growing market — accumulation is
   // not an observation, it is the weather.
   const real =
-    s.beforePrice > 0 || s.unusual > 0 || s.concentration > 0 || s.reversing > 0 || s.tension > 0;
+    s.beforePrice > 0 ||
+    s.unusual > 0 ||
+    s.concentration > 0 ||
+    s.reversing > 0 ||
+    s.tension > 0 ||
+    // A proven before/after is an observation, never just a receipt.
+    s.confirmation > 0;
   return real ? "observation" : "receipt";
 }
 
@@ -893,6 +903,19 @@ export function clueLine(v: VoiceInput | null | undefined): string | null {
   if (!v) return null;
   if (voiceLevel(v) === "receipt") return null;
   const s = v.signals;
+
+  /* THE CLUE'S OWN LIFE COMES FIRST (plan §9).
+     "Since then" is only ever said when `signal-vector` proved the ordering from
+     price observations either side of the input. A `new` clue never gets this
+     phrasing, so nothing here can imply a sequence we did not observe. */
+  const move = v.provenMoveSinceInput;
+  if (v.clue === "resolved" && typeof move === "number") {
+    const pct = Math.abs(move * 100);
+    return `Now it's moving. Price is ${move > 0 ? "up" : "down"} ${pct.toFixed(0)}% since then.`;
+  }
+  if (v.clue === "developing") {
+    return "Still quiet. Same money in, price basically unchanged since then.";
+  }
 
   if (s.tension > 0) {
     switch (v.tensionKind) {

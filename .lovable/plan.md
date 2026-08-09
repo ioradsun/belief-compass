@@ -227,7 +227,19 @@ Corpus supply the cost is pricing: 342 rows → receipt 79.5%, observation 18.7%
 ### Step-8 findings (2026-08-09)
 
 The motif cap keys on composed copy, so the same observation in four markets — different wallets, different numbers, four motifs — cost nothing while reading as one sentence repeated. `MixCandidate` now also carries `signalPrimary` and `signalKind` from the viewer-blind vector, and `dominancePenalty` charges the same escalating `overCap` for the window-wide shape: `maxPerSignalKind 2` (the recognisable phrase) and `maxPerSignalPrimary 3` (the looser family). Soft, exactly like the motif cap — a quiet day of one shape still returns every row, and `significance >= breakingAt` skips it. Rows with no vector are byte-identical to before (asserted). 2,383 tests green, typecheck clean.
-9. Confirmation and developing clues only after §8's temporal proof exists.
+9. Confirmation and developing clues only after §8's temporal proof exists. **Done.**
+
+### Step-9 findings (measured, 2026-08-09)
+
+Temporal proof exists and is cheap. `price_snapshots` holds ~2-minute resolution (measured over 24h: 2.0M rows / 2,804 markets; nearest-observation-before-event mean gap **58s**, max **179s**, 123/126 sampled trades covered). Raw reads are far too heavy for a feed build, so `market_price_path(p_ids, p_hours)` downsamples to **one observation per market per hour**, keeping the *last* value in each bucket (an average smears a real move across the hour it happened in), bounded to the markets with a candidate row. Service-role execute only.
+
+`src/domain/price-proof.ts` decides whether the history actually proves anything: it refuses when the before-side is more than 2h stale (a hole is not proof), when nothing has been observed at least 30 minutes after the moment, or when the path does not cover it. Null means "we cannot say" and never "nothing moved".
+
+Model: `SignalVector` gains `clue: new | developing | resolved` and `provenMoveSinceInput`. Confirmation is now **impossible** without a proof — the ungated 24h conjunction is deleted, so the psychologically-dishonest "money entered today, price is up 11% over 24h" can no longer be composed. `resolved` also requires the move to *agree* with the input's direction (a buy answered by a fall is a different story and we do not tell it) and clears `nonresponse`, because the silence broke. Confirmation carries a small bounded ranking weight (0.12) and is deliberately excluded from `primary`, so a resolved clue is worth reading but never leads.
+
+Voice: `clueLine` answers the stage before the signal — "Now it's moving. Price is up 10% since then." / "Still quiet. Same money in, price basically unchanged since then." A `new` clue can never reach that phrasing, so no line implies a sequence we did not observe (asserted).
+
+Supply, over trades ≥1h old in the last 36h: 275/280 provable, 144 resolved-shaped, 114 developing-shaped — so the lifecycle has real material rather than firing once a week. A client without the RPC (test doubles) yields no proof and the feed behaves exactly as it did before. 2,397 tests green, typecheck clean.
 
 ## 12. Tests and invariants
 

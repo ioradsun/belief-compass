@@ -8,6 +8,7 @@
  * Nothing here ranks, scores or writes copy.
  */
 import type { SignalActor, SignalFacts, Holder } from "./signal-vector";
+import type { PriceProof } from "./price-proof";
 
 /**
  * Rows that carry no market signal at all (plan §4). They still matter — a new
@@ -75,6 +76,12 @@ export function factsForRow(
   row: RowSignalInput,
   market: MarketSignalSource | null,
   nowMs: number,
+  /**
+   * Proven price behaviour since this row's moment (plan §8). Omitted or null
+   * means ordering was never established — the vector then refuses any
+   * before/after story rather than inferring one from a 24h window.
+   */
+  priceProof?: PriceProof | null,
 ): SignalFacts {
   if (isSocialSignalKind(row.kind) || !market) {
     return { isSocial: true, nowMs };
@@ -119,6 +126,7 @@ export function factsForRow(
     actor,
     preEventHolders: row.preEventHolders ?? null,
     input,
+    priceProof: priceProof ?? null,
     nowMs,
   };
 }

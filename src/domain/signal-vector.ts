@@ -12,6 +12,7 @@
  *
  * Not wired into ranking, cadence, or copy. Diagnostic first, influential later.
  */
+import type { PriceProof } from "./price-proof";
 
 // ---------------------------------------------------------------------------
 // Constants — each one traceable to a measured property of the corpus.
@@ -66,6 +67,9 @@ export const MAX_CREDIBLE_REL_MOVE = 0.5;
  */
 export const ROW_INHERIT_FLOOR = 0.3;
 
+/** Confirmation supports the story; it never leads it. */
+export const CONFIRMATION_WEIGHT = 0.12;
+
 
 // ---------------------------------------------------------------------------
 // Types
@@ -95,6 +99,16 @@ export type ConcentrationKind =
   | "newcomers_replaced_a_whale";
 
 export type Holder = { wallet: string; netUsd: number };
+
+/**
+ * A clue's life (plan §9). A PI is valuable because they remember:
+ *   new         Three wallets stepped into an empty YES. Price hasn't moved.
+ *   developing  Still quiet. Same money. Price basically unchanged.
+ *   resolved    Now it's moving. YES is up 9% since then.
+ * `developing` and `resolved` require proven ordering; without a price proof the
+ * stage is always `new`.
+ */
+export type ClueStage = "new" | "developing" | "resolved";
 
 export type SignalActor = {
   wallet: string;
@@ -138,8 +152,16 @@ export type SignalFacts = {
   /** A specific meaningful input whose response we can time. */
   input?: { amountUsd: number; atMs: number } | null;
 
+  /**
+   * Proven price behaviour SINCE `input` (plan §8). Present only when the price
+   * history actually covers that moment; null means "we cannot establish
+   * ordering", which is never the same as "nothing happened".
+   */
+  priceProof?: PriceProof | null;
+
   nowMs: number;
 };
+
 
 export type Signals = {
   tension: number;
@@ -171,6 +193,10 @@ export type SignalVector = {
   /** `marketGain × carrier` — the ranking number. */
   informationGain: number;
   primary: SignalKey;
+  /** Where this observation sits in its own life. `new` unless ordering is proven. */
+  clue: ClueStage;
+  /** The signed relative move since the input, ONLY when proven. Never inferred. */
+  provenMoveSinceInput?: number;
   reasons: string[];
 };
 
@@ -373,6 +399,7 @@ export function emptyVector(): SignalVector {
     carrier: 0,
     informationGain: 0,
     primary: "none",
+    clue: "new",
     reasons: [],
   };
 }
@@ -501,9 +528,33 @@ export function signalVector(facts: SignalFacts): SignalVector {
     }
   }
 
-  // --- confirmation (computed, never emitted as a story on its own) ---------
-  if ((band === "moving" || band === "loud") && netIn > CAPITAL_DUST && (change24 ?? 0) > 0) {
-    signals.confirmation = clamp01(Math.min((rel24 ?? 0) / LOUD_REL_MOVE, 1) * 0.8);
+  /* --- confirmation & clue stage (plan §8: PROVEN ORDERING ONLY) ------------
+     The bare conjunction — "$244 entered YES today, YES is up 11% over 24h" —
+     is factually safe and psychologically dishonest: the 24h window can predate
+     the entry entirely. So confirmation is zero unless a price observation from
+     at/just before the input, and one after it, both exist. No proof, no
+     before/after story, and the clue stays `new`. */
+  let clue: ClueStage = "new";
+  let provenMoveSinceInput: number | undefined;
+  const proof = facts.priceProof ?? null;
+  if (proof && input && input.amountUsd >= NONRESPONSE_MIN_USD) {
+    provenMoveSinceInput = proof.relMove;
+    const moved = Math.abs(proof.relMove);
+    const agrees = actorSideAgrees(facts, proof.relMove);
+    if (moved >= LOUD_REL_MOVE && agrees) {
+      // The silence broke, so it is no longer a nonresponse — it is an answer.
+      signals.nonresponse = 0;
+      signals.confirmation = clamp01(Math.min(moved / LOUD_REL_MOVE, 1) * 0.8);
+      clue = "resolved";
+      reasons.push(
+        `proven since the $${input.amountUsd.toFixed(0)} input: price moved ${(proof.relMove * 100).toFixed(1)}% (observed, not inferred)`,
+      );
+    } else if (moved < QUIET_REL_MOVE) {
+      clue = "developing";
+      reasons.push(
+        `proven since the $${input.amountUsd.toFixed(0)} input: price still inside the quiet band (${(proof.relMove * 100).toFixed(1)}%)`,
+      );
+    }
   }
 
   // --- building: residual only ---------------------------------------------
@@ -537,6 +588,9 @@ export function signalVector(facts: SignalFacts): SignalVector {
   ];
   let survive = 1;
   for (const [key, value] of parts) survive *= 1 - WEIGHT[key] * value;
+  // A resolved clue is worth reading, but it never leads: confirmation adds a
+  // small bounded part and is deliberately not a candidate for `primary`.
+  survive *= 1 - CONFIRMATION_WEIGHT * signals.confirmation;
   const marketGain = clamp01(1 - survive);
 
   let primary: SignalKey = "none";
@@ -577,8 +631,22 @@ export function signalVector(facts: SignalFacts): SignalVector {
     carrier,
     informationGain,
     primary,
+    clue,
+    provenMoveSinceInput,
     reasons,
   };
+}
+
+/**
+ * Did the price go the way the input pushed? A buy confirmed by a fall is not a
+ * confirmation of anything — it is a different story, and we do not tell it.
+ */
+function actorSideAgrees(facts: SignalFacts, relMove: number): boolean {
+  const dir = facts.actor?.direction ?? "buy";
+  const yesSide = (num(facts.yesCapitalDelta24h) ?? 0) >= (num(facts.noCapitalDelta24h) ?? 0);
+  const up = relMove > 0;
+  // YES buying agreeing with YES price up; NO-side inputs agree with a fall.
+  return dir === "buy" ? (yesSide ? up : !up) : yesSide ? !up : up;
 }
 
 // ---------------------------------------------------------------------------
