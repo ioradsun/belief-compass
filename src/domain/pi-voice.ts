@@ -76,6 +76,17 @@ export function pickVariant<T>(key: string, xs: readonly T[]): T {
  */
 export const QUESTION_SHARE = 0.35;
 
+/**
+ * THE SMALLEST TRANSACTION A CHARACTER READING IS ALLOWED TO REST ON.
+ *
+ * Copy may never imply more conviction than the transaction proves. "They
+ * weren't done", "doubled down", "still on YES" are all readings of a person's
+ * resolve; under this figure the only honest sentence is what happened.
+ */
+export const CONVICTION_MIN_USD = 25;
+
+
+
 const asksQuestion = (key: string): boolean => (piHash(`q:${key}`) % 100) / 100 < QUESTION_SHARE;
 
 // ── the observation model ────────────────────────────────────────────────────
