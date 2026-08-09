@@ -837,6 +837,10 @@ export type VoiceInput = {
   /** Which contradiction / which concentration — the angle layer needs the kind. */
   tensionKind?: TensionKind;
   concentrationKind?: ConcentrationKind;
+  /** Clue lifecycle (plan §9). Only ever past `new` when ordering was proven. */
+  clue?: ClueStage;
+  /** Signed relative move since the input, ONLY when proven from observations. */
+  provenMoveSinceInput?: number;
 };
 
 /**
@@ -893,6 +897,19 @@ export function clueLine(v: VoiceInput | null | undefined): string | null {
   if (!v) return null;
   if (voiceLevel(v) === "receipt") return null;
   const s = v.signals;
+
+  /* THE CLUE'S OWN LIFE COMES FIRST (plan §9).
+     "Since then" is only ever said when `signal-vector` proved the ordering from
+     price observations either side of the input. A `new` clue never gets this
+     phrasing, so nothing here can imply a sequence we did not observe. */
+  const move = v.provenMoveSinceInput;
+  if (v.clue === "resolved" && typeof move === "number") {
+    const pct = Math.abs(move * 100);
+    return `Now it's moving. Price is ${move > 0 ? "up" : "down"} ${pct.toFixed(0)}% since then.`;
+  }
+  if (v.clue === "developing") {
+    return "Still quiet. Same money in, price basically unchanged since then.";
+  }
 
   if (s.tension > 0) {
     switch (v.tensionKind) {
