@@ -156,6 +156,23 @@ export const CADENCE = {
    */
   maxPerSignalKind: 2,
   maxPerSignalPrimary: 3,
+  /**
+   * HOW STEEPLY A MARKET PAYS FOR TAKING OVER THE WINDOW.
+   *
+   * The cap was enforced linearly, which is why one question could supply 11 of
+   * 45 rows: the eleventh appearance paid eight times the overCap and a busy
+   * market's rows are worth far more than that. A market that keeps appearing
+   * should get expensive FAST — around the fifth row the price has to exceed
+   * anything an ordinary story is worth — while a genuinely exceptional sixth
+   * story (breaking, or a real clue) still wins, because both of those bypass
+   * this entirely.
+   */
+  marketEscalation: 1.7,
+  /**
+   * How many heartbeat rows may sit back-to-back before the run itself is
+   * charged. Two is a rhythm; six is a ticker, and the corpus ended on six.
+   */
+  maxConsecutivePulse: 2,
   /** Penalties. Deliberately smaller than the significance range they compete with. */
   penalty: {
     family: 0.18,
@@ -166,8 +183,11 @@ export const CADENCE = {
     overCap: 0.35,
     /** Per Intelligence row over the window's allowance. Escalates; never blocks. */
     intelligence: 0.12,
+    /** Per consecutive heartbeat row past `maxConsecutivePulse`. Escalates. */
+    pulseRun: 0.45,
 
   },
+
   /** The most a pacing target can ever be worth. Never enough to beat real news. */
   targetNudge: 0.12,
   /**
