@@ -1247,6 +1247,11 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     [...new Set(scored.map(({ r }) => Number(r.marketId)).filter(Number.isFinite))],
   );
   const signalById = new Map<string, ReturnType<typeof signalVector>>();
+  /* Standing rows carry their shape here so the question layer can ask about
+     the CONTRAST rather than about the tenure — and can stay silent for a
+     receipt or an observation, which have nothing unresolved in them. */
+  const standingKindById = new Map<string, { kind: string; klass: string }>();
+
   for (const { r } of scored) {
     const m = momentumById.get(Number(r.marketId));
     const occurredMs = r.occurredAt ? Date.parse(r.occurredAt) : NaN;
