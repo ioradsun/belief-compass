@@ -33,7 +33,15 @@ import { PersonAvatar } from "@/components/PersonAvatar";
 import { mergeLiveRows, LIVE_DELTA_OVERLAP_MS, type LiveRow } from "@/lib/live-tape";
 import { useTapeGate } from "@/hooks/useTapeGate";
 import { arrivalLabel } from "@/domain/tape-arrivals";
-import { mixFeed } from "@/domain/feed-cadence";
+import { mixFeed, type MixCandidate } from "@/domain/feed-cadence";
+import {
+  arrangeFeed,
+  tailState,
+  dueForFullRebuild,
+  HEARTBEAT_MS,
+  INITIAL_REVEAL,
+  REVEAL_PAGE,
+} from "@/domain/live-display";
 import type { BeatTone } from "@/domain/story";
 import { ago } from "@/domain/relative-time";
 
@@ -51,9 +59,6 @@ type LiveResult = {
 /** Beyond this gap since our newest cached event, a delta would be large — just
  *  do a full fetch (the persisted cache already gave the instant paint). */
 const MAX_DELTA_SPAN_MS = 30 * 60_000;
-
-/** How many rows the tape shows. The mixer picks which; time orders them. */
-const VISIBLE_ROWS = 40;
 
 /**
  * The money, at a glance. Two significant-ish figures is all a feed row can
@@ -128,6 +133,11 @@ export function LiveTape({
   const qc = useQueryClient();
   // A tap on a row opens that market — warm it the moment the finger lands.
   const warm = useWarmMarket();
+  // When this hook last did a FULL rebuild (not a delta). The heartbeat forces
+  // one on a slow cadence so the families that are full-fetch only — standing
+  // facts, person milestones, market signals, "showed up" — keep replenishing
+  // between trades instead of the feed running dry. See src/domain/live-display.
+  const lastFullAt = useRef(0);
   const key = ["live-tape", wallet ?? null, scopeKey, side ?? null, limit ?? null];
   const { data, isLoading } = useQuery({
     queryKey: key,
@@ -144,7 +154,10 @@ export function LiveTape({
         scopeKey === null &&
         side == null &&
         prev.length > 0 &&
-        Date.now() - newestMs <= MAX_DELTA_SPAN_MS;
+        Date.now() - newestMs <= MAX_DELTA_SPAN_MS &&
+        // A delta never rebuilds the non-trade families, so once the heartbeat
+        // is due we take the full path even though a delta would be cheaper.
+        !dueForFullRebuild(lastFullAt.current, Date.now());
       if (canDelta) {
         const sinceIso = new Date(newestMs - LIVE_DELTA_OVERLAP_MS).toISOString();
         const res = (await listLiveEvents({
@@ -159,28 +172,37 @@ export function LiveTape({
           error: null,
         };
       }
-      return (await listLiveEvents({
+      const full = (await listLiveEvents({
         data: { wallet, marketIds: scopeKey ?? undefined, side, limit },
       })) as LiveResult;
+      // Only a SUCCESSFUL full build resets the clock — an errored one did not
+      // refresh the families, so the next heartbeat should try again, not wait.
+      if (!full.error) lastFullAt.current = Date.now();
+      return full;
     },
     /**
-     * NO POLL. The realtime coordinator invalidates `["live-tape"]` on every
-     * trade event — coalesced to at most one refetch per 1.5s — and again on
-     * reconnect and on a hidden tab becoming visible. A 30-second timer was
-     * therefore both SLOWER than the socket (up to 30s behind a trade the
-     * coordinator already knew about) and redundant with it.
+     * FRESHNESS IS THE SOCKET'S JOB; the timer below is NOT a freshness poll.
      *
-     * Two mechanisms for one job, and the slower one was setting how fresh the
-     * tape FELT while the faster one paid for it. This codebase has been here
-     * before: see network-query.ts, where one observer's interval put the whole
-     * app's network on a poll.
-     *
-     * `staleTime` replaces it. The tape is authoritative until something says
-     * otherwise, and the coordinator is what says otherwise. A remount inside
-     * the window reuses the cache instead of refetching — which is why moving
-     * between markets no longer costs a request.
+     * The realtime coordinator invalidates `["live-tape"]` on every trade event
+     * — coalesced to at most one refetch per 1.5s — and again on reconnect and
+     * on a hidden tab becoming visible. That is what keeps the tape current, and
+     * a 30-second freshness poll was retired for being both slower than the
+     * socket and redundant with it (see network-query.ts for the same lesson).
+     * `staleTime` reflects that: the tape is authoritative until the coordinator
+     * says otherwise, so remounting inside the window costs no request.
      */
     staleTime: 60_000,
+    // THE HEARTBEAT — a SUPPLY floor, not a freshness poll. The socket only
+    // wakes the tape on a trade, and the delta it fetches rebuilds none of the
+    // non-trade families (standing facts, milestones, market signals, "showed
+    // up"). So between trades the "Now" feed had nothing left to add and looked
+    // frozen. This slow timer re-runs the query, and `dueForFullRebuild` turns
+    // roughly every other tick into a full rebuild — which is the only thing
+    // that replenishes those families and the standing reserve. Deliberately far
+    // slower than the retired poll, and only the global tape needs it (scoped
+    // tapes already full-fetch and ride the socket); a hidden tab never polls.
+    refetchInterval: scopeKey === null && side == null ? HEARTBEAT_MS : false,
+    refetchIntervalInBackground: false,
     // The seed only answers the question it was built for: the unscoped,
     // signed-out tape. Anything scoped or personal must show its own rows.
     placeholderData: (prev) =>
@@ -191,36 +213,23 @@ export function LiveTape({
   const visible =
     excludeMarketId == null ? sticky : sticky.filter((r) => Number(r.marketId) !== excludeMarketId);
 
-  // THE EDITORIAL PASS — and note what it does NOT do any more.
+  // THE EDITORIAL PASS — SELECT with rank, DISPLAY with time.
   //
   // A live tape's contract with the reader is "this is what just happened, in
-  // order". Re-ordering it broke that: the column read 3h, 41m, 1h, 2h and felt
-  // broken rather than curated. So the mixer now SELECTS (dominance caps, family
-  // variety, significance and discovery decide which rows survive the window)
-  // and time still ORDERS. Repetition is handled where feed-cadence always said
-  // it belonged — in aggregation upstream, which now collapses a wallet's sweep
-  // across markets into one row instead of leaving the mixer to hide fifteen.
-  const rows = useMemo(() => {
-    if (visible.length <= VISIBLE_ROWS || !visible.some((r) => r.mix)) return visible;
-    const keep = new Set(
-      mixFeed(
-        visible.map(
-          (r) =>
-            r.mix ?? {
-              id: r.id,
-              family: "live_action" as const,
-              significance: 0.5,
-              occurredAt: r.occurredAt,
-              marketId: String(r.marketId),
-              side: r.side,
-            },
-        ),
-      )
-        .slice(0, VISIBLE_ROWS)
-        .map((m) => m.id),
-    );
-    // `visible` is already newest-first, so filtering preserves live order.
-    return visible.filter((r) => keep.has(r.id));
+  // order". The mixer's job is to CHOOSE which rows survive the window (dominance
+  // caps, family variety, significance and discovery); it must never set the
+  // ORDER, or the column reads 3h, 41m, 1h, 2h and feels broken rather than
+  // curated. So the mixer's output becomes a RANK lookup here, and the actual
+  // windowing + chronological ordering happens at the render boundary via
+  // `arrangeFeed` — which, crucially, no longer DROPS the rows past the window
+  // but hands back how many are waiting, so "Update" can offer older stories
+  // instead of silently exhausting. See src/domain/live-display.
+  const rankById = useMemo(() => {
+    const cands = visible.map((r) => r.mix).filter((m): m is MixCandidate => m != null);
+    if (cands.length === 0) return null;
+    const map = new Map<string, number>();
+    mixFeed(cands).forEach((m, i) => map.set(m.id, i));
+    return map;
   }, [visible]);
 
   // ARRIVAL. A live feed should feel like it is being written, so rows are
@@ -246,7 +255,19 @@ export function LiveTape({
   // happens to render it.
   // A single-market tape counts events; the global feed counts markets.
   const singleMarket = (marketIds?.length ?? 0) === 1;
-  const gate = useTapeGate(rows, JSON.stringify(key), holdUpdates, !singleMarket);
+  // Identifies WHICH tape this is — a scope change is a new list, not new
+  // activity. Shared by the gate, the scheduler and the reveal window.
+  const resetKey = JSON.stringify(key);
+  // The gate now sees the FULL candidate set (not a pre-sliced 40), so nothing
+  // eligible is dropped before the reader can be offered it. Windowing moved to
+  // the render boundary — see `arranged` below.
+  const gate = useTapeGate(visible, resetKey, holdUpdates, !singleMarket);
+
+  // How many rows the "Now" column reveals. Grows when the reader asks for more;
+  // resets when the tape becomes a different list.
+  const [revealCount, setRevealCount] = useState(INITIAL_REVEAL);
+  useEffect(() => setRevealCount(INITIAL_REVEAL), [resetKey]);
+  const revealMore = useCallback(() => setRevealCount((n) => n + REVEAL_PAGE), []);
 
   // The 0 → N edge, counted. Increments only when the pill goes from absent to
   // present, so the entrance animation plays once per waiting batch.
@@ -265,10 +286,28 @@ export function LiveTape({
   );
   const { rows: released, entranceWeight } = useScheduledRows(
     gate.admitted,
-    JSON.stringify(key),
+    resetKey,
     standing,
     gate.admitNonce,
   );
+
+  // WINDOW + ORDER, in one place. For the standalone "Now" column the mixer's
+  // rank chooses the best `revealCount` stories and time orders them; `hidden`
+  // is what "Show earlier" will surface. Embedded tapes (no label) are short and
+  // scroll inside a host panel, so they keep showing everything the scheduler
+  // has released, in the scheduler's order — the windowing is the Now column's
+  // concern, not theirs.
+  const arranged =
+    label != null
+      ? arrangeFeed(released, { rankOf: (id) => rankById?.get(id), limit: revealCount })
+      : { shown: released, hidden: 0 };
+  const shown = arranged.shown;
+  const tail = tailState({
+    shown: shown.length,
+    hidden: arranged.hidden,
+    pending: gate.pending,
+    loading: isLoading,
+  });
 
   /**
    * THE TAP HAS TO LAND SOMEWHERE THE READER CAN SEE.
@@ -381,17 +420,17 @@ export function LiveTape({
           : ""
       }
     >
-      {isLoading && released.length === 0 ? (
+      {isLoading && shown.length === 0 ? (
         <ul className="space-y-2" aria-hidden>
           {Array.from({ length: skeletonRows }).map((_, i) => (
             <li key={i} className="h-8 animate-pulse rounded bg-[var(--surface-2)]" />
           ))}
         </ul>
-      ) : released.length === 0 ? (
+      ) : shown.length === 0 ? (
         <p className="text-xs text-[var(--text-muted)]">{emptyText}</p>
       ) : (
         <ul className="space-y-3">
-          {released.map((r) => {
+          {shown.map((r) => {
             const s = r.story;
             const personal = s.personal;
             // A discovery moment is about a PERSON, not a market — it has no
@@ -500,6 +539,28 @@ export function LiveTape({
               </li>
             );
           })}
+          {/* THE TAIL NEVER LOOKS FROZEN. Three honest states, and only ever one:
+              older stories to reveal, or a plain "you're caught up". A fetch in
+              flight or arrivals waiting up top say nothing here, so the tail does
+              not compete with the "N New" control. Only the standalone "Now"
+              column carries it — an embedded rail is short and its host owns the
+              end of its own list. See src/domain/live-display. */}
+          {label != null && tail === "more" && (
+            <li>
+              <button
+                type="button"
+                onClick={revealMore}
+                className="w-full rounded-[10px] px-2 py-2 text-left text-[12px] font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)]"
+              >
+                Show earlier stories
+              </button>
+            </li>
+          )}
+          {label != null && tail === "caught_up" && (
+            <li className="px-2 pb-1 pt-3 text-[11px] leading-snug text-[var(--text-muted)]">
+              You&rsquo;re all caught up. New stories appear as Conviction moves.
+            </li>
+          )}
         </ul>
       )}
     </div>
