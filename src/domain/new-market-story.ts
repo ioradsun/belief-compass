@@ -21,6 +21,7 @@
  */
 import { formatStoryMoney } from "./conviction-event";
 import { countWord } from "./pi-voice";
+import { fixStoryAgreement } from "./grammar";
 import type { LiveStory } from "./story";
 
 /** How loud a new-market row is allowed to be. */
