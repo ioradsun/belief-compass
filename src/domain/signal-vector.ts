@@ -540,9 +540,10 @@ export function signalVector(facts: SignalFacts): SignalVector {
   if (proof && input && input.amountUsd >= NONRESPONSE_MIN_USD) {
     provenMoveSinceInput = proof.relMove;
     const moved = Math.abs(proof.relMove);
-    const withInput = input && signals.nonresponse >= 0; // the input we are timing
     const agrees = actorSideAgrees(facts, proof.relMove);
-    if (moved >= LOUD_REL_MOVE && agrees && withInput) {
+    if (moved >= LOUD_REL_MOVE && agrees) {
+      // The silence broke, so it is no longer a nonresponse — it is an answer.
+      signals.nonresponse = 0;
       signals.confirmation = clamp01(Math.min(moved / LOUD_REL_MOVE, 1) * 0.8);
       clue = "resolved";
       reasons.push(
