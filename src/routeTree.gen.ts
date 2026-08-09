@@ -10,9 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ValueRouteImport } from './routes/value'
-import { Route as TestingsceneRouteImport } from './routes/testingscene'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as Lab9f3c7a21b4RouteImport } from './routes/lab-9f3c7a21b4'
 import { Route as HowRouteImport } from './routes/how'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
@@ -37,11 +37,6 @@ const ValueRoute = ValueRouteImport.update({
   path: '/value',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TestingsceneRoute = TestingsceneRouteImport.update({
-  id: '/testingscene',
-  path: '/testingscene',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
@@ -50,6 +45,11 @@ const TermsRoute = TermsRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Lab9f3c7a21b4Route = Lab9f3c7a21b4RouteImport.update({
+  id: '/lab-9f3c7a21b4',
+  path: '/lab-9f3c7a21b4',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HowRoute = HowRouteImport.update({
@@ -155,9 +155,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/how': typeof HowRoute
+  '/lab-9f3c7a21b4': typeof Lab9f3c7a21b4Route
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
-  '/testingscene': typeof TestingsceneRoute
   '/value': typeof ValueRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
@@ -179,9 +179,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/how': typeof HowRoute
+  '/lab-9f3c7a21b4': typeof Lab9f3c7a21b4Route
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
-  '/testingscene': typeof TestingsceneRoute
   '/value': typeof ValueRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
@@ -204,9 +204,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/how': typeof HowRoute
+  '/lab-9f3c7a21b4': typeof Lab9f3c7a21b4Route
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms': typeof TermsRoute
-  '/testingscene': typeof TestingsceneRoute
   '/value': typeof ValueRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
@@ -230,9 +230,9 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/how'
+    | '/lab-9f3c7a21b4'
     | '/sitemap.xml'
     | '/terms'
-    | '/testingscene'
     | '/value'
     | '/dev/rail'
     | '/dev/transitions'
@@ -254,9 +254,9 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/how'
+    | '/lab-9f3c7a21b4'
     | '/sitemap.xml'
     | '/terms'
-    | '/testingscene'
     | '/value'
     | '/dev/rail'
     | '/dev/transitions'
@@ -278,9 +278,9 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/how'
+    | '/lab-9f3c7a21b4'
     | '/sitemap.xml'
     | '/terms'
-    | '/testingscene'
     | '/value'
     | '/dev/rail'
     | '/dev/transitions'
@@ -303,9 +303,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   HowRoute: typeof HowRoute
+  Lab9f3c7a21b4Route: typeof Lab9f3c7a21b4Route
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsRoute: typeof TermsRoute
-  TestingsceneRoute: typeof TestingsceneRoute
   ValueRoute: typeof ValueRoute
   DevRailRoute: typeof DevRailRoute
   DevTransitionsRoute: typeof DevTransitionsRoute
@@ -333,13 +333,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ValueRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/testingscene': {
-      id: '/testingscene'
-      path: '/testingscene'
-      fullPath: '/testingscene'
-      preLoaderRoute: typeof TestingsceneRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/terms': {
       id: '/terms'
       path: '/terms'
@@ -352,6 +345,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lab-9f3c7a21b4': {
+      id: '/lab-9f3c7a21b4'
+      path: '/lab-9f3c7a21b4'
+      fullPath: '/lab-9f3c7a21b4'
+      preLoaderRoute: typeof Lab9f3c7a21b4RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/how': {
@@ -487,9 +487,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   HowRoute: HowRoute,
+  Lab9f3c7a21b4Route: Lab9f3c7a21b4Route,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsRoute: TermsRoute,
-  TestingsceneRoute: TestingsceneRoute,
   ValueRoute: ValueRoute,
   DevRailRoute: DevRailRoute,
   DevTransitionsRoute: DevTransitionsRoute,
@@ -510,13 +510,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

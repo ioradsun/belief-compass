@@ -163,11 +163,13 @@ function TestingScene() {
   const failed = checks.filter((c) => !c.ok);
   const subject = world.audience.find((p) => p.name === who) ?? world.audience[0] ?? null;
 
-  if (!import.meta.env.DEV) {
-    return (
-      <div className="p-8 text-sm text-[var(--text-muted)]">The scene lab is development-only.</div>
-    );
+  // Dev: always on. Production: only when the build was published with the flag.
+  const labEnabled =
+    import.meta.env.DEV || import.meta.env['VITE_ENABLE_SCENE_LAB'] === "true";
+  if (!labEnabled) {
+    return <div className="p-8 text-sm text-[var(--text-muted)]">Not found.</div>;
   }
+
 
   const set = (next: Partial<{ scene: string; role: Role; who: string }>) =>
     void navigate({
