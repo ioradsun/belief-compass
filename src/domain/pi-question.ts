@@ -28,7 +28,7 @@
  * Determinism is inherited from pi-voice: variants are a hash of a stable key,
  * so a row asks the same question on every refresh, on server and client.
  */
-import { piHash, pickVariant, voiceLevel, type VoiceInput } from "./pi-voice";
+import { piHash, pickVariant, voiceLevel, INTELLIGENCE_GAIN_MIN, type VoiceInput } from "./pi-voice";
 
 /** The shape of gap being asked about. One per feed window (see `rationQuestions`). */
 export type QuestionKind =
