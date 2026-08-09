@@ -9,7 +9,11 @@
 
 This is the design principle for every future feature. It is also encoded as
 `INSIDER_CONSTITUTION` in `src/domain/insider/index.ts` so docs, tests, and future
-architecture checks cite the same words.
+architecture checks cite the same words. The contract invariants — the
+constitutional rule, builder replay-determinism + provenance, activity
+scope/side/order parity, and bounded plural scoring — are guarded in CI by
+`npm run check:insider` (`scripts/check-insider.ts`), alongside the repo's other
+`check:*` gates.
 
 ## The principle
 

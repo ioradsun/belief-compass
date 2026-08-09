@@ -36,7 +36,8 @@
     "check:deployed": "node scripts/check-deployed.mjs",
     "check:signal-corpus": "tsx scripts/check-signal-corpus.ts",
     "check:questions": "tsx scripts/check-questions.ts",
-    "check:composition": "tsx scripts/check-composition.ts"
+    "check:composition": "tsx scripts/check-composition.ts",
+    "check:insider": "tsx scripts/check-insider.ts"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.11",
