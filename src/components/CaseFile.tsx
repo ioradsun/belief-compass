@@ -717,6 +717,20 @@ function FacePile({
 }) {
   const faces = roster.slice(0, 3).map((r) => r.believer);
   const total = roster.length;
+  /**
+   * THE HONORARY SEAT. Exactly one person per market carries `whale` — the
+   * largest position among holders who have stood on their side for at least a
+   * week — so this is a find, never a filter, and it is often nobody.
+   *
+   * Kept out of the avatar stack so the same face is not shown twice, but left
+   * in the sentence: they are still one of the people who backed this.
+   *
+   * NO AMOUNT SHOWN. The size decided who sits here; the duration is what makes
+   * the seat mean something. Printing the dollars would turn a status into a
+   * leaderboard, and nobody else on this strip shows a figure.
+   */
+  const whale = roster.find((r) => r.believer.whale)?.believer ?? null;
+  const stackFaces = whale ? faces.filter((b) => b.wallet !== whale.wallet) : faces;
   const first = (n: string) => n.split(/\s+/)[0] || n;
   const sentence =
     total === 1
@@ -730,7 +744,7 @@ function FacePile({
   return (
     <div className="flex items-center gap-2">
       <div className="flex shrink-0 -space-x-2">
-        {faces.map((b) => (
+        {stackFaces.map((b) => (
           <PersonAvatar
             key={b.wallet}
             wallet={b.wallet}
@@ -741,6 +755,31 @@ function FacePile({
           />
         ))}
       </div>
+
+      {/* The side's own colour is the only thing that says YES or NO here, so
+          the ring carries it rather than a second word of copy. */}
+      {whale && (
+        <div
+          className="flex shrink-0 items-center gap-1.5"
+          title={`Largest ${whale.side} holder still standing after ${whale.daysHeld} days`}
+        >
+          <span
+            className="inline-flex rounded-full p-[2px]"
+            style={{ backgroundColor: `var(--${whale.side === "YES" ? "yes" : "no"})` }}
+          >
+            <PersonAvatar
+              wallet={whale.wallet}
+              name={whale.name}
+              avatarUrl={whale.avatarUrl}
+              size={24}
+              className="ring-2 ring-[var(--bg)]"
+            />
+          </span>
+          <span className="text-[10.5px] leading-none whitespace-nowrap text-[var(--text-muted)]">
+            Whale · {whale.daysHeld}d
+          </span>
+        </div>
+      )}
       <button
         type="button"
         onClick={onOpenAll}
