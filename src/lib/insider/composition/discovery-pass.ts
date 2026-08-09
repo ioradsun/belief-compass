@@ -12,11 +12,8 @@
  * rows, so it can be run twice with two readers and compared.
  */
 import { discoveryValue, markSeen, type DiscoverySubject } from "@/domain/discovery";
-import {
-  scoreDiscoveryMoment,
-  tellDiscoveryMoment,
-  type DiscoveryMoment,
-} from "@/domain/discovery-moment";
+import { tellDiscoveryMoment, type DiscoveryMoment } from "@/domain/discovery-moment";
+import { scoreDiscoveryMoment } from "@/domain/significance";
 import { flattenStory, type LiveRow } from "@/lib/live-tape";
 import { aliasFor } from "@/lib/wallet-identity";
 import type { NetLabel } from "@/domain/viewer-network";
