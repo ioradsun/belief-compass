@@ -177,7 +177,7 @@ export function ChallengeRail({
             role="tab"
             aria-selected={tab === t}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => pick(t)}
             className={`flex grow basis-0 items-center justify-center gap-1.5 rounded-[8px] px-1.5 py-1 text-[12px] font-medium transition-colors ${
               tab === t ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
             }`}
