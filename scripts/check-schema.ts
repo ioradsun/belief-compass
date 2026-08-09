@@ -266,7 +266,7 @@ async function main() {
       else broken.push(r);
     }
     const mark = fatal ? "✗" : verdict === "ok" ? "✓" : "·";
-    console.log(`  ${mark} ${r.table.padEnd(24)} ${verdict.padEnd(15)} ${detail}`);
+    console.log(`  ${mark} ${label(r).padEnd(28)} ${verdict.padEnd(15)} ${detail}`);
     console.log(`      ${r.feature}`);
     if (!fatal) continue;
     // An empty table with a known writer is a stalled JOB, not a missing
