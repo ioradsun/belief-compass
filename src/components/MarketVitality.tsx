@@ -7,10 +7,15 @@
  * the story (the narrative sentence, the House voice, the activity) lives in the
  * right feed. The center never becomes a feed.
  *
- * Every number is read off the canonical marketBook, so the totals reconcile with
- * the side panels; the label comes from marketPulse — existing calculations,
- * unchanged. Side-blind by construction. The SAME component renders on desktop and
- * mobile; only the layout changes.
+ * WHO OWNS THE MOMENTUM READ. Not this file. The numbers are canonical
+ * (`marketBook` + the shared `MarketChange`), their copy comes from the shared
+ * metric-display rule, and the INTERPRETATION — direction, momentum, whether
+ * this is fast or calm — is the Insider's: `pulseFactsFromMarket` → `insiderPulse`
+ * → `insight`. The component renders that read; it does not compute one. This is
+ * the constitutional rule in `src/domain/insider` applied to the center panel.
+ *
+ * Side-blind by construction. The SAME component renders on desktop and mobile;
+ * only the layout changes.
  */
 import { useMemo, useState, type ReactNode } from "react";
 import { PersonAvatar } from "@/components/PersonAvatar";
@@ -23,6 +28,13 @@ import { useDisplayUnit } from "@/lib/display-unit";
 import { believerMove, capitalMove, type MetricMove } from "@/domain/metric-display";
 import type { MarketChange, MetricChange } from "@/domain/market-change";
 import { participantSocial, type ParticipantRelation } from "@/domain/participant-social";
+import {
+  insiderPulse,
+  insight,
+  pulseFactsFromMarket,
+  type MarketStateFacts,
+} from "@/domain/insider";
+
 
 /**
  * A shared MetricChange in the shape believerMove/capitalMove expect.
