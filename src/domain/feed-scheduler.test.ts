@@ -134,11 +134,15 @@ describe("a standing story is paced like any other unhurried row", () => {
   // indefinitely on a busy tape. It now competes on weight like everything else.
   const continuity = row({ id: "held43", perishability: "soon", weight: 2 });
 
-  it("still yields to urgent activity, on priority alone", () => {
-    const s = enqueue(createScheduleState(T0), [continuity, row({ id: "trade" })]);
+  it("yields to urgent activity of the same weight, on priority alone", () => {
+    const s = enqueue(createScheduleState(T0), [
+      continuity,
+      row({ id: "trade", perishability: "now", weight: 2 }),
+    ]);
     expect(modeFor(s, T0)).toBe("normal");
     expect(tick(s, T0 + 120_000).release?.id).toBe("trade");
   });
+
 
   it("is released on a quiet tape instead of being held for silence", () => {
     const s = enqueue(createScheduleState(T0), [continuity]);
