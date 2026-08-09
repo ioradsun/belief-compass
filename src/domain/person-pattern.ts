@@ -235,12 +235,23 @@ const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
  * "Will Pump.fun still be top 3 by revenue in 2026?" is about Pump.fun; the
  * rest of the sentence belongs to the market row, not to this one.
  */
-const LEAD_IN = /^(will|would|does|do|did|is|are|can|could|should|has|have)\s+/i;
+const LEAD_IN = /^(will|would|does|do|did|is|are|can|could|should|has|have|the|a|an)\\s+/i;
 function topic(title: string | null | undefined): string | null {
-  const t = (title ?? "").trim().replace(/[?.!]+$/, "");
+  let t = (title ?? "").trim().replace(/[?.!]+$/, "");
   if (!t) return null;
-  const rest = t.replace(LEAD_IN, "").trim();
-  if (!rest) return null;
-  const words = rest.split(/\s+/).slice(0, 3).join(" ");
-  return words.length > 32 ? words.slice(0, 32).trim() : words;
+  // Strip as many lead-ins as the question stacks ("Will the ...").
+  for (let i = 0; i < 3; i++) t = t.replace(LEAD_IN, "").trim();
+  /* THE SUBJECT IS THE FIRST NOUN, NOT THE FIRST THREE WORDS. "Will Pump.fun
+     still be top 3 by revenue?" is about Pump.fun; "Will gaming tokens
+     outperform in Q4?" is about gaming. Taking a fixed number of words drags
+     the predicate in with it ("Pump.fun still be"), which reads like a typo.
+     So: the first word, plus a second only when the pair is plainly one name
+     (both capitalised, e.g. "Base Chain"). */
+  const words = t.split(/\\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  const first = words[0]!;
+  const second = words[1];
+  const proper = (w: string | undefined) => !!w && /^[A-Z0-9]/.test(w);
+  const label = proper(first) && proper(second) ? `${first} ${second}` : first;
+  return label.length > 32 ? label.slice(0, 32).trim() : label;
 }

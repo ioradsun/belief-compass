@@ -54,7 +54,7 @@ describe("a person's receipts compose into one behaviour", () => {
       },
     ]);
     expect(p[0]!.kind).toBe("rotation");
-    expect(p[0]!.lead?.body).toBe("Out of Pump.fun still. Into gaming tokens outperform.");
+    expect(p[0]!.lead?.body).toBe("Out of Pump.fun. Into gaming.");
   });
 
   it("a lone move is still not a pattern", () => {
