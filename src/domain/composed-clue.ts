@@ -211,7 +211,20 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
                 `Out of one, into another. Changing the read, or just moving capital?`,
                 `Several positions changed at once. One decision, or one exit?`,
               ]),
+        /* THE BEHAVIOUR IS THE STORY; THE RECEIPT IS THE EVIDENCE. */
+        lead: named
+          ? {
+              headline: `${NAME} is moving around`,
+              body: [
+                `${markets.size > 1 ? `${n} positions changed across ${markets.size} questions` : `${n} changes on one question`} in the last few hours.`,
+                evidence,
+              ]
+                .filter(Boolean)
+                .join(" "),
+            }
+          : null,
       });
+
       continue;
     }
 
