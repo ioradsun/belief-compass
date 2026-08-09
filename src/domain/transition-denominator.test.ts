@@ -92,3 +92,15 @@ describe("percentages that are not money", () => {
     expect(r.detail).not.toContain("$6,931");
   });
 });
+
+describe("bare arithmetic rows", () => {
+  it("sizes a percentage the emitter stored without a noun", () => {
+    const r = retellTransition("Money is leaving YES", "−100% over 24H", "k2", {
+      usd: 2.01,
+      side: "YES",
+    });
+    expect(r.detail).toContain("$2.01");
+    expect(r.detail).not.toContain("%");
+    expect(r.level).toBe("receipt");
+  });
+});

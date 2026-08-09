@@ -101,8 +101,12 @@ export function retellTransition(
   /* A percentage only earns a dollar denominator when it IS money. Price
      re-ratings ("YES re-rated +5.3%") are a different quantity: restating one
      as "$6,931 arrived" would be a fabrication. */
+  /* The emitter often stores the bare arithmetic ("−100% over 24H") and lets
+     the voice layer supply the noun, so the raw row alone can't say whether a
+     percentage is money. Judge the rendered sentence as well. */
+  const said = `${raw} ${base.headline} ${base.detail}`;
   const aboutMoney =
-    /\b(money|capital|funded)\b/i.test(raw) && !/re-rated|\bprice\b/i.test(raw);
+    /\b(money|capital|funded)\b/i.test(said) && !/re-rated|\bprice\b/i.test(said);
 
   if (!move || !aboutMoney) {
     return { ...base, usd, level: hasFigure(base.detail) ? "observation" : "receipt" };
