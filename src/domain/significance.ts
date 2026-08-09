@@ -297,7 +297,24 @@ export const SIGNIFICANCE_COVERAGE = {
    * `events` — it exists for one reader — so it is scored where it is built.
    */
   discovery_moment: "derived",
-} as const satisfies Record<string, "derived" | "emitted">;
+  /**
+   * SYNTHESIZED CONTINUITY AND PERSON ROWS. These are composed at read time and
+   * carry an explicit score with them (`payload.significance` for standing
+   * stories, the milestone scorer for a person crossing a round number), so they
+   * are "derived" in exactly the sense the registry means: the number is
+   * computed by the builder, not read off a stored column.
+   *
+   * They were missing, which is worse than it sounds: an absent entry does not
+   * merely skip a check, it routes a real share of the feed through
+   * `SIGNIFICANCE.fallback` in the telemetry and hides the gap. Registering them
+   * changes no scoring semantics — the builders already produced these numbers —
+   * it makes the score path EXPLICIT, which is the only thing this registry is for.
+   */
+  standing_fact: "derived",
+  standing_signal: "derived",
+  person_milestone: "derived",
+  showed_up: "derived",
+
 
 export type ScoredKind = keyof typeof SIGNIFICANCE_COVERAGE;
 
