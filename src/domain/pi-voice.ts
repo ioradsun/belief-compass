@@ -623,8 +623,8 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
       case "last_believer_left":
         return [
           {
-            headline: "Emptied out",
-            body: side ? `${s} just emptied out.` : "That side just emptied out.",
+            headline: side ? `${s} just emptied out` : "Emptied out",
+            body: amount >= 0.005 ? `${who} took the last ${money} off it.` : `${who} was the last one on ${s || "it"}.`,
           },
           {
             headline: "Last one left",
@@ -632,6 +632,7 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
             angle: side ? `Nobody is on ${s} now.` : null,
           },
         ];
+
 
       case "swept_out": {
         const markets = n(c.marketCount);
