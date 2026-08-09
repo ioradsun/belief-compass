@@ -297,9 +297,17 @@ behind an unchanged surface, each step proven by parity tests.
    the realtime coordinator still invalidates everything the Insider believes with
    one prefix (`insiderRootKey()`) on a trade and on reconnect, and persistence
    restores the family by that root. The old component-named `live-tape` family is
-   gone. Keys tested in `lib/insider/keys.test.ts`. Remaining: converging the
-   surrounding families (`conviction-market`, `market-pulses`, `opp-feed`) as their
-   consumers adopt Insider projections.
+   gone, and the per-card INSIGHT batches moved with it: `insiderPulseKey(ids)` →
+   `["insider","pulse","12,45,88"]` keeps the id spec in the key so realtime can
+   still target exactly the batches holding a market that traded. The socket also
+   got MORE precise in the process: a trade used to refetch every mounted tape,
+   including rails belonging to markets it could not affect. The coordinator now
+   invalidates the global scope (`insiderNowRootKey()`) plus only the traded
+   markets' own rails (`affectedInsiderActivityKeys`). Keys tested in
+   `lib/insider/keys.test.ts`, targeting in `realtime/reduce.test.ts`. Remaining:
+   the canonical market families (`conviction-market`, `market-row`, `opp-feed`)
+   stay as they are — they are FACTS, not Insider interpretation, so they only
+   move if a surface starts reading them through a projection.
 7. **Reference audit + delete.** Remove old plumbing with zero remaining imports in
    current `main`; update `data-flow.md`, `data-ownership.md`, this file, and the
    architecture checks to enforce the boundary.

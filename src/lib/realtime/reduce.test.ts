@@ -6,6 +6,7 @@ import {
   affectedPulseKeys,
   affectedPositionsTapeKeys,
   affectedMarketKeys,
+  affectedInsiderActivityKeys,
   affectedViewerValuationKeys,
   viewerPositionKeys,
   liveFieldsOf,
@@ -157,18 +158,34 @@ describe("applyMarketStateBatch — deterministic ordering", () => {
 
 describe("affectedPulseKeys", () => {
   it("selects only pulse caches that hold a traded market (both key shapes)", () => {
-    qc.setQueryData(["market-pulses", "12,45,88"], { pulses: {} }); // feed id-list
-    qc.setQueryData(["market-pulses", "42"], { pulses: {} }); // single market
-    qc.setQueryData(["market-pulses", "7,9"], { pulses: {} }); // unrelated
+    qc.setQueryData(["insider", "pulse", "12,45,88"], { pulses: {} }); // feed id-list
+    qc.setQueryData(["insider", "pulse", "42"], { pulses: {} }); // single market
+    qc.setQueryData(["insider", "pulse", "7,9"], { pulses: {} }); // unrelated
     const keys = affectedPulseKeys(qc, new Set([42, 88]));
-    const specs = keys.map((k) => k[1]).sort();
+    const specs = keys.map((k) => k[2]).sort();
     expect(specs).toEqual(["12,45,88", "42"]);
   });
 
   it("returns nothing when no cache intersects (or the set is empty)", () => {
-    qc.setQueryData(["market-pulses", "7,9"], { pulses: {} });
+    qc.setQueryData(["insider", "pulse", "7,9"], { pulses: {} });
     expect(affectedPulseKeys(qc, new Set([1, 2]))).toEqual([]);
     expect(affectedPulseKeys(qc, new Set())).toEqual([]);
+  });
+});
+
+describe("affectedInsiderActivityKeys", () => {
+  it("selects only the traded market's own rails, never another market's", () => {
+    qc.setQueryData(["insider", 42, "activity", null, 200], { rows: [] });
+    qc.setQueryData(["insider", 7, "activity", "0xabc", 200], { rows: [] });
+    qc.setQueryData(["insider", "now", null, null, null, 120], { rows: [] });
+    const keys = affectedInsiderActivityKeys(qc, new Set([42]));
+    expect(keys).toEqual([["insider", 42, "activity", null, 200]]);
+  });
+
+  it("returns nothing when the traded market has no open rail", () => {
+    qc.setQueryData(["insider", 7, "activity", null, 200], { rows: [] });
+    expect(affectedInsiderActivityKeys(qc, new Set([42]))).toEqual([]);
+    expect(affectedInsiderActivityKeys(qc, new Set())).toEqual([]);
   });
 });
 

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { insiderPulseKey } from "@/lib/insider/keys";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { lazyRetry } from "@/lib/lazy-retry";
 
@@ -213,7 +214,7 @@ const feedQO = (
 
 const pulsesQO = (ids: number[]) =>
   queryOptions({
-    queryKey: ["market-pulses", ids.join(",")],
+    queryKey: insiderPulseKey(ids),
     queryFn: async () => await listMarketPulses({ data: { ids: ids.slice(0, 120) } }),
     enabled: ids.length > 0,
     // NO INTERVAL. The coordinator invalidates exactly the pulse keys that hold

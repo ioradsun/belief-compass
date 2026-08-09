@@ -13,6 +13,7 @@
  * desktop deck uses (marketBook / evidence / house read), so the
  * two experiences can never disagree.
  */
+import { insiderPulseKey } from "@/lib/insider/keys";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -574,7 +575,7 @@ function BothSides({
   const { unit, format } = useMoney();
   const { data: evidence } = useQuery(evidenceQO(marketId));
   const { data: pulses } = useQuery({
-    queryKey: ["market-pulses", String(marketId)],
+    queryKey: insiderPulseKey([marketId]),
     queryFn: () => listMarketPulses({ data: { ids: [marketId] } }),
     staleTime: 15_000,
   });

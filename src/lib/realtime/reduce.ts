@@ -16,6 +16,7 @@
  * the coordinator owns the socket, this owns the merge. Pure enough to unit-test.
  */
 import type { QueryClient } from "@tanstack/react-query";
+import { insiderPulseRootKey, insiderRootKey } from "@/lib/insider/keys";
 
 /** A raw `market_state` row as delivered by Postgres realtime (JSON payload.new). */
 export type MarketStateRow = Record<string, unknown> & {
@@ -192,15 +193,16 @@ export function applyMarketStateBatch(
 // narrated slice, letting the server stay the single author of the copy.
 
 /**
- * Which `["market-pulses", ids]` cache keys hold at least one of the markets that
- * just traded. Both key shapes are covered: the feed's `"12,45,88"` id-list and a
- * single market's `"42"`. Pure — the coordinator invalidates the returned keys.
+ * Which `["insider","pulse", ids]` cache keys hold at least one of the markets
+ * that just traded. Both key shapes are covered: the feed's `"12,45,88"` id-list
+ * and a single market's `"42"`. Pure — the coordinator invalidates the returned
+ * keys.
  */
 export function affectedPulseKeys(qc: QueryClient, affected: Set<number>): unknown[][] {
   if (affected.size === 0) return [];
   const out: unknown[][] = [];
-  for (const q of qc.getQueryCache().findAll({ queryKey: ["market-pulses"] })) {
-    const spec = q.queryKey[1];
+  for (const q of qc.getQueryCache().findAll({ queryKey: insiderPulseRootKey() })) {
+    const spec = q.queryKey[2];
     if (typeof spec !== "string") continue;
     const ids = spec.split(",").map((s) => Number(s));
     if (ids.some((id) => affected.has(id))) out.push(q.queryKey as unknown[]);
@@ -222,6 +224,28 @@ export function affectedPositionsTapeKeys(qc: QueryClient, affected: Set<number>
     if (Array.isArray(ids) && ids.some((id) => affected.has(Number(id)))) {
       out.push(q.queryKey as unknown[]);
     }
+  }
+  return out;
+}
+
+/**
+ * Which PER-MARKET INSIDER ACTIVITY caches a trade touches.
+ *
+ * A market's rails (`["insider", mid, "activity", …]`) are chronological within
+ * ONE market, so a trade on some other market cannot change them. The app-wide
+ * tape is the only scope every trade moves; this is how the coordinator tells
+ * the two apart instead of refetching every mounted rail on every trade.
+ */
+export function affectedInsiderActivityKeys(
+  qc: QueryClient,
+  affected: Set<number>,
+): unknown[][] {
+  if (affected.size === 0) return [];
+  const out: unknown[][] = [];
+  for (const q of qc.getQueryCache().findAll({ queryKey: insiderRootKey() })) {
+    if (q.queryKey[2] !== "activity") continue;
+    const id = Number(q.queryKey[1]);
+    if (Number.isFinite(id) && affected.has(id)) out.push(q.queryKey as unknown[]);
   }
   return out;
 }
