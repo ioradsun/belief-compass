@@ -713,11 +713,15 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
     const pct = m.pct == null ? null : formatPct(m.pct);
     const where = side ?? "the market";
 
+    /* ONE VOCABULARY FOR "THIS SIDE WAS EMPTY". There are exactly three
+       concepts (src/domain/first-event): WENT FIRST and SIDE OPENED, both told
+       by name in the conviction feed, and FIRST CAPITAL, which is this row and
+       ONLY exists when the side already had believers and no money. A believers
+       arrival is filtered out above, so this branch never invents a fourth
+       label for the same transition. */
     const headline =
       m.kind === "arrival"
-        ? m.metric === "capital"
-          ? `First capital backs ${where}`
-          : `${where} has its first believers`
+        ? `First capital backs ${where}`
         : m.kind === "crowd"
           ? `${where} ${m.delta > 0 ? "gained" : "lost"} ${Math.abs(Math.round(m.delta))} ${plural(m.delta, "believer", "believers")}`
           : m.metric === "price"

@@ -1317,6 +1317,13 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
           // family is somebody doing something, with a name attached.
           derived: r.kind === "market_transition",
           metric: (r.payload as { metric?: "capital" | "price" | "believers" } | null)?.metric ?? null,
+          // Every derived market read is a rolling-window statement ("in the
+          // last hour"), so two of them are two looks at one state.
+          rolling: r.kind === "market_transition",
+          family:
+            r.kind === "market_transition"
+              ? ((r.payload as { type?: string } | null)?.type ?? null)
+              : r.kind,
           // Market-scoped rows need the question to make sense standalone.
           context: r.marketId ? (r.marketTitle ?? "").trim().length > 0 : true,
         })),
