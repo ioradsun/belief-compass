@@ -860,7 +860,13 @@ export function voiceLevel(v: VoiceInput | null | undefined): VoiceLevel {
   // `building` alone is the default state of a growing market — accumulation is
   // not an observation, it is the weather.
   const real =
-    s.beforePrice > 0 || s.unusual > 0 || s.concentration > 0 || s.reversing > 0 || s.tension > 0;
+    s.beforePrice > 0 ||
+    s.unusual > 0 ||
+    s.concentration > 0 ||
+    s.reversing > 0 ||
+    s.tension > 0 ||
+    // A proven before/after is an observation, never just a receipt.
+    s.confirmation > 0;
   return real ? "observation" : "receipt";
 }
 
