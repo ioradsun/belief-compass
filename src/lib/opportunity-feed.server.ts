@@ -6,6 +6,7 @@
  * then gates (hard exclusions), ranks (composite score) and sequences (rhythm +
  * diversity). The client receives a finished queue and renders it as-is.
  */
+import { COPY_VERSION } from "@/domain/copy-version";
 import { eligibilityFor, reentryFor, type ViewerMarketState } from "@/domain/feed/eligibility";
 import { scoreMarket, type FeedAiAnalysis, type FeedMarketSignals } from "@/domain/feed/score";
 import { reasonFor } from "@/domain/feed/reasons";
@@ -625,7 +626,14 @@ export const SSR_FEED_KEY = "feed:ssr:anon:24h";
  * it for paint only and must still fetch. Trimmed to SEED_ITEMS so the row stays
  * small enough that reading it is never a second page budget.
  */
-const SEED_KEY = "anon:24h";
+/* THE SEED IS THE ONE CACHE THAT OUTLIVES A DEPLOY. Every other copy cache is
+   in-memory and dies with the isolate, but this row sits in the database, so a
+   build that fixes a sentence would still serve the OLD sentence to every cold
+   visitor until some later build happened to overwrite it. Scoping the key by
+   copy version makes build-id invalidation absolute: a new build simply cannot
+   see the previous build's composed rows. A stale row costs a few bytes and is
+   never read again. */
+const SEED_KEY = `anon:24h:${COPY_VERSION}`;
 const SEED_ITEMS = 3;
 /** A seed that cannot be read quickly is not a seed. Bound the SSR read. */
 const SEED_READ_MS = 700;
