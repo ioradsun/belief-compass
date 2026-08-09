@@ -893,6 +893,13 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   const copyLevel = new Map<string, CopyLevel>();
   /** Rows the copy layer refuses to print at all — see `retellTransition`. */
   const copySuppressed = new Set<string>();
+  /**
+   * THE FLOOR, for rows whose evidence does not live in market state.
+   * A new market with a proven reaction is a clue, but the signal vector is
+   * deliberately blind to social kinds, so without a floor it would rank as a
+   * receipt. Only ever raises, and only where a fact was proven.
+   */
+  const voiceFloor = new Map<string, "observation" | "intelligence">();
 
   for (const r of live) {
     const w = r.wallet?.toLowerCase();
@@ -1047,7 +1054,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     if (r.kind === "market_created") {
       const m = momentumById.get(Number(r.marketId));
       const openedMs = r.occurredAt ? Date.parse(r.occurredAt) : NaN;
-      const ageHours = Number.isFinite(openedMs) ? (nowMs - openedMs) / 3_600_000 : null;
+      const ageHours = Number.isFinite(openedMs) ? (Date.now() - openedMs) / 3_600_000 : null;
       // Someone the reader knows who is already in — a fact, or nothing.
       const known = (believersByMarket.get(Number(r.marketId)) ?? [])
         .map((wallet) => namePerson(wallet, profiles, labelByWallet, aliasFor))
@@ -1058,7 +1065,9 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         ageHours,
         believersYes: m?.believersYes ?? null,
         believersNo: m?.believersNo ?? null,
-        capitalUsd: (m?.yesCapitalUsd ?? 0) + (m?.noCapitalUsd ?? 0),
+        // Held capital is stored in ETH on this read model; the row does not
+        // claim a dollar figure it cannot prove, so reaction is counted in people.
+        capitalUsd: null,
         personal: known
           ? { name: known.name, relationship: String(known.relationship), side: null }
           : null,
