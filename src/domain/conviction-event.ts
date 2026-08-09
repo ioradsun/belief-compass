@@ -48,6 +48,7 @@
  * deciding, not to blind every surface again.
  */
 import type { BeatTone, LiveCategory, LiveStory, NetworkLabel, Side } from "@/domain/story";
+import { classifyFirstEvent } from "@/domain/first-event";
 
 /** What someone did to their position. Never a transaction type. */
 export type ConvictionAction =
