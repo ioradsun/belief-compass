@@ -286,9 +286,20 @@ behind an unchanged surface, each step proven by parity tests.
    which NEVER changes the prediction — the seam through which the read gets richer
    over time. **UI adoption** (the House Read surface → "Insider Read", including
    the visible label) changes rendering, so it lands with an app run.
-6. **Collapse realtime around the Insider.** Keep the one-socket architecture; as
-   consumers converge, surface-specific cache families give way to
-   `["insider", marketId]` and `["insider","now"]`.
+6. **Collapse realtime around the Insider — 🚧 the cache-scope pass has landed.**
+   The one-socket architecture is unchanged; what changed is who NAMES the cache.
+   `src/lib/insider/keys.ts` owns the two scopes: `insiderNowKey(...)` →
+   `["insider","now", wallet, marketIds, side, limit]` (the global feed resource,
+   viewer overlay in the key) and `insiderMarketKey(mid, ...)` →
+   `["insider", mid, "activity", wallet, limit]` (the per-market resource,
+   deliberately SIDE-BLIND so the YES rail, the NO rail and the Market Insider
+   rail keep sharing one fetch). Both hang off the single `["insider"]` root, so
+   the realtime coordinator still invalidates everything the Insider believes with
+   one prefix (`insiderRootKey()`) on a trade and on reconnect, and persistence
+   restores the family by that root. The old component-named `live-tape` family is
+   gone. Keys tested in `lib/insider/keys.test.ts`. Remaining: converging the
+   surrounding families (`conviction-market`, `market-pulses`, `opp-feed`) as their
+   consumers adopt Insider projections.
 7. **Reference audit + delete.** Remove old plumbing with zero remaining imports in
    current `main`; update `data-flow.md`, `data-ownership.md`, this file, and the
    architecture checks to enforce the boundary.
