@@ -189,6 +189,11 @@ export const LOPSIDED_MIN_LEAD_USD = 25;
 
 function variantsFor(i: SemanticInput, title: string, frag: string): string[] {
   const stake = stakeInTitle(title);
+  /* THE PROPOSITION IS QUOTED, NOT PARAPHRASED. Dropping a title fragment bare
+     into a sentence produces "Did selling your data worth a $20 airdrop stop
+     being a question?" — the PI mangling the thing it is quoting. Quotation
+     marks make the fragment a noun and keep the grammar the reader's. */
+  const topic = `“${frag}”`;
   const s = i.side ?? "that side";
   const f = i.facts ?? {};
 
@@ -203,8 +208,8 @@ function variantsFor(i: SemanticInput, title: string, frag: string): string[] {
             `${s} is empty. Does ${stake} change the calculation for anyone here?`,
           ]
         : [
-            `Nobody is backing ${s} anymore. Did ${frag} stop being a real question?`,
-            `${s} has no one left. Is there still an argument for ${frag}?`,
+            `Nobody is backing ${s} anymore. Is ${topic} still a real question?`,
+            `${s} has no one left. Is there still an argument on ${topic}?`,
           ];
 
     /* QUESTION THE CONSENSUS. Tenure makes "still" factual; without the days
@@ -212,8 +217,8 @@ function variantsFor(i: SemanticInput, title: string, frag: string): string[] {
     case "one_sided_persistence": {
       const d = Math.floor(f.days ?? 0);
       return [
-        `${d} days and still nobody will take ${other(i.side)}. Is ${frag} even controversial to this crowd?`,
-        `${d} days on one side and ${other(i.side)} stays empty. Is this a debate, or a foregone conclusion about ${frag}?`,
+        `${d} days and still nobody will take ${other(i.side)}. Is ${topic} even controversial to this crowd?`,
+        `${d} days on one side and ${other(i.side)} stays empty. Is this a debate, or a foregone conclusion about ${topic}?`,
       ];
     }
 
@@ -222,16 +227,16 @@ function variantsFor(i: SemanticInput, title: string, frag: string): string[] {
       const lead = f.leadUsd ?? 0;
       const light = f.laggardUsd ?? 0;
       return [
-        `${money(lead)} on one side, ${money(light)} on the other. Is ${frag} really a two-sided market?`,
-        `Real money on one side of ${frag}, pocket change on the other. Split market, or one-sided conviction?`,
+        `${money(lead)} on one side, ${money(light)} on the other. Is ${topic} really a two-sided market?`,
+        `Real money on one side of ${topic}, pocket change on the other. Split market, or one-sided conviction?`,
       ];
     }
 
     /* QUESTION WHETHER A SIDE BECAME LESS OBVIOUS. */
     case "side_got_company":
       return [
-        `${s} finally got company. Did ${frag} just stop being obvious?`,
-        `Somebody is on ${s} now. Is ${frag} less settled than it looked?`,
+        `${s} finally got company. Did ${topic} just stop being obvious?`,
+        `Somebody is on ${s} now. Is ${topic} less settled than it looked?`,
       ];
 
     /* QUESTION WHETHER ATTENTION CHANGED — attention, never outcome. */
@@ -239,8 +244,8 @@ function variantsFor(i: SemanticInput, title: string, frag: string): string[] {
       const q = Math.floor(f.quietDays ?? 0);
       const t = Math.max(1, Math.floor(f.trades ?? 1));
       return [
-        `${q} quiet days, then ${t} ${t === 1 ? "trade" : "trades"}. Did ${frag} just get interesting again?`,
-        `Nothing for ${q} days and now this. Did something change about ${frag}, or just the attention on it?`,
+        `${q} quiet days, then ${t} ${t === 1 ? "trade" : "trades"}. Did ${topic} just get interesting again?`,
+        `Nothing for ${q} days and now this. Did something change about ${topic}, or just the attention on it?`,
       ];
     }
   }
