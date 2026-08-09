@@ -6,6 +6,7 @@ import {
   affectedPulseKeys,
   affectedPositionsTapeKeys,
   affectedMarketKeys,
+  affectedInsiderActivityKeys,
   affectedViewerValuationKeys,
   viewerPositionKeys,
   liveFieldsOf,
@@ -169,6 +170,22 @@ describe("affectedPulseKeys", () => {
     qc.setQueryData(["insider", "pulse", "7,9"], { pulses: {} });
     expect(affectedPulseKeys(qc, new Set([1, 2]))).toEqual([]);
     expect(affectedPulseKeys(qc, new Set())).toEqual([]);
+  });
+});
+
+describe("affectedInsiderActivityKeys", () => {
+  it("selects only the traded market's own rails, never another market's", () => {
+    qc.setQueryData(["insider", 42, "activity", null, 200], { rows: [] });
+    qc.setQueryData(["insider", 7, "activity", "0xabc", 200], { rows: [] });
+    qc.setQueryData(["insider", "now", null, null, null, 120], { rows: [] });
+    const keys = affectedInsiderActivityKeys(qc, new Set([42]));
+    expect(keys).toEqual([["insider", 42, "activity", null, 200]]);
+  });
+
+  it("returns nothing when the traded market has no open rail", () => {
+    qc.setQueryData(["insider", 7, "activity", null, 200], { rows: [] });
+    expect(affectedInsiderActivityKeys(qc, new Set([42]))).toEqual([]);
+    expect(affectedInsiderActivityKeys(qc, new Set())).toEqual([]);
   });
 });
 
