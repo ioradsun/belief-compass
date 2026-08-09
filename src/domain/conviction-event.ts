@@ -241,7 +241,7 @@ export const EVENT_KICKER: Record<ConvictionEventType, string> = {
   new_market: "ON THE TABLE",
 };
 
-const REL_KICKER: Record<NetworkLabel, string> = {
+export const REL_KICKER: Record<NetworkLabel, string> = {
   twin: "YOUR TWIN",
   tribe: "YOUR TRIBE",
   opp: "YOUR RIVAL",
@@ -249,7 +249,7 @@ const REL_KICKER: Record<NetworkLabel, string> = {
 };
 
 /** How to name someone in your network whose identity we don't have. */
-const REL_WHO: Record<NetworkLabel, string> = {
+export const REL_WHO: Record<NetworkLabel, string> = {
   twin: "Your closest match",
   tribe: "Someone in your Tribe",
   opp: "Your strongest rival",
