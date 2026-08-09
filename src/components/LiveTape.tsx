@@ -49,6 +49,8 @@ import {
 import type { BeatTone } from "@/domain/story";
 import { ago } from "@/domain/relative-time";
 import { COPY_VERSION, sameCopyVersion } from "@/domain/copy-version";
+import { activity, signalsFromActivityRows } from "@/domain/insider";
+
 
 type LiveResult = {
   rows: LiveRow[];
