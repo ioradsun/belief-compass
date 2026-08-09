@@ -54,6 +54,16 @@ Not read at read time: `market_state_snapshots` / `price_snapshots` (true price 
 
 **Pre-wiring audit task (step 2a):** answer one precise question before ranking depends on concentration — *can the pre-event holder hierarchy be reconstructed from event amount plus current beliefs?* `loadBelieverFaces` returns **current** largest holders, which does not prove who was largest *before* an exit. If it cannot be reconstructed, `largest_holder_left` and `newcomers_replaced_a_whale` wait for a bounded historical read. Never infer "a whale exited" from a large dollar amount alone. Audit `nonresponse` derivability in the same step.
 
+### 2a findings (measured, 2026-08-09)
+
+Corpus: 2,806 markets, 6,760 canonical trades (4,537 BUY / 2,223 SELL), 221 markets traded in 7d, 140 trades in 24h.
+
+1. **Concentration is reconstructable — VERDICT: YES.** Cumulative net per `(market_id, wallet)` from the canonical event stream yields **2,891 pairs, exactly matching `wallet_beliefs`' 2,891**. Summing events up to an event timestamp therefore gives the *pre-event* holder hierarchy. Cost is small: 7.4 trades per market all-time. `largest_holder_left` is unblocked. **But** `newcomers_replaced_a_whale` is corpus-limited: mean holders per market is **2.0**, and only **63 markets** have ≥5 open positions. It stays defined and tested, and will simply rarely fire — it must never be loosened to "a big trade happened".
+2. **`unusual` cannot use a 1h baseline — VERDICT: NO.** Median 7d hourly rate is **0.012 trades/hr**; only **3 markets** traded in the last hour and only **11** have ≥3 trades in 24h. Against that baseline a single trade is ~80× "normal", which is noise, not information. The canonical baseline must be **daily**: compare `trade_count_24h` against `trade_count_7d / 7`, gated on `trade_count_7d >= 7` (**49 markets** qualify; 15 usable today, 4 currently bursting). Below the guard, `unusual` returns zero — never a large number from a small denominator.
+3. **The quiet band must be relative — VERDICT: relative only.** `yes_price_change_*` is an absolute USD delta, and median price is **$1.93** with median |24h move| **$0.166**. An absolute cent threshold would classify most of the book as either quiet or loud depending on price level. Quiet band = |Δprice| / price, with the observed median at **8.6%** and p90 at ~9.4% relative — the band gets calibrated from that distribution, not guessed.
+4. **`nonresponse` is derivable but rare.** Inputs (capital delta, price change) are populated for **2,795/2,806** markets. The limiting factor is not data, it is that only ~60 markets see any 24h activity, so at most a handful of nonresponse candidates exist per build.
+5. **One canonical baseline helper.** `unusual`, velocity, and the quiet band all call the same function; no second definition of "normal" anywhere.
+
 ## 3. Signal vector, not a single state
 
 Named **`SignalVector`** (`src/domain/signal-vector.ts`), not `Pressure` — the system measures anomaly, contradiction, nonresponse and reversal, and "pressure" biases the implementation toward momentum.
@@ -109,6 +119,8 @@ Conceptually: `informationGain ≈ anomaly + tension + change-from-baseline + vi
 
 **Anomaly-first does not mean anomaly-overrides.** Information gain may lift a story within its truthful significance class; it may not manufacture structural importance. "$8 arrived at 4× normal velocity" must not outrank "the market majority flipped". `compose()`'s bounded shape mostly gives this for free — pin it with a test anyway.
 
+**`building` is the lowest-information market signal, and evidence is never counted twice.** Accumulation is the default state of a growing market, so `building` contributes near-nothing to the score when `tension`, `beforePrice`, `unusual`, `concentration`, `reversing`, or `nonresponse` already explains the same event. The vector may show several non-zero signals — the *score* must attribute each piece of underlying evidence once. Concretely: `building` enters as a residual after the higher-information signals have taken their share, never as an independent additive term.
+
 Ranking touches, both subtractive:
 1. `significance.ts` — `informationGain` becomes a `compose()` part on the derived path. No migration; emitted scores untouched.
 2. `feed-cadence.ts` — `primary`/`tensionKind` added to `MixCandidate` for **variety only** (consecutive-run caps, small target bonus when tension is absent from a window). `breakingAt` stays on significance alone.
@@ -136,6 +148,15 @@ Two distinct jobs, deliberately separated:
 
 Invariant: personal context can change the selected angle, never the underlying market signal or the vector.
 
+**Personal relevance may foreground the actor, but must preserve the market clue when one exists.** Replacing "Three wallets entered NO while price stayed flat" with "Your Rival was one of them" throws away the most valuable information in the row. The correct shape keeps both:
+
+```text
+Your Rival was one of them.
+Three wallets entered NO. Price is still basically where it was.
+```
+
+Rule: for a zero-vector social row, personal context may own the whole story. For a row with a non-zero market signal, personal context augments — it never replaces the intelligence. This is a test, not a style note.
+
 ## 8. Confirmation is gated — a trust invariant
 
 **If the PI cannot establish ordering, the PI cannot tell a before/after story.** Event timestamp + 24h change ≠ change since the event; the window can predate the entry.
@@ -161,13 +182,13 @@ The distinction `new | developing | resolved` is written into the model now even
 
 ## 11. Smallest safe sequence
 
-1. Widen the `market_state` select in `loadTapeSource` to §2 columns; extend `Momentum`. Behaviour-neutral.
-2. **2a.** Audit concentration + nonresponse derivability against current reads (§2) before anything depends on them.
-3. Add `src/domain/signal-vector.ts` + tests. Pure, unused at first.
-4. Attach the vector to rows in `buildTape`; review in the dev voice lab (`/dev/voice`) with nothing wired to ranking.
+1. Widen the `market_state` select in `loadTapeSource` to §2 columns; extend `Momentum`. Behaviour-neutral. **Done.**
+2. **2a.** Audit concentration + nonresponse derivability and baseline math against real data. **Done — see §2a findings.**
+3. Add `src/domain/signal-vector.ts` + tests, including the one canonical baseline helper (daily rate, `trade_count_7d >= 7` guard, relative quiet band). Pure, unused at first.
+4. **Diagnostic before influential.** Attach the vector to rows in `buildTape` and print the **top 20 and bottom 20 candidate rows by `informationGain`**, with every signal value and every reason, over a real corpus. If ordinary trades outrank contradictions, fix the model here — never compensate downstream in the mixer. Nothing is wired to ranking during this step.
 5. Wire `informationGain` into the derived branch of `significance.ts`.
 6. Voice levels in `pi-voice.ts` + soft Intelligence cost with exceptional bypass in the cadence pass.
-7. Viewer-relative angle selection, post-admission.
+7. Viewer-relative angle selection, post-admission (clue-preserving, §7).
 8. Variety caps on `primary`/`tensionKind` in `feed-cadence.ts`.
 9. Confirmation and developing clues only after §8's temporal proof exists.
 
@@ -179,6 +200,10 @@ Storytelling invariants first — the numbers exist to serve them:
 - A larger ordinary trade does **not** always outrank a smaller market-relative anomaly.
 - Two individually ordinary facts become high information gain when their *relationship* is unusual.
 - Personal relevance can change the selected angle, never the underlying market signal.
+- **Personal context augments, never replaces, a market clue:** given a non-zero-vector row, the rendered output must still contain the market observation alongside the Rival/Tribe foregrounding. Only a zero-vector social row may be personal-only.
+- **Corpus-level acceptance gate (before ranking is switched on):** run the existing feed and the signal-aware feed over the same corpus and require that the signal-aware version surfaces materially more contradiction / before-price / unusual-market stories **without driving human and social stories toward zero**. Now must not become a quantitative scanner; a run that wins on anomaly count while collapsing social share fails the gate.
+- **Baseline sanity:** `unusual` returns zero whenever `trade_count_7d < 7`, so a lone trade in a market with a 0.012/hr history can never read as "80× normal".
+- **No double counting:** an event explained by tension/beforePrice/unusual/concentration/reversing/nonresponse scores essentially the same with and without a co-occurring `building` signal.
 - **No editorial layer without informational value:** a fact with nothing added stays a Receipt ("Alex pulled $15 from YES." never becomes a headline restating itself).
 - **Anomaly cannot manufacture structural significance:** a high-unusualness small event never outranks a majority flip.
 - A high-information story bypasses editorial scarcity.
