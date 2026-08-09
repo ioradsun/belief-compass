@@ -32,14 +32,13 @@ describe("the second story one action tells", () => {
   });
 
   it("names the belief that took them there", () => {
-    const m = convictionMilestone(person(3), win)!;
-    expect(m.marketId).toBe(102);
-    expect(tellConvictionMilestone(m).attribution).toBe("The 3rd is “Question 2”.");
+    const m = convictionMilestone(person(5), win)!;
+    expect(m.marketId).toBe(104);
+    expect(tellConvictionMilestone(m).attribution).toBe("The 5th is “Question 4”.");
   });
 
   it("counts in ordinals a person would use", () => {
     for (const [rung, word] of [
-      [3, "3rd"],
       [5, "5th"],
       [10, "10th"],
       [25, "25th"],
@@ -92,10 +91,11 @@ describe("only what is exactly true, and only while it is news", () => {
     expect(convictionMilestone(person(5, 40), win)).toBeNull();
   });
 
-  it("says nothing about one or two beliefs — that is the live row already", () => {
+  it("says nothing until a count reads as a habit", () => {
     expect(convictionMilestone(person(1), win)).toBeNull();
     expect(convictionMilestone(person(2), win)).toBeNull();
-    expect(CONVICTION_RUNGS[0]).toBe(3);
+    expect(convictionMilestone(person(3), win)).toBeNull();
+    expect(CONVICTION_RUNGS[0]).toBe(5);
   });
 
   it("refuses to count a belief it cannot date", () => {
@@ -120,7 +120,7 @@ describe("many people, newest first", () => {
   it("orders by when each count became true", () => {
     const rows = convictionMilestones(
       [
-        { ...person(3, 3), wallet: "0xold" },
+        { ...person(10, 3), wallet: "0xold" },
         { ...person(5, 1), wallet: "0xnew" },
         { ...person(4, 1), wallet: "0xbetween" }, // not on a rung
       ],

@@ -38,11 +38,12 @@
 /**
  * Counts a person would notice about themselves.
  *
- * Starts at three because one and two are not yet a pattern — "Sarah backed a
- * question" is already the live row, and saying "Sarah now backs one question"
- * beside it is the same fact twice.
+ * Starts at five because three is a structural fact, not a story. Three is
+ * where relationships can begin forming — which matters to US — but to another
+ * reader "somebody they have never met now backs three questions" is not news.
+ * Five is the smallest count that reads as a habit rather than a coincidence.
  */
-export const CONVICTION_RUNGS = [3, 5, 10, 25, 50, 100] as const;
+export const CONVICTION_RUNGS = [5, 10, 25, 50, 100] as const;
 
 /** One belief a person currently holds. */
 export interface PersonConviction {

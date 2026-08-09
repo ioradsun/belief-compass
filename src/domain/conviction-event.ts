@@ -513,12 +513,58 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
       body = side ? `${who} joined ${s}${tail}.` : `${who} took a side${tail}.`;
   }
 
+  /**
+   * TWO COMPOSERS, BECAUSE A CROWD IS NOT A PERSON.
+   *
+   * "3 people joined YES with $6.33. 2 others are with them." sounds like five
+   * people and makes the reader do arithmetic to find out it isn't. A grouped
+   * row therefore speaks in ONE population model: the group is the subject, the
+   * money is what arrived, and the believer count is the whole side afterwards.
+   * An individual row keeps the company line — for one person, "2 others are
+   * with him" is the point.
+   */
+  const grouped = people > 1 && (type === "joined" || type === "big_backing");
+  if (grouped) {
+    const amt = n(c.amountUsd);
+    const sentences = [
+      amt >= 0.005 ? `${money(amt)} came in.` : null,
+      remaining && remaining > 0
+        ? `${remaining.toLocaleString("en-US")} ${remaining === 1 ? "believer" : "believers"} now.`
+        : null,
+    ].filter(Boolean);
+    return {
+      category: rel ?? CATEGORY[type],
+      headline: rel
+        ? REL_KICKER[rel]
+        : side
+          ? `${people} PEOPLE PILED INTO ${s}`
+          : `${people} PEOPLE TOOK A SIDE`,
+      body: sentences.length ? sentences.join(" ") : `${people} people took ${side ? s : "a side"}.`,
+      attribution: null,
+      tone: toneFor(side, false),
+      personal: rel != null,
+    };
+  }
+
+  /**
+   * THE SIZE IS THE NEWS, SO THE SIZE IS THE HEADLINE. "BACKED" undersells the
+   * biggest thing that happens on this platform; the amount that just landed is
+   * the phrase somebody would actually repeat out loud.
+   */
+  const bigAmt = n(c.amountUsd);
+  const ownedHeadline =
+    !rel && type === "big_backing" && side && bigAmt > 0
+      ? `${money(bigAmt)} JUST HIT ${s}`
+      : rel
+        ? REL_KICKER[rel]
+        : KICKER[type];
+
   return {
     // A RELATIONSHIP FRAMES THE ROW, it no longer replaces it. The kicker says
     // who this person is to the reader; the sentence below says what they
     // actually did, side and all — where it used to say only "entered".
     category: rel ?? CATEGORY[type],
-    headline: rel ? REL_KICKER[rel] : KICKER[type],
+    headline: ownedHeadline,
     body,
     // "N believers now" is noise next to "the last one left" or "the first to back".
     attribution:
@@ -529,3 +575,4 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
     personal: rel != null,
   };
 }
+
