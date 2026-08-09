@@ -46,6 +46,11 @@ import {
 import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
 import { signalVector } from "@/domain/signal-vector";
 import { factsForRow } from "@/domain/signal-facts";
+import {
+  groupPricePaths,
+  priceProofSince,
+  type PriceSample,
+} from "@/domain/price-proof";
 import { editFeed } from "@/domain/feed-editorial";
 import { findPersonPatterns } from "@/domain/person-pattern";
 
@@ -660,6 +665,26 @@ const REAL_DEPS: TapeDeps = {
     import("@/lib/profiles.server").then((m) => m.resolveProfiles(wallets, budget)),
 };
 
+/**
+ * Hourly price observations for the candidate markets, 72h back.
+ *
+ * Bounded by construction: one row per market per hour (see `market_price_path`).
+ * A failure here is not a feed failure — the tape simply loses the ability to say
+ * "since then", which is exactly the behaviour before temporal proof existed.
+ */
+async function loadPricePaths(
+  sb: ReturnType<typeof serviceClient>,
+  marketIds: number[],
+): Promise<Map<number, PriceSample[]>> {
+  if (marketIds.length === 0) return new Map();
+  const { data, error } = await sb.rpc("market_price_path", {
+    p_ids: marketIds,
+    p_hours: 72,
+  });
+  if (error || !Array.isArray(data)) return new Map();
+  return groupPricePaths(data as Parameters<typeof groupPricePaths>[0]);
+}
+
 export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = REAL_DEPS) {
   const sb = deps.client();
   const limit = data?.limit ?? 120;
@@ -1108,9 +1133,21 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
      amount is never allowed to stand in for "a whale left". Concentration
      therefore stays 0 here and is reviewed in the corpus script. */
   const signalNowMs = Date.now();
+  /* TEMPORAL PROOF (plan §8/§9).
+     One bounded read — hourly price observations for just the markets with a
+     candidate row — is what licenses "since then". Without it the vector can
+     only ever say `new`, which is the correct silence rather than a guess. */
+  const pricePaths = await loadPricePaths(
+    sb,
+    [...new Set(scored.map(({ r }) => Number(r.marketId)).filter(Number.isFinite))],
+  );
   const signalById = new Map<string, ReturnType<typeof signalVector>>();
   for (const { r } of scored) {
     const m = momentumById.get(Number(r.marketId));
+    const occurredMs = r.occurredAt ? Date.parse(r.occurredAt) : NaN;
+    const proof = Number.isFinite(occurredMs)
+      ? priceProofSince(pricePaths.get(Number(r.marketId)), occurredMs, signalNowMs)
+      : null;
     signalById.set(
       r.id,
       signalVector(
@@ -1145,6 +1182,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
               }
             : null,
           signalNowMs,
+          proof,
         ),
       ),
     );
