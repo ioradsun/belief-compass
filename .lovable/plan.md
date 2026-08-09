@@ -125,6 +125,8 @@ Budgeting is **soft**: a window target of roughly 20–30% Intelligence, enforce
 
 Copy rules: the contrast fact comes last and the sentence stops there. No explanation, no motive, no reaction-only headlines ("ODD ONE", "WELL WELL WELL") unless a specific contrast immediately follows. Existing hype-word ban stays.
 
+**The PI does not editorialize when it has nothing to add.** If the Intelligence layer neither compresses nor connects information, the row stays a Receipt. "Alex pulled $15 from YES." must never become "ALEX MADE A MOVE / Alex pulled $15." Style is not insight.
+
 ## 7. Personal relevance modifies the angle, after ranking
 
 Two distinct jobs, deliberately separated:
