@@ -29,6 +29,13 @@ export interface TapeGate<T extends Arrival> {
   admit: () => void;
   /** Increments on every admit that actually merged rows. */
   admitNonce: number;
+  /**
+   * Ids merged by the most recent tap. The render boundary PINS these so a tap
+   * always changes what is on screen — otherwise a just-admitted row can lose
+   * the ranked window (or sort into the past) and "Update" reads as a no-op.
+   */
+  lastAdmitted: string[];
+
   /** Attach to the tape's scroller so it can tell whether anyone is reading. */
   scrollRef: (el: HTMLElement | null) => void;
   /** Spread onto the tape's root: the pointer half of the same question. */
