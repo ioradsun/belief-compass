@@ -248,8 +248,21 @@ export function LiveTape({
         ? (initial ?? undefined)
         : undefined),
   });
+  /* THE SIDE SCOPE IS A PROJECTION, NOT A QUERY. When this tape is a YES/NO rail
+     it received the whole market above; `insider.activity` applies the same
+     market/side/order rule the server used to apply, so the rendered rows are
+     unchanged — only their owner is. Any other tape passes straight through. */
+  const rows = useMemo(() => {
+    if (!sideRail || railMarketId == null) return data?.rows;
+    return activity(signalsFromActivityRows(data?.rows ?? []), {
+      marketId: railMarketId,
+      side,
+      ...(limit != null ? { limit } : {}),
+    }).signals.map((s) => s.payload as LiveRow);
+  }, [data?.rows, sideRail, railMarketId, side, limit]);
   // Sticky: the tape holds its rows until fresh ones arrive.
-  const sticky = useStickyRows(data?.rows);
+  const sticky = useStickyRows(rows);
+
   /* STANDING STORIES ARE ORDINARY ROWS NOW — they compete in the mixer like
      everything else. The one thing they still need is the per-reader cooldown:
      a fact that is permanently true would otherwise recur every session. Only
