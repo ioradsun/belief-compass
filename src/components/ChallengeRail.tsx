@@ -153,6 +153,16 @@ export function ChallengeRail({
   // screen — three means three people are actually waiting on you.
   const { lock, open, failed, lockUnknown } = useOpenCalls(wallet);
 
+  // Challenge earns the rail only when someone is actually waiting. Until then
+  // — signed out, locked, or an empty queue — Insider holds it.
+  useEffect(() => {
+    if (chose.current) return;
+    if (wallet && lock.unlocked && open.length > 0) setTab("challenge");
+    else setTab("insider");
+  }, [wallet, lock.unlocked, open.length]);
+
+
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div
