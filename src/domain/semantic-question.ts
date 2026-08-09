@@ -242,15 +242,18 @@ function variantsFor(i: SemanticInput, title: string, short: string | null): str
           ]
         : [];
 
-    /* QUESTION THE CONSENSUS. The headline is already directly above this
-       sentence, so persistence asks about what the observed empty side means;
-       it never reads the proposition back to the reader. Tenure makes "still"
-       factual; without the days this shape is not offered at all. */
+    /* ASK WHAT WOULD HAVE TO CHANGE, NOT WHETHER THE CONSENSUS IS "REAL".
+       "Is the consensus holding up, or going unchallenged?" is an analyst
+       commenting on a market: nothing in that sentence is a thing the reader can
+       look for. The interesting fact is already sitting in the first clause —
+       weeks of one-sidedness and no takers — so the question points forward at
+       the missing evidence instead of relabelling the fact. */
     case "one_sided_persistence": {
       const d = Math.floor(f.days ?? 0);
+      const o = other(i.side);
       return [
-        `${d} days and still nobody will take ${other(i.side)}. Is that consensus durable, or simply untested?`,
-        `${d} days on one side and ${other(i.side)} stays empty. Is the consensus holding up, or going unchallenged?`,
+        `${d} days and nobody has taken ${o}. What would it take for someone to disagree?`,
+        `${d} days without a single ${o}. Who would have to show up to make this a market?`,
       ];
     }
 
@@ -265,15 +268,19 @@ function variantsFor(i: SemanticInput, title: string, short: string | null): str
       ];
     }
 
-    /* QUESTION WHAT THE ARRIVAL MEANS, WITHOUT ANNOUNCING IT AGAIN. The kicker
-       directly above already says the side got company. Repeating "somebody is
-       on NO now" here turns evidence into three versions of one fact. Move one
-       inference past the arrival instead: was the apparent consensus real? */
+    /* THE ARRIVAL IS ONLY INTERESTING AGAINST THE PROPOSITION. "Does this expose
+       a real split, or only test the consensus?" is abstraction — expose, real
+       split and consensus are not things in the evidence. What is genuinely
+       unresolved is WHO is willing to argue the thing the market asks, now that
+       somebody has put money there. Without a usable handle on the proposition
+       the arrival speaks for itself and this shape stays silent. */
     case "side_got_company":
+      if (!topic) return [];
       return [
-        `Was the consensus real, or simply untested until now?`,
-        `Does this expose a real split, or only test the consensus?`,
+        `Somebody finally put money behind ${s}. Who is willing to argue ${topic}?`,
+        `${s} finally has money behind it. What did they see in ${topic}?`,
       ];
+
 
     /* QUESTION WHETHER ATTENTION CHANGED — attention, never outcome.
        AND WITHOUT QUOTING THE PROPOSITION BACK. The row already prints the
