@@ -218,14 +218,17 @@ behind an unchanged surface, each step proven by parity tests.
    deterministic; replay tests prove identical rows → identical signals. (The
    evidence-scoring seams — magnitude, velocity, novelty — arrive with Insight/Now;
    activity leaves evidence uncomputed, `null` ≠ `0`.)
-2. **Activity projection — ✅ landed; rails adopting.** `projections/activity.ts`
+2. **Activity projection — ✅ landed; rails adopted.** `projections/activity.ts`
    `activity(signals, { marketId, side })` is the one chronological filter, proven
    to reproduce today's server semantics (market scope; `eq(side)` excludes
    market-wide rows from a side column; newest-first + id tiebreak). Wired into the
-   **Market Insider** rail (`CurrentMarketActivity`), behavior-preserving. **Next:**
-   unify the YES/NO side rails (`CaseFile` / `LiveTape`) so ONE market fetch feeds
-   both side projections client-side instead of a per-side server query — a real
-   fetch-behavior change that needs an app run to verify UX.
+   **Market Insider** rail (`CurrentMarketActivity`) and now the **YES/NO side
+   rails**: a side `LiveTape` no longer asks the server a side-scoped question — it
+   shares the market-scoped query (same React Query key as the Market Insider rail)
+   and projects its side client-side. Verified in the app on market 2776: both rails
+   render the same rows as before and opening the Case File issues ZERO extra
+   requests.
+
 3. **Insight/Pulse — ✅ pure seam landed.** `pulse.ts` `insiderPulse` computes one
    `InsiderPulse` (direction, momentum, acceleration, activity, participation,
    capital flow, imbalance, volatility, novelty) by COMPOSING the existing

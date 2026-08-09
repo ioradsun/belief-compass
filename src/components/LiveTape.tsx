@@ -49,6 +49,8 @@ import {
 import type { BeatTone } from "@/domain/story";
 import { ago } from "@/domain/relative-time";
 import { COPY_VERSION, sameCopyVersion } from "@/domain/copy-version";
+import { activity, signalsFromActivityRows } from "@/domain/insider";
+
 
 type LiveResult = {
   rows: LiveRow[];
@@ -56,6 +58,13 @@ type LiveResult = {
   copyVersion?: string;
   error: string | null;
 };
+/**
+ * How much market history the shared side-rail fetch pulls. Matches the market
+ * query `CurrentMarketActivity` already runs, so the YES rail, the NO rail and
+ * the Market Insider rail are ONE request.
+ */
+const SIDE_RAIL_FETCH_LIMIT = 200;
+
 
 /** Beyond this gap since our newest cached event, a delta would be large — just
  *  do a full fetch (the persisted cache already gave the instant paint). */
@@ -139,7 +148,23 @@ export function LiveTape({
   // facts, person milestones, market signals, "showed up" — keep replenishing
   // between trades instead of the feed running dry. See src/domain/live-display.
   const lastFullAt = useRef(0);
-  const key = ["live-tape", wallet ?? null, scopeKey, side ?? null, limit ?? null];
+  /**
+   * ONE MARKET FETCH FEEDS BOTH SIDE RAILS (Insider migration, step 3).
+   *
+   * A YES/NO rail used to ask the server its own side-scoped question, so a Case
+   * File ran three requests for the same market (YES, NO, and the Market Insider
+   * rail). The side scope is a pure filter — `insider.activity(signals, { marketId,
+   * side })` reproduces the server's `eq("side", …)` semantics exactly — so the
+   * rails now share the market-scoped query React Query is already running for
+   * `CurrentMarketActivity` (same key, same fetch → deduped) and project their own
+   * side client-side.
+   */
+  const railMarketId = side != null && scopeKey?.length === 1 ? scopeKey[0] : null;
+  const sideRail = railMarketId != null;
+  const key = sideRail
+    ? ["live-tape", wallet ?? null, scopeKey, SIDE_RAIL_FETCH_LIMIT]
+    : ["live-tape", wallet ?? null, scopeKey, side ?? null, limit ?? null];
+
   const { data, isLoading } = useQuery({
     queryKey: key,
     queryFn: async (): Promise<LiveResult> => {
@@ -181,8 +206,11 @@ export function LiveTape({
         };
       }
       const full = (await listLiveEvents({
-        data: { wallet, marketIds: scopeKey ?? undefined, side, limit },
+        data: sideRail
+          ? { wallet, marketIds: scopeKey ?? undefined, limit: SIDE_RAIL_FETCH_LIMIT }
+          : { wallet, marketIds: scopeKey ?? undefined, side, limit },
       })) as LiveResult;
+
       // Only a SUCCESSFUL full build resets the clock — an errored one did not
       // refresh the families, so the next heartbeat should try again, not wait.
       if (!full.error) lastFullAt.current = Date.now();
@@ -220,8 +248,21 @@ export function LiveTape({
         ? (initial ?? undefined)
         : undefined),
   });
+  /* THE SIDE SCOPE IS A PROJECTION, NOT A QUERY. When this tape is a YES/NO rail
+     it received the whole market above; `insider.activity` applies the same
+     market/side/order rule the server used to apply, so the rendered rows are
+     unchanged — only their owner is. Any other tape passes straight through. */
+  const rows = useMemo(() => {
+    if (!sideRail || railMarketId == null || data?.rows == null) return data?.rows;
+    return activity(signalsFromActivityRows(data.rows), {
+      marketId: railMarketId,
+      side,
+      ...(limit != null ? { limit } : {}),
+    }).signals.map((s) => s.payload as LiveRow);
+  }, [data?.rows, sideRail, railMarketId, side, limit]);
   // Sticky: the tape holds its rows until fresh ones arrive.
-  const sticky = useStickyRows(data?.rows);
+  const sticky = useStickyRows(rows);
+
   /* STANDING STORIES ARE ORDINARY ROWS NOW — they compete in the mixer like
      everything else. The one thing they still need is the per-reader cooldown:
      a fact that is permanently true would otherwise recur every session. Only
