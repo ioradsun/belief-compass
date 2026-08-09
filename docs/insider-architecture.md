@@ -286,7 +286,7 @@ behind an unchanged surface, each step proven by parity tests.
    which NEVER changes the prediction — the seam through which the read gets richer
    over time. **UI adoption** (the House Read surface → "Insider Read", including
    the visible label) changes rendering, so it lands with an app run.
-6. **Collapse realtime around the Insider — 🚧 the cache-scope pass has landed.**
+6. **Collapse realtime around the Insider — ✅ landed (cache-scope pass).**
    The one-socket architecture is unchanged; what changed is who NAMES the cache.
    `src/lib/insider/keys.ts` owns the two scopes: `insiderNowKey(...)` →
    `["insider","now", wallet, marketIds, side, limit]` (the global feed resource,
