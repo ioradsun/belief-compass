@@ -200,6 +200,10 @@ Storytelling invariants first — the numbers exist to serve them:
 - A larger ordinary trade does **not** always outrank a smaller market-relative anomaly.
 - Two individually ordinary facts become high information gain when their *relationship* is unusual.
 - Personal relevance can change the selected angle, never the underlying market signal.
+- **Personal context augments, never replaces, a market clue:** given a non-zero-vector row, the rendered output must still contain the market observation alongside the Rival/Tribe foregrounding. Only a zero-vector social row may be personal-only.
+- **Corpus-level acceptance gate (before ranking is switched on):** run the existing feed and the signal-aware feed over the same corpus and require that the signal-aware version surfaces materially more contradiction / before-price / unusual-market stories **without driving human and social stories toward zero**. Now must not become a quantitative scanner; a run that wins on anomaly count while collapsing social share fails the gate.
+- **Baseline sanity:** `unusual` returns zero whenever `trade_count_7d < 7`, so a lone trade in a market with a 0.012/hr history can never read as "80× normal".
+- **No double counting:** an event explained by tension/beforePrice/unusual/concentration/reversing/nonresponse scores essentially the same with and without a co-occurring `building` signal.
 - **No editorial layer without informational value:** a fact with nothing added stays a Receipt ("Alex pulled $15 from YES." never becomes a headline restating itself).
 - **Anomaly cannot manufacture structural significance:** a high-unusualness small event never outranks a majority flip.
 - A high-information story bypasses editorial scarcity.
