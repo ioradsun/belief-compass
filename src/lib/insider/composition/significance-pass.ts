@@ -15,12 +15,12 @@
  * The caller loads the price paths between the two, because the markets to read
  * are only known once the candidates exist.
  */
-import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
+import { scoreFeedEvent, type NetTag, type FeedCandidate } from "@/domain/feed-event";
 import { adaptiveFloor, admissionOf, silenceAdjustedFloor } from "@/domain/feed-density";
 import { scoreLiveAction } from "@/domain/significance";
 import { signalVector } from "@/domain/signal-vector";
 import { factsForRow } from "@/domain/signal-facts";
-import { priceProofSince, type PricePoint } from "@/domain/price-proof";
+import { priceProofSince, type PriceSample } from "@/domain/price-proof";
 import { signalFromTransition, mergeSignals, dominantKey } from "@/domain/transition-signal";
 import type { LiveRow } from "@/lib/live-tape";
 import type { Momentum } from "@/lib/insider/source.server";
@@ -46,18 +46,7 @@ export interface BeliefLike {
 /** One row, judged once — used by the gate, the score and the batch bar. */
 export interface Candidate<R extends LiveRow> {
   r: R;
-  candidate: {
-    kind: string;
-    side: string | null;
-    amountUsd: number | null;
-    walletCount: number | null;
-    tradeCount: number | null;
-    windowMs: number | null;
-    relationship: NetTag | null;
-    marketBelievers: number | null;
-    conviction: ReturnType<typeof beliefAction>;
-    daysHeld: number | null;
-  };
+  candidate: FeedCandidate;
   fullExit: boolean;
   daysHeld: number | null;
 }
@@ -91,7 +80,7 @@ export function buildCandidates<R extends LiveRow>({
         r,
         candidate: {
           kind: r.kind,
-          side: r.side,
+          side: r.side as FeedCandidate["side"],
           amountUsd: r.amountUsd,
           walletCount: r.walletCount,
           tradeCount: r.tradeCount,
@@ -136,7 +125,7 @@ export function runSignificancePass<R extends LiveRow>({
 }: {
   scored: Array<Candidate<R>>;
   momentumById: Map<number, Momentum>;
-  pricePaths: Map<number, PricePoint[]>;
+  pricePaths: Map<number, PriceSample[]>;
   nowMs?: number;
 }): SignificancePassResult<R> {
   // ADAPTIVE DENSITY. The absolute gate asks "is this big?" and on a quiet chain
