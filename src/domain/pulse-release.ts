@@ -10,7 +10,7 @@
  *
  * The first-principles variable is TIME SINCE THE READER LAST SAW A NEWLY
  * ARRIVING ROW, and only the client knows it: the server's shared tape is one
- * cached answer handed to every visitor (see live.functions TAPE_KEY), so a
+ * cached answer handed to every visitor (see insider/cache TAPE_KEY), so a
  * per-reader clock could not reach it without either poisoning that cache or
  * inventing a fake proxy for it.
  *

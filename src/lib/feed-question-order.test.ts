@@ -22,7 +22,7 @@ const src = readFileSync(
   resolve(process.cwd(), "src/lib/insider/composition/editorial-pass.ts"),
   "utf8",
 );
-const tape = readFileSync(resolve(process.cwd(), "src/lib/live.functions.ts"), "utf8");
+const tape = readFileSync(resolve(process.cwd(), "src/lib/insider/build.server.ts"), "utf8");
 
 const at = (needle: string): number => {
   const i = src.indexOf(needle);

@@ -13,7 +13,7 @@
  * and until now nothing would have caught a slip.
  */
 import { describe, expect, it } from "vitest";
-import { buildTape } from "./live.functions";
+import { buildTape } from "./insider/build.server";
 import type { TapeDeps } from "@/lib/insider/source.server";
 
 const MARKET = 7;
