@@ -118,10 +118,8 @@ export function retellTransition(
      dropped rather than shouted, and the row falls to receipt volume. */
   if (usd == null)
     return {
-      headline: base.headline,
-      detail: move.falling
-        ? `Money came off ${it} today. The size behind it isn't confirmed yet.`
-        : `Money went on ${it} today. The size behind it isn't confirmed yet.`,
+      headline: move.falling ? `Money came off ${it}` : `Money went on ${it}`,
+      detail: "The size behind it isn't confirmed yet.",
       usd: null,
       level: "receipt",
     };
