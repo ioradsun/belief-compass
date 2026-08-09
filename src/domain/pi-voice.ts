@@ -37,6 +37,7 @@
  * vocabularies below.
  */
 import type { LiveCategory, LiveStory, NetworkLabel, Side, BeatTone } from "./story";
+import type { TensionKind, ConcentrationKind } from "./signal-vector";
 import {
   classifyConvictionEvent,
   formatStoryMoney,
@@ -821,7 +822,7 @@ export const OBSERVATION_GAIN_MIN = 0.05;
 /** Intelligence needs enough gain that the contradiction is worth the volume. */
 export const INTELLIGENCE_GAIN_MIN = 0.12;
 
-type VoiceInput = {
+export type VoiceInput = {
   signals: {
     tension: number;
     beforePrice: number;
@@ -833,6 +834,9 @@ type VoiceInput = {
     confirmation: number;
   };
   informationGain: number;
+  /** Which contradiction / which concentration — the angle layer needs the kind. */
+  tensionKind?: TensionKind;
+  concentrationKind?: ConcentrationKind;
 };
 
 /**
@@ -854,4 +858,102 @@ export function voiceLevel(v: VoiceInput | null | undefined): VoiceLevel {
   const real =
     s.beforePrice > 0 || s.unusual > 0 || s.concentration > 0 || s.reversing > 0 || s.tension > 0;
   return real ? "observation" : "receipt";
+}
+
+// ── viewer-relative angle selection (plan §7) ────────────────────────────────
+
+/**
+ * THE ANGLE IS VIEWER-RELATIVE. THE SIGNAL IS NOT.
+ *
+ * Admission and ranking are viewer-blind: the SignalVector never sees who is
+ * reading. Once a row is admitted, though, the editorial choice of WHICH FACT TO
+ * FOREGROUND may see the relationship — "Three wallets entered NO" becomes "Your
+ * Rival was one of them".
+ *
+ * The invariant that makes this safe: **personal context augments, it never
+ * replaces a market clue.** Throwing away "price didn't move" to say "your rival
+ * did it" discards the most valuable thing in the row. So a row with a non-zero
+ * market signal keeps the observation; only an all-zero social row may be
+ * personal-only.
+ */
+export type ViewerAngleInput = {
+  relationship: NetworkLabel | null | undefined;
+  signal: VoiceInput | null | undefined;
+};
+
+/**
+ * The market clue, in one sentence, from the vector alone.
+ *
+ * Every line here restates exactly what the signal encodes and stops. No motive,
+ * no causation (plan §8 keeps before/after phrasing gated), no expectation the
+ * model did not compute. Returns null when the vector has nothing to say —
+ * `building` is the weather, not a clue.
+ */
+export function clueLine(v: VoiceInput | null | undefined): string | null {
+  if (!v) return null;
+  if (voiceLevel(v) === "receipt") return null;
+  const s = v.signals;
+
+  if (s.tension > 0) {
+    switch (v.tensionKind) {
+      case "people_up_capital_down":
+        return "More people are here. Less money is.";
+      case "capital_up_price_flat":
+        return "Money keeps arriving. The price is where it was.";
+      case "price_up_believers_flat":
+        return "The price moved. The number of believers didn't.";
+      case "believers_left_price_rose":
+        return "Believers left while the price went up.";
+      case "whales_out_newcomers_in":
+        return "The biggest positions left. Smaller ones took their place.";
+      default:
+        return "The people and the money are pointing different ways.";
+    }
+  }
+
+  if (s.nonresponse > 0) return "Real money landed here and the price still hasn't moved.";
+
+  if (s.concentration > 0) {
+    switch (v.concentrationKind) {
+      case "largest_holder_left":
+        return "The largest position on this side is gone.";
+      case "newcomers_replaced_a_whale":
+        return "One large holder left. Several small ones arrived.";
+      case "concentrating":
+        return "This side is held by fewer, larger positions than it was.";
+      case "distributing":
+        return "This side is spread across more hands than it was.";
+      default:
+        return null;
+    }
+  }
+
+  if (s.beforePrice > 0) return "Money moved. The price hasn't.";
+  if (s.reversing > 0) return "This market just turned the other way.";
+  if (s.unusual >= INTELLIGENCE_UNUSUAL_MIN) return "This market is busier than its own normal.";
+  if (s.unusual > 0) return "Busier here than usual.";
+  return null;
+}
+
+/**
+ * Foreground the relationship without losing the clue.
+ *
+ * - No relationship → unchanged. The angle is viewer-relative or it is nothing.
+ * - Relationship + zero-signal row → unchanged: the social story already owns
+ *   the row, and there is no market observation to preserve.
+ * - Relationship + real signal → the kicker names the reader's person, the body
+ *   keeps the behaviour, and the market observation is carried in the third line
+ *   so both survive.
+ */
+export function applyViewerAngle(story: LiveStory, input: ViewerAngleInput): LiveStory {
+  const rel = input.relationship ?? null;
+  if (!rel) return story;
+  const clue = clueLine(input.signal);
+  if (!clue) return story;
+  return {
+    ...story,
+    headline: REL_KICKER[rel],
+    attribution: clue,
+    personal: true,
+  };
 }
