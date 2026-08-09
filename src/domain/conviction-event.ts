@@ -188,8 +188,18 @@ export function classifyConvictionEvent(e: ConvictionEvent): ConvictionEventType
 
   if (e.action === "add") return "doubled_down";
 
-  // enter
-  if (has(c.sideBelieversAfter) && n(c.sideBelieversAfter) === 1) return "first_believer";
+  // enter — the first-event taxonomy decides which "first" this is, so
+  // went_first / side_opened / first_capital can never describe one transition
+  // twice (src/domain/first-event).
+  if (has(c.sideBelieversAfter)) {
+    const first = classifyFirstEvent({
+      believersBefore: n(c.sideBelieversAfter) - Math.max(1, n(c.peopleCount) || 1),
+      believersAfter: n(c.sideBelieversAfter),
+      peopleCount: c.peopleCount,
+    });
+    if (first === "went_first") return "first_believer";
+    if (first === "side_opened") return "side_opened";
+  }
   if (n(c.amountUsd) >= CONVICTION_EVENT.bigUsd) return "big_backing";
   return "joined";
 }
@@ -209,6 +219,8 @@ const KICKER: Record<ConvictionEventType, string> = {
   swept_in: "GOING BROAD",
   // A rank is a label; going first is an act.
   first_believer: "WENT FIRST",
+  // Not a person going first — an empty side becoming a populated one.
+  side_opened: "SIDE OPENED",
   doubled_down: "DOUBLED DOWN",
   big_backing: "BACKED",
   joined: "NEW BELIEVER",
@@ -266,6 +278,7 @@ const REL_WHO: Record<NetworkLabel, string> = {
  */
 export const CELEBRATION_TYPES: ReadonlySet<ConvictionEventType> = new Set<ConvictionEventType>([
   "first_believer",
+  "side_opened",
   "doubled_down",
   "big_backing",
   "changed_mind",
@@ -284,6 +297,7 @@ const CATEGORY: Record<ConvictionEventType, LiveCategory> = {
   swept_out: "capital_out",
   swept_in: "capital_in",
   first_believer: "growing",
+  side_opened: "growing",
   doubled_down: "capital_in",
   big_backing: "capital_in",
   joined: "growing",
@@ -477,6 +491,13 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
     case "first_believer":
       body = side ? `Nobody had backed ${s}. Then ${who} did.` : `${who} is the first one here.`;
       break;
+    /* AN EMPTY SIDE FILLED. Nobody "went first" when two people arrived at
+       once; the change is that the side exists as an argument now. */
+    case "side_opened":
+      body = side
+        ? `Nobody had backed ${s}. Now ${people > 1 ? `${people} people do` : "somebody does"}.`
+        : `This side has its first believers.`;
+      break;
     case "doubled_down":
       body = side ? `${who} added to ${s}${tail}.` : `${who} doubled down${tail}.`;
       break;
@@ -570,7 +591,10 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
     body,
     // "N believers now" is noise next to "the last one left" or "the first to back".
     attribution:
-      type === "last_believer_left" || type === "first_believer" || type === "round_trip"
+      type === "last_believer_left" ||
+      type === "first_believer" ||
+      type === "side_opened" ||
+      type === "round_trip"
         ? null
         : scale,
     tone: toneFor(side, negative),
