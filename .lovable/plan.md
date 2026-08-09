@@ -1,10 +1,15 @@
-# Now Feed — Anomaly & Early-Signal Layer (revised)
+# Now Feed — Anomaly-First Intelligence Layer (v3)
 
-No code changed yet. Revised after your storytelling note. The architecture holds; the premise changes.
+No code changed yet. Revised again: scoring is explicitly **anomaly-first, magnitude-supporting**, and the PI may foreground personal context *after* ranking.
 
-**Mission (top of the implementation spec):** Now is your private investigator for conviction. It does not predict. It watches people, money, conviction and price, and reports changes a person casually watching would miss. It presents the smallest set of facts needed for the reader to notice the thing themselves — and stops before explaining it.
+**Mission (top of the implementation spec):** Now is your private investigator for conviction. It does not predict. It notices asymmetry before the reader does. Its job is not to answer "what happened?" but to make the reader think "wait — why is that happening?" It presents the smallest set of facts needed for the reader to notice the thing themselves, and stops before explaining it.
 
-Rank by **information gain**, not activity. BUILDING / DIVERGING / REVERSING / CONFIRMING remain internal machinery and never appear in copy.
+**The bar** (a fact belongs in the folder or it doesn't):
+- "Three people bought YES." — no.
+- "YES was empty an hour ago. Three wallets are in now. Price hasn't moved." — yes.
+- "Nine people joined. $85 left." — yes.
+- "Mike took NO." — maybe.
+- "Mike normally lands opposite you. Today he's on your side." — yes.
 
 ---
 
@@ -34,122 +39,149 @@ events (72h, canonical, LIVE_KINDS, limit*3) + market_state (8 cols) + titles + 
 
 Queried today: believers YES/NO, `new_believers_1h`, `money_yes_pct`, `people_yes_pct`, `opportunity_type`, `market_age_days`, plus per-row amount/side/action/wallet and tenure from `wallet_beliefs`.
 
-On the **same `market_state` row**, already stored, currently unselected — this is the anomaly feedstock:
+On the **same `market_state` row**, stored and currently unselected — the anomaly feedstock:
 
 | Signal | Columns |
 | --- | --- |
 | price moved | `yes_price_change_1h/24h/7d` |
 | capital moved | `yes_capital_delta_24h`, `no_capital_delta_24h`, `yes/no_capital_usd` |
 | people moved | `new_believers_yes_24h`, `new_believers_no_24h`, `people_yes_change_24h`, `side_flips_24h` |
-| velocity | `trade_count_1h/24h/7d`, `unique_wallets_1h/24h/7d`, `volume_eth_1h/24h/7d`, `buy_sell_ratio_24h`, `sell_rate_24h` |
-| unusualness | this market's 1h rate vs its own 24h/7d rate — all three windows on the row |
-| silence / dormancy | `last_trade_at`, `inactive_for_seconds`, `first_trade_at` |
+| baseline / velocity | `trade_count_1h/24h/7d`, `unique_wallets_1h/24h/7d`, `volume_eth_1h/24h/7d`, `buy_sell_ratio_24h`, `sell_rate_24h` |
+| concentration | `capital_held_yes/no/total`, `avg_conviction_strength`, plus largest-holder ordering already loaded by `loadBelieverFaces` |
+| nonresponse | `last_trade_at`, `inactive_for_seconds`, `first_trade_at` |
 
-Not read at read time: `market_state_snapshots` / `price_snapshots` (true price path) and `market_transition_state` (memory of what we already said). Both cron-side today. `market_window_change` and `chg_24h_yes` are empty per existing code comments — do not build on them.
+Not read at read time: `market_state_snapshots` / `price_snapshots` (true price path) and `market_transition_state` (memory of what we already said). `market_window_change` and `chg_24h_yes` are empty per existing code comments — do not build on them.
+
+**Pre-wiring audit task (step 2a):** confirm exactly how much of *concentration shift* is derivable from current reads before ranking depends on it — specifically whether "one large holder left while several small ones arrived" can be established from the in-batch trades plus `wallet_beliefs` without a new query. If it needs one bounded extra read, price that read before committing.
 
 ## 3. Signal vector, not a single state
 
-`Pressure.state` as one enum throws away the reason a story is interesting. Replace with a vector:
+Named **`SignalVector`** (`src/domain/signal-vector.ts`), not `Pressure` — the system measures anomaly, contradiction, nonresponse and reversal, and "pressure" biases the implementation toward momentum.
 
 ```ts
-interface Pressure {
-  signals: {                 // each 0..1, independent, can all be non-zero
-    building: number;        // participation/capital forming
-    divergence: number;      // two signals that belong together have separated
+interface SignalVector {
+  signals: {                 // 0..1 each, independent, several can be non-zero
+    tension: number;         // two things that travel together have separated
+    beforePrice: number;     // people/capital/conviction moved, price still quiet
+    unusual: number;         // abnormal FOR THIS MARKET vs its own baseline
+    concentration: number;   // shape of the money changed (see below)
     reversing: number;       // conviction weakening or turning
-    confirmation: number;    // price consistent with an earlier observable pattern
-    silence: number;         // the dog that didn't bark
+    building: number;        // raw accumulation, no other signal
+    nonresponse: number;     // meaningful input, observable response below threshold for N hours
+    confirmation: number;    // computed, not emitted — see §7
   };
-  velocity: number;          // rate now vs this market's own baseline
-  unusualness: number;       // how abnormal this is FOR THIS MARKET
-  informationGain: number;   // 0..1 — the ranking number (see §5)
-  primary: SignalKey;        // largest signal, for copy selection only
-  tension?: TensionKind;     // the specific contradiction, when divergence > 0
-  reasons: string[];         // explainability
+  tensionKind?: TensionKind;
+  concentrationKind?: ConcentrationKind;
+  informationGain: number;   // the ranking number (§5)
+  primary: SignalKey;        // for copy selection only; never printed
+  reasons: string[];
 }
 ```
 
-`tension` is the premium inventory and is named explicitly so copy can be specific: `people_up_capital_down`, `capital_up_price_flat`, `price_up_believers_flat`, `believers_left_price_rose`, `whales_out_newcomers_in`, `tribe_against_market`.
+`TensionKind`: `people_up_capital_down`, `capital_up_price_flat`, `price_up_believers_flat`, `believers_left_price_rose`, `whales_out_newcomers_in`, `tribe_against_market`.
 
-`silence` covers "nothing happened when something was expected": money landed and price hasn't budged four hours later; a lone position nobody followed; a price jump no believer followed. Computationally a subtype of divergence, editorially its own voice.
+`ConcentrationKind`: `concentrating`, `distributing`, `largest_holder_left`, `newcomers_replaced_a_whale`. This is a first-class signal because five wallets at $2 and one wallet at $200 are psychologically different, and "five people came in, one big holder walked out" explains the *shape* of a contradiction without inventing motive. The existing `concentration_rising` transition family feeds this rather than staying siloed.
 
-## 4. CONTEXT has no pressure
+**`nonresponse`, precisely modelled.** Never "the expected move didn't happen" — we cannot establish expectation. The model is: *meaningful input occurred, and the observable response stayed below threshold for N hours.* Copy: "$200 entered YES four hours ago. Price is still basically where it was." Never: "Price should have moved by now."
 
-Corrected from the previous draft. Social and personal rows (Tribe/Rival/Twin activity, milestones, cohorts, new markets, `showed_up`, `standing_fact`) carry **no pressure signals at all** — not weak ones. Their vector is zero and they rank entirely on the existing personal axis (`viewerBoost` + `stakeBoost` + `discovery`). A Rival flipping is high personal relevance with zero market pressure, and the ranker should be able to say exactly that instead of pretending it is a small market signal.
+## 4. CONTEXT has no market signal
 
-Exception: a person-driven row that also carries market weight (the 32-day whale exiting) gets both — a real `reversing` signal *and* personal relevance, because both are true.
+Social/personal rows (Tribe/Rival/Twin activity, milestones, cohorts, new markets, `showed_up`, `standing_fact`) carry an **all-zero vector** — not weak signals. They rank purely on the existing personal axis (`viewerBoost` + `stakeBoost` + `discovery`). A Rival flipping is high personal relevance with zero market signal, and the ranker should say exactly that.
 
-## 5. Information gain replaces event-kind importance
+Exception: a person-driven row that also carries market weight — the 32-day whale exiting — gets both, because both are true.
 
-The ranking principle, stated as the design rule: *how much does knowing this change what the reader understands about this market?*
+## 5. informationGain is anomaly-first
 
-`informationGain` composes (via the existing `compose()` in `significance.ts`, not a new combinator):
+The explicit hierarchy, highest to lowest. Magnitude is supporting evidence, never the lead.
 
-- magnitude of change, **market-relative first** (a $2 trade in an active market ≈ 0; the first $2 ever on NO is not)
-- number of independent people behind it
-- tension present (largest single contributor — contradictions are the premium)
-- velocity and unusualness relative to this market's own baseline
-- person notability (tenure, largest holder, repeated intersection with the reader)
+1. **Contradiction / separation** — two things that normally travel together stopped.
+2. **Change before price** — people/capital/conviction moved materially while price stayed quiet.
+3. **Unusual for this market** — not "10 trades", but "5× this market's normal pace".
+4. **Notable person changed behaviour** — long holder exits, Rival joins your side, whale adds, Tribe breaks pattern.
+5. **Strong raw movement** — large influx/outflow with no other signal.
+6. **Ordinary activity** — Receipt, or suppressed.
+
+Conceptually: `informationGain ≈ anomaly + tension + change-from-baseline + human significance`, with magnitude as corroboration. A smaller trade that breaks a market's pattern must be able to outrank a larger ordinary one — that is a tested invariant, not an aspiration. Composed with the existing `compose()` in `significance.ts`; no second combinator.
 
 Ranking touches, both subtractive:
+1. `significance.ts` — `informationGain` becomes a `compose()` part on the derived path. No migration; emitted scores untouched.
+2. `feed-cadence.ts` — `primary`/`tensionKind` added to `MixCandidate` for **variety only** (consecutive-run caps, small target bonus when tension is absent from a window). `breakingAt` stays on significance alone.
 
-1. `significance.ts` — `informationGain` becomes a `compose()` part on the derived path. No migration, emitted scores untouched.
-2. `feed-cadence.ts` — add `primary` + `tension` to `MixCandidate` and use them **only for variety**: cap consecutive rows sharing a primary signal (like `MAX_SAME_FAMILY_RUN`), small target bonus when tension rows are absent from the window. `breakingAt` stays on significance alone.
-
-## 6. Three voice levels, with enforced scarcity
-
-`pi-voice.ts` receives the vector and picks a register:
+## 6. Three voice levels; scarcity is a cost, never a ceiling
 
 | Level | When | Shape |
 | --- | --- | --- |
 | **Receipt** | no tension, low gain | "Alex pulled $15 from YES." |
-| **Observation** | single-signal, real change | "YES IS THINNING OUT / Three holders have left today." |
-| **Intelligence** | tension or high unusualness | "THE PEOPLE STAYED. THE MONEY DIDN'T. / Nine new believers joined. $85 left." |
+| **Observation** | single-signal, real change | "YES is thinning out. Three holders left today." |
+| **Intelligence** | tension, nonresponse, or high unusualness | "The people stayed. The money didn't. Nine joined. $85 left." |
 
-Hard cap: **Intelligence rows are at most ~25% of any window**, enforced in the cadence pass. Over budget, the weaker ones drop to Observation. Scarcity is the credibility mechanism; the ratio is a tested invariant, not a vibe.
+Budgeting is **soft**: a window target of roughly 20–30% Intelligence, enforced as an escalating repetition cost through the existing motif/diversity machinery — not a hard cap. A genuinely chaotic hour with six real contradictions must be allowed to report six; downgrading true clues to satisfy a quota makes the PI deliberately dumber. Very high `informationGain` bypasses the cost entirely. Same philosophy already used elsewhere in the mixer: penalties, not filters.
 
-Copy rules: the contrast fact must be present and last ("Price hasn't moved yet."), then stop. No explanation, no "why", no headline that is only a reaction word. The existing hype-word ban stays and gains `ODD ONE`-style reaction headlines unless a specific contrast follows.
+Copy rules: the contrast fact comes last and the sentence stops there. No explanation, no motive, no reaction-only headlines ("ODD ONE", "WELL WELL WELL") unless a specific contrast immediately follows. Existing hype-word ban stays.
 
-## 7. CONFIRMING is gated, not shipped
+## 7. Personal relevance modifies the angle, after ranking
 
-Your objection is correct and the audit already suspected it: knowing an entry happened at 10:00 and that the 24h change is +11% does **not** license "since then, +11%". The window can predate the entry.
+Two distinct jobs, deliberately separated:
 
-So: `confirmation` stays in the vector but **emits nothing** until we can prove temporal order from price observations. Two options, decided when we get there:
+- **Admission and rank** — market signal (viewer-blind) plus the existing personal axis. `viewerBoost` stays out of the vector computation.
+- **Angle selection** — once a row is admitted, the editorial choice of *which fact to foreground* may see relationship context. "Three people entered NO" becomes "Your Rival was one of them." The market facts are identical; only the foregrounded one changes.
 
-- read a bounded `price_snapshots` / `market_state_snapshots` lookup for the small set of markets that have a candidate build event in-batch, or
-- ship only the strictly factual conjunction — "$244 entered YES. It's also up 11% today." — which claims no ordering.
+Invariant: personal context can change the selected angle, never the underlying market signal or the vector.
 
-Nothing in phase 1 says "since then". One suspicious inference and the feed stops being believed.
+## 8. Confirmation is gated — a trust invariant
 
-## 8. Developing story (memory) — feasible, unchanged
+**If the PI cannot establish ordering, the PI cannot tell a before/after story.** Event timestamp + 24h change ≠ change since the event; the window can predate the entry.
 
-`buildTape` already holds the 72h batch with `market_id`, `side`, `occurred_at`, `amount`, `source_key`, and `feed-editorial.collapseCausal` already correlates `(marketId, side)` within 6h to *suppress*. The same index can *connect*. Caveat stated honestly: the batch is `limit*3` events across all markets, so an older build event can fall out of the window — absent link, the row stays as it is today. No fabrication, no new table.
+`confirmation` is computed but emits nothing until temporal order is provable from price observations (a bounded `price_snapshots` / `market_state_snapshots` read for just the markets with a candidate build event in-batch). The bare conjunction — "$244 entered YES today. YES is also up 11% over 24h." — is factually safe but psychologically implies causation, so it is also withheld until temporal resolution makes it genuinely useful. One suspicious inference and the feed stops being believed.
 
-## 9. Missing data
+## 9. Clue lifecycle (product principle; phase 1 supports only the first)
 
-- **Intraday price path** — blocks temporal confirmation (§7).
-- **Cross-poll memory** — no record of what a reader already saw, so a developing story can restate itself between polls. Motif pruning limits this within a window; if it annoys, fix client-side, not with a table.
+A PI is valuable because they remember. The eventual arc:
 
-## 10. Smallest safe sequence
+```text
+10:00  new clue        Three wallets stepped into an empty YES. Price hasn't moved.
+13:00  developing clue Still quiet. Same three wallets. Price basically unchanged.
+16:00  resolved clue   Now it's moving. YES is up 9%.
+```
+
+The distinction `new | developing | resolved` is written into the model now even though phase 1 emits only `new`. `buildTape` already holds the 72h batch keyed by `(marketId, side, occurredAt, sourceKey)` and `feed-editorial.collapseCausal` already correlates that pair within 6h to *suppress*; the same index will *connect*. Caveat kept honest: the batch is `limit*3` events across all markets, so an older clue can fall out of the window — absent link, the row behaves exactly as today. No fabrication, no new table.
+
+## 10. Missing data
+
+- **Intraday price path** — blocks resolved clues and any before/after phrasing (§8).
+- **Cross-poll memory** — no record of what a reader already saw; a developing clue can restate itself between polls. Motif pruning limits it within a window; if it annoys, fix client-side, not with a table.
+
+## 11. Smallest safe sequence
 
 1. Widen the `market_state` select in `loadTapeSource` to §2 columns; extend `Momentum`. Behaviour-neutral.
-2. Add `src/domain/pressure.ts` (vector, tension, silence, informationGain) + tests. Unused at first.
-3. Attach the vector to rows in `buildTape`; review in the dev voice lab (`/dev/voice`) with nothing wired to ranking.
-4. Wire `informationGain` into the derived branch of `significance.ts`.
-5. Voice levels + Intelligence budget in `pi-voice.ts` and the cadence pass.
-6. Variety caps on `primary`/`tension` in `feed-cadence.ts`.
-7. Confirmation only after §7's temporal proof exists.
+2. **2a.** Audit concentration + nonresponse derivability against current reads (§2) before anything depends on them.
+3. Add `src/domain/signal-vector.ts` + tests. Pure, unused at first.
+4. Attach the vector to rows in `buildTape`; review in the dev voice lab (`/dev/voice`) with nothing wired to ranking.
+5. Wire `informationGain` into the derived branch of `significance.ts`.
+6. Voice levels in `pi-voice.ts` + soft Intelligence cost with exceptional bypass in the cadence pass.
+7. Viewer-relative angle selection, post-admission.
+8. Variety caps on `primary`/`tensionKind` in `feed-cadence.ts`.
+9. Confirmation and developing clues only after §8's temporal proof exists.
 
-## 11. Tests and invariants
+## 12. Tests and invariants
 
-- **Vector**: signals are independent — a case with people↑, capital flat, price flat, 6× normal activity yields non-zero `building`, `divergence` and `unusualness` simultaneously.
-- **CONTEXT purity**: social/personal kinds return an all-zero pressure vector. Asserted per kind.
-- **Causality ban**: no generated copy contains "caused", "because", "drove", "sent", "since then" (the last until §7 is satisfied).
-- **Scarcity**: Intelligence-level rows never exceed the budget share in a mixed window.
-- **Market-relative**: a $5 arrival in an active market ranks below a $5 first-capital arrival on an empty side.
-- **Silence**: a stale build with no price response emits a silence row only after the expectation window, and only once.
-- **Regression**: full suite green; existing `feed-cadence` breaking-band and dominance tests unchanged; `buildTape` output unchanged after step 1.
+Storytelling invariants first — the numbers exist to serve them:
+
+- A larger ordinary trade does **not** always outrank a smaller market-relative anomaly.
+- Two individually ordinary facts become high information gain when their *relationship* is unusual.
+- Personal relevance can change the selected angle, never the underlying market signal.
+- A high-information story bypasses editorial scarcity.
+- No PI observation states an expectation the data model did not encode (no "should have", no "expected").
+- No copy contains "caused", "because", "drove", "sent", or "since then" while §8 is ungated.
+
+Plus the numerical ones:
+
+- Signals are independent: people↑ / capital flat / price flat / 6× normal pace yields non-zero `building`, `beforePrice` and `unusual` simultaneously.
+- Social/personal kinds return an all-zero vector, asserted per kind.
+- `nonresponse` fires only after the input threshold *and* the N-hour window, and only once.
+- Concentration: five small arrivals plus one large exit classifies as `newcomers_replaced_a_whale`, not as plain `building`.
+- Regression: full suite green; existing `feed-cadence` breaking-band and dominance tests unchanged; `buildTape` output unchanged after step 1.
 
 ## Technical notes
 
-Files: `src/lib/live.functions.ts`, new `src/domain/pressure.ts` (+ test), `src/domain/significance.ts`, `src/domain/feed-editorial.ts`, `src/domain/feed-cadence.ts`, `src/domain/pi-voice.ts`. No migrations, no new tables, no cron, no second scoring engine; `src/domain/feed/*` untouched.
+Files: `src/lib/live.functions.ts`, new `src/domain/signal-vector.ts` (+ test), `src/domain/significance.ts`, `src/domain/feed-editorial.ts`, `src/domain/feed-cadence.ts`, `src/domain/pi-voice.ts`. No migrations, no new tables, no cron, no second scoring engine; `src/domain/feed/*` untouched.
