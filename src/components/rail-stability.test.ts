@@ -233,7 +233,9 @@ describe("the update control never moves the feed", () => {
  * title — it is neither, it is a failed join.
  */
 describe("market titles", () => {
-  const c = code("src/lib/live.functions.ts");
+  // The events/market read moved to the tape source layer; the invariant is
+  // about that loader, not about where the server fn happens to live.
+  const c = code("src/lib/insider/source.server.ts");
 
   it("never stores an empty string as a title", () => {
     // `set(id, title ?? "")` made the map return a present-but-empty string,
