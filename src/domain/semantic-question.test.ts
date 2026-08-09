@@ -135,7 +135,7 @@ describe("the champagne case", () => {
     expect(all.size).toBeGreaterThan(1);
   });
 
-  it("never mangles the proposition it quotes", () => {
+  it("asks about the proposition without restating the arrival", () => {
     const q = semanticQuestion({
       key: "row-2",
       title: DATA,
@@ -144,9 +144,9 @@ describe("the champagne case", () => {
       facts: { days: 9 },
     })!;
     // The headline already establishes the arrival. The question advances to
-    // what it means instead of saying "somebody is on NO now" a second time.
-    expect(q).not.toMatch(/selling your data|somebody|got company/i);
-    expect(q).toMatch(/consensus|split/i);
+    // who is prepared to argue the proposition instead of saying it again.
+    expect(q).not.toMatch(/somebody|got company|first believer/i);
+    expect(q).toMatch(/argue|case on/i);
   });
 
   it("does not repeat the first believer under a got-company headline", () => {
@@ -157,10 +157,11 @@ describe("the champagne case", () => {
       side: "NO",
       facts: { days: 12 },
     })!;
-    expect(q).not.toMatch(/somebody|believer|on NO|got company|tipping/i);
-    expect(q).toMatch(/consensus|split/i);
+    expect(q).not.toMatch(/somebody|believer|on NO|got company/i);
+    expect(q).toMatch(/argue|case on/i);
   });
 });
+
 
 /**
  * THE HEADLINE IS ALREADY ON SCREEN.
@@ -253,3 +254,32 @@ describe("the $20 airdrop / horse-sized duck fixture", () => {
   });
 });
 
+
+/**
+ * THE DETECTIVE TEST. A question earns its slot by naming the unresolved thing
+ * in the evidence, not by relabelling it. "Is the consensus holding up, or
+ * going unchallenged?" is an analyst; "what would it take for someone to
+ * disagree?" is somebody looking at receipts.
+ */
+describe("one-sided persistence asks forward, not abstractly", () => {
+  const q = semanticQuestion({
+    key: "discipline",
+    title: "Is discipline more important than talent?",
+    state: "one_sided_persistence",
+    side: "YES",
+    facts: { days: 29 },
+  })!;
+
+  it("names the tenure and the missing side", () => {
+    expect(q).toContain("29");
+    expect(q).toMatch(/NO/);
+  });
+
+  it("drops analyst abstraction", () => {
+    expect(q).not.toMatch(/consensus|durable|untested|holding up/i);
+  });
+
+  it("does not read the proposition back to the reader", () => {
+    expect(q).not.toMatch(/discipline|talent/i);
+  });
+});

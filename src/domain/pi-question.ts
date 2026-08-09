@@ -171,6 +171,19 @@ export const PREMIUM_GAIN = 0.6;
  */
 export const SEMANTIC_GAIN = 0.45;
 
+/**
+ * The state shapes whose question must come from the proposition rather than
+ * from whatever metric the vector happened to notice. These rows lead with the
+ * state in their own headline, so any other source produces a question about
+ * evidence the reader was never shown.
+ */
+export const STATE_LED_QUESTION: ReadonlySet<string> = new Set([
+  "side_emptied",
+  "back_from_dead",
+  "side_got_company",
+]);
+
+
 
 /**
  * How many questions this window has earned.
@@ -241,10 +254,24 @@ function standingQuestions(kind: string, name: string | null): string[] {
  */
 export function piQuestion(input: QuestionInput): PIQuestion | null {
   const v = input.signal;
+  /* THE QUESTION MUST INVESTIGATE THE STORY THE READER JUST READ.
+     Mechanics normally outrank the proposition, and for a row whose headline is
+     itself a mechanic that is right. But when the headline IS a state shape —
+     a side emptied, a dormant market woke up, a side finally got money — a
+     mechanical question sourced from a different metric reads as two unrelated
+     documents stapled together ("Nobody touched this for a week. Then 2 trades
+     landed… Fewer believers, higher price. Which is the real reading?"). For
+     those shapes the proposition question is tried FIRST, because it is the one
+     that investigates the clue the row actually printed. */
+  if (input.semantic && STATE_LED_QUESTION.has(input.semantic.state)) {
+    const led = semanticFor(input);
+    if (led) return led;
+  }
   /* NO VECTOR IS NOT THE SAME AS NOTHING TO ASK. Synthesized rows (continuity,
      person milestones) can arrive without a market vector and still sit on a
      proven state. */
   if (!v) return semanticFor(input);
+
 
   /* CONTINUITY ROWS ANSWER TO THEIR OWN RULE. A receipt and an observation are
      true and finished; only a proven contrast leaves something open, and what
