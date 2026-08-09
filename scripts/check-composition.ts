@@ -11,7 +11,7 @@
  */
 process.env["SIGNAL_DIAGNOSTIC"] = "1";
 
-import { buildTape } from "../src/lib/live.functions";
+import { buildTape } from "../src/lib/insider/build.server";
 
 type Row = {
   id: string;
