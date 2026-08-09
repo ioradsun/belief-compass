@@ -1437,6 +1437,23 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     for (const r of material) r.signal = signalById.get(r.id);
   }
 
+  /* VIEWER-RELATIVE ANGLE, AFTER ADMISSION (plan §7).
+     Ranking is viewer-blind — the vector never sees who is reading. Once a row
+     is in, the relationship may choose WHICH fact leads: the kicker names the
+     reader's person. The clue is not spent to buy that: `applyViewerAngle`
+     keeps the market observation in the third line, so a signal-bearing row
+     never degrades into a personal-only headline. A zero-vector social row is
+     left exactly as the voice layer wrote it. */
+  for (const r of material) {
+    const rel = (r.face?.relationship as NetworkLabel | null) ?? null;
+    if (!rel || !r.story) continue;
+    const angled = applyViewerAngle(r.story, { relationship: rel, signal: signalById.get(r.id) });
+    if (angled === r.story) continue;
+    r.story = angled;
+    r.text = flattenStory(angled);
+  }
+
+
 
   // ── THE EDITORIAL PASS: subtraction, after everything is composed ────────
   // Two rules a reader would state out loud — a second row about the same
