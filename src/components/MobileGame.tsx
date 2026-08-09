@@ -404,7 +404,7 @@ export function MobileGame({
           win={deckWin}
           change={marketChange}
           faces={participantFaces}
-          state={marketStateFacts(rr)}
+          state={marketStateFacts(row as unknown as Record<string, unknown>)}
           footer={
             <CurrentMarketActivity
               embedded
