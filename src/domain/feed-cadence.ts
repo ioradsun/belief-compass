@@ -87,6 +87,15 @@ export interface MixCandidate {
   voice?: "receipt" | "observation" | "intelligence";
   /** `informationGain` for the row — lets a genuine clue buy its way past the cost. */
   signalGain?: number;
+  /**
+   * The SHAPE of the clue: the vector's `primary` signal, and the tension kind
+   * when there is one (src/domain/signal-vector). A motif keys on the composed
+   * copy, so two rows can read as the same observation — "believers left while
+   * price rose", four times, in four different markets — and pay nothing. The
+   * shape is what the reader recognises, so the shape is what gets capped.
+   */
+  signalPrimary?: string | null;
+  signalKind?: string | null;
 }
 
 
