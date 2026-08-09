@@ -541,13 +541,13 @@ export function LiveTape({
                         !s.body.includes("$") &&
                         !s.headline.includes("$") &&
                         !(s.attribution ?? "").includes("$") && (
-                        <span className="ml-auto shrink-0 text-[11px] text-[var(--text-muted)]">
-                          <span className="num font-semibold text-[var(--text-secondary)]">
-                            {usdShort(r.amountUsd)}
-                          </span>{" "}
-                          traded
-                        </span>
-                      )}
+                          <span className="ml-auto shrink-0 text-[11px] text-[var(--text-muted)]">
+                            <span className="num font-semibold text-[var(--text-secondary)]">
+                              {usdShort(r.amountUsd)}
+                            </span>{" "}
+                            traded
+                          </span>
+                        )}
                     </div>
                   )}
                 </div>

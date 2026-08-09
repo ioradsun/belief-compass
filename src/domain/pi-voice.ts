@@ -158,7 +158,6 @@ const WORDS = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight
 export const countWord = (k: number, noun = "people"): string =>
   k >= 1 && k <= 9 ? `${WORDS[k]} ${k === 1 ? noun.replace(/s$/, "") : noun}` : `${k} ${noun}`;
 
-
 const ANGLE: Record<ConvictionEventType, PIObservation["angle"]> = {
   swept_out: "departure",
   swept_in: "rush",
@@ -367,7 +366,6 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
           },
         ];
 
-
       // RUSH / SCALE — several people, or one unusually large arrival.
       case "big_backing":
         if (people > 1)
@@ -412,7 +410,10 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
             },
             {
               headline: `${countWord(people)} just stepped in`,
-              body: amount >= 0.005 ? `${money} landed on ${s || "one side"}.` : `${s || "This one"} got company.`,
+              body:
+                amount >= 0.005
+                  ? `${money} landed on ${s || "one side"}.`
+                  : `${s || "This one"} got company.`,
               angle: remaining ? `${remaining} believers now.` : null,
             },
           ];
@@ -476,7 +477,9 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
               },
               {
                 headline: kicker,
-                body: from ? `${from} for ${held}. Then ${s}.` : `${held} of holding, then the turn.`,
+                body: from
+                  ? `${from} for ${held}. Then ${s}.`
+                  : `${held} of holding, then the turn.`,
                 angle: `${who} changed their mind.`,
               },
             ]
@@ -503,7 +506,6 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
           });
         return base;
       }
-
 
       case "round_trip":
         return [
