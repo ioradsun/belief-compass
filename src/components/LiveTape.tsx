@@ -284,6 +284,10 @@ export function LiveTape({
     () => (data?.standing ?? []).filter((r) => fresh(r.id)),
     [data?.standing, fresh],
   );
+  // The rows the last tap admitted — kept in the window and shown at the top,
+  // so "Update" always visibly changes the feed.
+  const pinnedIds = useMemo(() => new Set(gate.lastAdmitted), [gate.lastAdmitted]);
+
   const { rows: released, entranceWeight } = useScheduledRows(
     gate.admitted,
     resetKey,
@@ -299,7 +303,11 @@ export function LiveTape({
   // concern, not theirs.
   const arranged =
     label != null
-      ? arrangeFeed(released, { rankOf: (id) => rankById?.get(id), limit: revealCount })
+      ? arrangeFeed(released, {
+          rankOf: (id) => rankById?.get(id),
+          limit: revealCount,
+          pinned: pinnedIds,
+        })
       : { shown: released, hidden: 0 };
   const shown = arranged.shown;
   const tail = tailState({
