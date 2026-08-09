@@ -45,6 +45,7 @@ import {
 } from "@/domain/transition-denominator";
 import type { NetTag } from "@/domain/feed-event";
 import { runNarrationPass } from "@/lib/insider/composition/narration-pass";
+import { runEditorialPass } from "@/lib/insider/composition/editorial-pass";
 import {
   buildCandidates,
   candidateMarkets,
