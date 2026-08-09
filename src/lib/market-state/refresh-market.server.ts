@@ -72,7 +72,7 @@ export async function refreshMarket(
       // needs. Absent when no old-enough snapshot exists → delta stays null.
       sb
         .from("market_state_snapshots")
-        .select("yes_capital_usd, no_capital_usd, yes_price_usd, no_price_usd")
+        .select("yes_capital_usd, no_capital_usd, yes_price_usd, no_price_usd, believers_yes, believers_no")
         .eq("onchain_id", market)
         .lte("captured_at", new Date(now - 86_400_000).toISOString())
         .order("captured_at", { ascending: false })
