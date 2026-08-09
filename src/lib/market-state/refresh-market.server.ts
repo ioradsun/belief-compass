@@ -72,7 +72,7 @@ export async function refreshMarket(
       // needs. Absent when no old-enough snapshot exists → delta stays null.
       sb
         .from("market_state_snapshots")
-        .select("yes_capital_usd, no_capital_usd, yes_price_usd, no_price_usd")
+        .select("yes_capital_usd, no_capital_usd, yes_price_usd, no_price_usd, believers_yes, believers_no")
         .eq("onchain_id", market)
         .lte("captured_at", new Date(now - 86_400_000).toISOString())
         .order("captured_at", { ascending: false })
@@ -137,11 +137,24 @@ export async function refreshMarket(
       no_capital_usd?: number;
       yes_price_usd?: number | null;
       no_price_usd?: number | null;
+      believers_yes?: number | null;
+      believers_no?: number | null;
     } | null;
     const yesCapitalDelta24h =
       snapBase == null ? null : num(state.yes_capital_usd) - num(snapBase.yes_capital_usd);
     const noCapitalDelta24h =
       snapBase == null ? null : num(state.no_capital_usd) - num(snapBase.no_capital_usd);
+
+    // People% 24h change, in PERCENTAGE POINTS, from the same authoritative
+    // snapshot baseline as the capital deltas. Null when there is no old-enough
+    // snapshot or the baseline had no directional believers — a missing history
+    // must never read as "the crowd did not move".
+    const basePeopleYes =
+      snapBase == null
+        ? null
+        : peopleYesPct(num(snapBase.believers_yes), num(snapBase.believers_no));
+    const peopleYesChange24h =
+      pYes == null || basePeopleYes == null ? null : pYes - basePeopleYes;
 
     // Transitions
     const nb = {
@@ -251,6 +264,7 @@ export async function refreshMarket(
       // movement
       yes_price_change_1h: yesChg1h,
       yes_price_change_24h: yesChg24h,
+      people_yes_change_24h: peopleYesChange24h,
       // lifecycle
       market_created_at: createdAt,
       first_trade_at: (e.first_trade_at as string) ?? null,
