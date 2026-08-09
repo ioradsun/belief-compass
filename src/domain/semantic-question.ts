@@ -314,8 +314,11 @@ export function semanticQuestion(i: SemanticInput): string | null {
   }
   if (i.state === "side_got_company" && (f.days ?? 0) < 3) return null;
 
-  const variants = variantsFor(i, title, frag).filter(
-    (v) => !containsBannedLanguage(v) && isPropositionSpecific(v, title),
+  const variants = variantsFor(i, title, shortTopic(frag)).filter(
+    (v) =>
+      v.length <= MAX_QUESTION_CHARS &&
+      !containsBannedLanguage(v) &&
+      isPropositionSpecific(v, title),
   );
   if (variants.length === 0) return null;
   return pickVariant(`${i.key}:semantic:${i.state}`, variants);
