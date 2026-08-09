@@ -38,7 +38,10 @@ const CORPUS: { key: string; e: ConvictionEvent }[] = [
   })),
   ...Array.from({ length: 8 }, (_, i) => ({
     key: `exit-${i}`,
-    e: ev({ action: "exit", context: { amountUsd: 5 * i, sideBelieversAfter: i, daysHeld: i * 9 } }),
+    e: ev({
+      action: "exit",
+      context: { amountUsd: 5 * i, sideBelieversAfter: i, daysHeld: i * 9 },
+    }),
   })),
   ...Array.from({ length: 6 }, (_, i) => ({
     key: `flip-${i}`,

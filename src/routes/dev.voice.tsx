@@ -58,10 +58,16 @@ const base = (i: number, o: Partial<Omit<LiveRow, "text" | "story">>) => ({
 
 const FIXTURES: Fixture[] = [
   { note: "went first", row: base(0, { amountUsd: 30, walletCount: 1 }) },
-  { note: "side opened · a crowd at once", row: base(1, { walletCount: 3, amountUsd: 18, side: "NO" }) },
+  {
+    note: "side opened · a crowd at once",
+    row: base(1, { walletCount: 3, amountUsd: 18, side: "NO" }),
+  },
   { note: "ordinary arrival", row: base(2, { amountUsd: 4 }) },
   { note: "scale · the size is the news", row: base(3, { amountUsd: 420 }) },
-  { note: "commitment · already held", row: base(4, { amountUsd: 65, payload: { action: "BUY" } }) },
+  {
+    note: "commitment · already held",
+    row: base(4, { amountUsd: 65, payload: { action: "BUY" } }),
+  },
   {
     note: "the turn",
     row: base(5, { kind: "side_shift", side: "NO", payload: { action: "BUY" } }),

@@ -226,8 +226,11 @@ export function observeConviction(e: ConvictionEvent): PIObservation {
     case "trimmed":
       // An ordinary arrival or exit with nothing attached is exactly the row the
       // PI should stay quiet about. It still renders as a receipt if admitted.
-      response =
-        relational ? "context" : amount < 0.005 && remaining == null ? "suppress" : "receipt";
+      response = relational
+        ? "context"
+        : amount < 0.005 && remaining == null
+          ? "suppress"
+          : "receipt";
       break;
     default:
       response = "receipt";
@@ -396,7 +399,9 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
         return [
           {
             headline: "New believer",
-            body: side ? `${who} backed ${s}${amount >= 0.005 ? ` with ${money}` : ""}.` : `${who} took a side.`,
+            body: side
+              ? `${who} backed ${s}${amount >= 0.005 ? ` with ${money}` : ""}.`
+              : `${who} took a side.`,
             angle: scale,
           },
           {
@@ -416,7 +421,9 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
           },
           {
             headline: "Doubled down",
-            body: side ? `Still on ${s}. More money behind it.` : `Still there. More money behind it.`,
+            body: side
+              ? `Still on ${s}. More money behind it.`
+              : `Still there. More money behind it.`,
             angle: amount > 0 ? `${who} added ${money}.` : null,
           },
           {
@@ -440,20 +447,32 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
               },
             ]
           : [
-              { headline: "Flipped", body: side ? `${who} flipped to ${s}.` : `${who} changed their mind.` },
+              {
+                headline: "Flipped",
+                body: side ? `${who} flipped to ${s}.` : `${who} changed their mind.`,
+              },
             ];
         if (rel)
           base.push({
             headline: REL_KICKER[rel],
             body: `${who} just changed sides${side ? ` to ${s}` : ""}.`,
-            angle: question ? "What do they see differently here?" : held ? `${held} of holding, then the turn.` : null,
+            angle: question
+              ? "What do they see differently here?"
+              : held
+                ? `${held} of holding, then the turn.`
+                : null,
           });
         return base;
       }
 
       case "round_trip":
         return [
-          { headline: "In and out", body: side ? `${who} backed ${s} and left the same day.` : `${who} came and went the same day.` },
+          {
+            headline: "In and out",
+            body: side
+              ? `${who} backed ${s} and left the same day.`
+              : `${who} came and went the same day.`,
+          },
           { headline: "Blinked", body: `${who} was in and out inside a day.` },
         ];
 
@@ -534,7 +553,10 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
       // HOLDOUT / EMPTIED — a qualitative state change, so it may hit harder.
       case "last_believer_left":
         return [
-          { headline: "Emptied out", body: side ? `${s} just emptied out.` : "That side just emptied out." },
+          {
+            headline: "Emptied out",
+            body: side ? `${s} just emptied out.` : "That side just emptied out.",
+          },
           {
             headline: "Last one left",
             body: `${who} was the last one backing ${s || "it"}.`,

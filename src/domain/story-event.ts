@@ -404,7 +404,11 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
     const left = money(fmt, s.capitalDeltaUsd);
     /* THE SIGNATURE OBSERVATION. Two trusted numbers that disagree — the one
        place the voice may leave a question open rather than answer it. */
-    const v = crowdMoneyDivergenceLine(s.believerDelta, left, vkey("people_capital_divergence", side));
+    const v = crowdMoneyDivergenceLine(
+      s.believerDelta,
+      left,
+      vkey("people_capital_divergence", side),
+    );
     return {
       type: "people_capital_divergence",
       side,
@@ -663,7 +667,8 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
        the universal feed while the center panel may still show it. */
     const arrivals = Math.max(0, yes.believerDelta) + Math.max(0, no.believerDelta);
     const cashIn = Math.abs(yes.capitalDeltaUsd) + Math.abs(no.capitalDeltaUsd);
-    const strong = a.trades24h >= STRONG_REAWAKEN_TRADES || arrivals >= 2 || cashIn >= STRONG_REAWAKEN_USD;
+    const strong =
+      a.trades24h >= STRONG_REAWAKEN_TRADES || arrivals >= 2 || cashIn >= STRONG_REAWAKEN_USD;
     return {
       type: "market_reawakened",
       tier: strong ? TIER.market_reawakened : 3,

@@ -10,10 +10,7 @@
  */
 import type { JsonValue } from "@/lib/events";
 import type { LiveStory } from "@/domain/story";
-import {
-  CONVICTION_EVENT,
-  type ConvictionAction,
-} from "@/domain/conviction-event";
+import { CONVICTION_EVENT, type ConvictionAction } from "@/domain/conviction-event";
 import { tellPiStory } from "@/domain/pi-voice";
 import type { StackPerson } from "@/domain/conviction-cohort";
 import type { MixCandidate } from "@/domain/feed-cadence";
