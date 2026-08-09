@@ -141,11 +141,12 @@ export function tellConvictionMilestone(m: PersonMilestone): {
   attribution: string;
 } {
   return {
-    headline: "CONVICTIONS",
-    body: `${m.name} now backs ${m.rung} questions.`,
-    attribution: `The ${ordinal(m.rung)} is “${m.marketTitle}”.`,
+    headline: `${m.rung} deep`,
+    body: `${m.name} just hit conviction #${m.rung}.`,
+    attribution: `Latest: “${m.marketTitle}”.`,
   };
 }
+
 
 function ordinal(n: number): string {
   const rem100 = n % 100;
