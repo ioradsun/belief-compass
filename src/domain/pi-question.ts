@@ -64,6 +64,10 @@ export type QuestionKind =
   | "concentrating"
   | "person_unwinding"
   | "unusual"
+  /* CONTINUITY AGAINST CHANGE. Tenure alone asks nothing; tenure that survived
+     a proven move is two facts that do not sit together. */
+  | "standing_contrast"
+
   /* COMPOSED SHAPES — earned by a GROUP of rows rather than by one vector.
      See src/domain/composed-clue.ts. A clue built from several plain receipts
      is often the most interesting thing in the window, so these rank beside
