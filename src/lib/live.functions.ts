@@ -155,7 +155,30 @@ type Momentum = {
   opportunityType: string | null;
   /** Days since the market opened — lets a standing fact claim "since the start". */
   marketAgeDays: number | null;
+  // ---- Signal inputs. Carried, not yet read by any story. ----
+  /** Price moves. Null means "not computed", never "flat" — the difference matters. */
+  yesPriceChange1h: number | null;
+  yesPriceChange24h: number | null;
+  yesPriceChange7d: number | null;
+  /** Capital direction over 24h, per side. */
+  yesCapitalDelta24h: number | null;
+  noCapitalDelta24h: number | null;
+  capitalHeldYes: number | null;
+  capitalHeldNo: number | null;
+  /** Trade counts at three horizons — the raw material for market-relative "normal". */
+  tradeCount1h: number | null;
+  tradeCount24h: number | null;
+  tradeCount7d: number | null;
+  uniqueWallets1h: number | null;
+  uniqueWallets24h: number | null;
+  newBelievers24h: number | null;
+  newBelieversYes24h: number | null;
+  newBelieversNo24h: number | null;
+  peopleYesChange24h: number | null;
+  sideFlips24h: number | null;
+  lastTradeAt: string | null;
 };
+
 
 /**
  * How many standing facts one full fetch puts in reserve.
