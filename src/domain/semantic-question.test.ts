@@ -135,7 +135,7 @@ describe("the champagne case", () => {
     expect(all.size).toBeGreaterThan(1);
   });
 
-  it("never mangles the proposition it quotes", () => {
+  it("asks about the proposition without restating the arrival", () => {
     const q = semanticQuestion({
       key: "row-2",
       title: DATA,
@@ -144,9 +144,9 @@ describe("the champagne case", () => {
       facts: { days: 9 },
     })!;
     // The headline already establishes the arrival. The question advances to
-    // what it means instead of saying "somebody is on NO now" a second time.
-    expect(q).not.toMatch(/selling your data|somebody|got company/i);
-    expect(q).toMatch(/consensus|split/i);
+    // who is prepared to argue the proposition instead of saying it again.
+    expect(q).not.toMatch(/somebody|got company|first believer/i);
+    expect(q).toMatch(/argue|case on/i);
   });
 
   it("does not repeat the first believer under a got-company headline", () => {
@@ -157,10 +157,11 @@ describe("the champagne case", () => {
       side: "NO",
       facts: { days: 12 },
     })!;
-    expect(q).not.toMatch(/somebody|believer|on NO|got company|tipping/i);
-    expect(q).toMatch(/consensus|split/i);
+    expect(q).not.toMatch(/somebody|believer|on NO|got company/i);
+    expect(q).toMatch(/argue|case on/i);
   });
 });
+
 
 /**
  * THE HEADLINE IS ALREADY ON SCREEN.
