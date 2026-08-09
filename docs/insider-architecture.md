@@ -262,7 +262,14 @@ behind an unchanged surface, each step proven by parity tests.
     (adaptive floor, heartbeat bar, anomaly vectors, admission, tier, derived
     score, and the rejected-but-evidential rows). The one bounded read it needs,
     `loadPricePaths`, stays in the source layer and runs between the halves.
-    **Still to pull in:** grouping and PI narrative drafting out of
+    **Narration pass landed:** `insider/composition/narration-pass.ts`
+    `runNarrationPass(...)` is where facts become sentences — naming the actor and
+    the crowd, rendering cohorts for the surface they appear on, re-saying frozen
+    transition copy in the current voice, making a new market answer "who opened
+    it", and running everything else through the conviction grammar + PI voice. It
+    returns the per-row judgements (action, celebration, unrenderable, copy
+    ceiling/floor) the ranking and question layers read. **Still to pull in:** the
+    editorial/person-pattern/clue/question composition tail out of
     `live.functions` into `src/lib/insider/*` behind the same projection.
 
 5. **Read — ✅ pure seam landed.** `read.ts` `insiderRead(source, { pulse })` lifts
