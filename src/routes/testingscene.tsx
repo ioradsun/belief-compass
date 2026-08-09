@@ -163,11 +163,16 @@ function TestingScene() {
   const failed = checks.filter((c) => !c.ok);
   const subject = world.audience.find((p) => p.name === who) ?? world.audience[0] ?? null;
 
-  if (!import.meta.env.DEV) {
+  // Local dev → always on. Production → only when VITE_ENABLE_SCENE_LAB is
+  // explicitly set at build time. Normal visitors never see it.
+  const sceneLabEnabled =
+    import.meta.env.DEV || import.meta.env.VITE_ENABLE_SCENE_LAB === "true";
+  if (!sceneLabEnabled) {
     return (
-      <div className="p-8 text-sm text-[var(--text-muted)]">The scene lab is development-only.</div>
+      <div className="p-8 text-sm text-[var(--text-muted)]">The scene lab is not enabled here.</div>
     );
   }
+
 
   const set = (next: Partial<{ scene: string; role: Role; who: string }>) =>
     void navigate({
