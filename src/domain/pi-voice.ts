@@ -344,7 +344,10 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
           ? [
               {
                 headline: "Went first",
-                body: `${who} went first.`,
+                /* THE BODY MAY NOT RESTATE THE HEADLINE. "Went first / X went
+                   first." is one fact printed twice; the body's job is to say
+                   what "first" cost and what it was first INTO. */
+                body: `${s} had nobody on it. ${who} took it${amount > 0 ? ` with ${money}` : ""}.`,
                 angle: `${s} was empty until they put ${amount > 0 ? money : "money"} behind it.`,
               },
               { headline: "Went first", body: `Nobody wanted ${s}. ${who} did.` },
