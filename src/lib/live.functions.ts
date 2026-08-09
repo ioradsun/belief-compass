@@ -388,6 +388,122 @@ async function loadTapeSource(
   };
 }
 
+/** Tenure facts per (wallet, market), as the grammar and the scorers read them. */
+type BeliefByKey = Map<
+  string,
+  {
+    daysHeld: number | null;
+    tenureIsFloor: boolean;
+    enteredBefore: boolean;
+    yesShares: number;
+    noShares: number;
+  }
+>;
+
+/**
+ * GLOBAL READ — the largest current holders of markets whose rows have no actor.
+ *
+ * Viewer-independent: `signalMarkets` comes from grouping, which never sees a
+ * wallet. Returns a plain Map, so nothing that later decorates rows for one
+ * reader can reach it.
+ */
+async function loadBelieverFaces(
+  sb: ReturnType<typeof serviceClient>,
+  signalMarkets: number[],
+): Promise<Map<number, string[]>> {
+  const believersByMarket = new Map<number, string[]>();
+  if (signalMarkets.length > 0) {
+    const { serviceClientOrNull } = await import("@/lib/supabase-clients");
+    const svc = serviceClientOrNull();
+    const { data: holders } = svc
+      ? await svc
+          .from("wallet_beliefs")
+          .select("wallet, onchain_id, yes_shares, no_shares")
+          .in("onchain_id", signalMarkets)
+          .limit(600)
+      : { data: null };
+    const byMarket = new Map<number, Array<{ wallet: string; size: number }>>();
+    for (const h of (holders ?? []) as Array<Record<string, unknown>>) {
+      const size = Number(h.yes_shares ?? 0) + Number(h.no_shares ?? 0);
+      if (!(size > 0)) continue;
+      const id = Number(h.onchain_id);
+      const list = byMarket.get(id) ?? [];
+      list.push({ wallet: String(h.wallet).toLowerCase(), size });
+      byMarket.set(id, list);
+    }
+    for (const [id, list] of byMarket) {
+      believersByMarket.set(
+        id,
+        list
+          .sort((a, b) => b.size - a.size)
+          .slice(0, 6)
+          .map((x) => x.wallet),
+      );
+    }
+  }
+  return believersByMarket;
+}
+
+/**
+ * GLOBAL READ — how long each actor on screen has believed what they believe.
+ *
+ * Viewer-independent: keyed on the wallets the rows are ABOUT, never on the
+ * wallet reading them. Returns a plain Map, for the same reason as above.
+ */
+async function loadActorBeliefs(
+  sb: ReturnType<typeof serviceClient>,
+  actorWallets: string[],
+  marketIds: number[],
+): Promise<BeliefByKey> {
+  const beliefByKey = new Map<
+    string,
+    {
+      daysHeld: number | null;
+      tenureIsFloor: boolean;
+      enteredBefore: boolean;
+      yesShares: number;
+      noShares: number;
+    }
+  >();
+  if (actorWallets.length > 0 && marketIds.length > 0) {
+    const { serviceClientOrNull } = await import("@/lib/supabase-clients");
+    const svc = serviceClientOrNull();
+    if (!svc)
+      console.warn(
+        "[feed] no service key — rows lose their tenure, so no story can say how long anyone believed it.",
+      );
+    const { data: beliefs, error: beliefErr } = svc
+      ? await svc
+          .from("wallet_beliefs")
+          .select("wallet, onchain_id, yes_shares, no_shares, first_backed_at")
+          .in("wallet", actorWallets)
+          .in("onchain_id", marketIds)
+          .limit(500)
+      : { data: null, error: null };
+    if (beliefErr)
+      console.warn(
+        `[feed] wallet_beliefs unreadable (${beliefErr.message}) — rows lose their tenure, so no story can say how long anyone believed it.`,
+      );
+    const now = Date.now();
+    for (const b of (beliefs ?? []) as Array<Record<string, unknown>>) {
+      const first = b.first_backed_at ? Date.parse(String(b.first_backed_at)) : NaN;
+      const days = Number.isFinite(first) ? (now - first) / 86_400_000 : null;
+      beliefByKey.set(`${String(b.wallet).toLowerCase()}:${Number(b.onchain_id)}`, {
+        // Sub-day tenure is not a story; don't dress one up as "a day".
+        daysHeld: days != null && days >= 1 ? days : null,
+        // A belief that was already there when the index opened has no
+        // knowable start. The sentence says "43+ days", not "43 days".
+        tenureIsFloor: firstBackedIsFloor(first),
+        // They were in this market before today's move.
+        enteredBefore: Number.isFinite(first) && now - first > 86_400_000,
+        yesShares: Number(b.yes_shares ?? 0),
+        noShares: Number(b.no_shares ?? 0),
+      });
+    }
+  }
+  return beliefByKey;
+}
+
 async function buildTape(data: z.output<typeof input>) {
   const sb = serviceClient();
   const limit = data?.limit ?? 120;
@@ -495,36 +611,7 @@ async function buildTape(data: z.output<typeof input>) {
     ),
   ];
   /** marketId → believer wallets, biggest position first. */
-  const believersByMarket = new Map<number, string[]>();
-  if (signalMarkets.length > 0) {
-    const { serviceClientOrNull } = await import("@/lib/supabase-clients");
-    const svc = serviceClientOrNull();
-    const { data: holders } = svc
-      ? await svc
-          .from("wallet_beliefs")
-          .select("wallet, onchain_id, yes_shares, no_shares")
-          .in("onchain_id", signalMarkets)
-          .limit(600)
-      : { data: null };
-    const byMarket = new Map<number, Array<{ wallet: string; size: number }>>();
-    for (const h of (holders ?? []) as Array<Record<string, unknown>>) {
-      const size = Number(h.yes_shares ?? 0) + Number(h.no_shares ?? 0);
-      if (!(size > 0)) continue;
-      const id = Number(h.onchain_id);
-      const list = byMarket.get(id) ?? [];
-      list.push({ wallet: String(h.wallet).toLowerCase(), size });
-      byMarket.set(id, list);
-    }
-    for (const [id, list] of byMarket) {
-      believersByMarket.set(
-        id,
-        list
-          .sort((a, b) => b.size - a.size)
-          .slice(0, 6)
-          .map((x) => x.wallet),
-      );
-    }
-  }
+  const believersByMarket = await loadBelieverFaces(sb, signalMarkets);
 
   const labelByWallet = new Map<string, NetLabel>();
   /**
@@ -608,52 +695,7 @@ async function buildTape(data: z.output<typeof input>) {
    * a bulk-queryable table of who holds what. Every other server path already
    * reads it with the service role — this now matches them.
    */
-  const beliefByKey = new Map<
-    string,
-    {
-      daysHeld: number | null;
-      tenureIsFloor: boolean;
-      enteredBefore: boolean;
-      yesShares: number;
-      noShares: number;
-    }
-  >();
-  if (actorWallets.length > 0 && marketIds.length > 0) {
-    const { serviceClientOrNull } = await import("@/lib/supabase-clients");
-    const svc = serviceClientOrNull();
-    if (!svc)
-      console.warn(
-        "[feed] no service key — rows lose their tenure, so no story can say how long anyone believed it.",
-      );
-    const { data: beliefs, error: beliefErr } = svc
-      ? await svc
-          .from("wallet_beliefs")
-          .select("wallet, onchain_id, yes_shares, no_shares, first_backed_at")
-          .in("wallet", actorWallets)
-          .in("onchain_id", marketIds)
-          .limit(500)
-      : { data: null, error: null };
-    if (beliefErr)
-      console.warn(
-        `[feed] wallet_beliefs unreadable (${beliefErr.message}) — rows lose their tenure, so no story can say how long anyone believed it.`,
-      );
-    const now = Date.now();
-    for (const b of (beliefs ?? []) as Array<Record<string, unknown>>) {
-      const first = b.first_backed_at ? Date.parse(String(b.first_backed_at)) : NaN;
-      const days = Number.isFinite(first) ? (now - first) / 86_400_000 : null;
-      beliefByKey.set(`${String(b.wallet).toLowerCase()}:${Number(b.onchain_id)}`, {
-        // Sub-day tenure is not a story; don't dress one up as "a day".
-        daysHeld: days != null && days >= 1 ? days : null,
-        // A belief that was already there when the index opened has no
-        // knowable start. The sentence says "43+ days", not "43 days".
-        tenureIsFloor: firstBackedIsFloor(first),
-        // They were in this market before today's move.
-        enteredBefore: Number.isFinite(first) && now - first > 86_400_000,
-        yesShares: Number(b.yes_shares ?? 0),
-        noShares: Number(b.no_shares ?? 0),
-      });
-    }
-  }
+  const beliefByKey = await loadActorBeliefs(sb, actorWallets, marketIds);
 
   /** Cohort members with their tenure kept — the face stack only needs names. */
   const cohortPeople = new Map<string, CohortHolder[]>();
