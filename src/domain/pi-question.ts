@@ -88,8 +88,19 @@ export function piQuestion(input: QuestionInput): PIQuestion | null {
   const v = input.signal;
   if (!v) return null;
 
-  // RULE 1 — only a genuine clue may ask anything.
-  if (voiceLevel(v) !== "intelligence") return null;
+  /* RULE 1 — only a genuine clue may ask anything.
+     Intelligence (a contradiction, a timed silence, pronounced unusualness)
+     qualifies outright. One observation-level shape also does: a proven change
+     in the holder hierarchy, or a person visibly unwinding. Those are gaps in
+     the evidence even when the market's own vector stays quiet — they are the
+     "KODAK IS BACKING AWAY" case. Everything else stays declarative. */
+  const level = voiceLevel(v);
+  const hierarchyGap =
+    v.signals.concentration >= 0.6 ||
+    (!!input.pattern && UNWINDING.test(input.pattern) && v.signals.concentration > 0);
+  if (level === "receipt") return null;
+  if (level !== "intelligence" && !(hierarchyGap && v.informationGain >= INTELLIGENCE_GAIN_MIN))
+    return null;
   // RULE 2 — a clue with a proven ending answers itself.
   if (v.clue === "resolved") return null;
 
