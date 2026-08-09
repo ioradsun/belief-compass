@@ -29,6 +29,8 @@
 export * from "./types";
 export * from "./signals";
 export { insiderPulse, type PulseFacts } from "./pulse";
+export { pulseFactsFromMarket, type MarketStateFacts } from "./market-facts";
+
 export { insiderRead, fromHouseReadState, type InsiderReadContext } from "./read";
 export { evidenceFromPulse, freshnessOf, FRESH_HALF_LIFE_MS } from "./features";
 export { score, scoreSignal, IMPORTANCE_WEIGHTS } from "./scoring";
