@@ -1869,13 +1869,16 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
              milestone) and read as one sentence repeated. When the printed
              kicker makes the first-participation claim, that IS the family, so
              the cap can ration it. */
-          family: /got company|first believers?|first capital|stepped in/i.test(
-            r.story?.headline ?? "",
-          )
-            ? "side_opened"
-            : r.kind === "market_transition"
-              ? ((r.payload as { type?: string } | null)?.type ?? null)
-              : r.kind,
+          family: /emptied out|nothing behind it now/i.test(r.story?.headline ?? "")
+            ? "side_emptied"
+            : /got company|first believers?|first capital|stepped in/i.test(
+                  r.story?.headline ?? "",
+                )
+              ? "side_opened"
+              : r.kind === "market_transition"
+                ? ((r.payload as { type?: string } | null)?.type ?? null)
+                : r.kind,
+
           // Market-scoped rows need the question to make sense standalone.
           context: r.marketId ? (r.marketTitle ?? "").trim().length > 0 : true,
           suppressed: copySuppressed.has(r.id),
