@@ -411,6 +411,8 @@ export function MarketDeck({
         win={deckWin}
         change={marketChange}
         faces={participantFaces}
+        state={marketStateFacts(rr)}
+
         footer={
           onToggleCase && !mobileCaseOpen ? (
             <ExamineCta open={caseOpen} onToggle={onToggleCase} houseRead={houseReadState_} />
