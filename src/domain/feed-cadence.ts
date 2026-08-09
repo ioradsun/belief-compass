@@ -30,9 +30,12 @@
  *      introduce someone new. Penalties and bonuses, never filters: if the only
  *      candidates left are three holding milestones, you get three holding
  *      milestones rather than an empty feed.
- *   4. NOBODY DOMINATES. Soft caps per wallet and per market, applied as growing
- *      penalties rather than hard cuts, so a busy market is quietened rather
- *      than silenced.
+ *   4. NOBODY DOMINATES — and neither does any one KIND of story. Soft caps per
+ *      wallet, per market and per motif, applied as growing penalties rather
+ *      than hard cuts, so a busy market is quietened rather than silenced. The
+ *      motif cap is window-wide because repetition of a kind is felt across the
+ *      whole read: six "Back from the dead" rows in ten make the phrase mean
+ *      nothing, however far apart they sit.
  *   5. TARGETS ARE GUIDANCE. Under-represented families get a nudge bounded well
  *      below the significance range, and an event under `minQuality` is never
  *      promoted by it. A quiet period yields a shorter, slower feed — never a
@@ -89,6 +92,17 @@ export const CADENCE = {
   /** Soft caps inside one mixed window. Exceeding them costs, it doesn't block. */
   maxPerWallet: 2,
   maxPerMarket: 3,
+  /**
+   * How many rows may tell the SAME KIND of story in one window.
+   *
+   * A motif already costs the most of any adjacency penalty, but adjacency only
+   * looks back `lookback` rows and decays — so six "Back from the dead" spread
+   * across ten rows paid almost nothing and the copy stopped meaning anything.
+   * A market and a wallet each had a window-wide ceiling; the thing that makes a
+   * row feel repetitive did not. Two of a kind is a coincidence; the third is a
+   * pattern, and a pattern is what makes a feed read as generated.
+   */
+  maxPerMotif: 2,
   /** Penalties. Deliberately smaller than the significance range they compete with. */
   penalty: {
     family: 0.18,
@@ -172,11 +186,12 @@ function noveltyBonus(c: MixCandidate, walletCount: Map<string, number>): number
   return subjects.some((s) => !walletCount.has(s)) ? CADENCE.newPersonBonus : 0;
 }
 
-/** Growing cost for a wallet or market that is taking over the window. */
+/** Growing cost for a wallet, a market, or a KIND OF STORY taking over the window. */
 function dominancePenalty(
   c: MixCandidate,
   walletCount: Map<string, number>,
   marketCount: Map<string, number>,
+  motifCount: Map<string, number>,
 ): number {
   let p = 0;
   const m = marketCount.get(c.marketId) ?? 0;
@@ -184,6 +199,14 @@ function dominancePenalty(
   for (const s of c.subjects ?? []) {
     const w = walletCount.get(s) ?? 0;
     if (w >= CADENCE.maxPerWallet) p += CADENCE.penalty.overCap * (1 + w - CADENCE.maxPerWallet);
+  }
+  // Window-wide, unlike the adjacency motif penalty: repetition of a KIND is
+  // felt across the whole read, not only between neighbours. Still a cost and
+  // never a block — a third genuinely breaking row of one kind still gets in,
+  // because significance ≥ breakingAt skips this entirely.
+  if (c.motif) {
+    const k = motifCount.get(c.motif) ?? 0;
+    if (k >= CADENCE.maxPerMotif) p += CADENCE.penalty.overCap * (1 + k - CADENCE.maxPerMotif);
   }
   return p;
 }
@@ -300,6 +323,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
   const picked: MixCandidate[] = [];
   const walletCount = new Map<string, number>();
   const marketCount = new Map<string, number>();
+  const motifCount = new Map<string, number>();
 
   while (pool.length > 0) {
     const recent = picked.slice(-CADENCE.lookback).reverse();
@@ -318,7 +342,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
           ? base + 1
           : base -
             adjacencyPenalty(c, recent) -
-            dominancePenalty(c, walletCount, marketCount) +
+            dominancePenalty(c, walletCount, marketCount, motifCount) +
             targetBonus(c, picked, want) +
             noveltyBonus(c, walletCount);
 
@@ -338,6 +362,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
     const [chosen] = pool.splice(bestIdx, 1);
     picked.push(chosen);
     marketCount.set(chosen.marketId, (marketCount.get(chosen.marketId) ?? 0) + 1);
+    if (chosen.motif) motifCount.set(chosen.motif, (motifCount.get(chosen.motif) ?? 0) + 1);
     for (const s of chosen.subjects ?? []) walletCount.set(s, (walletCount.get(s) ?? 0) + 1);
   }
 
