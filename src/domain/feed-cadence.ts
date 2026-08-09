@@ -238,7 +238,31 @@ function dominancePenalty(
   return p;
 }
 
+/**
+ * The price of speaking at Intelligence volume again.
+ *
+ * `intelCount` rows already read as intelligence; this candidate would be the
+ * next. The allowance grows with the window, so a short feed of three genuine
+ * clues is untouched, while a long one that keeps escalating pays more for each
+ * additional clue than it did for the last. A row whose `informationGain` is
+ * genuinely high pays nothing at all — the quota must never downgrade a true
+ * contradiction into a receipt.
+ */
+export function intelligenceCost(
+  c: MixCandidate,
+  intelCount: number,
+  pickedTotal: number,
+): number {
+  if (c.voice !== "intelligence") return 0;
+  if ((c.signalGain ?? 0) >= CADENCE.intelligenceBypass) return 0;
+  const window = Math.max(pickedTotal + 1, CADENCE.intelligenceFloorWindow);
+  const allowance = Math.max(1, Math.round(CADENCE.intelligenceTarget * window));
+  const over = intelCount + 1 - allowance;
+  return over <= 0 ? 0 : CADENCE.penalty.intelligence * over;
+}
+
 const FAMILIES = Object.keys(FAMILY_TARGET) as EventFamily[];
+
 
 /**
  * THE BUDGET FOR THE DAY THAT ACTUALLY HAPPENED.
