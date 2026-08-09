@@ -319,7 +319,18 @@ function dominancePenalty(
 ): number {
   let p = 0;
   const m = marketCount.get(c.marketId) ?? 0;
-  if (m >= CADENCE.maxPerMarket) p += CADENCE.penalty.overCap * (1 + m - CADENCE.maxPerMarket);
+  /* ESCALATING, NOT LINEAR. A market's eleventh row used to cost eight overCaps
+     against a base worth far more than that, so a busy question could still own
+     a quarter of the window. Raising the excess to a power makes the fifth row
+     cost about six times the third and the seventh unaffordable — a soft
+     ceiling around five that an exceptional row may still cross. */
+  if (m >= CADENCE.maxPerMarket)
+    p +=
+      CADENCE.penalty.overCap *
+      (exceptional(c)
+        ? 1 + m - CADENCE.maxPerMarket
+        : Math.pow(1 + m - CADENCE.maxPerMarket, CADENCE.marketEscalation));
+
   for (const s of c.subjects ?? []) {
     const w = walletCount.get(s) ?? 0;
     if (w >= CADENCE.maxPerWallet) p += CADENCE.penalty.overCap * (1 + w - CADENCE.maxPerWallet);
