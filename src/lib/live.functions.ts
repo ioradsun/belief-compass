@@ -48,7 +48,7 @@ import {
   type CopyLevel,
 } from "@/domain/transition-denominator";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
-import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
+import { adaptiveFloor, admissionOf, admitToFeed, silenceAdjustedFloor } from "@/domain/feed-density";
 import {
   scoreLiveAction,
   scoreDiscoveryMoment,
