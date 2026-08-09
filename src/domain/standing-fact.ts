@@ -165,10 +165,26 @@ function recognition(people: StandingHolder[]): number {
   return best;
 }
 
+/**
+ * Day 18 and day 19 are the same fact.
+ *
+ * The cooldown key used to carry `Math.floor(daysHeld)`, which made a standing
+ * truth expire and re-arrive as news once every twenty-four hours — "Rummy has
+ * held YES for 18 days", then 19, then 20, forever. Bucketing is what makes the
+ * identity stable across polls while still letting a genuinely new milestone
+ * (a week, a month, a year) speak again.
+ */
+export function tenureBucket(days: number): number {
+  const d = Math.max(0, Math.floor(days));
+  for (const b of [365, 180, 90, 60, 30, 14, 7, 3, 1]) if (d >= b) return b;
+  return 0;
+}
+
 /** Longer is stronger, flattening out — a year is not ten times a month. */
 function tenureWeight(days: number): number {
   return clamp01(Math.log10(Math.max(1, days) + 1) / Math.log10(366));
 }
+
 
 function rank(a: StandingHolder, b: StandingHolder): number {
   const rel = (h: StandingHolder) =>
@@ -261,7 +277,10 @@ export function findStandingFacts(input: StandingInput): StandingFact[] {
       marketTitle: input.marketTitle,
       side: input.side,
       people: open.slice(0, STANDING.maxPeople),
-      key: `holding:${base}:${open.length}:${Math.floor(lead.daysHeld)}`,
+      // Tenure BUCKETED, not floored: see `tenureBucket`. A day ticking over is
+      // not new intelligence, and the cooldown key is what decides that.
+      key: `holding:${base}:${open.length}:${tenureBucket(lead.daysHeld)}`,
+
       strength: clamp01(
         0.2 + 0.4 * tenureWeight(lead.daysHeld) + 0.1 * Math.min(1, open.length / 3),
       ),

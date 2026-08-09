@@ -127,6 +127,14 @@ export const EDITORIAL = {
     first_believer: 1,
     side_opened: 1,
     first_capital: 1,
+    /* CONTINUITY RATIONED WHERE EVERY OTHER FAMILY IS — this is the cap that
+       replaced the standing lane's scheduler. A bare tenure receipt is the
+       weakest true thing the feed can say, so two is generous; persistence
+       that contrasts with a real move is intelligence and gets the same
+       allowance as any other market reading. */
+    standing_fact: 2,
+    standing_signal: 3,
+
   } as Record<string, number>,
 } as const;
 

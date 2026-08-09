@@ -549,10 +549,16 @@ export function familyOf(input: {
     case "market_transition":
     case "believer_milestone":
     case "tribe_doubled":
+    /* PERSISTENCE IS A MARKET READING. "The price fell and the four oldest
+       holders didn't move" belongs in the same family as the move itself —
+       it competes with change because it is ABOUT change. Only the bare
+       receipt ("still here, 31 days") is a relationship story. */
+    case "standing_signal":
       return "market_transition";
     case "discovery_moment":
     case "standing_fact":
       return "relationship_story";
+
     default:
       // A market opening, or a milestone crossed, is a moment however it was
       // recorded — the category says so even when the kind cannot.
