@@ -84,7 +84,7 @@ export function now<T extends NowRow>(
     query.limit == null
       ? { shown: [...rows], hidden: 0 }
       : (() => {
-          const rank = nowRanking(rows);
+          const rank = nowRanking(query.rankOver ?? rows);
           return arrangeFeed(rows, {
             rankOf: (id) => rank?.get(id),
             limit: query.limit,
