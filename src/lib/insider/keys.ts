@@ -54,3 +54,18 @@ export const insiderMarketKey = (
   marketId: number,
   opts: { wallet?: string | null; limit: number },
 ) => [INSIDER_KEY_ROOT, marketId, "activity", opts.wallet ?? null, opts.limit] as const;
+
+/** The global feed scope alone — used to invalidate only the app-wide tape. */
+export const insiderNowRootKey = () => [INSIDER_KEY_ROOT, "now"] as const;
+
+/**
+ * The batched per-market INSIGHT read (the pulse strips under the cards). The
+ * spec is the comma-joined id list the request carries, so the key still says
+ * exactly which markets the cached answer covers — that is what lets realtime
+ * invalidate only the batches holding a market that just traded.
+ */
+export const insiderPulseKey = (ids: readonly number[] | string) =>
+  [INSIDER_KEY_ROOT, "pulse", typeof ids === "string" ? ids : ids.join(",")] as const;
+
+/** Every pulse batch — the reconnect-time re-sync scope. */
+export const insiderPulseRootKey = () => [INSIDER_KEY_ROOT, "pulse"] as const;
