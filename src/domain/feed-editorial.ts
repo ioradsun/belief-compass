@@ -59,7 +59,23 @@ export interface EditorialRow {
   rolling?: boolean | null;
   /** Event family, for capping how much of the feed one family may occupy. */
   family?: string | null;
+  /**
+   * The copy layer already decided this row should not be printed — chiefly a
+   * percentage it could not size, or a percentage over pocket change. See
+   * `retellTransition`. Editorial honours that verdict rather than re-deriving
+   * it, because only the copy layer knows what sentence would have shipped.
+   */
+  suppressed?: boolean | null;
+  /**
+   * Does the row carry a SECOND FACT — something beyond the bare structural
+   * announcement? "NO just got company" is an event type. "NO was empty, three
+   * wallets stepped in within the hour" is intelligence. First-participation
+   * rows without a second fact are ordinary, and ordinary is allowed at most
+   * one slot.
+   */
+  secondFact?: boolean | null;
 }
+
 
 export const EDITORIAL = {
   /**
