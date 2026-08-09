@@ -19,9 +19,13 @@
  * mutate — the contract `loadTapeSource` already states — which is what makes
  * handing one object to concurrent readers safe.
  */
+import type { z } from "zod";
 import { swrCache } from "@/lib/server-cache";
-import { loadTapeSource, type TapeQuery, type TapeSource } from "@/lib/insider/source.server";
+import { tapeInput } from "@/lib/insider/tape-input";
+import { loadTapeSource, type TapeSource } from "@/lib/insider/source.server";
 import type { serviceClient } from "@/lib/supabase-clients";
+
+type TapeQuery = z.output<typeof tapeInput>;
 
 /** Same window as the shared tape: fresh enough to be live, long enough to share. */
 export const SOURCE_TTL_MS = 10_000;
@@ -38,13 +42,17 @@ export async function loadSharedTapeSource(
   data: TapeQuery,
 ): Promise<TapeSource> {
   if (data?.since) return loadTapeSource(sb, data);
-  return swrCache(sourceCacheKey(data), { ttlMs: SOURCE_TTL_MS }, async () => {
-    const source = await loadTapeSource(sb, data);
-    // A failed read must not be cached — the next reader has to try again.
-    if (source.error) throw new Error(source.error);
-    return source;
-  }).catch((e) => ({
-    ...(await Promise.resolve(loadTapeSource(sb, data))),
-    error: e instanceof Error ? e.message : String(e),
-  })) as Promise<TapeSource>;
+  try {
+    return await swrCache(sourceCacheKey(data), { ttlMs: SOURCE_TTL_MS }, async () => {
+      const source = await loadTapeSource(sb, data);
+      // A failed read must not be cached — the next reader has to try again.
+      if (source.error) throw new Error(source.error);
+      return source;
+    });
+  } catch (e) {
+    // The cache is an accelerator, never a gate: on any failure the caller
+    // still gets the loader's own answer (including its error, in its shape).
+    return loadTapeSource(sb, data);
+  }
 }
+
