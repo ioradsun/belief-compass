@@ -80,7 +80,15 @@ export interface MixCandidate {
    * story ("another 30-day cohort on YES"), even when they are different rows.
    */
   motif?: string;
+  /**
+   * How loudly the PI speaks about this row (src/domain/pi-voice `voiceLevel`).
+   * Used for one thing only: charging for repeated Intelligence, below.
+   */
+  voice?: "receipt" | "observation" | "intelligence";
+  /** `informationGain` for the row — lets a genuine clue buy its way past the cost. */
+  signalGain?: number;
 }
+
 
 export const CADENCE = {
   /** Above this an event is breaking news and ignores sequencing. */
