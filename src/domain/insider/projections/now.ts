@@ -40,10 +40,18 @@ export interface NowQuery {
   limit: number | null;
   /** Rows the reader explicitly asked for; they lead the column. */
   pinned?: ReadonlySet<string>;
+  /**
+   * Rank the window against THIS candidate set rather than the rows being
+   * placed. The tape ranks the full admitted pool, then places only what the
+   * arrival scheduler has released so far — the two are the same editorial
+   * judgment applied at two moments. Defaults to `rows`.
+   */
+  rankOver?: readonly NowRow[];
   /** Arrivals held behind the "N New" control, for the tail state. */
   pending?: number;
   /** A fetch is in flight; the tail must not claim "caught up". */
   loading?: boolean;
+
 }
 
 export interface InsiderNowFeed<T extends NowRow> {
