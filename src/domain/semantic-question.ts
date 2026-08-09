@@ -140,7 +140,7 @@ export function proposition(title: string): string | null {
 
 /** The most words a quoted topic may carry before it stops being a phrase and
  *  starts being the headline read back to the reader. */
-export const MAX_TOPIC_WORDS = 6;
+export const MAX_TOPIC_WORDS = 8;
 
 const SUBORDINATOR = /^(if|when|whether|that|because|after|before|once|unless)\s+/i;
 
