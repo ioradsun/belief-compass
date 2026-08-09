@@ -69,7 +69,10 @@ async function main() {
     .limit(600);
   if (error) throw error;
 
-  const ids = (states ?? []).map((s) => String(s.onchain_id));
+  const ids = ((states ?? []) as unknown as Record<string, any>[]).map((s) =>
+    String(s.onchain_id),
+  );
+
   const { data: markets } = await sb
     .from("markets")
     .select("onchain_id, question")
