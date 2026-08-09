@@ -60,6 +60,12 @@ import { familyOf, VOICE_CEILING, type MixCandidate } from "@/domain/feed-cadenc
 import { signalVector } from "@/domain/signal-vector";
 import { tellNewMarketStory } from "@/domain/new-market-story";
 import { COPY_VERSION } from "@/domain/copy-version";
+import {
+  ONE_SIDED_MIN_DAYS,
+  LOPSIDED_MIN_LEAD_USD,
+  LOPSIDED_RATIO,
+  type SemanticInput,
+} from "@/domain/semantic-question";
 import { signalFromTransition, mergeSignals, dominantKey } from "@/domain/transition-signal";
 import { factsForRow } from "@/domain/signal-facts";
 import {
@@ -2051,6 +2057,75 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     }> = [];
     const drafted = new Map<string, string>();
 
+    /* THE PROPOSITION PAIR. Which already-proven STATE, if any, this row sits
+       on — the only input the semantic question layer takes beyond the title.
+       Everything here is read off state the pipeline already established: the
+       composed kicker (which the editorial family classifier reads the same
+       way), the market's own believer/capital book, and its age. Nothing is
+       inferred about what the question MEANS; that stays the reader's job, and
+       the PI only asks. See src/domain/semantic-question. */
+    const semanticStateFor = (
+      r: (typeof material)[number],
+    ): Omit<SemanticInput, "key"> | null => {
+      const title = (r.marketTitle ?? "").trim();
+      if (title.length === 0) return null;
+      const m = momentumById.get(Number(r.marketId));
+      const head = r.story?.headline ?? "";
+      const side = r.side === "YES" || r.side === "NO" ? r.side : null;
+      const ageDays = m?.marketAgeDays ?? null;
+
+      if (/emptied out|nothing behind it now|no one left/i.test(head))
+        return { title, state: "side_emptied", side };
+
+      if (/back from the dead|woke this up|this one's back|^a pulse$/i.test(head))
+        return {
+          title,
+          state: "back_from_dead",
+          side: null,
+          facts: { quietDays: 7, trades: m?.tradeCount24h ?? null },
+        };
+
+      if (
+        /got company|first capital|stepped into an empty|empty no more/i.test(head) &&
+        ageDays != null
+      )
+        return { title, state: "side_got_company", side, facts: { days: ageDays } };
+
+      /* PERSISTENT ONE-SIDEDNESS. "Still nobody will take NO" is only factual
+         when NO is empty RIGHT NOW and the market is old enough for "still" to
+         mean something, so both are required and the age is the proven floor. */
+      const by = m?.believersYes ?? null;
+      const bn = m?.believersNo ?? null;
+      if (
+        by != null &&
+        bn != null &&
+        ageDays != null &&
+        ageDays >= ONE_SIDED_MIN_DAYS &&
+        ((by > 0 && bn === 0) || (bn > 0 && by === 0))
+      )
+        return {
+          title,
+          state: "one_sided_persistence",
+          side: by > 0 ? "YES" : "NO",
+          facts: { days: ageDays },
+        };
+
+      const cy = m?.capitalHeldYes ?? null;
+      const cn = m?.capitalHeldNo ?? null;
+      if (cy != null && cn != null) {
+        const lead = Math.max(cy, cn);
+        const light = Math.min(cy, cn);
+        if (lead >= LOPSIDED_MIN_LEAD_USD && light <= lead * LOPSIDED_RATIO)
+          return {
+            title,
+            state: "lopsided_book",
+            side: cy >= cn ? "YES" : "NO",
+            facts: { leadUsd: lead, laggardUsd: light },
+          };
+      }
+      return null;
+    };
+
     /* STAGE 1 — SINGLE-ROW CLUES. One vector, one named gap. */
     for (const r of material) {
       if (!r.story) continue;
@@ -2069,7 +2144,8 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         pattern: r.story.pattern ?? patternById.get(r.id) ?? null,
         actorName: r.face?.name ?? r.people?.[0]?.name ?? null,
         standing: standingKindById.get(r.id) ?? null,
-
+        semantic: semanticStateFor(r),
+        unusual: { trades24h: momentumById.get(Number(r.marketId))?.tradeCount24h ?? null },
       });
       if (!q) continue;
       drafted.set(r.id, q.text);

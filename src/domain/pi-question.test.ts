@@ -170,7 +170,16 @@ describe("no privileged knowledge, no expectation, no prediction", () => {
     { key: "8", signal: strong({ concentration: 0.9 }, { concentrationKind: "newcomers_replaced_a_whale" }), headline: "H", body: "B" },
     { key: "9", signal: strong({ concentration: 0.9 }, { concentrationKind: "concentrating" }), headline: "H", body: "B" },
     { key: "10", signal: strong({ beforePrice: 0.9 }), headline: "H", body: "B" },
-    { key: "11", signal: strong({ unusual: 0.95 }), headline: "H", body: "B" },
+    /* UNUSUAL VOLUME NOW HAS TO COUNT SOMETHING. The old variant ("busier than
+       this market has ever been") named no checkable number, so the shape is
+       only asked when the trade count is known. */
+    {
+      key: "11",
+      signal: strong({ unusual: 0.95 }),
+      headline: "H",
+      body: "B",
+      unusual: { trades24h: 14 },
+    },
   ];
 
   it("never implies hidden knowledge or predicts the next move", () => {
