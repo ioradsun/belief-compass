@@ -129,17 +129,28 @@ export const EDITORIAL = {
     first_capital: 1,
     /* CONTINUITY RATIONED WHERE EVERY OTHER FAMILY IS — this is the cap that
        replaced the standing lane's scheduler. A bare tenure receipt is the
-       weakest true thing the feed can say, so two is generous; persistence
-       that contrasts with a real move is intelligence and gets the same
-       allowance as any other market reading. */
-    standing_fact: 2,
+       weakest true thing the feed can say: ONE is the whole allowance, because
+       two of them back to back read as a template. Persistence beside a real
+       change (observation) or against a proven move (intelligence) is a market
+       reading and gets the same allowance as any other. */
+    standing_fact: 1,
     standing_signal: 3,
+    /* "EMPTIED OUT" IS A LOUD SENTENCE. Printed twice in a window, with no
+       amount behind either, it sounds like the feed shouting. One per window
+       unless the second telling brings its own evidence. */
+    side_emptied: 1,
 
   } as Record<string, number>,
 } as const;
 
 /** The families whose cap only applies to the bare, single-fact telling. */
-const SECOND_FACT_EXEMPT = new Set(["first_believer", "side_opened", "first_capital"]);
+const SECOND_FACT_EXEMPT = new Set([
+  "first_believer",
+  "side_opened",
+  "first_capital",
+  "side_emptied",
+]);
+
 
 const num = (v: number | null | undefined): number =>
   v == null || !Number.isFinite(Number(v)) ? 0 : Math.abs(Number(v));
