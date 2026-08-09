@@ -99,32 +99,46 @@ export async function swrCache<T>(key: string, opts: SwrOptions, fn: () => Promi
   }
 
   // Cold: ONE computation for every caller waiting on this key.
+  //
+  // THE WATCHDOG UNWEDGES THE SLOT; IT DOES NOT FAIL THE BUILD. Racing the
+  // originator's own `fn()` against a timer conflated two different problems: a
+  // computation that can never come back (the wedge this guards) and one that
+  // is merely slower than the window on a cold isolate. The second is the
+  // common case, and rejecting it threw away a build that was about to succeed
+  // and handed the page an error instead of content.
+  //
+  // So the originator awaits its own work to completion. The timer only expires
+  // the shared SLOT, so a later arrival starts a fresh build rather than
+  // joining one that may never settle — which is all the wedge protection ever
+  // required.
   const running = inflight.get(key) as Promise<T> | undefined;
-  if (running) return running;
+  if (running) {
+    // A JOINER, by contrast, must never be held hostage. If the build it
+    // attached to has not produced anything within the window, it stops waiting
+    // and computes for itself instead of failing.
+    return Promise.race<T | typeof TIMED_OUT>([
+      running,
+      new Promise<typeof TIMED_OUT>((r) => setTimeout(() => r(TIMED_OUT), MAX_INFLIGHT_MS)),
+    ]).then((v) => (v === TIMED_OUT ? fn() : (v as T)));
+  }
 
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const started = Promise.race<T>([
-    fn().then((value) => {
-      store.set(key, { value, expires: now() + opts.ttlMs, refreshing: false });
-      return value;
-    }),
-    new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
-        // Evict eagerly: the next caller must start a fresh build rather than
-        // await a computation that may never come back.
-        if (inflight.get(key) === started) inflight.delete(key);
-        reject(new Error(`swrCache: "${key}" did not settle in ${MAX_INFLIGHT_MS}ms`));
-      }, MAX_INFLIGHT_MS);
-    }),
-  ]).finally(() => {
-    if (timer) clearTimeout(timer);
-    // Cleared whether it resolved or threw — a failed build must not become a
-    // promise every future caller keeps awaiting.
-    if (inflight.get(key) === started) inflight.delete(key);
+  const started = fn().then((value) => {
+    store.set(key, { value, expires: now() + opts.ttlMs, refreshing: false });
+    return value;
   });
+  const timer = setTimeout(() => {
+    if (inflight.get(key) === started) inflight.delete(key);
+  }, MAX_INFLIGHT_MS);
+  void started
+    .catch(() => undefined) // a failed build must not be cached, nor go unhandled
+    .finally(() => {
+      clearTimeout(timer);
+      if (inflight.get(key) === started) inflight.delete(key);
+    });
   inflight.set(key, started);
   return started;
 }
+
 
 /**
  * A NON-BLOCKING READ. Returns the cached value if this isolate already has one
