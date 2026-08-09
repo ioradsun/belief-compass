@@ -33,6 +33,7 @@ import {
   type ConvictionAction,
 } from "@/domain/conviction-event";
 import { tellPiStory } from "@/domain/pi-voice";
+import { modernizeTransitionCopy } from "@/domain/legacy-voice";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
 import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
 import {
@@ -905,7 +906,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
          still speak the old product's language forever. modernizeTransitionCopy
          recognises those labels at read time and re-says them in the current
          voice, using only the numbers the stored detail already printed. */
-      const modern = modernizeTransitionCopy(p.headline ?? "", p.detail ?? "", r.sourceKey ?? r.id);
+      const modern = modernizeTransitionCopy(p.headline ?? "", p.detail ?? "", String(r.id));
       const kicker = modern.headline.trim();
       r.story = {
         category: "momentum",
