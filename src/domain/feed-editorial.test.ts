@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  capFamilies,
   collapseCausal,
   earnsSlot,
   editFeed,
@@ -55,7 +56,7 @@ describe("low-value truth is not news", () => {
     expect(earnsSlot(row({ action: "exit", amountUsd: 40 }))).toBe(true);
   });
 
-  it("refuses a 3-conviction milestone from a stranger", () => {
+  it("refuses a small milestone from a stranger", () => {
     expect(earnsSlot(row({ kind: "person_milestone", rung: 3 }))).toBe(false);
     expect(earnsSlot(row({ kind: "person_milestone", rung: 3, personal: true }))).toBe(true);
     expect(earnsSlot(row({ kind: "person_milestone", rung: 25 }))).toBe(true);
@@ -141,5 +142,50 @@ describe("a row the reader cannot place is not a story", () => {
     expect(earnsSlot(row({ context: false }))).toBe(false);
     expect(earnsSlot(row({ context: true }))).toBe(true);
     expect(earnsSlot(row({}))).toBe(true);
+  });
+});
+
+describe("rolling-window state is one story, re-read", () => {
+  const roll = (id: string, at: string, amt: number) =>
+    row({ id, marketId: "5", motif: "people_capital_divergence", rolling: true, occurredAt: at, amountUsd: amt });
+
+  it("replaces the earlier reading even when the numbers moved a lot", () => {
+    const a = roll("late", "2026-08-09T10:00:00.000Z", 85);
+    const b = roll("early", "2026-08-09T09:10:00.000Z", 215);
+    expect(pruneRepeats([a, b]).map((r) => r.id)).toEqual(["late"]);
+  });
+
+  it("still allows a different category on the same market", () => {
+    const a = roll("div", "2026-08-09T10:00:00.000Z", 85);
+    const b = row({ id: "drain", marketId: "5", motif: "material_move:capital", rolling: true });
+    expect(pruneRepeats([a, b])).toHaveLength(2);
+  });
+
+  it("keeps the escalation exemption for moment events", () => {
+    const a = row({ id: "a", motif: "big_backing", amountUsd: 500, occurredAt: "2026-08-09T10:00:00.000Z" });
+    const b = row({ id: "b", motif: "big_backing", amountUsd: 20, occurredAt: "2026-08-09T09:00:00.000Z" });
+    expect(pruneRepeats([a, b])).toHaveLength(2);
+  });
+});
+
+describe("one family may not own the feed", () => {
+  it("keeps only the two strongest resurrections", () => {
+    const rows = ["a", "b", "c", "d"].map((id) =>
+      row({ id, marketId: id, family: "market_reawakened" }),
+    );
+    expect(capFamilies(rows).map((r) => r.id)).toEqual(["a", "b"]);
+  });
+
+  it("does not cap uncapped families", () => {
+    const rows = ["a", "b", "c"].map((id) => row({ id, marketId: id, family: "trade" }));
+    expect(capFamilies(rows)).toHaveLength(3);
+  });
+});
+
+describe("small conviction counts are not global news", () => {
+  it("needs 25 from a stranger, any rung from someone you know", () => {
+    expect(earnsSlot(row({ kind: "person_milestone", rung: 5 }))).toBe(false);
+    expect(earnsSlot(row({ kind: "person_milestone", rung: 5, personal: true }))).toBe(true);
+    expect(earnsSlot(row({ kind: "person_milestone", rung: 25 }))).toBe(true);
   });
 });
