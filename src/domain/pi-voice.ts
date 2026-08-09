@@ -821,7 +821,7 @@ export const OBSERVATION_GAIN_MIN = 0.05;
 /** Intelligence needs enough gain that the contradiction is worth the volume. */
 export const INTELLIGENCE_GAIN_MIN = 0.12;
 
-type VoiceInput = {
+export type VoiceInput = {
   signals: {
     tension: number;
     beforePrice: number;
@@ -833,6 +833,9 @@ type VoiceInput = {
     confirmation: number;
   };
   informationGain: number;
+  /** Which contradiction / which concentration — the angle layer needs the kind. */
+  tensionKind?: TensionKind;
+  concentrationKind?: ConcentrationKind;
 };
 
 /**
