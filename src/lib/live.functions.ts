@@ -2177,12 +2177,22 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       });
       if (!q) continue;
       drafted.set(r.id, q.text);
+      /* A SEMANTIC QUESTION CARRIES ITS OWN WEIGHT. Its evidence is the proven
+         state shape and the proposition, not the row's mechanical vector —
+         which on a derived state reading ("NO has nothing behind it now") is
+         near zero, i.e. under the rationer's floor. Weighing it that way is why
+         the best layup in the corpus was never asked. */
+      const gain =
+        q.kind === "semantic"
+          ? Math.max(signalById.get(r.id)?.informationGain ?? 0, SEMANTIC_GAIN)
+          : (signalById.get(r.id)?.informationGain ?? 0);
       asked.push({
         id: r.id,
         kind: q.kind,
-        gain: signalById.get(r.id)?.informationGain ?? 0,
+        gain,
         personal: r.face?.relationship != null,
         text: q.text,
+
       });
       questionLedger.push({
         id: r.id,
