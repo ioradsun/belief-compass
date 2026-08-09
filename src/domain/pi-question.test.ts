@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { piQuestion, rationQuestions, questionAdds, type QuestionKind } from "./pi-question";
+import { piQuestion, rationQuestions, questionAdds, type QuestionInput, type QuestionKind } from "./pi-question";
 import type { VoiceInput } from "./pi-voice";
 
 const clue = (over: Partial<VoiceInput["signals"]> = {}, rest: Partial<VoiceInput> = {}): VoiceInput => ({
@@ -106,5 +106,63 @@ describe("pi-question", () => {
     expect(keep.size).toBe(3);
     expect(keep.has("a")).toBe(true);
     expect(keep.has("b")).toBe(false);
+  });
+});
+
+describe("the person question does not depend on an unrelated missing field", () => {
+  it("fires on a proven unwinding pattern with no concentration evidence", () => {
+    const q = piQuestion({
+      key: "row-6",
+      signal: clue({}, { informationGain: 0.05 }),
+      headline: "ANOTHER $0.02 ON NO",
+      body: "Kodak added again.",
+      pattern: "Stepped back from two questions this afternoon.",
+      actorName: "Kodak",
+    });
+    expect(q?.kind).toBe("person_unwinding");
+  });
+
+  it("still refuses a person with no pattern behind them", () => {
+    expect(
+      piQuestion({
+        key: "row-7",
+        signal: clue({}, { informationGain: 0.05 }),
+        headline: "ANOTHER $0.02 ON NO",
+        body: "Kodak added again.",
+        actorName: "Kodak",
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("no privileged knowledge, no expectation, no prediction", () => {
+  const BANNED = /know something|knew something|what did they see|why hasn't this been priced|about to follow|learn(ed)? something/i;
+
+  const cases: QuestionInput[] = [
+    { key: "1", signal: clue({ tension: 0.9 }, { tensionKind: "people_up_capital_down" }), headline: "H", body: "B" },
+    { key: "2", signal: clue({ tension: 0.9 }, { tensionKind: "capital_up_price_flat" }), headline: "H", body: "B" },
+    { key: "3", signal: clue({ tension: 0.9 }, { tensionKind: "price_up_believers_flat" }), headline: "H", body: "B" },
+    { key: "4", signal: clue({ tension: 0.9 }, { tensionKind: "believers_left_price_rose" }), headline: "H", body: "B" },
+    { key: "5", signal: clue({ tension: 0.9 }, { tensionKind: "whales_out_newcomers_in" }), headline: "H", body: "B" },
+    { key: "6", signal: clue({ nonresponse: 0.9 }), headline: "H", body: "B" },
+    { key: "7", signal: clue({ concentration: 0.9 }, { concentrationKind: "largest_holder_left" }), headline: "H", body: "B" },
+    { key: "8", signal: clue({ concentration: 0.9 }, { concentrationKind: "newcomers_replaced_a_whale" }), headline: "H", body: "B" },
+    { key: "9", signal: clue({ concentration: 0.9 }, { concentrationKind: "concentrating" }), headline: "H", body: "B" },
+    { key: "10", signal: clue({ beforePrice: 0.9 }), headline: "H", body: "B" },
+    { key: "11", signal: clue({ unusual: 0.95 }), headline: "H", body: "B" },
+  ];
+
+  it("never implies hidden knowledge or predicts the next move", () => {
+    for (const c of cases) {
+      // every deterministic variant, not just the one this key happens to pick
+      for (let i = 0; i < 12; i++) {
+        const q = piQuestion({ ...c, key: `${c.key}-${i}` });
+        if (q) expect(q.text, q.text).not.toMatch(BANNED);
+      }
+    }
+  });
+
+  it("every eligible shape still produces a question", () => {
+    for (const c of cases) expect(piQuestion(c), c.key).not.toBeNull();
   });
 });
