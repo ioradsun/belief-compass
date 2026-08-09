@@ -101,7 +101,8 @@ export function retellTransition(
   /* A percentage only earns a dollar denominator when it IS money. Price
      re-ratings ("YES re-rated +5.3%") are a different quantity: restating one
      as "$6,931 arrived" would be a fabrication. */
-  const aboutMoney = /money|capital|funded|behind it|walked|left/i.test(raw);
+  const aboutMoney =
+    /\b(money|capital|funded)\b/i.test(raw) && !/re-rated|\bprice\b/i.test(raw);
 
   if (!move || !aboutMoney) {
     return { ...base, usd, level: hasFigure(base.detail) ? "observation" : "receipt" };
