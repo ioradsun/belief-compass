@@ -246,9 +246,14 @@ behind an unchanged surface, each step proven by parity tests.
    keeps only attention mechanics — the update gate, the arrival scheduler, scroll.
    Parity by construction (same primitives, same order) and proven by
    `projections/now.test.ts` plus an app run: continuity block on top, then
-   15m → 51m → 2h → 3h → … unchanged. **Still to pull in:** significance,
-   discovery, grouping and PI narrative drafting out of `live.functions` into
-   `src/lib/insider/*` behind the same projection.
+    15m → 51m → 2h → 3h → … unchanged. **Source pass landed:** every way the tape
+    touches the world now lives in `src/lib/insider/source.server.ts`
+    (`loadTapeSource`, `loadBelieverFaces`, `loadActorBeliefs`, `loadViewerDna`,
+    `loadViewerHoldings`, `loadPricePaths`, `TapeDeps`/`REAL_DEPS`), with the query
+    shape in `insider/tape-input.ts` — each loader declared GLOBAL or VIEWER at its
+    signature, which is what the shared-tape cache key rests on. **Still to pull in:**
+    significance, discovery, grouping and PI narrative drafting out of
+    `live.functions` into `src/lib/insider/*` behind the same projection.
 
 5. **Read — ✅ pure seam landed.** `read.ts` `insiderRead(source, { pulse })` lifts
    the pure house-read state machine into `InsiderRead` unchanged (learning →
