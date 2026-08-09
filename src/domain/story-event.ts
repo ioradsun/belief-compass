@@ -775,7 +775,7 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
                    three different events (src/domain/pi-voice). */
                 (m.direction === "up"
                   ? capitalArrivalLine(where, m.pct ?? 0, vkey("material_move", side))
-                  : capitalDrainLine(where, m.pct ?? 0, vkey("material_move", side))
+                  : capitalDrainLine(where, m.pct ?? 0, vkey("material_move", side), m.metric === "capital" ? m.delta : null)
                 ).headline
               : `Believers on ${where} ${dir} ${pct ?? ""}`.trim();
 
@@ -798,7 +798,7 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
           : m.metric === "capital"
             ? (m.direction === "up"
                 ? capitalArrivalLine(where, m.pct ?? 0, vkey("material_move", side))
-                : capitalDrainLine(where, m.pct ?? 0, vkey("material_move", side))
+                : capitalDrainLine(where, m.pct ?? 0, vkey("material_move", side), m.metric === "capital" ? m.delta : null)
               ).body
             : pct == null
               ? undefined
