@@ -136,7 +136,18 @@ export interface ArrangeResult<T> {
  */
 export function arrangeFeed<T extends DisplayRow>(
   rows: readonly T[],
-  opts: { rankOf?: (id: string) => number | undefined; limit: number },
+  opts: {
+    rankOf?: (id: string) => number | undefined;
+    limit: number;
+    /**
+     * Rows the reader JUST ASKED FOR by tapping "N New". They are always kept
+     * in the window and always lead the timed rows, whatever the mixer thinks
+     * of them and whenever they happened — otherwise a low-ranked or older
+     * arrival can be selected out (or sorted into the past) and the tap reads
+     * as doing nothing at all.
+     */
+    pinned?: ReadonlySet<string>;
+  },
 ): ArrangeResult<T> {
   const limit = Math.max(0, Math.floor(opts.limit));
   const rank = (r: T): number => {
@@ -144,17 +155,27 @@ export function arrangeFeed<T extends DisplayRow>(
     return v == null || !Number.isFinite(v) ? Number.POSITIVE_INFINITY : v;
   };
 
+  const pinnedIds = opts.pinned;
   const timeless: T[] = [];
   const timed: T[] = [];
-  for (const r of rows) (r.timeless ? timeless : timed).push(r);
+  const pinnedRows: T[] = [];
+  for (const r of rows) {
+    if (r.timeless) timeless.push(r);
+    else if (pinnedIds?.has(r.id)) pinnedRows.push(r);
+    else timed.push(r);
+  }
 
   // Best first, newest as the tie-break — this is the SELECTION order, not the
   // display order.
   const bySelection = [...timed].sort((a, b) => rank(a) - rank(b) || newestFirst(a, b));
-  const chosen = bySelection.slice(0, limit);
+  const chosen = bySelection.slice(0, Math.max(0, limit - pinnedRows.length));
   const hidden = Math.max(0, timed.length - chosen.length);
 
-  return { shown: orderForDisplay([...timeless, ...chosen]), hidden };
+  pinnedRows.sort(newestFirst);
+  return {
+    shown: [...orderForDisplay(timeless), ...pinnedRows, ...orderForDisplay(chosen)],
+    hidden,
+  };
 }
 
 /**
