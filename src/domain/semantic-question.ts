@@ -232,9 +232,11 @@ function variantsFor(i: SemanticInput, title: string, short: string | null): str
     case "side_emptied":
       if (stake)
         return [
-          `Nobody is backing ${s} anymore. Is ${stake} really enough to make that trade-off feel worth it?`,
+          `Nobody is backing ${s} anymore. Has ${stake} become enough?`,
+          `Nobody is backing ${s} anymore. Where did the resistance to the ${stake} trade-off go?`,
           `${s} is empty. Does ${stake} change the calculation for anyone here?`,
         ];
+
       return topic
         ? [
             `Nobody is backing ${s} anymore. Is ${topic} still a real question?`,
