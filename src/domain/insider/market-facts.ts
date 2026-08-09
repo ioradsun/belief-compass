@@ -99,3 +99,31 @@ export function pulseFactsFromMarket({
     lastInterestingEventAt: state?.lastTradeAt ?? null,
   };
 }
+
+/**
+ * A `market_state` row (as the deck already holds it) → the facts above. Kept
+ * beside the pulse adapter so the column names appear exactly once, rather than
+ * in every component that happens to have a row in hand.
+ */
+export function marketStateFacts(row: Record<string, unknown> | null | undefined): MarketStateFacts {
+  const n = (k: string): number | null => {
+    const v = row?.[k];
+    return typeof v === "number" && Number.isFinite(v) ? v : v == null ? null : num(Number(v));
+  };
+  const s = (k: string): string | null => {
+    const v = row?.[k];
+    return typeof v === "string" ? v : null;
+  };
+  return {
+    believersYes: n("believers_yes"),
+    believersNo: n("believers_no"),
+    capitalHeldYesUsd: n("yes_capital_usd"),
+    capitalHeldNoUsd: n("no_capital_usd"),
+    tradeCount24h: n("trade_count_24h"),
+    tradeCount7d: n("trade_count_7d"),
+    yesPriceUsd: n("yes_price_usd"),
+    yesPriceChange1h: n("yes_price_change_1h"),
+    yesPriceChange24h: n("yes_price_change_24h"),
+    lastTradeAt: s("last_trade_at"),
+  };
+}
