@@ -1,4 +1,6 @@
 import { Link } from "@tanstack/react-router";
+import { BrandMark } from "@/components/BrandMark";
+
 
 export type AppTab = "mine" | "belief" | "room";
 
@@ -57,9 +59,13 @@ export function AppMenu({
         className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-[var(--panel)] p-4"
         style={{ borderRight: "1px solid var(--hairline)" }}
       >
-        <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-          Menu
+        <div className="mb-4 flex items-center gap-2">
+          <BrandMark size={22} className="shrink-0 text-[var(--text)]" />
+          <span className="text-sm font-semibold tracking-[-0.01em] text-[var(--text)]">
+            conviction
+          </span>
         </div>
+
         <div className="space-y-1">
           {/* HOME — the intro and an example. A destination in the menu like
               anything else, so the header stays a plain header. */}
