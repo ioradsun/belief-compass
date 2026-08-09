@@ -27,12 +27,20 @@ import {
   type PendingRow,
   type ScheduleState,
 } from "@/domain/feed-scheduler";
+import { pulseReleaseCount } from "@/domain/pulse-release";
 
 /** The minimum a row must carry to be scheduled. */
 export interface SchedulableRow {
   id: string;
   occurredAt: string;
   pace?: { perishability: PendingRow["perishability"]; weight: number } | null;
+  /**
+   * Admitted for heartbeat only (src/domain/feed-density `admissionOf`). Held
+   * here rather than dropped, because whether an ordinary true thing is worth a
+   * slot depends on something only this side knows: how long THIS reader has
+   * been watching a page where nothing arrives.
+   */
+  pulse?: boolean | null;
 }
 
 export interface ScheduledView<T> {
@@ -74,6 +82,14 @@ export function useScheduledRows<T extends SchedulableRow>(
   const painted = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const entrances = useRef<Map<string, number>>(new Map());
+  /**
+   * READER-VISIBLE SILENCE, the only clock that can answer "does this page look
+   * dead to the person in front of it". It is when a row last ARRIVED for this
+   * reader — first paint counts, every release counts — and deliberately not
+   * when an event occurred, which is a different quantity that can be minutes
+   * older than anything the reader experienced.
+   */
+  const lastArrivalAt = useRef(Date.now());
 
   /**
    * Run the scheduler until it has nothing due, then sleep exactly as long as
@@ -91,6 +107,7 @@ export function useScheduledRows<T extends SchedulableRow>(
       if (res.release) {
         const { id, weight } = res.release;
         entrances.current.set(id, weight);
+        lastArrivalAt.current = Date.now();
         if (entrances.current.size > ENTRANCE_MEMORY) {
           // Oldest first — insertion order is arrival order.
           const oldest = entrances.current.keys().next().value;
@@ -126,6 +143,9 @@ export function useScheduledRows<T extends SchedulableRow>(
 
     // The first non-empty batch IS the page as the reader finds it. Show it
     // whole; scheduling it would be a loading animation pretending to be life.
+    // Heartbeat rows are included here on purpose: an arriving reader wants an
+    // inhabited column, and holding them back is the empty feed this whole
+    // layer exists to prevent. The gate below is about what happens NEXT.
     if (!painted.current) {
       painted.current = true;
       for (const r of all) known.current.add(r.id);
@@ -133,14 +153,30 @@ export function useScheduledRows<T extends SchedulableRow>(
       // The activity clock starts here, so a tape that opens quiet does not
       // immediately think it has been silent for long enough to celebrate.
       state.current = createScheduleState(Date.now());
+      lastArrivalAt.current = Date.now();
       return;
     }
 
     const now = Date.now();
-    for (const r of fresh) known.current.add(r.id);
+    /* HEARTBEAT IS RELEASED ON THE READER'S CLOCK, NOT THE CHAIN'S.
+       Rows that earned their slot go straight to the scheduler. Rows admitted
+       only because the floor bent for silence are held until this reader has
+       genuinely been watching nothing arrive — and are NOT marked known while
+       held, so a silence that continues eventually gets its heartbeat and a
+       silence that ends simply never spends one. */
+    const signal = fresh.filter((r) => !r.pulse);
+    const heldPulse = fresh.filter((r) => r.pulse);
+    const allowed = pulseReleaseCount({
+      silentForMs: now - lastArrivalAt.current,
+      freshSignalCount: signal.length,
+      queued: state.current.queue.length,
+    });
+    const admit = [...signal, ...heldPulse.slice(0, allowed)];
+    for (const r of admit) known.current.add(r.id);
+    if (admit.length === 0) return;
     state.current = enqueue(
       state.current,
-      fresh.map(
+      admit.map(
         (r): PendingRow => ({
           id: r.id,
           perishability: r.pace?.perishability ?? "soon",

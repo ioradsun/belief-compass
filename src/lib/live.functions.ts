@@ -48,7 +48,7 @@ import {
   type CopyLevel,
 } from "@/domain/transition-denominator";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
-import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
+import { adaptiveFloor, admissionOf, silenceAdjustedFloor } from "@/domain/feed-density";
 import {
   scoreLiveAction,
   scoreDiscoveryMoment,
@@ -1226,6 +1226,12 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   const { floor, relaxed } = adaptiveFloor(
     scored.map(({ candidate }) => scoreFeedEvent(candidate).score),
   );
+  /* THE HEARTBEAT BAR. The server cannot know how long a reader has been
+     watching a still page — the anonymous tape is one cached answer handed to
+     everyone — so it does not try to. It computes CANDIDACY at full silence
+     pressure and marks what only clears that bar; the client, which is the only
+     place a per-reader clock exists, decides release (src/domain/pulse-release). */
+  const pulseBar = silenceAdjustedFloor(floor, 1);
 
   /* ANOMALY, MEASURED ONCE PER ROW (plan §11 step 5).
      The vector is viewer-blind and pure, so it is computed here — before
@@ -1335,8 +1341,24 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   // without carrying it forward every row arrived at the client looking
   // equally important, whatever it was.
   const tierById = new Map<string, number>();
+  /* Rows that got in ONLY because the bar bent for silence. Comparative by
+     construction (see `admissionOf`): a genuinely meaningful row that happens
+     to arrive in a quiet window is NOT one of these, so it keeps every right a
+     row has, including the right to be questioned. */
+  const pulseIds = new Set<string>();
+  /* DUST IS NOT NEWS AND IS STILL EVIDENCE.
+     A $0.02 add can never earn a slot of its own — that is the dust rule in
+     `admitToFeed` and it does not move. But three of them by one person are how
+     "KODAK IS REPOSITIONING" gets proved, so the rejected small moves are kept
+     here and handed to the composition layer as non-surviving evidence, exactly
+     like the receipts a promoted behavioural story absorbs. */
+  const unadmitted: typeof scored = [];
   const material = scored
-    .filter(({ candidate }) => admitToFeed(candidate, floor))
+    .filter(({ r, candidate }) => {
+      const a = admissionOf(candidate, { floor, silenceFloor: pulseBar });
+      if (a === "pulse") pulseIds.add(r.id);
+      return a !== null;
+    })
     .map(({ r, candidate, fullExit, daysHeld }) => {
       const v = signalById.get(r.id);
       derived.set(
@@ -1350,6 +1372,8 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       tierById.set(r.id, scoreFeedEvent(candidate).tier);
       return r;
     });
+  for (const s of scored)
+    if (!material.some((r) => r.id === s.r.id) && s.r.wallet) unadmitted.push(s);
 
   /* ── STANDING IS A STORY TYPE, NOT A LANE ──────────────────────────────────
      Persistence enters the SAME pool as change, at the SAME point, and earns
@@ -1787,7 +1811,12 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
          four different rows to the mixer and as one sentence to the reader. */
       signalPrimary: signalById.get(r.id)?.primary ?? null,
       signalKind: signalById.get(r.id)?.tensionKind ?? null,
+      /* Heartbeat: carried so the mixer can charge for a REPEATED heartbeat
+         shape. It changes nothing about how loud this row is — significance,
+         voice and gain above are computed identically either way. */
+      pulse: pulseIds.has(r.id) || undefined,
     } satisfies MixCandidate;
+    if (pulseIds.has(r.id)) r.pulse = true;
   }
 
   /* ── THE TWO LAYERS, MADE VISIBLE IN THE RANKING ────────────────────────
@@ -2025,6 +2054,13 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     /* STAGE 1 — SINGLE-ROW CLUES. One vector, one named gap. */
     for (const r of material) {
       if (!r.story) continue;
+      /* A HEARTBEAT ROW CANNOT INTERROGATE THE READER. It is in the feed
+         because the page had gone quiet, not because anything about it is
+         unresolved — asking a question off the back of that would be the
+         product manufacturing suspense out of an admission decision. Stage 2
+         below is deliberately NOT gated: if this receipt turns out to be part
+         of a real pattern, the composed clue may still ask. */
+      if (pulseIds.has(r.id)) continue;
       const q = piQuestion({
         key: r.id,
         signal: signalById.get(r.id),
@@ -2064,9 +2100,14 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     /* Evidence includes the receipts a promoted behavioural story absorbed:
        they are the reason the behaviour is a fact, and dropping them here would
        make a person's five moves look like one. They can never be the anchor —
-       `surviving: false` keeps a question off a row the reader cannot see. */
+       `surviving: false` keeps a question off a row the reader cannot see.
+       It also includes the moves the admission gate rejected — the dust in
+       particular. A two-cent add is not a story and never gets a slot, but
+       three of them by one wallet are how a repositioning is PROVED, and
+       throwing that evidence away at the gate is how the composition layer ends
+       up guessing. Same `surviving: false` rule: evidence, never an anchor. */
     for (const c of composeClues(
-      [...material, ...consumedForClues].map((r) => ({
+      [...material, ...consumedForClues, ...unadmitted.map(({ r }) => r)].map((r) => ({
         id: r.id,
         marketId: String(r.marketId),
         marketTitle: r.marketTitle ?? null,
@@ -2078,7 +2119,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         amountUsd: r.amountUsd ?? null,
         kind: r.kind,
         occurredAt: r.occurredAt,
-        surviving: !consumedByPattern.has(r.id),
+        surviving: material.some((m) => m.id === r.id) && !consumedByPattern.has(r.id),
       })),
     )) {
       const target = material.find((r) => r.id === c.rowId);

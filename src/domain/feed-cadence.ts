@@ -96,6 +96,15 @@ export interface MixCandidate {
    */
   signalPrimary?: string | null;
   signalKind?: string | null;
+  /**
+   * This row is here for HEARTBEAT, not for meaning: it failed standard
+   * admission and passed only the silence-adjusted one (src/domain/feed-density
+   * `admissionOf`). The mixer treats it as an ordinary receipt in every respect
+   * but one — repetition of the same heartbeat shape is charged, so a quiet
+   * window fills with four different people rather than one person four times.
+   * It NEVER changes significance, voice or gain.
+   */
+  pulse?: boolean;
 }
 
 
@@ -285,6 +294,15 @@ function dominancePenalty(
       const k = shapeCount.get(`primary:${c.signalPrimary}`) ?? 0;
       if (k >= CADENCE.maxPerSignalPrimary)
         p += CADENCE.penalty.overCap * (1 + k - CADENCE.maxPerSignalPrimary);
+    }
+    /* HEARTBEAT REPEATS ITSELF FASTEST. A pulse row carries no signal shape to
+       cap and often no distinguishing motif — five ordinary buys are five
+       genuinely different facts that read as one sentence. The family here is
+       the heartbeat itself, so the second one already pays and the window keeps
+       breathing without turning into a ticker. */
+    if (c.pulse) {
+      const k = shapeCount.get("pulse") ?? 0;
+      if (k >= 1) p += CADENCE.penalty.overCap * k;
     }
   }
   return p;
@@ -479,6 +497,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
         `primary:${chosen.signalPrimary}`,
         (shapeCount.get(`primary:${chosen.signalPrimary}`) ?? 0) + 1,
       );
+    if (chosen.pulse) shapeCount.set("pulse", (shapeCount.get("pulse") ?? 0) + 1);
     if (chosen.voice === "intelligence") intelCount += 1;
     for (const s of chosen.subjects ?? []) walletCount.set(s, (walletCount.get(s) ?? 0) + 1);
   }
