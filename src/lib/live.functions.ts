@@ -1718,6 +1718,11 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   // It runs AFTER subtraction, so a pattern only ever describes rows the reader
   // will actually see, and it adds no rows — one aside on the person's newest
   // surviving row. See src/domain/person-pattern.
+  /* The pattern text per row, kept even when the pattern is promoted into the
+     headline. The question layer below reads it as evidence, and a promoted
+     pattern is the strongest evidence of all — losing it there was the second
+     reason the PERSON question never fired. */
+  const patternById = new Map<string, string>();
   for (const p of findPersonPatterns(
     material.map((r) => ({
       id: r.id,
@@ -1739,6 +1744,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
        the ordinary event drops to the aside — the market still renders
        underneath, so nothing is lost. A row that already speaks at observation
        or intelligence volume keeps its own headline and its footnote. */
+    patternById.set(p.rowId, p.note);
     if (p.lead && (target.mix?.voice ?? "receipt") === "receipt") {
       target.story = {
         ...target.story,
@@ -1784,7 +1790,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         signal: signalById.get(r.id),
         headline: r.story.headline,
         body: r.story.body,
-        pattern: r.story.pattern ?? null,
+        pattern: r.story.pattern ?? patternById.get(r.id) ?? null,
         actorName: r.face?.name ?? r.people?.[0]?.name ?? null,
       });
       if (!q) continue;
