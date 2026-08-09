@@ -273,18 +273,24 @@ function variantsFor(i: SemanticInput, title: string, short: string | null): str
           ]
         : [];
 
-    /* QUESTION WHETHER ATTENTION CHANGED — attention, never outcome. */
+    /* QUESTION WHETHER ATTENTION CHANGED — attention, never outcome.
+       AND WITHOUT QUOTING THE PROPOSITION BACK. The row already prints the
+       question the market asks, immediately above this line; repeating it
+       inside the question ("Did something change about “if you suddenly became
+       rich, would you still work”, or just the attention on it?") is the tape
+       talking to itself at double length. Less semantic, more human: name the
+       silence, name the return, and ask why now. */
     case "back_from_dead": {
-      if (!topic) return [];
       const q = Math.floor(f.quietDays ?? 0);
       const t = Math.max(1, Math.floor(f.trades ?? 1));
       return [
-        `${q} quiet days, then ${t} ${t === 1 ? "trade" : "trades"}. Did ${topic} just get interesting again?`,
-        `Nothing for ${q} days and now this. Did the ${topic} question change, or just the attention on it?`,
+        `${q} quiet days, then ${t} ${t === 1 ? "trade" : "trades"}. Why did this come back now?`,
+        `Nobody touched this for ${q} days. What changed today?`,
       ];
     }
   }
 }
+
 
 /** A question longer than this is the headline read back at the reader. */
 export const MAX_QUESTION_CHARS = 130;
