@@ -2100,21 +2100,26 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     /* Evidence includes the receipts a promoted behavioural story absorbed:
        they are the reason the behaviour is a fact, and dropping them here would
        make a person's five moves look like one. They can never be the anchor —
-       `surviving: false` keeps a question off a row the reader cannot see. */
+       `surviving: false` keeps a question off a row the reader cannot see.
+       It also includes the moves the admission gate rejected — the dust in
+       particular. A two-cent add is not a story and never gets a slot, but
+       three of them by one wallet are how a repositioning is PROVED, and
+       throwing that evidence away at the gate is how the composition layer ends
+       up guessing. Same `surviving: false` rule: evidence, never an anchor. */
     for (const c of composeClues(
-      [...material, ...consumedForClues].map((r) => ({
+      [...material, ...consumedForClues, ...unadmitted.map(({ r }) => r)].map((r) => ({
         id: r.id,
         marketId: String(r.marketId),
         marketTitle: r.marketTitle ?? null,
         wallet: r.wallet ?? null,
-        name: r.face?.name ?? null,
+        name: r.face?.name ?? labelByWallet.get((r.wallet ?? "").toLowerCase()) ?? null,
         relationship: (r.face?.relationship as string | null) ?? null,
         side: r.side === "YES" || r.side === "NO" ? r.side : null,
         action: actionById.get(r.id) ?? null,
         amountUsd: r.amountUsd ?? null,
         kind: r.kind,
         occurredAt: r.occurredAt,
-        surviving: !consumedByPattern.has(r.id),
+        surviving: material.some((m) => m.id === r.id) && !consumedByPattern.has(r.id),
       })),
     )) {
       const target = material.find((r) => r.id === c.rowId);
