@@ -57,6 +57,7 @@ import {
   type PriceSample,
 } from "@/domain/price-proof";
 import { editFeed, secondSentenceAdds } from "@/domain/feed-editorial";
+import { VOICE_CEILING } from "@/domain/feed-cadence";
 import { findPersonPatterns } from "@/domain/person-pattern";
 
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
@@ -1519,6 +1520,28 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     } satisfies MixCandidate;
   }
 
+  /* ── THE TWO LAYERS, MADE VISIBLE IN THE RANKING ────────────────────────
+     Insider is an intelligence layer with an activity layer under it. Two
+     things enforce that here, and both only ever lower a row:
+
+     1. THE CANONICAL RULE. If the second sentence does not change how you read
+        the first, the row is not intelligence. "NO JUST GOT COMPANY / First
+        believers just stepped in." is one fact printed twice, whatever the
+        market state around it looks like.
+     2. VOICE BANDS. A receipt may not outrank an observation, and an
+        observation may not outrank a clue, no matter how much boost the
+        reader's own money added. Contradictions, changes before price, unusual
+        behaviour and person patterns therefore sit at the top by construction. */
+  for (const r of material) {
+    if (!r.mix) continue;
+    if (
+      r.mix.voice === "intelligence" &&
+      !secondSentenceAdds(r.story?.headline ?? "", r.story?.body ?? "")
+    )
+      r.mix.voice = "observation";
+    r.mix.significance = Math.min(r.mix.significance, VOICE_CEILING[r.mix.voice ?? "receipt"]);
+  }
+
   /* The vector is computed once per row in `signalById` (above the scoring
      pass) and is now INFLUENTIAL through significance. It is still only
      ATTACHED to the shipped payload under SIGNAL_DIAGNOSTIC=1, so review keeps
@@ -1609,11 +1632,35 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       side: r.side === "YES" || r.side === "NO" ? r.side : null,
       action: actionById.get(r.id) ?? null,
       amountUsd: r.amountUsd ?? null,
+      name: r.face?.name ?? null,
       occurredAt: r.occurredAt,
     })),
   )) {
     const target = material.find((r) => r.id === p.rowId);
-    if (target?.story) target.story = { ...target.story, pattern: p.note };
+    if (!target?.story) continue;
+    /* WHEN THE PATTERN IS THE INTERESTING PART, IT BECOMES THE STORY.
+       "Not done / Another $0.02 on NO" with the pattern as an italic footnote
+       buries the only clue in the row. Where the event itself is receipt-grade
+       and the pattern is promotable, the pattern takes the kicker and body and
+       the ordinary event drops to the aside — the market still renders
+       underneath, so nothing is lost. A row that already speaks at observation
+       or intelligence volume keeps its own headline and its footnote. */
+    if (p.lead && (target.mix?.voice ?? "receipt") === "receipt") {
+      target.story = {
+        ...target.story,
+        category: "momentum",
+        headline: p.lead.headline.toUpperCase(),
+        body: p.lead.body,
+        pattern: null,
+      };
+      target.text = flattenStory(target.story);
+      if (target.mix) {
+        target.mix.voice = "observation";
+        target.mix.significance = Math.max(target.mix.significance, 0.5);
+      }
+      continue;
+    }
+    target.story = { ...target.story, pattern: p.note };
   }
 
 
