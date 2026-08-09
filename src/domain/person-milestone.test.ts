@@ -28,26 +28,26 @@ describe("the second story one action tells", () => {
     const m = convictionMilestone(person(5), win)!;
     expect(m.rung).toBe(5);
     expect(m.name).toBe("Sarah");
-    expect(tellConvictionMilestone(m).body).toBe("Sarah now backs 5 questions.");
+    expect(tellConvictionMilestone(m).body).toBe("Sarah just hit conviction #5.");
   });
 
   it("names the belief that took them there", () => {
     const m = convictionMilestone(person(5), win)!;
     expect(m.marketId).toBe(104);
-    expect(tellConvictionMilestone(m).attribution).toBe("The 5th is “Question 4”.");
+    expect(tellConvictionMilestone(m).attribution).toBe("Latest: “Question 4”.");
   });
 
-  it("counts in ordinals a person would use", () => {
-    for (const [rung, word] of [
-      [5, "5th"],
-      [10, "10th"],
-      [25, "25th"],
-    ] as const) {
+  /* The rung belongs in the headline, where it is the news, not buried in an
+     ordinal at the end of the third line. */
+  it("leads with the number they reached", () => {
+    for (const rung of [5, 10, 25] as const) {
       const m = convictionMilestone(person(rung), win)!;
-      expect(tellConvictionMilestone(m).attribution).toContain(word);
+      expect(tellConvictionMilestone(m).headline).toBe(`${rung} deep`);
+      expect(tellConvictionMilestone(m).body).toContain(`#${rung}`);
     }
   });
 });
+
 
 /**
  * The whole trick, and the reason this needs no table: a belief knows when it
