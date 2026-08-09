@@ -726,7 +726,13 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
  * −20%, −65% and −100% are three different events and must never share a
  * sentence. Intensity is derived from the number, never chosen for drama.
  */
-export function capitalDrainLine(side: string, pct: number, key: string): Draft {
+export function capitalDrainLine(
+  side: string,
+  pct: number,
+  key: string,
+  /** Dollars that actually came off, when the move carries them. */
+  usd?: number | null,
+): Draft {
   const m = Math.abs(pct);
   if (m >= 99)
     return pickVariant(key, [
@@ -738,11 +744,26 @@ export function capitalDrainLine(side: string, pct: number, key: string): Draft 
       { headline: `${side} is getting thin`, body: `Most of the money behind it left.` },
       { headline: "Money walked", body: `${side} lost the bulk of what was behind it.` },
     ]);
+  /* "SOME" IS A CONFESSION, NOT A STYLE. Where the move carries dollars, the
+     dollars are the sentence — a reader who can see the exact figure elsewhere
+     in the product and reads "some of what was behind it walked" here learns
+     that the feed rounds things off. The vague telling survives only for the
+     one case that earns it: a move whose amount we genuinely do not have (or
+     that is dust), and then the copy says the share instead of inventing one. */
+  const exact = Math.abs(Number(usd ?? 0));
+  if (Number.isFinite(exact) && exact >= 1) {
+    const figure = exact >= 1000 ? `$${Math.round(exact).toLocaleString("en-US")}` : `$${exact < 10 ? exact.toFixed(2) : Math.round(exact)}`;
+    return pickVariant(key, [
+      { headline: `${side} is getting lighter`, body: `${figure} came off ${side}.` },
+      { headline: `Money is drifting out of ${side}`, body: `${figure} left. Not all of it. Enough to notice.` },
+    ]);
+  }
   return pickVariant(key, [
-    { headline: `${side} is getting lighter`, body: `Some of what was behind it walked.` },
+    { headline: `${side} is getting lighter`, body: `${Math.round(m)}% of what was behind it walked.` },
     { headline: `Money is drifting out of ${side}`, body: `Not all of it. Enough to notice.` },
   ]);
 }
+
 
 /** Money arriving, same discipline in the other direction. */
 export function capitalArrivalLine(side: string, pct: number, key: string): Draft {
