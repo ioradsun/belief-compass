@@ -228,7 +228,10 @@ function standingQuestions(kind: string, name: string | null): string[] {
  */
 export function piQuestion(input: QuestionInput): PIQuestion | null {
   const v = input.signal;
-  if (!v) return null;
+  /* NO VECTOR IS NOT THE SAME AS NOTHING TO ASK. Synthesized rows (continuity,
+     person milestones) can arrive without a market vector and still sit on a
+     proven state. */
+  if (!v) return semanticFor(input);
 
   /* CONTINUITY ROWS ANSWER TO THEIR OWN RULE. A receipt and an observation are
      true and finished; only a proven contrast leaves something open, and what
