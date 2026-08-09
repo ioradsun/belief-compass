@@ -177,6 +177,21 @@ describe("a question is a handle on the headline, not a copy of it", () => {
     expect(q).toMatch(/7/);
   });
 
+  it("asks about persistent consensus without repeating the market question", () => {
+    const title = "Is discipline more important than talent?";
+    const q = semanticQuestion({
+      key: "discipline",
+      title,
+      state: "one_sided_persistence",
+      side: "YES",
+      facts: { days: 29 },
+    });
+    expect(q).toBeTruthy();
+    expect(q).toContain("29 days");
+    expect(q).toContain("NO");
+    expect(q).not.toMatch(/discipline|talent/i);
+  });
+
   it("never ships a question longer than the cap", () => {
     for (const title of [
       LONG,
