@@ -2271,6 +2271,45 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         text: c.text,
       });
       questionLedger.push(clueEntry(c));
+
+      /* THE COMPOSITION OWNS THE ROW IT ASKS ABOUT — AND CONSUMES ITS EVIDENCE.
+         Hanging "4 changes in a few hours, backing away or moving conviction?"
+         under a body that only establishes "NO had no one, then they stepped
+         in" is a mismatch the reader can see: the question is about a behaviour
+         the row does not describe. Where the clue is a person's behaviour and
+         the anchor is an ordinary receipt, the behaviour becomes the headline
+         and the receipt becomes the evidence line under it. The other ordinary
+         constituents are then absorbed: they are how the behaviour was proved,
+         not nine separate things that happened. */
+      if (!scoped && c.lead && (target.mix?.voice ?? "receipt") === "receipt") {
+        target.story = {
+          ...target.story,
+          category: "momentum",
+          headline: c.lead.headline.toUpperCase(),
+          body: c.lead.body,
+          pattern: null,
+        };
+        target.text = flattenStory(target.story);
+        if (target.mix) {
+          target.mix.voice = "observation";
+          target.mix.significance = Math.max(target.mix.significance, 0.5);
+        }
+        for (const id of c.members)
+          if (id !== c.rowId && ordinaryEvidence(id)) consumedByClue.add(id);
+      }
+    }
+
+    /* Absorb before rationing, never after: the budget must be spent on rows
+       the reader will actually see, and a question attached to a row that is
+       about to disappear is a slot thrown away. */
+    if (consumedByClue.size > 0) {
+      for (let i = material.length - 1; i >= 0; i--)
+        if (consumedByClue.has(material[i]!.id)) {
+          const [gone] = material.splice(i, 1);
+          if (gone) consumedRows.push({ id: gone.id, headline: gone.story?.headline ?? "" });
+        }
+      for (let i = asked.length - 1; i >= 0; i--)
+        if (consumedByClue.has(asked[i]!.id)) asked.splice(i, 1);
     }
 
     /* STAGE 3 — RATIONING, over exactly the rows the reader will see. */
@@ -2287,6 +2326,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     }
     for (const e of questionLedger) if (keep.has(e.id) && !e.rejected) e.kept = true;
   }
+
 
 
 
