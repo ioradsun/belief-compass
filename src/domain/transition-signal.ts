@@ -107,11 +107,10 @@ export function signalFromTransition(input: {
  * Take the strongest reading of each shape. The live market state wins where it
  * still sees something; the frozen evidence fills the silence it left behind.
  */
-export function mergeSignals(
-  live: VoiceInput | null | undefined,
+export function mergeSignals<T extends VoiceInput>(
+  live: T,
   own: VoiceInput | null | undefined,
-): VoiceInput | null {
-  if (!live) return own ?? null;
+): T {
   if (!own) return live;
   const signals = zero();
   for (const k of Object.keys(signals) as Key[])
@@ -123,4 +122,18 @@ export function mergeSignals(
     tensionKind: live.tensionKind ?? own.tensionKind,
     concentrationKind: live.concentrationKind ?? own.concentrationKind,
   };
+}
+
+/** The loudest shape in a vector — the `primary` a merged reading should carry. */
+export function dominantKey(v: VoiceInput): Key | "none" {
+  let best: Key | "none" = "none";
+  let score = 0;
+  for (const k of Object.keys(v.signals) as Key[]) {
+    const contribution = (v.signals[k] ?? 0) * GAIN[k];
+    if (contribution > score) {
+      score = contribution;
+      best = k;
+    }
+  }
+  return best;
 }
