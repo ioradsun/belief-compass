@@ -55,13 +55,20 @@ function money(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
-/** The percentage the stored detail printed, if it printed one. */
-function readPct(detail: string): { pct: number; falling: boolean } | null {
-  const m = detail.match(/([-−+]?)\s*([\d.]+)%/);
+/**
+ * The percentage the row printed, and which way it points.
+ *
+ * Read from the RAW pair, not the modernized copy: the retelling drops the sign
+ * ("65% of the money left in 24H"), so direction has to come from the sentence
+ * that still carries it.
+ */
+function readPct(raw: string): { pct: number; falling: boolean } | null {
+  const m = raw.match(/([-−+]?)\s*([\d.]+)%/);
   if (!m) return null;
   const pct = Number(m[2]);
   if (!Number.isFinite(pct)) return null;
-  return { pct, falling: m[1] === "-" || m[1] === "−" };
+  const falling = m[1] === "-" || m[1] === "−" || /leaving|left|fell|thin|lighter|empt/i.test(raw);
+  return { pct, falling };
 }
 
 /** Does this row carry any figure at all, or is it a bare state announcement? */
@@ -82,7 +89,8 @@ export function retellTransition(
   ctx: DenominatorContext,
 ): RetoldTransition {
   const base = modernizeTransitionCopy(rawHeadline, rawDetail ?? "", key);
-  const move = readPct(base.detail);
+  const raw = `${rawHeadline ?? ""} ${rawDetail ?? ""}`;
+  const move = readPct(raw);
   const usd = Number.isFinite(ctx.usd as number) && (ctx.usd as number) > 0 ? (ctx.usd as number) : null;
   const side = (ctx.side ?? "").toUpperCase() === "NO" ? "NO" : ctx.side ? "YES" : null;
   const it = side ?? "this side";
