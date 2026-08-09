@@ -312,6 +312,18 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
   const held = days >= 1 ? heldFor(days, floor) : null;
   const remaining = c.sideBelieversAfter == null ? null : n(c.sideBelieversAfter);
   const who = name ?? (rel ? REL_WHO[rel] : people > 1 ? `${people} people` : "Someone");
+/* SUBJECT-VERB AGREEMENT. `who` is sometimes a GROUP — "2 people" — and the
+   templates below were written for a single actor, which is how the feed
+   shipped "2 people is out." A reader forgives a dull sentence; they do not
+   forgive a broken one, because broken grammar reads as a broken system and
+   every number next to it stops being trustworthy. These carry the plurality
+   of the subject into the handful of templates that inflect. */
+  const many = !name && !rel && people > 1;
+  const IS = many ? "are" : "is";
+  const WAS = many ? "were" : "was";
+  const ONLY_ONE = many ? "the only ones" : "the only one";
+  const FIRST_ONE = many ? "the first ones" : "the first one";
+  const LAST_ONE = many ? "the last ones" : "the last one";
   const question = obs.questionEligible && asksQuestion(key);
 
   /** The company/room line — the one thing a behaviour sentence can't carry. */
@@ -339,10 +351,10 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
               { headline: "Went first", body: `${s} had no one. Then ${who} stepped in.` },
               {
                 headline: "First one in",
-                body: `${who} is the only one on ${s}${amount > 0 ? `, with ${money}` : ""}.`,
+                body: `${who} ${IS} ${ONLY_ONE} on ${s}${amount > 0 ? `, with ${money}` : ""}.`,
               },
             ]
-          : [{ headline: "Went first", body: `${who} is the first one here.` }];
+          : [{ headline: "Went first", body: `${who} ${IS} ${FIRST_ONE} here.` }];
 
       // SIDE FILLED — not a person going first; a side becoming an argument.
       /* KICKERS NAME WHAT CHANGED SOCIALLY, NOT WHAT CHANGED IN THE TABLE.
@@ -457,7 +469,7 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
         return [
           {
             headline: "Not done",
-            body: `${who} wasn't done.`,
+            body: `${who} ${WAS}n't done.`,
             angle: amount > 0 ? `Another ${money} on ${s || "the same side"}.` : null,
           },
           {
@@ -516,7 +528,7 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
         if (rel)
           base.push({
             headline: REL_KICKER[rel],
-            body: from ? `${who} was on ${from}. Now ${s}.` : `${who} just changed sides.`,
+            body: from ? `${who} ${WAS} on ${from}. Now ${s}.` : `${who} just changed sides.`,
             angle: question
               ? "What do they see differently here?"
               : held
@@ -534,7 +546,7 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
               ? `${who} backed ${s} and left the same day.`
               : `${who} came and went the same day.`,
           },
-          { headline: "Blinked", body: `${who} was in and out inside a day.` },
+          { headline: "Blinked", body: `${who} ${WAS} in and out inside a day.` },
         ];
 
       // DEPARTURE — kept quieter than arrivals unless the state changed.
@@ -559,7 +571,7 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
             angle: scale,
           },
 
-          { headline: "Out", body: `${who} is out.`, angle: scale },
+          { headline: "Out", body: `${who} ${IS} out.`, angle: scale },
         ];
 
       case "trimmed":
@@ -574,7 +586,7 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
           },
           {
             headline: "Lightened up",
-            body: `${who} is still in ${s || "this"}, just lighter${amount >= 0.005 ? ` by ${money}` : ""}.`,
+            body: `${who} ${IS} still in ${s || "this"}, just lighter${amount >= 0.005 ? ` by ${money}` : ""}.`,
           },
         ];
 
@@ -588,7 +600,7 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
           {
             headline: "Money walked",
             body: `${amount > 0 ? `${money} walked off ${s || "the table"}` : `${who} walked`}.`,
-            angle: `${who} is out.`,
+            angle: `${who} ${IS} out.`,
           },
         ];
 
@@ -625,11 +637,11 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
         return [
           {
             headline: side ? `${s} just emptied out` : "Emptied out",
-            body: amount >= 0.005 ? `${who} took the last ${money} off it.` : `${who} was the last one on ${s || "it"}.`,
+            body: amount >= 0.005 ? `${who} took the last ${money} off it.` : `${who} ${WAS} ${LAST_ONE} on ${s || "it"}.`,
           },
           {
             headline: "Last one left",
-            body: `${who} was the last one backing ${s || "it"}.`,
+            body: `${who} ${WAS} ${LAST_ONE} backing ${s || "it"}.`,
             angle: side ? `Nobody is on ${s} now.` : null,
           },
         ];
