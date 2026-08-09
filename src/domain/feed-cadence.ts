@@ -239,6 +239,17 @@ function recencyScore(occurredAt: string, newestMs: number, oldestMs: number): n
   return (t - oldestMs) / (newestMs - oldestMs);
 }
 
+/**
+ * A row strong enough that repetition rules should not be allowed to hold it
+ * back: breaking news, or a clue whose information gain is genuinely high. Both
+ * are already exempt elsewhere in this module; naming it keeps the two new
+ * escalations (market dominance, heartbeat runs) honest about the same
+ * exception rather than inventing a third policy.
+ */
+export function exceptional(c: MixCandidate): boolean {
+  return c.significance >= CADENCE.breakingAt || (c.signalGain ?? 0) >= CADENCE.intelligenceBypass;
+}
+
 /** How much this candidate repeats what the reader just saw. */
 function adjacencyPenalty(c: MixCandidate, recent: MixCandidate[]): number {
   let p = 0;
@@ -253,8 +264,28 @@ function adjacencyPenalty(c: MixCandidate, recent: MixCandidate[]): number {
     if (subjects.size && (prev.subjects ?? []).some((s) => subjects.has(s)))
       p += CADENCE.penalty.subject * weight;
   });
+  /* THE RUN, NOT THE NEIGHBOUR. Heartbeat rows carry no shape to cap and often
+     no motif, so the decaying per-neighbour costs above barely register and the
+     feed can end on six sub-dollar receipts in a row. This charges the RUN
+     itself — the unbroken tail of pulse rows already picked — so the third
+     consecutive one is expensive and the sixth is unaffordable, while a single
+     pulse after real news pays nothing. Never a filter: with nothing else left
+     in the pool a run still happens, which is the honest report of a quiet
+     hour. */
+  if (c.pulse && !exceptional(c)) {
+    let run = 0;
+    for (const prev of recent) {
+      if (!prev.pulse) break;
+      run += 1;
+    }
+    // `recent` is capped at `lookback`, so the run is measured against the tail
+    // the reader is actually still holding in their eye.
+    if (run >= CADENCE.maxConsecutivePulse)
+      p += CADENCE.penalty.pulseRun * (1 + run - CADENCE.maxConsecutivePulse);
+  }
   return p;
 }
+
 
 /**
  * How good this candidate is, on both axes at once. Discovery closes some of the
