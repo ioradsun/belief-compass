@@ -138,6 +138,32 @@ export function proposition(title: string): string | null {
   return frag.charAt(0).toLowerCase() + frag.slice(1);
 }
 
+/** The most words a quoted topic may carry before it stops being a phrase and
+ *  starts being the headline read back to the reader. */
+export const MAX_TOPIC_WORDS = 6;
+
+const SUBORDINATOR = /^(if|when|whether|that|because|after|before|once|unless)\s+/i;
+
+/**
+ * A quoted topic short enough to sit INSIDE a sentence.
+ *
+ * The failure this fixes: the headline already says the proposition, and then
+ * the question quoted the whole of it again — "Nothing for 7 days and now this.
+ * Did something change about “if you suddenly became rich, would you still
+ * work”, or just the attention on it?" That is the tape repeating itself at
+ * double length. A topic is a HANDLE for the thing above it, not a second copy
+ * of it: keep the first clause, drop the subordinator, and if it is still long,
+ * the sentence quotes nothing rather than quoting everything.
+ */
+export function shortTopic(frag: string): string | null {
+  const clause = (frag.split(/[,;:]/)[0] ?? frag).trim().replace(SUBORDINATOR, "");
+  const words = clause.split(" ").filter(Boolean);
+  if (words.length < 3 || words.length > MAX_TOPIC_WORDS) return null;
+  const out = words.join(" ");
+  return out.charAt(0).toLowerCase() + out.slice(1);
+}
+
+
 /** A dollar figure named IN THE PROPOSITION — the strongest semantic hook there is. */
 export function stakeInTitle(title: string): string | null {
   const m = /\$\s?(\d[\d,]*(?:\.\d+)?)\s?(k|m|bn|b)?/i.exec(title);
