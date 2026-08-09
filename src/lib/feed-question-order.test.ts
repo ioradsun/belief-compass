@@ -64,4 +64,9 @@ describe("questions are rationed over the rows that actually render", () => {
     expect(src).toMatch(/patternById/);
     expect(src).toMatch(/pattern: r\.story\.pattern \?\? patternById\.get\(r\.id\)/);
   });
+
+  it("runs the pass from the tape, after narration composed the copy", () => {
+    expect(tape).toMatch(/runEditorialPass\(/);
+    expect(tape.indexOf("runEditorialPass(")).toBeGreaterThan(tape.indexOf("runNarrationPass({"));
+  });
 });
