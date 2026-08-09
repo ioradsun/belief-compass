@@ -171,6 +171,19 @@ export const PREMIUM_GAIN = 0.6;
  */
 export const SEMANTIC_GAIN = 0.45;
 
+/**
+ * The state shapes whose question must come from the proposition rather than
+ * from whatever metric the vector happened to notice. These rows lead with the
+ * state in their own headline, so any other source produces a question about
+ * evidence the reader was never shown.
+ */
+export const STATE_LED_QUESTION: ReadonlySet<string> = new Set([
+  "side_emptied",
+  "back_from_dead",
+  "side_got_company",
+]);
+
+
 
 /**
  * How many questions this window has earned.
