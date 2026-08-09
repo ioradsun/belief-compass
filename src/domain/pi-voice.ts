@@ -791,3 +791,67 @@ export function priceWithoutCrowdLine(side: string, pctText: string, key: string
 
 export type { Draft as PIDraft };
 export type { NetworkLabel };
+
+// ── voice levels: how loud the PI is allowed to be about one row ─────────────
+
+/**
+ * THREE VOLUMES, AND THE SIGNAL DECIDES WHICH — never the writer.
+ *
+ *   receipt      the event is the whole story. "Alex pulled $15 from YES."
+ *   observation  one real, single-signal change. "YES is thinning out."
+ *   intelligence two facts that disagree, or a silence worth timing.
+ *
+ * The point of naming these is the cost attached downstream (feed-cadence): a
+ * feed of unbroken Intelligence reads as manufactured, so repetition is charged
+ * for. The level itself is pure classification of the viewer-blind vector, so a
+ * row's volume cannot drift with who is reading or how busy the window is.
+ *
+ * A row only reaches Intelligence when the signal is BOTH of the right kind and
+ * actually earned BY THIS ROW: `informationGain` already carries the carrier
+ * discount, so a trade inheriting a share of its market's anomaly speaks at
+ * observation volume while the row holding the evidence speaks at full volume.
+ * That is the §6 rule "style is not insight" expressed as arithmetic.
+ */
+export type VoiceLevel = "receipt" | "observation" | "intelligence";
+
+/** Unusualness on its own has to be pronounced before it counts as a clue. */
+export const INTELLIGENCE_UNUSUAL_MIN = 0.6;
+/** Below this the row has no earned claim on the market's story at all. */
+export const OBSERVATION_GAIN_MIN = 0.05;
+/** Intelligence needs enough gain that the contradiction is worth the volume. */
+export const INTELLIGENCE_GAIN_MIN = 0.12;
+
+type VoiceInput = {
+  signals: {
+    tension: number;
+    beforePrice: number;
+    unusual: number;
+    concentration: number;
+    reversing: number;
+    building: number;
+    nonresponse: number;
+    confirmation: number;
+  };
+  informationGain: number;
+};
+
+/**
+ * The volume this row has earned. Social rows carry an all-zero vector and a
+ * missing vector means "we know nothing" — both are receipts, which is the
+ * honest default.
+ */
+export function voiceLevel(v: VoiceInput | null | undefined): VoiceLevel {
+  if (!v) return "receipt";
+  const s = v.signals;
+  const gain = v.informationGain;
+  if (gain < OBSERVATION_GAIN_MIN) return "receipt";
+
+  const contradicts = s.tension > 0 || s.nonresponse > 0 || s.unusual >= INTELLIGENCE_UNUSUAL_MIN;
+  if (contradicts && gain >= INTELLIGENCE_GAIN_MIN) return "intelligence";
+
+  // `building` alone is the default state of a growing market — accumulation is
+  // not an observation, it is the weather.
+  const real =
+    s.beforePrice > 0 || s.unusual > 0 || s.concentration > 0 || s.reversing > 0 || s.tension > 0;
+  return real ? "observation" : "receipt";
+}
