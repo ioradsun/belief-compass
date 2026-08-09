@@ -112,8 +112,22 @@ export const EDITORIAL = {
    * without a cap a quiet day fills the feed with "back from the dead" and the
    * feed looks padded rather than alive.
    */
-  familyCaps: { market_reawakened: 2 } as Record<string, number>,
+  /**
+   * FIRST PARTICIPATION IS AN EVENT TYPE, NOT INTELLIGENCE. Every quiet side
+   * eventually gets its first backer, so a feed that treats each one as a story
+   * prints five versions of "just got company". One bare telling per feed; a
+   * telling that carries a second fact is exempt (see `capFamilies`).
+   */
+  familyCaps: {
+    market_reawakened: 2,
+    first_believer: 1,
+    side_opened: 1,
+    first_capital: 1,
+  } as Record<string, number>,
 } as const;
+
+/** The families whose cap only applies to the bare, single-fact telling. */
+const SECOND_FACT_EXEMPT = new Set(["first_believer", "side_opened", "first_capital"]);
 
 const num = (v: number | null | undefined): number =>
   v == null || !Number.isFinite(Number(v)) ? 0 : Math.abs(Number(v));
@@ -129,6 +143,9 @@ function magnitude(r: EditorialRow): number {
  * should not take a slot.
  */
 export function earnsSlot(r: EditorialRow): boolean {
+  // The copy layer already looked at the sentence this row would print and
+  // said it isn't worth printing. Nothing here overrides that.
+  if (r.suppressed) return false;
   // A row a reader cannot place — no question, no market — is a fact without a
   // subject. "NEW BELIEVER · Someone backed YES" of WHAT?
   if (r.context === false) return false;
@@ -148,6 +165,10 @@ export function capFamilies<T extends EditorialRow>(rows: readonly T[]): T[] {
   return rows.filter((r) => {
     const cap = r.family ? EDITORIAL.familyCaps[r.family] : undefined;
     if (cap == null) return true;
+    // A first-participation row that brought a second fact ("price hasn't
+    // moved", "your rival was one of the first two in") is no longer the
+    // generic announcement the cap exists to ration.
+    if (r.secondFact && SECOND_FACT_EXEMPT.has(r.family!)) return true;
     const n = (seen.get(r.family!) ?? 0) + 1;
     seen.set(r.family!, n);
     return n <= cap;
