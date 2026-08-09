@@ -52,7 +52,7 @@ On the **same `market_state` row**, stored and currently unselected — the anom
 
 Not read at read time: `market_state_snapshots` / `price_snapshots` (true price path) and `market_transition_state` (memory of what we already said). `market_window_change` and `chg_24h_yes` are empty per existing code comments — do not build on them.
 
-**Pre-wiring audit task (step 2a):** confirm exactly how much of *concentration shift* is derivable from current reads before ranking depends on it — specifically whether "one large holder left while several small ones arrived" can be established from the in-batch trades plus `wallet_beliefs` without a new query. If it needs one bounded extra read, price that read before committing.
+**Pre-wiring audit task (step 2a):** answer one precise question before ranking depends on concentration — *can the pre-event holder hierarchy be reconstructed from event amount plus current beliefs?* `loadBelieverFaces` returns **current** largest holders, which does not prove who was largest *before* an exit. If it cannot be reconstructed, `largest_holder_left` and `newcomers_replaced_a_whale` wait for a bounded historical read. Never infer "a whale exited" from a large dollar amount alone. Audit `nonresponse` derivability in the same step.
 
 ## 3. Signal vector, not a single state
 
