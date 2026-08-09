@@ -432,7 +432,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
           ? base + 1
           : base -
             adjacencyPenalty(c, recent) -
-            dominancePenalty(c, walletCount, marketCount, motifCount) -
+            dominancePenalty(c, walletCount, marketCount, motifCount, shapeCount) -
             intelligenceCost(c, intelCount, picked.length) +
             targetBonus(c, picked, want) +
             noveltyBonus(c, walletCount);
