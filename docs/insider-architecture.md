@@ -255,8 +255,14 @@ behind an unchanged surface, each step proven by parity tests.
     landed:** `insider/composition/discovery-pass.ts` `runDiscoveryPass(...)` owns
     the second ranking dimension (discovery scores + the synthesized "you two
     should meet" rows) as one pure function — no IO, no input mutation, so two
-    readers can be run over the same facts and compared. **Still to pull in:**
-    significance, discovery, grouping and PI narrative drafting out of
+    readers can be run over the same facts and compared. **Significance pass
+    landed:** `insider/composition/significance-pass.ts` owns the first ranking
+    dimension in two pure halves — `buildCandidates(...)` (one candidate per row,
+    read by the gate, the score and the batch bar) and `runSignificancePass(...)`
+    (adaptive floor, heartbeat bar, anomaly vectors, admission, tier, derived
+    score, and the rejected-but-evidential rows). The one bounded read it needs,
+    `loadPricePaths`, stays in the source layer and runs between the halves.
+    **Still to pull in:** grouping and PI narrative drafting out of
     `live.functions` into `src/lib/insider/*` behind the same projection.
 
 5. **Read — ✅ pure seam landed.** `read.ts` `insiderRead(source, { pulse })` lifts
