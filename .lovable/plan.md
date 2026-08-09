@@ -1,138 +1,155 @@
-# Now Feed — Pressure Hierarchy Audit and Smallest Safe Change
+# Now Feed — Anomaly & Early-Signal Layer (revised)
 
-No code changed. This is the audit you asked for, plus the minimum implementation sequence.
+No code changed yet. Revised after your storytelling note. The architecture holds; the premise changes.
 
-Verdict up front: the four-state model can be built almost entirely from data we already store, but **not from data the Now feed currently loads**. `buildTape` reads only 8 columns of `market_state` today. Every interval metric the hierarchy needs (price change 1h/24h, capital deltas 24h, believer deltas, trade/wallet counts, last trade time) already exists on the same row and is simply not selected. That is the single biggest finding: the pressure layer is mostly a wider `SELECT`, not a new engine.
+**Mission (top of the implementation spec):** Now is your private investigator for conviction. It does not predict. It watches people, money, conviction and price, and reports changes a person casually watching would miss. It presents the smallest set of facts needed for the reader to notice the thing themselves — and stops before explaining it.
+
+Rank by **information gain**, not activity. BUILDING / DIVERGING / REVERSING / CONFIRMING remain internal machinery and never appear in copy.
 
 ---
 
-## 1. Current architecture
+## 1. Current architecture (verified)
 
-The Now tape is built once per fetch in `buildTape()` (`src/lib/live.functions.ts:615`):
+Built once per fetch in `buildTape()` (`src/lib/live.functions.ts:615`):
 
 ```text
-events (72h, canonical, LIVE_KINDS, limit*3)
-  + market_state (8 columns) + titles + eth/usd
-        ↓ groupLiveRows            (src/lib/live-tape.ts)  churn → wash → sweeps → bursts
-        ↓ tellPiStory / legacy     (pi-voice.ts, legacy-voice.ts)
-        ↓ scoreFeedEvent           (feed-event.ts)   0.5*magnitude + 0.2*speed + 0.3*novelty, × relevance
-        ↓ scoreLiveAction etc.     (significance.ts) one 0..1 scale, tier floors, compose()
-        ↓ adaptiveFloor/admit      (feed-density.ts)
-        ↓ + viewerBoost + stakeBoost  (viewer-relationship.ts, viewer-stake.ts) additive, capped at 1
-        ↓ mix candidate            {family, significance, discovery, motif, subjects}
-        ↓ editFeed                 (feed-editorial.ts) earnsSlot → collapseCausal → pruneRepeats → capFamilies
-        ↓ findPersonPatterns       (person-pattern.ts) asides only, no new rows
-        ↓ pace annotate            (feed-scheduler.ts)
-   returns UNORDERED rows
-        ↓ mixFeed                  (feed-cadence.ts:313) 0.7*quality + 0.3*recency − adjacency − dominance + targets
-                                    quality = sig + (1−sig)*0.85*discovery; sig ≥ 0.8 skips the queue
+events (72h, canonical, LIVE_KINDS, limit*3) + market_state (8 cols) + titles + eth/usd
+  → groupLiveRows        (live-tape.ts)      churn → wash → sweeps → bursts
+  → tellPiStory / legacy  (pi-voice.ts, legacy-voice.ts)
+  → scoreFeedEvent        (feed-event.ts)    0.5*magnitude + 0.2*speed + 0.3*novelty, × relevance
+  → significance.ts       one 0..1 scale, tier floors, compose()
+  → adaptiveFloor/admit   (feed-density.ts)
+  → + viewerBoost + stakeBoost  (viewer-relationship.ts, viewer-stake.ts)
+  → mix candidate {family, significance, discovery, motif, subjects}
+  → editFeed              (feed-editorial.ts) earnsSlot → collapseCausal → pruneRepeats → capFamilies
+  → findPersonPatterns    (person-pattern.ts) asides only
+  returns UNORDERED
+  → mixFeed               (feed-cadence.ts:313) 0.7*quality + 0.3*recency − adjacency − dominance
+                          quality = sig + (1−sig)*0.85*discovery; sig ≥ 0.8 skips the queue
 ```
 
-Important: `src/domain/feed/*` (score/pool/sequence/momentum/config) is the **markets/opportunity queue**, a different surface. Do not touch it for this work.
+`src/domain/feed/*` is the separate markets/opportunity queue. Not touched.
 
-Also relevant: `story-event.ts` already emits interval-aware transitions (`people_capital_divergence`, `price_conviction_divergence`, `market_reawakened`, `accelerating`, `losing_conviction`), but they are produced by a **cron** (`story-event-emit.server.ts`) reading `market_state_snapshots`, not at read time.
+## 2. Data available (verified)
 
-## 2. Existing data available for each signal
+Queried today: believers YES/NO, `new_believers_1h`, `money_yes_pct`, `people_yes_pct`, `opportunity_type`, `market_age_days`, plus per-row amount/side/action/wallet and tenure from `wallet_beliefs`.
 
-Already queried by the tape: believers YES/NO, `new_believers_1h`, `money_yes_pct`, `people_yes_pct`, `opportunity_type`, `market_age_days`, plus per-row amount/side/action/wallet/tenure (`wallet_beliefs`).
+On the **same `market_state` row**, already stored, currently unselected — this is the anomaly feedstock:
 
-Available on the **same `market_state` row** and unqueried — this is the pressure feedstock:
-
-| Signal | Column(s) |
+| Signal | Columns |
 | --- | --- |
-| priceMoved | `yes_price_change_1h`, `yes_price_change_24h`, `yes_price_change_7d` |
-| capitalMoved | `yes_capital_delta_24h`, `no_capital_delta_24h`, `yes_capital_usd`, `no_capital_usd` |
-| peopleMoved | `new_believers_yes_24h`, `new_believers_no_24h`, `people_yes_change_24h`, `side_flips_24h` |
-| velocity | `trade_count_1h/24h`, `unique_wallets_1h/24h`, `volume_eth_1h/24h`, `buy_sell_ratio_24h`, `sell_rate_24h` |
-| unusualness | this market's 1h vs its own 24h/7d rate (all three windows are on the row) |
-| dormancy / reawakening | `last_trade_at`, `inactive_for_seconds`, `first_trade_at` |
+| price moved | `yes_price_change_1h/24h/7d` |
+| capital moved | `yes_capital_delta_24h`, `no_capital_delta_24h`, `yes/no_capital_usd` |
+| people moved | `new_believers_yes_24h`, `new_believers_no_24h`, `people_yes_change_24h`, `side_flips_24h` |
+| velocity | `trade_count_1h/24h/7d`, `unique_wallets_1h/24h/7d`, `volume_eth_1h/24h/7d`, `buy_sell_ratio_24h`, `sell_rate_24h` |
+| unusualness | this market's 1h rate vs its own 24h/7d rate — all three windows on the row |
+| silence / dormancy | `last_trade_at`, `inactive_for_seconds`, `first_trade_at` |
 
-Not available at read time without new IO: true multi-point price history (`market_state_snapshots`, `price_snapshots`) and any memory of what we told the reader before (`market_transition_state`). Both are cron-side today.
+Not read at read time: `market_state_snapshots` / `price_snapshots` (true price path) and `market_transition_state` (memory of what we already said). Both cron-side today. `market_window_change` and `chg_24h_yes` are empty per existing code comments — do not build on them.
 
-Personal relevance already exists: `viewerBoost`, `stakeBoost`, `relByWallet`/`labelByWallet`, `discovery`.
+## 3. Signal vector, not a single state
 
-## 3. Event → interpretation matrix
-
-Every existing event kind stays. Interpretation is derived, never emitted.
-
-| Event family | Default state | Escalates to | Basis |
-| --- | --- | --- | --- |
-| trade BUY / burst / large_trade / "not done" | BUILDING | DIVERGING if `yes_price_change_1h` ≈ 0 while capital delta is large; CONFIRMING if price moved with the side | amount, wallet count, price delta |
-| side_opened / went_first / first_capital | BUILDING (strong: zero base) | — | first-event taxonomy |
-| trade SELL / believer_left / OUT / ONE LESS / capital leaving | REVERSING | strength scales with tenure and share of side capital | `daysHeld`, capital delta share |
-| position_changed_side / FLIPPED | REVERSING | DIVERGING if the market's price is moving the other way | abandoned side + tenure |
-| market_transition `people_capital_divergence`, `price_conviction_divergence`, `market_dividing` | DIVERGING | — | already emitted as contradictions |
-| market_transition `accelerating`, `participation_broadening`, `concentration_rising`, `capital_milestone`, `side_doubled` | BUILDING | — | emitted |
-| market_transition `majority_flipped`, `losing_conviction`, `market_balanced` | REVERSING | — | emitted |
-| market_transition `material_move` | CONFIRMING if prior same-side build exists in the batch, else CONTEXT | — | in-batch linkage (§6) |
-| market_reawakened | BUILDING (weak reawaken stays quiet, as today) | — | existing trade-count gate |
-| believer_milestone, tribe_doubled, conviction_cohort, person_milestone, standing_fact, market_created, showed_up, discovery_moment, wallet_sweep | CONTEXT | promoted only by personal relevance | social texture |
-
-CONFIRMING is the only genuinely new narrative and is derived, never causal: "Three people brought $244 into YES. Since then, YES is up 11%." — two facts joined by "since then".
-
-## 4. Proposed strength model
-
-One small pure module, `src/domain/pressure.ts`, exporting:
+`Pressure.state` as one enum throws away the reason a story is interesting. Replace with a vector:
 
 ```ts
-type StoryState = "BUILDING" | "DIVERGING" | "REVERSING" | "CONFIRMING" | "CONTEXT";
-
 interface Pressure {
-  state: StoryState;
-  strength: number;          // 0..1, via the existing compose() from significance.ts
-  priceMoved: number;        // 0..1
-  peopleMoved: number;       // 0..1
-  capitalMoved: number;      // 0..1
-  velocity: number;          // 0..1  (1h rate vs this market's own 24h rate)
-  unusualness: number;       // 0..1  (same, market-relative — never absolute)
-  reasons: string[];         // explainability, same convention as Significance
+  signals: {                 // each 0..1, independent, can all be non-zero
+    building: number;        // participation/capital forming
+    divergence: number;      // two signals that belong together have separated
+    reversing: number;       // conviction weakening or turning
+    confirmation: number;    // price consistent with an earlier observable pattern
+    silence: number;         // the dog that didn't bark
+  };
+  velocity: number;          // rate now vs this market's own baseline
+  unusualness: number;       // how abnormal this is FOR THIS MARKET
+  informationGain: number;   // 0..1 — the ranking number (see §5)
+  primary: SignalKey;        // largest signal, for copy selection only
+  tension?: TensionKind;     // the specific contradiction, when divergence > 0
+  reasons: string[];         // explainability
 }
 ```
 
-Rules: reuse `compose()` and `clamp01`/`sat` rather than inventing a second combinator. All inputs market-relative first, absolute second — the same discipline `feed-event.magnitude` already uses. `CONTEXT` strength is capped below the notable band (0.5) so it cannot outrank real pressure on the market axis alone.
+`tension` is the premium inventory and is named explicitly so copy can be specific: `people_up_capital_down`, `capital_up_price_flat`, `price_up_believers_flat`, `believers_left_price_rose`, `whales_out_newcomers_in`, `tribe_against_market`.
 
-## 5. Ranking changes (subtractive)
+`silence` covers "nothing happened when something was expected": money landed and price hasn't budged four hours later; a lone position nobody followed; a price jump no believer followed. Computationally a subtype of divergence, editorially its own voice.
 
-No new scoring engine. Two touches:
+## 4. CONTEXT has no pressure
 
-1. `significance.ts` — feed `pressure.strength` in as one more `compose()` part on the existing derived path, so BUILDING with real velocity lifts and CONTEXT does not. No change to emitted-score persistence, no migration.
-2. `feed-cadence.ts` — add `state` to `MixCandidate` and use it in the **variety** rules only: cap consecutive rows of the same `StoryState` (like the existing `MAX_SAME_FAMILY_RUN`), and let `DIVERGING`/`CONFIRMING` take a small target-bonus when absent from the window. `breakingAt` stays on significance alone.
+Corrected from the previous draft. Social and personal rows (Tribe/Rival/Twin activity, milestones, cohorts, new markets, `showed_up`, `standing_fact`) carry **no pressure signals at all** — not weak ones. Their vector is zero and they rank entirely on the existing personal axis (`viewerBoost` + `stakeBoost` + `discovery`). A Rival flipping is high personal relevance with zero market pressure, and the ranker should be able to say exactly that instead of pretending it is a small market signal.
 
-Personal relevance keeps its existing separate axis (`viewerBoost` + `stakeBoost` + `discovery` lift). That already gives the two-axis behaviour you described: "your rival joined your side" is CONTEXT on the market axis but wins on the personal one.
+Exception: a person-driven row that also carries market weight (the 32-day whale exiting) gets both — a real `reversing` signal *and* personal relevance, because both are true.
 
-## 6. Developing-story feasibility
+## 5. Information gain replaces event-kind importance
 
-Feasible today, no persisted state. `buildTape` already holds the whole 72h batch in memory with `market_id`, `side`, `occurred_at`, `amount`, `source_key`, and `feed-editorial.collapseCausal` already correlates `(marketId, side)` pairs inside a 6h window — it just uses the link to *suppress*. We extend the same index to also *connect*: if an earlier BUILDING row on `(market, side)` precedes a later material price move on the same side, the later row becomes CONFIRMING and carries a reference to the earlier fact. One caveat to state honestly: the batch is `limit*3` events across all markets, not N per market, so on a busy platform an older build event can fall out of the window and the link is simply absent. Absent link → row stays as it is today. No fabrication.
+The ranking principle, stated as the design rule: *how much does knowing this change what the reader understands about this market?*
 
-## 7. Missing data
+`informationGain` composes (via the existing `compose()` in `significance.ts`, not a new combinator):
 
-Only two gaps, and neither blocks phase 1:
+- magnitude of change, **market-relative first** (a $2 trade in an active market ≈ 0; the first $2 ever on NO is not)
+- number of independent people behind it
+- tension present (largest single contributor — contradictions are the premium)
+- velocity and unusualness relative to this market's own baseline
+- person notability (tenure, largest holder, repeated intersection with the reader)
 
-- **Intraday price path.** We can see "price moved over 1h/24h" but not "when it moved". Enough for CONFIRMING as chronology; not enough to say "price moved *after* the money". Mitigation: require the build event to be older than the price window's start, or accept the weaker phrasing.
-- **Cross-poll memory.** No record of which stories a reader already saw, so a developing story can restate itself between polls. Existing motif pruning limits this within a window. If it proves annoying, the fix is client-side seen-motif state, not a table.
+Ranking touches, both subtractive:
 
-`market_window_change` and `chg_24h_yes` are effectively empty per existing code comments — do not build on them.
+1. `significance.ts` — `informationGain` becomes a `compose()` part on the derived path. No migration, emitted scores untouched.
+2. `feed-cadence.ts` — add `primary` + `tension` to `MixCandidate` and use them **only for variety**: cap consecutive rows sharing a primary signal (like `MAX_SAME_FAMILY_RUN`), small target bonus when tension rows are absent from the window. `breakingAt` stays on significance alone.
 
-## 8. Smallest safe implementation sequence
+## 6. Three voice levels, with enforced scarcity
 
-1. Widen the `market_state` select in `loadTapeSource` to the columns in §2 and extend `Momentum`. Behaviour-neutral. (One query, same row count.)
-2. Add `src/domain/pressure.ts` + tests. Pure, unused at first.
-3. Attach `pressure` to each row's story/mix in `buildTape`. Still unranked — verify in the dev voice lab.
-4. Wire `pressure.strength` into the derived branch of `significance.ts`.
-5. Add the `(market, side)` chronology index in `feed-editorial.ts` and emit CONFIRMING.
-6. Add `state` variety caps in `feed-cadence.ts`.
-7. Give `pi-voice.ts` the interpretation so copy leads with the state ("YES is getting crowded", "The crowd grew. The money left.").
+`pi-voice.ts` receives the vector and picks a register:
 
-Each step ships independently and is revertible.
+| Level | When | Shape |
+| --- | --- | --- |
+| **Receipt** | no tension, low gain | "Alex pulled $15 from YES." |
+| **Observation** | single-signal, real change | "YES IS THINNING OUT / Three holders have left today." |
+| **Intelligence** | tension or high unusualness | "THE PEOPLE STAYED. THE MONEY DIDN'T. / Nine new believers joined. $85 left." |
 
-## 9. Tests and invariants required
+Hard cap: **Intelligence rows are at most ~25% of any window**, enforced in the cadence pass. Over budget, the weaker ones drop to Observation. Scarcity is the credibility mechanism; the ratio is a tested invariant, not a vibe.
 
-- `pressure.test.ts`: every existing kind maps to exactly one state; CONTEXT strength never exceeds 0.5; strength is monotonic in capital/people/velocity; zero-data markets return CONTEXT, not BUILDING.
-- Causality invariant: no generated copy may contain "caused", "because", "drove", "sent" — assert against the CONFIRMING corpus.
-- Chronology invariant: CONFIRMING only emits when the build event's `occurredAt` precedes the price window.
-- Ranking invariants: existing `feed-cadence` breaking-band and dominance tests must still pass unchanged; add one asserting a $5 arrival in an active market ranks below a $5 first-capital arrival on an empty side.
-- Regression: full suite (2,325 tests) green; `buildTape` snapshot unchanged after step 1.
+Copy rules: the contrast fact must be present and last ("Price hasn't moved yet."), then stop. No explanation, no "why", no headline that is only a reaction word. The existing hype-word ban stays and gains `ODD ONE`-style reaction headlines unless a specific contrast follows.
+
+## 7. CONFIRMING is gated, not shipped
+
+Your objection is correct and the audit already suspected it: knowing an entry happened at 10:00 and that the 24h change is +11% does **not** license "since then, +11%". The window can predate the entry.
+
+So: `confirmation` stays in the vector but **emits nothing** until we can prove temporal order from price observations. Two options, decided when we get there:
+
+- read a bounded `price_snapshots` / `market_state_snapshots` lookup for the small set of markets that have a candidate build event in-batch, or
+- ship only the strictly factual conjunction — "$244 entered YES. It's also up 11% today." — which claims no ordering.
+
+Nothing in phase 1 says "since then". One suspicious inference and the feed stops being believed.
+
+## 8. Developing story (memory) — feasible, unchanged
+
+`buildTape` already holds the 72h batch with `market_id`, `side`, `occurred_at`, `amount`, `source_key`, and `feed-editorial.collapseCausal` already correlates `(marketId, side)` within 6h to *suppress*. The same index can *connect*. Caveat stated honestly: the batch is `limit*3` events across all markets, so an older build event can fall out of the window — absent link, the row stays as it is today. No fabrication, no new table.
+
+## 9. Missing data
+
+- **Intraday price path** — blocks temporal confirmation (§7).
+- **Cross-poll memory** — no record of what a reader already saw, so a developing story can restate itself between polls. Motif pruning limits this within a window; if it annoys, fix client-side, not with a table.
+
+## 10. Smallest safe sequence
+
+1. Widen the `market_state` select in `loadTapeSource` to §2 columns; extend `Momentum`. Behaviour-neutral.
+2. Add `src/domain/pressure.ts` (vector, tension, silence, informationGain) + tests. Unused at first.
+3. Attach the vector to rows in `buildTape`; review in the dev voice lab (`/dev/voice`) with nothing wired to ranking.
+4. Wire `informationGain` into the derived branch of `significance.ts`.
+5. Voice levels + Intelligence budget in `pi-voice.ts` and the cadence pass.
+6. Variety caps on `primary`/`tension` in `feed-cadence.ts`.
+7. Confirmation only after §7's temporal proof exists.
+
+## 11. Tests and invariants
+
+- **Vector**: signals are independent — a case with people↑, capital flat, price flat, 6× normal activity yields non-zero `building`, `divergence` and `unusualness` simultaneously.
+- **CONTEXT purity**: social/personal kinds return an all-zero pressure vector. Asserted per kind.
+- **Causality ban**: no generated copy contains "caused", "because", "drove", "sent", "since then" (the last until §7 is satisfied).
+- **Scarcity**: Intelligence-level rows never exceed the budget share in a mixed window.
+- **Market-relative**: a $5 arrival in an active market ranks below a $5 first-capital arrival on an empty side.
+- **Silence**: a stale build with no price response emits a silence row only after the expectation window, and only once.
+- **Regression**: full suite green; existing `feed-cadence` breaking-band and dominance tests unchanged; `buildTape` output unchanged after step 1.
 
 ## Technical notes
 
-Files touched, in order: `src/lib/live.functions.ts`, new `src/domain/pressure.ts` (+ test), `src/domain/significance.ts`, `src/domain/feed-editorial.ts`, `src/domain/feed-cadence.ts`, `src/domain/pi-voice.ts`. No migrations, no new tables, no new cron, no second scoring engine, and `src/domain/feed/*` (the markets queue) is not touched.
+Files: `src/lib/live.functions.ts`, new `src/domain/pressure.ts` (+ test), `src/domain/significance.ts`, `src/domain/feed-editorial.ts`, `src/domain/feed-cadence.ts`, `src/domain/pi-voice.ts`. No migrations, no new tables, no cron, no second scoring engine; `src/domain/feed/*` untouched.
