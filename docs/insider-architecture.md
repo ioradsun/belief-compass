@@ -238,7 +238,7 @@ behind an unchanged surface, each step proven by parity tests.
    tested. **UI adoption** (`MarketVitality` "Market Momentum" → Insider Insight)
    changes the rendered read, so it lands with an app run — same discipline as the
    side-rail flip.
-4. **Now onto the Insider — 🚧 in progress; the render-boundary pass has landed.**
+4. **Now onto the Insider — ✅ landed (verified in the app).** The render-boundary,
    `projections/now.ts` `now(rows, { limit, rankOver, pinned, pending, loading })`
    now owns the EDITORIAL DECISION the tape used to make inline: rank the
    candidates (`mixFeed`), select the window by that rank, display in the reader's
@@ -345,7 +345,7 @@ src/domain/insider/
     features.ts     # universal evidence (calculate once)   ✅ landed
     scoring.ts      # evidence → momentum/importance/confidence  ✅ landed
     projections/
-        activity.ts  # ✅ landed   insight.ts  # ✅ landed   now.ts  — needs app run
+        activity.ts  # ✅ landed   insight.ts  # ✅ landed   now.ts  # ✅ landed
 
 src/lib/insider/
     source.server.ts  # every read the tape makes             ✅ landed

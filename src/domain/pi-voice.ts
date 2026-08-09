@@ -167,10 +167,18 @@ const n = (v: number | null | undefined): number =>
  * "Two people" reads like a person talking; "2 people" reads like a row count.
  * Small crowds get words, larger ones keep the digit because "seventeen people"
  * is harder to scan than the number itself.
+ *
+ * A count of one is singularised properly. Stripping a trailing "s" cannot do
+ * that for the noun this product counts most — "people" has no "s" — which is
+ * how "One people took YES" reached the surface.
  */
 const WORDS = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"] as const;
+const IRREGULAR: Record<string, string> = { people: "person" };
+const singularOf = (noun: string): string =>
+  IRREGULAR[noun.toLowerCase()] ?? noun.replace(/s$/, "");
 export const countWord = (k: number, noun = "people"): string =>
-  k >= 1 && k <= 9 ? `${WORDS[k]} ${k === 1 ? noun.replace(/s$/, "") : noun}` : `${k} ${noun}`;
+  k >= 1 && k <= 9 ? `${WORDS[k]} ${k === 1 ? singularOf(noun) : noun}` : `${k} ${noun}`;
+
 
 const ANGLE: Record<ConvictionEventType, PIObservation["angle"]> = {
   swept_out: "departure",
