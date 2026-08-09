@@ -52,6 +52,7 @@ import {
 import { familyOf, VOICE_CEILING, type MixCandidate } from "@/domain/feed-cadence";
 import { signalVector } from "@/domain/signal-vector";
 import { tellNewMarketStory } from "@/domain/new-market-story";
+import { COPY_VERSION } from "@/domain/copy-version";
 import { signalFromTransition, mergeSignals, dominantKey } from "@/domain/transition-signal";
 import { factsForRow } from "@/domain/signal-facts";
 import {
@@ -712,7 +713,12 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   const scoped = scope != null;
   const source = await deps.loadTapeSource(sb, data);
   if (source.error)
-    return { rows: [] as LiveRow[], standing: [] as LiveRow[], error: source.error };
+    return {
+      rows: [] as LiveRow[],
+      standing: [] as LiveRow[],
+      copyVersion: COPY_VERSION,
+      error: source.error,
+    };
   const { rows, marketIds, titleById, creatorByMarket, momentumById, ethUsd } = source;
 
   const events: LiveEventInput[] = (rows ?? []).map((r) => ({
@@ -2010,5 +2016,8 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     }
   }
 
-  return { rows: material, standing, error: null };
+  /* THE BUILD THAT WROTE THESE SENTENCES. The client refuses to merge a cached
+     tail composed by a different build, so a copy fix can never be left on
+     screen by the sticky tape. See src/domain/copy-version. */
+  return { rows: material, standing, copyVersion: COPY_VERSION, error: null };
 }
