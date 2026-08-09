@@ -143,8 +143,22 @@ describe("the champagne case", () => {
       side: "NO",
       facts: { days: 9 },
     })!;
-    // The fragment is quoted, not spliced bare into the grammar.
-    expect(q).toMatch(/“selling your data worth a \$20 airdrop”/);
+    // The headline already establishes the arrival. The question advances to
+    // what it means instead of saying "somebody is on NO now" a second time.
+    expect(q).not.toMatch(/selling your data|somebody|got company/i);
+    expect(q).toMatch(/consensus|split/i);
+  });
+
+  it("does not repeat the first believer under a got-company headline", () => {
+    const q = semanticQuestion({
+      key: "tipping",
+      title: "Should tipping be mandatory?",
+      state: "side_got_company",
+      side: "NO",
+      facts: { days: 12 },
+    })!;
+    expect(q).not.toMatch(/somebody|believer|on NO|got company|tipping/i);
+    expect(q).toMatch(/consensus|split/i);
   });
 });
 
