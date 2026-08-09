@@ -44,7 +44,6 @@ type NetLabel = "twin" | "tribe" | "opp" | "inverse";
 /** One member of the crowd behind a burst, as the grouping ordered them. */
 export interface BurstStake {
   wallet: string;
-  amountUsd: number | null;
 }
 
 /** The belief state AFTER the trade, as the read model stores it. */
