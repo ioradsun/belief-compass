@@ -36,6 +36,11 @@ export {
 } from "./market-facts";
 
 export { insiderRead, fromHouseReadState, type InsiderReadContext } from "./read";
+export {
+  insiderReadCopy,
+  INSIDER_READ_LABEL,
+  type InsiderReadCopy,
+} from "./projections/read";
 export { evidenceFromPulse, freshnessOf, FRESH_HALF_LIFE_MS } from "./features";
 export { score, scoreSignal, IMPORTANCE_WEIGHTS } from "./scoring";
 export { activity } from "./projections/activity";

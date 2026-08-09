@@ -7,13 +7,13 @@
  * reads identically everywhere. No card, no tab: a hairline does the separating.
  */
 import { useEffect, useState } from "react";
-import { HouseRead } from "@/components/HouseRead";
-import type { HouseReadState } from "@/domain/house-read";
+import { InsiderRead } from "@/components/InsiderRead";
+import type { InsiderRead as InsiderReadState } from "@/domain/insider";
 
 export function ExamineCta({
   open,
   onToggle,
-  houseRead = null,
+  insiderRead = null,
   openLabel = "See both sides",
   closeLabel = "Close Case File",
   compact = false,
@@ -21,29 +21,29 @@ export function ExamineCta({
   open: boolean;
   onToggle: () => void;
   /**
-   * The House Read — the House's attempt to call the viewer's next move. The
+   * The Insider Read — the Insider's attempt to call the viewer's next move. The
    * SAME state drives desktop and mobile; null only when there is no viewer to
    * read at all.
    */
-  houseRead?: HouseReadState | null;
+  insiderRead?: InsiderReadState | null;
   openLabel?: string;
   closeLabel?: string;
   /** Phone dock: tighter padding, same anatomy. */
   compact?: boolean;
 }) {
-  // The House Read depends on the viewer's wallet, which only exists in the
+  // The Insider Read depends on the viewer's wallet, which only exists in the
   // browser — rendering it during SSR guarantees a hydration mismatch.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   return (
     <div>
-      {/* Only the House Read remains here — the generic momentum interpretation
+      {/* Only the Insider Read remains here — the generic momentum interpretation
           was removed for being noisy and often wrong. */}
-      {mounted && houseRead && (
+      {mounted && insiderRead && (
         <>
           <div className={compact ? "px-3.5 py-2" : "px-4 py-3 sm:px-5"}>
-            <HouseRead state={houseRead} />
+            <InsiderRead read={insiderRead} />
           </div>
           <div className="border-t border-[var(--hairline)]" aria-hidden />
         </>
