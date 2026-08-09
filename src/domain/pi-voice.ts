@@ -37,7 +37,7 @@
  * vocabularies below.
  */
 import type { LiveCategory, LiveStory, NetworkLabel, Side, BeatTone } from "./story";
-import type { TensionKind, ConcentrationKind } from "./signal-vector";
+import type { TensionKind, ConcentrationKind, ClueStage } from "./signal-vector";
 import {
   classifyConvictionEvent,
   formatStoryMoney,
