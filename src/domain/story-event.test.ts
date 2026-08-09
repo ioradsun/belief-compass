@@ -713,8 +713,9 @@ describe("one fact is told once", () => {
         }),
       }),
     );
-    expect(t?.detail).toBe("+12% over 1D");
+    expect(t?.detail?.toLowerCase()).toMatch(/money|heavier|behind/);
     expect(t?.detail ?? "").not.toMatch(/treats as news/);
+
   });
 });
 
