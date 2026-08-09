@@ -57,7 +57,7 @@ import { railSideKey, tableKey } from "@/components/YourTable";
 import { networkQO } from "@/lib/network-query";
 import type { NetworkResponse } from "@/lib/dna.functions";
 
-export const Route = createFileRoute("/testingscene")({
+export const Route = createFileRoute("/lab-9f3c7a21b4")({
   // The scenario lives in a client-side cache, so a server render would paint a
   // shell the client immediately replaces. And it is not for search engines.
   ssr: false,
