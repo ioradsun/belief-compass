@@ -480,7 +480,11 @@ export interface TapeDeps {
 
 export const REAL_DEPS: TapeDeps = {
   client: () => serviceClient(),
-  loadTapeSource,
+  // The factual half is viewer-blind by contract, so it is shared across
+  // readers rather than rebuilt per wallet — see insider/source-cache.server.
+  loadTapeSource: (sb, data) =>
+    import("@/lib/insider/source-cache.server").then((m) => m.loadSharedTapeSource(sb, data)),
+
   loadBelieverFaces,
   loadActorBeliefs,
   loadViewerDna,

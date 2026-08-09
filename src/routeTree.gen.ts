@@ -23,6 +23,7 @@ import { Route as DevRailRouteImport } from './routes/dev.rail'
 import { Route as OgMarketMidRouteImport } from './routes/og/market.$mid'
 import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 import { Route as ApiPublicBuildIdRouteImport } from './routes/api/public/build-id'
+import { Route as ApiPublicJobsTapeWarmRouteImport } from './routes/api/public/jobs/tape-warm'
 import { Route as ApiPublicJobsSuggestionGeneratorRouteImport } from './routes/api/public/jobs/suggestion-generator'
 import { Route as ApiPublicJobsPovPollerRouteImport } from './routes/api/public/jobs/pov-poller'
 import { Route as ApiPublicJobsPositionReconcileRouteImport } from './routes/api/public/jobs/position-reconcile'
@@ -103,6 +104,11 @@ const ApiPublicBuildIdRoute = ApiPublicBuildIdRouteImport.update({
   path: '/api/public/build-id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicJobsTapeWarmRoute = ApiPublicJobsTapeWarmRouteImport.update({
+  id: '/api/public/jobs/tape-warm',
+  path: '/api/public/jobs/tape-warm',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicJobsSuggestionGeneratorRoute =
   ApiPublicJobsSuggestionGeneratorRouteImport.update({
     id: '/api/public/jobs/suggestion-generator',
@@ -181,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/api/public/jobs/position-reconcile': typeof ApiPublicJobsPositionReconcileRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
   '/api/public/jobs/suggestion-generator': typeof ApiPublicJobsSuggestionGeneratorRoute
+  '/api/public/jobs/tape-warm': typeof ApiPublicJobsTapeWarmRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -206,6 +213,7 @@ export interface FileRoutesByTo {
   '/api/public/jobs/position-reconcile': typeof ApiPublicJobsPositionReconcileRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
   '/api/public/jobs/suggestion-generator': typeof ApiPublicJobsSuggestionGeneratorRoute
+  '/api/public/jobs/tape-warm': typeof ApiPublicJobsTapeWarmRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -232,6 +240,7 @@ export interface FileRoutesById {
   '/api/public/jobs/position-reconcile': typeof ApiPublicJobsPositionReconcileRoute
   '/api/public/jobs/pov-poller': typeof ApiPublicJobsPovPollerRoute
   '/api/public/jobs/suggestion-generator': typeof ApiPublicJobsSuggestionGeneratorRoute
+  '/api/public/jobs/tape-warm': typeof ApiPublicJobsTapeWarmRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -259,6 +268,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/position-reconcile'
     | '/api/public/jobs/pov-poller'
     | '/api/public/jobs/suggestion-generator'
+    | '/api/public/jobs/tape-warm'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -284,6 +294,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/position-reconcile'
     | '/api/public/jobs/pov-poller'
     | '/api/public/jobs/suggestion-generator'
+    | '/api/public/jobs/tape-warm'
   id:
     | '__root__'
     | '/'
@@ -309,6 +320,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/position-reconcile'
     | '/api/public/jobs/pov-poller'
     | '/api/public/jobs/suggestion-generator'
+    | '/api/public/jobs/tape-warm'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -335,6 +347,7 @@ export interface RootRouteChildren {
   ApiPublicJobsPositionReconcileRoute: typeof ApiPublicJobsPositionReconcileRoute
   ApiPublicJobsPovPollerRoute: typeof ApiPublicJobsPovPollerRoute
   ApiPublicJobsSuggestionGeneratorRoute: typeof ApiPublicJobsSuggestionGeneratorRoute
+  ApiPublicJobsTapeWarmRoute: typeof ApiPublicJobsTapeWarmRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -437,6 +450,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicBuildIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/jobs/tape-warm': {
+      id: '/api/public/jobs/tape-warm'
+      path: '/api/public/jobs/tape-warm'
+      fullPath: '/api/public/jobs/tape-warm'
+      preLoaderRoute: typeof ApiPublicJobsTapeWarmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/jobs/suggestion-generator': {
       id: '/api/public/jobs/suggestion-generator'
       path: '/api/public/jobs/suggestion-generator'
@@ -527,17 +547,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicJobsPositionReconcileRoute: ApiPublicJobsPositionReconcileRoute,
   ApiPublicJobsPovPollerRoute: ApiPublicJobsPovPollerRoute,
   ApiPublicJobsSuggestionGeneratorRoute: ApiPublicJobsSuggestionGeneratorRoute,
+  ApiPublicJobsTapeWarmRoute: ApiPublicJobsTapeWarmRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
