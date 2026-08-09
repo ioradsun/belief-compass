@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { insiderMarketKey, insiderNowKey, insiderRootKey } from "./keys";
+import {
+  insiderMarketKey,
+  insiderNowKey,
+  insiderNowRootKey,
+  insiderPulseKey,
+  insiderPulseRootKey,
+  insiderRootKey,
+} from "./keys";
 
 describe("insider cache keys", () => {
   it("gives the side rails and the Market Insider rail the SAME key", () => {
@@ -25,5 +32,17 @@ describe("insider cache keys", () => {
 
   it("normalises absent viewer/side/limit so keys are stable", () => {
     expect(insiderNowKey({})).toEqual(insiderNowKey({ wallet: null, side: null, limit: null }));
+  });
+});
+
+describe("insider pulse keys", () => {
+  it("carries the batch spec so realtime can target it", () => {
+    expect(insiderPulseKey([12, 45, 88])).toEqual(["insider", "pulse", "12,45,88"]);
+    expect(insiderPulseKey("42")).toEqual(insiderPulseKey([42]));
+  });
+
+  it("keeps the global feed and the pulse batches separately invalidatable", () => {
+    expect(insiderNowRootKey()).not.toEqual(insiderPulseRootKey());
+    expect(insiderNowRootKey()[0]).toBe(insiderPulseRootKey()[0]);
   });
 });
