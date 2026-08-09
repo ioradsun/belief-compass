@@ -531,23 +531,24 @@ export function LiveTape({
                           </span>
                         )}
                       </div>
-                      {/* ONE FACT, ONCE PER CARD. The old test only looked at
-                        the body, so a card whose PI angle carried the amount
-                        ("$13 came in.") still printed "$13 traded" underneath —
-                        the same dollar said twice, two lines apart. Any line
-                        already naming money silences the footer. */}
-                      {r.amountUsd != null &&
-                        r.amountUsd > 0 &&
-                        !s.body.includes("$") &&
-                        !s.headline.includes("$") &&
-                        !(s.attribution ?? "").includes("$") && (
-                          <span className="ml-auto shrink-0 text-[11px] text-[var(--text-muted)]">
-                            <span className="num font-semibold text-[var(--text-secondary)]">
-                              {usdShort(r.amountUsd)}
-                            </span>{" "}
-                            traded
-                          </span>
-                        )}
+                      {/* ONE FACT, ONCE PER CARD — AND ONLY IF IT IS A FACT
+                        WORTH A LINE. See src/domain/amount-footer: a card that
+                        already carries its own consequence ("Only 4 left") does
+                        not need $15 bolted underneath it. */}
+                      {showsAmountFooter({
+                        headline: s.headline,
+                        body: s.body,
+                        attribution: s.attribution,
+                        amountUsd: r.amountUsd,
+                      }) && (
+                        <span className="ml-auto shrink-0 text-[11px] text-[var(--text-muted)]">
+                          <span className="num font-semibold text-[var(--text-secondary)]">
+                            {usdShort(r.amountUsd!)}
+                          </span>{" "}
+                          traded
+                        </span>
+                      )}
+
                     </div>
                   )}
                 </div>
