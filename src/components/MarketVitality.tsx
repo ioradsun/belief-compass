@@ -370,6 +370,12 @@ export function MarketMomentum({
   dense?: boolean;
   /** Who the participant count is made of — faces beside the Participants label. */
   faces?: MomentumFace[];
+  /**
+   * The `market_state` facts the Insider needs to read direction and pace
+   * (per-side believers and capital, trade counts, price move). Optional: with
+   * none of it the read stays calm and balanced rather than inventing movement.
+   */
+  state?: MarketStateFacts | null;
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs, win), [tape, nowMs, win]);
   const { unit } = useDisplayUnit();
@@ -387,11 +393,23 @@ export function MarketMomentum({
   const b = fromChange(change?.market.believers, book.believers.market, 1);
   const c = fromChange(change?.market.capital, book.capitalEth.market, ethUsd > 0 ? ethUsd : null);
 
+  /**
+   * THE READ, from the Insider — the same facts these two rows print, handed to
+   * the one momentum owner. Nothing visual depends on it yet (the figures are
+   * unchanged, which is the parity requirement); it names the panel for anyone
+   * listening to it, and it is the seam the Case File / House Read adopt next.
+   */
+  const read = useMemo(
+    () => insight(insiderPulse(pulseFactsFromMarket({ book, change, state, ethUsd }))),
+    [book, change, state, ethUsd],
+  );
+
   // ONE analytical container: heading → believers → cap → insight → Case File.
   // No floating typography, no nested cards — a single market instrument.
   return (
     <section
-      aria-label="Total market"
+      aria-label={`Total market — ${read.headline}`}
+
       className={`momentum${dense ? " momentum-dense" : ""} shrink-0 overflow-hidden rounded-[16px]`}
       style={{ background: "var(--surface)", border: "1px solid var(--hairline)" }}
     >
