@@ -276,24 +276,15 @@ export function LiveTape({
     return scoped.filter((r) => !r.timeless || factFresh(r.id));
   }, [sticky, excludeMarketId, factFresh]);
 
-  // THE EDITORIAL PASS — SELECT with rank, DISPLAY with time.
+  // THE EDITORIAL PASS NOW BELONGS TO THE INSIDER (migration, step 4).
   //
   // A live tape's contract with the reader is "this is what just happened, in
-  // order". The mixer's job is to CHOOSE which rows survive the window (dominance
-  // caps, family variety, significance and discovery); it must never set the
-  // ORDER, or the column reads 3h, 41m, 1h, 2h and feels broken rather than
-  // curated. So the mixer's output becomes a RANK lookup here, and the actual
-  // windowing + chronological ordering happens at the render boundary via
-  // `arrangeFeed` — which, crucially, no longer DROPS the rows past the window
-  // but hands back how many are waiting, so "Update" can offer older stories
-  // instead of silently exhausting. See src/domain/live-display.
-  const rankById = useMemo(() => {
-    const cands = visible.map((r) => r.mix).filter((m): m is MixCandidate => m != null);
-    if (cands.length === 0) return null;
-    const map = new Map<string, number>();
-    mixFeed(cands).forEach((m, i) => map.set(m.id, i));
-    return map;
-  }, [visible]);
+  // order". Choosing WHICH rows survive the window (dominance caps, family
+  // variety, significance) and rendering them in the reader's temporal model is
+  // intelligence, not presentation — so it moved out of this component and into
+  // `insider.now`. What stays here is attention mechanics: the update gate, the
+  // arrival scheduler, and the scroll behaviour.
+
 
   // ARRIVAL. A live feed should feel like it is being written, so rows are
   // released one at a time by the presentation scheduler rather than rendered
