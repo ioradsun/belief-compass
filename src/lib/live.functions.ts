@@ -1946,6 +1946,26 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   /* Constituent receipts a promoted behavioural story now contains. Dropped
      from the GLOBAL surface only — see below. */
   const consumedByPattern = new Set<string>();
+  /**
+   * IS THIS ROW ORDINARY EVIDENCE — i.e. may a story that contains it absorb it?
+   *
+   * Receipts → evidence → pattern → story. Once the pattern has been told at
+   * full volume, the constituent transactions are proof, not news; leaving them
+   * in makes the reader assemble the same conclusion a second time underneath
+   * the one the feed already reached. The exception is the constituent that
+   * would have been a story without the pattern: anything the voice layer calls
+   * an observation or intelligence keeps its slot.
+   */
+  const ORDINARY_EVIDENCE_MAX = 0.5;
+  const ordinaryEvidence = (id: string): boolean => {
+    const r = material.find((x) => x.id === id);
+    if (!r) return false;
+    return (
+      (r.mix?.voice ?? "receipt") === "receipt" &&
+      (r.mix?.significance ?? 0) < ORDINARY_EVIDENCE_MAX
+    );
+  };
+
   for (const p of findPersonPatterns(
     material.map((r) => ({
       id: r.id,
