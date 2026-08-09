@@ -34,7 +34,7 @@ describe("reaction is what makes a new market a story", () => {
     const v = tellNewMarketStory({ creatorName: "Jacek", believersYes: 3, ageHours: 20 });
     expect(v.level).toBe("intelligence");
     expect(v.story?.headline).toBe("JACEK PUT THIS ON THE TABLE");
-    expect(v.story?.body).toBe("Three have already taken YES.");
+    expect(v.story?.body).toBe("Three people have already taken YES.");
   });
 
   it("asks the question only when the reaction is unusually fast", () => {
