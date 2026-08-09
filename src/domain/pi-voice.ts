@@ -368,6 +368,10 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
 
       // RUSH / SCALE — several people, or one unusually large arrival.
       case "big_backing":
+        /* HEADLINE = WHAT CHANGED, BODY = WHAT PROVES IT. "Got heavier / YES
+           just got heavier." says one thought twice and wastes the only two
+           lines the card has. The kicker names the change; the sentence under
+           it carries the evidence and nothing else. */
         if (people > 1)
           return [
             {
@@ -376,11 +380,24 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
               angle: remaining ? `${remaining} believers now.` : null,
             },
             {
-              headline: "Got heavier",
-              body: `${s || "That side"} just got heavier.`,
-              angle: amount > 0 ? `${countWord(people)} brought in ${money}.` : null,
+              headline: side ? `${s} just got heavier` : "Got heavier",
+              body:
+                amount > 0
+                  ? `${countWord(people)} brought in ${money}.`
+                  : `${countWord(people)} stepped in at once.`,
+              angle: remaining ? `${remaining} believers now.` : null,
             },
+            ...(amount > 0
+              ? [
+                  {
+                    headline: `${money} just landed`,
+                    body: `${countWord(people)} stepped into ${s || "one side"}.`,
+                    angle: remaining ? `${remaining} believers now.` : null,
+                  },
+                ]
+              : []),
           ];
+
 
         return [
           {
