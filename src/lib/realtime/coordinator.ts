@@ -18,11 +18,16 @@
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { shouldRevalidateOnReturn } from "@/lib/focus-policy";
-import { insiderRootKey } from "@/lib/insider/keys";
+import {
+  insiderNowRootKey,
+  insiderPulseRootKey,
+  insiderRootKey,
+} from "@/lib/insider/keys";
 
 import {
   applyMarketStateBatch,
   affectedPulseKeys,
+  affectedInsiderActivityKeys,
   affectedPositionsTapeKeys,
   affectedMarketKeys,
   affectedViewerValuationKeys,
@@ -116,9 +121,15 @@ export function startRealtime(qc: QueryClient): () => void {
     for (const key of affectedViewerValuationKeys(qc, ids)) {
       void qc.invalidateQueries({ queryKey: key, exact: true, refetchType: "active" });
     }
-    // The live tape is chronological across all markets, so any trade can change
-    // it; refetch only the mounted (active) tapes, never the whole family.
-    void qc.invalidateQueries({ queryKey: insiderRootKey(), refetchType: "active" });
+    // THE TAPES, split by what a trade can actually change. The app-wide feed is
+    // chronological across all markets, so any trade can move it; a market's own
+    // rails cannot be moved by a trade somewhere else. So: the global scope
+    // always, the per-market scopes only for the markets in hand — and only the
+    // mounted (active) ones, never the whole family.
+    void qc.invalidateQueries({ queryKey: insiderNowRootKey(), refetchType: "active" });
+    for (const key of affectedInsiderActivityKeys(qc, ids)) {
+      void qc.invalidateQueries({ queryKey: key, exact: true, refetchType: "active" });
+    }
   };
   const noteActivity = (marketId: number) => {
     if (Number.isFinite(marketId)) affected.add(marketId);
@@ -142,7 +153,7 @@ export function startRealtime(qc: QueryClient): () => void {
       if (disposed) return;
       void qc.invalidateQueries({ queryKey: ["opp-feed"] });
       void qc.invalidateQueries({ queryKey: insiderRootKey(), refetchType: "active" });
-      void qc.invalidateQueries({ queryKey: ["market-pulses"], refetchType: "active" });
+      void qc.invalidateQueries({ queryKey: insiderPulseRootKey(), refetchType: "active" });
       // The viewer's network. It has no event of its own to listen for — it is
       // derived from `viewer_dna_cache`, which a background worker recomputes
       // when positions change — so a reconnect is the honest moment to re-read

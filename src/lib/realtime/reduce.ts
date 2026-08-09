@@ -16,6 +16,7 @@
  * the coordinator owns the socket, this owns the merge. Pure enough to unit-test.
  */
 import type { QueryClient } from "@tanstack/react-query";
+import { insiderPulseRootKey, insiderRootKey } from "@/lib/insider/keys";
 
 /** A raw `market_state` row as delivered by Postgres realtime (JSON payload.new). */
 export type MarketStateRow = Record<string, unknown> & {

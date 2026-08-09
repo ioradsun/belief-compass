@@ -157,16 +157,16 @@ describe("applyMarketStateBatch — deterministic ordering", () => {
 
 describe("affectedPulseKeys", () => {
   it("selects only pulse caches that hold a traded market (both key shapes)", () => {
-    qc.setQueryData(["market-pulses", "12,45,88"], { pulses: {} }); // feed id-list
-    qc.setQueryData(["market-pulses", "42"], { pulses: {} }); // single market
-    qc.setQueryData(["market-pulses", "7,9"], { pulses: {} }); // unrelated
+    qc.setQueryData(["insider", "pulse", "12,45,88"], { pulses: {} }); // feed id-list
+    qc.setQueryData(["insider", "pulse", "42"], { pulses: {} }); // single market
+    qc.setQueryData(["insider", "pulse", "7,9"], { pulses: {} }); // unrelated
     const keys = affectedPulseKeys(qc, new Set([42, 88]));
-    const specs = keys.map((k) => k[1]).sort();
+    const specs = keys.map((k) => k[2]).sort();
     expect(specs).toEqual(["12,45,88", "42"]);
   });
 
   it("returns nothing when no cache intersects (or the set is empty)", () => {
-    qc.setQueryData(["market-pulses", "7,9"], { pulses: {} });
+    qc.setQueryData(["insider", "pulse", "7,9"], { pulses: {} });
     expect(affectedPulseKeys(qc, new Set([1, 2]))).toEqual([]);
     expect(affectedPulseKeys(qc, new Set())).toEqual([]);
   });

@@ -213,7 +213,7 @@ const feedQO = (
 
 const pulsesQO = (ids: number[]) =>
   queryOptions({
-    queryKey: ["market-pulses", ids.join(",")],
+    queryKey: insiderPulseKey(ids),
     queryFn: async () => await listMarketPulses({ data: { ids: ids.slice(0, 120) } }),
     enabled: ids.length > 0,
     // NO INTERVAL. The coordinator invalidates exactly the pulse keys that hold

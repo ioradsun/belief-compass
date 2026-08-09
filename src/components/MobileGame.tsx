@@ -574,7 +574,7 @@ function BothSides({
   const { unit, format } = useMoney();
   const { data: evidence } = useQuery(evidenceQO(marketId));
   const { data: pulses } = useQuery({
-    queryKey: ["market-pulses", String(marketId)],
+    queryKey: insiderPulseKey([marketId]),
     queryFn: () => listMarketPulses({ data: { ids: [marketId] } }),
     staleTime: 15_000,
   });
