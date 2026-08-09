@@ -106,6 +106,7 @@ export function useScheduledRows<T extends SchedulableRow>(
       if (res.release) {
         const { id, weight } = res.release;
         entrances.current.set(id, weight);
+        lastArrivalAt.current = Date.now();
         if (entrances.current.size > ENTRANCE_MEMORY) {
           // Oldest first — insertion order is arrival order.
           const oldest = entrances.current.keys().next().value;
