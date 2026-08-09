@@ -1654,44 +1654,6 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     r.text = flattenStory(angled);
   }
 
-  /* ── THE QUESTION LAYER (the last stage) ────────────────────────────────
-     facts → detect tension → explain what changed → ASK THE OPEN QUESTION.
-     Everything above establishes what is true and says it plainly. A row that
-     the vector calls Intelligence AND that carries a named unresolved shape —
-     a contradiction, a silence after real money, a hierarchy changing hands, a
-     person unwinding — earns one question grounded in that shape. Nothing
-     else does, and the window keeps at most a handful, so the feed asks where
-     asking is warranted instead of interrogating the reader. */
-  {
-    const asked: Array<{ id: string; kind: QuestionKind; gain: number }> = [];
-    const drafted = new Map<string, string>();
-    for (const r of material) {
-      if (!r.story) continue;
-      const q = piQuestion({
-        key: r.id,
-        signal: signalById.get(r.id),
-        headline: r.story.headline,
-        body: r.story.body,
-        pattern: r.story.pattern ?? null,
-        actorName: r.face?.name ?? r.people?.[0]?.name ?? null,
-      });
-      if (!q) continue;
-      drafted.set(r.id, q.text);
-      asked.push({ id: r.id, kind: q.kind, gain: signalById.get(r.id)?.informationGain ?? 0 });
-    }
-    const keep = rationQuestions(asked);
-    for (const r of material) {
-      if (!r.story) continue;
-      const text = keep.has(r.id) ? (drafted.get(r.id) ?? null) : null;
-      if (!text) continue;
-      r.story = { ...r.story, question: text };
-      r.text = flattenStory(r.story);
-    }
-  }
-
-
-
-
   // ── THE EDITORIAL PASS: subtraction, after everything is composed ────────
   // Two rules a reader would state out loud — a second row about the same
   // market has to say something the first didn't, and low-value truth is still
@@ -1756,6 +1718,11 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   // It runs AFTER subtraction, so a pattern only ever describes rows the reader
   // will actually see, and it adds no rows — one aside on the person's newest
   // surviving row. See src/domain/person-pattern.
+  /* The pattern text per row, kept even when the pattern is promoted into the
+     headline. The question layer below reads it as evidence, and a promoted
+     pattern is the strongest evidence of all — losing it there was the second
+     reason the PERSON question never fired. */
+  const patternById = new Map<string, string>();
   for (const p of findPersonPatterns(
     material.map((r) => ({
       id: r.id,
@@ -1777,6 +1744,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
        the ordinary event drops to the aside — the market still renders
        underneath, so nothing is lost. A row that already speaks at observation
        or intelligence volume keeps its own headline and its footnote. */
+    patternById.set(p.rowId, p.note);
     if (p.lead && (target.mix?.voice ?? "receipt") === "receipt") {
       target.story = {
         ...target.story,
@@ -1794,6 +1762,54 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     }
     target.story = { ...target.story, pattern: p.note };
   }
+
+  /* ── THE QUESTION LAYER (genuinely last: after subtraction and patterns) ────────────────────────────────
+     facts → detect tension → explain what changed → ASK THE OPEN QUESTION.
+     Everything above establishes what is true and says it plainly. A row that
+     the vector calls Intelligence AND that carries a named unresolved shape —
+     a contradiction, a silence after real money, a hierarchy changing hands, a
+     person unwinding — earns one question grounded in that shape. Nothing
+     else does, and the window keeps at most a handful, so the feed asks where
+     asking is warranted instead of interrogating the reader.
+
+     IT RUNS HERE, AND THE POSITION IS THE FEATURE. Drafting and rationing used
+     to happen before editorial subtraction and before person patterns existed,
+     which made the layer close to invisible in production for two structural
+     reasons: the three question slots could be spent on rows `editFeed` then
+     deleted (leaving the rendered feed with none), and `piQuestion` was asked
+     "does this row have an unwinding pattern?" before `findPersonPatterns` had
+     written one — so the PERSON question could never fire at all. The corpus
+     the rationer sees is now exactly the corpus the reader sees. */
+  {
+    const asked: Array<{ id: string; kind: QuestionKind; gain: number }> = [];
+    const drafted = new Map<string, string>();
+    for (const r of material) {
+      if (!r.story) continue;
+      const q = piQuestion({
+        key: r.id,
+        signal: signalById.get(r.id),
+        headline: r.story.headline,
+        body: r.story.body,
+        pattern: r.story.pattern ?? patternById.get(r.id) ?? null,
+        actorName: r.face?.name ?? r.people?.[0]?.name ?? null,
+      });
+      if (!q) continue;
+      drafted.set(r.id, q.text);
+      asked.push({ id: r.id, kind: q.kind, gain: signalById.get(r.id)?.informationGain ?? 0 });
+    }
+    const keep = rationQuestions(asked);
+    for (const r of material) {
+      if (!r.story) continue;
+      const text = keep.has(r.id) ? (drafted.get(r.id) ?? null) : null;
+      if (!text) continue;
+      r.story = { ...r.story, question: text };
+      r.text = flattenStory(r.story);
+    }
+  }
+
+
+
+
 
 
 
