@@ -33,6 +33,13 @@ export interface SchedulableRow {
   id: string;
   occurredAt: string;
   pace?: { perishability: PendingRow["perishability"]; weight: number } | null;
+  /**
+   * Admitted for heartbeat only (src/domain/feed-density `admissionOf`). Held
+   * here rather than dropped, because whether an ordinary true thing is worth a
+   * slot depends on something only this side knows: how long THIS reader has
+   * been watching a page where nothing arrives.
+   */
+  pulse?: boolean | null;
 }
 
 export interface ScheduledView<T> {
