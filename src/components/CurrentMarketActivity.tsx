@@ -37,10 +37,12 @@
  *    about. It now grows downward from where it sits, bounded and internally
  *    scrolled, and the tape below keeps whatever height is left.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
+import { activity, signalsFromActivityRows } from "@/domain/insider";
+import type { LiveRow } from "@/lib/live-tape";
 import { LiveTape } from "@/components/LiveTape";
 import { Collapsible } from "@/components/Collapsible";
 
@@ -110,9 +112,18 @@ export function CurrentMarketActivity({
     // this one's.
     placeholderData: (prev) => prev,
   });
-  const rows = live?.rows ?? [];
-  const hasActivity = rows.length > 0;
-  const latest = rows[0]?.text ?? "";
+  // THE MARKET INSIDER RAIL reads from the Insider ACTIVITY projection: the same
+  // market-scoped history, filtered and ordered by ONE shared rule
+  // (`insider.activity`) rather than by this component. Each signal's `payload`
+  // is the source LiveRow the beat renders from, so the rows are unchanged — only
+  // their owner is. The server already scopes to this market and orders newest
+  // first, so the projection reproduces the same set and order.
+  const acts = useMemo(
+    () => activity(signalsFromActivityRows(live?.rows ?? []), { marketId, limit: 200 }).signals,
+    [live, marketId],
+  );
+  const hasActivity = acts.length > 0;
+  const latest = (acts[0]?.payload as LiveRow | undefined)?.text ?? "";
   // A FIXED FRAME. The card used to mount/unmount (and animate open/closed)
   // with the data, so every market change jumped the rail: the frame vanished,
   // then reappeared a fetch later. The frame is now permanent and only its

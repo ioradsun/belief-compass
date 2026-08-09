@@ -27,6 +27,8 @@
  * the surface inventory + migration plan.
  */
 export * from "./types";
+export * from "./signals";
+export { activity } from "./projections/activity";
 
 /**
  * The constitutional rule, as a single importable source of truth so docs, tests,

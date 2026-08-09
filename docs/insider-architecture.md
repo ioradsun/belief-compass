@@ -205,15 +205,23 @@ coordinator (`lib/realtime/coordinator.ts`).
 Build the Insider **underneath** the existing UI; migrate one projection at a time
 behind an unchanged surface, each step proven by parity tests.
 
-0. **Contract first (this pass).** `src/domain/insider/` defines the vocabulary
+0. **Contract + renames — ✅ landed.** `src/domain/insider/` defines the vocabulary
    (`InsiderSignal`, `InsiderPulse`, `InsiderRead`, `InsiderMarket`, `InsiderNow`,
-   …) + the constitutional rule. Types only, non-breaking. Renames applied (below).
-1. **Build the builder.** Feed `events + market_state + wallet_beliefs` into a pure
-   Insider builder that emits `InsiderSignal`s with provenance + `builderVersion`.
-   Fixture/replay tests: identical inputs → identical signals.
-2. **Activity rails first** (simplest — mostly chronological). Reframe
-   `CurrentMarketActivity` / CaseFile "Insider Moves" as `insider.activity({
-   marketId, side })` filters over one Insider history. No editorial change.
+   …) + the constitutional rule. Types only, non-breaking.
+1. **The builder (activity seam) — ✅ landed.** `signals.ts` `signalsFromActivityRows`
+   lifts grouped canonical activity (the pure `groupLiveRows` output) into
+   `InsiderSignal`s with provenance + `INSIDER_BUILDER_VERSION`. Pure and
+   deterministic; replay tests prove identical rows → identical signals. (The
+   evidence-scoring seams — magnitude, velocity, novelty — arrive with Insight/Now;
+   activity leaves evidence uncomputed, `null` ≠ `0`.)
+2. **Activity projection — ✅ landed; rails adopting.** `projections/activity.ts`
+   `activity(signals, { marketId, side })` is the one chronological filter, proven
+   to reproduce today's server semantics (market scope; `eq(side)` excludes
+   market-wide rows from a side column; newest-first + id tiebreak). Wired into the
+   **Market Insider** rail (`CurrentMarketActivity`), behavior-preserving. **Next:**
+   unify the YES/NO side rails (`CaseFile` / `LiveTape`) so ONE market fetch feeds
+   both side projections client-side instead of a per-side server query — a real
+   fetch-behavior change that needs an app run to verify UX.
 3. **Insight/Pulse onto `InsiderPulse`.** Move `MarketVitality` /
    `market-vitals` momentum math behind one `InsiderPulse`; Market Insight becomes
    the human explanation of that pulse.
@@ -235,18 +243,18 @@ behind an unchanged surface, each step proven by parity tests.
 
 ```text
 src/domain/insider/
-    types.ts        # the contract (this pass)
-    index.ts        # barrel + INSIDER_CONSTITUTION (this pass)
-    features.ts     # universal evidence extraction (calculate once)
-    signals.ts      # canonical facts → InsiderSignal[]
-    pulse.ts        # signals → InsiderPulse
-    scoring.ts      # evidence → judgments (momentum/importance/confidence)
-    read.ts         # house-read, moved inward
+    types.ts        # the contract                         ✅ landed
+    index.ts        # barrel + INSIDER_CONSTITUTION         ✅ landed
+    signals.ts      # canonical activity → InsiderSignal[]  ✅ landed (activity seam)
+    features.ts     # universal evidence extraction (calculate once)   — next
+    pulse.ts        # signals → InsiderPulse                            — next
+    scoring.ts      # evidence → judgments (momentum/importance/confidence) — next
+    read.ts         # house-read, moved inward                          — later
     projections/
-        activity.ts  now.ts  insight.ts  read.ts
+        activity.ts  # ✅ landed          now.ts  insight.ts  read.ts   — next/later
 
 src/lib/insider/
-    source.server.ts   build.server.ts   functions.ts   cache.ts
+    source.server.ts   build.server.ts   functions.ts   cache.ts       — next
 ```
 
 ---

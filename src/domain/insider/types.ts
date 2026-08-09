@@ -189,7 +189,12 @@ export interface InsiderSignal {
   evidence: InsiderEvidence;
   /** Present only when built for a specific viewer. */
   viewer?: InsiderViewerOverlay;
-  judgment: InsiderJudgment;
+  /**
+   * Optional: present only once a projection has SCORED this signal (Now /
+   * Insight). A pure chronological Activity signal is unscored — omitting the
+   * judgment is honest, and matches "evidence once, interpreted per surface".
+   */
+  judgment?: InsiderJudgment;
   provenance: InsiderProvenance;
 
   /** Kind-specific detail (actors, amounts, holders…). Opaque to the contract. */
