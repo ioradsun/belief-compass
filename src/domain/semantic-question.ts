@@ -138,6 +138,32 @@ export function proposition(title: string): string | null {
   return frag.charAt(0).toLowerCase() + frag.slice(1);
 }
 
+/** The most words a quoted topic may carry before it stops being a phrase and
+ *  starts being the headline read back to the reader. */
+export const MAX_TOPIC_WORDS = 8;
+
+const SUBORDINATOR = /^(if|when|whether|that|because|after|before|once|unless)\s+/i;
+
+/**
+ * A quoted topic short enough to sit INSIDE a sentence.
+ *
+ * The failure this fixes: the headline already says the proposition, and then
+ * the question quoted the whole of it again — "Nothing for 7 days and now this.
+ * Did something change about “if you suddenly became rich, would you still
+ * work”, or just the attention on it?" That is the tape repeating itself at
+ * double length. A topic is a HANDLE for the thing above it, not a second copy
+ * of it: keep the first clause, drop the subordinator, and if it is still long,
+ * the sentence quotes nothing rather than quoting everything.
+ */
+export function shortTopic(frag: string): string | null {
+  const clause = (frag.split(/[,;:]/)[0] ?? frag).trim().replace(SUBORDINATOR, "");
+  const words = clause.split(" ").filter(Boolean);
+  if (words.length < 3 || words.length > MAX_TOPIC_WORDS) return null;
+  const out = words.join(" ");
+  return out.charAt(0).toLowerCase() + out.slice(1);
+}
+
+
 /** A dollar figure named IN THE PROPOSITION — the strongest semantic hook there is. */
 export function stakeInTitle(title: string): string | null {
   const m = /\$\s?(\d[\d,]*(?:\.\d+)?)\s?(k|m|bn|b)?/i.exec(title);
@@ -187,13 +213,15 @@ export const REAWAKEN_MIN_QUIET_DAYS = 5;
 export const LOPSIDED_RATIO = 0.05;
 export const LOPSIDED_MIN_LEAD_USD = 25;
 
-function variantsFor(i: SemanticInput, title: string, frag: string): string[] {
+function variantsFor(i: SemanticInput, title: string, short: string | null): string[] {
   const stake = stakeInTitle(title);
-  /* THE PROPOSITION IS QUOTED, NOT PARAPHRASED. Dropping a title fragment bare
-     into a sentence produces "Did selling your data worth a $20 airdrop stop
-     being a question?" — the PI mangling the thing it is quoting. Quotation
-     marks make the fragment a noun and keep the grammar the reader's. */
-  const topic = `“${frag}”`;
+  /* THE PROPOSITION IS QUOTED, NOT PARAPHRASED, AND ONLY WHEN IT IS SHORT.
+     Dropping a title fragment bare into a sentence produces "Did selling your
+     data worth a $20 airdrop stop being a question?" — the PI mangling the
+     thing it is quoting. Quotation marks make the fragment a noun and keep the
+     grammar the reader's. When there is no short handle, the topic-shaped
+     variants are simply not offered; the row keeps its headline and says less. */
+  const topic = short ? `“${short}”` : null;
   const s = i.side ?? "that side";
   const f = i.facts ?? {};
 
@@ -202,28 +230,32 @@ function variantsFor(i: SemanticInput, title: string, frag: string): string[] {
        price is the single cleanest case in the product: the market literally
        asked whether an amount was enough, and one answer has no takers left. */
     case "side_emptied":
-      return stake
+      if (stake)
+        return [
+          `Nobody is backing ${s} anymore. Is ${stake} really enough to make that trade-off feel worth it?`,
+          `${s} is empty. Does ${stake} change the calculation for anyone here?`,
+        ];
+      return topic
         ? [
-            `Nobody is backing ${s} anymore. Is ${stake} really enough to make that trade-off feel worth it?`,
-            `${s} is empty. Does ${stake} change the calculation for anyone here?`,
-          ]
-        : [
             `Nobody is backing ${s} anymore. Is ${topic} still a real question?`,
             `${s} has no one left. Is there still an argument on ${topic}?`,
-          ];
+          ]
+        : [];
 
     /* QUESTION THE CONSENSUS. Tenure makes "still" factual; without the days
        this shape is not offered at all (see the gate below). */
     case "one_sided_persistence": {
+      if (!topic) return [];
       const d = Math.floor(f.days ?? 0);
       return [
         `${d} days and still nobody will take ${other(i.side)}. Is ${topic} even controversial to this crowd?`,
-        `${d} days on one side and ${other(i.side)} stays empty. Is this a debate, or a foregone conclusion about ${topic}?`,
+        `${d} days on one side and ${other(i.side)} stays empty. Debate, or foregone conclusion?`,
       ];
     }
 
     /* QUESTION WHETHER THE MARKET IS ACTUALLY SPLIT. */
     case "lopsided_book": {
+      if (!topic) return [];
       const lead = f.leadUsd ?? 0;
       const light = f.laggardUsd ?? 0;
       return [
@@ -234,22 +266,29 @@ function variantsFor(i: SemanticInput, title: string, frag: string): string[] {
 
     /* QUESTION WHETHER A SIDE BECAME LESS OBVIOUS. */
     case "side_got_company":
-      return [
-        `${s} finally got company. Did ${topic} just stop being obvious?`,
-        `Somebody is on ${s} now. Is ${topic} less settled than it looked?`,
-      ];
+      return topic
+        ? [
+            `${s} finally got company. Did ${topic} just stop being obvious?`,
+            `Somebody is on ${s} now. Is ${topic} less settled than it looked?`,
+          ]
+        : [];
 
     /* QUESTION WHETHER ATTENTION CHANGED — attention, never outcome. */
     case "back_from_dead": {
+      if (!topic) return [];
       const q = Math.floor(f.quietDays ?? 0);
       const t = Math.max(1, Math.floor(f.trades ?? 1));
       return [
         `${q} quiet days, then ${t} ${t === 1 ? "trade" : "trades"}. Did ${topic} just get interesting again?`,
-        `Nothing for ${q} days and now this. Did something change about ${topic}, or just the attention on it?`,
+        `Nothing for ${q} days and now this. Did the ${topic} question change, or just the attention on it?`,
       ];
     }
   }
 }
+
+/** A question longer than this is the headline read back at the reader. */
+export const MAX_QUESTION_CHARS = 130;
+
 
 /**
  * The semantic question this state and this proposition have earned, or null —
@@ -275,8 +314,11 @@ export function semanticQuestion(i: SemanticInput): string | null {
   }
   if (i.state === "side_got_company" && (f.days ?? 0) < 3) return null;
 
-  const variants = variantsFor(i, title, frag).filter(
-    (v) => !containsBannedLanguage(v) && isPropositionSpecific(v, title),
+  const variants = variantsFor(i, title, shortTopic(frag)).filter(
+    (v) =>
+      v.length <= MAX_QUESTION_CHARS &&
+      !containsBannedLanguage(v) &&
+      isPropositionSpecific(v, title),
   );
   if (variants.length === 0) return null;
   return pickVariant(`${i.key}:semantic:${i.state}`, variants);
