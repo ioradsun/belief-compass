@@ -393,3 +393,22 @@ describe("a stricter reader is served by filtering, never by recomputing", () =>
     expect(atSensitivity(woke, "major", "24h").lenses).toContain("waking");
   });
 });
+
+describe("dust-sized capital moves", () => {
+  it("names the dollars instead of the rate", () => {
+    const line = momentumReason(
+      { kind: "move", metric: "capital", side: "YES", delta: 8, pct: 62, direction: "up" } as never,
+      "24h",
+    );
+    expect(line).toContain("$8");
+    expect(line).not.toContain("%");
+  });
+
+  it("still uses the rate once the move is material", () => {
+    const line = momentumReason(
+      { kind: "move", metric: "capital", side: "YES", delta: 900, pct: 62, direction: "up" } as never,
+      "24h",
+    );
+    expect(line).toContain("62%");
+  });
+});
