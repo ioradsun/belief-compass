@@ -497,7 +497,7 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
     case "side_opened":
       body = side
         ? `Nobody had backed ${s}. Now ${people > 1 ? `${people} people do` : "somebody does"}.`
-        : `This side has its first believers.`;
+        : `Nobody had backed this side. Now ${people > 1 ? `${people} people do` : "somebody does"}.`;
       break;
     case "doubled_down":
       body = side ? `${who} added to ${s}${tail}.` : `${who} doubled down${tail}.`;

@@ -190,12 +190,14 @@ const BEL = FEED_TRIGGERS.believers.minAbs;
 /**
  * Trades in a day before a silent market may be called awake again.
  *
- * TWO WAS STILL AN OVERSTATEMENT. "Back from the dead" is the loudest claim the
- * feed makes about a market, and a pair of fills — often the same person twice
- * — is not a room filling up. Three separate landings in a day, after a week of
- * nobody, is the smallest fact that honestly reads as a return.
+ * ONE TRADE IS NOT A RETURN — it is somebody touching the question again, and
+ * saying "back from the dead" about it is the feed's loudest claim spent on its
+ * thinnest fact. TWO is the smallest number that reads as a room reopening, and
+ * a two-trade return still has to clear the STRONG bar below before it may take
+ * a slot in the universal feed; otherwise it stays a tier-3 panel row.
  */
-const MIN_REAWAKEN_TRADES = 3;
+const MIN_REAWAKEN_TRADES = 2;
+
 /** …and this many before the return is loud enough for the universal feed. */
 const STRONG_REAWAKEN_TRADES = 5;
 /** …or this much money moving in the same window. */

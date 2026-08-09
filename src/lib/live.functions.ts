@@ -1288,7 +1288,18 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         : r.wallet
           ? [r.wallet.toLowerCase()]
           : [],
-      motif: `${r.kind}:${r.side ?? "market"}:${r.story.headline}`,
+      /* A ROLLING STATE STORY IS IDENTIFIED BY ITS CATEGORY, NOT ITS NUMBERS.
+         "More believers. Less capital." read at 09:10 and again at 10:00 is one
+         evolving state, but the composed headline/detail carry the window's
+         figures, so keying the motif on copy made two readings look like two
+         developments. Derived market reads therefore key on the TRANSITION TYPE
+         (and metric) alone — a change of category still earns a second row,
+         a change of numbers does not. Named acts keep the headline key, so the
+         genuine beats (new believer → side opens → pile-in → flip) survive. */
+      motif:
+        r.kind === "market_transition"
+          ? `state:${(r.payload as { type?: string } | null)?.type ?? "move"}:${(r.payload as { metric?: string } | null)?.metric ?? ""}`
+          : `${r.kind}:${r.side ?? "market"}:${r.story.headline}`,
     } satisfies MixCandidate;
   }
 
