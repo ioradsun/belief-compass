@@ -1,4 +1,6 @@
 import { Link } from "@tanstack/react-router";
+import { BrandMark } from "@/components/BrandMark";
+
 
 export type AppTab = "mine" | "belief" | "room";
 
