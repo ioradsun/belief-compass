@@ -94,7 +94,15 @@ export type QuestionInput = {
   pattern?: string | null;
   /** Display name of the single actor, when the row is about one person. */
   actorName?: string | null;
+  /**
+   * Set for continuity rows. `klass` decides whether the row may ask at all —
+   * a receipt ("still here") and an observation ("still here, and one position
+   * left") have nothing unresolved in them; only a proven contrast does — and
+   * `kind` decides which contrast is being asked about.
+   */
+  standing?: { kind: string; klass: string } | null;
 };
+
 
 /**
  * The floor of the editorial budget — a quiet window still gets to be curious.
