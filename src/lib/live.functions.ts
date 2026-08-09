@@ -33,7 +33,14 @@ import {
   type ConvictionAction,
 } from "@/domain/conviction-event";
 import { tellPiStory, voiceLevel, applyViewerAngle } from "@/domain/pi-voice";
-import { piQuestion, rationQuestions, type QuestionKind } from "@/domain/pi-question";
+import {
+  piQuestion,
+  questionAdds,
+  questionBudget,
+  rationQuestions,
+  type QuestionKind,
+} from "@/domain/pi-question";
+import { composeClues, type ComposedClue } from "@/domain/composed-clue";
 import {
   retellTransition,
   capVoice,
@@ -1783,11 +1790,15 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   /* Diagnostic only (SIGNAL_DIAGNOSTIC=1): the receipts a promoted behavioural
      story absorbed, so a reviewer can read the before → after directly. */
   const consumedRows: Array<{ id: string; headline: string }> = [];
+  const consumedForClues: typeof material = [];
   if (consumedByPattern.size > 0)
     for (let i = material.length - 1; i >= 0; i--)
       if (consumedByPattern.has(material[i]!.id)) {
         const [gone] = material.splice(i, 1);
-        if (gone) consumedRows.push({ id: gone.id, headline: gone.story?.headline ?? "" });
+        if (gone) {
+          consumedForClues.push(gone);
+          consumedRows.push({ id: gone.id, headline: gone.story?.headline ?? "" });
+        }
       }
 
 
@@ -1808,9 +1819,38 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
      "does this row have an unwinding pattern?" before `findPersonPatterns` had
      written one — so the PERSON question could never fire at all. The corpus
      the rationer sees is now exactly the corpus the reader sees. */
+  /** Diagnostic row for a composed clue (SIGNAL_DIAGNOSTIC=1 reporting). */
+  const clueEntry = (c: ComposedClue) => ({
+    id: c.rowId,
+    kind: c.kind as string,
+    source: "composed" as const,
+    gain: c.gain,
+    why: `${c.why} [${c.members.length} rows]`,
+    text: c.text,
+    rejected: null as string | null,
+    kept: false,
+  });
+  const questionLedger: Array<{
+    id: string;
+    kind: string;
+    source: "row" | "composed";
+    gain: number;
+    why: string;
+    text: string | null;
+    rejected: string | null;
+    kept: boolean;
+  }> = [];
   {
-    const asked: Array<{ id: string; kind: QuestionKind; gain: number }> = [];
+    const asked: Array<{
+      id: string;
+      kind: QuestionKind;
+      gain: number;
+      personal?: boolean;
+      text?: string;
+    }> = [];
     const drafted = new Map<string, string>();
+
+    /* STAGE 1 — SINGLE-ROW CLUES. One vector, one named gap. */
     for (const r of material) {
       if (!r.story) continue;
       const q = piQuestion({
@@ -1823,9 +1863,90 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       });
       if (!q) continue;
       drafted.set(r.id, q.text);
-      asked.push({ id: r.id, kind: q.kind, gain: signalById.get(r.id)?.informationGain ?? 0 });
+      asked.push({
+        id: r.id,
+        kind: q.kind,
+        gain: signalById.get(r.id)?.informationGain ?? 0,
+        personal: r.face?.relationship != null,
+        text: q.text,
+      });
+      questionLedger.push({
+        id: r.id,
+        kind: q.kind,
+        source: "row",
+        gain: signalById.get(r.id)?.informationGain ?? 0,
+        why: "single-row signal shape",
+        text: q.text,
+        rejected: null,
+        kept: false,
+      });
     }
-    const keep = rationQuestions(asked);
+
+    /* STAGE 2 — COMPOSED CLUES. The 7:30-dinner stage: facts that are dull
+       alone and pointed together. A group of plain receipts may earn a question
+       here that none of its members could earn above, which is the whole reason
+       Insider is not a ticker. Runs on the FINAL rows, so a composed clue can
+       only ever be built from evidence the reader can actually see. */
+    /* Evidence includes the receipts a promoted behavioural story absorbed:
+       they are the reason the behaviour is a fact, and dropping them here would
+       make a person's five moves look like one. They can never be the anchor —
+       `surviving: false` keeps a question off a row the reader cannot see. */
+    for (const c of composeClues(
+      [...material, ...consumedForClues].map((r) => ({
+        id: r.id,
+        marketId: String(r.marketId),
+        marketTitle: r.marketTitle ?? null,
+        wallet: r.wallet ?? null,
+        name: r.face?.name ?? null,
+        relationship: (r.face?.relationship as string | null) ?? null,
+        side: r.side === "YES" || r.side === "NO" ? r.side : null,
+        action: actionById.get(r.id) ?? null,
+        amountUsd: r.amountUsd ?? null,
+        kind: r.kind,
+        occurredAt: r.occurredAt,
+        surviving: !consumedByPattern.has(r.id),
+      })),
+    )) {
+      const target = material.find((r) => r.id === c.rowId);
+      if (!target?.story) continue;
+      /* WHEN THE COMPOSITION IS THE BETTER CLUE, IT WINS.
+         A row may already have drafted a question off its own vector. That
+         question is more specific, so it keeps its slot — unless the composed
+         clue is measurably stronger, which is common: a single receipt scoring
+         0.05 sitting under a behaviour assembled from four of them. */
+      const own = asked.find((a) => a.id === c.rowId);
+      if (own && own.gain >= c.gain) {
+        questionLedger.push({ ...clueEntry(c), rejected: "row asks a stronger question", kept: false });
+        continue;
+      }
+      // Same echo bar as every other question: it must add a term the row
+      // has not already printed.
+      const said = `${target.story.headline} ${target.story.body} ${target.story.pattern ?? ""}`;
+      if (!questionAdds(c.text, said)) {
+        questionLedger.push({ ...clueEntry(c), rejected: "echoes the row", kept: false });
+        continue;
+      }
+      drafted.set(c.rowId, c.text);
+      if (own) {
+        asked.splice(asked.indexOf(own), 1);
+        const prior = questionLedger.find((e) => e.id === c.rowId && e.source === "row");
+        if (prior) prior.rejected = "superseded by the composed clue";
+      }
+      asked.push({
+        id: c.rowId,
+        kind: c.kind,
+        gain: c.gain,
+        personal: target.face?.relationship != null,
+        text: c.text,
+      });
+      questionLedger.push(clueEntry(c));
+    }
+
+    /* STAGE 3 — RATIONING, over exactly the rows the reader will see. */
+    const intelligenceRows = material.filter(
+      (r) => (r.mix?.voice ?? "receipt") === "intelligence",
+    ).length;
+    const keep = rationQuestions(asked, questionBudget(material.length, intelligenceRows));
     for (const r of material) {
       if (!r.story) continue;
       const text = keep.has(r.id) ? (drafted.get(r.id) ?? null) : null;
@@ -1833,6 +1954,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       r.story = { ...r.story, question: text };
       r.text = flattenStory(r.story);
     }
+    for (const e of questionLedger) if (keep.has(e.id) && !e.rejected) e.kept = true;
   }
 
 
@@ -2031,7 +2153,10 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     copyVersion: COPY_VERSION,
     error: null,
     ...(process.env["SIGNAL_DIAGNOSTIC"] === "1"
-      ? { composition: { consumed: consumedRows.reverse() } }
+      ? {
+          composition: { consumed: consumedRows.reverse() },
+          questions: questionLedger,
+        }
       : {}),
   };
 }
