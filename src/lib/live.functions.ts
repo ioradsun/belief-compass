@@ -32,7 +32,7 @@ import {
   isCelebration,
   type ConvictionAction,
 } from "@/domain/conviction-event";
-import { tellPiStory, voiceLevel } from "@/domain/pi-voice";
+import { tellPiStory, voiceLevel, applyViewerAngle } from "@/domain/pi-voice";
 import { modernizeTransitionCopy } from "@/domain/legacy-voice";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
 import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
@@ -1445,7 +1445,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
      never degrades into a personal-only headline. A zero-vector social row is
      left exactly as the voice layer wrote it. */
   for (const r of material) {
-    const rel = (r.face?.relationship as NetworkLabel | null) ?? null;
+    const rel = (r.face?.relationship as NetLabel | null) ?? null;
     if (!rel || !r.story) continue;
     const angled = applyViewerAngle(r.story, { relationship: rel, signal: signalById.get(r.id) });
     if (angled === r.story) continue;
