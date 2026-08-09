@@ -68,7 +68,21 @@ export interface ComposedClue {
   members: string[];
   /** Plain-language reason, for the corpus diagnostic. */
   why: string;
+  /**
+   * THE COMPOSITION SHOULD OWN THE ROW IT ASKS ABOUT.
+   *
+   * A question about four moves bolted onto a receipt that establishes one of
+   * them is a mismatch the reader can see: "NO had no one. Then Md.Sabbir
+   * stepped in. … 4 changes in a few hours. Backing away, or moving conviction
+   * somewhere else?" The body proves the wrong thing. Where the clue is about a
+   * PERSON — the only family where the composition is a behaviour rather than a
+   * coincidence of timing — it carries the headline and body the row should be
+   * wearing, and the caller promotes it and consumes the ordinary receipts
+   * underneath. Null where the receipt is still the better subject.
+   */
+  lead?: { headline: string; body: string } | null;
 }
+
 
 const HOUR = 3600_000;
 const ms = (iso: string) => Date.parse(iso) || 0;
