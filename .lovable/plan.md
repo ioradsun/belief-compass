@@ -222,7 +222,11 @@ Corpus supply the cost is pricing: 342 rows → receipt 79.5%, observation 18.7%
 ### Step-7 findings (measured, 2026-08-09)
 
 `clueLine(vector)` renders the market observation from the viewer-blind vector alone — one sentence per tension/concentration kind, plus nonresponse, beforePrice, reversing and unusual — and returns null for a receipt-level or `building`-only vector, so the PI stays quiet when it has nothing to add. `applyViewerAngle(story, { relationship, signal })` runs in `buildTape` **after admission and scoring**: no relationship, or no clue, and the story is returned byte-identical. With both, the kicker becomes the relationship (`YOUR RIVAL`), the body keeps the behaviour, and the clue takes the third line — so the personal angle is bought without spending the intelligence. Ranking, the vector and the shipped signal attach are untouched; only the rendered copy of already-admitted rows changes. Tested: no-relationship and zero-vector rows are identity, the clue survives the foregrounding, and no clue line contains caused/because/drove/sent/since then while §8 stays gated. 2,384 tests green.
-8. Variety caps on `primary`/`tensionKind` in `feed-cadence.ts`.
+8. Variety caps on `primary`/`tensionKind` in `feed-cadence.ts`. **Done.**
+
+### Step-8 findings (2026-08-09)
+
+The motif cap keys on composed copy, so the same observation in four markets — different wallets, different numbers, four motifs — cost nothing while reading as one sentence repeated. `MixCandidate` now also carries `signalPrimary` and `signalKind` from the viewer-blind vector, and `dominancePenalty` charges the same escalating `overCap` for the window-wide shape: `maxPerSignalKind 2` (the recognisable phrase) and `maxPerSignalPrimary 3` (the looser family). Soft, exactly like the motif cap — a quiet day of one shape still returns every row, and `significance >= breakingAt` skips it. Rows with no vector are byte-identical to before (asserted). 2,383 tests green, typecheck clean.
 9. Confirmation and developing clues only after §8's temporal proof exists.
 
 ## 12. Tests and invariants
