@@ -182,13 +182,13 @@ The distinction `new | developing | resolved` is written into the model now even
 
 ## 11. Smallest safe sequence
 
-1. Widen the `market_state` select in `loadTapeSource` to §2 columns; extend `Momentum`. Behaviour-neutral.
-2. **2a.** Audit concentration + nonresponse derivability against current reads (§2) before anything depends on them.
-3. Add `src/domain/signal-vector.ts` + tests. Pure, unused at first.
-4. Attach the vector to rows in `buildTape`; review in the dev voice lab (`/dev/voice`) with nothing wired to ranking.
+1. Widen the `market_state` select in `loadTapeSource` to §2 columns; extend `Momentum`. Behaviour-neutral. **Done.**
+2. **2a.** Audit concentration + nonresponse derivability and baseline math against real data. **Done — see §2a findings.**
+3. Add `src/domain/signal-vector.ts` + tests, including the one canonical baseline helper (daily rate, `trade_count_7d >= 7` guard, relative quiet band). Pure, unused at first.
+4. **Diagnostic before influential.** Attach the vector to rows in `buildTape` and print the **top 20 and bottom 20 candidate rows by `informationGain`**, with every signal value and every reason, over a real corpus. If ordinary trades outrank contradictions, fix the model here — never compensate downstream in the mixer. Nothing is wired to ranking during this step.
 5. Wire `informationGain` into the derived branch of `significance.ts`.
 6. Voice levels in `pi-voice.ts` + soft Intelligence cost with exceptional bypass in the cadence pass.
-7. Viewer-relative angle selection, post-admission.
+7. Viewer-relative angle selection, post-admission (clue-preserving, §7).
 8. Variety caps on `primary`/`tensionKind` in `feed-cadence.ts`.
 9. Confirmation and developing clues only after §8's temporal proof exists.
 
