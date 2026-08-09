@@ -146,3 +146,49 @@ describe("the champagne case", () => {
     expect(q).toMatch(/“selling your data worth a \$20 airdrop”/);
   });
 });
+
+/**
+ * THE HEADLINE IS ALREADY ON SCREEN.
+ *
+ * A question that quotes the whole proposition back is the tape repeating
+ * itself at double length: "Nothing for 7 days and now this. Did something
+ * change about “if you suddenly became rich, would you still work”, or just
+ * the attention on it?" The quoted topic is a HANDLE, never a second copy.
+ */
+describe("a question is a handle on the headline, not a copy of it", () => {
+  const LONG = "If you suddenly became rich, would you still work?";
+  const back = (title: string) =>
+    semanticQuestion({
+      key: "k1",
+      title,
+      state: "back_from_dead",
+      side: "YES",
+      facts: { quietDays: 7, trades: 3 },
+    });
+
+  it("quotes only the first clause of a two-clause proposition", () => {
+    const q = back(LONG)!;
+    expect(q).toBeTruthy();
+    expect(q).not.toMatch(/would you still work/);
+    expect(q).toMatch(/“you suddenly became rich”/);
+  });
+
+  it("never ships a question longer than the cap", () => {
+    for (const title of [
+      LONG,
+      "Will the committee, after months of deliberation and public pressure, finally publish the full report before the end of the year?",
+      "Is selling your data worth a $20 airdrop?",
+    ]) {
+      const q = back(title);
+      if (q) expect(q.length).toBeLessThanOrEqual(MAX_QUESTION_CHARS);
+    }
+  });
+
+  it("says nothing rather than quoting a sprawling proposition", () => {
+    expect(
+      back(
+        "Will the committee, after months of deliberation and public pressure, finally publish the full report before the end of the year?",
+      ),
+    ).toBeNull();
+  });
+});
