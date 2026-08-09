@@ -79,6 +79,12 @@ export interface LiveRow {
    */
   mix?: MixCandidate;
   /**
+   * DIAGNOSTIC ONLY (plan §11 step 4). The viewer-blind anomaly measurement for
+   * this row. Nothing reads it — not ranking, not cadence, not copy — and it is
+   * only attached when SIGNAL_DIAGNOSTIC=1, so the shipped payload is unchanged.
+   */
+  signal?: SignalVector;
+  /**
    * What the presentation scheduler needs: how urgent this row is, and how much
    * of the reader's attention it is owed. Both are decided server-side, where
    * the tier and the conviction action already exist — `scoreFeedEvent` was
