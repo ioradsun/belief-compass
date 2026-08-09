@@ -24,15 +24,10 @@ import {
   flattenStory,
   groupLiveRows,
   type LiveEventInput,
-  type LiveFace,
   type LiveRow,
 } from "@/lib/live-tape";
-import {
-  classifyConvictionEvent,
-  isCelebration,
-  type ConvictionAction,
-} from "@/domain/conviction-event";
-import { tellPiStory, voiceLevel, applyViewerAngle } from "@/domain/pi-voice";
+import type { ConvictionAction } from "@/domain/conviction-event";
+import { voiceLevel, applyViewerAngle } from "@/domain/pi-voice";
 import {
   piQuestion,
   questionAdds,
@@ -44,28 +39,20 @@ import {
 } from "@/domain/pi-question";
 import { composeClues, type ComposedClue } from "@/domain/composed-clue";
 import {
-  retellTransition,
   capVoice,
   RECEIPT_SIGNIFICANCE_CEILING,
   type CopyLevel,
 } from "@/domain/transition-denominator";
-import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
+import type { NetTag } from "@/domain/feed-event";
 import { runNarrationPass } from "@/lib/insider/composition/narration-pass";
 import {
   buildCandidates,
   candidateMarkets,
   runSignificancePass,
 } from "@/lib/insider/composition/significance-pass";
-import { adaptiveFloor, admissionOf, silenceAdjustedFloor } from "@/domain/feed-density";
-import {
-  scoreLiveAction,
-  SIGNIFICANCE,
-  isCovered,
-  fallbackRate,
-} from "@/domain/significance";
+import { SIGNIFICANCE, isCovered, fallbackRate } from "@/domain/significance";
 import { familyOf, VOICE_CEILING, type MixCandidate } from "@/domain/feed-cadence";
 import { signalVector } from "@/domain/signal-vector";
-import { tellNewMarketStory } from "@/domain/new-market-story";
 import { COPY_VERSION } from "@/domain/copy-version";
 import {
   ONE_SIDED_MIN_DAYS,
@@ -73,17 +60,11 @@ import {
   LOPSIDED_RATIO,
   type SemanticInput,
 } from "@/domain/semantic-question";
-import { signalFromTransition, mergeSignals, dominantKey } from "@/domain/transition-signal";
 import { factsForRow } from "@/domain/signal-facts";
-import {
-  groupPricePaths,
-  priceProofSince,
-  type PriceSample,
-} from "@/domain/price-proof";
+import { groupPricePaths, type PriceSample } from "@/domain/price-proof";
 import { editFeed, secondSentenceAdds } from "@/domain/feed-editorial";
 import { findPersonPatterns } from "@/domain/person-pattern";
 
-import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
 import { stakeBoost, NO_STAKES } from "@/domain/viewer-stake";
 import { currentHoldDays, holdStartIsFloor } from "@/domain/tenure";
 import { classifyPace } from "@/domain/feed-scheduler";
@@ -96,17 +77,10 @@ import {
   type DiscoveryMoment,
 } from "@/domain/discovery-moment";
 import { viewerNetwork } from "@/domain/viewer-network";
-import { namePerson, knownFirst, type ProfileLike } from "@/domain/feed-people";
+import type { ProfileLike } from "@/domain/feed-people";
 import type { CachedRelationship } from "@/lib/dna/viewer-dna-cache.server";
 import { weiToEth } from "@/domain/money";
-import {
-  cohortKindForViewer,
-  renderCohort,
-  type CohortHolder,
-  type CohortKind,
-  type ConvictionCohort,
-  type HoldingRung,
-} from "@/domain/conviction-cohort";
+import type { CohortHolder } from "@/domain/conviction-cohort";
 import { fetchMarketNames } from "@/lib/market-titles.server";
 import { tapeInput } from "@/lib/insider/tape-input";
 import { runDiscoveryPass } from "@/lib/insider/composition/discovery-pass";
