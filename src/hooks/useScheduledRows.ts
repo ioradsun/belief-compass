@@ -142,6 +142,9 @@ export function useScheduledRows<T extends SchedulableRow>(
 
     // The first non-empty batch IS the page as the reader finds it. Show it
     // whole; scheduling it would be a loading animation pretending to be life.
+    // Heartbeat rows are included here on purpose: an arriving reader wants an
+    // inhabited column, and holding them back is the empty feed this whole
+    // layer exists to prevent. The gate below is about what happens NEXT.
     if (!painted.current) {
       painted.current = true;
       for (const r of all) known.current.add(r.id);
@@ -149,14 +152,30 @@ export function useScheduledRows<T extends SchedulableRow>(
       // The activity clock starts here, so a tape that opens quiet does not
       // immediately think it has been silent for long enough to celebrate.
       state.current = createScheduleState(Date.now());
+      lastArrivalAt.current = Date.now();
       return;
     }
 
     const now = Date.now();
-    for (const r of fresh) known.current.add(r.id);
+    /* HEARTBEAT IS RELEASED ON THE READER'S CLOCK, NOT THE CHAIN'S.
+       Rows that earned their slot go straight to the scheduler. Rows admitted
+       only because the floor bent for silence are held until this reader has
+       genuinely been watching nothing arrive — and are NOT marked known while
+       held, so a silence that continues eventually gets its heartbeat and a
+       silence that ends simply never spends one. */
+    const signal = fresh.filter((r) => !r.pulse);
+    const heldPulse = fresh.filter((r) => r.pulse);
+    const allowed = pulseReleaseCount({
+      silentForMs: now - lastArrivalAt.current,
+      freshSignalCount: signal.length,
+      queued: state.current.queue.length,
+    });
+    const admit = [...signal, ...heldPulse.slice(0, allowed)];
+    for (const r of admit) known.current.add(r.id);
+    if (admit.length === 0) return;
     state.current = enqueue(
       state.current,
-      fresh.map(
+      admit.map(
         (r): PendingRow => ({
           id: r.id,
           perishability: r.pace?.perishability ?? "soon",
