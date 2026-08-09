@@ -242,14 +242,15 @@ function variantsFor(i: SemanticInput, title: string, short: string | null): str
           ]
         : [];
 
-    /* QUESTION THE CONSENSUS. Tenure makes "still" factual; without the days
-       this shape is not offered at all (see the gate below). */
+    /* QUESTION THE CONSENSUS. The headline is already directly above this
+       sentence, so persistence asks about what the observed empty side means;
+       it never reads the proposition back to the reader. Tenure makes "still"
+       factual; without the days this shape is not offered at all. */
     case "one_sided_persistence": {
-      if (!topic) return [];
       const d = Math.floor(f.days ?? 0);
       return [
-        `${d} days and still nobody will take ${other(i.side)}. Is ${topic} even controversial to this crowd?`,
-        `${d} days on one side and ${other(i.side)} stays empty. Debate, or foregone conclusion?`,
+        `${d} days and still nobody will take ${other(i.side)}. Is that consensus durable, or simply untested?`,
+        `${d} days on one side and ${other(i.side)} stays empty. Is the consensus holding up, or going unchallenged?`,
       ];
     }
 
@@ -320,12 +321,12 @@ export function semanticQuestion(i: SemanticInput): string | null {
   }
   if (i.state === "side_got_company" && (f.days ?? 0) < 3) return null;
 
-  /* SPECIFICITY IS A TEST FOR SENTENCES THAT FLOAT FREE OF THEIR ROW, and a
-     dormancy question does not float: "Nobody touched this for 9 days" is only
-     sayable under this market, and the proposition is printed directly above
-     it. Requiring it to quote the title as well is how that shape ended up
-     saying the headline twice. Every other shape still has to earn it. */
-  const grounded = i.state === "back_from_dead";
+  /* SPECIFICITY IS A TEST FOR SENTENCES THAT FLOAT FREE OF THEIR ROW. Dormancy
+     and persistent one-sidedness do not float: their measured tenure and state
+     are only sayable under this market, whose proposition is printed directly
+     above. Requiring either to quote the title is how the question layer ends
+     up repeating the headline. Every other shape still has to earn it. */
+  const grounded = i.state === "back_from_dead" || i.state === "one_sided_persistence";
   const variants = variantsFor(i, title, shortTopic(frag)).filter(
     (v) =>
       v.length <= MAX_QUESTION_CHARS &&
