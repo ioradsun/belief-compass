@@ -158,6 +158,8 @@ type Momentum = {
   /** Days since the market opened — lets a standing fact claim "since the start". */
   marketAgeDays: number | null;
   // ---- Signal inputs. Carried, not yet read by any story. ----
+  /** The level the moves are relative to — the quiet band is a percentage, not cents. */
+  yesPrice: number | null;
   /** Price moves. Null means "not computed", never "flat" — the difference matters. */
   yesPriceChange1h: number | null;
   yesPriceChange24h: number | null;
@@ -339,7 +341,7 @@ async function loadTapeSource(
       sb
         .from("market_state")
         .select(
-          "onchain_id, believers_yes, believers_no, new_believers_1h, money_yes_pct, people_yes_pct, opportunity_type, market_age_days, yes_price_change_1h, yes_price_change_24h, yes_price_change_7d, yes_capital_delta_24h, no_capital_delta_24h, capital_held_yes, capital_held_no, trade_count_1h, trade_count_24h, trade_count_7d, unique_wallets_1h, unique_wallets_24h, new_believers_24h, new_believers_yes_24h, new_believers_no_24h, people_yes_change_24h, side_flips_24h, last_trade_at",
+          "onchain_id, believers_yes, believers_no, new_believers_1h, money_yes_pct, people_yes_pct, opportunity_type, market_age_days, yes_price_usd, yes_price_change_1h, yes_price_change_24h, yes_price_change_7d, yes_capital_delta_24h, no_capital_delta_24h, capital_held_yes, capital_held_no, trade_count_1h, trade_count_24h, trade_count_7d, unique_wallets_1h, unique_wallets_24h, new_believers_24h, new_believers_yes_24h, new_believers_no_24h, people_yes_change_24h, side_flips_24h, last_trade_at",
         )
         .in("onchain_id", marketIds),
     ]);
@@ -361,6 +363,7 @@ async function loadTapeSource(
         peopleYesPct: num("people_yes_pct"),
         opportunityType: (r.opportunity_type as string | null) ?? null,
         marketAgeDays: num("market_age_days"),
+        yesPrice: num("yes_price_usd"),
         yesPriceChange1h: num("yes_price_change_1h"),
         yesPriceChange24h: num("yes_price_change_24h"),
         yesPriceChange7d: num("yes_price_change_7d"),
@@ -1383,6 +1386,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
           },
           m
             ? {
+                yesPrice: m.yesPrice,
                 yesPriceChange1h: m.yesPriceChange1h,
                 yesPriceChange24h: m.yesPriceChange24h,
                 yesPriceChange7d: m.yesPriceChange7d,
