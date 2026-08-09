@@ -1989,7 +1989,15 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         target.mix.voice = "observation";
         target.mix.significance = Math.max(target.mix.significance, 0.5);
       }
-      if (collapsible) for (const id of p.consumes) consumedByPattern.add(id);
+      /* ORDINARY EVIDENCE IS CONSUMED; AN UNUSUAL CONSTITUENT SURVIVES.
+         The promoted story now contains the constituent transactions, so
+         reprinting them makes the reader reconstruct a pattern the feed has
+         already told them. That is only true of ORDINARY receipts, though: a
+         constituent that is itself intelligence-grade (a contradiction, a
+         whale, a market state change) is news in its own right and is not
+         absorbed just because the same wallet is in it. */
+      if (collapsible) for (const id of p.consumes) if (ordinaryEvidence(id)) consumedByPattern.add(id);
+
       continue;
     }
     target.story = { ...target.story, pattern: p.note };
