@@ -19,6 +19,9 @@ export type PatternKind = "rotation" | "sweep" | "one_way" | "streak" | "unwindi
 
 export interface PatternRow {
   id: string;
+  /** The question this row is about, when we have its title. Used to say what
+   *  they moved OUT OF and INTO, which is the whole content of a rotation. */
+  marketTitle?: string | null;
   /** Lowercased actor. Rows without one are crowd rows and carry no pattern. */
   wallet?: string | null;
   marketId: string;
@@ -49,6 +52,23 @@ export interface PersonPattern {
   lead: { headline: string; body: string } | null;
   /** The aside, already written. One sentence, no numbers the row repeats. */
   note: string;
+  /**
+   * THE ROWS THIS PATTERN IS MADE OF, minus the anchor.
+   *
+   * A person cutting three positions and flipping a fourth currently arrives as
+   * five separate receipts — ONE LESS, BELIEVER LEFT, OUT, BELIEVER LEFT,
+   * FLIPPED — plus one italic aside noting that they have stepped back from
+   * several questions. The aside is the only informative line there, and it is
+   * the smallest. A real investigator does not send five texts; he sends one:
+   * "Kodak cut two positions and flipped another this afternoon."
+   *
+   * So when the caller promotes `lead` into the headline, these ids are the
+   * constituent receipts the promoted story now CONTAINS. On the global surface
+   * they should be dropped — the behaviour is told once, at full volume. Inside
+   * a market's own Recent Activity they must stay: there the individual
+   * transaction is the point.
+   */
+  consumes: string[];
 }
 
 export const PATTERN = {
@@ -62,6 +82,8 @@ export const PATTERN = {
 
 const ENTRIES = new Set(["enter", "add"]);
 const EXITS = new Set(["exit", "reduce"]);
+/** A flip is a move too: it changes what they believe, not just how much. */
+const FLIPS = new Set(["flip", "switch", "side_shift"]);
 
 const WORD = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
 const count = (n: number): string => WORD[n] ?? String(n);
@@ -92,7 +114,8 @@ export function findPersonPatterns(rows: readonly PatternRow[]): PersonPattern[]
     if (!w || !r.marketId) continue;
     const amt = Math.abs(Number(r.amountUsd ?? 0));
     if (r.amountUsd != null && amt < PATTERN.minUsd) continue;
-    if (!ENTRIES.has(r.action ?? "") && !EXITS.has(r.action ?? "")) continue;
+    const a = r.action ?? "";
+    if (!ENTRIES.has(a) && !EXITS.has(a) && !FLIPS.has(a)) continue;
     const list = byWallet.get(w);
     if (list) list.push(r);
     else byWallet.set(w, [r]);
@@ -105,6 +128,7 @@ export function findPersonPatterns(rows: readonly PatternRow[]): PersonPattern[]
 
     const entries = list.filter((r) => ENTRIES.has(r.action ?? ""));
     const exits = list.filter((r) => EXITS.has(r.action ?? ""));
+    const flips = list.filter((r) => FLIPS.has(r.action ?? ""));
     const entryMarkets = new Set(entries.map((r) => r.marketId));
     const exitMarkets = new Set(exits.map((r) => r.marketId));
     const rotated = [...entryMarkets].some((m) => !exitMarkets.has(m)) && exitMarkets.size > 0;
@@ -135,7 +159,9 @@ export function findPersonPatterns(rows: readonly PatternRow[]): PersonPattern[]
       note = `${cap(count(entryMarkets.size))} different questions ${when}.`;
     } else if (exitMarkets.size >= PATTERN.minMarkets) {
       kind = "unwinding";
-      note = `They have stepped back from ${count(exitMarkets.size)} questions ${when}.`;
+      note = flips.length
+        ? `They have cut ${count(exitMarkets.size)} positions and flipped another ${when}.`
+        : `They have stepped back from ${count(exitMarkets.size)} questions ${when}.`;
     } else continue;
 
     /* A HEADLINE ONLY WHERE THE PATTERN OUT-INFORMS THE EVENT. A streak of
@@ -146,10 +172,18 @@ export function findPersonPatterns(rows: readonly PatternRow[]): PersonPattern[]
     let lead: PersonPattern["lead"] = null;
     if (who) {
       if (kind === "unwinding")
-        lead = {
-          headline: `${NAME} is backing away`,
-          body: `They've cut ${count(exitMarkets.size)} positions ${when}.`,
-        };
+        lead = flips.length
+          ? {
+              /* Cutting AND flipping is not retreat — it is a person moving
+                 their conviction around, which is a different claim and the
+                 more interesting one. Say the one the facts support. */
+              headline: `${NAME} is repositioning`,
+              body: `They cut ${count(exitMarkets.size)} positions and flipped another ${when}.`,
+            }
+          : {
+              headline: `${NAME} is backing away`,
+              body: `They've cut ${count(exitMarkets.size)} positions ${when}.`,
+            };
       else if (kind === "one_way")
         lead = {
           headline: `${NAME} keeps leaning ${entries[0]!.side}`,
@@ -160,16 +194,64 @@ export function findPersonPatterns(rows: readonly PatternRow[]): PersonPattern[]
           headline: `${NAME} is working the room`,
           body: `Their ${nth(entryMarkets.size)} question ${when}.`,
         };
-      else if (kind === "rotation")
-        lead = {
-          headline: `${NAME} moved their conviction`,
-          body: `They sold out of one question and backed another ${when}.`,
-        };
+      else if (kind === "rotation") {
+        /* "Sold out of one question and backed another" is true and says
+           nothing: the reader wants to know WHICH, because the pair is the
+           clue. Name both when we have both titles. */
+        const from = topic(exits.find((r) => r.marketTitle)?.marketTitle);
+        const into = topic(
+          entries.find((r) => r.marketTitle && !exitMarkets.has(r.marketId))?.marketTitle,
+        );
+        lead =
+          from && into && from !== into
+            ? { headline: `${NAME} moved their conviction`, body: `Out of ${from}. Into ${into}.` }
+            : {
+                headline: `${NAME} moved their conviction`,
+                body: `They sold out of one question and backed another ${when}.`,
+              };
+      }
     }
 
-    out.push({ rowId: anchor.id, wallet, kind, note, lead });
+    out.push({
+      rowId: anchor.id,
+      wallet,
+      kind,
+      note,
+      lead,
+      // Sorted so the same facts in any input order give the same pattern.
+      consumes: list
+        .filter((r) => r.id !== anchor.id)
+        .map((r) => r.id)
+        .sort(),
+    });
   }
   return out;
 }
 
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * The SUBJECT of a question, short enough to sit in a sentence about a person.
+ * "Will Pump.fun still be top 3 by revenue in 2026?" is about Pump.fun; the
+ * rest of the sentence belongs to the market row, not to this one.
+ */
+const LEAD_IN = /^(will|would|does|do|did|is|are|can|could|should|has|have|the|a|an)\s+/i;
+function topic(title: string | null | undefined): string | null {
+  let t = (title ?? "").trim().replace(/[?.!]+$/, "");
+  if (!t) return null;
+  // Strip as many lead-ins as the question stacks ("Will the ...").
+  for (let i = 0; i < 3; i++) t = t.replace(LEAD_IN, "").trim();
+  /* THE SUBJECT IS THE FIRST NOUN, NOT THE FIRST THREE WORDS. "Will Pump.fun
+     still be top 3 by revenue?" is about Pump.fun; "Will gaming tokens
+     outperform in Q4?" is about gaming. Taking a fixed number of words drags
+     the predicate in with it ("Pump.fun still be"), which reads like a typo.
+     So: the first word, plus a second only when the pair is plainly one name
+     (both capitalised, e.g. "Base Chain"). */
+  const words = t.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  const first = words[0]!;
+  const second = words[1];
+  const proper = (w: string | undefined) => !!w && /^[A-Z0-9]/.test(w);
+  const label = proper(first) && proper(second) ? `${first} ${second}` : first;
+  return label.length > 32 ? label.slice(0, 32).trim() : label;
+}

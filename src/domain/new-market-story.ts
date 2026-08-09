@@ -39,6 +39,20 @@ export type NewMarketInput = {
   believersNo?: number | null;
   /** Capital standing behind the question now, in USD. */
   capitalUsd?: number | null;
+  /**
+   * SILENCE IS ONLY A CLUE WHEN SOMETHING MAKES IT ONE.
+   *
+   * "STILL WAITING FOR A SIDE — opened 7 hours ago" is not intelligence; it is
+   * inventory state with a clock on it, and three of them in one feed is
+   * filler. A market nobody answered becomes a clue when there is a second
+   * fact: the reader knows the person who opened it, or this question sat
+   * unanswered far longer than questions like it normally do. Absent one, the
+   * row stays Receipt-grade and gets rationed like the inventory it is.
+   *
+   * True only when the caller can PROVE the wait is unusual against a real
+   * baseline — never as a guess.
+   */
+  unusualWait?: boolean | null;
   /** Someone the reader knows who is already in, when one exists. */
   personal?: { name: string; relationship: string; side?: NewMarketSide } | null;
 };
@@ -151,8 +165,10 @@ export function tellNewMarketStory(input: NewMarketInput): NewMarketVerdict {
     };
   }
 
-  // ── INTELLIGENCE: the silence, once it has lasted long enough ────────────
+  // ── THE SILENCE — a clue only with a second fact behind it ───────────────
   if (quiet && age != null) {
+    // Personal relevance or a provably unusual wait. Otherwise: inventory.
+    const informative = Boolean(rel) || input.unusualWait === true;
     return {
       story: {
         category: "fresh_market",
@@ -162,9 +178,9 @@ export function tellNewMarketStory(input: NewMarketInput): NewMarketVerdict {
           : `Opened ${hours(age)}. Nobody has backed it yet.`,
         attribution: null,
         tone: "neutral",
-        personal: false,
+        personal: Boolean(rel),
       },
-      level: "intelligence",
+      level: informative ? "intelligence" : "receipt",
       suppress: false,
     };
   }

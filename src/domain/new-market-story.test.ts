@@ -55,11 +55,27 @@ describe("reaction is what makes a new market a story", () => {
     expect(v.story?.personal).toBe(true);
   });
 
-  it("turns long silence into the clue", () => {
+  it("keeps a bare unanswered market at receipt grade — silence alone is inventory", () => {
     const v = tellNewMarketStory({ creatorName: "Hamid", ageHours: 5 });
-    expect(v.level).toBe("intelligence");
+    expect(v.level).toBe("receipt");
+    expect(v.suppress).toBe(false);
     expect(v.story?.headline).toBe("STILL WAITING FOR A SIDE");
     expect(v.story?.body).toContain("Nobody has backed it yet.");
+  });
+
+  it("elevates silence when the reader knows who opened it", () => {
+    const v = tellNewMarketStory({
+      creatorName: "Hamid",
+      creatorRelationship: "Twin",
+      ageHours: 5,
+    });
+    expect(v.level).toBe("intelligence");
+    expect(v.story?.personal).toBe(true);
+  });
+
+  it("elevates silence when the wait is provably unusual", () => {
+    const v = tellNewMarketStory({ creatorName: "Hamid", ageHours: 7, unusualWait: true });
+    expect(v.level).toBe("intelligence");
   });
 
   it("stops calling an old empty market news", () => {
