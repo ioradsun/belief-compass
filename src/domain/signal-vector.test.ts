@@ -311,3 +311,62 @@ describe("concentration needs a trade big enough to change the shape", () => {
     expect(v.concentrationKind).toBe("distributing");
   });
 });
+
+describe("row evidence vs market anomaly (carrier)", () => {
+  // 14 trades in 7d ⇒ baseline 2/day; 12 in 24h ⇒ saturated unusualness, and
+  // $400 of gross capital moved in the day.
+  const market = () =>
+    base({ tradeCount24h: 12, tradeCount7d: 14, yesCapitalDelta24h: 400 });
+
+  it("expresses the market's anomaly once, at full strength, on the market row", () => {
+    const v = signalVector(market());
+    expect(v.carrier).toBe(1);
+    expect(v.informationGain).toBeCloseTo(v.marketGain, 10);
+    expect(v.marketGain).toBeGreaterThan(0);
+  });
+
+  it("a tiny trade in a busy market inherits only a share of its gain", () => {
+    const m = signalVector(market());
+    const row = signalVector({
+      ...market(),
+      actor: { wallet: "0xa", direction: "buy", amountUsd: 4 },
+    });
+    expect(row.marketGain).toBeCloseTo(m.marketGain, 10);
+    expect(row.carrier).toBeLessThan(0.4);
+    expect(row.informationGain).toBeLessThan(m.informationGain);
+  });
+
+  it("a trade that is most of the day's money earns nearly all of it", () => {
+    const small = signalVector({
+      ...market(),
+      actor: { wallet: "0xa", direction: "buy", amountUsd: 4 },
+    });
+    const big = signalVector({
+      ...market(),
+      actor: { wallet: "0xa", direction: "buy", amountUsd: 380 },
+    });
+    expect(big.carrier).toBeGreaterThan(small.carrier);
+    expect(big.informationGain).toBeGreaterThan(small.informationGain);
+  });
+
+  it("a row with its own evidence is not discounted", () => {
+    const v = signalVector({
+      ...market(),
+      preEventHolders: [
+        { wallet: "0xwhale", netUsd: 400 },
+        { wallet: "0xb", netUsd: 50 },
+      ],
+      actor: { wallet: "0xwhale", direction: "sell", amountUsd: 400 },
+    });
+    expect(v.concentrationKind).toBeDefined();
+    expect(v.carrier).toBe(1);
+  });
+
+  it("a quiet market gives its rows nothing to inherit", () => {
+    const v = signalVector(
+      base({ tradeCount24h: 1, tradeCount7d: 1, actor: { wallet: "0xa", direction: "buy", amountUsd: 5 } }),
+    );
+    expect(v.marketGain).toBe(0);
+    expect(v.informationGain).toBe(0);
+  });
+});
