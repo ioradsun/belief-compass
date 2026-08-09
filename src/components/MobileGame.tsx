@@ -22,7 +22,7 @@ import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { pulseLine } from "@/components/MarketCard";
 import { MarketMomentum } from "@/components/MarketVitality";
-import { marketStateFacts } from "@/domain/insider";
+import { insiderPulse, insiderRead, marketStateFacts, pulseFactsFromMarket } from "@/domain/insider";
 import { relationFromGroup } from "@/domain/participant-social";
 import { presentRelationship } from "@/domain/relationship";
 import { WindowFilter } from "@/components/WindowFilter";
@@ -52,7 +52,7 @@ import { OrderTicket } from "@/components/order/OrderTicket";
 import { useOwnedDock, OwnedDock, ownedDockShown } from "@/components/order/OwnedDock";
 import { ExamineCta } from "@/components/order/ExamineRail";
 import { marketBook } from "@/domain/market-book";
-import { houseReadState } from "@/domain/house-read";
+
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
@@ -261,13 +261,20 @@ export function MobileGame({
     return (Number.isFinite(y) ? y : 0) + (Number.isFinite(n) ? n : 0);
   }, [row]);
 
-  // THE HOUSE READ — the SAME shared engine and state the desktop deck uses, so
-  // the phone shows the identical feature, data and copy. Never hidden, never a
-  // mobile-only variant.
-  const houseReadState_ = useMemo(
-    () => (viewerWallet ? houseReadState(houseRead ?? null) : null),
-    [viewerWallet, houseRead],
-  );
+  // THE INSIDER READ — the SAME shared engine and state the desktop deck uses,
+  // so the phone shows the identical feature, data and copy. Never hidden, never
+  // a mobile-only variant.
+  const insiderRead_ = useMemo(() => {
+    if (!viewerWallet) return null;
+    const pulse = insiderPulse(
+      pulseFactsFromMarket({
+        change: marketChange,
+        state: marketStateFacts(row as unknown as Record<string, unknown>),
+        ethUsd,
+      }),
+    );
+    return insiderRead(houseRead ?? null, { pulse });
+  }, [viewerWallet, houseRead, marketChange, row, ethUsd]);
   useEffect(() => {
     if (trade.isSuccess && trade.hash && side && !revealed) {
       setRevealed(true);
@@ -462,7 +469,7 @@ export function MobileGame({
             compact
             open={sidesOpen}
             onToggle={() => setPhase(sidesOpen ? "question" : "sides")}
-            houseRead={houseReadState_}
+            insiderRead={insiderRead_}
             openLabel="See both sides"
             closeLabel="Back to the market"
           />

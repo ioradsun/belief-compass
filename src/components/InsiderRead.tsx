@@ -1,7 +1,7 @@
 /**
- * THE HOUSE READ — one row, one component, every screen size.
+ * THE INSIDER READ — one row, one component, every screen size.
  *
- * The House's running attempt to call your next move, rendered as a single
+ * The Insider's running attempt to call your next move, rendered as a single
  * integrated row of the market summary card (never its own card or modal). The
  * SAME component and the SAME state serve desktop and mobile — there is no
  * mobile variant, no icon-only fallback, and nothing is hidden at a breakpoint.
@@ -9,19 +9,21 @@
  * On a narrow screen the sentence WRAPS onto a second line rather than
  * truncating: the message is the feature, so it is never clipped to save space.
  *
- * Presentation only — every word comes from the pure src/domain/house-read
- * engine, so the copy and the state machine can't drift between surfaces.
+ * Presentation only — every word comes from the pure Insider read projection
+ * (`domain/insider/projections/read`), so the copy and the state machine can't
+ * drift between surfaces.
  */
-import { houseReadCopy, type HouseReadState } from "@/domain/house-read";
+import { insiderReadCopy } from "@/domain/insider";
+import type { InsiderRead as InsiderReadState } from "@/domain/insider";
 
-export function HouseRead({
-  state,
+export function InsiderRead({
+  read,
   className = "",
 }: {
-  state: HouseReadState;
+  read: InsiderReadState;
   className?: string;
 }) {
-  const copy = houseReadCopy(state);
+  const copy = insiderReadCopy(read);
   const sideColor = copy.side === "YES" ? "var(--yes)" : "var(--no)";
   // A settled round tints only the verdict, so a win/loss reads instantly
   // without turning the row into a banner.
@@ -35,8 +37,10 @@ export function HouseRead({
   return (
     <div
       className={`flex min-w-0 items-start text-[12px] leading-snug ${className}`}
-      // The whole row is one sentence for a screen reader, side included.
-      aria-label={`The House Read. ${copy.body}${copy.side ?? ""}${copy.suffix}`}
+      // The whole row is one sentence for a screen reader, side and context included.
+      aria-label={`Insider Read. ${copy.body}${copy.side ?? ""}${copy.suffix}${
+        copy.context ? ` ${copy.context}` : ""
+      }`}
     >
       {/* min-w-0 + normal wrapping: the sentence flows to a second line on a
           phone instead of being cut off. */}
@@ -49,6 +53,10 @@ export function HouseRead({
           </span>
         )}
         {copy.suffix && <span className="text-[var(--text-muted)]">{copy.suffix}</span>}
+        {/* Market context reads as an aside, never as part of the call. */}
+        {copy.context && (
+          <span className="text-[var(--text-muted)]"> {copy.context}</span>
+        )}
       </p>
     </div>
   );
