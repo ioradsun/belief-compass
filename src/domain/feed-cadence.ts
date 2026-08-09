@@ -131,7 +131,23 @@ export const CADENCE = {
   discoveryLift: 0.85,
   /** A person not yet met in this window. Small, and never a reason on its own. */
   newPersonBonus: 0.1,
+  /**
+   * SCARCITY IS A COST, NEVER A CEILING (plan §6).
+   *
+   * Roughly a quarter of a healthy window speaks at Intelligence volume. Held
+   * as a quota it would make the PI deliberately dumber: an hour with six real
+   * contradictions must be allowed to report six. So the target is enforced as
+   * an ESCALATING PRICE — the first rows over the allowance pay a little, the
+   * fifth pays five times that — and a genuinely strong clue skips it entirely,
+   * exactly as `breakingAt` skips sequencing.
+   */
+  intelligenceTarget: 0.25,
+  /** Above this `informationGain`, the row is a real clue and pays nothing. */
+  intelligenceBypass: 0.6,
+  /** The smallest window the allowance is computed against, so early rows aren't taxed. */
+  intelligenceFloorWindow: 4,
 } as const;
+
 
 /**
  * Pacing guidance, not quotas. Read as "roughly this much of a HEALTHY feed",
