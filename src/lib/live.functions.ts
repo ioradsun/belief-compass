@@ -2054,6 +2054,13 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     /* STAGE 1 — SINGLE-ROW CLUES. One vector, one named gap. */
     for (const r of material) {
       if (!r.story) continue;
+      /* A HEARTBEAT ROW CANNOT INTERROGATE THE READER. It is in the feed
+         because the page had gone quiet, not because anything about it is
+         unresolved — asking a question off the back of that would be the
+         product manufacturing suspense out of an admission decision. Stage 2
+         below is deliberately NOT gated: if this receipt turns out to be part
+         of a real pattern, the composed clue may still ask. */
+      if (pulseIds.has(r.id)) continue;
       const q = piQuestion({
         key: r.id,
         signal: signalById.get(r.id),
