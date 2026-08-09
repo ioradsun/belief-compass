@@ -142,3 +142,57 @@ describe("tailState", () => {
     expect(tailState({ shown: 40, hidden: 2, pending: 5, loading: true })).toBe("more");
   });
 });
+
+/**
+ * THE TAP MUST CHANGE THE TOP OF THE COLUMN.
+ *
+ * "Updates, no matter what" — a row the reader explicitly asked for leads the
+ * whole list. It does not queue behind the standing/continuity block, and it is
+ * not sorted into the timeline by its own timestamp.
+ */
+describe("arrangeFeed — asked-for rows", () => {
+  it("puts requested rows above the timeline, however old they are", () => {
+    const out = arrangeFeed([row("new", 30), row("a", 1), row("b", 2)], {
+      limit: 10,
+      pinned: new Set(["new"]),
+    });
+    expect(out.shown.map((r) => r.id)).toEqual(["new", "a", "b"]);
+  });
+
+  it("puts requested rows above continuity, not below it", () => {
+    const out = arrangeFeed([standing("s1"), standing("s2"), row("new", 3), row("a", 1)], {
+      limit: 10,
+      pinned: new Set(["new"]),
+    });
+    expect(out.shown[0]?.id).toBe("new");
+    expect(out.shown.map((r) => r.id)).toEqual(["new", "s1", "s2", "a"]);
+  });
+
+  it("lifts a requested row out of the continuity block when it is itself timeless", () => {
+    const out = arrangeFeed([standing("s1"), standing("s2"), row("a", 1)], {
+      limit: 10,
+      pinned: new Set(["s2"]),
+    });
+    expect(out.shown.map((r) => r.id)).toEqual(["s2", "s1", "a"]);
+  });
+
+  it("never lets the mixer's window select a requested row out", () => {
+    const rows = [row("new", 50), row("a", 1), row("b", 2), row("c", 3)];
+    const out = arrangeFeed(rows, {
+      limit: 2,
+      // The requested row is the WORST ranked story in the pool.
+      rankOf: (id) => ({ a: 0, b: 1, c: 2, new: 99 })[id],
+      pinned: new Set(["new"]),
+    });
+    expect(out.shown.map((r) => r.id)).toEqual(["new", "a"]);
+    expect(out.hidden).toBe(2);
+  });
+
+  it("orders several requested rows newest-first among themselves", () => {
+    const out = arrangeFeed([row("older", 9), row("newer", 1), row("x", 4)], {
+      limit: 10,
+      pinned: new Set(["older", "newer"]),
+    });
+    expect(out.shown.map((r) => r.id)).toEqual(["newer", "older", "x"]);
+  });
+});
