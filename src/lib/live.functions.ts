@@ -337,7 +337,7 @@ async function loadTapeSource(
       sb
         .from("market_state")
         .select(
-          "onchain_id, believers_yes, believers_no, new_believers_1h, money_yes_pct, people_yes_pct, opportunity_type, market_age_days",
+          "onchain_id, believers_yes, believers_no, new_believers_1h, money_yes_pct, people_yes_pct, opportunity_type, market_age_days, yes_price_change_1h, yes_price_change_24h, yes_price_change_7d, yes_capital_delta_24h, no_capital_delta_24h, capital_held_yes, capital_held_no, trade_count_1h, trade_count_24h, trade_count_7d, unique_wallets_1h, unique_wallets_24h, new_believers_24h, new_believers_yes_24h, new_believers_no_24h, people_yes_change_24h, side_flips_24h, last_trade_at",
         )
         .in("onchain_id", marketIds),
     ]);
@@ -350,16 +350,36 @@ async function loadTapeSource(
     }
     for (const s of ms.data ?? []) {
       const r = s as Record<string, unknown>;
+      const num = (k: string) => (r[k] as number | null) ?? null;
       momentumById.set(Number(r.onchain_id), {
-        believersYes: (r.believers_yes as number | null) ?? null,
-        believersNo: (r.believers_no as number | null) ?? null,
-        newBackers1h: (r.new_believers_1h as number | null) ?? null,
-        moneyYesPct: (r.money_yes_pct as number | null) ?? null,
-        peopleYesPct: (r.people_yes_pct as number | null) ?? null,
+        believersYes: num("believers_yes"),
+        believersNo: num("believers_no"),
+        newBackers1h: num("new_believers_1h"),
+        moneyYesPct: num("money_yes_pct"),
+        peopleYesPct: num("people_yes_pct"),
         opportunityType: (r.opportunity_type as string | null) ?? null,
-        marketAgeDays: (r.market_age_days as number | null) ?? null,
+        marketAgeDays: num("market_age_days"),
+        yesPriceChange1h: num("yes_price_change_1h"),
+        yesPriceChange24h: num("yes_price_change_24h"),
+        yesPriceChange7d: num("yes_price_change_7d"),
+        yesCapitalDelta24h: num("yes_capital_delta_24h"),
+        noCapitalDelta24h: num("no_capital_delta_24h"),
+        capitalHeldYes: num("capital_held_yes"),
+        capitalHeldNo: num("capital_held_no"),
+        tradeCount1h: num("trade_count_1h"),
+        tradeCount24h: num("trade_count_24h"),
+        tradeCount7d: num("trade_count_7d"),
+        uniqueWallets1h: num("unique_wallets_1h"),
+        uniqueWallets24h: num("unique_wallets_24h"),
+        newBelievers24h: num("new_believers_24h"),
+        newBelieversYes24h: num("new_believers_yes_24h"),
+        newBelieversNo24h: num("new_believers_no_24h"),
+        peopleYesChange24h: num("people_yes_change_24h"),
+        sideFlips24h: num("side_flips_24h"),
+        lastTradeAt: (r.last_trade_at as string | null) ?? null,
       });
     }
+
   }
 
   // ETH/USD comes from the cron-refreshed snapshot (calc_cache), NOT the live
