@@ -14,6 +14,7 @@ import { CONVICTION_EVENT, type ConvictionAction } from "@/domain/conviction-eve
 import { tellPiStory } from "@/domain/pi-voice";
 import type { StackPerson } from "@/domain/conviction-cohort";
 import type { MixCandidate } from "@/domain/feed-cadence";
+import type { SignalVector } from "@/domain/signal-vector";
 import { findWashTrades, WASH } from "@/domain/wash-trading";
 import type { Perishability } from "@/domain/feed-scheduler";
 import { marketTitle } from "@/domain/market-title";
