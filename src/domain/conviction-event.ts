@@ -192,25 +192,38 @@ export function classifyConvictionEvent(e: ConvictionEvent): ConvictionEventType
   return "joined";
 }
 
-/** The kicker for each event — 2–3 words, never a sentence. */
+/**
+ * The kicker for each event — 2–3 words, never a sentence.
+ *
+ * CONTRAST IS THE POINT. If every row shouts, nothing does, and the feed reads
+ * as noise rather than news. So the loud kickers are spent only where the
+ * underlying fact is genuinely rare — going first, standing alone at the end,
+ * changing your mind, clearing out a whole book. Ordinary arrivals and exits
+ * stay flat on purpose: they are the quiet ground the rare rows stand out
+ * against, and promoting them would cost the rare ones their force.
+ */
 const KICKER: Record<ConvictionEventType, string> = {
   swept_out: "CLEARING OUT",
   swept_in: "GOING BROAD",
-  first_believer: "FIRST BELIEVER",
+  // A rank is a label; going first is an act.
+  first_believer: "WENT FIRST",
   doubled_down: "DOUBLED DOWN",
   big_backing: "BACKED",
   joined: "NEW BELIEVER",
   trimmed: "SOLD SOME",
   long_held_exit: "LOST CONVICTION",
   biggest_believer_left: "BIGGEST BELIEVER LEFT",
-  last_believer_left: "LAST BELIEVER LEFT",
+  last_believer_left: "LAST ONE LEFT",
   big_exit: "BIG EXIT",
   left: "BELIEVER LEFT",
   round_trip: "IN AND OUT",
-  changed_mind: "CHANGED THEIR MIND",
+  // The body now carries "held on for 3 days", so the kicker can be the turn.
+  changed_mind: "FLIPPED",
   surging: "SURGING",
   milestone: "MILESTONE",
-  new_market: "NEW MARKET",
+  // A new market is inventory until somebody cares. It should not announce
+  // itself louder than the first person who does.
+  new_market: "ON THE TABLE",
 };
 
 const REL_KICKER: Record<NetworkLabel, string> = {
@@ -399,11 +412,25 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
     type === "biggest_believer_left" ||
     type === "last_believer_left";
   const remaining = has(c.sideBelieversAfter) ? n(c.sideBelieversAfter) : null;
-  /** The scale line — the one thing a behaviour sentence cannot carry. */
-  const scale =
-    remaining == null || remaining === 0
-      ? null
-      : `${remaining.toLocaleString("en-US")} believer${remaining === 1 ? "" : "s"} now.`;
+  /**
+   * The scale line — the one thing a behaviour sentence cannot carry.
+   *
+   * "6 believers now" counts people like inventory. The same number means two
+   * opposite things depending on which way the door swung, so it is said two
+   * ways: an EXIT is about what is left in the room, and an ARRIVAL is about
+   * company. Standing alone is deliberately silent here — the sentence above
+   * already says they went first, and "0 others are with them" would take a
+   * story and turn it back into a count.
+   */
+  const scale = (() => {
+    if (remaining == null || remaining === 0) return null;
+    if (negative) return `Only ${remaining.toLocaleString("en-US")} left.`;
+    const others = remaining - 1;
+    if (others <= 0) return null;
+    return others === 1
+      ? "1 other is with them."
+      : `${others.toLocaleString("en-US")} others are with them.`;
+  })();
 
   /**
    * SIDE-FREE ALTERNATES. This module's own rule is that a sentence degrades
@@ -425,16 +452,28 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
     case "swept_in":
       body = `${who} backed ${markets} markets at once${tail}.`;
       break;
+    /* DURATION IS THE STORY. Somebody changing their mind after three days held
+       a position through three days of being wrong-footed and then acted anyway
+       — that is more interesting than anyone's first buy, and the old sentence
+       buried it in a trailing clause. Standing your ground and then not is two
+       beats, so it gets two. */
     case "changed_mind":
-      body = side ? `${who} flipped to ${s}${tail}.` : `${who} changed their mind${tail}.`;
+      body = tail
+        ? `${who} held on${tail.replace(/^ after/, " for")}. Then flipped${side ? ` to ${s}` : ""}.`
+        : side
+          ? `${who} flipped to ${s}.`
+          : `${who} changed their mind.`;
       break;
     case "round_trip":
       body = side
         ? `${who} backed ${s} and left the same day.`
         : `${who} came and went the same day.`;
       break;
+    /* BEFORE AND AFTER, NOT A LABEL. "X is the first to back YES" states a rank;
+       the empty room that came before it is what makes going first mean
+       anything. Two clauses, and the reader feels the room fill. */
     case "first_believer":
-      body = side ? `${who} is the first to back ${s}.` : `${who} is the first one here.`;
+      body = side ? `Nobody had backed ${s}. Then ${who} did.` : `${who} is the first one here.`;
       break;
     case "doubled_down":
       body = side ? `${who} added to ${s}${tail}.` : `${who} doubled down${tail}.`;

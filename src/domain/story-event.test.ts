@@ -410,7 +410,8 @@ describe("a material move is never silently dropped", () => {
     );
     expect(t?.type).toBe("material_move");
     expect(t?.side).toBe("YES");
-    expect(t?.headline).toBe("Capital on YES rose +12%");
+    expect(t?.headline).toBe("Money is piling into YES");
+    expect(t?.detail).toBe("+12% over 1D");
     expect(t?.tier).toBe(1);
   });
 
@@ -578,7 +579,7 @@ describe("a market that went quiet and came back", () => {
       input({ yes: funded(), no: funded(), activity: { trades24h: 3, trades7d: 3 } }),
     );
     expect(t?.type).toBe("market_reawakened");
-    expect(t?.detail).toBe("First trades in a week — 3 trades today.");
+    expect(t?.detail).toBe("Nobody touched this for a week. Then 3 trades landed.");
   });
 
   it("says nothing while the week was busy throughout", () => {

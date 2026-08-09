@@ -37,7 +37,7 @@ describe("the same action becomes a different story", () => {
     const e = ev({ action: "exit", context: { rank: 1, daysHeld: 90, sideBelieversAfter: 0 } });
     expect(classifyConvictionEvent(e)).toBe("last_believer_left");
     const s = tellConvictionStory(e);
-    expect(s.headline).toBe("LAST BELIEVER LEFT");
+    expect(s.headline).toBe("LAST ONE LEFT");
     expect(s.body).toBe("duckfacts.eth was the last one backing YES.");
   });
 });
@@ -53,7 +53,7 @@ describe("commitment reads as commitment", () => {
   it("the very first believer on a side is named as such", () => {
     const e = ev({ context: { sideBelieversAfter: 1 } });
     expect(classifyConvictionEvent(e)).toBe("first_believer");
-    expect(tellConvictionStory(e).body).toBe("duckfacts.eth is the first to back YES.");
+    expect(tellConvictionStory(e).body).toBe("Nobody had backed YES. Then duckfacts.eth did.");
   });
 
   it("size alone earns its own event", () => {
@@ -65,8 +65,8 @@ describe("reversal", () => {
   it("a flip names the change of mind and how long the old belief lasted", () => {
     const e = ev({ action: "flip", side: "NO", context: { daysHeld: 41 } });
     const s = tellConvictionStory(e);
-    expect(s.headline).toBe("CHANGED THEIR MIND");
-    expect(s.body).toBe("duckfacts.eth flipped to NO after 41 days.");
+    expect(s.headline).toBe("FLIPPED");
+    expect(s.body).toBe("duckfacts.eth held on for 41 days. Then flipped to NO.");
   });
 
   it("without tenure it still reads, just quieter", () => {
