@@ -335,23 +335,28 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
           : [{ headline: "Went first", body: `${who} is the first one here.` }];
 
       // SIDE FILLED — not a person going first; a side becoming an argument.
+      /* KICKERS NAME WHAT CHANGED SOCIALLY, NOT WHAT CHANGED IN THE TABLE.
+         "SIDE OPENED" is a state name — the kind of phrase a backend would
+         choose. What actually happened is that a side nobody would stand on has
+         people standing on it, so the kicker says that. */
       case "side_opened":
         return [
           {
-            headline: "Side opened",
-            body: `${s || "That side"} just got company.`,
-            angle: people > 1 ? `${people} people stepped in at once.` : null,
+            headline: side ? `${s} just got company` : "Just got company",
+            body: `Nobody was on ${s || "that side"}. Now ${people > 1 ? `${people} people are` : "somebody is"}.`,
           },
           {
-            headline: "Side opened",
-            body: `An empty side just filled up.`,
+            headline: "Empty no more",
+            body: `${people > 1 ? `${people} people` : "Somebody"} stepped into an empty ${s || "side"}.`,
             angle: remaining ? `${remaining} on ${s || "it"} now.` : null,
           },
           {
-            headline: "Side opened",
-            body: `Nobody was on ${s || "that side"}. Now ${people > 1 ? `${people} people are` : "somebody is"}.`,
+            headline: side ? `${s} just got company` : "Just got company",
+            body: `${s || "That side"} had nobody on it an hour ago.`,
+            angle: people > 1 ? `${people} people stepped in at once.` : null,
           },
         ];
+
 
       // RUSH / SCALE — several people, or one unusually large arrival.
       case "big_backing":
