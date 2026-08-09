@@ -32,6 +32,36 @@ export type Database = {
         }
         Relationships: []
       }
+      challenges: {
+        Row: {
+          challenger_wallet: string
+          close_reason: string | null
+          closed_at: string | null
+          created_at: string
+          id: number
+          market_id: number
+          slot_no: number
+        }
+        Insert: {
+          challenger_wallet: string
+          close_reason?: string | null
+          closed_at?: string | null
+          created_at?: string
+          id?: number
+          market_id: number
+          slot_no: number
+        }
+        Update: {
+          challenger_wallet?: string
+          close_reason?: string | null
+          closed_at?: string | null
+          created_at?: string
+          id?: number
+          market_id?: number
+          slot_no?: number
+        }
+        Relationships: []
+      }
       conviction_markets: {
         Row: {
           category: string
@@ -504,7 +534,9 @@ export type Database = {
         Row: {
           called_at: string
           caller_wallet: string
+          challenge_id: number | null
           market_id: number
+          passed_at: string | null
           relation_at_call: string
           responded_at: string | null
           responder_wallet: string
@@ -512,7 +544,9 @@ export type Database = {
         Insert: {
           called_at?: string
           caller_wallet: string
+          challenge_id?: number | null
           market_id: number
+          passed_at?: string | null
           relation_at_call: string
           responded_at?: string | null
           responder_wallet: string
@@ -520,12 +554,22 @@ export type Database = {
         Update: {
           called_at?: string
           caller_wallet?: string
+          challenge_id?: number | null
           market_id?: number
+          passed_at?: string | null
           relation_at_call?: string
           responded_at?: string | null
           responder_wallet?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "market_calls_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       market_milestone: {
         Row: {
