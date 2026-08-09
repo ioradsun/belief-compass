@@ -243,6 +243,33 @@ export function pruneRepeats<T extends EditorialRow>(rows: readonly T[]): T[] {
   return rows.filter((r) => !dropped.has(r.id));
 }
 
+/**
+ * THE CANONICAL RULE: IF THE SECOND SENTENCE DOES NOT CHANGE HOW YOU READ THE
+ * FIRST, IT IS NOT INTELLIGENCE.
+ *
+ * "NO JUST GOT COMPANY / First believers just stepped in." is one fact said
+ * twice. Intelligence needs the body to add something the kicker could not
+ * carry — a number, a person, a second side, a time, or a contradiction.
+ * Returns false when the body is a restatement, and the caller lowers the
+ * row's voice rather than dropping it.
+ */
+export function secondSentenceAdds(headline: string, detail: string): boolean {
+  const h = (headline ?? "").toLowerCase().trim();
+  const d = (detail ?? "").toLowerCase().trim();
+  if (!d) return false;
+  // A figure, a share, a name or a counterpoint is always new information.
+  if (/[\d$%]/.test(d)) return true;
+  if (/\b(but|while|without|yet|still|hasn't|hasn'|no one|nobody|first two)\b/.test(d)) return true;
+  // Otherwise: does the body reuse the headline's own words and nothing else?
+  const stop = new Set(["the", "a", "an", "just", "is", "was", "in", "on", "it", "its", "to", "of", "and", "this", "that", "has", "have", "some", "into", "off", "up", "down", "now", "here", "they", "their"]);
+  const words = (t: string) => new Set(t.replace(/[^a-z\s]/g, " ").split(/\s+/).filter((w) => w && !stop.has(w)));
+  const hw = words(h);
+  const dw = [...words(d)];
+  if (dw.length === 0) return false;
+  const fresh = dw.filter((w) => !hw.has(w) && ![...hw].some((x) => x.startsWith(w) || w.startsWith(x)));
+  return fresh.length >= 2;
+}
+
 /** Both rules, in the order an editor applies them. */
 export function editFeed<T extends EditorialRow>(rows: readonly T[]): T[] {
   return capFamilies(pruneRepeats(collapseCausal(rows.filter(earnsSlot))));
