@@ -105,6 +105,14 @@ import {
   type HoldingRung,
 } from "@/domain/conviction-cohort";
 import { fetchMarketNames } from "@/lib/market-titles.server";
+import { tapeInput } from "@/lib/insider/tape-input";
+import {
+  LIVE_WINDOW_MS,
+  loadPricePaths,
+  REAL_DEPS,
+  type Momentum,
+  type TapeDeps,
+} from "@/lib/insider/source.server";
 
 type NetLabel = "twin" | "tribe" | "opp" | "inverse";
 
