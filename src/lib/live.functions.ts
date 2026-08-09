@@ -1353,6 +1353,10 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       limit: STANDING_RESERVE,
     }).catch(() => []);
     for (const f of facts) {
+      // A YES/NO activity rail is a side ledger. Standing facts are built from
+      // the whole market after the event query, so apply the same side boundary
+      // here or a quiet YES rail can be filled with a NO continuity fact.
+      if (data?.side && f.side !== data.side) continue;
       const story = tellStandingFact(f);
       standing.push({
         id: `standing:${f.key}`,

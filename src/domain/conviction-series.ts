@@ -301,12 +301,7 @@ export function leadStory(pts: SeriesPoint[]): string | null {
 // ---------------------------------------------------------------------------
 
 export type StoryShape =
-  | "grassroots"
-  | "concentrated"
-  | "growing"
-  | "price-ahead"
-  | "cooling"
-  | "quiet";
+  "grassroots" | "concentrated" | "growing" | "price-ahead" | "cooling" | "quiet";
 
 export interface ConvictionStory {
   shape: StoryShape;
@@ -337,14 +332,22 @@ export function convictionStory(
   // (snapshot at window open vs the price now). The series' own price track is
   // built from each trade's post-trade mark, which spikes and collapses inside a
   // single round-trip and would otherwise narrate a huge move on a flat market.
-  opts: { capitalDust?: number; pricePct?: number | null } = {},
+  opts: {
+    capitalDust?: number;
+    pricePct?: number | null;
+    /** Authoritative holder-count move. The tape can prove arrivals, but a
+     * sell amount cannot prove a full exit, so its roster is gross, not net. */
+    believerDelta?: number | null;
+    /** Authoritative side-capital move. Tape replay is only the event ledger. */
+    capitalDeltaEth?: number | null;
+  } = {},
 ): ConvictionStory | null {
   if (pts.length < 2) return null;
   const dust = Math.max(opts.capitalDust ?? 1e-9, 0);
   const a = pts[0];
   const z = pts[pts.length - 1];
-  const believerDelta = z.believers - a.believers;
-  const rawCap = z.capital - a.capital;
+  const believerDelta = opts.believerDelta ?? z.believers - a.believers;
+  const rawCap = opts.capitalDeltaEth ?? z.capital - a.capital;
   // Below the dust floor there is no capital story to tell.
   const capitalDeltaEth = Math.abs(rawCap) < dust ? 0 : rawCap;
   const pricePct = opts.pricePct !== undefined ? opts.pricePct : z.pricePct;

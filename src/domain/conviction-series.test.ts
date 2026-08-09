@@ -210,6 +210,17 @@ describe("story copy edge cases", () => {
     expect(s.headline).toBe("NO is losing believers");
   });
 
+  it("uses authoritative net holders instead of gross tape arrivals", () => {
+    const s = convictionStory(
+      "YES",
+      pts({ believers: 0, capital: 1 }, { believers: 5, capital: 0.9 }),
+      { believerDelta: -4, capitalDeltaEth: -0.1 },
+    )!;
+    expect(s.headline).toBe("YES is losing capital");
+    expect(narrateStory(s, "YES", "today", money)).toContain("4 believers left YES");
+    expect(narrateStory(s, "YES", "today", money)).not.toContain("5 new believers");
+  });
+
   it("omits price when it did not move", () => {
     const s = convictionStory(
       "YES",

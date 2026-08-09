@@ -60,6 +60,8 @@ type Position = {
   chg_window_no?: number | null;
   new_believers_yes_win?: number | null;
   new_believers_no_win?: number | null;
+  believer_delta_yes_win?: number | null;
+  believer_delta_no_win?: number | null;
   yes_value_usd?: number | null;
   no_value_usd?: number | null;
   /** The stored marked value is too old to trust as a live mark (see getWallet). */
@@ -379,6 +381,8 @@ export function MyConvictions({
         believers: believersRaw == null ? null : Number(believersRaw),
         newToday: newTodayRaw == null ? null : Number(newTodayRaw),
         live,
+        believerDelta:
+          (side === "YES" ? p.believer_delta_yes_win : p.believer_delta_no_win) ?? null,
         newInWindow: newWinRaw == null ? null : Number(newWinRaw),
       };
     })
@@ -400,6 +404,7 @@ export function MyConvictions({
     newToday: number | null;
     newInWindow: number | null;
     live: CanonicalLine | null;
+    believerDelta: number | null;
   }[];
 
   // Per-market network signal: pass the wallet so the tape tags Twin/Tribe/Opp
@@ -467,6 +472,7 @@ export function MyConvictions({
       side: f.side,
       believers: f.believers,
       live: f.live,
+      believerDelta: f.believerDelta,
       net,
       milestone: net?.milestone ?? null,
     });
