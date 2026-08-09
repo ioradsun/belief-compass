@@ -1010,8 +1010,14 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
          over, and it lives in market state, here. */
       const mkt = momentumById.get(Number(r.marketId));
       const delta = r.side === "NO" ? mkt?.noCapitalDelta24h : mkt?.yesCapitalDelta24h;
+      /* market_state carries capital in ETH, and the reader thinks in dollars —
+         the denominator is meaningless in the wrong unit. No rate, no claim. */
+      const deltaUsd =
+        typeof delta === "number" && Number.isFinite(delta) && ethUsd > 0
+          ? Math.abs(delta) * ethUsd
+          : null;
       const modern = retellTransition(p.headline ?? "", p.detail ?? "", String(r.id), {
-        usd: typeof delta === "number" && Number.isFinite(delta) ? Math.abs(delta) : null,
+        usd: deltaUsd,
         side: r.side ?? null,
       });
       copyLevel.set(r.id, modern.level);
