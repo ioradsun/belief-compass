@@ -1038,9 +1038,45 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       continue;
     }
 
+    /* A NEW MARKET MUST ANSWER "WHO PUT IT THERE" AND "DID ANYONE REACT".
+       "ON THE TABLE / <question>" is inventory — it names a thing that exists
+       and nothing that happened. The creator wallet rides on the event, the
+       reaction is in market state, and the admission grade follows from which
+       of those facts exist. Nothing here manufactures either one: a bare
+       creation is receipt-grade and gets dropped from the primary surface. */
+    if (r.kind === "market_created") {
+      const m = momentumById.get(Number(r.marketId));
+      const openedMs = r.occurredAt ? Date.parse(r.occurredAt) : NaN;
+      const ageHours = Number.isFinite(openedMs) ? (nowMs - openedMs) / 3_600_000 : null;
+      // Someone the reader knows who is already in — a fact, or nothing.
+      const known = (believersByMarket.get(Number(r.marketId)) ?? [])
+        .map((wallet) => namePerson(wallet, profiles, labelByWallet, aliasFor))
+        .find((p) => p.relationship != null && p.name);
+      const verdict = tellNewMarketStory({
+        creatorName: r.face?.name ?? null,
+        creatorRelationship: r.face?.relationship ?? null,
+        ageHours,
+        believersYes: m?.believersYes ?? null,
+        believersNo: m?.believersNo ?? null,
+        capitalUsd: (m?.yesCapitalUsd ?? 0) + (m?.noCapitalUsd ?? 0),
+        personal: known
+          ? { name: known.name, relationship: String(known.relationship), side: null }
+          : null,
+      });
+      if (verdict.suppress) copySuppressed.add(r.id);
+      if (verdict.level === "receipt") copyLevel.set(r.id, "receipt");
+      else if (verdict.level === "observation") copyLevel.set(r.id, "observation");
+      else voiceFloor.set(r.id, "intelligence");
+      if (verdict.story) {
+        r.story = verdict.story;
+        r.text = flattenStory(r.story);
+      }
+      continue;
+    }
 
     // Milestone / surge rows are already final from grouping (no actor to name).
     if (r.kind === "believer_milestone" || r.kind === "tribe_doubled") continue;
+
 
     const market = momentumById.get(Number(r.marketId)) ?? null;
     const buySell = (r.payload as { action?: "BUY" | "SELL" }).action ?? null;
