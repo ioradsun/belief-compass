@@ -137,11 +137,24 @@ export async function refreshMarket(
       no_capital_usd?: number;
       yes_price_usd?: number | null;
       no_price_usd?: number | null;
+      believers_yes?: number | null;
+      believers_no?: number | null;
     } | null;
     const yesCapitalDelta24h =
       snapBase == null ? null : num(state.yes_capital_usd) - num(snapBase.yes_capital_usd);
     const noCapitalDelta24h =
       snapBase == null ? null : num(state.no_capital_usd) - num(snapBase.no_capital_usd);
+
+    // People% 24h change, in PERCENTAGE POINTS, from the same authoritative
+    // snapshot baseline as the capital deltas. Null when there is no old-enough
+    // snapshot or the baseline had no directional believers — a missing history
+    // must never read as "the crowd did not move".
+    const basePeopleYes =
+      snapBase == null
+        ? null
+        : peopleYesPct(num(snapBase.believers_yes), num(snapBase.believers_no));
+    const peopleYesChange24h =
+      pYes == null || basePeopleYes == null ? null : pYes - basePeopleYes;
 
     // Transitions
     const nb = {
