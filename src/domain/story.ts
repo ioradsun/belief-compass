@@ -309,4 +309,11 @@ export interface LiveStory {
   tone: BeatTone;
   /** True for network-relative rows (get the "about you" wash). */
   personal: boolean;
+  /**
+   * A CROSS-MARKET observation about the person in this row — "Their third
+   * question today." Written by src/domain/person-pattern, never by the voice
+   * layer, because no single event can know it.
+   */
+  pattern?: string | null;
 }
+
