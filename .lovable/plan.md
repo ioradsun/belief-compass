@@ -101,11 +101,13 @@ The explicit hierarchy, highest to lowest. Magnitude is supporting evidence, nev
 1. **Contradiction / separation** — two things that normally travel together stopped.
 2. **Change before price** — people/capital/conviction moved materially while price stayed quiet.
 3. **Unusual for this market** — not "10 trades", but "5× this market's normal pace".
-4. **Notable person changed behaviour** — long holder exits, Rival joins your side, whale adds, Tribe breaks pattern.
+4. **Notable person changed behaviour — viewer-blind only.** Longest current holder, largest holder / Conviction Whale, full exit after 40 days, unusually large share of side capital, one actor appearing across several rapid events in this market. Explicitly **forbidden here**: Tribe, Rival, Twin, conviction match, repeated intersection with the reader, showing-up history, my position, my market. Those live on the personal axis and may change the angle after admission (§7).
 5. **Strong raw movement** — large influx/outflow with no other signal.
 6. **Ordinary activity** — Receipt, or suppressed.
 
-Conceptually: `informationGain ≈ anomaly + tension + change-from-baseline + human significance`, with magnitude as corroboration. A smaller trade that breaks a market's pattern must be able to outrank a larger ordinary one — that is a tested invariant, not an aspiration. Composed with the existing `compose()` in `significance.ts`; no second combinator.
+Conceptually: `informationGain ≈ anomaly + tension + change-from-baseline + viewer-blind human significance`, with magnitude as corroboration. A smaller trade that breaks a market's pattern must be able to outrank a larger ordinary one — a tested invariant, not an aspiration. Composed with the existing `compose()` in `significance.ts`; no second combinator.
+
+**Anomaly-first does not mean anomaly-overrides.** Information gain may lift a story within its truthful significance class; it may not manufacture structural importance. "$8 arrived at 4× normal velocity" must not outrank "the market majority flipped". `compose()`'s bounded shape mostly gives this for free — pin it with a test anyway.
 
 Ranking touches, both subtractive:
 1. `significance.ts` — `informationGain` becomes a `compose()` part on the derived path. No migration; emitted scores untouched.
