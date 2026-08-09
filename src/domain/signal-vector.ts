@@ -360,7 +360,14 @@ const WEIGHT: Record<Exclude<SignalKey, "none">, number> = {
 };
 
 export function emptyVector(): SignalVector {
-  return { signals: { ...ZERO }, informationGain: 0, primary: "none", reasons: [] };
+  return {
+    signals: { ...ZERO },
+    marketGain: 0,
+    carrier: 0,
+    informationGain: 0,
+    primary: "none",
+    reasons: [],
+  };
 }
 
 export function signalVector(facts: SignalFacts): SignalVector {
