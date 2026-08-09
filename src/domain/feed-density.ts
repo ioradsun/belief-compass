@@ -73,6 +73,18 @@ export const DENSITY = {
    * that adapts.
    */
   dustUsd: 0.5,
+  /**
+   * THE HEARTBEAT FLOOR — the bar when the reader has seen nothing for a while.
+   *
+   * The adaptive floor above answers "is this the biggest thing that happened
+   * today". It cannot answer the second question a live column raises, which is
+   * "has this reader been looking at a still page for four minutes". A world
+   * that is ordinary but ALIVE should let some humans breathe through; a world
+   * that is actually dead should stay quiet. So there is one more step below
+   * `hardFloor`, reachable only under silence, and nothing else changes: a row
+   * admitted here is still scored, voiced and ranked exactly as it was.
+   */
+  pulseFloor: 10,
 } as const;
 
 /** A wash: bought and sold the same size in minutes. Volume, not conviction. */
@@ -84,6 +96,9 @@ export interface DensityDecision {
   /** True when the day was quiet enough that the bar had to come down. */
   relaxed: boolean;
 }
+
+/** How a row got in — or that it did not. */
+export type Admission = "standard" | "pulse" | null;
 
 /**
  * Where to set the bar for this batch. `scores` is every candidate's importance
@@ -100,6 +115,37 @@ export function adaptiveFloor(scores: number[], target: number = DENSITY.target)
   const nth = sorted[Math.min(target, sorted.length) - 1];
   const floor = Math.max(DENSITY.hardFloor, Math.min(DENSITY.standard, nth));
   return { floor, relaxed: floor < DENSITY.standard };
+}
+
+/**
+ * The batch bar, lowered by how long the feed has been silent.
+ *
+ * `pressure` is 0..1 and means one thing only: how much this reader needs a
+ * sign of life. At 0 this returns the ordinary floor and the whole feature is
+ * inert. At 1 it reaches `pulseFloor` and no further — silence can lower the
+ * bar for admission and can never touch what a row MEANS once admitted.
+ */
+export function silenceAdjustedFloor(floor: number, pressure: number): number {
+  const p = Math.max(0, Math.min(1, pressure));
+  return floor - p * Math.max(0, floor - DENSITY.pulseFloor);
+}
+
+/**
+ * HOW a row got in, decided comparatively.
+ *
+ * "Pulse" is NOT "the floor happened to be relaxed" — that would misclassify a
+ * genuinely meaningful row unlucky enough to arrive during a quiet window, and
+ * then permanently strip its right to be questioned. It is the exact statement
+ * `would fail at standard admission, passes at the silence-adjusted one`, i.e.
+ * this row exists only because the feed needed a heartbeat.
+ */
+export function admissionOf(
+  c: FeedCandidate,
+  bars: { floor: number; silenceFloor: number },
+): Admission {
+  if (admitToFeed(c, bars.floor)) return "standard";
+  if (bars.silenceFloor >= bars.floor) return null;
+  return admitToFeed(c, bars.silenceFloor) ? "pulse" : null;
 }
 
 /**
