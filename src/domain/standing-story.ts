@@ -335,7 +335,7 @@ export function toReceipt(fact: StandingFact): StandingStoryRow {
 }
 
 /**
- * THE MIDDLE CASE. Something真 did change around the holder — a price move too
+ * THE MIDDLE CASE. Something did change around the holder — a price move too
  * small to be a contradiction, one departure rather than two, capital off the
  * side below the material floor — so the persistence means slightly more than
  * texture and considerably less than a clue. It says the change out loud so the
