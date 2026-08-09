@@ -1585,7 +1585,7 @@ function Feed() {
                         onSelect={selectMarket}
                         excludeMarketId={shownId ?? undefined}
                         holdUpdates
-                        label="Now"
+                        label="Insider"
                         initial={loaderData?.tape ?? null}
                       />
                     </div>

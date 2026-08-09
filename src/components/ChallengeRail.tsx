@@ -166,7 +166,7 @@ export function ChallengeRail({
               tab === t ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
             }`}
           >
-            {t === "challenge" ? "Challenge" : "Now"}
+            {t === "challenge" ? "Challenge" : "Insider"}
             {/* No padlock while the lock is unknown — the tab strip must not
                 claim a state the panel below it is refusing to claim. */}
             {t === "challenge" && !lock.unlocked && !lockUnknown && (

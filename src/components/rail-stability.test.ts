@@ -210,7 +210,7 @@ describe("the update control never moves the feed", () => {
 
   it("the rail hands the heading to the tape rather than rendering its own", () => {
     const idx = code("src/routes/index.tsx");
-    expect(idx).toMatch(/label="Now"/);
+    expect(idx).toMatch(/label="Insider"/);
   });
 
   it("still holds every update until the reader asks", () => {
