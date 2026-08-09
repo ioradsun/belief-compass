@@ -30,7 +30,10 @@ describe("contradictions carry the most information", () => {
     const t = emitStoryEvent(input({ yes: side({ believerDelta: 4, capitalDeltaUsd: -120 }) }));
     expect(t?.type).toBe("people_capital_divergence");
     expect(t?.side).toBe("YES");
-    expect(t?.headline).toBe("More believers. Less capital.");
+    // Phrasing is the voice layer's (src/domain/pi-voice); the FACT is that
+    // both halves of the contradiction are stated.
+    expect(t?.detail).toContain("3");
+    expect(t?.detail).toMatch(/\$/);
     expect(t?.detail).toBe("4 people joined while $120.00 left the market.");
     expect(t?.tier).toBe(1);
   });
@@ -47,7 +50,7 @@ describe("contradictions carry the most information", () => {
       input({ yes: side({ believerDelta: 0, capitalDeltaUsd: 0, pricePct: 12 }) }),
     );
     expect(t?.type).toBe("price_conviction_divergence");
-    expect(t?.headline).toBe("Price moved, but conviction did not.");
+    expect(t?.headline.toLowerCase()).toContain("price");
   });
 
   it("believers and capital rising together → participation broadening", () => {
@@ -410,7 +413,8 @@ describe("a material move is never silently dropped", () => {
     );
     expect(t?.type).toBe("material_move");
     expect(t?.side).toBe("YES");
-    expect(t?.headline).toBe("Money is piling into YES");
+    expect(t?.headline).toContain("YES");
+    expect(t?.headline.toLowerCase()).toMatch(/money|heavier|doubled|piling/);
     expect(t?.detail).toBe("+12% over 1D");
     expect(t?.tier).toBe(1);
   });
@@ -579,7 +583,7 @@ describe("a market that went quiet and came back", () => {
       input({ yes: funded(), no: funded(), activity: { trades24h: 3, trades7d: 3 } }),
     );
     expect(t?.type).toBe("market_reawakened");
-    expect(t?.detail).toBe("Nobody touched this for a week. Then 3 trades landed.");
+    expect(t?.detail).toContain("3 trades");
   });
 
   it("says nothing while the week was busy throughout", () => {
