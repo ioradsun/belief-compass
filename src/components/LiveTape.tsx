@@ -199,8 +199,11 @@ export function LiveTape({
         };
       }
       const full = (await listLiveEvents({
-        data: { wallet, marketIds: scopeKey ?? undefined, side, limit },
+        data: sideRail
+          ? { wallet, marketIds: scopeKey ?? undefined, limit: SIDE_RAIL_FETCH_LIMIT }
+          : { wallet, marketIds: scopeKey ?? undefined, side, limit },
       })) as LiveResult;
+
       // Only a SUCCESSFUL full build resets the clock — an errored one did not
       // refresh the families, so the next heartbeat should try again, not wait.
       if (!full.error) lastFullAt.current = Date.now();
