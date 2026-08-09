@@ -238,13 +238,18 @@ behind an unchanged surface, each step proven by parity tests.
    tested. **UI adoption** (`MarketVitality` "Market Momentum" → Insider Insight)
    changes the rendered read, so it lands with an app run — same discipline as the
    side-rail flip.
-4. **Now onto the Insider.** Pull significance, discovery, grouping, editorial
-   selection, PI narrative out of `live.functions`/`LiveTape` into the Now
-   projection. Leave animation / update-gating in the component
-   (intelligence server-side; attention mechanics UI-side). The evidence
-   (`features.ts`) and scoring (`scoring.ts` — `importanceScore` ranks the feed)
-   foundation is ✅ landed; Now consumes it. This is the largest seam and its whole
-   point is tape parity, so it needs an app run to prove the feed reads identically.
+4. **Now onto the Insider — 🚧 in progress; the render-boundary pass has landed.**
+   `projections/now.ts` `now(rows, { limit, rankOver, pinned, pending, loading })`
+   now owns the EDITORIAL DECISION the tape used to make inline: rank the
+   candidates (`mixFeed`), select the window by that rank, display in the reader's
+   temporal model (`arrangeFeed`), and name the tail state (`tailState`). `LiveTape`
+   keeps only attention mechanics — the update gate, the arrival scheduler, scroll.
+   Parity by construction (same primitives, same order) and proven by
+   `projections/now.test.ts` plus an app run: continuity block on top, then
+   15m → 51m → 2h → 3h → … unchanged. **Still to pull in:** significance,
+   discovery, grouping and PI narrative drafting out of `live.functions` into
+   `src/lib/insider/*` behind the same projection.
+
 5. **Read — ✅ pure seam landed.** `read.ts` `insiderRead(source, { pulse })` lifts
    the pure house-read state machine into `InsiderRead` unchanged (learning →
    predicted → correct/incorrect), and adds the additive `marketAligned` context
