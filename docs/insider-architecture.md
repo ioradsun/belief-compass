@@ -234,7 +234,10 @@ behind an unchanged surface, each step proven by parity tests.
 4. **Now onto the Insider.** Pull significance, discovery, grouping, editorial
    selection, PI narrative out of `live.functions`/`LiveTape` into the Now
    projection. Leave animation / update-gating in the component
-   (intelligence server-side; attention mechanics UI-side).
+   (intelligence server-side; attention mechanics UI-side). The evidence
+   (`features.ts`) and scoring (`scoring.ts` — `importanceScore` ranks the feed)
+   foundation is ✅ landed; Now consumes it. This is the largest seam and its whole
+   point is tape parity, so it needs an app run to prove the feed reads identically.
 5. **Read — ✅ pure seam landed.** `read.ts` `insiderRead(source, { pulse })` lifts
    the pure house-read state machine into `InsiderRead` unchanged (learning →
    predicted → correct/incorrect), and adds the additive `marketAligned` context
@@ -258,10 +261,10 @@ src/domain/insider/
     signals.ts      # canonical activity → InsiderSignal[]  ✅ landed (activity seam)
     pulse.ts        # market facts → InsiderPulse           ✅ landed
     read.ts         # house-read, lifted into InsiderRead   ✅ landed
-    features.ts     # universal evidence extraction (calculate once)   — next
-    scoring.ts      # evidence → judgments (momentum/importance/confidence) — next
+    features.ts     # universal evidence (calculate once)   ✅ landed
+    scoring.ts      # evidence → momentum/importance/confidence  ✅ landed
     projections/
-        activity.ts  # ✅ landed   insight.ts  # ✅ landed   now.ts  — next
+        activity.ts  # ✅ landed   insight.ts  # ✅ landed   now.ts  — needs app run
 
 src/lib/insider/
     source.server.ts   build.server.ts   functions.ts   cache.ts       — next
