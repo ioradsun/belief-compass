@@ -77,6 +77,7 @@ export function useTapeGate<T extends Arrival>(
   const [admitted, setAdmitted] = useState<T[]>([]);
   const [pending, setPending] = useState(0);
   const [admitNonce, setAdmitNonce] = useState(0);
+  const [lastAdmitted, setLastAdmitted] = useState<string[]>([]);
 
   const heldRef = useRef<T[]>([]);
   // The mixer's latest, complete, freshly ranked output. Admitting REPLACES the
@@ -126,6 +127,7 @@ export function useTapeGate<T extends Arrival>(
     heldRef.current = [];
     setPending(0);
     setAdmitted([]);
+    setLastAdmitted([]);
     atTop.current = true;
   }, [resetKey]);
 
@@ -183,6 +185,7 @@ export function useTapeGate<T extends Arrival>(
     setPending(0);
     if (taking.length === 0) return;
     setAdmitNonce((n) => n + 1);
+    setLastAdmitted(taking.map((r) => r.id));
     setAdmitted((prev) =>
       // WHAT THEY ASKED FOR, FIRST. The admitted rows lead, then the mixer's
       // current ranking, then anything it has since dropped so nothing the
@@ -196,6 +199,7 @@ export function useTapeGate<T extends Arrival>(
     pending,
     admit,
     admitNonce,
+    lastAdmitted,
     scrollRef,
     pointerProps: {
       onPointerEnter: () => {
