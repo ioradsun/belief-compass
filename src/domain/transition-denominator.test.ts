@@ -30,6 +30,7 @@ describe("a percentage never travels without its denominator", () => {
       side: "YES",
     });
     expect(r.level).toBe("receipt");
+    expect(r.detail).not.toContain("%");
   });
 
   it("treats the middle as true but quiet", () => {

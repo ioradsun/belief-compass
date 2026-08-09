@@ -109,7 +109,18 @@ export function retellTransition(
   }
 
   // A PERCENTAGE WE CANNOT SIZE. Demoted, not deleted — see the header.
-  if (usd == null) return { ...base, usd: null, level: "receipt" };
+  /* No denominator, no percentage. An unsized "100% of the money left" reads
+     like a collapse whether the side held $3 or $30,000, so the share is
+     dropped rather than shouted, and the row falls to receipt volume. */
+  if (usd == null)
+    return {
+      headline: base.headline,
+      detail: move.falling
+        ? `Money came off ${it} today. The size behind it isn't confirmed yet.`
+        : `Money went on ${it} today. The size behind it isn't confirmed yet.`,
+      usd: null,
+      level: "receipt",
+    };
 
   const all = move.pct >= 99;
 
