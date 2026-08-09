@@ -92,7 +92,7 @@ describe("when the pattern is the story, it gets the headline", () => {
       r("a", "1", "exit", "YES", "2026-08-09T10:00:00.000Z"),
       r("b", "2", "exit", "NO", "2026-08-09T09:00:00.000Z"),
     ])[0]!;
-    expect(p.lead?.headline).toBe("KODAK is backing away".toUpperCase().replace("KODAK", "KODAK"));
+    expect(p.lead?.headline).toBe("KODAK is backing away");
     expect(p.lead?.body).toContain("two positions");
   });
 
@@ -101,7 +101,7 @@ describe("when the pattern is the story, it gets the headline", () => {
       r("a", "1", "enter", "YES", "2026-08-09T10:00:00.000Z"),
       r("b", "2", "enter", "YES", "2026-08-09T09:00:00.000Z"),
     ])[0]!;
-    expect(p.lead?.headline).toContain("KEEPS LEANING YES");
+    expect(p.lead?.headline).toBe("KODAK keeps leaning YES");
   });
 
   it("has no headline when we cannot name the person", () => {
