@@ -165,15 +165,17 @@ export function liveRowStory(r: Omit<LiveRow, "text" | "story">): LiveStory {
   return tellPiStory(
     {
       action,
-    side: r.side,
-    context: {
-      amountUsd: r.amountUsd,
-      peopleCount: r.walletCount,
-      marketCount: Number(r.payload.markets ?? 0) || null,
-      question: r.kind === "market_created" ? r.marketTitle : null,
-      threshold: r.kind === "believer_milestone" ? Number(r.payload.threshold ?? 0) : null,
+      side: r.side,
+      context: {
+        amountUsd: r.amountUsd,
+        peopleCount: r.walletCount,
+        marketCount: Number(r.payload.markets ?? 0) || null,
+        question: r.kind === "market_created" ? r.marketTitle : null,
+        threshold: r.kind === "believer_milestone" ? Number(r.payload.threshold ?? 0) : null,
+      },
     },
-  });
+    r.id,
+  );
 }
 
 const ROUND_TRIP_WINDOW_MS = WASH.roundTripWindowMs;
