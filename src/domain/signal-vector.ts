@@ -138,8 +138,16 @@ export type SignalFacts = {
   /** A specific meaningful input whose response we can time. */
   input?: { amountUsd: number; atMs: number } | null;
 
+  /**
+   * Proven price behaviour SINCE `input` (plan §8). Present only when the price
+   * history actually covers that moment; null means "we cannot establish
+   * ordering", which is never the same as "nothing happened".
+   */
+  priceProof?: PriceProof | null;
+
   nowMs: number;
 };
+
 
 export type Signals = {
   tension: number;
