@@ -30,7 +30,7 @@ import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
-import { marketStateFacts } from "@/domain/insider";
+import { insiderPulse, insiderRead, marketStateFacts, pulseFactsFromMarket } from "@/domain/insider";
 import { relationFromGroup } from "@/domain/participant-social";
 import { convictionMatch, presentRelationship } from "@/domain/relationship";
 import { SharedConviction } from "@/components/SharedConviction";
@@ -55,7 +55,7 @@ import {
   sharesForPct,
   type OrderSide,
 } from "@/domain/order";
-import { houseReadState } from "@/domain/house-read";
+
 import { WindowFilter } from "@/components/WindowFilter";
 import { useDeckWindow, setDeckWindow } from "@/lib/deck-window";
 import { OrderTicket } from "@/components/order/OrderTicket";
@@ -247,13 +247,17 @@ export function MarketDeck({
   // why they reconcile by construction instead of by care.
   const marketChange = useMarketChange(Number(row.onchain_id), row, deckWin as VolumeWindow);
 
-  // THE HOUSE READ — derived by the shared pure engine, so desktop and mobile
+  // THE INSIDER READ — derived by the shared pure engine, so desktop and mobile
   // show the same state from the same data. Only a connected viewer has tells to
-  // read; anonymous browsing shows no row at all.
-  const houseReadState_ = useMemo(
-    () => (viewerWallet ? houseReadState(houseRead ?? null) : null),
-    [viewerWallet, houseRead],
-  );
+  // read; anonymous browsing shows no row at all. The market's own pulse rides
+  // along as context — it never changes what we predict.
+  const insiderRead_ = useMemo(() => {
+    if (!viewerWallet) return null;
+    const pulse = insiderPulse(
+      pulseFactsFromMarket({ change: marketChange, state: marketStateFacts(rr), ethUsd }),
+    );
+    return insiderRead(houseRead ?? null, { pulse });
+  }, [viewerWallet, houseRead, marketChange, rr, ethUsd]);
 
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(marketId, side === "YES", side ? ethWei : 0n);
@@ -416,7 +420,7 @@ export function MarketDeck({
 
         footer={
           onToggleCase && !mobileCaseOpen ? (
-            <ExamineCta open={caseOpen} onToggle={onToggleCase} houseRead={houseReadState_} />
+            <ExamineCta open={caseOpen} onToggle={onToggleCase} insiderRead={insiderRead_} />
           ) : null
         }
       />
