@@ -149,6 +149,16 @@ export const PI_BANNED = [
 const n = (v: number | null | undefined): number =>
   v == null || !Number.isFinite(Number(v)) ? 0 : Number(v);
 
+/**
+ * "Two people" reads like a person talking; "2 people" reads like a row count.
+ * Small crowds get words, larger ones keep the digit because "seventeen people"
+ * is harder to scan than the number itself.
+ */
+const WORDS = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"] as const;
+export const countWord = (k: number, noun = "people"): string =>
+  k >= 1 && k <= 9 ? `${WORDS[k]} ${k === 1 ? noun.replace(/s$/, "") : noun}` : `${k} ${noun}`;
+
+
 const ANGLE: Record<ConvictionEventType, PIObservation["angle"]> = {
   swept_out: "departure",
   swept_in: "rush",
