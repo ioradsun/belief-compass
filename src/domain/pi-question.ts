@@ -49,6 +49,7 @@
  * so a row asks the same question on every refresh, on server and client.
  */
 import { piHash, pickVariant, voiceLevel, INTELLIGENCE_GAIN_MIN, type VoiceInput } from "./pi-voice";
+import { semanticQuestion, type SemanticInput } from "./semantic-question";
 
 /** The shape of gap being asked about. One per feed window (see `rationQuestions`). */
 export type QuestionKind =
@@ -80,7 +81,11 @@ export type QuestionKind =
   | "side_burst"
   | "capital_concentrated_arrival"
   | "network_convergence"
-  | "network_split";
+  | "network_split"
+
+  /* THE PROPOSITION SHAPE. Not a mechanic at all: the reader's own question,
+     asked of the thing they took a side on. See src/domain/semantic-question. */
+  | "semantic";
 
 export type PIQuestion = { text: string; kind: QuestionKind };
 
@@ -101,7 +106,36 @@ export type QuestionInput = {
    * `kind` decides which contrast is being asked about.
    */
   standing?: { kind: string; klass: string } | null;
+  /**
+   * The market STATE + PROPOSITION pair, when the row is one of the few proven
+   * shapes where the title makes the behaviour interesting. This is the only
+   * question source in the file that is not a mechanic, and it is deliberately
+   * the LAST one tried: a contradiction in the numbers is more specific than a
+   * question about the title, so mechanics always win the slot when they exist.
+   */
+  semantic?: Omit<SemanticInput, "key"> | null;
+  /**
+   * Exact counts behind an "unusual" read, when known. Without them the
+   * unusualness question has nothing concrete to point at and is not asked —
+   * "what is different about it?" is a shrug, not a question.
+   */
+  unusual?: { trades24h?: number | null } | null;
 };
+
+/**
+ * The proposition question, or null. Shared by every exit path below so that a
+ * row which produces no mechanical clue can still be interesting, and a row
+ * which produces one is never overwritten by a weaker semantic line.
+ */
+function semanticFor(input: QuestionInput): PIQuestion | null {
+  if (!input.semantic) return null;
+  const text = semanticQuestion({ ...input.semantic, key: input.key });
+  if (!text) return null;
+  // Same echo bar as every other question: it must add something the row's own
+  // two sentences did not already print.
+  if (!questionAdds(text, `${input.headline} ${input.body} ${input.pattern ?? ""}`)) return null;
+  return { text, kind: "semantic" };
+}
 
 
 /**
@@ -200,11 +234,15 @@ export function piQuestion(input: QuestionInput): PIQuestion | null {
      true and finished; only a proven contrast leaves something open, and what
      it leaves open is the contrast rather than anything the vector saw. */
   if (input.standing) {
-    if (input.standing.klass !== "intelligence") return null;
+    /* A receipt and an observation leave no MECHANICAL gap — but persistence
+       against a proposition is exactly the case §19 asks for: fifteen days on
+       one side of a question nobody will argue the other half of. So the
+       semantic layer is offered here even when the contrast question is not. */
+    if (input.standing.klass !== "intelligence") return semanticFor(input);
     const variants = standingQuestions(input.standing.kind, input.actorName ?? null);
-    if (variants.length === 0) return null;
+    if (variants.length === 0) return semanticFor(input);
     const text = pickVariant(`${input.key}:standing_contrast`, variants);
-    if (!questionAdds(text, `${input.headline} ${input.body}`)) return null;
+    if (!questionAdds(text, `${input.headline} ${input.body}`)) return semanticFor(input);
     return { text, kind: "standing_contrast" };
   }
 
@@ -236,9 +274,12 @@ export function piQuestion(input: QuestionInput): PIQuestion | null {
     level === "intelligence" ||
     unwinding ||
     ((hierarchyGap || beforePriceGap) && v.informationGain >= INTELLIGENCE_GAIN_MIN);
-  if (!eligible) return null;
+  /* A row with no mechanical gap is not automatically silent. It may still be a
+     proven STATE against a proposition, which is a different kind of gap and
+     the one a human notices first. */
+  if (!eligible) return semanticFor(input);
   // RULE 2 — a clue with a proven ending answers itself.
-  if (v.clue === "resolved") return null;
+  if (v.clue === "resolved") return semanticFor(input);
 
   const s = v.signals;
   let kind: QuestionKind | null = null;
@@ -326,10 +367,19 @@ export function piQuestion(input: QuestionInput): PIQuestion | null {
        no fact and could sit under any row in the feed. An unusualness question
        has to point at the one thing the reader could actually go and check —
        whether the volume is one participant or many. */
-    variants = [
-      "Busier than this market has ever been. Is that one participant, or many?",
-      "This is the heaviest hour this question has had. Did it come from one side?",
-    ];
+    /* AND IT MUST COUNT SOMETHING. "Busier than this market has ever been" names
+       no number the reader can check, which is why it read as a template and
+       survived long enough to become the canonical example of generic copy. The
+       question now requires the trade count that makes it concrete, and simply
+       is not asked without it. */
+    const n = input.unusual?.trades24h ?? null;
+    variants =
+      n != null && n > 0
+        ? [
+            `${n} ${n === 1 ? "trade" : "trades"} today against this market's usual trickle. One wallet, or a crowd?`,
+            `${n} ${n === 1 ? "trade" : "trades"} in a day here. Did they all come from one side?`,
+          ]
+        : [];
   }
 
 
@@ -352,13 +402,14 @@ export function piQuestion(input: QuestionInput): PIQuestion | null {
     variants = personQuestions(input.actorName ?? null);
   }
 
-  if (!kind || variants.length === 0) return null;
+  if (!kind || variants.length === 0) return semanticFor(input);
 
   const text = pickVariant(`${input.key}:${kind}`, variants);
 
   // RULE 4-adjacent: a question that only repeats the sentence above it is not
   // a question, it is an echo. It must introduce something the row hasn't said.
-  if (!questionAdds(text, `${input.headline} ${input.body} ${input.pattern ?? ""}`)) return null;
+  if (!questionAdds(text, `${input.headline} ${input.body} ${input.pattern ?? ""}`))
+    return semanticFor(input);
 
   return { text, kind };
 }
