@@ -531,16 +531,23 @@ export function LiveTape({
                           </span>
                         )}
                       </div>
-                      {/* Never a bare figure: if the sentence already names the
-                        money, don't repeat it; otherwise say what it is. */}
-                      {r.amountUsd != null && r.amountUsd > 0 && !s.body.includes("$") && (
-                        <span className="ml-auto shrink-0 text-[11px] text-[var(--text-muted)]">
-                          <span className="num font-semibold text-[var(--text-secondary)]">
-                            {usdShort(r.amountUsd)}
-                          </span>{" "}
-                          traded
-                        </span>
-                      )}
+                      {/* ONE FACT, ONCE PER CARD. The old test only looked at
+                        the body, so a card whose PI angle carried the amount
+                        ("$13 came in.") still printed "$13 traded" underneath —
+                        the same dollar said twice, two lines apart. Any line
+                        already naming money silences the footer. */}
+                      {r.amountUsd != null &&
+                        r.amountUsd > 0 &&
+                        !s.body.includes("$") &&
+                        !s.headline.includes("$") &&
+                        !(s.attribution ?? "").includes("$") && (
+                          <span className="ml-auto shrink-0 text-[11px] text-[var(--text-muted)]">
+                            <span className="num font-semibold text-[var(--text-secondary)]">
+                              {usdShort(r.amountUsd)}
+                            </span>{" "}
+                            traded
+                          </span>
+                        )}
                     </div>
                   )}
                 </div>

@@ -751,11 +751,17 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
        ONLY exists when the side already had believers and no money. A believers
        arrival is filtered out above, so this branch never invents a fourth
        label for the same transition. */
+    /* PEOPLE AND MONEY DO THINGS; STATES DO NOT. "First capital backs NO" and
+       "YES gained 3 believers" are table rows read aloud. The same facts, said
+       as somebody acting, are what the rest of the feed now sounds like. */
+    const crowdN = Math.abs(Math.round(m.delta));
     const headline =
       m.kind === "arrival"
-        ? `First capital backs ${where}`
+        ? `Money finally hit ${where}`
         : m.kind === "crowd"
-          ? `${where} ${m.delta > 0 ? "gained" : "lost"} ${Math.abs(Math.round(m.delta))} ${plural(m.delta, "believer", "believers")}`
+          ? m.delta > 0
+            ? `${where} picked up ${crowdN} ${plural(m.delta, "believer", "believers")}`
+            : `${crowdN} walked away from ${where}`
           : m.metric === "price"
             ? `${where} ${m.direction === "up" ? "got more expensive" : "got cheaper"}`
             : m.metric === "capital"
@@ -781,8 +787,23 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
       /* The move, not the rule that admitted it. This used to append "— at or
          beyond the N% the feed treats as news", which explains our own threshold
          to a reader who has no use for it; it is editorial policy leaking into
-         the story. The number and the window are the fact. */
-      detail: pct == null ? undefined : `${pct} over ${input.timeframeShort}`,
+         the story. The number and the window are the fact.
+
+         A bare "−100% over 24H" under a PI headline is the last piece of
+         telemetry in the column: a percentage with no subject. Where the fact
+         has a sentence in it, the sentence is what ships. */
+      detail:
+        m.kind === "arrival"
+          ? "First capital just landed on that side."
+          : m.metric === "capital"
+            ? (m.direction === "up"
+                ? capitalArrivalLine(where, m.pct ?? 0, vkey("material_move", side))
+                : capitalDrainLine(where, m.pct ?? 0, vkey("material_move", side))
+              ).body
+            : pct == null
+              ? undefined
+              : `${pct} over ${input.timeframeShort}`,
+
       evidence: [
         {
           label: m.metric === "capital" ? "Capital" : m.metric === "price" ? "Price" : "Believers",

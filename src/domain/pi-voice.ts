@@ -149,6 +149,15 @@ export const PI_BANNED = [
 const n = (v: number | null | undefined): number =>
   v == null || !Number.isFinite(Number(v)) ? 0 : Number(v);
 
+/**
+ * "Two people" reads like a person talking; "2 people" reads like a row count.
+ * Small crowds get words, larger ones keep the digit because "seventeen people"
+ * is harder to scan than the number itself.
+ */
+const WORDS = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"] as const;
+export const countWord = (k: number, noun = "people"): string =>
+  k >= 1 && k <= 9 ? `${WORDS[k]} ${k === 1 ? noun.replace(/s$/, "") : noun}` : `${k} ${noun}`;
+
 const ANGLE: Record<ConvictionEventType, PIObservation["angle"]> = {
   swept_out: "departure",
   swept_in: "rush",
@@ -335,21 +344,25 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
           : [{ headline: "Went first", body: `${who} is the first one here.` }];
 
       // SIDE FILLED — not a person going first; a side becoming an argument.
+      /* KICKERS NAME WHAT CHANGED SOCIALLY, NOT WHAT CHANGED IN THE TABLE.
+         "SIDE OPENED" is a state name — the kind of phrase a backend would
+         choose. What actually happened is that a side nobody would stand on has
+         people standing on it, so the kicker says that. */
       case "side_opened":
         return [
           {
-            headline: "Side opened",
-            body: `${s || "That side"} just got company.`,
-            angle: people > 1 ? `${people} people stepped in at once.` : null,
+            headline: side ? `${s} just got company` : "Just got company",
+            body: `Nobody was on ${s || "that side"}. Now ${people > 1 ? `${people} people are` : "somebody is"}.`,
           },
           {
-            headline: "Side opened",
-            body: `An empty side just filled up.`,
+            headline: "Empty no more",
+            body: `${people > 1 ? `${people} people` : "Somebody"} stepped into an empty ${s || "side"}.`,
             angle: remaining ? `${remaining} on ${s || "it"} now.` : null,
           },
           {
-            headline: "Side opened",
-            body: `Nobody was on ${s || "that side"}. Now ${people > 1 ? `${people} people are` : "somebody is"}.`,
+            headline: side ? `${s} just got company` : "Just got company",
+            body: `${s || "That side"} had nobody on it an hour ago.`,
+            angle: people > 1 ? `${people} people stepped in at once.` : null,
           },
         ];
 
@@ -358,16 +371,17 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
         if (people > 1)
           return [
             {
-              headline: `${people} piled in`,
-              body: `${people} people piled into ${s || "one side"}.`,
-              angle: amount > 0 ? `${money} came with them.` : null,
+              headline: side ? `${s} got company` : "Got company",
+              body: `${countWord(people)} piled into ${s || "one side"}${amount > 0 ? ` with ${money}` : ""}.`,
+              angle: remaining ? `${remaining} believers now.` : null,
             },
             {
               headline: "Got heavier",
               body: `${s || "That side"} just got heavier.`,
-              angle: amount > 0 ? `${people} people brought in ${money}.` : null,
+              angle: amount > 0 ? `${countWord(people)} brought in ${money}.` : null,
             },
           ];
+
         return [
           {
             headline: `${money} landed`,
@@ -383,19 +397,27 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
         ];
 
       case "joined":
+        /* A GROUPED ARRIVAL IS A SOCIAL FACT, NOT A COUNT. "2 came in" recites
+           the number and stops; what actually changed is that somebody on that
+           side is no longer standing there alone. The count still appears — in
+           the sentence, where it belongs — and the amount is said ONCE. */
         if (people > 1)
           return [
             {
-              headline: `${people} came in`,
-              body: `${people} people stepped into ${s || "this one"}.`,
-              angle: amount >= 0.005 ? `${money} came in.` : null,
+              headline: side ? `${s} got company` : "Got company",
+              body: `${countWord(people)} stepped into ${s || "this one"}${amount >= 0.005 ? ` with ${money}` : ""}.`,
+              angle: remaining ? `${remaining} believers now.` : null,
             },
             {
-              headline: "Got company",
-              body: `${s || "This one"} got company.`,
+              headline: `${countWord(people)} just stepped in`,
+              body:
+                amount >= 0.005
+                  ? `${money} landed on ${s || "one side"}.`
+                  : `${s || "This one"} got company.`,
               angle: remaining ? `${remaining} believers now.` : null,
             },
           ];
+
         return [
           {
             headline: "New believer",
@@ -432,30 +454,50 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
           },
         ];
 
-      // TURN — the highest-value human story in the feed.
+      /**
+       * TURN — the highest-value human story in the feed, and it was getting
+       * the least storytelling: "kodak.base.eth changed their mind." said less
+       * than a $1.80 add. A flip is a binary market, so the side they LEFT is
+       * known the moment the side they arrived on is — no new data, a much
+       * better sentence. Tenure, where the index has it, is the whole drama.
+       */
       case "changed_mind": {
+        const from = side === "YES" ? "NO" : side === "NO" ? "YES" : null;
+        // "kodak.base.eth" is an address in a headline; "kodak" is a person.
+        const shortName = name ? name.split(".")[0]! : null;
+        const kicker = shortName ? `${shortName} flipped` : "Flipped";
         const base: Draft[] = held
           ? [
               {
-                headline: "Flipped",
-                body: `${who} held ${side ? "on" : "out"} for ${held}. Then flipped${side ? ` to ${s}` : ""}.`,
+                headline: kicker,
+                body: from
+                  ? `Held ${from} for ${held}. Now they're on ${s}.`
+                  : `${who} held on for ${held}. Then changed their mind.`,
+                angle: null,
               },
               {
-                headline: "Changed sides",
-                body: `${held} on one side. Now ${s || "the other"}.`,
+                headline: kicker,
+                body: from
+                  ? `${from} for ${held}. Then ${s}.`
+                  : `${held} of holding, then the turn.`,
                 angle: `${who} changed their mind.`,
               },
             ]
           : [
               {
-                headline: "Flipped",
+                headline: kicker,
+                body: from ? `${from} before. ${s} now.` : `${who} changed their mind.`,
+                angle: from && name ? null : side ? `${who} flipped to ${s}.` : null,
+              },
+              {
+                headline: "Changed sides",
                 body: side ? `${who} flipped to ${s}.` : `${who} changed their mind.`,
               },
             ];
         if (rel)
           base.push({
             headline: REL_KICKER[rel],
-            body: `${who} just changed sides${side ? ` to ${s}` : ""}.`,
+            body: from ? `${who} was on ${from}. Now ${s}.` : `${who} just changed sides.`,
             angle: question
               ? "What do they see differently here?"
               : held

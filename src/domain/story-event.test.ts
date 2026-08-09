@@ -415,7 +415,10 @@ describe("a material move is never silently dropped", () => {
     expect(t?.side).toBe("YES");
     expect(t?.headline).toContain("YES");
     expect(t?.headline.toLowerCase()).toMatch(/money|heavier|doubled|piling/);
-    expect(t?.detail).toBe("+12% over 1D");
+    // A bare "+12% over 1D" is a percentage with no subject; the second line
+    // now says what the money did.
+    expect(t?.detail?.toLowerCase()).toMatch(/money|heavier|behind/);
+
     expect(t?.tier).toBe(1);
   });
 
@@ -710,8 +713,9 @@ describe("one fact is told once", () => {
         }),
       }),
     );
-    expect(t?.detail).toBe("+12% over 1D");
+    expect(t?.detail?.toLowerCase()).toMatch(/money|heavier|behind/);
     expect(t?.detail ?? "").not.toMatch(/treats as news/);
+
   });
 });
 
