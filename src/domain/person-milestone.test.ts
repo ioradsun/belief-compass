@@ -92,10 +92,11 @@ describe("only what is exactly true, and only while it is news", () => {
     expect(convictionMilestone(person(5, 40), win)).toBeNull();
   });
 
-  it("says nothing about one or two beliefs — that is the live row already", () => {
+  it("says nothing until a count reads as a habit", () => {
     expect(convictionMilestone(person(1), win)).toBeNull();
     expect(convictionMilestone(person(2), win)).toBeNull();
-    expect(CONVICTION_RUNGS[0]).toBe(3);
+    expect(convictionMilestone(person(3), win)).toBeNull();
+    expect(CONVICTION_RUNGS[0]).toBe(5);
   });
 
   it("refuses to count a belief it cannot date", () => {
