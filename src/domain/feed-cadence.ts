@@ -295,6 +295,15 @@ function dominancePenalty(
       if (k >= CADENCE.maxPerSignalPrimary)
         p += CADENCE.penalty.overCap * (1 + k - CADENCE.maxPerSignalPrimary);
     }
+    /* HEARTBEAT REPEATS ITSELF FASTEST. A pulse row carries no signal shape to
+       cap and often no distinguishing motif — five ordinary buys are five
+       genuinely different facts that read as one sentence. The family here is
+       the heartbeat itself, so the second one already pays and the window keeps
+       breathing without turning into a ticker. */
+    if (c.pulse) {
+      const k = shapeCount.get("pulse") ?? 0;
+      if (k >= 1) p += CADENCE.penalty.overCap * k;
+    }
   }
   return p;
 }
