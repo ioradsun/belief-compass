@@ -218,7 +218,11 @@ export function findPersonPatterns(rows: readonly PatternRow[]): PersonPattern[]
       kind,
       note,
       lead,
-      consumes: list.filter((r) => r.id !== anchor.id).map((r) => r.id),
+      // Sorted so the same facts in any input order give the same pattern.
+      consumes: list
+        .filter((r) => r.id !== anchor.id)
+        .map((r) => r.id)
+        .sort(),
     });
   }
   return out;
