@@ -18,6 +18,7 @@ import {
   type SignalVector,
   type CanonicalTrade,
 } from "../src/domain/signal-vector";
+import { voiceLevel } from "../src/domain/pi-voice";
 import { factsForRow, type MarketSignalSource } from "../src/domain/signal-facts";
 
 const url = process.env.SUPABASE_URL;
