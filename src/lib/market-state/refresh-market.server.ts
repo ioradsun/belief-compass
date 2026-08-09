@@ -264,6 +264,7 @@ export async function refreshMarket(
       // movement
       yes_price_change_1h: yesChg1h,
       yes_price_change_24h: yesChg24h,
+      people_yes_change_24h: peopleYesChange24h,
       // lifecycle
       market_created_at: createdAt,
       first_trade_at: (e.first_trade_at as string) ?? null,
