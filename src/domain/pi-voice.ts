@@ -467,8 +467,21 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
           },
         ];
 
-      // COMMITMENT — they were already here and they are not done.
-      case "doubled_down":
+      /* COMMITMENT — they were already here and they are not done.
+         THE INVARIANT: RECEIPT COPY MAY NOT IMPLY MORE CONVICTION THAN THE
+         TRANSACTION PROVES. "nkboy17 wasn't done" is a claim about a person's
+         resolve; two cents is not evidence of resolve, it is evidence of two
+         cents. So the character reading is available only once the add is big
+         enough that a reader would describe it as a decision — below that the
+         row says the plain fact and lets the reader decide whether it means
+         anything. The feed can be alive without pretending every heartbeat is
+         dramatic. */
+      case "doubled_down": {
+        const plain = {
+          headline: side ? `Added to ${s}` : "Added",
+          body: `${who} added${amount > 0 ? ` ${money}` : ""}${side ? ` to ${s}` : ""}.`,
+        };
+        if (amount < CONVICTION_MIN_USD) return [plain];
         return [
           {
             headline: "Not done",
@@ -487,6 +500,8 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
             body: `${who} added${amount > 0 ? ` ${money}` : ""} to ${s || "their side"}.`,
           },
         ];
+      }
+
 
       /**
        * TURN — the highest-value human story in the feed, and it was getting
