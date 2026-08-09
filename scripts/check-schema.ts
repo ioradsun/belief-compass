@@ -42,7 +42,15 @@ if (!url || !key) {
 interface Requirement {
   /** What breaks when this is missing — written for whoever reads the failure. */
   feature: string;
-  table: string;
+  /** A table to probe. Exactly one of `table` / `fn` is set. */
+  table?: string;
+  /**
+   * A database FUNCTION to probe, by name. Functions hide exactly like tables:
+   * a missing one answers 404 from PostgREST, so the app's `.rpc()` call comes
+   * back `{ data: null }` and the caller shrugs. Probed with an empty body, so
+   * a 404 means "does not exist" while 401/403/400 all prove it does.
+   */
+  fn?: string;
   /** Columns the code selects by name. A missing one fails the whole select. */
   columns?: string[];
   /** The migration that provides it, so the fix is one command away. */
@@ -58,6 +66,7 @@ interface Requirement {
    */
   emptyMeans?: string;
 }
+
 
 const REQUIRED: Requirement[] = [
   {
@@ -143,11 +152,66 @@ const REQUIRED: Requirement[] = [
     // Exactly the class of failure this script was written for.
     emptyMeans: "No calls recorded yet — expected until someone qualifies as a Tribe or Rival.",
   },
+  {
+    feature:
+      "Now tab during downtime — the time-driven sweep that keeps quiet markets evaluatable",
+    fn: "enqueue_stale_markets",
+    migration: "20260905000000_enqueue_stale_markets.sql",
+    // The market-refresher logs a sweep_error, but the visible symptom is a
+    // feed that just goes quiet — indistinguishable from a slow day, which is
+    // precisely the failure mode this whole script exists to name.
+  },
+  {
+    feature: "/value — the record of which trades came through Conviction",
+    table: "conviction_trades",
+    columns: ["tx_hash", "wallet", "market_id", "recorded_at"],
+    migration: "20260816000000_conviction_attributed_trades.sql",
+  },
+  {
+    feature: "/value — attributed volume, traders and the per-market breakdown",
+    fn: "conviction_attributed_value",
+    migration: "20260816000000_conviction_attributed_trades.sql",
+  },
+  {
+    feature: "/value — the two ecosystem-share charts",
+    fn: "conviction_ecosystem_share",
+    migration: "20260817000000_conviction_ecosystem_share.sql",
+  },
 ];
 
 type Verdict = "ok" | "missing_table" | "missing_column" | "blocked" | "empty" | "error";
 
+/** What we print in the left column — a table name or `fn()`. */
+function label(r: Requirement): string {
+  return r.fn ? `${r.fn}()` : (r.table as string);
+}
+
+/**
+ * Probe a FUNCTION. PostgREST answers a missing function with 404 (PGRST202),
+ * a restricted one with 401/403, and a present-but-wrongly-called one with 400.
+ * Only 404 means "the migration never ran" — everything else proves existence,
+ * which is all we can ask of a service-role-only function from out here.
+ */
+async function probeFn(r: Requirement): Promise<{ verdict: Verdict; detail: string }> {
+  const res = await fetch(`${url}/rest/v1/rpc/${r.fn}`, {
+    method: "POST",
+    headers: {
+      apikey: key as string,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  });
+  const body = await res.text();
+  if (res.status === 404 || body.includes("PGRST202"))
+    return { verdict: "missing_table", detail: "function does not exist" };
+  if (res.status === 401 || res.status === 403)
+    return { verdict: "blocked", detail: "exists, not executable by anon (expected)" };
+  return { verdict: "ok", detail: `exists (HTTP ${res.status})` };
+}
+
 async function probe(r: Requirement): Promise<{ verdict: Verdict; detail: string }> {
+  if (r.fn) return probeFn(r);
   const cols = (r.columns ?? ["*"]).join(",");
   const res = await fetch(`${url}/rest/v1/${r.table}?select=${cols}&limit=1`, {
     headers: { apikey: key as string, Authorization: `Bearer ${key}` },
@@ -172,6 +236,7 @@ async function probe(r: Requirement): Promise<{ verdict: Verdict; detail: string
   if (rows.length === 0 && r.anonMustRead) return { verdict: "empty", detail: "0 rows visible" };
   return { verdict: "ok", detail: `${rows.length} row(s)` };
 }
+
 
 async function main() {
   console.log("\n═══ SCHEMA (as the public client) ═══\n");
@@ -201,7 +266,7 @@ async function main() {
       else broken.push(r);
     }
     const mark = fatal ? "✗" : verdict === "ok" ? "✓" : "·";
-    console.log(`  ${mark} ${r.table.padEnd(24)} ${verdict.padEnd(15)} ${detail}`);
+    console.log(`  ${mark} ${label(r).padEnd(28)} ${verdict.padEnd(15)} ${detail}`);
     console.log(`      ${r.feature}`);
     if (!fatal) continue;
     // An empty table with a known writer is a stalled JOB, not a missing

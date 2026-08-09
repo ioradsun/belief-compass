@@ -1663,6 +1663,10 @@ export type Database = {
         Args: { p_kind: string; p_market_ids: number[] }
         Returns: number
       }
+      enqueue_stale_markets: {
+        Args: { p_active_days?: number; p_limit?: number }
+        Returns: number
+      }
       eth_usd_calibration: { Args: never; Returns: number }
       events_health: { Args: never; Returns: Json }
       find_match_candidates: {
