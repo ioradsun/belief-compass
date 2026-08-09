@@ -320,12 +320,19 @@ export function semanticQuestion(i: SemanticInput): string | null {
   }
   if (i.state === "side_got_company" && (f.days ?? 0) < 3) return null;
 
+  /* SPECIFICITY IS A TEST FOR SENTENCES THAT FLOAT FREE OF THEIR ROW, and a
+     dormancy question does not float: "Nobody touched this for 9 days" is only
+     sayable under this market, and the proposition is printed directly above
+     it. Requiring it to quote the title as well is how that shape ended up
+     saying the headline twice. Every other shape still has to earn it. */
+  const grounded = i.state === "back_from_dead";
   const variants = variantsFor(i, title, shortTopic(frag)).filter(
     (v) =>
       v.length <= MAX_QUESTION_CHARS &&
       !containsBannedLanguage(v) &&
-      isPropositionSpecific(v, title),
+      (grounded || isPropositionSpecific(v, title)),
   );
   if (variants.length === 0) return null;
   return pickVariant(`${i.key}:semantic:${i.state}`, variants);
 }
+
