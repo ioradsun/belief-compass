@@ -119,6 +119,9 @@ export const CADENCE = {
     motif: 0.3,
     side: 0.05,
     overCap: 0.35,
+    /** Per Intelligence row over the window's allowance. Escalates; never blocks. */
+    intelligence: 0.12,
+
   },
   /** The most a pacing target can ever be worth. Never enough to beat real news. */
   targetNudge: 0.12,
