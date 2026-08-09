@@ -545,10 +545,19 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
             angle: amount >= 0.005 ? `${money} left with them.` : scale,
           },
           {
+            /* HEADLINE = CONSEQUENCE, BODY = EVIDENCE. "One less / One less
+               believer on YES." is the same sentence twice; the body's job is
+               to name who, and how much walked with them. */
             headline: "One less",
-            body: side ? `One less believer on ${s}.` : "One less believer.",
-            angle: amount >= 0.005 ? `${who} pulled ${money}.` : scale,
+            body:
+              amount >= 0.005
+                ? `${who} pulled ${money} from ${s || "it"}.`
+                : side
+                  ? `${who} left ${s}.`
+                  : `${who} left.`,
+            angle: scale,
           },
+
           { headline: "Out", body: `${who} is out.`, angle: scale },
         ];
 
