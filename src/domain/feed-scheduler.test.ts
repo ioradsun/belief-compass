@@ -128,56 +128,36 @@ describe("real activity is never intentionally held", () => {
   });
 });
 
-describe("standing facts fill silence and nothing else", () => {
-  const celebration = row({ id: "held43", perishability: "standing", weight: 2 });
+describe("a standing story is paced like any other unhurried row", () => {
+  // It used to sit in a reserve lane the scheduler only opened after ten
+  // seconds of silence, which meant a true, interesting thing could be withheld
+  // indefinitely on a busy tape. It now competes on weight like everything else.
+  const continuity = row({ id: "held43", perishability: "soon", weight: 2 });
 
-  it("stays held while real activity is pending", () => {
-    const s = enqueue(createScheduleState(T0), [celebration, row({ id: "trade" })]);
+  it("still yields to urgent activity, on priority alone", () => {
+    const s = enqueue(createScheduleState(T0), [continuity, row({ id: "trade" })]);
     expect(modeFor(s, T0)).toBe("normal");
-    // Way past any cadence, and it is still the trade that comes out.
     expect(tick(s, T0 + 120_000).release?.id).toBe("trade");
   });
 
-  it("stays held through recent activity, even with nothing else queued", () => {
-    // Relative to the threshold, not a literal: this asserted "held at 10s",
-    // which was only meaningful while the gate happened to be 20s. Tied to the
-    // constant, it keeps meaning "not yet silent" whatever the gate becomes.
-    const s = enqueue(createScheduleState(T0), [celebration]);
-    const justBefore = T0 + SCHEDULE.quietAfterMs - 1;
-    expect(modeFor(s, justBefore)).toBe("idle");
-    expect(tick(s, justBefore).release).toBeNull();
+  it("is released on a quiet tape instead of being held for silence", () => {
+    const s = enqueue(createScheduleState(T0), [continuity]);
+    expect(tick(s, T0 + SCHEDULE.normal.toMs).release?.id).toBe("held43");
   });
 
-  it("appears once the silence is genuine", () => {
-    const s = enqueue(createScheduleState(T0), [celebration]);
-    const quietAt = T0 + SCHEDULE.quietAfterMs;
-    expect(modeFor(s, quietAt)).toBe("quiet");
-    expect(tick(s, quietAt).release?.id).toBe("held43");
-  });
-
-  it("stops the moment a real event arrives", () => {
-    const quietAt = T0 + SCHEDULE.quietAfterMs;
-    let s = enqueue(createScheduleState(T0), [celebration, row({ id: "held7" })]);
-    s = { ...s, queue: s.queue.map((r) => ({ ...r, perishability: "standing" as const })) };
-    expect(modeFor(s, quietAt)).toBe("quiet");
-    // A trade lands. Quiet mode ends and the celebrations go back on hold.
-    s = enqueue(s, [row({ id: "trade", enqueuedAt: quietAt })]);
-    expect(modeFor(s, quietAt)).toBe("normal");
-    expect(tick(s, quietAt).release?.id).toBe("trade");
-  });
-
-  it("does not dump celebrations back to back", () => {
+  it("does not dump several of them back to back", () => {
     const many = Array.from({ length: 4 }, (_, i) =>
-      row({ id: `c${i}`, perishability: "standing", weight: 2 }),
+      row({ id: `c${i}`, perishability: "soon", weight: 2 }),
     );
     const s = enqueue(createScheduleState(T0), many);
-    const released = drain(s, T0 + SCHEDULE.quietAfterMs, T0 + SCHEDULE.quietAfterMs + 40_000);
-    expect(released.length).toBeGreaterThanOrEqual(1);
+    const released = drain(s, T0, T0 + 40_000);
+    expect(released.length).toBeGreaterThanOrEqual(2);
     for (let i = 1; i < released.length; i++) {
-      expect(released[i].at - released[i - 1].at).toBeGreaterThanOrEqual(SCHEDULE.quiet.fromMs);
+      expect(released[i]!.at - released[i - 1]!.at).toBeGreaterThanOrEqual(SCHEDULE.minGapMs);
     }
   });
 });
+
 
 /**
  * "A celebration must never delay a trade" is right in spirit and wrong at the
