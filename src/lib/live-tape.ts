@@ -10,11 +10,8 @@
  */
 import type { JsonValue } from "@/lib/events";
 import type { LiveStory } from "@/domain/story";
-import {
-  tellConvictionStory,
-  CONVICTION_EVENT,
-  type ConvictionAction,
-} from "@/domain/conviction-event";
+import { CONVICTION_EVENT, type ConvictionAction } from "@/domain/conviction-event";
+import { tellPiStory } from "@/domain/pi-voice";
 import type { StackPerson } from "@/domain/conviction-cohort";
 import type { MixCandidate } from "@/domain/feed-cadence";
 import { findWashTrades, WASH } from "@/domain/wash-trading";
@@ -162,17 +159,20 @@ export function liveRowStory(r: Omit<LiveRow, "text" | "story">): LiveStory {
                 : buySell === "SELL"
                   ? "exit"
                   : "enter";
-  return tellConvictionStory({
-    action,
-    side: r.side,
-    context: {
-      amountUsd: r.amountUsd,
-      peopleCount: r.walletCount,
-      marketCount: Number(r.payload.markets ?? 0) || null,
-      question: r.kind === "market_created" ? r.marketTitle : null,
-      threshold: r.kind === "believer_milestone" ? Number(r.payload.threshold ?? 0) : null,
+  return tellPiStory(
+    {
+      action,
+      side: r.side,
+      context: {
+        amountUsd: r.amountUsd,
+        peopleCount: r.walletCount,
+        marketCount: Number(r.payload.markets ?? 0) || null,
+        question: r.kind === "market_created" ? r.marketTitle : null,
+        threshold: r.kind === "believer_milestone" ? Number(r.payload.threshold ?? 0) : null,
+      },
     },
-  });
+    r.id,
+  );
 }
 
 const ROUND_TRIP_WINDOW_MS = WASH.roundTripWindowMs;

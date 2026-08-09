@@ -30,9 +30,9 @@ import {
 import {
   classifyConvictionEvent,
   isCelebration,
-  tellConvictionStory,
   type ConvictionAction,
 } from "@/domain/conviction-event";
+import { tellPiStory } from "@/domain/pi-voice";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
 import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
 import {
@@ -976,7 +976,9 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       },
     };
     celebrationById.set(r.id, isCelebration(classifyConvictionEvent(convictionEvent)));
-    r.story = tellConvictionStory(convictionEvent);
+    // Facts above, voice here — the PI layer only chooses HOW this is said
+    // (src/domain/pi-voice); the row id keeps that choice frozen per row.
+    r.story = tellPiStory(convictionEvent, r.id);
     r.text = flattenStory(r.story);
   }
 

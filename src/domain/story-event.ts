@@ -40,6 +40,13 @@ import { capitalTrigger, FEED_TRIGGERS } from "./feed-event";
 import { formatPct } from "./metric-display";
 import { MATERIAL, type MaterialMove } from "./market-change";
 import { classifyFirstEvent } from "./first-event";
+import {
+  capitalArrivalLine,
+  capitalDrainLine,
+  crowdMoneyDivergenceLine,
+  priceWithoutCrowdLine,
+  reawakenLine,
+} from "./pi-voice";
 
 export type Side = "YES" | "NO";
 
@@ -135,6 +142,12 @@ export interface StoryEventInput {
   prev?: { type: StoryEventType; side?: Side } | null;
   /** USD → the viewer's display unit, for evidence/detail. Optional. */
   money?: (usd: number) => string;
+  /**
+   * A stable per-market key for the VOICE layer only (src/domain/pi-voice).
+   * It never changes a fact — it decides which phrasing of the same fact this
+   * market gets, and keeps that phrasing identical on every recomputation.
+   */
+  voiceKey?: string | null;
 }
 
 export interface MetricEvidence {
@@ -256,6 +269,10 @@ function dominantSide(input: StoryEventInput): Side {
  */
 export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
   const { yes, no, baseline, social, prev, money: fmt } = input;
+
+  /** Which phrasing this market gets, frozen per market and per state. */
+  const vkey = (type: StoryEventType, side?: Side): string =>
+    `${input.voiceKey ?? ""}:${fp(type, side)}`;
 
   // Sides in a deterministic order — the one with the most capital action first.
   const sides: [Side, SideWindow][] =
@@ -385,12 +402,19 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
       capitalMoved(s);
     if (!active && !hold) return null;
     const left = money(fmt, s.capitalDeltaUsd);
+    /* THE SIGNATURE OBSERVATION. Two trusted numbers that disagree — the one
+       place the voice may leave a question open rather than answer it. */
+    const v = crowdMoneyDivergenceLine(
+      s.believerDelta,
+      left,
+      vkey("people_capital_divergence", side),
+    );
     return {
       type: "people_capital_divergence",
       side,
       tier: TIER.people_capital_divergence,
-      headline: "More believers. Less capital.",
-      detail: `${s.believerDelta} ${plural(s.believerDelta, "person", "people")} joined while ${left} left the market.`,
+      headline: v.headline,
+      detail: `${v.body}${v.angle ? ` ${v.angle}` : ""}`,
       evidence: [
         { label: "Believers", value: `+${s.believerDelta}` },
         { label: "Capital", value: `−${left}` },
@@ -430,12 +454,13 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
     const hold =
       held(prev, "price_conviction_divergence", side) && p >= ACCEL_EXIT && s.believerDelta <= 0;
     if (!active && !hold) return null;
+    const v = priceWithoutCrowdLine(side, formatPct(p), vkey("price_conviction_divergence", side));
     return {
       type: "price_conviction_divergence",
       side,
       tier: TIER.price_conviction_divergence,
-      headline: "Price moved, but conviction did not.",
-      detail: `${side} re-rated ${formatPct(p)} with no new believers behind it.`,
+      headline: v.headline,
+      detail: v.body,
       evidence: [
         { label: "Price", value: formatPct(p) },
         { label: "Believers", value: `${s.believerDelta >= 0 ? "+" : ""}${s.believerDelta}` },
@@ -642,7 +667,8 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
        the universal feed while the center panel may still show it. */
     const arrivals = Math.max(0, yes.believerDelta) + Math.max(0, no.believerDelta);
     const cashIn = Math.abs(yes.capitalDeltaUsd) + Math.abs(no.capitalDeltaUsd);
-    const strong = a.trades24h >= STRONG_REAWAKEN_TRADES || arrivals >= 2 || cashIn >= STRONG_REAWAKEN_USD;
+    const strong =
+      a.trades24h >= STRONG_REAWAKEN_TRADES || arrivals >= 2 || cashIn >= STRONG_REAWAKEN_USD;
     return {
       type: "market_reawakened",
       tier: strong ? TIER.market_reawakened : 3,
@@ -650,8 +676,12 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
          is telemetry: it reports the query that found the row. The fact is that
          a room nobody had entered in a week has people in it, and saying it as
          before-and-after is both truer to what happened and worth reading. */
-      headline: "Back from the dead",
-      detail: `Nobody touched this for a week. Then ${a.trades24h} ${plural(a.trades24h, "trade", "trades")} landed.`,
+      ...(() => {
+        /* Volume proportional to the fact: a two-trade pulse and a room
+           filling back up are not the same return, so they never share copy. */
+        const v = reawakenLine(a.trades24h, strong, vkey("market_reawakened"));
+        return { headline: v.headline, detail: v.body };
+      })(),
       evidence: [{ label: "Trades today", value: String(a.trades24h) }],
       fingerprint: `market_reawakened:${strong ? "strong" : "weak"}`,
     };
@@ -735,9 +765,12 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
                    already suppresses this row, so what survives is a holder
                    trimming, and calling that a collapse would be a lie told for
                    drama. */
-                m.direction === "up"
-                ? `Money is piling into ${where}`
-                : `Money is leaving ${where}`
+                /* INTENSITY IS DERIVED, NEVER CHOSEN. −20%, −65% and −100% are
+                   three different events (src/domain/pi-voice). */
+                (m.direction === "up"
+                  ? capitalArrivalLine(where, m.pct ?? 0, vkey("material_move", side))
+                  : capitalDrainLine(where, m.pct ?? 0, vkey("material_move", side))
+                ).headline
               : `Believers on ${where} ${dir} ${pct ?? ""}`.trim();
 
     return {

@@ -237,6 +237,8 @@ export async function emitStoryEvents(
 
     const transition = emitStoryEvent({
       timeframeShort: "24H",
+      // Voice only: this market's phrasing of a state, stable across recomputes.
+      voiceKey: String(id),
       yes: {
         believerDelta: dYes,
         believerBase: Math.max(0, believersYes - dYes),
