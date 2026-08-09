@@ -140,11 +140,17 @@ export function arrangeFeed<T extends DisplayRow>(
     rankOf?: (id: string) => number | undefined;
     limit: number;
     /**
-     * Rows the reader JUST ASKED FOR by tapping "N New". They are always kept
-     * in the window and always lead the timed rows, whatever the mixer thinks
-     * of them and whenever they happened — otherwise a low-ranked or older
-     * arrival can be selected out (or sorted into the past) and the tap reads
-     * as doing nothing at all.
+     * Rows the reader JUST ASKED FOR by tapping "N New". They lead the ENTIRE
+     * column and are always kept in the window — whatever the mixer thinks of
+     * them, whenever they happened, and whether or not they are timeless.
+     *
+     * NO EXCEPTIONS, INCLUDING CONTINUITY. Timeless facts normally sit above
+     * the timeline because they are the backdrop the tape draws during silence.
+     * But an update the reader explicitly requested is not backdrop, and
+     * sorting a requested row underneath (or, if it happened to be timeless,
+     * INTO) that standing block is exactly the failure this pin exists to
+     * prevent: the counter clears, the column looks the same, and the tap reads
+     * as doing nothing. Asked-for rows go to the top. Full stop.
      */
     pinned?: ReadonlySet<string>;
   },
@@ -160,8 +166,10 @@ export function arrangeFeed<T extends DisplayRow>(
   const timed: T[] = [];
   const pinnedRows: T[] = [];
   for (const r of rows) {
-    if (r.timeless) timeless.push(r);
-    else if (pinnedIds?.has(r.id)) pinnedRows.push(r);
+    // Pinned is tested FIRST so a timeless arrival cannot be captured by the
+    // continuity block on its way to the top.
+    if (pinnedIds?.has(r.id)) pinnedRows.push(r);
+    else if (r.timeless) timeless.push(r);
     else timed.push(r);
   }
 
@@ -173,10 +181,11 @@ export function arrangeFeed<T extends DisplayRow>(
 
   pinnedRows.sort(newestFirst);
   return {
-    shown: [...orderForDisplay(timeless), ...pinnedRows, ...orderForDisplay(chosen)],
+    shown: [...pinnedRows, ...orderForDisplay(timeless), ...orderForDisplay(chosen)],
     hidden,
   };
 }
+
 
 /**
  * The three honest terminal states, plus "still streaming".
