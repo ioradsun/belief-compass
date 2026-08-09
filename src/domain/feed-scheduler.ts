@@ -288,12 +288,9 @@ function gapFor(
   // entrance already playing, which is the animation floor, not a delay.
   if (next.perishability === "now") return floor;
 
-  const band =
-    mode === "busy" ? SCHEDULE.busy : SCHEDULE.normal;
+  const band = mode === "busy" ? SCHEDULE.busy : SCHEDULE.normal;
   const wanted = spread(next.id, band.fromMs, band.toMs);
-  // Standing facts have no bound to breach — silence is exactly where they
-  // belong, and hurrying them would defeat the point.
-  if (next.perishability === "standing") return Math.max(floor, wanted);
+
 
   const waiting = queue.filter((r) => r.perishability === "soon").length;
   if (waiting === 0) return Math.max(floor, wanted);
