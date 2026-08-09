@@ -314,6 +314,9 @@ export const SIGNIFICANCE_COVERAGE = {
   standing_signal: "derived",
   person_milestone: "derived",
   showed_up: "derived",
+} as const satisfies Record<string, "derived" | "emitted">;
+
+
 
 
 export type ScoredKind = keyof typeof SIGNIFICANCE_COVERAGE;
