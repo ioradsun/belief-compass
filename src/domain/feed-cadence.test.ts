@@ -500,3 +500,64 @@ describe("no single kind of story takes over the window", () => {
     expect(rows[0].id).toBe(breaking.id);
   });
 });
+
+describe("variety: the same OBSERVATION cannot fill the window (plan §11.8)", () => {
+  // Different markets, different copy, different motifs — one sentence.
+  const sameShape = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      c({
+        family: "live_action",
+        significance: 0.5,
+        marketId: `s${i}`,
+        motif: `distinct-copy:${i}`,
+        signalPrimary: "tension",
+        signalKind: "believers_left_price_rose",
+      }),
+    );
+
+  const variedShape = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      c({
+        family: "collective_story",
+        significance: 0.5,
+        marketId: `v${i}`,
+        motif: `varied:${i}`,
+      }),
+    );
+
+  it("sinks repeats of one signal kind below equally-strong varied stories", () => {
+    const top = mixFeed([...sameShape(6), ...variedShape(6)]).slice(0, 6);
+    const repeats = top.filter((r) => r.signalKind === "believers_left_price_rose").length;
+    expect(repeats).toBeLessThanOrEqual(CADENCE.maxPerSignalKind + 1);
+  });
+
+  it("still shows them when they are the only thing that happened", () => {
+    expect(mixFeed(sameShape(5))).toHaveLength(5);
+  });
+
+  it("never holds back a breaking row of a repeated shape", () => {
+    const breaking = c({
+      family: "market_transition",
+      significance: 0.95,
+      marketId: "big",
+      motif: "distinct-copy:breaking",
+      signalPrimary: "tension",
+      signalKind: "believers_left_price_rose",
+    });
+    expect(mixFeed([...sameShape(6), breaking])[0].id).toBe(breaking.id);
+  });
+
+  it("is inert for rows with no signal shape", () => {
+    const rows = [
+      c({ marketId: "a", motif: "m1" }),
+      c({ marketId: "b", motif: "m2" }),
+      c({ marketId: "c", motif: "m3" }),
+      c({ marketId: "d", motif: "m4" }),
+    ];
+    const before = mixFeed(rows).map((r) => r.id);
+    const after = mixFeed(rows.map((r) => ({ ...r, signalPrimary: "none", signalKind: null }))).map(
+      (r) => r.id,
+    );
+    expect(after).toEqual(before);
+  });
+});
