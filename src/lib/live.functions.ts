@@ -58,6 +58,7 @@ import {
   type DiscoveryMoment,
 } from "@/domain/discovery-moment";
 import { viewerNetwork } from "@/domain/viewer-network";
+import { namePerson, knownFirst } from "@/domain/feed-people";
 import type { CachedRelationship } from "@/lib/dna/viewer-dna-cache.server";
 import { weiToEth } from "@/domain/money";
 import {
@@ -753,13 +754,8 @@ async function buildTape(data: z.output<typeof input>) {
     const w = r.wallet?.toLowerCase();
     // Name the actor / creator when we have one; tag the network relationship.
     if (w) {
-      const prof = profiles.get(w);
-      const relationship = labelByWallet.get(w) ?? null;
-      r.face = {
-        name: prof?.displayName ?? aliasFor(w),
-        avatarUrl: prof?.pfpUrl ?? null,
-        relationship,
-      } satisfies LiveFace;
+      const { name, avatarUrl, relationship } = namePerson(w, profiles, labelByWallet, aliasFor);
+      r.face = { name, avatarUrl, relationship } satisfies LiveFace;
     }
 
     // The crowd behind a burst, named. Ordered by what they committed (the
@@ -774,39 +770,15 @@ async function buildTape(data: z.output<typeof input>) {
       const seen = new Set<string>(w ? [w] : []);
       const named = stakes
         .filter((s) => !seen.has(s.wallet) && (seen.add(s.wallet), true))
-        .map((s) => {
-          const prof = profiles.get(s.wallet);
-          return {
-            wallet: s.wallet,
-            name: prof?.displayName ?? aliasFor(s.wallet),
-            avatarUrl: prof?.pfpUrl ?? null,
-            relationship: labelByWallet.get(s.wallet) ?? null,
-          };
-        });
-      // Stable partition, not a re-sort: known people lead, everyone else
-      // keeps the commitment order the grouping gave them.
-      if (named.length > 0)
-        r.people = [
-          ...named.filter((p) => p.relationship),
-          ...named.filter((p) => !p.relationship),
-        ];
+        .map((s) => namePerson(s.wallet, profiles, labelByWallet, aliasFor));
+      if (named.length > 0) r.people = knownFirst(named);
     } else if (!r.face && !r.people) {
       // A market signal: no actor, no burst — the believers it is about.
       const believers = believersByMarket.get(Number(r.marketId)) ?? [];
       if (believers.length > 0) {
-        const named = believers.map((wallet) => {
-          const prof = profiles.get(wallet);
-          return {
-            wallet,
-            name: prof?.displayName ?? aliasFor(wallet),
-            avatarUrl: prof?.pfpUrl ?? null,
-            relationship: labelByWallet.get(wallet) ?? null,
-          };
-        });
-        r.people = [
-          ...named.filter((p) => p.relationship),
-          ...named.filter((p) => !p.relationship),
-        ];
+        r.people = knownFirst(
+          believers.map((wallet) => namePerson(wallet, profiles, labelByWallet, aliasFor)),
+        );
       }
     }
 
