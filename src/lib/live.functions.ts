@@ -1097,6 +1097,59 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     scored.map(({ candidate }) => scoreFeedEvent(candidate).score),
   );
 
+  /* ANOMALY, MEASURED ONCE PER ROW (plan §11 step 5).
+     The vector is viewer-blind and pure, so it is computed here — before
+     significance — and reused by the diagnostic attach further down. It feeds
+     significance as SUPPORTING evidence only: `scoreLiveAction` still caps an
+     individual action below the exceptional band, so an anomalous market can
+     never manufacture a structural story.
+     `preEventHolders` is deliberately null in-feed: reconstructing the holder
+     hierarchy needs a bounded historical read the tape does not do, and a large
+     amount is never allowed to stand in for "a whale left". Concentration
+     therefore stays 0 here and is reviewed in the corpus script. */
+  const signalNowMs = Date.now();
+  const signalById = new Map<string, ReturnType<typeof signalVector>>();
+  for (const { r } of scored) {
+    const m = momentumById.get(Number(r.marketId));
+    signalById.set(
+      r.id,
+      signalVector(
+        factsForRow(
+          {
+            kind: r.kind,
+            wallet: r.wallet,
+            action: (r.payload as { action?: "BUY" | "SELL" }).action ?? null,
+            amountUsd: r.amountUsd,
+            occurredAt: r.occurredAt,
+          },
+          m
+            ? {
+                yesPrice: m.yesPrice,
+                yesPriceChange1h: m.yesPriceChange1h,
+                yesPriceChange24h: m.yesPriceChange24h,
+                yesPriceChange7d: m.yesPriceChange7d,
+                yesCapitalDelta24h: m.yesCapitalDelta24h,
+                noCapitalDelta24h: m.noCapitalDelta24h,
+                capitalHeldYes: m.capitalHeldYes,
+                capitalHeldNo: m.capitalHeldNo,
+                tradeCount24h: m.tradeCount24h,
+                tradeCount7d: m.tradeCount7d,
+                believersYes: m.believersYes,
+                believersNo: m.believersNo,
+                newBelievers24h: m.newBelievers24h,
+                newBelieversYes24h: m.newBelieversYes24h,
+                newBelieversNo24h: m.newBelieversNo24h,
+                peopleYesChange24h: m.peopleYesChange24h,
+                sideFlips24h: m.sideFlips24h,
+                lastTradeAt: m.lastTradeAt,
+              }
+            : null,
+          signalNowMs,
+        ),
+      ),
+    );
+  }
+
   const derived = new Map<string, number>();
   // The tier the admission gate computes and used to discard. It is exactly
   // "how much of the reader's attention is this owed", already calculated —
@@ -1106,7 +1159,15 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   const material = scored
     .filter(({ candidate }) => admitToFeed(candidate, floor))
     .map(({ r, candidate, fullExit, daysHeld }) => {
-      derived.set(r.id, scoreLiveAction(candidate, { daysHeld, fullExit }).score);
+      const v = signalById.get(r.id);
+      derived.set(
+        r.id,
+        scoreLiveAction(candidate, {
+          daysHeld,
+          fullExit,
+          signal: v ? { informationGain: v.informationGain, primary: v.primary } : null,
+        }).score,
+      );
       tierById.set(r.id, scoreFeedEvent(candidate).tier);
       return r;
     });
@@ -1362,54 +1423,12 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     } satisfies MixCandidate;
   }
 
-  /* DIAGNOSTIC BEFORE INFLUENTIAL (plan §11 step 4).
-     The anomaly vector is measured for every composed row and attached — but
-     ONLY under SIGNAL_DIAGNOSTIC=1, and nothing downstream reads it. Ranking,
-     cadence and copy are byte-for-byte unchanged; this exists so the model can
-     be judged against real rows before it is allowed to move anything.
-     `preEventHolders` is deliberately null here: reconstructing the hierarchy
-     needs a bounded historical read the tape does not do, and a large amount is
-     never allowed to stand in for "a whale left". Concentration stays 0 in-feed
-     and is reviewed in scripts/check-feed-signal-rows.ts. */
+  /* The vector is computed once per row in `signalById` (above the scoring
+     pass) and is now INFLUENTIAL through significance. It is still only
+     ATTACHED to the shipped payload under SIGNAL_DIAGNOSTIC=1, so review keeps
+     the same shape and the client payload does not grow. */
   if (process.env["SIGNAL_DIAGNOSTIC"] === "1") {
-    const nowMs = Date.now();
-    for (const r of material) {
-      const m = momentumById.get(Number(r.marketId));
-      r.signal = signalVector(
-        factsForRow(
-          {
-            kind: r.kind,
-            wallet: r.wallet,
-            action: (r.payload as { action?: "BUY" | "SELL" }).action ?? null,
-            amountUsd: r.amountUsd,
-            occurredAt: r.occurredAt,
-          },
-          m
-            ? {
-                yesPrice: m.yesPrice,
-                yesPriceChange1h: m.yesPriceChange1h,
-                yesPriceChange24h: m.yesPriceChange24h,
-                yesPriceChange7d: m.yesPriceChange7d,
-                yesCapitalDelta24h: m.yesCapitalDelta24h,
-                noCapitalDelta24h: m.noCapitalDelta24h,
-                capitalHeldYes: m.capitalHeldYes,
-                capitalHeldNo: m.capitalHeldNo,
-                tradeCount24h: m.tradeCount24h,
-                tradeCount7d: m.tradeCount7d,
-                believersYes: m.believersYes,
-                believersNo: m.believersNo,
-                newBelievers24h: m.newBelievers24h,
-                newBelieversYes24h: m.newBelieversYes24h,
-                newBelieversNo24h: m.newBelieversNo24h,
-                peopleYesChange24h: m.peopleYesChange24h,
-                sideFlips24h: m.sideFlips24h,
-                lastTradeAt: m.lastTradeAt,
-              }
-            : null,
-          nowMs,
-        ),
-      );
-    }
+    for (const r of material) r.signal = signalById.get(r.id);
   }
 
 

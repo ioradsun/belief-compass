@@ -215,3 +215,40 @@ describe("fallback stays available but observable", () => {
     expect(SIGNIFICANCE.fallback).toBe(0.5);
   });
 });
+
+describe("market anomaly as supporting evidence", () => {
+  it("lifts an otherwise ordinary row without changing its family", () => {
+    const plain = scoreLiveAction(trade({ amountUsd: 20 })).score;
+    const anomalous = scoreLiveAction(trade({ amountUsd: 20 }), {
+      signal: { informationGain: 0.6, primary: "tension" },
+    }).score;
+    expect(anomalous).toBeGreaterThan(plain);
+  });
+
+  it("says why", () => {
+    const s = scoreLiveAction(trade({ amountUsd: 20 }), {
+      signal: { informationGain: 0.42, primary: "beforePrice" },
+    });
+    expect(s.reasons.join(" ")).toContain("beforePrice anomaly");
+  });
+
+  it("cannot manufacture structural significance", () => {
+    const s = scoreLiveAction(trade({ amountUsd: 4000 }), {
+      signal: { informationGain: 1, primary: "tension" },
+    });
+    expect(s.score).toBeLessThanOrEqual(SIGNIFICANCE.bands.high);
+    const flip = scoreMarketTransition({ type: "majority_flipped", tier: 1 }).score;
+    expect(s.score).toBeLessThan(flip);
+  });
+
+  it("no signal changes nothing", () => {
+    expect(scoreLiveAction(trade({ amountUsd: 20 }), { signal: null }).score).toBe(
+      scoreLiveAction(trade({ amountUsd: 20 })).score,
+    );
+    expect(
+      scoreLiveAction(trade({ amountUsd: 20 }), {
+        signal: { informationGain: 0, primary: "none" },
+      }).score,
+    ).toBe(scoreLiveAction(trade({ amountUsd: 20 })).score);
+  });
+});

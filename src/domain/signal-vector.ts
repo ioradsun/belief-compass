@@ -59,6 +59,13 @@ export const CONCENTRATION_MIN_POSITION = 10;
  */
 export const MAX_CREDIBLE_REL_MOVE = 0.5;
 
+/**
+ * The smallest share of a market's anomaly a row with no evidence of its own may
+ * inherit. Above zero because such a row is still about an anomalous market;
+ * well below one because the market's story is told once, not once per trade.
+ */
+export const ROW_INHERIT_FLOOR = 0.3;
+
 
 // ---------------------------------------------------------------------------
 // Types
@@ -149,6 +156,19 @@ export type SignalVector = {
   signals: Signals;
   tensionKind?: TensionKind;
   concentrationKind?: ConcentrationKind;
+  /**
+   * The anomaly of the MARKET, identical for every row about it. This is the
+   * number the signals actually measure.
+   */
+  marketGain: number;
+  /**
+   * How much of the market's anomaly THIS row is entitled to (0..1). A market's
+   * story is told once; a row that adds no evidence of its own inherits only a
+   * discounted share of it, so a busy market cannot hand the feed twenty copies
+   * of the same observation.
+   */
+  carrier: number;
+  /** `marketGain × carrier` — the ranking number. */
   informationGain: number;
   primary: SignalKey;
   reasons: string[];
@@ -347,7 +367,14 @@ const WEIGHT: Record<Exclude<SignalKey, "none">, number> = {
 };
 
 export function emptyVector(): SignalVector {
-  return { signals: { ...ZERO }, informationGain: 0, primary: "none", reasons: [] };
+  return {
+    signals: { ...ZERO },
+    marketGain: 0,
+    carrier: 0,
+    informationGain: 0,
+    primary: "none",
+    reasons: [],
+  };
 }
 
 export function signalVector(facts: SignalFacts): SignalVector {
@@ -510,7 +537,7 @@ export function signalVector(facts: SignalFacts): SignalVector {
   ];
   let survive = 1;
   for (const [key, value] of parts) survive *= 1 - WEIGHT[key] * value;
-  const informationGain = clamp01(1 - survive);
+  const marketGain = clamp01(1 - survive);
 
   let primary: SignalKey = "none";
   let best = 0;
@@ -522,10 +549,32 @@ export function signalVector(facts: SignalFacts): SignalVector {
     }
   }
 
+  /* ROW EVIDENCE vs MARKET ANOMALY (step-4 finding 1).
+     The signals above describe the MARKET, so every row about a busy market
+     used to carry the identical gain and the top of the feed became one market
+     repeated. The market's anomaly is told once — by the row that carries the
+     evidence for it. A row with its own evidence (a whale exit reconstructed
+     from the hierarchy, the input whose silence we are timing, a trade large
+     enough to be a visible share of the day's money) earns the full number.
+     Everything else inherits a floor-limited share, so it is still ranked above
+     a nothing-row without being able to repeat the headline. */
+  const rowEvidence = conc.kind != null || signals.nonresponse > 0;
+  let carrier = 1;
+  if (facts.actor && !rowEvidence) {
+    const share = grossIn > 0 ? clamp01(facts.actor.amountUsd / grossIn) : 0;
+    carrier = ROW_INHERIT_FLOOR + (1 - ROW_INHERIT_FLOOR) * share;
+    reasons.push(
+      `row carries ${(carrier * 100).toFixed(0)}% of the market's anomaly ($${facts.actor.amountUsd.toFixed(0)} of $${grossIn.toFixed(0)} moved)`,
+    );
+  }
+  const informationGain = clamp01(marketGain * carrier);
+
   return {
     signals,
     tensionKind: lead?.kind,
     concentrationKind: conc.kind,
+    marketGain,
+    carrier,
     informationGain,
     primary,
     reasons,
