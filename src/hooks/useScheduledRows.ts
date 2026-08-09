@@ -81,6 +81,14 @@ export function useScheduledRows<T extends SchedulableRow>(
   const painted = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const entrances = useRef<Map<string, number>>(new Map());
+  /**
+   * READER-VISIBLE SILENCE, the only clock that can answer "does this page look
+   * dead to the person in front of it". It is when a row last ARRIVED for this
+   * reader — first paint counts, every release counts — and deliberately not
+   * when an event occurred, which is a different quantity that can be minutes
+   * older than anything the reader experienced.
+   */
+  const lastArrivalAt = useRef(Date.now());
 
   /**
    * Run the scheduler until it has nothing due, then sleep exactly as long as
