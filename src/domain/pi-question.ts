@@ -63,7 +63,20 @@ export type QuestionKind =
   | "newcomers_replaced_a_whale"
   | "concentrating"
   | "person_unwinding"
-  | "unusual";
+  | "unusual"
+  /* COMPOSED SHAPES — earned by a GROUP of rows rather than by one vector.
+     See src/domain/composed-clue.ts. A clue built from several plain receipts
+     is often the most interesting thing in the window, so these rank beside
+     single-row shapes rather than beneath them. */
+  | "person_repositioning"
+  | "person_rotation"
+  | "person_same_side"
+  | "in_and_out"
+  | "creator_pickup"
+  | "side_burst"
+  | "capital_concentrated_arrival"
+  | "network_convergence"
+  | "network_split";
 
 export type PIQuestion = { text: string; kind: QuestionKind };
 
@@ -80,10 +93,40 @@ export type QuestionInput = {
 };
 
 /**
- * At most this many questions in one feed window. A page of questions is an
- * interrogation, not an investigation.
+ * The floor of the editorial budget — a quiet window still gets to be curious.
+ *
+ * There used to be a flat ceiling of three, which was right for a feed called
+ * Now and wrong for a product called Insider. The question is one of the main
+ * reasons the feed exists: it is the moment the reader stops scrolling and
+ * opens the market. Three per window meant a rich hour of evidence shipped as
+ * a list of conclusions with two questions buried in it.
  */
-export const MAX_QUESTIONS_PER_FEED = 3;
+export const MIN_QUESTION_BUDGET = 3;
+/** Nothing justifies more than this in one window. Curiosity, not a quiz. */
+export const MAX_QUESTION_BUDGET = 9;
+/**
+ * The weakest a candidate may be and still be worth a slot, on the same scale
+ * as `informationGain` (intelligence starts at 0.12). Below this the window
+ * simply stops asking rather than filling its budget with filler.
+ */
+export const QUESTION_WEIGHT_FLOOR = 0.1;
+/** A clue this strong is kept even when the budget is spent. */
+export const PREMIUM_GAIN = 0.6;
+
+/**
+ * How many questions this window has earned.
+ *
+ * Roughly one per five surviving stories — a healthy 20–30 row Insider feed
+ * lands at 5–7 — widened when the window is genuinely anomalous (lots of
+ * intelligence-grade rows) and never below the floor. Scarcity exists to
+ * prevent interrogation, not to suppress real curiosity, so this is a budget
+ * and not a cap: `rationQuestions` still refuses to spend it on weak shapes.
+ */
+export function questionBudget(surviving: number, intelligenceRows = 0): number {
+  const base = Math.max(MIN_QUESTION_BUDGET, Math.round(surviving / 5));
+  const rich = intelligenceRows >= 5 ? 2 : intelligenceRows >= 3 ? 1 : 0;
+  return Math.min(MAX_QUESTION_BUDGET, base + rich);
+}
 
 /** A person visibly reducing exposure across a market — the pattern layer's words. */
 const UNWINDING = /backing away|unwinding|cutting|reducing|stepped back|trimming/i;
@@ -289,19 +332,62 @@ export function questionAdds(question: string, said: string): boolean {
  * of row ids allowed to keep their question.
  */
 export function rationQuestions(
-  rows: Array<{ id: string; kind: QuestionKind; gain: number }>,
-  max: number = MAX_QUESTIONS_PER_FEED,
+  rows: Array<{ id: string; kind: QuestionKind; gain: number; personal?: boolean; text?: string }>,
+  max: number = MIN_QUESTION_BUDGET,
 ): Set<string> {
+  /* A REPEATED SHAPE PAYS, IT IS NOT BANNED.
+     The old rule kept at most one question of each kind, which sounds like
+     variety and behaves like censorship: two genuinely strong contradictions in
+     one window are two genuinely strong contradictions, and silencing the
+     second one is an editorial lie. Instead each repeat of a shape halves that
+     candidate's effective weight, so a second "people up, capital down" has to
+     beat everything else on the board to be worth its slot.
+
+     Selection is greedy over the decayed weights rather than a single sort,
+     so a premium clue arriving late never loses to three mediocre ones that
+     happened to be scored first. */
   const keep = new Set<string>();
-  const seen = new Set<QuestionKind>();
-  const ordered = [...rows].sort(
+  const used = new Map<QuestionKind, number>();
+  /* THE SAME SENTENCE TWICE IS NOT VARIETY, IT IS A BUG THE READER CAN SEE.
+     Shape decay allows a repeated KIND when both clues are strong, but two rows
+     whose variants hashed to identical words read as a template. The second one
+     is dropped outright. */
+  const spoken = new Set<string>();
+  const norm = (t: string | undefined) => (t ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  const pool = [...rows].sort(
     (a, b) => b.gain - a.gain || (piHash(a.id) - piHash(b.id) || a.id.localeCompare(b.id)),
   );
-  for (const r of ordered) {
-    if (keep.size >= max) break;
-    if (seen.has(r.kind)) continue;
-    seen.add(r.kind);
-    keep.add(r.id);
+
+  const weight = (r: { kind: QuestionKind; gain: number; personal?: boolean }) =>
+    (r.gain + (r.personal ? 0.08 : 0)) * Math.pow(0.5, used.get(r.kind) ?? 0);
+
+  // Premium clues bypass scarcity: the whole point of a budget is to protect
+  // these, so they may never be the thing it excludes.
+  for (const r of pool)
+    if (r.gain >= PREMIUM_GAIN && !spoken.has(norm(r.text))) {
+      keep.add(r.id);
+      spoken.add(norm(r.text));
+      used.set(r.kind, (used.get(r.kind) ?? 0) + 1);
+    }
+
+  while (keep.size < max) {
+    let best: (typeof pool)[number] | null = null;
+    let bestW = -Infinity;
+    for (const r of pool) {
+      if (keep.has(r.id) || (r.text != null && spoken.has(norm(r.text)))) continue;
+      const w = weight(r);
+      if (w > bestW) {
+        best = r;
+        bestW = w;
+      }
+    }
+    /* Never manufacture a question to fill the budget: once the decayed weight
+       of the best remaining candidate falls below the bar, the window is done
+       asking. */
+    if (!best || bestW < QUESTION_WEIGHT_FLOOR) break;
+    keep.add(best.id);
+    spoken.add(norm(best.text));
+    used.set(best.kind, (used.get(best.kind) ?? 0) + 1);
   }
   return keep;
 }
