@@ -12,9 +12,17 @@
  *   4. The activity projection reproduces the server's scope/side/order semantics.
  *   5. The pulse composes the canonical shape label; scoring stays bounded and is
  *      three distinct judgments, never one universal score.
+ *   6. THE BOUNDARY (static): no product surface — anything under src/components
+ *      or src/routes — imports an intelligence PRIMITIVE. Surfaces read
+ *      projections (activity / insight / now / read); they never rank, score,
+ *      classify a shape, or draft a question themselves. Constants, types and
+ *      attention mechanics are not intelligence and stay allowed.
+ *   7. Deleted pre-Insider plumbing stays deleted (step 7 of the migration).
  *
  * Run:  npx tsx scripts/check-insider.ts   (npm run check:insider)
  */
+import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import {
   INSIDER_CONSTITUTION,
   INSIDER_SIGNAL_KINDS,
@@ -33,6 +41,7 @@ const check = (ok: boolean, msg: string) => {
   if (!ok) failures.push(msg);
 };
 const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) <= eps;
+
 
 // 1. Constitution ------------------------------------------------------------
 check(
