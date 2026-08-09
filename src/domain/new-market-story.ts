@@ -19,9 +19,12 @@
  *    window is Intelligence — that is the only grade that may ask a question,
  *    and only when the reaction is genuinely unusual.
  */
-import { formatStoryMoney, type LiveStory } from "./conviction-event";
+import { formatStoryMoney } from "./conviction-event";
 import { countWord } from "./pi-voice";
-import type { CopyLevel } from "./transition-denominator";
+import type { LiveStory } from "./story";
+
+/** How loud a new-market row is allowed to be. */
+export type NewMarketLevel = "receipt" | "observation" | "intelligence";
 
 export type NewMarketSide = "YES" | "NO" | null;
 
@@ -44,7 +47,7 @@ export type NewMarketVerdict = {
   /** Null when the row does not deserve to be printed at all. */
   story: LiveStory | null;
   /** The loudest this row may ever be. */
-  level: CopyLevel;
+  level: NewMarketLevel;
   /** True when the row is inventory and must be dropped from the feed. */
   suppress: boolean;
 };
