@@ -48,7 +48,7 @@ import {
   isCovered,
   fallbackRate,
 } from "@/domain/significance";
-import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
+import { familyOf, VOICE_CEILING, type MixCandidate } from "@/domain/feed-cadence";
 import { signalVector } from "@/domain/signal-vector";
 import { factsForRow } from "@/domain/signal-facts";
 import {
@@ -57,7 +57,6 @@ import {
   type PriceSample,
 } from "@/domain/price-proof";
 import { editFeed, secondSentenceAdds } from "@/domain/feed-editorial";
-import { VOICE_CEILING } from "@/domain/feed-cadence";
 import { findPersonPatterns } from "@/domain/person-pattern";
 
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
