@@ -91,8 +91,18 @@ const hours = (h: number): string => {
 /**
  * The story a new market has earned. `null` story + `suppress` means the feed
  * should not carry the row at all.
+ *
+ * Every sentence leaves through the conviction grammar, so a count of one can
+ * never reach a surface as "One people" / "1 believers" whichever branch wrote
+ * it — the agreement rule belongs to the composer, not to each call site.
  */
 export function tellNewMarketStory(input: NewMarketInput): NewMarketVerdict {
+  const v = tellNewMarketStoryRaw(input);
+  return v.story ? { ...v, story: fixStoryAgreement(v.story) } : v;
+}
+
+function tellNewMarketStoryRaw(input: NewMarketInput): NewMarketVerdict {
+
   const name = input.creatorName?.trim() || null;
   const rel = input.creatorRelationship ?? null;
   const yes = Math.max(0, Math.round(n(input.believersYes)));
