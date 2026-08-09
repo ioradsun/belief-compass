@@ -251,7 +251,11 @@ behind an unchanged surface, each step proven by parity tests.
     (`loadTapeSource`, `loadBelieverFaces`, `loadActorBeliefs`, `loadViewerDna`,
     `loadViewerHoldings`, `loadPricePaths`, `TapeDeps`/`REAL_DEPS`), with the query
     shape in `insider/tape-input.ts` — each loader declared GLOBAL or VIEWER at its
-    signature, which is what the shared-tape cache key rests on. **Still to pull in:**
+    signature, which is what the shared-tape cache key rests on. **Discovery pass
+    landed:** `insider/composition/discovery-pass.ts` `runDiscoveryPass(...)` owns
+    the second ranking dimension (discovery scores + the synthesized "you two
+    should meet" rows) as one pure function — no IO, no input mutation, so two
+    readers can be run over the same facts and compared. **Still to pull in:**
     significance, discovery, grouping and PI narrative drafting out of
     `live.functions` into `src/lib/insider/*` behind the same projection.
 
