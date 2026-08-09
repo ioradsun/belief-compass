@@ -208,7 +208,7 @@ import { applyViewerAngle, clueLine } from "./pi-voice";
 
 describe("applyViewerAngle", () => {
   const story = {
-    category: "trade" as const,
+    category: "growing" as const,
     headline: "Stepped in",
     body: "Three wallets entered NO.",
     attribution: null,
