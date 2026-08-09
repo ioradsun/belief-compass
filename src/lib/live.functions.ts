@@ -8,22 +8,32 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import type { z } from "zod";
-import { peekSwr, swrCache } from "@/lib/server-cache";
+import { swrCache } from "@/lib/server-cache";
 import { tapeInput } from "@/lib/insider/tape-input";
 import { buildTape } from "@/lib/insider/build.server";
 import { isSharedTape, tapeCacheKey, TAPE_TTL_MS } from "@/lib/insider/cache";
+import { warmTape, writeTapeSeed, type TapeResult } from "@/lib/insider/seed.server";
 
 export const listLiveEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof tapeInput>) => tapeInput.parse(d ?? {}))
   .handler(async ({ data }) => {
     if (!isSharedTape(data)) return buildTape(data);
-    return swrCache(tapeCacheKey(data?.limit), { ttlMs: TAPE_TTL_MS }, () => buildTape(data));
+    return swrCache(tapeCacheKey(data?.limit), { ttlMs: TAPE_TTL_MS }, async () => {
+      const built = await buildTape(data);
+      // The seed is what a COLD isolate paints from; only the shared answer
+      // qualifies, and only a successful one. Awaited, because work belonging
+      // to a responded request is cancelled on this runtime.
+      await writeTapeSeed(built as TapeResult);
+      return built;
+    });
   });
 
 /**
- * The SSR read: this isolate's warm tape, or null. NEVER builds — a shell that
- * waits on the tape is the stall this whole path exists to remove.
+ * The SSR read: this isolate's warm tape, else the durable seed, else null.
+ * NEVER builds — a shell that waits on the tape is the stall this whole path
+ * exists to remove.
  */
 export const getWarmTape = createServerFn({ method: "GET" }).handler(async () => {
-  return peekSwr<Awaited<ReturnType<typeof buildTape>>>(tapeCacheKey(120)) ?? null;
+  return (await warmTape(120)) ?? null;
 });
+
