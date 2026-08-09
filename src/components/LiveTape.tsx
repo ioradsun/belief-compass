@@ -25,6 +25,8 @@ import { useWarmMarket } from "@/lib/realtime/warm-market";
 
 import { PersonStack } from "@/components/PersonStack";
 import { showsAmountFooter } from "@/domain/amount-footer";
+import { fixStoryAgreement } from "@/domain/grammar";
+
 
 import { listLiveEvents } from "@/lib/live.functions";
 import { useStickyRows } from "@/hooks/useSticky";
@@ -450,7 +452,11 @@ export function LiveTape({
       ) : (
         <ul className="space-y-3">
           {shown.map((r) => {
-            const s = r.story;
+            /* Copy arrives from many writers (voice, patterns, questions,
+               cached payloads written by older builds). Agreement is enforced
+               once here, at the surface, so no row can ever read "One people". */
+            const s = fixStoryAgreement(r.story);
+
             const personal = s.personal;
             // A discovery moment is about a PERSON, not a market — it has no
             // destination of its own, and the faces are deliberately the only

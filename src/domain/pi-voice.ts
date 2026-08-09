@@ -37,6 +37,8 @@
  * vocabularies below.
  */
 import type { LiveCategory, LiveStory, NetworkLabel, Side, BeatTone } from "./story";
+import { fixStoryAgreement } from "./grammar";
+
 import type { TensionKind, ConcentrationKind, ClueStage } from "./signal-vector";
 import {
   classifyConvictionEvent,
@@ -307,7 +309,18 @@ const NEGATIVE: ReadonlySet<ConvictionEventType> = new Set<ConvictionEventType>(
  * Anything this module has no better angle on falls through to the plain fact
  * grammar in conviction-event. Silence beats a synonym.
  */
+/**
+ * NUMBER AGREEMENT IS NOT OPTIONAL. Every template below can be handed a count
+ * of one, and "One people took YES" destroys the credibility of every figure
+ * next to it. The rendered story passes through one deterministic agreement
+ * pass on the way out, so no template has to remember.
+ */
 export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
+  return fixStoryAgreement(tellPiStoryRaw(e, key));
+}
+
+function tellPiStoryRaw(e: ConvictionEvent, key: string): LiveStory {
+
   const type = classifyConvictionEvent(e);
   const obs = observeConviction(e);
   const c = e.context ?? {};
