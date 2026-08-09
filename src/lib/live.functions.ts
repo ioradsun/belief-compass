@@ -202,15 +202,60 @@ export const getWarmTape = createServerFn({ method: "GET" }).handler(async () =>
   return peekSwr<Awaited<ReturnType<typeof buildTape>>>(`${TAPE_KEY}:120`) ?? null;
 });
 
-async function buildTape(data: z.output<typeof input>) {
-  const sb = serviceClient();
-  const limit = data?.limit ?? 120;
-  const viewer = data?.wallet?.toLowerCase() ?? null;
+/**
+ * THE FACTUAL HALF OF THE TAPE — everything true regardless of who is reading.
+ *
+ * The first seam in a path that had none. `buildTape` interleaved global reads,
+ * the viewer's reads and composition across ~1100 lines, which is why a signed-in
+ * reader could not share a build with anyone else: there was no boundary to cache
+ * on. This is that boundary's factual side, and nothing here may ever depend on
+ * `data.wallet`.
+ *
+ * DELIBERATELY PARTIAL. Three of the eight reads live here — events, market
+ * names + market_state, and the eth/usd snapshot. Two more (signal-market holders
+ * and actor beliefs) are provably global and belong here next; they are left in
+ * place so this change stays a mechanical move. Profile resolution can NEVER move
+ * here: its wallet set includes the viewer's discovery moments, so it straddles
+ * the boundary and is the reason this is a source loader rather than the whole
+ * global half.
+ *
+ * Returns plain data only — arrays, Maps and numbers, no row objects — so nothing
+ * a later viewer-relative pass mutates can reach anything cached from here.
+ */
+interface TapeSource {
+  /**
+   * Raw event rows, newest first. Untyped by PostgREST and cast field-by-field
+   * where they are read, exactly as before this extraction. Never mutated
+   * downstream — grouping builds new objects — so these are safe to share.
+   */
+  rows: Record<string, unknown>[];
+  marketIds: number[];
+  titleById: Map<number, string>;
+  /** Who asked each question — the strongest stake a reader can have in one. */
+  creatorByMarket: Map<number, string>;
+  momentumById: Map<number, Momentum>;
+  /** 0 means "no rate", never "free" — callers must not price rows with it. */
+  ethUsd: number;
+  error: string | null;
+}
 
+const EMPTY_SOURCE: TapeSource = {
+  rows: [],
+  marketIds: [],
+  titleById: new Map(),
+  creatorByMarket: new Map(),
+  momentumById: new Map(),
+  ethUsd: 0,
+  error: null,
+};
+
+async function loadTapeSource(
+  sb: ReturnType<typeof serviceClient>,
+  data: z.output<typeof input>,
+): Promise<TapeSource> {
+  const limit = data?.limit ?? 120;
   const scope = data?.marketIds?.map((n) => String(n)) ?? null;
-  // Scoped to specific markets == rendered inside a market panel, which already
-  // shows the question and the side. Unscoped == the app-wide tape, which does not.
-  const scoped = scope != null;
+
   let q = sb
     .from("events")
     // NOTE: the full `payload` (raw_log) is deliberately NOT selected — the raw
@@ -245,7 +290,7 @@ async function buildTape(data: z.output<typeof input>) {
     .order("block_number", { ascending: false, nullsFirst: false })
     .order("log_index", { ascending: false, nullsFirst: false })
     .limit(limit * 3); // over-read so grouping still yields ~limit rows
-  if (error) return { rows: [] as LiveRow[], standing: [] as LiveRow[], error: error.message };
+  if (error) return { ...EMPTY_SOURCE, error: error.message };
 
   const marketIds = [...new Set((rows ?? []).map((r) => Number(r.market_id)))];
   const titleById = new Map<number, string>();
@@ -331,6 +376,31 @@ async function buildTape(data: z.output<typeof input>) {
         ? "[feed] calc_cache.eth_usd is UNREADABLE by this client (RLS/grant), so every trade is reported WITHOUT an amount. Refreshing the value will not help — check SELECT access for anon."
         : "[feed] calc_cache.eth_usd is null or zero, so every trade is reported WITHOUT an amount. Check refresh_eth_usd_calibration() and market_state.volume_total_usd.",
     );
+
+  return {
+    rows: rows ?? [],
+    marketIds,
+    titleById,
+    creatorByMarket,
+    momentumById,
+    ethUsd,
+    error: null,
+  };
+}
+
+async function buildTape(data: z.output<typeof input>) {
+  const sb = serviceClient();
+  const limit = data?.limit ?? 120;
+  const viewer = data?.wallet?.toLowerCase() ?? null;
+
+  const scope = data?.marketIds?.map((n) => String(n)) ?? null;
+  // Scoped to specific markets == rendered inside a market panel, which already
+  // shows the question and the side. Unscoped == the app-wide tape, which does not.
+  const scoped = scope != null;
+  const source = await loadTapeSource(sb, data);
+  if (source.error)
+    return { rows: [] as LiveRow[], standing: [] as LiveRow[], error: source.error };
+  const { rows, marketIds, titleById, creatorByMarket, momentumById, ethUsd } = source;
 
   const events: LiveEventInput[] = (rows ?? []).map((r) => ({
     source_key: r.source_key as string,
