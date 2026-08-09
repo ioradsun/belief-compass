@@ -52,7 +52,7 @@ On the **same `market_state` row**, stored and currently unselected — the anom
 
 Not read at read time: `market_state_snapshots` / `price_snapshots` (true price path) and `market_transition_state` (memory of what we already said). `market_window_change` and `chg_24h_yes` are empty per existing code comments — do not build on them.
 
-**Pre-wiring audit task (step 2a):** confirm exactly how much of *concentration shift* is derivable from current reads before ranking depends on it — specifically whether "one large holder left while several small ones arrived" can be established from the in-batch trades plus `wallet_beliefs` without a new query. If it needs one bounded extra read, price that read before committing.
+**Pre-wiring audit task (step 2a):** answer one precise question before ranking depends on concentration — *can the pre-event holder hierarchy be reconstructed from event amount plus current beliefs?* `loadBelieverFaces` returns **current** largest holders, which does not prove who was largest *before* an exit. If it cannot be reconstructed, `largest_holder_left` and `newcomers_replaced_a_whale` wait for a bounded historical read. Never infer "a whale exited" from a large dollar amount alone. Audit `nonresponse` derivability in the same step.
 
 ## 3. Signal vector, not a single state
 
@@ -78,15 +78,19 @@ interface SignalVector {
 }
 ```
 
-`TensionKind`: `people_up_capital_down`, `capital_up_price_flat`, `price_up_believers_flat`, `believers_left_price_rose`, `whales_out_newcomers_in`, `tribe_against_market`.
+`TensionKind`: `people_up_capital_down`, `capital_up_price_flat`, `price_up_believers_flat`, `believers_left_price_rose`, `whales_out_newcomers_in`. All viewer-blind. "Tribe went the other way" is deliberately **not** a tension kind — it is viewer-relative and belongs to the angle layer (§7).
 
-`ConcentrationKind`: `concentrating`, `distributing`, `largest_holder_left`, `newcomers_replaced_a_whale`. This is a first-class signal because five wallets at $2 and one wallet at $200 are psychologically different, and "five people came in, one big holder walked out" explains the *shape* of a contradiction without inventing motive. The existing `concentration_rising` transition family feeds this rather than staying siloed.
+`ConcentrationKind`: `concentrating`, `distributing`, `largest_holder_left`, `newcomers_replaced_a_whale`. First-class because five wallets at $2 and one wallet at $200 are psychologically different, and "five people came in, one big holder walked out" explains the *shape* of a contradiction without inventing motive. The existing `concentration_rising` transition family feeds this rather than staying siloed. Gated on the §2 audit.
 
-**`nonresponse`, precisely modelled.** Never "the expected move didn't happen" — we cannot establish expectation. The model is: *meaningful input occurred, and the observable response stayed below threshold for N hours.* Copy: "$200 entered YES four hours ago. Price is still basically where it was." Never: "Price should have moved by now."
+**`nonresponse`, precisely modelled.** Never "the expected move didn't happen" — we cannot establish expectation. The model is: *meaningful input occurred, and the observable response stayed below threshold for N hours.* Copy: "$200 entered YES four hours ago. Price is still basically where it was." Never: "Price should have moved by now." Scope: at most one surviving nonresponse story per underlying input **within a build/editorial window**. Cross-poll deduplication is explicitly not guaranteed until seen-state exists — and seen-state, when it comes, is client-side, not a table.
 
-## 4. CONTEXT has no market signal
+**`beforePrice`, precisely modelled.** "Quiet" is a measured band, never `priceChange === 0`: input signal above a defined materiality threshold **and** absolute price change below a market-relative quiet band. That is what licenses "Three wallets stepped in. Price is still basically where it was."
 
-Social/personal rows (Tribe/Rival/Twin activity, milestones, cohorts, new markets, `showed_up`, `standing_fact`) carry an **all-zero vector** — not weak signals. They rank purely on the existing personal axis (`viewerBoost` + `stakeBoost` + `discovery`). A Rival flipping is high personal relevance with zero market signal, and the ranker should say exactly that.
+## 4. Social rows carry zero market signal — which is not the same as unimportant
+
+Social/personal rows (Tribe/Rival/Twin activity, discovery moments, milestones, cohorts, new markets, `showed_up`, `standing_fact`) receive an **all-zero SignalVector**. Their existing significance and relevance behaviour is untouched — `significance.ts` already lets a Twin/Opp discovery reach the exceptional band and ordinary Tribe discovery reach high, and that stays exactly as it is.
+
+Zero vector means "this row tells us nothing about market anomaly". It does not mean "this row is unimportant". Meeting a new Rival can be the most important thing in Now while carrying no market signal at all.
 
 Exception: a person-driven row that also carries market weight — the 32-day whale exiting — gets both, because both are true.
 
@@ -97,11 +101,13 @@ The explicit hierarchy, highest to lowest. Magnitude is supporting evidence, nev
 1. **Contradiction / separation** — two things that normally travel together stopped.
 2. **Change before price** — people/capital/conviction moved materially while price stayed quiet.
 3. **Unusual for this market** — not "10 trades", but "5× this market's normal pace".
-4. **Notable person changed behaviour** — long holder exits, Rival joins your side, whale adds, Tribe breaks pattern.
+4. **Notable person changed behaviour — viewer-blind only.** Longest current holder, largest holder / Conviction Whale, full exit after 40 days, unusually large share of side capital, one actor appearing across several rapid events in this market. Explicitly **forbidden here**: Tribe, Rival, Twin, conviction match, repeated intersection with the reader, showing-up history, my position, my market. Those live on the personal axis and may change the angle after admission (§7).
 5. **Strong raw movement** — large influx/outflow with no other signal.
 6. **Ordinary activity** — Receipt, or suppressed.
 
-Conceptually: `informationGain ≈ anomaly + tension + change-from-baseline + human significance`, with magnitude as corroboration. A smaller trade that breaks a market's pattern must be able to outrank a larger ordinary one — that is a tested invariant, not an aspiration. Composed with the existing `compose()` in `significance.ts`; no second combinator.
+Conceptually: `informationGain ≈ anomaly + tension + change-from-baseline + viewer-blind human significance`, with magnitude as corroboration. A smaller trade that breaks a market's pattern must be able to outrank a larger ordinary one — a tested invariant, not an aspiration. Composed with the existing `compose()` in `significance.ts`; no second combinator.
+
+**Anomaly-first does not mean anomaly-overrides.** Information gain may lift a story within its truthful significance class; it may not manufacture structural importance. "$8 arrived at 4× normal velocity" must not outrank "the market majority flipped". `compose()`'s bounded shape mostly gives this for free — pin it with a test anyway.
 
 Ranking touches, both subtractive:
 1. `significance.ts` — `informationGain` becomes a `compose()` part on the derived path. No migration; emitted scores untouched.
@@ -118,6 +124,8 @@ Ranking touches, both subtractive:
 Budgeting is **soft**: a window target of roughly 20–30% Intelligence, enforced as an escalating repetition cost through the existing motif/diversity machinery — not a hard cap. A genuinely chaotic hour with six real contradictions must be allowed to report six; downgrading true clues to satisfy a quota makes the PI deliberately dumber. Very high `informationGain` bypasses the cost entirely. Same philosophy already used elsewhere in the mixer: penalties, not filters.
 
 Copy rules: the contrast fact comes last and the sentence stops there. No explanation, no motive, no reaction-only headlines ("ODD ONE", "WELL WELL WELL") unless a specific contrast immediately follows. Existing hype-word ban stays.
+
+**The PI does not editorialize when it has nothing to add.** If the Intelligence layer neither compresses nor connects information, the row stays a Receipt. "Alex pulled $15 from YES." must never become "ALEX MADE A MOVE / Alex pulled $15." Style is not insight.
 
 ## 7. Personal relevance modifies the angle, after ranking
 
@@ -167,9 +175,12 @@ The distinction `new | developing | resolved` is written into the model now even
 
 Storytelling invariants first — the numbers exist to serve them:
 
+- **Viewer-blindness:** two different viewers looking at the same market facts get the **identical** SignalVector. They may get different reasons to care.
 - A larger ordinary trade does **not** always outrank a smaller market-relative anomaly.
 - Two individually ordinary facts become high information gain when their *relationship* is unusual.
 - Personal relevance can change the selected angle, never the underlying market signal.
+- **No editorial layer without informational value:** a fact with nothing added stays a Receipt ("Alex pulled $15 from YES." never becomes a headline restating itself).
+- **Anomaly cannot manufacture structural significance:** a high-unusualness small event never outranks a majority flip.
 - A high-information story bypasses editorial scarcity.
 - No PI observation states an expectation the data model did not encode (no "should have", no "expected").
 - No copy contains "caused", "because", "drove", "sent", or "since then" while §8 is ungated.
@@ -177,9 +188,10 @@ Storytelling invariants first — the numbers exist to serve them:
 Plus the numerical ones:
 
 - Signals are independent: people↑ / capital flat / price flat / 6× normal pace yields non-zero `building`, `beforePrice` and `unusual` simultaneously.
-- Social/personal kinds return an all-zero vector, asserted per kind.
-- `nonresponse` fires only after the input threshold *and* the N-hour window, and only once.
-- Concentration: five small arrivals plus one large exit classifies as `newcomers_replaced_a_whale`, not as plain `building`.
+- Social/personal kinds return an all-zero vector, asserted per kind — while their existing significance behaviour is unchanged (a Twin discovery still reaches the exceptional band).
+- `nonresponse` fires only after the input threshold *and* the N-hour window, and at most once per underlying input **per build/editorial window**; cross-poll repetition is a known, accepted phase-1 limitation.
+- `beforePrice` requires input above the materiality threshold and price inside the quiet band — not `priceChange === 0`.
+- Concentration: five small arrivals plus one large exit classifies as `newcomers_replaced_a_whale` — but only if §2's audit proved the pre-event hierarchy is reconstructable; otherwise the kind is not emitted at all.
 - Regression: full suite green; existing `feed-cadence` breaking-band and dominance tests unchanged; `buildTape` output unchanged after step 1.
 
 ## Technical notes
