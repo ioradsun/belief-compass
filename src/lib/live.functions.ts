@@ -53,7 +53,6 @@ import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
 import { adaptiveFloor, admissionOf, silenceAdjustedFloor } from "@/domain/feed-density";
 import {
   scoreLiveAction,
-  scoreDiscoveryMoment,
   SIGNIFICANCE,
   isCovered,
   fallbackRate,
@@ -79,7 +78,6 @@ import { editFeed, secondSentenceAdds } from "@/domain/feed-editorial";
 import { findPersonPatterns } from "@/domain/person-pattern";
 
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
-import { discoveryValue, markSeen, type DiscoverySubject } from "@/domain/discovery";
 import { stakeBoost, NO_STAKES } from "@/domain/viewer-stake";
 import { currentHoldDays, holdStartIsFloor } from "@/domain/tenure";
 import { classifyPace } from "@/domain/feed-scheduler";
@@ -89,7 +87,6 @@ import { tellConvictionMilestone } from "@/domain/person-milestone";
 
 import {
   findDiscoveryMoments,
-  tellDiscoveryMoment,
   type DiscoveryMoment,
 } from "@/domain/discovery-moment";
 import { viewerNetwork } from "@/domain/viewer-network";
