@@ -235,7 +235,7 @@ const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
  * "Will Pump.fun still be top 3 by revenue in 2026?" is about Pump.fun; the
  * rest of the sentence belongs to the market row, not to this one.
  */
-const LEAD_IN = /^(will|would|does|do|did|is|are|can|could|should|has|have|the|a|an)\\s+/i;
+const LEAD_IN = /^(will|would|does|do|did|is|are|can|could|should|has|have|the|a|an)\s+/i;
 function topic(title: string | null | undefined): string | null {
   let t = (title ?? "").trim().replace(/[?.!]+$/, "");
   if (!t) return null;
@@ -247,7 +247,7 @@ function topic(title: string | null | undefined): string | null {
      the predicate in with it ("Pump.fun still be"), which reads like a typo.
      So: the first word, plus a second only when the pair is plainly one name
      (both capitalised, e.g. "Base Chain"). */
-  const words = t.split(/\\s+/).filter(Boolean);
+  const words = t.split(/\s+/).filter(Boolean);
   if (words.length === 0) return null;
   const first = words[0]!;
   const second = words[1];
