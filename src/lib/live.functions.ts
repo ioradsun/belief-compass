@@ -1780,9 +1780,15 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     }
     target.story = { ...target.story, pattern: p.note };
   }
+  /* Diagnostic only (SIGNAL_DIAGNOSTIC=1): the receipts a promoted behavioural
+     story absorbed, so a reviewer can read the before → after directly. */
+  const consumedRows: Array<{ id: string; headline: string }> = [];
   if (consumedByPattern.size > 0)
     for (let i = material.length - 1; i >= 0; i--)
-      if (consumedByPattern.has(material[i]!.id)) material.splice(i, 1);
+      if (consumedByPattern.has(material[i]!.id)) {
+        const [gone] = material.splice(i, 1);
+        if (gone) consumedRows.push({ id: gone.id, headline: gone.story?.headline ?? "" });
+      }
 
 
   /* ── THE QUESTION LAYER (genuinely last: after subtraction and patterns) ────────────────────────────────
@@ -2019,5 +2025,13 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   /* THE BUILD THAT WROTE THESE SENTENCES. The client refuses to merge a cached
      tail composed by a different build, so a copy fix can never be left on
      screen by the sticky tape. See src/domain/copy-version. */
-  return { rows: material, standing, copyVersion: COPY_VERSION, error: null };
+  return {
+    rows: material,
+    standing,
+    copyVersion: COPY_VERSION,
+    error: null,
+    ...(process.env["SIGNAL_DIAGNOSTIC"] === "1"
+      ? { composition: { consumed: consumedRows.reverse() } }
+      : {}),
+  };
 }
