@@ -315,5 +315,12 @@ export interface LiveStory {
    * layer, because no single event can know it.
    */
   pattern?: string | null;
+  /**
+   * THE OPEN QUESTION. Written by src/domain/pi-question, and only when the
+   * signal leaves a genuine tension unresolved: significant fact + unexplained
+   * contrast → the PI asks what might explain the gap, and never answers it.
+   * Null on receipts, milestones, and anything the facts already settle.
+   */
+  question?: string | null;
 }
 

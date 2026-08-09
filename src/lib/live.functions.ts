@@ -33,6 +33,7 @@ import {
   type ConvictionAction,
 } from "@/domain/conviction-event";
 import { tellPiStory, voiceLevel, applyViewerAngle } from "@/domain/pi-voice";
+import { piQuestion, rationQuestions, type QuestionKind } from "@/domain/pi-question";
 import {
   retellTransition,
   capVoice,
@@ -1564,6 +1565,42 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     r.story = angled;
     r.text = flattenStory(angled);
   }
+
+  /* ── THE QUESTION LAYER (the last stage) ────────────────────────────────
+     facts → detect tension → explain what changed → ASK THE OPEN QUESTION.
+     Everything above establishes what is true and says it plainly. A row that
+     the vector calls Intelligence AND that carries a named unresolved shape —
+     a contradiction, a silence after real money, a hierarchy changing hands, a
+     person unwinding — earns one question grounded in that shape. Nothing
+     else does, and the window keeps at most a handful, so the feed asks where
+     asking is warranted instead of interrogating the reader. */
+  {
+    const asked: Array<{ id: string; kind: QuestionKind; gain: number }> = [];
+    const drafted = new Map<string, string>();
+    for (const r of material) {
+      if (!r.story) continue;
+      const q = piQuestion({
+        key: r.id,
+        signal: signalById.get(r.id),
+        headline: r.story.headline,
+        body: r.story.body,
+        pattern: r.story.pattern ?? null,
+        actorName: r.face?.name ?? r.people?.[0]?.name ?? null,
+      });
+      if (!q) continue;
+      drafted.set(r.id, q.text);
+      asked.push({ id: r.id, kind: q.kind, gain: signalById.get(r.id)?.informationGain ?? 0 });
+    }
+    const keep = rationQuestions(asked);
+    for (const r of material) {
+      if (!r.story) continue;
+      const text = keep.has(r.id) ? (drafted.get(r.id) ?? null) : null;
+      if (!text) continue;
+      r.story = { ...r.story, question: text };
+      r.text = flattenStory(r.story);
+    }
+  }
+
 
 
 
