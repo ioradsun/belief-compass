@@ -201,3 +201,59 @@ describe("the strongest human stories keep their force", () => {
     expect(`${s.headline} ${s.body} ${s.attribution ?? ""}`).toContain("40 days");
   });
 });
+import { emptyVector } from "./signal-vector";
+import { applyViewerAngle, clueLine } from "./pi-voice";
+
+// ── viewer-relative angle (plan §7) ──────────────────────────────────────────
+
+describe("applyViewerAngle", () => {
+  const story = {
+    category: "trade" as const,
+    headline: "Stepped in",
+    body: "Three wallets entered NO.",
+    attribution: null,
+    tone: "no" as const,
+    personal: false,
+  };
+  const zero = { signals: emptyVector().signals, informationGain: 0 };
+  const clue = {
+    signals: { ...emptyVector().signals, tension: 0.8 },
+    informationGain: 0.5,
+    tensionKind: "believers_left_price_rose" as const,
+  };
+
+  it("leaves a row with no relationship untouched", () => {
+    expect(applyViewerAngle(story, { relationship: null, signal: clue })).toBe(story);
+  });
+
+  it("leaves a zero-vector social row personal-only", () => {
+    expect(applyViewerAngle(story, { relationship: "opp", signal: zero })).toBe(story);
+  });
+
+  it("foregrounds the person but preserves the market clue", () => {
+    const out = applyViewerAngle(story, { relationship: "opp", signal: clue });
+    expect(out.headline).toBe("YOUR RIVAL");
+    expect(out.body).toBe(story.body);
+    expect(out.attribution).toBe("Believers left while the price went up.");
+    expect(out.personal).toBe(true);
+  });
+
+  it("never states causation while confirmation is gated", () => {
+    const banned = /caused|because|drove|sent|since then/i;
+    for (const kind of [
+      "people_up_capital_down",
+      "capital_up_price_flat",
+      "price_up_believers_flat",
+      "believers_left_price_rose",
+      "whales_out_newcomers_in",
+    ] as const) {
+      const line = clueLine({ ...clue, tensionKind: kind });
+      expect(line).toBeTruthy();
+      expect(line!).not.toMatch(banned);
+    }
+  });
+
+  it("says nothing for a receipt-level vector", () => {
+    expect(clueLine({ signals: { ...emptyVector().signals, building: 1 }, informationGain: 0.9 })).toBeNull();
+  });
+});
