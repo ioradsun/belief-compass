@@ -401,17 +401,18 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
 
         return [
           {
-            headline: `${money} landed`,
-            body: `${money} just landed on ${s || "one side"}.`,
+            headline: `${money} just landed`,
+            body: `${who} put it behind ${s || "their side"}.`,
             angle: scale,
           },
           { headline: "Backed", body: `${who} put ${money} behind ${s || "their side"}.` },
           {
-            headline: "Got heavier",
-            body: `${s || "That side"} got heavier.`,
-            angle: `${who} added ${money}.`,
+            headline: side ? `${s} just got heavier` : "Got heavier",
+            body: `${who} added ${money}.`,
+            angle: scale,
           },
         ];
+
 
       case "joined":
         /* A GROUPED ARRIVAL IS A SOCIAL FACT, NOT A COUNT. "2 came in" recites
