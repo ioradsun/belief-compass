@@ -51,6 +51,8 @@ import {
 } from "@/domain/significance";
 import { familyOf, VOICE_CEILING, type MixCandidate } from "@/domain/feed-cadence";
 import { signalVector } from "@/domain/signal-vector";
+import { tellNewMarketStory } from "@/domain/new-market-story";
+import { signalFromTransition, mergeSignals, dominantKey } from "@/domain/transition-signal";
 import { factsForRow } from "@/domain/signal-facts";
 import {
   groupPricePaths,
