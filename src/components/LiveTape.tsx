@@ -37,10 +37,8 @@ import { PersonAvatar } from "@/components/PersonAvatar";
 import { mergeLiveRows, LIVE_DELTA_OVERLAP_MS, type LiveRow } from "@/lib/live-tape";
 import { useTapeGate } from "@/hooks/useTapeGate";
 import { arrivalLabel } from "@/domain/tape-arrivals";
-import { mixFeed, type MixCandidate } from "@/domain/feed-cadence";
+import { type MixCandidate } from "@/domain/feed-cadence";
 import {
-  arrangeFeed,
-  tailState,
   dueForFullRebuild,
   HEARTBEAT_MS,
   INITIAL_REVEAL,
@@ -49,7 +47,8 @@ import {
 import type { BeatTone } from "@/domain/story";
 import { ago } from "@/domain/relative-time";
 import { COPY_VERSION, sameCopyVersion } from "@/domain/copy-version";
-import { activity, signalsFromActivityRows } from "@/domain/insider";
+import { activity, now as insiderNow, signalsFromActivityRows } from "@/domain/insider";
+
 
 
 type LiveResult = {
