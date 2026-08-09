@@ -1723,11 +1723,15 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
      pattern is the strongest evidence of all — losing it there was the second
      reason the PERSON question never fired. */
   const patternById = new Map<string, string>();
+  /* Constituent receipts a promoted behavioural story now contains. Dropped
+     from the GLOBAL surface only — see below. */
+  const consumedByPattern = new Set<string>();
   for (const p of findPersonPatterns(
     material.map((r) => ({
       id: r.id,
       wallet: r.wallet ?? null,
       marketId: String(r.marketId),
+      marketTitle: r.marketTitle ?? null,
       side: r.side === "YES" || r.side === "NO" ? r.side : null,
       action: actionById.get(r.id) ?? null,
       amountUsd: r.amountUsd ?? null,
@@ -1737,15 +1741,22 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   )) {
     const target = material.find((r) => r.id === p.rowId);
     if (!target?.story) continue;
-    /* WHEN THE PATTERN IS THE INTERESTING PART, IT BECOMES THE STORY.
+    /* WHEN THE PATTERN IS THE INTERESTING PART, IT BECOMES THE STORY — AND IT
+       TAKES ITS RECEIPTS WITH IT.
        "Not done / Another $0.02 on NO" with the pattern as an italic footnote
-       buries the only clue in the row. Where the event itself is receipt-grade
-       and the pattern is promotable, the pattern takes the kicker and body and
-       the ordinary event drops to the aside — the market still renders
-       underneath, so nothing is lost. A row that already speaks at observation
-       or intelligence volume keeps its own headline and its footnote. */
+       buries the only clue in the row. Worse, the constituent moves stayed in
+       the feed alongside it: ONE LESS, BELIEVER LEFT, OUT, BELIEVER LEFT,
+       FLIPPED, plus a small aside noting the person had stepped back from
+       several questions. Five rows to say one thing, with the one thing in the
+       smallest type. A promoted pattern therefore CONSUMES the rows it is made
+       of on the app-wide tape; inside a market panel they stay, because there
+       the individual transaction IS the subject.
+       Promotion happens when the event is receipt-grade (the pattern clearly
+       out-informs it) or when the pattern spans other rows the reader would
+       otherwise read separately. */
     patternById.set(p.rowId, p.note);
-    if (p.lead && (target.mix?.voice ?? "receipt") === "receipt") {
+    const collapsible = !scoped && p.consumes.length > 0;
+    if (p.lead && ((target.mix?.voice ?? "receipt") === "receipt" || collapsible)) {
       target.story = {
         ...target.story,
         category: "momentum",
@@ -1758,10 +1769,15 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         target.mix.voice = "observation";
         target.mix.significance = Math.max(target.mix.significance, 0.5);
       }
+      if (collapsible) for (const id of p.consumes) consumedByPattern.add(id);
       continue;
     }
     target.story = { ...target.story, pattern: p.note };
   }
+  if (consumedByPattern.size > 0)
+    for (let i = material.length - 1; i >= 0; i--)
+      if (consumedByPattern.has(material[i]!.id)) material.splice(i, 1);
+
 
   /* ── THE QUESTION LAYER (genuinely last: after subtraction and patterns) ────────────────────────────────
      facts → detect tension → explain what changed → ASK THE OPEN QUESTION.
