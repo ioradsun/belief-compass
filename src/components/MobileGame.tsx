@@ -22,6 +22,7 @@ import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { pulseLine } from "@/components/MarketCard";
 import { MarketMomentum } from "@/components/MarketVitality";
+import { marketStateFacts } from "@/domain/insider";
 import { relationFromGroup } from "@/domain/participant-social";
 import { presentRelationship } from "@/domain/relationship";
 import { WindowFilter } from "@/components/WindowFilter";
@@ -403,6 +404,7 @@ export function MobileGame({
           win={deckWin}
           change={marketChange}
           faces={participantFaces}
+          state={marketStateFacts(rr)}
           footer={
             <CurrentMarketActivity
               embedded
