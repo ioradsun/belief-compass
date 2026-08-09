@@ -41,7 +41,7 @@ function why(v: VoiceInput | null | undefined, pattern: string | null): string |
 
 async function main() {
   const tape = await buildTape({ limit: 60 } as never);
-  const rows = ((tape as { events?: unknown[] }).events ?? []) as Array<{
+  const rows = ((tape as { rows?: unknown[] }).rows ?? []) as Array<{
     id: string;
     kind: string;
     marketTitle?: string | null;
