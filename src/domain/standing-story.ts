@@ -335,12 +335,71 @@ export function toReceipt(fact: StandingFact): StandingStoryRow {
 }
 
 /**
+ * THE MIDDLE CASE. Something真 did change around the holder — a price move too
+ * small to be a contradiction, one departure rather than two, capital off the
+ * side below the material floor — so the persistence means slightly more than
+ * texture and considerably less than a clue. It says the change out loud so the
+ * reader can judge it, and it never asks a question.
+ */
+export function findStandingObservation(ev: StandingEvidence): StandingStoryRow[] {
+  const held = longHeld(ev.holders);
+  const lead = held[0];
+  if (!lead) return [];
+
+  const move = num(ev.sidePriceChange24h);
+  const exits = Math.max(0, num(ev.exits) ?? 0);
+  const capital = num(ev.capitalDelta24h);
+
+  let change: string | null = null;
+  let tag = "";
+  if (exits >= 1) {
+    change = `${countPositions(exits)} left this side in the last day.`;
+    tag = `exits:${Math.min(9, exits)}`;
+  } else if (capital != null && capital <= -STANDING_INTEL.softCapitalLeaving) {
+    change = `${usdShort(capital)} came off ${ev.side} in the last day.`;
+    tag = `capital:${usdBucket(capital)}`;
+  } else if (move != null && Math.abs(move) >= STANDING_INTEL.softPriceMove) {
+    change = `${moved(move, ev.side)} in the last day.`;
+    tag = `price:${moveBucket(move)}`;
+  }
+  if (!change) return [];
+
+  return [
+    {
+      kind: "held_while_side_thinned",
+      klass: "observation",
+      key: `standing:${ev.marketId}:${ev.side}:thinned:${tag}:${tenureBucket(lead.daysHeld)}`,
+      marketId: ev.marketId,
+      marketTitle: ev.marketTitle,
+      side: ev.side,
+      people: held.slice(0, STANDING.maxPeople),
+      headline: "STILL HERE",
+      body: `${nameThem([lead])} has backed ${ev.side} for ${heldText(
+        lead.daysHeld,
+        lead.tenureIsFloor === true,
+      )}. ${change}`,
+      strength: STANDING_INTEL.observationCeiling,
+      motif: `standing:thinned:${ev.side}`,
+    },
+  ];
+}
+
+/** A bare tenure telling, with nothing around it — the weakest true thing. */
+const isPlainTenure = (r: StandingStoryRow) =>
+  r.klass === "receipt" && !/crossed|network|your/i.test(r.motif);
+
+/**
  * Every standing story one (market, side) can support — intelligence first,
- * then the receipts underneath it. The caller ranks them against everything
- * else in the feed; nothing here reserves a slot for any of them.
+ * then the observation, then the receipts underneath. The caller ranks them
+ * against everything else in the feed; nothing here reserves a slot.
+ *
+ * A side that has something to contrast against does NOT also print the bare
+ * tenure line for the same people: that is the same fact told twice, once with
+ * information and once without.
  */
 export function buildStandingStories(ev: StandingEvidence): StandingStoryRow[] {
   const intel = findStandingIntelligence(ev);
+  const observation = intel.length > 0 ? [] : findStandingObservation(ev);
   const receipts = findStandingFacts({
     marketId: ev.marketId,
     marketTitle: ev.marketTitle,
@@ -348,5 +407,7 @@ export function buildStandingStories(ev: StandingEvidence): StandingStoryRow[] {
     holders: ev.holders,
     marketAgeDays: ev.marketAgeDays ?? null,
   }).map(toReceipt);
-  return [...intel, ...receipts];
+  const better = intel.length > 0 || observation.length > 0;
+  return [...intel, ...observation, ...receipts.filter((r) => !better || !isPlainTenure(r))];
 }
+
