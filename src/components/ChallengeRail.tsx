@@ -23,7 +23,7 @@
  * of wallets have no Tribe and no wallet has a Rival — so the empty copy says
  * what is actually true rather than implying something is broken.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { YourTable, useTable, railSideKey } from "@/components/YourTable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
@@ -90,13 +90,18 @@ export function ChallengeRail({
 }) {
   const qc = useQueryClient();
   /**
-   * A SIGNED-OUT READER HAS NO CHALLENGES, so opening on that tab shows them
-   * "connect a wallet to see who wants you at the table" and nothing else —
-   * which is now the first screen on a phone. Without a wallet the rail opens
-   * on Insider, the one thing that is true for everyone. Connecting a wallet
-   * still lands on Challenge, because then there is something there.
+   * NO CHALLENGES MEANS INSIDER. An empty Challenge tab is a dead first screen,
+   * so the rail always opens on Insider — the one thing that is true for
+   * everyone — and only promotes Challenge once real open calls exist for this
+   * reader. A reader who picks a tab themselves keeps it.
    */
-  const [tab, setTab] = useState<Tab>(wallet ? "challenge" : "insider");
+  const [tab, setTab] = useState<Tab>("insider");
+  const chose = useRef(false);
+  const pick = (t: Tab) => {
+    chose.current = true;
+    setTab(t);
+  };
+
 
   /**
    * Which side is showing. Seeded from the cache so "See yours", pressed in the
@@ -148,6 +153,16 @@ export function ChallengeRail({
   // screen — three means three people are actually waiting on you.
   const { lock, open, failed, lockUnknown } = useOpenCalls(wallet);
 
+  // Challenge earns the rail only when someone is actually waiting. Until then
+  // — signed out, locked, or an empty queue — Insider holds it.
+  useEffect(() => {
+    if (chose.current) return;
+    if (wallet && lock.unlocked && open.length > 0) setTab("challenge");
+    else setTab("insider");
+  }, [wallet, lock.unlocked, open.length]);
+
+
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div
@@ -162,7 +177,7 @@ export function ChallengeRail({
             role="tab"
             aria-selected={tab === t}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => pick(t)}
             className={`flex grow basis-0 items-center justify-center gap-1.5 rounded-[8px] px-1.5 py-1 text-[12px] font-medium transition-colors ${
               tab === t ? "bg-[var(--bg)] text-[var(--text)]" : "text-[var(--text-muted)]"
             }`}
