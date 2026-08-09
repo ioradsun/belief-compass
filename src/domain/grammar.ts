@@ -76,40 +76,56 @@ const matchCase = (sample: string, word: string): string =>
 
 /**
  * Rewrite counted phrases so the noun — and any verb immediately following it —
- * agrees with the number in front of it. Words in between (adjectives like
- * "new", "more") are preserved.
+ * agrees with the number in front of it. Adjectives between the two ("2 new
+ * believers") are preserved, and any word that is not a noun this product
+ * counts is left exactly as written.
+ *
+ * Tokenised rather than pattern-matched, because a single regex either misses
+ * "1 new believers" or mangles "backed 3 markets at once"; walking the words
+ * lets the rule stay narrow: fix the FIRST countable noun after a number.
  */
 export function fixAgreement(text: string): string {
   if (!text) return text;
-  let out = text;
+  const parts = text.split(/([A-Za-z']+|\d[\d,]*)/);
+  const isWord = (i: number) => i % 2 === 1;
 
-  // <count> [adjectives] <noun> [verb]
-  out = out.replace(
-    /\b([\d,]+|one|One|ONE)(\s+(?:[a-z]+\s+){0,2})([a-z]+)\b([ ,]+(?:is|are|was|were|has|have|isn't|aren't|wasn't|weren't|hasn't|haven't)\b)?/g,
-    (whole, rawCount: string, gap: string, noun: string, tail: string | undefined) => {
-      const numeric = Number(rawCount.replace(/,/g, ""));
-      const isOne = ONE.test(rawCount) || numeric === 1;
-      const isMany = !isOne && Number.isFinite(numeric) && numeric !== 1;
-      if (!isOne && !isMany) return whole;
+  for (let i = 1; i < parts.length; i += 2) {
+    const tok = parts[i];
+    const numeric = Number(tok.replace(/,/g, ""));
+    const isOne = ONE.test(tok) || numeric === 1;
+    const isMany = !isOne && Number.isFinite(numeric) && numeric > 1;
+    if (!isOne && !isMany) continue;
+    // Only a plain count — never a token inside a longer word or a decimal.
+    if (parts[i + 1]?.startsWith(".")) continue;
 
-      let nextNoun = noun;
-      if (isOne && SINGULAR[noun.toLowerCase()]) {
-        nextNoun = matchCase(noun, SINGULAR[noun.toLowerCase()]);
-      } else if (isMany && PLURAL[noun.toLowerCase()]) {
-        nextNoun = matchCase(noun, PLURAL[noun.toLowerCase()]);
-      } else if (!SINGULAR[noun.toLowerCase()] && !PLURAL[noun.toLowerCase()]) {
-        return whole; // not a noun we count — never touch it
+    // The first countable noun within three words of the number.
+    let nounAt = -1;
+    for (let k = i + 2; k <= i + 6 && k < parts.length; k += 2) {
+      if (!isWord(k)) break;
+      if (/\S/.test(parts[k - 1].replace(/\s/g, ""))) break; // punctuation between → stop
+      const w = parts[k].toLowerCase();
+      if (SINGULAR[w] || PLURAL[w]) {
+        nounAt = k;
+        break;
       }
+    }
+    if (nounAt < 0) continue;
 
-      let nextTail = tail ?? "";
-      if (tail) {
-        const verb = tail.trim().replace(/^[, ]+/, "");
-        const swapped = isOne ? TO_SINGULAR[verb] : TO_PLURAL[verb];
-        if (swapped) nextTail = tail.replace(verb, swapped);
-      }
-      return `${rawCount}${gap}${nextNoun}${nextTail}`;
-    },
-  );
+    const noun = parts[nounAt];
+    const key = noun.toLowerCase();
+    parts[nounAt] = matchCase(noun, isOne ? (SINGULAR[key] ?? key) : (PLURAL[key] ?? key));
+
+    // The verb immediately after the noun, when there is one.
+    const vAt = nounAt + 2;
+    if (vAt < parts.length && /^\s*$/.test(parts[vAt - 1])) {
+      const verb = parts[vAt]?.toLowerCase();
+      const swapped = isOne ? TO_SINGULAR[verb] : TO_PLURAL[verb];
+      if (swapped) parts[vAt] = matchCase(parts[vAt], swapped);
+    }
+  }
+
+  let out = parts.join("");
+
 
   // "Nobody ... are" style leftovers from group templates.
   out = out.replace(/\b(Nobody|Somebody|Someone|Everyone)\s+(are|were|have)\b/g, (_m, s, v) => {
