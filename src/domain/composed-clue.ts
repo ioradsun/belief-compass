@@ -139,6 +139,25 @@ export function composeClues(rows: ClueRow[]): ComposedClue[] {
 
 // ── PERSON: several actions by one person become one behaviour ───────────────
 
+/** The latest receipt, as one clause of evidence under a behavioural headline. */
+function latestLine(anchor: ClueRow): string | null {
+  const where = subject(anchor.marketTitle);
+  const a = anchor.action ?? "";
+  const s = anchor.side ?? null;
+  const verb = REDUCING.has(a)
+    ? s
+      ? `out of ${s}`
+      : "out"
+    : a === "flip"
+      ? s
+        ? `over to ${s}`
+        : "over"
+      : s
+        ? `into ${s}`
+        : "in";
+  return where ? `Latest: ${verb} on ${where}.` : null;
+}
+
 function personClues(rows: ClueRow[]): ComposedClue[] {
   const out: ComposedClue[] = [];
   for (const [wallet, all] of group(rows, (r) => r.wallet?.toLowerCase())) {
@@ -148,11 +167,15 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
     if (!anchor) continue;
     const members = acts.map((r) => r.id);
     const who = anchor.name?.trim() || "they";
+    const named = (anchor.name ?? acts.find((r) => r.name)?.name ?? "").trim();
+    const NAME = named.toUpperCase();
     const markets = new Set(acts.map((r) => r.marketId));
     const cut = acts.filter((r) => REDUCING.has(r.action!));
     const put = acts.filter((r) => ADDING.has(r.action!));
     const flips = acts.filter((r) => r.action === "flip");
     const key = `${wallet}:${anchor.id}`;
+    const evidence = latestLine(anchor);
+
 
     /* A CLEAN SWAP IS A ROTATION, NOT A REPOSITIONING. One sale here, one
        purchase there, and we can name both questions — which is a better line
