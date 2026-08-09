@@ -120,6 +120,18 @@ export const CADENCE = {
    * pattern, and a pattern is what makes a feed read as generated.
    */
   maxPerMotif: 2,
+  /**
+   * How many rows in one window may have the SAME SIGNAL SHAPE.
+   *
+   * Distinct from the motif: the motif is the copy's identity, the shape is the
+   * observation's. Three markets can each honestly report "believers left while
+   * price rose" with different wallets, different numbers and three different
+   * motifs — and the reader still experiences one sentence, three times. The
+   * kind (`believers_left_price_rose`) is the tighter cap because it is the more
+   * recognisable phrase; the primary signal is the looser one.
+   */
+  maxPerSignalKind: 2,
+  maxPerSignalPrimary: 3,
   /** Penalties. Deliberately smaller than the significance range they compete with. */
   penalty: {
     family: 0.18,
