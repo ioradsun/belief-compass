@@ -111,8 +111,10 @@ export function LandingPanel({
             )}
             {!expanded && (
               <span className="hidden shrink-0 truncate text-[12px] text-[var(--text-secondary)] md:block">
-                Conviction needs company.
+                <span style={{ color: "var(--yes)" }}>Conviction</span> needs{" "}
+                <span style={{ color: "var(--no)" }}>Company</span>.
               </span>
+
             )}
 
             {!expanded && search && (
