@@ -57,6 +57,7 @@ import {
   tellDiscoveryMoment,
   type DiscoveryMoment,
 } from "@/domain/discovery-moment";
+import { viewerNetwork } from "@/domain/viewer-network";
 import type { CachedRelationship } from "@/lib/dna/viewer-dna-cache.server";
 import { weiToEth } from "@/domain/money";
 import {
@@ -691,29 +692,10 @@ async function buildTape(data: z.output<typeof input>) {
   const viewerBoost = new Map<string, number>();
   let moments: DiscoveryMoment[] = [];
   if (viewer) {
-    const cache = await loadViewerDna(viewer);
-    if (cache) {
-      const add = (rows: unknown, label: NetLabel): CachedRelationship[] => {
-        const out = ((rows as CachedRelationship[] | null) ?? []).filter((r) => r.wallet);
-        for (const r of out) {
-          const w = String(r.wallet).toLowerCase();
-          labelByWallet.set(w, label);
-          relByWallet.set(w, r);
-        }
-        return out;
-      };
-      const net = {
-        twin: add(cache.twin_matches, "twin"),
-        tribe: add(cache.tribe_matches, "tribe"),
-        opp: add(cache.opp_matches, "opp"),
-        inverse: add(cache.inverse_matches, "inverse"),
-      };
-      // MEETING SOMEONE. Read-time only, and only on the app-wide tape — a
-      // market panel is about that market, not about the reader's network.
-      // Nothing is written: a moment is a projection of relationships the DNA
-      // engine already cached, so the same state always yields the same rows.
-      if (!scoped) moments = findDiscoveryMoments(net);
-    }
+    const net = viewerNetwork(await loadViewerDna(viewer), scoped);
+    for (const [w, l] of net.labelByWallet) labelByWallet.set(w, l);
+    for (const [w, r] of net.relByWallet) relByWallet.set(w, r);
+    moments = net.moments;
   }
 
   const profileWallets = [
