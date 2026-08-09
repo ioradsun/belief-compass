@@ -141,7 +141,23 @@ export function LiveTape({
   // facts, person milestones, market signals, "showed up" — keep replenishing
   // between trades instead of the feed running dry. See src/domain/live-display.
   const lastFullAt = useRef(0);
-  const key = ["live-tape", wallet ?? null, scopeKey, side ?? null, limit ?? null];
+  /**
+   * ONE MARKET FETCH FEEDS BOTH SIDE RAILS (Insider migration, step 3).
+   *
+   * A YES/NO rail used to ask the server its own side-scoped question, so a Case
+   * File ran three requests for the same market (YES, NO, and the Market Insider
+   * rail). The side scope is a pure filter — `insider.activity(signals, { marketId,
+   * side })` reproduces the server's `eq("side", …)` semantics exactly — so the
+   * rails now share the market-scoped query React Query is already running for
+   * `CurrentMarketActivity` (same key, same fetch → deduped) and project their own
+   * side client-side.
+   */
+  const railMarketId = side != null && scopeKey?.length === 1 ? scopeKey[0] : null;
+  const sideRail = railMarketId != null;
+  const key = sideRail
+    ? ["live-tape", wallet ?? null, scopeKey, SIDE_RAIL_FETCH_LIMIT]
+    : ["live-tape", wallet ?? null, scopeKey, side ?? null, limit ?? null];
+
   const { data, isLoading } = useQuery({
     queryKey: key,
     queryFn: async (): Promise<LiveResult> => {
