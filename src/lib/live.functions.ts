@@ -33,6 +33,7 @@ import {
   type ConvictionAction,
 } from "@/domain/conviction-event";
 import { tellPiStory, voiceLevel, applyViewerAngle } from "@/domain/pi-voice";
+import { piQuestion, rationQuestions, type QuestionKind } from "@/domain/pi-question";
 import {
   retellTransition,
   capVoice,
