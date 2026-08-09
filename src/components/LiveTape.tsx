@@ -253,8 +253,8 @@ export function LiveTape({
      market/side/order rule the server used to apply, so the rendered rows are
      unchanged — only their owner is. Any other tape passes straight through. */
   const rows = useMemo(() => {
-    if (!sideRail || railMarketId == null) return data?.rows;
-    return activity(signalsFromActivityRows(data?.rows ?? []), {
+    if (!sideRail || railMarketId == null || data?.rows == null) return data?.rows;
+    return activity(signalsFromActivityRows(data.rows), {
       marketId: railMarketId,
       side,
       ...(limit != null ? { limit } : {}),
