@@ -497,6 +497,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
         `primary:${chosen.signalPrimary}`,
         (shapeCount.get(`primary:${chosen.signalPrimary}`) ?? 0) + 1,
       );
+    if (chosen.pulse) shapeCount.set("pulse", (shapeCount.get("pulse") ?? 0) + 1);
     if (chosen.voice === "intelligence") intelCount += 1;
     for (const s of chosen.subjects ?? []) walletCount.set(s, (walletCount.get(s) ?? 0) + 1);
   }
