@@ -96,6 +96,15 @@ export interface MixCandidate {
    */
   signalPrimary?: string | null;
   signalKind?: string | null;
+  /**
+   * This row is here for HEARTBEAT, not for meaning: it failed standard
+   * admission and passed only the silence-adjusted one (src/domain/feed-density
+   * `admissionOf`). The mixer treats it as an ordinary receipt in every respect
+   * but one — repetition of the same heartbeat shape is charged, so a quiet
+   * window fills with four different people rather than one person four times.
+   * It NEVER changes significance, voice or gain.
+   */
+  pulse?: boolean;
 }
 
 
