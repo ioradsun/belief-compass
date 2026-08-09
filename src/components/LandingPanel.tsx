@@ -111,8 +111,10 @@ export function LandingPanel({
             )}
             {!expanded && (
               <span className="hidden shrink-0 truncate text-[12px] text-[var(--text-secondary)] md:block">
-                Conviction needs company.
+                <span style={{ color: "var(--yes)" }}>Conviction</span> needs{" "}
+                <span style={{ color: "var(--no)" }}>Company</span>.
               </span>
+
             )}
 
             {!expanded && search && (
@@ -169,8 +171,10 @@ export function LandingPanel({
                   </div>
 
                   <h1 className="mt-3 max-w-[14ch] text-[40px] font-semibold leading-[1.02] tracking-[-0.03em] text-[var(--text)] sm:text-[52px] lg:text-[62px]">
-                    Conviction needs company.
+                    <span style={{ color: "var(--yes)" }}>Conviction</span> needs{" "}
+                    <span style={{ color: "var(--no)" }}>Company</span>.
                   </h1>
+
 
                   <p className="mt-4 text-[19px] leading-snug text-[var(--text)] sm:text-[23px]">
                     Back what you believe.
