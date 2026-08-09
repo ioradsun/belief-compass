@@ -84,7 +84,7 @@ export type Momentum = {
  * Returns plain data only — arrays, Maps and numbers, no row objects — so nothing
  * a later viewer-relative pass mutates can reach anything cached from here.
  */
-interface TapeSource {
+export interface TapeSource {
   /**
    * Raw event rows, newest first. Untyped by PostgREST and cast field-by-field
    * where they are read, exactly as before this extraction. Never mutated
@@ -101,7 +101,7 @@ interface TapeSource {
   error: string | null;
 }
 
-const EMPTY_SOURCE: TapeSource = {
+export const EMPTY_SOURCE: TapeSource = {
   rows: [],
   marketIds: [],
   titleById: new Map(),
@@ -111,7 +111,7 @@ const EMPTY_SOURCE: TapeSource = {
   error: null,
 };
 
-async function loadTapeSource(
+export async function loadTapeSource(
   sb: ReturnType<typeof serviceClient>,
   data: TapeQuery,
 ): Promise<TapeSource> {
@@ -272,7 +272,7 @@ async function loadTapeSource(
 }
 
 /** Tenure facts per (wallet, market), as the grammar and the scorers read them. */
-type BeliefByKey = Map<
+export type BeliefByKey = Map<
   string,
   {
     daysHeld: number | null;
@@ -290,7 +290,7 @@ type BeliefByKey = Map<
  * wallet. Returns a plain Map, so nothing that later decorates rows for one
  * reader can reach it.
  */
-async function loadBelieverFaces(
+export async function loadBelieverFaces(
   sb: ReturnType<typeof serviceClient>,
   signalMarkets: number[],
 ): Promise<Map<number, string[]>> {
@@ -333,7 +333,7 @@ async function loadBelieverFaces(
  * Viewer-independent: keyed on the wallets the rows are ABOUT, never on the
  * wallet reading them. Returns a plain Map, for the same reason as above.
  */
-async function loadActorBeliefs(
+export async function loadActorBeliefs(
   sb: ReturnType<typeof serviceClient>,
   actorWallets: string[],
   marketIds: number[],
@@ -392,7 +392,7 @@ async function loadActorBeliefs(
 }
 
 /** The four relationship buckets the DNA engine caches per viewer. */
-interface ViewerDnaRow {
+export interface ViewerDnaRow {
   twin_matches: unknown;
   tribe_matches: unknown;
   opp_matches: unknown;
@@ -411,7 +411,7 @@ interface ViewerDnaRow {
  * discovery moments is pure and stays at the call site — this moves the IO, not
  * the meaning.
  */
-async function loadViewerDna(viewer: string): Promise<ViewerDnaRow | null> {
+export async function loadViewerDna(viewer: string): Promise<ViewerDnaRow | null> {
   const { serviceClient } = await import("@/lib/supabase-clients");
   const { data } = await serviceClient()
     .from("viewer_dna_cache")
@@ -428,7 +428,7 @@ async function loadViewerDna(viewer: string): Promise<ViewerDnaRow | null> {
  * having been here, for the purpose of what to show someone. Failure is
  * swallowed deliberately — no key means the feed is impersonal, never absent.
  */
-async function loadViewerHoldings(viewer: string, marketIds: number[]): Promise<Set<number>> {
+export async function loadViewerHoldings(viewer: string, marketIds: number[]): Promise<Set<number>> {
   const holding = new Set<number>();
   try {
     const { serviceClientOrNull } = await import("@/lib/supabase-clients");
@@ -478,7 +478,7 @@ export interface TapeDeps {
   resolveProfiles: (wallets: string[], budget: number) => Promise<Map<string, ProfileLike>>;
 }
 
-const REAL_DEPS: TapeDeps = {
+export const REAL_DEPS: TapeDeps = {
   client: () => serviceClient(),
   loadTapeSource,
   loadBelieverFaces,
@@ -496,7 +496,7 @@ const REAL_DEPS: TapeDeps = {
  * A failure here is not a feed failure — the tape simply loses the ability to say
  * "since then", which is exactly the behaviour before temporal proof existed.
  */
-async function loadPricePaths(
+export async function loadPricePaths(
   sb: ReturnType<typeof serviceClient>,
   marketIds: number[],
 ): Promise<Map<number, PriceSample[]>> {
