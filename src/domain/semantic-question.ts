@@ -213,13 +213,15 @@ export const REAWAKEN_MIN_QUIET_DAYS = 5;
 export const LOPSIDED_RATIO = 0.05;
 export const LOPSIDED_MIN_LEAD_USD = 25;
 
-function variantsFor(i: SemanticInput, title: string, frag: string): string[] {
+function variantsFor(i: SemanticInput, title: string, short: string | null): string[] {
   const stake = stakeInTitle(title);
-  /* THE PROPOSITION IS QUOTED, NOT PARAPHRASED. Dropping a title fragment bare
-     into a sentence produces "Did selling your data worth a $20 airdrop stop
-     being a question?" — the PI mangling the thing it is quoting. Quotation
-     marks make the fragment a noun and keep the grammar the reader's. */
-  const topic = `“${frag}”`;
+  /* THE PROPOSITION IS QUOTED, NOT PARAPHRASED, AND ONLY WHEN IT IS SHORT.
+     Dropping a title fragment bare into a sentence produces "Did selling your
+     data worth a $20 airdrop stop being a question?" — the PI mangling the
+     thing it is quoting. Quotation marks make the fragment a noun and keep the
+     grammar the reader's. When there is no short handle, the topic-shaped
+     variants are simply not offered; the row keeps its headline and says less. */
+  const topic = short ? `“${short}”` : null;
   const s = i.side ?? "that side";
   const f = i.facts ?? {};
 
@@ -228,28 +230,32 @@ function variantsFor(i: SemanticInput, title: string, frag: string): string[] {
        price is the single cleanest case in the product: the market literally
        asked whether an amount was enough, and one answer has no takers left. */
     case "side_emptied":
-      return stake
+      if (stake)
+        return [
+          `Nobody is backing ${s} anymore. Is ${stake} really enough to make that trade-off feel worth it?`,
+          `${s} is empty. Does ${stake} change the calculation for anyone here?`,
+        ];
+      return topic
         ? [
-            `Nobody is backing ${s} anymore. Is ${stake} really enough to make that trade-off feel worth it?`,
-            `${s} is empty. Does ${stake} change the calculation for anyone here?`,
-          ]
-        : [
             `Nobody is backing ${s} anymore. Is ${topic} still a real question?`,
             `${s} has no one left. Is there still an argument on ${topic}?`,
-          ];
+          ]
+        : [];
 
     /* QUESTION THE CONSENSUS. Tenure makes "still" factual; without the days
        this shape is not offered at all (see the gate below). */
     case "one_sided_persistence": {
+      if (!topic) return [];
       const d = Math.floor(f.days ?? 0);
       return [
         `${d} days and still nobody will take ${other(i.side)}. Is ${topic} even controversial to this crowd?`,
-        `${d} days on one side and ${other(i.side)} stays empty. Is this a debate, or a foregone conclusion about ${topic}?`,
+        `${d} days on one side and ${other(i.side)} stays empty. Debate, or foregone conclusion?`,
       ];
     }
 
     /* QUESTION WHETHER THE MARKET IS ACTUALLY SPLIT. */
     case "lopsided_book": {
+      if (!topic) return [];
       const lead = f.leadUsd ?? 0;
       const light = f.laggardUsd ?? 0;
       return [
@@ -260,22 +266,29 @@ function variantsFor(i: SemanticInput, title: string, frag: string): string[] {
 
     /* QUESTION WHETHER A SIDE BECAME LESS OBVIOUS. */
     case "side_got_company":
-      return [
-        `${s} finally got company. Did ${topic} just stop being obvious?`,
-        `Somebody is on ${s} now. Is ${topic} less settled than it looked?`,
-      ];
+      return topic
+        ? [
+            `${s} finally got company. Did ${topic} just stop being obvious?`,
+            `Somebody is on ${s} now. Is ${topic} less settled than it looked?`,
+          ]
+        : [];
 
     /* QUESTION WHETHER ATTENTION CHANGED — attention, never outcome. */
     case "back_from_dead": {
+      if (!topic) return [];
       const q = Math.floor(f.quietDays ?? 0);
       const t = Math.max(1, Math.floor(f.trades ?? 1));
       return [
         `${q} quiet days, then ${t} ${t === 1 ? "trade" : "trades"}. Did ${topic} just get interesting again?`,
-        `Nothing for ${q} days and now this. Did something change about ${topic}, or just the attention on it?`,
+        `Nothing for ${q} days and now this. Did the ${topic} question change, or just the attention on it?`,
       ];
     }
   }
 }
+
+/** A question longer than this is the headline read back at the reader. */
+export const MAX_QUESTION_CHARS = 130;
+
 
 /**
  * The semantic question this state and this proposition have earned, or null —
