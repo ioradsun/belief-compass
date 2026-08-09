@@ -33,7 +33,12 @@ import {
   type ConvictionAction,
 } from "@/domain/conviction-event";
 import { tellPiStory, voiceLevel, applyViewerAngle } from "@/domain/pi-voice";
-import { retellTransition, type CopyLevel } from "@/domain/transition-denominator";
+import {
+  retellTransition,
+  capVoice,
+  RECEIPT_SIGNIFICANCE_CEILING,
+  type CopyLevel,
+} from "@/domain/transition-denominator";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
 import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
 import {
@@ -1458,6 +1463,9 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       // → fallback, which is now only reachable by a legacy or unknown kind.
       significance: Math.min(
         1,
+        /* A receipt-grade sentence is capped, not deleted: an unsized
+           percentage sits below the clues instead of leading over them. */
+        copyLevel.get(r.id) === "receipt" ? RECEIPT_SIGNIFICANCE_CEILING : 1,
         (typeof (r.payload as { significance?: number }).significance === "number"
           ? (r.payload as { significance: number }).significance
           : (derived.get(r.id) ?? SIGNIFICANCE.fallback)) +

@@ -132,3 +132,28 @@ export function retellTransition(
     level: usd >= MATERIAL_USD ? "observation" : "receipt",
   };
 }
+
+/**
+ * A ROW MAY NEVER SPEAK LOUDER THAN ITS OWN SENTENCE.
+ *
+ * The signal vector reads market state; this reads the copy we actually
+ * printed. Where they disagree the quieter one wins, because the reader only
+ * ever sees the sentence.
+ */
+export function capVoice(
+  level: "receipt" | "observation" | "intelligence",
+  ceiling: CopyLevel | undefined,
+): "receipt" | "observation" | "intelligence" {
+  if (!ceiling) return level;
+  if (ceiling === "receipt") return "receipt";
+  return level === "intelligence" ? "observation" : level;
+}
+
+/**
+ * The most significance a receipt-grade transition may carry.
+ *
+ * Not a new scorer — a ceiling. Sparsity is the product: an unsized percentage
+ * or a bare "first believers" should be available below the clues, never
+ * competing with them. Above `CADENCE.minQuality`, so nothing disappears.
+ */
+export const RECEIPT_SIGNIFICANCE_CEILING = 0.3;
