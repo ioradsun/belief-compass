@@ -128,56 +128,40 @@ describe("real activity is never intentionally held", () => {
   });
 });
 
-describe("standing facts fill silence and nothing else", () => {
-  const celebration = row({ id: "held43", perishability: "standing", weight: 2 });
+describe("a standing story is paced like any other unhurried row", () => {
+  // It used to sit in a reserve lane the scheduler only opened after ten
+  // seconds of silence, which meant a true, interesting thing could be withheld
+  // indefinitely on a busy tape. It now competes on weight like everything else.
+  const continuity = row({ id: "held43", perishability: "soon", weight: 2 });
 
-  it("stays held while real activity is pending", () => {
-    const s = enqueue(createScheduleState(T0), [celebration, row({ id: "trade" })]);
+  it("yields to urgent activity of the same weight, on priority alone", () => {
+    const s = enqueue(createScheduleState(T0), [
+      continuity,
+      row({ id: "trade", perishability: "now", weight: 2 }),
+    ]);
     expect(modeFor(s, T0)).toBe("normal");
-    // Way past any cadence, and it is still the trade that comes out.
     expect(tick(s, T0 + 120_000).release?.id).toBe("trade");
   });
 
-  it("stays held through recent activity, even with nothing else queued", () => {
-    // Relative to the threshold, not a literal: this asserted "held at 10s",
-    // which was only meaningful while the gate happened to be 20s. Tied to the
-    // constant, it keeps meaning "not yet silent" whatever the gate becomes.
-    const s = enqueue(createScheduleState(T0), [celebration]);
-    const justBefore = T0 + SCHEDULE.quietAfterMs - 1;
-    expect(modeFor(s, justBefore)).toBe("idle");
-    expect(tick(s, justBefore).release).toBeNull();
+
+  it("is released on a quiet tape instead of being held for silence", () => {
+    const s = enqueue(createScheduleState(T0), [continuity]);
+    expect(tick(s, T0 + SCHEDULE.normal.toMs).release?.id).toBe("held43");
   });
 
-  it("appears once the silence is genuine", () => {
-    const s = enqueue(createScheduleState(T0), [celebration]);
-    const quietAt = T0 + SCHEDULE.quietAfterMs;
-    expect(modeFor(s, quietAt)).toBe("quiet");
-    expect(tick(s, quietAt).release?.id).toBe("held43");
-  });
-
-  it("stops the moment a real event arrives", () => {
-    const quietAt = T0 + SCHEDULE.quietAfterMs;
-    let s = enqueue(createScheduleState(T0), [celebration, row({ id: "held7" })]);
-    s = { ...s, queue: s.queue.map((r) => ({ ...r, perishability: "standing" as const })) };
-    expect(modeFor(s, quietAt)).toBe("quiet");
-    // A trade lands. Quiet mode ends and the celebrations go back on hold.
-    s = enqueue(s, [row({ id: "trade", enqueuedAt: quietAt })]);
-    expect(modeFor(s, quietAt)).toBe("normal");
-    expect(tick(s, quietAt).release?.id).toBe("trade");
-  });
-
-  it("does not dump celebrations back to back", () => {
+  it("does not dump several of them back to back", () => {
     const many = Array.from({ length: 4 }, (_, i) =>
-      row({ id: `c${i}`, perishability: "standing", weight: 2 }),
+      row({ id: `c${i}`, perishability: "soon", weight: 2 }),
     );
     const s = enqueue(createScheduleState(T0), many);
-    const released = drain(s, T0 + SCHEDULE.quietAfterMs, T0 + SCHEDULE.quietAfterMs + 40_000);
-    expect(released.length).toBeGreaterThanOrEqual(1);
+    const released = drain(s, T0, T0 + 40_000);
+    expect(released.length).toBeGreaterThanOrEqual(2);
     for (let i = 1; i < released.length; i++) {
-      expect(released[i].at - released[i - 1].at).toBeGreaterThanOrEqual(SCHEDULE.quiet.fromMs);
+      expect(released[i]!.at - released[i - 1]!.at).toBeGreaterThanOrEqual(SCHEDULE.minGapMs);
     }
   });
 });
+
 
 /**
  * "A celebration must never delay a trade" is right in spirit and wrong at the
@@ -192,11 +176,12 @@ describe("preemption is by weight, not by lane alone", () => {
     expect(priorityOf(discovery)).toBe(priorityOf(dust));
   });
 
-  it("still puts any material real event ahead of any standing fact", () => {
-    const trade = row({ id: "trade", perishability: "now", weight: 4 });
-    const best = row({ id: "cohort", perishability: "standing", weight: 1 });
-    expect(priorityOf(trade)).toBeLessThan(priorityOf(best));
+  it("puts an urgent material event ahead of a middling paced one", () => {
+    const trade = row({ id: "trade", perishability: "now", weight: 2 });
+    const cohort = row({ id: "cohort", perishability: "soon", weight: 2 });
+    expect(priorityOf(trade)).toBeLessThan(priorityOf(cohort));
   });
+
 
   it("orders a heavy paced row ahead of a light one", () => {
     const s = enqueue(createScheduleState(T0), [
@@ -355,10 +340,12 @@ describe("classifyPace", () => {
     expect(classifyPace({ kind: "position_changed_side" })).toBe("soon");
   });
 
-  it("treats duration facts as standing, because they have no when", () => {
-    expect(classifyPace({ kind: "conviction_cohort" })).toBe("standing");
-    expect(classifyPace({ kind: "believer_milestone" })).toBe("standing");
-    expect(classifyPace({ kind: "tribe_doubled" })).toBe("standing");
+  it("paces duration facts, because they have no when of their own", () => {
+    expect(classifyPace({ kind: "conviction_cohort" })).toBe("soon");
+    expect(classifyPace({ kind: "believer_milestone" })).toBe("soon");
+    expect(classifyPace({ kind: "tribe_doubled" })).toBe("soon");
+    expect(classifyPace({ kind: "standing_fact" })).toBe("soon");
+    expect(classifyPace({ kind: "standing_signal" })).toBe("soon");
   });
 
   /**
@@ -399,13 +386,13 @@ describe("classifyPace", () => {
 
 /**
  * A person's conviction count became true at a moment and then stays true — the
- * same shape as "someone has held YES for 43 days". Scheduling it as standing is
- * what lets a quiet stretch draw on it, which is the whole reason it exists.
+ * same shape as "someone has held YES for 43 days". Neither is urgent, and
+ * neither is withheld: they queue as "soon" and win or lose on significance.
  */
 describe("a conviction count is a standing fact, not news that ages", () => {
   it("paces a person milestone with the other things that do not rot", () => {
-    expect(classifyPace({ kind: "person_milestone" })).toBe("standing");
-    expect(classifyPace({ kind: "conviction_cohort" })).toBe("standing");
+    expect(classifyPace({ kind: "person_milestone" })).toBe("soon");
+    expect(classifyPace({ kind: "conviction_cohort" })).toBe("soon");
   });
 
   it("still yields to the reader's own move", () => {

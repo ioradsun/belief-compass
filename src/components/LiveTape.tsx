@@ -50,12 +50,6 @@ import { COPY_VERSION, sameCopyVersion } from "@/domain/copy-version";
 
 type LiveResult = {
   rows: LiveRow[];
-  /**
-   * Standing facts — who is still here. Not timeline rows: they are held in
-   * reserve and the scheduler draws one only during genuine silence. Built on a
-   * full fetch only, so a delta poll carries the previous reserve forward.
-   */
-  standing?: LiveRow[];
   /** The build that COMPOSED these sentences — see src/domain/copy-version. */
   copyVersion?: string;
   error: string | null;
@@ -159,7 +153,6 @@ export function LiveTape({
          A version change costs exactly one full rebuild. */
       const fresh = cached != null && sameCopyVersion(cached.copyVersion);
       const prev = fresh ? (cached?.rows ?? []) : [];
-      const prevStanding = fresh ? (cached?.standing ?? []) : [];
       const newestMs = prev.length ? Date.parse(prev[0].occurredAt) : 0;
       const canDelta =
         scopeKey === null &&
@@ -175,16 +168,13 @@ export function LiveTape({
           data: { wallet, limit, since: sinceIso },
         })) as LiveResult;
         if (res.error)
-          return { rows: prev, standing: prevStanding, copyVersion: COPY_VERSION, error: res.error };
+          return { rows: prev, copyVersion: COPY_VERSION, error: res.error };
         // The server may have redeployed mid-session: never merge across builds.
         if (!sameCopyVersion(res.copyVersion))
           return (await listLiveEvents({ data: { wallet, limit } })) as LiveResult;
         return {
           rows: mergeLiveRows(prev, res.rows, sinceIso, limit ?? 120),
           copyVersion: res.copyVersion,
-          // Continuity is a slow-moving fact, and re-deriving it on every delta
-          // would put a wallet_beliefs read on the fast path.
-          standing: prevStanding,
           error: null,
         };
       }
@@ -214,7 +204,7 @@ export function LiveTape({
     // up"). So between trades the "Now" feed had nothing left to add and looked
     // frozen. This slow timer re-runs the query, and `dueForFullRebuild` turns
     // roughly every other tick into a full rebuild — which is the only thing
-    // that replenishes those families and the standing reserve. Deliberately far
+    // that replenishes those families, standing stories included. Deliberately far
     // slower than the retired poll, and only the global tape needs it (scoped
     // tapes already full-fetch and ride the socket); a hidden tab never polls.
     refetchInterval: scopeKey === null && side == null ? HEARTBEAT_MS : false,
@@ -230,8 +220,19 @@ export function LiveTape({
   });
   // Sticky: the tape holds its rows until fresh ones arrive.
   const sticky = useStickyRows(data?.rows);
-  const visible =
-    excludeMarketId == null ? sticky : sticky.filter((r) => Number(r.marketId) !== excludeMarketId);
+  /* STANDING STORIES ARE ORDINARY ROWS NOW — they compete in the mixer like
+     everything else. The one thing they still need is the per-reader cooldown:
+     a fact that is permanently true would otherwise recur every session. Only
+     the browser knows what THIS reader has already been told, so the filter
+     lives here, before the mixer, rather than in a separate lane. */
+  const { fresh: factFresh, remember } = useStandingMemory();
+  const visible = useMemo(() => {
+    const scoped =
+      excludeMarketId == null
+        ? sticky
+        : sticky.filter((r) => Number(r.marketId) !== excludeMarketId);
+    return scoped.filter((r) => !r.timeless || factFresh(r.id));
+  }, [sticky, excludeMarketId, factFresh]);
 
   // THE EDITORIAL PASS — SELECT with rank, DISPLAY with time.
   //
@@ -257,10 +258,6 @@ export function LiveTape({
   // as whatever the last poll returned — eight events landing in one frame is a
   // page refresh with a transition on it. The scheduler also decides WHICH row
   // goes next, so coordinated selling never waits behind four dust trades.
-  // Standing facts bypass the mixer entirely — they are not timeline rows and
-  // must never be selected against events for a place in the window.
-  // A fact this reader was told recently is dropped before it ever reaches the
-  // scheduler — the cooldown is what stops a small pool reading as a loop.
   // THE GATE. Everything above decides what the tape COULD show; this decides
   // whether the reader gets it now or is offered it. The scheduler below then
   // paces what was admitted — pacing an arrival the reader never asked for is
@@ -299,11 +296,6 @@ export function LiveTape({
     wasWaiting.current = waiting;
   }, [gate.pending]);
 
-  const { fresh, remember } = useStandingMemory();
-  const standing = useMemo(
-    () => (data?.standing ?? []).filter((r) => fresh(r.id)),
-    [data?.standing, fresh],
-  );
   // The rows the last tap admitted — kept in the window and shown at the top,
   // so "Update" always visibly changes the feed.
   const pinnedIds = useMemo(() => new Set(gate.lastAdmitted), [gate.lastAdmitted]);
@@ -311,7 +303,6 @@ export function LiveTape({
   const { rows: released, entranceWeight } = useScheduledRows(
     gate.admitted,
     resetKey,
-    standing,
     gate.admitNonce,
   );
 

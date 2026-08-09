@@ -6,7 +6,7 @@
  * frame is what makes a live tape read as a page refresh instead of a stream,
  * and no amount of easing fixes that. It is a scheduling problem.
  *
- * THE ONE RULE: real activity interrupts, standing facts fill silence.
+ * THE ONE RULE: one thing moves at a time, and the most urgent thing moves first.
  *
  * TWO AXES, NOT THREE LANES. An earlier design sorted events into immediate /
  * paced / reservoir, which quietly collapsed two independent questions into one
@@ -23,20 +23,27 @@
  *   · "now"      Coordinated buying or selling, a market opening, the viewer's
  *                own action, major capital movement. These arrive over the
  *                realtime socket and are never intentionally held.
- *   · "soon"     Ordinary trades, price moves, network activity. Released in
- *                sequence so simultaneous arrivals do not look like a reload.
- *                Never held past `maxHoldMs`.
- *   · "standing" Someone has held YES for 43 days. True now, true tomorrow,
- *                true next week — it has no "when" at all. Drawn only during
- *                genuine silence, and never allowed to delay real activity.
+ *   · "soon"     Ordinary trades, price moves, network activity, and standing
+ *                reads of the market. Released in sequence so simultaneous
+ *                arrivals do not look like a reload. Never held past
+ *                `maxHoldMs`.
  *
- * WHY STANDING FACTS DO NOT EXPIRE. Treating them as events with a maximum age
- * creates the staleness it then has to manage: a queue of celebrations drains
- * and leaves you empty again, which is exactly the dead feed this exists to
- * prevent. A standing fact is not aging, so the correct control is a per-reader
- * COOLDOWN on repeating the same fact — the caller's job, since only it knows
- * who is reading. This module simply never invents one and never lets one
- * outrank real activity.
+ * THERE IS NO "STANDING" LANE, DELIBERATELY — REMOVED, DO NOT REINTRODUCE.
+ * Continuity used to have a third lane and a silence gate: a reserve of
+ * standing facts the scheduler drew from only after ten seconds of quiet. It
+ * was the wrong shape twice over. Mechanically it was dead code most of the
+ * time, because a feed with any activity never reached the gate. Editorially it
+ * was worse: it made the product's single best observation — "the price fell
+ * nine points and not one of the four oldest holders moved" — appear ONLY when
+ * nothing was happening, which is exactly when persistence means least.
+ * Contrast needs something to contrast with.
+ *
+ * Continuity is now an ordinary story that competes on significance upstream
+ * (see src/domain/standing-story), and it arrives here as "soon" like any other
+ * non-urgent row. The controls that lane provided are kept where they belong:
+ * family caps and repeat pruning in the editorial layer, and the per-reader
+ * cooldown in the client, which is the only place that knows who is reading.
+
  *
  * PREEMPTION IS BY WEIGHT, NOT BY LANE. "A celebration must never delay a
  * trade" sounds right and is wrong at the edges: it lets a $2 dust trade
@@ -66,10 +73,10 @@
  * ZERO IO, pure, deterministic (including the jitter), fully testable.
  */
 
-export type Perishability = "now" | "soon" | "standing";
+export type Perishability = "now" | "soon";
 
-/** busy → normal → quiet → idle, by how much real activity is waiting. */
-export type SchedulerMode = "busy" | "normal" | "quiet" | "idle";
+/** busy → normal → idle, by how much activity is waiting. */
+export type SchedulerMode = "busy" | "normal" | "idle";
 
 export const SCHEDULE = {
   /**
@@ -81,27 +88,11 @@ export const SCHEDULE = {
   minGapMs: 700,
   /** Several economic events waiting: keep up, but still one at a time. */
   busy: { fromMs: 1_500, toMs: 3_000 },
-  /** The ordinary rhythm. */
+  /** The ordinary rhythm, and the only one once the queue is shallow. */
   normal: { fromMs: 3_000, toMs: 6_000 },
-  /** Silence. One standing fact, unhurried, and never two in a row quickly. */
-  quiet: { fromMs: 15_000, toMs: 30_000 },
-  /** Real rows pending at which the cadence tightens. */
+  /** Rows pending at which the cadence tightens. */
   busyDepth: 4,
-  /** Silence this long before a standing fact may be drawn at all. */
-  // TEN SECONDS, arrived at twice by the same evidence. At 45s a tape only
-  // reached `quiet` on a genuinely dead market, so the reserve built on every
-  // fetch was rarely drawn and slow periods read as broken rather than calm.
-  // Twenty fixed that for dead markets and not for slow ones: a reader watching
-  // a real feed still never saw a standing fact, while eighteen true things sat
-  // in reserve behind the gate.
-  //
-  // Ten is chosen against the cost of being wrong, which is asymmetric. Drawing
-  // one too eagerly costs a true, calm sentence in a gap the reader was already
-  // staring at; drawing one too late costs the entire feature, silently, which
-  // is what has happened twice. The reserve holds ~18 and the pacing below still
-  // spaces them 15–30s apart, so this changes WHEN the first one appears, not
-  // how many arrive.
-  quietAfterMs: 10_000,
+
   /**
    * The longest a "soon" row may be held. Past this the queue is behind reality
    * and the cadence drops to the floor — a feed that is pleasant and wrong is
@@ -147,22 +138,24 @@ export function classifyPace(input: {
 }): Perishability {
   if (input.isViewer) return "now";
   switch (input.kind) {
-    // Standing facts: true today, true tomorrow, no "when" of their own.
-    //
-    // `person_milestone` is the same shape as the rest: a conviction count
-    // became true at a moment and then stays true. Scheduling it as standing is
-    // what lets the quiet stretches draw on it, which is why it exists.
+    /* TRUE TODAY, TRUE TOMORROW — and therefore "soon", never urgent. These
+       used to be a third lane that only played during silence; they are now
+       paced like any other unhurried row, and their rationing is editorial
+       (family caps, repeat pruning) rather than a gate on the clock. */
     case "conviction_cohort":
     case "believer_milestone":
     case "tribe_doubled":
     case "person_milestone":
-      return "standing";
+    case "standing_fact":
+    case "standing_signal":
+      return "soon";
     // A market opening is the one piece of news that is only news once.
     case "market_created":
       return "now";
     // A structural change in where the capital or the believers sit.
     case "market_transition":
       return "now";
+
     default:
       // One wallet moving across many markets at once is coordination, and
       // coordination is the thing a reader most wants to catch while it is
@@ -198,7 +191,7 @@ export interface ScheduleState {
   lastReleaseAt: number;
   /** Weight of the last released row — sets how long the floor is held. */
   lastWeight: number;
-  /** When real (non-standing) activity was last released. Gates quiet mode. */
+  /** When the last row was released, for callers that want an idle signal. */
   lastActivityAt: number;
   /** Ids already released, newest last. Bounded to SCHEDULE.memory. */
   seen: string[];
@@ -217,7 +210,7 @@ export function createScheduleState(nowMs: number): ScheduleState {
   return { queue: [], lastReleaseAt: 0, lastWeight: 4, lastActivityAt: nowMs, seen: [] };
 }
 
-const PERISH_RANK: Record<Perishability, number> = { now: 0, soon: 1, standing: 2 };
+const PERISH_RANK: Record<Perishability, number> = { now: 0, soon: 1 };
 
 const clampWeight = (w: number): number => (w < 1 ? 1 : w > 4 ? 4 : Math.round(w));
 
@@ -255,8 +248,6 @@ export function enqueue(state: ScheduleState, rows: PendingRow[]): ScheduleState
   return { ...state, queue: [...state.queue, ...fresh] };
 }
 
-const isReal = (r: PendingRow) => r.perishability !== "standing";
-
 /** The oldest hold on a "soon" row, in ms. 0 when nothing is waiting. */
 function longestHold(queue: PendingRow[], nowMs: number): number {
   let worst = 0;
@@ -269,12 +260,9 @@ function longestHold(queue: PendingRow[], nowMs: number): number {
 }
 
 export function modeFor(state: ScheduleState, nowMs: number): SchedulerMode {
-  const real = state.queue.filter(isReal).length;
+  const real = state.queue.length;
   if (real >= SCHEDULE.busyDepth) return "busy";
   if (real > 0) return "normal";
-  const silentFor = nowMs - state.lastActivityAt;
-  const hasStanding = state.queue.some((r) => !isReal(r));
-  if (hasStanding && silentFor >= SCHEDULE.quietAfterMs) return "quiet";
   return "idle";
 }
 
@@ -300,12 +288,9 @@ function gapFor(
   // entrance already playing, which is the animation floor, not a delay.
   if (next.perishability === "now") return floor;
 
-  const band =
-    mode === "busy" ? SCHEDULE.busy : mode === "quiet" ? SCHEDULE.quiet : SCHEDULE.normal;
+  const band = mode === "busy" ? SCHEDULE.busy : SCHEDULE.normal;
   const wanted = spread(next.id, band.fromMs, band.toMs);
-  // Standing facts have no bound to breach — silence is exactly where they
-  // belong, and hurrying them would defeat the point.
-  if (next.perishability === "standing") return Math.max(floor, wanted);
+
 
   const waiting = queue.filter((r) => r.perishability === "soon").length;
   if (waiting === 0) return Math.max(floor, wanted);
@@ -321,7 +306,8 @@ function gapFor(
  * chronologically even though it renders newest-first.
  */
 function nextUp(queue: PendingRow[], mode: SchedulerMode): PendingRow | null {
-  const eligible = queue.filter((r) => (isReal(r) ? true : mode === "quiet"));
+  // Every lane is eligible: there is no gated reserve any more.
+  const eligible = queue;
   if (eligible.length === 0) return null;
   return [...eligible].sort(
     (a, b) =>
@@ -366,7 +352,7 @@ export function tick(state: ScheduleState, nowMs: number): TickResult {
     queue: state.queue.filter((r) => !taken.has(r.id)),
     lastReleaseAt: nowMs,
     lastWeight: clampWeight(head.weight),
-    lastActivityAt: isReal(head) ? nowMs : state.lastActivityAt,
+    lastActivityAt: nowMs,
     seen,
   };
 

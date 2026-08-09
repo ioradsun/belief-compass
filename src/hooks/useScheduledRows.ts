@@ -47,9 +47,6 @@ export interface ScheduledView<T> {
 /** Ids whose entrance has already played. Bounded so a long session cannot grow. */
 const ENTRANCE_MEMORY = 200;
 
-/** Stable identity for the default, so it never re-triggers the reserve effect. */
-const EMPTY: never[] = [];
-
 /**
  * @param resetKey Identifies WHICH tape this is. Changing it starts over: a
  *   reader switching market is not watching a stream arrive, they are opening a
@@ -59,7 +56,6 @@ const EMPTY: never[] = [];
 export function useScheduledRows<T extends SchedulableRow>(
   all: T[],
   resetKey?: string,
-  reserve: T[] = EMPTY,
   /**
    * REVEAL ON DEMAND. Changing this number means the reader ASKED for the
    * waiting rows (they tapped "N New"). A drip is the right answer for activity
@@ -162,33 +158,6 @@ export function useScheduledRows<T extends SchedulableRow>(
     pump();
   }, [all, pump]);
 
-  // THE RESERVE. Standing facts are never shown on first paint and never
-  // compete with the timeline: they go straight into the scheduler's queue, and
-  // it draws one only once the silence is real. Enqueued even before the first
-  // paint, so a tape that opens quiet has something to say when it stays quiet.
-  useEffect(() => {
-    const fresh = reserve.filter((r) => !known.current.has(r.id));
-    if (fresh.length === 0) return;
-    const now = Date.now();
-    for (const r of fresh) known.current.add(r.id);
-    state.current = enqueue(
-      state.current,
-      fresh.map(
-        (r): PendingRow => ({
-          id: r.id,
-          perishability: "standing",
-          weight: r.pace?.weight ?? 3,
-          // A standing fact has no "when"; this only orders it within its own
-          // lane and is never rendered.
-          occurredAt: Date.parse(r.occurredAt) || 0,
-          enqueuedAt: now,
-          collapseKey: null,
-        }),
-      ),
-    );
-    pump();
-  }, [reserve, pump]);
-
   // THE READER ASKED. Everything known — queued, held back, just merged — is
   // released in one commit, and each newly visible row is given the major
   // entrance so the answer to "where did they go?" is a thing you can watch.
@@ -227,9 +196,7 @@ export function useScheduledRows<T extends SchedulableRow>(
   );
 
   return {
-    // A released standing fact renders at the top: it has no time of its own,
-    // and the moment it was drawn is the only ordering it can honestly have.
-    rows: [...reserve.filter((r) => shown.has(r.id)), ...all.filter((r) => shown.has(r.id))],
+    rows: all.filter((r) => shown.has(r.id)),
     entranceWeight: (id: string) => entrances.current.get(id) ?? null,
     pending,
   };

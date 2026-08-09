@@ -75,10 +75,10 @@ import { discoveryValue, markSeen, type DiscoverySubject } from "@/domain/discov
 import { stakeBoost, NO_STAKES } from "@/domain/viewer-stake";
 import { currentHoldDays, holdStartIsFloor } from "@/domain/tenure";
 import { classifyPace } from "@/domain/feed-scheduler";
-import { buildStandingFacts } from "@/lib/standing-facts.server";
+import { buildStandingStories } from "@/lib/standing-facts.server";
 import { buildPersonMilestones } from "@/lib/person-milestones.server";
 import { tellConvictionMilestone } from "@/domain/person-milestone";
-import { tellStandingFact } from "@/domain/standing-fact";
+
 import {
   findDiscoveryMoments,
   tellDiscoveryMoment,
@@ -206,14 +206,17 @@ type Momentum = {
 
 
 /**
- * How many standing facts one full fetch puts in reserve.
+ * How many standing stories one full fetch may offer the pipeline.
  *
- * Six was a reserve that ran dry inside one quiet stretch: the scheduler draws
- * one every 15–30s of silence, so six is about two minutes of material for a
- * feed that can be quiet for an hour. This is the cheap half of the fetch (one
- * wallet_beliefs read the tape already needs), so the depth is close to free.
+ * This is a CANDIDATE ceiling, not a reserve depth. Standing stories now
+ * compete for the window on significance like everything else, so the number
+ * only has to be large enough that the editorial layer has a real choice — the
+ * ranking, family caps and cooldowns do the rest of the work that a fixed
+ * reserve size used to do badly. It stays cheap: one wallet_beliefs read the
+ * tape already needs.
  */
-const STANDING_RESERVE = 18;
+const STANDING_CANDIDATES = 18;
+
 
 /** How far back an answered call can be and still be news. */
 const SHOWED_UP_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
@@ -722,10 +725,10 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   if (source.error)
     return {
       rows: [] as LiveRow[],
-      standing: [] as LiveRow[],
       copyVersion: COPY_VERSION,
       error: source.error,
     };
+
   const { rows, marketIds, titleById, creatorByMarket, momentumById, ethUsd } = source;
 
   const events: LiveEventInput[] = (rows ?? []).map((r) => ({
@@ -1343,6 +1346,162 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       return r;
     });
 
+  /* ── STANDING IS A STORY TYPE, NOT A LANE ──────────────────────────────────
+     Persistence enters the SAME pool as change, at the SAME point, and earns
+     its place the same way. Every row below this line — significance, viewer
+     angle, editorial subtraction, person patterns, composed clues, the
+     question layer — treats these exactly like an event story.
+
+     The old design returned them on a separate `standing` channel and had the
+     client drip-feed them during silence. That made the product's best
+     observation — "the price fell nine points and not one of them moved" —
+     structurally unrankable: it could only ever appear when NOTHING was
+     happening, which is precisely when it means least. Contrast needs
+     something to contrast with.
+
+     They are `timeless: true` rather than backdated: a standing story is not
+     an event that occurred at a moment, and inventing an `occurredAt` would be
+     inventing history. See src/domain/standing-story.
+
+     Full fetches only — a delta poll merges into a tail that already carries
+     them, and nobody's tenure changes in thirty seconds. */
+  if (data?.since == null && marketIds.length > 0) {
+    // PROVEN departures only, counted from the events this window actually
+    // loaded. "Fewer holders than yesterday" would be an inference; a row that
+    // says someone left is a receipt.
+    const exitsByKey = new Map<string, number>();
+    for (const { r } of scored) {
+      const act = actionById.get(r.id);
+      if (act !== "exit" && act !== "flip") continue;
+      const k = `${Number(r.marketId)}:${r.side}`;
+      exitsByKey.set(k, (exitsByKey.get(k) ?? 0) + 1);
+    }
+
+    const standingRows = await buildStandingStories({
+      marketIds,
+      labelByWallet,
+      crossingsByWallet: new Map([...relByWallet].map(([w, r]) => [w, r.sharedBeliefs ?? 0])),
+      titleById,
+      evidenceByMarket: new Map(
+        [...momentumById].map(([id, m]) => [
+          id,
+          {
+            yesPriceChange24h: m.yesPriceChange24h,
+            yesCapitalDelta24h: m.yesCapitalDelta24h,
+            noCapitalDelta24h: m.noCapitalDelta24h,
+            believersYes: m.believersYes,
+            believersNo: m.believersNo,
+            marketAgeDays: m.marketAgeDays,
+          },
+        ]),
+      ),
+      exitsByKey,
+      now: signalNowMs,
+      limit: STANDING_CANDIDATES,
+    }).catch(() => []);
+
+    for (const s of standingRows) {
+      // A YES/NO activity rail is a side ledger. Standing stories are built
+      // from the whole market, so the same side boundary applies or a quiet
+      // YES rail fills with NO continuity.
+      if (data?.side && s.side !== data.side) continue;
+      const id = `standing:${s.key}`;
+      /* TWO KINDS, NOT FIVE. The pipeline's kind is the CLASS — every mapping
+         downstream (family caps, pace, the social-vector set, the renderer)
+         only ever needs to know "receipt or intelligence". The specific shape
+         travels in `motif`, where the mixer's variety caps read it. */
+      const kind = s.klass === "intelligence" ? "standing_signal" : "standing_fact";
+      /* A standing story is "about you" when one of the people standing there
+         is someone the reader knows — not because it is a standing story. */
+      const personal = s.people.some((p) => p.relationship != null);
+
+
+      /* INTELLIGENCE EARNS A REAL VECTOR; A RECEIPT DOES NOT.
+         `standing_signal` is absent from SOCIAL_SIGNAL_KINDS precisely so it
+         reads live market facts here — the contrast IS the market's own
+         movement, so a zero vector would have thrown away the whole point.
+         `standing_fact` stays social and zero, which is the honest score for
+         "someone is still here" with nothing to contrast it against. */
+      const m = momentumById.get(s.marketId);
+      signalById.set(
+        id,
+        signalVector(
+          factsForRow(
+            { kind, wallet: null, action: null, amountUsd: null, occurredAt: null },
+            m
+              ? {
+                  yesPrice: m.yesPrice,
+                  yesPriceChange1h: m.yesPriceChange1h,
+                  yesPriceChange24h: m.yesPriceChange24h,
+                  yesPriceChange7d: m.yesPriceChange7d,
+                  yesCapitalDelta24h: m.yesCapitalDelta24h,
+                  noCapitalDelta24h: m.noCapitalDelta24h,
+                  capitalHeldYes: m.capitalHeldYes,
+                  capitalHeldNo: m.capitalHeldNo,
+                  tradeCount24h: m.tradeCount24h,
+                  tradeCount7d: m.tradeCount7d,
+                  believersYes: m.believersYes,
+                  believersNo: m.believersNo,
+                  newBelievers24h: m.newBelievers24h,
+                  newBelieversYes24h: m.newBelieversYes24h,
+                  newBelieversNo24h: m.newBelieversNo24h,
+                  peopleYesChange24h: m.peopleYesChange24h,
+                  sideFlips24h: m.sideFlips24h,
+                  lastTradeAt: m.lastTradeAt,
+                }
+              : null,
+            signalNowMs,
+            null,
+          ),
+        ),
+      );
+      derived.set(id, s.strength);
+      tierById.set(id, s.strength >= 0.65 ? 1 : 2);
+
+      material.push({
+        id,
+        kind,
+        marketId: String(s.marketId),
+        marketTitle: s.marketTitle,
+        // No "when", and none invented. `timeless` stops the renderer printing
+        // an age that would read as "this just happened".
+        occurredAt: new Date(0).toISOString(),
+        startedAt: new Date(0).toISOString(),
+        timeless: true,
+        side: s.side,
+        walletCount: s.people.length,
+        tradeCount: null,
+        amountEth: null,
+        amountUsd: null,
+        wallet: null,
+        people: s.people.map((p) => ({
+          wallet: p.wallet,
+          name: p.name,
+          avatarUrl: p.avatarUrl,
+        })),
+        story: {
+          category: "conviction",
+          headline: s.headline,
+          body: s.body,
+          attribution: null,
+          tone: "neutral",
+          personal,
+        },
+        text: `${s.headline} — ${s.body}`,
+        // Not urgent and not stale: it was true an hour ago and will be true in
+        // an hour, so it must never preempt a market moving right now.
+        pace: { perishability: "soon", weight: s.strength >= 0.65 ? 2 : 3 },
+        /* The SHAPE, not the sentence, is what the reader experiences as a
+           repeat — "held through the move" twice is a repeat even when the
+           day counts differ, so the motif keys on the shape the domain named
+           and never on the composed copy. */
+        payload: { significance: s.strength, motif: s.motif, standingKind: s.kind },
+
+      } as (typeof material)[number]);
+    }
+  }
+
+
   // ── YOUR OWN STAKE ───────────────────────────────────────────────────────
   // The ranker knew about PEOPLE the reader is connected to and nothing about
   // their own MARKETS: a transition in the question you opened was ranked
@@ -1591,9 +1750,11 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
          a change of numbers does not. Named acts keep the headline key, so the
          genuine beats (new believer → side opens → pile-in → flip) survive. */
       motif:
-        r.kind === "market_transition"
+        (r.payload as { motif?: string } | null)?.motif ??
+        (r.kind === "market_transition"
           ? `state:${(r.payload as { type?: string } | null)?.type ?? "move"}:${(r.payload as { metric?: string } | null)?.metric ?? ""}`
-          : `${r.kind}:${r.side ?? "market"}:${r.story.headline}`,
+          : `${r.kind}:${r.side ?? "market"}:${r.story.headline}`),
+
       /* HOW LOUD THIS ROW IS ALLOWED TO BE, and what it costs to be that loud
          again (plan §6). The level is the viewer-blind vector's, so the mixer
          charges for a run of contradictions without ever being able to turn a
@@ -2017,68 +2178,11 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       );
   }
 
-  // ── STANDING FACTS ───────────────────────────────────────────────────────
-  // Not timeline rows, and returned separately for that reason. Every other
-  // row answers "what changed"; these answer "who is still here", which is
-  // the only honest thing a feed has to say when nothing changed at all. The
-  // client holds them in reserve and the scheduler draws one during genuine
-  // silence — see src/domain/standing-fact for why they never expire.
-  //
-  // Built only on a FULL fetch: a delta poll merges into a cached tail that
-  // already carries the reserve, and continuity does not change in 30 seconds.
-  const standing: LiveRow[] = [];
-  if (data?.since == null && marketIds.length > 0) {
-    const facts = await buildStandingFacts({
-      marketIds,
-      labelByWallet,
-      crossingsByWallet: new Map([...relByWallet].map(([w, r]) => [w, r.sharedBeliefs ?? 0])),
-      titleById,
-      ageByMarket: new Map([...momentumById].map(([id, m]) => [id, m.marketAgeDays])),
-      now: Date.now(),
-      limit: STANDING_RESERVE,
-    }).catch(() => []);
-    for (const f of facts) {
-      // A YES/NO activity rail is a side ledger. Standing facts are built from
-      // the whole market after the event query, so apply the same side boundary
-      // here or a quiet YES rail can be filled with a NO continuity fact.
-      if (data?.side && f.side !== data.side) continue;
-      const story = tellStandingFact(f);
-      standing.push({
-        id: `standing:${f.key}`,
-        kind: "standing_fact",
-        marketId: String(f.marketId),
-        marketTitle: f.marketTitle,
-        // A standing fact has no "when". The reserve is ordered by strength,
-        // not by time, and `timeless` stops the renderer printing an age that
-        // would read as "this just happened".
-        occurredAt: new Date(0).toISOString(),
-        startedAt: new Date(0).toISOString(),
-        timeless: true,
-        side: f.side,
-        walletCount: f.people.length,
-        tradeCount: null,
-        amountEth: null,
-        amountUsd: null,
-        wallet: null,
-        people: f.people.map((p) => ({
-          wallet: p.wallet,
-          name: p.name,
-          avatarUrl: p.avatarUrl,
-        })),
-        story: {
-          category: "conviction",
-          headline: story.headline,
-          body: story.body,
-          attribution: null,
-          tone: "neutral",
-          personal: f.side == null,
-        },
-        text: `${story.headline} — ${story.body}`,
-        pace: { perishability: "standing", weight: f.strength >= 0.65 ? 2 : 3 },
-        payload: { significance: f.strength },
-      });
-    }
-  }
+  // Standing stories are built with the rest of the material, far above this
+  // point — they are a story TYPE, not a lane, and nothing about them belongs
+  // in the tail of the pipeline any more.
+
+
 
   // ── SOMEBODY SHOWED UP ───────────────────────────────────────────────────
   // The one family in this tape that is about the READER rather than a market:
@@ -2149,8 +2253,8 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
      screen by the sticky tape. See src/domain/copy-version. */
   return {
     rows: material,
-    standing,
     copyVersion: COPY_VERSION,
+
     error: null,
     ...(process.env["SIGNAL_DIAGNOSTIC"] === "1"
       ? {
