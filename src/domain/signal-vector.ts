@@ -59,6 +59,13 @@ export const CONCENTRATION_MIN_POSITION = 10;
  */
 export const MAX_CREDIBLE_REL_MOVE = 0.5;
 
+/**
+ * The smallest share of a market's anomaly a row with no evidence of its own may
+ * inherit. Above zero because such a row is still about an anomalous market;
+ * well below one because the market's story is told once, not once per trade.
+ */
+export const ROW_INHERIT_FLOOR = 0.3;
+
 
 // ---------------------------------------------------------------------------
 // Types
