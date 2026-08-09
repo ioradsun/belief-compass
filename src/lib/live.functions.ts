@@ -2086,6 +2086,9 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       text?: string;
     }> = [];
     const drafted = new Map<string, string>();
+    /** Ordinary receipts absorbed by a promoted composed clue (see stage 2). */
+    const consumedByClue = new Set<string>();
+
 
     /* THE PROPOSITION PAIR. Which already-proven STATE, if any, this row sits
        on — the only input the semantic question layer takes beyond the title.
