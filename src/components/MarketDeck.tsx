@@ -24,7 +24,6 @@ import { useAnswerCalls } from "@/hooks/useAnswerCalls";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
-import { DnaFirstReveal } from "@/components/DnaFirstReveal";
 import { MobileCaseView } from "@/components/MobileCase";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
@@ -33,7 +32,6 @@ import { MarketMomentum } from "@/components/MarketVitality";
 import { insiderPulse, insiderRead, marketStateFacts, pulseFactsFromMarket } from "@/domain/insider";
 import { relationFromGroup } from "@/domain/participant-social";
 import { convictionMatch, presentRelationship } from "@/domain/relationship";
-import { SharedConviction } from "@/components/SharedConviction";
 import { marketAgeCopy } from "@/domain/market-freshness";
 import { RELATIONSHIP_TEXT, relationshipTone } from "@/lib/dna-labels";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
@@ -425,28 +423,14 @@ export function MarketDeck({
         }
       />
 
-      {/* SHARED CONVICTION — belonging: your Tribe/Twin/Opp are here, and which
-          way they went.
+      {/* NO TRIBE CALLOUT UNDER THE CASE FILE.
+          Two blocks used to sit here: a "1 person from your Tribe is on YES"
+          line and a "someone who thinks like you is here" card. The first
+          repeated what the Case File already shows in its believer rows, and
+          the second surfaced a match who had not taken a side in THIS market
+          at all — a person the reader was being told about while looking at a
+          question they never touched. Duplicate above, wrong below; both gone. */}
 
-          Its row is RESERVED for a connected viewer, on every market, because
-          the alternative is the one thing this column must never do: change
-          shape depending on which market you are reading. The block renders
-          nothing when nobody you know is in the room, and it renders late even
-          when they are — so left conditional it pushed the body down a row on
-          some markets and, worse, mid-read on the ones where the lookup landed
-          after paint. A signed-out reader can never see it, so they get no gap. */}
-      {viewerWallet ? (
-        <div className="shrink-0" style={{ minHeight: 24 }}>
-          <SharedConviction
-            marketId={marketId}
-            viewerWallet={viewerWallet}
-            onSelectPerson={onSelectPerson}
-          />
-        </div>
-      ) : null}
-
-      {/* One-time nudge: the first real match, surfaced to explore. */}
-      <DnaFirstReveal viewerWallet={viewerWallet} onSelectPerson={onSelectPerson} />
     </>
   );
 
