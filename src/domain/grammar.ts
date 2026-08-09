@@ -47,6 +47,8 @@ const SINGULAR: Record<string, string> = {
 const PLURAL = Object.fromEntries(
   Object.entries(SINGULAR).map(([p, s]) => [s, p]),
 ) as Record<string, string>;
+// "persons" round-trips to itself above; the plural a person actually says is "people".
+PLURAL.person = "people";
 
 /** Verbs that inflect for number, in both directions. */
 const TO_SINGULAR: Record<string, string> = {
