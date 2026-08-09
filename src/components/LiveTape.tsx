@@ -204,7 +204,7 @@ export function LiveTape({
     // up"). So between trades the "Now" feed had nothing left to add and looked
     // frozen. This slow timer re-runs the query, and `dueForFullRebuild` turns
     // roughly every other tick into a full rebuild — which is the only thing
-    // that replenishes those families and the standing reserve. Deliberately far
+    // that replenishes those families, standing stories included. Deliberately far
     // slower than the retired poll, and only the global tape needs it (scoped
     // tapes already full-fetch and ride the socket); a hidden tab never polls.
     refetchInterval: scopeKey === null && side == null ? HEARTBEAT_MS : false,
