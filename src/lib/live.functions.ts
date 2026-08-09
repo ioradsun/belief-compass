@@ -2324,7 +2324,12 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       if (!r.story) continue;
       const text = keep.has(r.id) ? (drafted.get(r.id) ?? null) : null;
       if (!text) continue;
-      r.story = { ...r.story, question: text };
+      /* A question is the interpretation layer, not a fourth repetition of the
+         evidence. If the body only restates the kicker ("NO just got company" /
+         "First believers just stepped in"), absorb it before attaching the
+         question. Bodies carrying a number, person or counterpoint survive. */
+      const body = secondSentenceAdds(r.story.headline, r.story.body) ? r.story.body : "";
+      r.story = { ...r.story, body, question: text };
       r.text = flattenStory(r.story);
     }
     for (const e of questionLedger) if (keep.has(e.id) && !e.rejected) e.kept = true;

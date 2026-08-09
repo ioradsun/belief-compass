@@ -265,14 +265,15 @@ function variantsFor(i: SemanticInput, title: string, short: string | null): str
       ];
     }
 
-    /* QUESTION WHETHER A SIDE BECAME LESS OBVIOUS. */
+    /* QUESTION WHAT THE ARRIVAL MEANS, WITHOUT ANNOUNCING IT AGAIN. The kicker
+       directly above already says the side got company. Repeating "somebody is
+       on NO now" here turns evidence into three versions of one fact. Move one
+       inference past the arrival instead: was the apparent consensus real? */
     case "side_got_company":
-      return topic
-        ? [
-            `${s} finally got company. Did ${topic} just stop being obvious?`,
-            `Somebody is on ${s} now. Is ${topic} less settled than it looked?`,
-          ]
-        : [];
+      return [
+        `Was the consensus real, or simply untested until now?`,
+        `Does this expose a real split, or only test the consensus?`,
+      ];
 
     /* QUESTION WHETHER ATTENTION CHANGED — attention, never outcome.
        AND WITHOUT QUOTING THE PROPOSITION BACK. The row already prints the
@@ -326,7 +327,10 @@ export function semanticQuestion(i: SemanticInput): string | null {
      are only sayable under this market, whose proposition is printed directly
      above. Requiring either to quote the title is how the question layer ends
      up repeating the headline. Every other shape still has to earn it. */
-  const grounded = i.state === "back_from_dead" || i.state === "one_sided_persistence";
+  const grounded =
+    i.state === "back_from_dead" ||
+    i.state === "one_sided_persistence" ||
+    i.state === "side_got_company";
   const variants = variantsFor(i, title, shortTopic(frag)).filter(
     (v) =>
       v.length <= MAX_QUESTION_CHARS &&
