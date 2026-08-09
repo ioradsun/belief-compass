@@ -49,7 +49,7 @@ export async function loadSharedTapeSource(
       if (source.error) throw new Error(source.error);
       return source;
     });
-  } catch (e) {
+  } catch {
     // The cache is an accelerator, never a gate: on any failure the caller
     // still gets the loader's own answer (including its error, in its shape).
     return loadTapeSource(sb, data);
