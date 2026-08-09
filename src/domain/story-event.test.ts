@@ -725,7 +725,11 @@ describe("a return needs more than one trade", () => {
     expect(woken(1)?.type).not.toBe("market_reawakened");
   });
 
-  it("calls it awake once a second person agrees", () => {
-    expect(woken(2)?.type).toBe("market_reawakened");
+  it("still refuses two — a pair of fills is not a room filling up", () => {
+    expect(woken(2)?.type).not.toBe("market_reawakened");
+  });
+
+  it("calls it awake once a third landing agrees", () => {
+    expect(woken(3)?.type).toBe("market_reawakened");
   });
 });

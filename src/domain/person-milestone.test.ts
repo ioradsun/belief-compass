@@ -121,7 +121,7 @@ describe("many people, newest first", () => {
   it("orders by when each count became true", () => {
     const rows = convictionMilestones(
       [
-        { ...person(3, 3), wallet: "0xold" },
+        { ...person(10, 3), wallet: "0xold" },
         { ...person(5, 1), wallet: "0xnew" },
         { ...person(4, 1), wallet: "0xbetween" }, // not on a rung
       ],

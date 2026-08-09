@@ -47,7 +47,8 @@ describe("trade burst grouping", () => {
     expect(rows[0].walletCount).toBe(3);
     expect(rows[0].tradeCount).toBe(3);
     expect(rows[0].occurredAt).toBe(t); // latest
-    expect(rows[0].story.headline).toBe("NEW BELIEVER");
+    // A crowd is not a person: grouped arrivals get their own composer.
+    expect(rows[0].story.headline).toBe("3 PEOPLE PILED INTO YES");
     expect(rows[0].story.category).toBe("growing");
   });
 
