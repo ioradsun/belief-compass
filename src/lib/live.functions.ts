@@ -1426,6 +1426,11 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
          true clue into a receipt — a high `signalGain` skips the cost. */
       voice: voiceLevel(signalById.get(r.id) ?? null),
       signalGain: signalById.get(r.id)?.informationGain ?? 0,
+      /* THE SHAPE OF THE CLUE, capped window-wide (plan §11.8). The motif keys
+         on composed copy, so the same observation across four markets reads as
+         four different rows to the mixer and as one sentence to the reader. */
+      signalPrimary: signalById.get(r.id)?.primary ?? null,
+      signalKind: signalById.get(r.id)?.tensionKind ?? null,
     } satisfies MixCandidate;
   }
 
