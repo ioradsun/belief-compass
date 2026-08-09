@@ -1359,6 +1359,56 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     } satisfies MixCandidate;
   }
 
+  /* DIAGNOSTIC BEFORE INFLUENTIAL (plan §11 step 4).
+     The anomaly vector is measured for every composed row and attached — but
+     ONLY under SIGNAL_DIAGNOSTIC=1, and nothing downstream reads it. Ranking,
+     cadence and copy are byte-for-byte unchanged; this exists so the model can
+     be judged against real rows before it is allowed to move anything.
+     `preEventHolders` is deliberately null here: reconstructing the hierarchy
+     needs a bounded historical read the tape does not do, and a large amount is
+     never allowed to stand in for "a whale left". Concentration stays 0 in-feed
+     and is reviewed in scripts/check-feed-signal-rows.ts. */
+  if (process.env["SIGNAL_DIAGNOSTIC"] === "1") {
+    const nowMs = Date.now();
+    for (const r of material) {
+      const m = momentumById.get(Number(r.marketId));
+      r.signal = signalVector(
+        factsForRow(
+          {
+            kind: r.kind,
+            wallet: r.wallet,
+            action: (r.payload as { action?: "BUY" | "SELL" }).action ?? null,
+            amountUsd: r.amountUsd,
+            occurredAt: r.occurredAt,
+          },
+          m
+            ? {
+                yesPriceChange1h: m.yesPriceChange1h,
+                yesPriceChange24h: m.yesPriceChange24h,
+                yesPriceChange7d: m.yesPriceChange7d,
+                yesCapitalDelta24h: m.yesCapitalDelta24h,
+                noCapitalDelta24h: m.noCapitalDelta24h,
+                capitalHeldYes: m.capitalHeldYes,
+                capitalHeldNo: m.capitalHeldNo,
+                tradeCount24h: m.tradeCount24h,
+                tradeCount7d: m.tradeCount7d,
+                believersYes: m.believersYes,
+                believersNo: m.believersNo,
+                newBelievers24h: m.newBelievers24h,
+                newBelieversYes24h: m.newBelieversYes24h,
+                newBelieversNo24h: m.newBelieversNo24h,
+                peopleYesChange24h: m.peopleYesChange24h,
+                sideFlips24h: m.sideFlips24h,
+                lastTradeAt: m.lastTradeAt,
+              }
+            : null,
+          nowMs,
+        ),
+      );
+    }
+  }
+
+
   // ── THE EDITORIAL PASS: subtraction, after everything is composed ────────
   // Two rules a reader would state out loud — a second row about the same
   // market has to say something the first didn't, and low-value truth is still
