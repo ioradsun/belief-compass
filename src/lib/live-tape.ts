@@ -162,8 +162,9 @@ export function liveRowStory(r: Omit<LiveRow, "text" | "story">): LiveStory {
                 : buySell === "SELL"
                   ? "exit"
                   : "enter";
-  return tellConvictionStory({
-    action,
+  return tellPiStory(
+    {
+      action,
     side: r.side,
     context: {
       amountUsd: r.amountUsd,
