@@ -1275,7 +1275,38 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         ),
       ),
     );
+
+    /* A DERIVED READING CARRIES ITS OWN EVIDENCE (see transition-signal).
+       The vector above reads market state as it is NOW; a transition emitted
+       four hours ago was measured against windows that have since rolled, so
+       a proven contradiction was arriving with an all-zero vector — ranked as
+       a receipt and, worse, structurally unable to earn the open question.
+       The emitter's frozen type and significance are re-read here, decayed by
+       age, and merged so the live state still wins wherever it sees more. */
+    if (r.kind === "market_transition") {
+      const p = r.payload as { type?: string | null; significance?: number | null } | null;
+      const atMs = r.occurredAt ? Date.parse(r.occurredAt) : NaN;
+      const own = Number.isFinite(atMs)
+        ? signalFromTransition({
+            type: p?.type ?? null,
+            significance: p?.significance ?? null,
+            ageHours: (signalNowMs - atMs) / 3_600_000,
+          })
+        : null;
+      const live = signalById.get(r.id);
+      if (own && live) {
+        const merged = mergeSignals(live, own);
+        signalById.set(r.id, {
+          ...merged,
+          primary:
+            live.informationGain >= own.informationGain
+              ? live.primary
+              : (dominantKey(own) as typeof live.primary),
+        });
+      }
+    }
   }
+
 
   const derived = new Map<string, number>();
   // The tier the admission gate computes and used to discard. It is exactly
