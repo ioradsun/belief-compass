@@ -40,6 +40,13 @@ import { capitalTrigger, FEED_TRIGGERS } from "./feed-event";
 import { formatPct } from "./metric-display";
 import { MATERIAL, type MaterialMove } from "./market-change";
 import { classifyFirstEvent } from "./first-event";
+import {
+  capitalArrivalLine,
+  capitalDrainLine,
+  crowdMoneyDivergenceLine,
+  priceWithoutCrowdLine,
+  reawakenLine,
+} from "./pi-voice";
 
 export type Side = "YES" | "NO";
 
@@ -262,6 +269,10 @@ function dominantSide(input: StoryEventInput): Side {
  */
 export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
   const { yes, no, baseline, social, prev, money: fmt } = input;
+
+  /** Which phrasing this market gets, frozen per market and per state. */
+  const vkey = (type: StoryEventType, side?: Side): string =>
+    `${input.voiceKey ?? ""}:${fp(type, side)}`;
 
   // Sides in a deterministic order — the one with the most capital action first.
   const sides: [Side, SideWindow][] =
