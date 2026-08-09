@@ -51,6 +51,14 @@ export interface EditorialRow {
    * caller is not asserting either way; only an explicit `false` drops the row.
    */
   context?: boolean | null;
+  /**
+   * True when the row is a ROLLING-WINDOW reading — a statement about the last
+   * hour/day rather than about a moment. Two of these on one market are two
+   * observations of overlapping windows, not two developments.
+   */
+  rolling?: boolean | null;
+  /** Event family, for capping how much of the feed one family may occupy. */
+  family?: string | null;
 }
 
 export const EDITORIAL = {
@@ -70,13 +78,25 @@ export const EDITORIAL = {
    * automatically interesting to anyone else, so it needs the reader to already
    * know the person.
    */
-  minMilestoneRung: 5,
+  /**
+   * A conviction count only becomes news for STRANGERS at real scale. 5 is a
+   * fact about somebody the reader has never met; 25 is a standing. Below the
+   * bar the row still ships when the person is personally relevant.
+   */
+  minMilestoneRung: 25,
   /**
    * How close a derived market move has to be to a named trade on the same side
    * before it counts as a restatement of it. Six hours is the window in which a
    * reader would still connect the two as one development.
    */
   causalWindowMs: 6 * 3_600_000,
+  /**
+   * How many rows one family may occupy in a single feed. Resurrection is
+   * CLOCK-driven — every dormant market crosses the bar in the same sweep — so
+   * without a cap a quiet day fills the feed with "back from the dead" and the
+   * feed looks padded rather than alive.
+   */
+  familyCaps: { market_reawakened: 2 } as Record<string, number>,
 } as const;
 
 const num = (v: number | null | undefined): number =>
@@ -101,6 +121,21 @@ export function earnsSlot(r: EditorialRow): boolean {
   if (r.kind === "person_milestone" && (r.rung ?? 0) < EDITORIAL.minMilestoneRung && !r.personal)
     return false;
   return true;
+}
+
+/**
+ * ONE FAMILY MAY NOT OWN THE FEED. Keeps the first N rows of a capped family in
+ * the caller's order (which is already strongest-first) and drops the rest.
+ */
+export function capFamilies<T extends EditorialRow>(rows: readonly T[]): T[] {
+  const seen = new Map<string, number>();
+  return rows.filter((r) => {
+    const cap = r.family ? EDITORIAL.familyCaps[r.family] : undefined;
+    if (cap == null) return true;
+    const n = (seen.get(r.family!) ?? 0) + 1;
+    seen.set(r.family!, n);
+    return n <= cap;
+  });
 }
 
 /**
@@ -157,7 +192,15 @@ export function pruneRepeats<T extends EditorialRow>(rows: readonly T[]): T[] {
       keptByGroup.set(key, [r]);
       continue;
     }
-    if (kept.every((k) => escalated(k, r))) kept.push(r);
+    /* ROLLING WINDOWS NEVER REPEAT. "3 joined / $215 left" at 50m and
+       "9 joined / $85 left" at 1h are the same rolling state read twice over
+       overlapping windows; printing both invites a reader to count one
+       development as two. The newest reading REPLACES the older one, and only a
+       change of category (a different motif) earns a second row. Moment events
+       — a trade, an exit — keep the escalation exemption, because a bigger
+       second one genuinely did happen. */
+    if (!r.rolling && !kept.some((k) => k.rolling) && kept.every((k) => escalated(k, r)))
+      kept.push(r);
     else dropped.add(r.id);
   }
   return rows.filter((r) => !dropped.has(r.id));
@@ -165,5 +208,5 @@ export function pruneRepeats<T extends EditorialRow>(rows: readonly T[]): T[] {
 
 /** Both rules, in the order an editor applies them. */
 export function editFeed<T extends EditorialRow>(rows: readonly T[]): T[] {
-  return pruneRepeats(collapseCausal(rows.filter(earnsSlot)));
+  return capFamilies(pruneRepeats(collapseCausal(rows.filter(earnsSlot))));
 }
