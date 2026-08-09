@@ -187,7 +187,7 @@ function TestingScene() {
         note="Aggregate only. Never a name, never a view count, never a dollar."
       >
         <Stage>
-          <ChallengeRail wallet={ME} onSelect={() => undefined} now={<Tape />} />
+          <ChallengeRail wallet={ME} onSelect={() => undefined} insider={<Tape />} />
         </Stage>
         <Facts
           rows={[
@@ -205,7 +205,7 @@ function TestingScene() {
         note="The same event, from the other side of it."
       >
         <Stage>
-          <ChallengeRail wallet={ME} onSelect={() => undefined} now={<Tape />} />
+          <ChallengeRail wallet={ME} onSelect={() => undefined} insider={<Tape />} />
         </Stage>
         {seen && subject ? (
           <Facts
@@ -234,7 +234,7 @@ function TestingScene() {
         note="Unlocked, connected, and outside the audience. This panel must stay empty; anything that appears here is a leak."
       >
         <Stage>
-          <ChallengeRail wallet={BYSTANDER} onSelect={() => undefined} now={<Tape />} />
+          <ChallengeRail wallet={BYSTANDER} onSelect={() => undefined} insider={<Tape />} />
         </Stage>
       </Panel>
     ),

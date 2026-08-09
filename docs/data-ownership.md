@@ -13,6 +13,27 @@ One responsibility → one active owner → one production path. For code review
 | **trades** | temporary compatibility projection | `ingest_chain_chunk` only | rollback/parity/diagnostics/backfill only | any product read | temporary (ledger) |
 | **feed_events** | legacy only | none | `getIngestStatus` count (diagnostic) | any trade write / chronological product read | temporary (ledger) |
 
+## Interpretation: The Insider
+
+Everything above answers **what is true**. The **Insider** (`src/domain/insider`)
+is the single owner of **what is interesting about what is true** — the
+interpretation layer between canonical facts and every product surface. Its
+constitutional rule (`INSIDER_CONSTITUTION`):
+
+> No product surface calculates market intelligence. Facts are produced by
+> canonical data systems (events, wallet_beliefs, market_state). The Insider
+> interprets those facts. Product surfaces only filter, aggregate, personalize,
+> and render Insider output.
+
+| Concern | Canonical owner | Allowed producers | Allowed consumers | Prohibited | Status |
+|---|---|---|---|---|---|
+| **Insider signals / pulse / stories / read** | `src/domain/insider` | the Insider builder (reads `events` + `wallet_beliefs` + `market_state`) | product surfaces (activity/insight/now/read projections) | any card/route/component that scores momentum, significance, discovery, opportunity, or a viewer read on its own | contract landed; projections migrating (see `docs/insider-architecture.md`) |
+
+The four projections (Insider Activity / Insight / Now / Read) are cache scopes,
+not separate engines: `InsiderMarket` (per-market) and `InsiderNow` (global feed)
+keep global facts cacheable and layer the viewer overlay on afterward. Full surface
+inventory + migration plan: `docs/insider-architecture.md`.
+
 ## Live market readers
 `getMarkets` (center candidates, ordered by `opportunity_score`) and `getMarket`
 (detail) are the current live market readers. They read `market_state` +

@@ -1563,8 +1563,8 @@ function Feed() {
                   LaunchRail above answers exactly that. Left says "already out
                   there?", centre says "what do you believe?", right says "need an
                   angle?" — and then right becomes "your people". */}
-              {/* CHALLENGE | NOW — the two social questions, kept apart.
-                Challenge is "where are my people waiting for my take"; Now is
+              {/* CHALLENGE | INSIDER — the two social questions, kept apart.
+                Challenge is "where are my people waiting for my take"; Insider is
                 "what is happening across Conviction". Anything that cannot tell
                 those apart belongs in the tape, which is why the tape is passed
                 in rather than owned here. */}
@@ -1578,7 +1578,7 @@ function Feed() {
                 <ChallengeRail
                   wallet={wallet}
                   onSelect={selectMarket}
-                  now={
+                  insider={
                     <div className="min-h-0 flex-1 overflow-hidden">
                       <LiveTape
                         wallet={wallet}

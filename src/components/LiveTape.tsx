@@ -201,7 +201,7 @@ export function LiveTape({
     // THE HEARTBEAT — a SUPPLY floor, not a freshness poll. The socket only
     // wakes the tape on a trade, and the delta it fetches rebuilds none of the
     // non-trade families (standing facts, milestones, market signals, "showed
-    // up"). So between trades the "Now" feed had nothing left to add and looked
+    // up"). So between trades the "Insider" feed had nothing left to add and looked
     // frozen. This slow timer re-runs the query, and `dueForFullRebuild` turns
     // roughly every other tick into a full rebuild — which is the only thing
     // that replenishes those families, standing stories included. Deliberately far
@@ -280,7 +280,7 @@ export function LiveTape({
   // the render boundary — see `arranged` below.
   const gate = useTapeGate(visible, resetKey, holdUpdates, !singleMarket);
 
-  // How many rows the "Now" column reveals. Grows when the reader asks for more;
+  // How many rows the "Insider" column reveals. Grows when the reader asks for more;
   // resets when the tape becomes a different list.
   const [revealCount, setRevealCount] = useState(INITIAL_REVEAL);
   useEffect(() => setRevealCount(INITIAL_REVEAL), [resetKey]);
@@ -306,11 +306,11 @@ export function LiveTape({
     gate.admitNonce,
   );
 
-  // WINDOW + ORDER, in one place. For the standalone "Now" column the mixer's
+  // WINDOW + ORDER, in one place. For the standalone "Insider" column the mixer's
   // rank chooses the best `revealCount` stories and time orders them; `hidden`
   // is what "Show earlier" will surface. Embedded tapes (no label) are short and
   // scroll inside a host panel, so they keep showing everything the scheduler
-  // has released, in the scheduler's order — the windowing is the Now column's
+  // has released, in the scheduler's order — the windowing is the Insider column's
   // concern, not theirs.
   const arranged =
     label != null
