@@ -1811,7 +1811,12 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
          four different rows to the mixer and as one sentence to the reader. */
       signalPrimary: signalById.get(r.id)?.primary ?? null,
       signalKind: signalById.get(r.id)?.tensionKind ?? null,
+      /* Heartbeat: carried so the mixer can charge for a REPEATED heartbeat
+         shape. It changes nothing about how loud this row is — significance,
+         voice and gain above are computed identically either way. */
+      pulse: pulseIds.has(r.id) || undefined,
     } satisfies MixCandidate;
+    if (pulseIds.has(r.id)) r.pulse = true;
   }
 
   /* ── THE TWO LAYERS, MADE VISIBLE IN THE RANKING ────────────────────────
