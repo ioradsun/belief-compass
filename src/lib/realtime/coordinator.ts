@@ -18,6 +18,7 @@
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { shouldRevalidateOnReturn } from "@/lib/focus-policy";
+import { insiderRootKey } from "@/lib/insider/keys";
 
 import {
   applyMarketStateBatch,
