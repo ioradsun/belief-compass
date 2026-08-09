@@ -105,3 +105,38 @@ describe("whaleTenureText", () => {
     );
   });
 });
+
+/**
+ * WHAT REPLACING THE OLD FLAG HAD TO CHANGE.
+ *
+ * `Believer.whale` used to mean "big money on this side" — $250, or $5000
+ * absolute, up to two per side and so up to four per market, with no tenure
+ * requirement at all. These pin the differences that made it worth replacing
+ * rather than keeping alongside.
+ */
+describe("the seat is not the old size flag", () => {
+  const rich = { wallet: "0xrich", side: "YES", daysHeld: 0, valueUsd: 9_000 };
+  const steady = { wallet: "0xsteady", side: "YES", daysHeld: 30, valueUsd: 300 };
+
+  it("does not crown $9,000 bought today, which the old flag would have", () => {
+    // $9,000 cleared WHALE_ABS_USD outright. Tenure is the whole difference.
+    expect(findConvictionWhale([rich, steady])?.wallet).toBe("0xsteady");
+  });
+
+  it("names exactly one holder, never one per side", () => {
+    const w = findConvictionWhale([
+      { wallet: "0xyes", side: "YES", daysHeld: 40, valueUsd: 900 },
+      { wallet: "0xno", side: "NO", daysHeld: 40, valueUsd: 800 },
+    ]);
+    expect(w?.wallet).toBe("0xyes");
+    expect(w?.side).toBe("YES");
+  });
+
+  it("has no dollar threshold — the market decides its own scale", () => {
+    // The old flag ignored anyone under $250, so a small market had no whale
+    // however long anyone had stood there.
+    expect(
+      findConvictionWhale([{ wallet: "0xa", side: "NO", daysHeld: 20, valueUsd: 12 }]),
+    ).not.toBeNull();
+  });
+});

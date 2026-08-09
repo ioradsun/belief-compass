@@ -49,20 +49,8 @@ const DIAMOND_MIN_DAYS = 7;
 
 // ── Whale flagging (relative to the market, server-side) ─────────────────────
 
-/** A position must clear this USD floor before "whale" means anything. */
-export const WHALE_MIN_USD = 250;
 /** …and either tower over its side's median position by this multiple… */
 export const WHALE_MULTIPLE = 3;
-/** …or be big in absolute terms (covers a lone whale with no peers). */
-export const WHALE_ABS_USD = 5000;
-/** Whales are rare by definition — never more than this many per side. */
-export const WHALE_MAX_PER_SIDE = 2;
-
-export interface SidePosition {
-  wallet: string;
-  side: "YES" | "NO";
-  valueUsd: number;
-}
 
 const median = (xs: number[]): number => {
   if (xs.length === 0) return 0;
@@ -70,33 +58,6 @@ const median = (xs: number[]): number => {
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
-
-/**
- * The wallets whose USD position makes them a whale ON THEIR SIDE — big relative
- * to that side's typical holder, or big in absolute terms. Bounded per side so a
- * side of near-equal large holders doesn't turn into a row of whales.
- */
-export function whaleWallets(positions: SidePosition[]): Set<string> {
-  const out = new Set<string>();
-  for (const side of ["YES", "NO"] as const) {
-    const onSide = positions
-      .filter((p) => p.side === side && p.valueUsd > 0)
-      .sort((a, b) => b.valueUsd - a.valueUsd);
-    if (onSide.length === 0) continue;
-    const mid = median(onSide.map((p) => p.valueUsd));
-    let flagged = 0;
-    for (const p of onSide) {
-      if (flagged >= WHALE_MAX_PER_SIDE) break;
-      const dominant = mid > 0 && p.valueUsd >= WHALE_MULTIPLE * mid;
-      const absolute = p.valueUsd >= WHALE_ABS_USD;
-      if (p.valueUsd >= WHALE_MIN_USD && (dominant || absolute)) {
-        out.add(p.wallet.toLowerCase());
-        flagged++;
-      }
-    }
-  }
-  return out;
-}
 
 /**
  * time × size — the honest conviction score. Size counts on its own (a fresh

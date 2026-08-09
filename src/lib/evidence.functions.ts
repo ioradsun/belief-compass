@@ -16,7 +16,7 @@ import { serviceClient } from "@/lib/supabase-clients";
 import { readEthUsd } from "@/lib/eth-usd.server";
 import { positionValueUsd } from "@/domain/position-value";
 import { aliasFor } from "@/lib/wallet-identity";
-import { whaleWallets, type SidePosition } from "@/domain/conviction";
+import { findConvictionWhale } from "@/domain/conviction-whale";
 
 export interface Believer {
   wallet: string;
@@ -28,7 +28,11 @@ export interface Believer {
   daysHeld: number;
   /** USD value of the held side, when POV has priced it (0 when unknown). */
   valueUsd: number;
-  /** Big money on the line relative to this market's side (server-flagged). */
+  /**
+   * The market's ONE Conviction Whale: the largest position among holders who
+   * have continuously held their side for at least a week. False for everyone
+   * when nobody has earned it — there is no runner-up.
+   */
   whale: boolean;
 }
 
@@ -126,12 +130,10 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
       8,
     );
 
-    // Whale = big money on the line, judged relative to each side of THIS market.
-    // `*_value_usd` is a column nothing writes, so every position valued at $0
-    // and whaleWallets ranked a field of zeros — no whale was ever found.
-    // Null, not zero: a believer whose position cannot be priced must not be
-    // ranked as dust. `positionValueUsd` falls back to cost basis, then reports
-    // "unknown" — it never invents a figure.
+    // `*_value_usd` is a column nothing writes, so a position read from it alone
+    // values at $0 and a whole field ranks as dust — which is how the previous
+    // whale found nobody, ever. `positionValueUsd` falls back to cost basis and
+    // reports "unknown" rather than inventing a figure.
     const valueOf = (r: (typeof rows)[number], side: "YES" | "NO") =>
       Math.max(
         0,
@@ -142,11 +144,29 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
           ethUsd,
         }).usd,
       );
-    const positions: SidePosition[] = rows.map((r) => {
-      const side = (r.stance_side ?? r.expressed_side) === "YES" ? "YES" : "NO";
-      return { wallet: r.wallet, side, valueUsd: valueOf(r, side) };
-    });
-    const whales = whaleWallets(positions);
+    /**
+     * ONE SEAT, EARNED. This used to flag up to two wallets per side purely on
+     * size ($250, or $5000 absolute), which meant the title could be bought
+     * minutes before you looked at it and up to four people held it at once.
+     *
+     * The Conviction Whale is the largest position among holders who have
+     * CONTINUOUSLY held their side for at least a week — one per market, or
+     * none. `days_held` is the right input and already here: the reducer derives
+     * it from `directional_since`, which survives adds and trims, resets on a
+     * flip and clears on exit. Scarcity is what makes the seat mean anything, so
+     * a market that has not earned one shows nobody.
+     */
+    const whale = findConvictionWhale(
+      rows.map((r) => {
+        const side = (r.stance_side ?? r.expressed_side) === "YES" ? "YES" : "NO";
+        return {
+          wallet: r.wallet.toLowerCase(),
+          side,
+          daysHeld: Number(r.days_held) || 0,
+          valueUsd: valueOf(r, side),
+        };
+      }),
+    );
 
     let believersYes = 0;
     let believersNo = 0;
@@ -165,7 +185,7 @@ export const getMarketEvidence = createServerFn({ method: "GET" })
         conviction: Number(r.conviction) || 0,
         daysHeld: Math.max(0, Math.round(Number(r.days_held) || 0)),
         valueUsd,
-        whale: whales.has(r.wallet.toLowerCase()),
+        whale: whale?.wallet === r.wallet.toLowerCase(),
       };
     });
 
