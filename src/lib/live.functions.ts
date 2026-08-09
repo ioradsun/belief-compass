@@ -45,6 +45,8 @@ import {
 } from "@/domain/significance";
 import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
 import { editFeed } from "@/domain/feed-editorial";
+import { findPersonPatterns } from "@/domain/person-pattern";
+
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
 import { discoveryValue, markSeen, type DiscoverySubject } from "@/domain/discovery";
 import { stakeBoost, NO_STAKES } from "@/domain/viewer-stake";
@@ -1352,6 +1354,32 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     for (let i = material.length - 1; i >= 0; i--)
       if (!keep.has(material[i]!.id)) material.splice(i, 1);
   }
+
+  // ── CROSS-MARKET PERSON PATTERNS ─────────────────────────────────────────
+  // Everything above reasons about ONE question at a time. A person watching
+  // the room also notices what one row structurally cannot: that the same
+  // person has now backed their third question this afternoon, that everything
+  // they touched today is NO, that they sold one belief and bought another.
+  //
+  // It runs AFTER subtraction, so a pattern only ever describes rows the reader
+  // will actually see, and it adds no rows — one aside on the person's newest
+  // surviving row. See src/domain/person-pattern.
+  for (const p of findPersonPatterns(
+    material.map((r) => ({
+      id: r.id,
+      wallet: r.wallet ?? null,
+      marketId: String(r.marketId),
+      side: r.side === "YES" || r.side === "NO" ? r.side : null,
+      action: actionById.get(r.id) ?? null,
+      amountUsd: r.amountUsd ?? null,
+      occurredAt: r.occurredAt,
+    })),
+  )) {
+    const target = material.find((r) => r.id === p.rowId);
+    if (target?.story) target.story = { ...target.story, pattern: p.note };
+  }
+
+
 
 
 

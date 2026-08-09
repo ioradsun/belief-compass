@@ -511,6 +511,15 @@ export function LiveTape({
                       {r.marketTitle}
                     </div>
                   )}
+                  {/* THE PATTERN ASIDE. Not what happened — what it is the third
+                    of. Cross-market context no single event can carry, so it
+                    sits apart from the story in the observer's own register. */}
+                  {s.pattern && (
+                    <div className="mt-1 text-[11px] italic leading-snug text-[var(--text-muted)]">
+                      {s.pattern}
+                    </div>
+                  )}
+
                   {/* WHO + HOW MUCH. Every row that has people ends with their
                     faces, and every row that has money ends with the money.
                     Faces left, amount right, one line — the stack is the way
