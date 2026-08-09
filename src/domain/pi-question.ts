@@ -74,9 +74,9 @@ function personQuestions(name: string | null): string[] {
   const who = name && name.trim().length > 0 ? name.trim() : "they";
   const Who = cap(who);
   return [
-    `Is ${who} losing conviction, or just taking money off the table?`,
-    `Did ${who} learn something, or is this position sizing?`,
-    `${Who} left in pieces rather than all at once — winding down, or making room?`,
+    `Two positions cut in a few hours. Losing conviction, or just lightening up?`,
+    `Is ${who} winding down, or making room for something else?`,
+    `${Who} left in pieces rather than all at once. Exit, or position sizing?`,
   ];
 }
 
@@ -90,17 +90,27 @@ export function piQuestion(input: QuestionInput): PIQuestion | null {
 
   /* RULE 1 — only a genuine clue may ask anything.
      Intelligence (a contradiction, a timed silence, pronounced unusualness)
-     qualifies outright. One observation-level shape also does: a proven change
-     in the holder hierarchy, or a person visibly unwinding. Those are gaps in
-     the evidence even when the market's own vector stays quiet — they are the
-     "KODAK IS BACKING AWAY" case. Everything else stays declarative. */
+     qualifies outright. Two observation-level shapes also do, because they are
+     gaps in the evidence even when the market's own vector stays quiet:
+
+     a. A PROVEN CROSS-MARKET UNWINDING. The pattern layer only writes "stepped
+        back from two questions" once it has seen both, so the behaviour is a
+        fact in hand. It used to be gated behind `concentration > 0`, which the
+        feed sets to zero on purpose (the holder hierarchy before the event is
+        not reconstructed in-feed) — an unrelated missing field was making the
+        one PERSON-shaped question unreachable in production. The pattern is now
+        its own sufficient evidence.
+     b. A PROVEN CHANGE IN THE HOLDER HIERARCHY, where the vector does see it.
+
+     Everything else stays declarative. */
   const level = voiceLevel(v);
-  const hierarchyGap =
-    v.signals.concentration >= 0.6 ||
-    (!!input.pattern && UNWINDING.test(input.pattern) && v.signals.concentration > 0);
-  if (level === "receipt") return null;
-  if (level !== "intelligence" && !(hierarchyGap && v.informationGain >= INTELLIGENCE_GAIN_MIN))
-    return null;
+  const unwinding = !!input.pattern && UNWINDING.test(input.pattern);
+  const hierarchyGap = v.signals.concentration >= 0.6;
+  const eligible =
+    level === "intelligence" ||
+    unwinding ||
+    (hierarchyGap && v.informationGain >= INTELLIGENCE_GAIN_MIN);
+  if (!eligible) return null;
   // RULE 2 — a clue with a proven ending answers itself.
   if (v.clue === "resolved") return null;
 
@@ -113,66 +123,66 @@ export function piQuestion(input: QuestionInput): PIQuestion | null {
     switch (v.tensionKind) {
       case "people_up_capital_down":
         variants = [
-          "Are smaller holders replacing someone bigger?",
+          "More believers, less money. Are smaller positions replacing a bigger one?",
           "Who left while everyone else was arriving?",
-          "More hands, less money — is that new believers, or one exit hidden behind them?",
+          "More hands, less money. Is conviction spreading, or thinning out?",
         ];
         break;
       case "capital_up_price_flat":
         variants = [
-          "Money keeps arriving and nothing moves — who is selling into it?",
-          "What is absorbing all of this?",
-          "Is someone selling as fast as this is being bought?",
+          "More money. Same price. What's absorbing it?",
+          "Money keeps arriving and the price holds. Who is taking the other side?",
+          "If this much came in, what is selling into it?",
         ];
         break;
       case "price_up_believers_flat":
         variants = [
-          "What moved the price if conviction didn't move with it?",
-          "Same crowd, different price — did a few people get much bigger?",
-          "Is this new belief, or the same believers paying more?",
+          "Higher price. Same crowd. What changed underneath it?",
+          "Higher price. Same crowd. Did existing positions get bigger?",
+          "Is this broader conviction, or the same believers paying more?",
         ];
         break;
       case "believers_left_price_rose":
         variants = [
-          "People left and the price went up anyway — who bought what they sold?",
-          "Is the exit the story, or whoever was happy to take the other side?",
+          "People left and the price rose. Who bought what they sold?",
+          "Fewer believers, higher price. Which of those is the real reading?",
         ];
         break;
       case "whales_out_newcomers_in":
         variants = [
-          "Did the big money learn something the newcomers haven't?",
-          "Is this a handover, or a distribution?",
+          "Big positions out, small ones in. Is the conviction the same size?",
+          "Fewer, larger holders replaced by more, smaller ones. Handover, or thinning?",
         ];
         break;
     }
   } else if (s.nonresponse > 0) {
     kind = "nonresponse";
     variants = [
-      "Real money landed and nothing moved — is anyone on the other side paying attention?",
-      "Why hasn't this been priced yet?",
-      "Is the market disagreeing with that money, or hasn't it noticed it?",
+      "Money came in. Price stayed put. What took the other side?",
+      "That much landed and the price held. Who was selling into it?",
+      "Real money, no move. Is the other side deeper than it looks?",
     ];
   } else if (s.concentration > 0 && v.concentrationKind) {
     switch (v.concentrationKind) {
       case "largest_holder_left":
         kind = "largest_holder_left";
         variants = [
-          "Does anyone here still hold a position that size?",
-          "Did the biggest holder know something, or need the money?",
+          "The biggest position is gone. Who carries this side now?",
+          "Does anyone left here hold a position that size?",
         ];
         break;
       case "newcomers_replaced_a_whale":
         kind = "newcomers_replaced_a_whale";
         variants = [
-          "Are smaller holders replacing someone bigger?",
-          "Is the conviction the same size now that it's spread across more people?",
+          "More people, smaller positions. Is conviction spreading, or thinning out?",
+          "The weight moved from one holder to several. Same conviction, or less of it?",
         ];
         break;
       case "concentrating":
         kind = "concentrating";
         variants = [
-          "This side is now mostly one person — whose read is the price?",
-          "If that holder leaves, what is left behind them?",
+          "How much of this side is really one person?",
+          "A crowd on paper. If that holder leaves, what is left behind them?",
         ];
         break;
       default:
@@ -181,14 +191,14 @@ export function piQuestion(input: QuestionInput): PIQuestion | null {
   } else if (s.beforePrice > 0) {
     kind = "before_price";
     variants = [
-      "Money moved first — is the price about to follow, or is nobody convinced?",
-      "Who is taking the other side of this quietly?",
+      "The money moved and the price didn't. Which one is wrong?",
+      "Positions changed before the price. Who is quietly taking the other side?",
     ];
   } else if (s.unusual >= 0.8) {
     kind = "unusual";
     variants = [
-      "Why here, and why today?",
-      "Something brought this crowd — what did they see?",
+      "This much activity, on this question, today. What is different about it?",
+      "Busier than this market has ever been. Is that one participant, or many?",
     ];
   }
 
