@@ -345,7 +345,7 @@ src/domain/insider/
     features.ts     # universal evidence (calculate once)   ✅ landed
     scoring.ts      # evidence → momentum/importance/confidence  ✅ landed
     projections/
-        activity.ts  # ✅ landed   insight.ts  # ✅ landed   now.ts  — needs app run
+        activity.ts  # ✅ landed   insight.ts  # ✅ landed   now.ts  # ✅ landed
 
 src/lib/insider/
     source.server.ts  # every read the tape makes             ✅ landed
