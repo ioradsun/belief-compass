@@ -178,8 +178,15 @@ const ACCEL_EXIT = 2; // 2×
 /** A believer swing this size is "meaningful" (reuses the people trigger). */
 const BEL = FEED_TRIGGERS.believers.minAbs;
 
-/** Trades in a day before a silent market may be called awake again. */
-const MIN_REAWAKEN_TRADES = 2;
+/**
+ * Trades in a day before a silent market may be called awake again.
+ *
+ * TWO WAS STILL AN OVERSTATEMENT. "Back from the dead" is the loudest claim the
+ * feed makes about a market, and a pair of fills — often the same person twice
+ * — is not a room filling up. Three separate landings in a day, after a week of
+ * nobody, is the smallest fact that honestly reads as a return.
+ */
+const MIN_REAWAKEN_TRADES = 3;
 /** A Tribe cluster this size on one side reads as a movement forming. */
 const TRIBE_FORMING_MIN = 3;
 /** Believer counts worth announcing when a side crosses them. */
