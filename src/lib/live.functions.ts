@@ -46,7 +46,7 @@ import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
 import { discoveryValue, markSeen, type DiscoverySubject } from "@/domain/discovery";
 import { stakeBoost, NO_STAKES } from "@/domain/viewer-stake";
-import { firstBackedIsFloor } from "@/domain/tenure";
+import { currentHoldDays, holdStartIsFloor } from "@/domain/tenure";
 import { classifyPace } from "@/domain/feed-scheduler";
 import { buildStandingFacts } from "@/lib/standing-facts.server";
 import { buildPersonMilestones } from "@/lib/person-milestones.server";
@@ -477,7 +477,7 @@ async function loadActorBeliefs(
     const { data: beliefs, error: beliefErr } = svc
       ? await svc
           .from("wallet_beliefs")
-          .select("wallet, onchain_id, yes_shares, no_shares, first_backed_at")
+          .select("wallet, onchain_id, yes_shares, no_shares, directional_since")
           .in("wallet", actorWallets)
           .in("onchain_id", marketIds)
           .limit(500)
@@ -488,16 +488,20 @@ async function loadActorBeliefs(
       );
     const now = Date.now();
     for (const b of (beliefs ?? []) as Array<Record<string, unknown>>) {
-      const first = b.first_backed_at ? Date.parse(String(b.first_backed_at)) : NaN;
-      const days = Number.isFinite(first) ? (now - first) / 86_400_000 : null;
+      // CURRENT conviction, not first-ever participation. This read
+      // `first_backed_at`, which never resets — so somebody who bought a year
+      // ago, left, and returned yesterday had every sentence about them claim a
+      // year. See src/domain/tenure.
+      const startedAt = b.directional_since ? Date.parse(String(b.directional_since)) : NaN;
+      const days = currentHoldDays(b.directional_since as string | null, now);
       beliefByKey.set(`${String(b.wallet).toLowerCase()}:${Number(b.onchain_id)}`, {
         // Sub-day tenure is not a story; don't dress one up as "a day".
         daysHeld: days != null && days >= 1 ? days : null,
         // A belief that was already there when the index opened has no
         // knowable start. The sentence says "43+ days", not "43 days".
-        tenureIsFloor: firstBackedIsFloor(first),
+        tenureIsFloor: holdStartIsFloor(startedAt),
         // They were in this market before today's move.
-        enteredBefore: Number.isFinite(first) && now - first > 86_400_000,
+        enteredBefore: Number.isFinite(startedAt) && now - startedAt > 86_400_000,
         yesShares: Number(b.yes_shares ?? 0),
         noShares: Number(b.no_shares ?? 0),
       });

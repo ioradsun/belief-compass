@@ -83,8 +83,45 @@ export function isFloorTenure(daysHeld: number, nowMs: number = Date.now()): boo
   return daysHeld >= knownSinceDays(nowMs) - TENURE.graceDays;
 }
 
-/** The same question, from the timestamp itself — for callers that hold one. */
-export function firstBackedIsFloor(firstBackedAtMs: number): boolean {
-  if (!Number.isFinite(firstBackedAtMs)) return false;
-  return firstBackedAtMs <= TENURE.epochMs + TENURE.graceDays * DAY;
+/**
+ * The same question, from the timestamp itself — for callers that hold one.
+ *
+ * Start-agnostic despite the name: it only asks whether a start predates the
+ * index, so it answers identically for a `directional_since` and a
+ * `first_backed_at`. See `holdStartIsFloor`, which is the name to prefer now
+ * that current-hold tenure is measured from the former.
+ */
+export function firstBackedIsFloor(startedAtMs: number): boolean {
+  if (!Number.isFinite(startedAtMs)) return false;
+  return startedAtMs <= TENURE.epochMs + TENURE.graceDays * DAY;
+}
+
+/** Reads better at a `directional_since` call site. Same question, same answer. */
+export const holdStartIsFloor = firstBackedIsFloor;
+
+/**
+ * HOW LONG THE CURRENT CONVICTION HAS BEEN HELD — the one definition.
+ *
+ * Measured from `directional_since`, which the reducer preserves across adds
+ * and trims, RESETS on a flip, and CLEARS on exit. So adding continues the
+ * clock, trimming continues it, exiting ends it, and re-entering or flipping
+ * starts a new one.
+ *
+ * NEVER from `first_backed_at`. That column is set once on a wallet's first
+ * position in a market and never reset, so a holder who left and came back
+ * reads as though they never went — which is how the tape and standing facts
+ * came to claim "held for 43 days" about a two-day-old position.
+ *
+ * Null when there is no current directional holding: there is no tenure to
+ * claim, and zero would be a claim.
+ */
+export function currentHoldDays(
+  directionalSince: string | number | null | undefined,
+  nowMs: number = Date.now(),
+): number | null {
+  if (directionalSince == null) return null;
+  const startedMs =
+    typeof directionalSince === "number" ? directionalSince : Date.parse(String(directionalSince));
+  if (!Number.isFinite(startedMs)) return null;
+  return Math.max(0, (nowMs - startedMs) / DAY);
 }

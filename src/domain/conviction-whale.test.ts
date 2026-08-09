@@ -5,6 +5,7 @@ import {
   WHALE,
   type WhaleCandidate,
 } from "./conviction-whale";
+import { currentHoldDays } from "./tenure";
 
 const holder = (over: Partial<WhaleCandidate> = {}): WhaleCandidate => ({
   wallet: "0xaaa",
@@ -138,5 +139,48 @@ describe("the seat is not the old size flag", () => {
     expect(
       findConvictionWhale([{ wallet: "0xa", side: "NO", daysHeld: 20, valueUsd: 12 }]),
     ).not.toBeNull();
+  });
+});
+
+/**
+ * ONE DEFINITION, EVERYWHERE. The Whale and the tape must agree about how long
+ * a wallet has held, or the same person reads as established in one place and
+ * new in another. Both now measure from directional_since via
+ * src/domain/tenure.
+ */
+describe("Whale eligibility uses the same tenure as every other surface", () => {
+  const NOW = Date.UTC(2026, 5, 1);
+  const daysAgo = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
+  const held = (since: string | null) => currentHoldDays(since, NOW) ?? 0;
+
+  it("excludes a 43-day-old FIRST visit whose current hold restarted 2 days ago", () => {
+    // The exact case the tape used to get wrong: exited, then came back.
+    expect(
+      findConvictionWhale([
+        { wallet: "0xback", side: "YES", daysHeld: held(daysAgo(2)), valueUsd: 9_000 },
+      ]),
+    ).toBeNull();
+  });
+
+  it("includes a hold that survived adds and trims", () => {
+    expect(
+      findConvictionWhale([
+        { wallet: "0xsteady", side: "YES", daysHeld: held(daysAgo(20)), valueUsd: 100 },
+      ])?.wallet,
+    ).toBe("0xsteady");
+  });
+
+  it("treats a flip as a new conviction, not a continuing one", () => {
+    expect(
+      findConvictionWhale([
+        { wallet: "0xflipped", side: "NO", daysHeld: held(daysAgo(3)), valueUsd: 9_000 },
+      ]),
+    ).toBeNull();
+  });
+
+  it("claims nothing for someone with no current directional holding", () => {
+    expect(
+      findConvictionWhale([{ wallet: "0xout", side: "YES", daysHeld: held(null), valueUsd: 500 }]),
+    ).toBeNull();
   });
 });

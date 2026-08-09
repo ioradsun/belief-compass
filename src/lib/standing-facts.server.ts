@@ -81,12 +81,12 @@ export async function buildStandingFacts(input: StandingFactsInput): Promise<Sta
   const { data, error } = await svc
     .from("wallet_beliefs")
     .select(
-      "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, value_updated_at, yes_cost, no_cost, first_backed_at",
+      "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, value_updated_at, yes_cost, no_cost, directional_since",
     )
     .in("onchain_id", ids)
     // Oldest belief first: if the ceiling ever bites it drops the shortest
     // tenures, which are the ones with the least to say.
-    .order("first_backed_at", { ascending: true })
+    .order("directional_since", { ascending: true })
     .limit(MAX_BELIEFS);
   if (error || !data || data.length === 0) return [];
 
@@ -94,7 +94,9 @@ export async function buildStandingFacts(input: StandingFactsInput): Promise<Sta
   // two holders, because they believe two things and each has its own age.
   const byKey = new Map<string, StandingHolder[]>();
   for (const b of data as Row[]) {
-    const firstMs = b.first_backed_at ? Date.parse(String(b.first_backed_at)) : NaN;
+    // The CURRENT hold, not first-ever participation — "has backed YES for 43
+    // days" must not survive an exit and re-entry. See src/domain/tenure.
+    const firstMs = b.directional_since ? Date.parse(String(b.directional_since)) : NaN;
     if (!Number.isFinite(firstMs)) continue;
     const daysHeld = (input.now - firstMs) / 86_400_000;
     const wallet = String(b.wallet).toLowerCase();
