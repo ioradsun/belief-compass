@@ -21,9 +21,29 @@
  *    it can only ask about the gap those numbers actually expose. There is no
  *    generic "why now?" pool.
  * 4. NO HYPOTHESIS THE EVIDENCE DOES NOT SUPPORT. The PI may name the two
- *    candidate readings the data leaves open ("losing conviction, or just taking
- *    money off the table?") and must never assert either, imply hidden
- *    knowledge, or manufacture urgency.
+ *    candidate readings the data leaves open ("winding down, or making room?")
+ *    and must never assert either, imply hidden knowledge, or manufacture
+ *    urgency.
+ *
+ * THE GRAMMAR. 7:30 dinner. Champagne. Strawberries. "Business dinner?" The
+ * investigator does not invent what happened; he puts the facts next to each
+ * other and asks the question their combination creates. Every line below does
+ * exactly one of four things:
+ *
+ *   RECONCILE  two facts that do not naturally fit ("More believers, less
+ *              money. Are smaller positions replacing a bigger one?")
+ *   IDENTIFY   the person or capital on the other side ("The biggest position
+ *              is gone. Who carries this side now?")
+ *   DISTINGUISH between two structural readings ("Is conviction spreading, or
+ *              thinning out?")
+ *   CHALLENGE  the obvious reading ("Higher price. Same crowd. What changed
+ *              underneath it?")
+ *
+ * Banned by construction, because they claim something the tape cannot see:
+ * "did they know something", "what did they see", "why hasn't this been priced",
+ * "is the price about to follow". No privileged knowledge, no expectation, no
+ * prediction. And the question must live one inference PAST the receipt — never
+ * "did money leave?" under a row that just said money left.
  *
  * Determinism is inherited from pi-voice: variants are a hash of a stable key,
  * so a row asks the same question on every refresh, on server and client.
