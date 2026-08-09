@@ -120,6 +120,10 @@ export const EDITORIAL = {
    */
   familyCaps: {
     market_reawakened: 2,
+    /* An unanswered market is inventory with a clock on it. One is context;
+       three ("opened 7 hours ago", "13 hours ago", "19 hours ago") is the same
+       non-event printed until it becomes the feed's dominant motif. */
+    market_created: 1,
     first_believer: 1,
     side_opened: 1,
     first_capital: 1,
