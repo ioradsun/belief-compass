@@ -148,6 +148,15 @@ Two distinct jobs, deliberately separated:
 
 Invariant: personal context can change the selected angle, never the underlying market signal or the vector.
 
+**Personal relevance may foreground the actor, but must preserve the market clue when one exists.** Replacing "Three wallets entered NO while price stayed flat" with "Your Rival was one of them" throws away the most valuable information in the row. The correct shape keeps both:
+
+```text
+Your Rival was one of them.
+Three wallets entered NO. Price is still basically where it was.
+```
+
+Rule: for a zero-vector social row, personal context may own the whole story. For a row with a non-zero market signal, personal context augments — it never replaces the intelligence. This is a test, not a style note.
+
 ## 8. Confirmation is gated — a trust invariant
 
 **If the PI cannot establish ordering, the PI cannot tell a before/after story.** Event timestamp + 24h change ≠ change since the event; the window can predate the entry.
