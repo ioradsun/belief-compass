@@ -54,6 +54,16 @@ Not read at read time: `market_state_snapshots` / `price_snapshots` (true price 
 
 **Pre-wiring audit task (step 2a):** answer one precise question before ranking depends on concentration — *can the pre-event holder hierarchy be reconstructed from event amount plus current beliefs?* `loadBelieverFaces` returns **current** largest holders, which does not prove who was largest *before* an exit. If it cannot be reconstructed, `largest_holder_left` and `newcomers_replaced_a_whale` wait for a bounded historical read. Never infer "a whale exited" from a large dollar amount alone. Audit `nonresponse` derivability in the same step.
 
+### 2a findings (measured, 2026-08-09)
+
+Corpus: 2,806 markets, 6,760 canonical trades (4,537 BUY / 2,223 SELL), 221 markets traded in 7d, 140 trades in 24h.
+
+1. **Concentration is reconstructable — VERDICT: YES.** Cumulative net per `(market_id, wallet)` from the canonical event stream yields **2,891 pairs, exactly matching `wallet_beliefs`' 2,891**. Summing events up to an event timestamp therefore gives the *pre-event* holder hierarchy. Cost is small: 7.4 trades per market all-time. `largest_holder_left` is unblocked. **But** `newcomers_replaced_a_whale` is corpus-limited: mean holders per market is **2.0**, and only **63 markets** have ≥5 open positions. It stays defined and tested, and will simply rarely fire — it must never be loosened to "a big trade happened".
+2. **`unusual` cannot use a 1h baseline — VERDICT: NO.** Median 7d hourly rate is **0.012 trades/hr**; only **3 markets** traded in the last hour and only **11** have ≥3 trades in 24h. Against that baseline a single trade is ~80× "normal", which is noise, not information. The canonical baseline must be **daily**: compare `trade_count_24h` against `trade_count_7d / 7`, gated on `trade_count_7d >= 7` (**49 markets** qualify; 15 usable today, 4 currently bursting). Below the guard, `unusual` returns zero — never a large number from a small denominator.
+3. **The quiet band must be relative — VERDICT: relative only.** `yes_price_change_*` is an absolute USD delta, and median price is **$1.93** with median |24h move| **$0.166**. An absolute cent threshold would classify most of the book as either quiet or loud depending on price level. Quiet band = |Δprice| / price, with the observed median at **8.6%** and p90 at ~9.4% relative — the band gets calibrated from that distribution, not guessed.
+4. **`nonresponse` is derivable but rare.** Inputs (capital delta, price change) are populated for **2,795/2,806** markets. The limiting factor is not data, it is that only ~60 markets see any 24h activity, so at most a handful of nonresponse candidates exist per build.
+5. **One canonical baseline helper.** `unusual`, velocity, and the quiet band all call the same function; no second definition of "normal" anywhere.
+
 ## 3. Signal vector, not a single state
 
 Named **`SignalVector`** (`src/domain/signal-vector.ts`), not `Pressure` — the system measures anomaly, contradiction, nonresponse and reversal, and "pressure" biases the implementation toward momentum.
