@@ -520,6 +520,16 @@ export function LiveTape({
                     </div>
                   )}
 
+                  {/* THE OPEN QUESTION. Only on rows where two facts genuinely
+                    don't fit together — the investigator pointing at the gap
+                    instead of pretending to have closed it. */}
+                  {s.question && (
+                    <div className="mt-1.5 border-l-2 border-[color-mix(in_oklab,var(--notice,#9b87f5)_60%,transparent)] pl-2 text-[12px] leading-snug text-[var(--text-secondary)]">
+                      {s.question}
+                    </div>
+                  )}
+
+
                   {/* WHO + HOW MUCH. Every row that has people ends with their
                     faces, and every row that has money ends with the money.
                     Faces left, amount right, one line — the stack is the way
