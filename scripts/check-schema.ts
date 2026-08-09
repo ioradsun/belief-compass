@@ -42,7 +42,15 @@ if (!url || !key) {
 interface Requirement {
   /** What breaks when this is missing — written for whoever reads the failure. */
   feature: string;
-  table: string;
+  /** A table to probe. Exactly one of `table` / `fn` is set. */
+  table?: string;
+  /**
+   * A database FUNCTION to probe, by name. Functions hide exactly like tables:
+   * a missing one answers 404 from PostgREST, so the app's `.rpc()` call comes
+   * back `{ data: null }` and the caller shrugs. Probed with an empty body, so
+   * a 404 means "does not exist" while 401/403/400 all prove it does.
+   */
+  fn?: string;
   /** Columns the code selects by name. A missing one fails the whole select. */
   columns?: string[];
   /** The migration that provides it, so the fix is one command away. */
@@ -58,6 +66,7 @@ interface Requirement {
    */
   emptyMeans?: string;
 }
+
 
 const REQUIRED: Requirement[] = [
   {
