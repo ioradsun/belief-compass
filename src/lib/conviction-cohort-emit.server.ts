@@ -83,7 +83,7 @@ const WINDOW_DAYS = 1;
 const MIN_SIGNIFICANCE = 0.25;
 
 /**
- * The windows in which a rung is crossed TODAY, as `first_backed_at` ranges.
+ * The windows in which a rung is crossed TODAY, as `directional_since` ranges.
  *
  * A duration milestone is driven by the CLOCK, not by trading. The caller used
  * to hand us the markets it had just refreshed — the dirty ones — which meant a
@@ -101,14 +101,14 @@ function crossingWindows(nowMs: number, windowDays: number) {
   const day = 86_400_000;
   return HOLDING_RUNGS.map((rung: number) => ({
     rung,
-    // Crossed rung R today ⇒ first_backed_at ∈ [now − R − window, now − R).
+    // Crossed rung R today ⇒ directional_since ∈ [now − R − window, now − R).
     from: new Date(nowMs - (rung + windowDays) * day).toISOString(),
     to: new Date(nowMs - rung * day).toISOString(),
   }));
 }
 
 const BELIEF_COLUMNS =
-  "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, value_updated_at, yes_cost, no_cost, first_backed_at";
+  "wallet, onchain_id, yes_shares, no_shares, yes_value_usd, no_value_usd, value_updated_at, yes_cost, no_cost, directional_since";
 
 /** One page of a paginated read. */
 const PAGE_SIZE = 1000;
@@ -215,7 +215,11 @@ async function cohortsFrom(
   // which is correct: they believe two things and each belief has its own age.
   const byKey = new Map<string, CohortHolder[]>();
   for (const b of beliefs) {
-    const first = b.first_backed_at ? Date.parse(String(b.first_backed_at)) : NaN;
+    // THE CURRENT HOLD, not first-ever participation. A cohort claims "these
+    // people have held this side for thirty days". Measured from
+    // first_backed_at — which survives an exit and re-entry — somebody two days
+    // back in could be counted into a thirty-day group. See src/domain/tenure.
+    const first = b.directional_since ? Date.parse(String(b.directional_since)) : NaN;
     if (!Number.isFinite(first)) continue;
     const daysHeld = (now - first) / 86_400_000;
     const wallet = String(b.wallet).toLowerCase();
@@ -372,8 +376,8 @@ async function emitCatchUp(db: Db, now: number, room: number): Promise<number> {
     q
       .select(BELIEF_COLUMNS)
       .in("onchain_id", ids)
-      .lt("first_backed_at", oldest)
-      .order("first_backed_at", { ascending: true }),
+      .lt("directional_since", oldest)
+      .order("directional_since", { ascending: true }),
   );
 
   const candidates = await cohortsFrom(db, beliefs, now, "standing");
@@ -404,7 +408,7 @@ export async function emitConvictionCohorts(marketIds: number[] | null, db: Db =
   const orFilter = ranges
     .map(
       (r: { from: string; to: string }) =>
-        `and(first_backed_at.gte.${r.from},first_backed_at.lt.${r.to})`,
+        `and(directional_since.gte.${r.from},directional_since.lt.${r.to})`,
     )
     .join(",");
 
@@ -414,7 +418,7 @@ export async function emitConvictionCohorts(marketIds: number[] | null, db: Db =
       .or(orFilter)
       // Oldest belief first, so if the page ceiling ever bites it drops the
       // shortest tenures — the ones with the least to say.
-      .order("first_backed_at", { ascending: true });
+      .order("directional_since", { ascending: true });
     return marketIds && marketIds.length > 0 ? base.in("onchain_id", marketIds) : base;
   });
 
