@@ -66,11 +66,19 @@ export const STANDING_INTEL = {
   minCapitalLeaving: MATERIAL_CAPITAL,
   /** A receipt may never claim more of the reader than this. */
   receiptCeiling: 0.3,
+  /** An observation sits above texture and below a proven contradiction. */
+  observationCeiling: 0.5,
+  /** The smallest proven price move that makes stillness worth noting at all. */
+  softPriceMove: LOUD_REL_MOVE / 2,
+  /** The smallest capital outflow that makes stillness worth noting at all. */
+  softCapitalLeaving: MATERIAL_CAPITAL / 2,
 } as const;
 
 export type StandingStoryKind =
   /** The base case: persistence, with nothing to contrast it against. */
   | "standing_receipt"
+  /** Persistence alongside a real but not yet decisive change around it. */
+  | "held_while_side_thinned"
   /** Price moved materially; the long-held positions did not. */
   | "held_through_price_move"
   /** Smaller holders left; the proven largest long-held position remains. */
@@ -80,7 +88,14 @@ export type StandingStoryKind =
   /** Capital drained off this side; a long-tenured holder is still on it. */
   | "holder_stayed_capital_left";
 
-export type StandingClass = "receipt" | "intelligence";
+/**
+ * PERSISTENCE ALONE IS A RECEIPT. PERSISTENCE PLUS SURROUNDING CHANGE IS
+ * INTELLIGENCE. The middle case — something did move around them, but not
+ * enough to call it a contradiction — is an OBSERVATION: it ranks above texture
+ * and below a clue, and it never earns a question.
+ */
+export type StandingClass = "receipt" | "observation" | "intelligence";
+
 
 /** The proven, viewer-blind market facts a standing story may contrast against. */
 export interface StandingEvidence {
