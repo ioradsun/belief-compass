@@ -199,7 +199,15 @@ Three real problems, to fix in the model before step 5:
 2. **`tension` still cannot fire.** `people_yes_change_24h` is now derived in the read model but only 254/2806 markets have refreshed and only 9 are non-zero, and none of those coincided with capital leaving. Re-measure once refresh has swept the corpus; do not loosen the tension conditions to make it appear.
 3. **`nonresponse` never fired** — the largest qualifying input in-window was $9 against a $50 floor. Corpus-limited, exactly as 2a predicted. Leave the floor alone.
 
-5. Wire `informationGain` into the derived branch of `significance.ts`.
+5. Wire `informationGain` into the derived branch of `significance.ts`. **Done.**
+
+### Step-5 findings (measured, 2026-08-09)
+
+Model fix first (step-4 problem 1). The vector now separates `marketGain` (the market's anomaly, identical for every row about it) from `carrier` (how much of it this row is entitled to), with `informationGain = marketGain × carrier`. A row with its own evidence — a reconstructed whale exit, the input whose silence is being timed — carries the full number; an ordinary trade inherits `ROW_INHERIT_FLOOR (0.3) + 0.7 × (its amount / the day's gross)`. Market-level rows carry 1, so the market's story is expressed once and its trades sit beneath it instead of cloning it.
+
+Wiring: `scoreLiveAction` takes an optional `signal` and adds one bounded part (weight 0.3 × gain) with a reason. The individual-action cap is untouched, so an anomalous market still cannot lift a single trade past a majority flip. `buildTape` computes the vector once per candidate row before scoring and reuses it for the `SIGNAL_DIAGNOSTIC=1` attach; the shipped payload is unchanged.
+
+Corpus after the fix: the top 20 is no longer one market twenty times — it leads with three `tension` rows (`believers_left_price_rose`, now firing since the read model populates `people_yes_change_24h`), then `unusual`, `beforePrice` and one `largest_holder_left`. 2,363 tests green.
 6. Voice levels in `pi-voice.ts` + soft Intelligence cost with exceptional bypass in the cadence pass.
 7. Viewer-relative angle selection, post-admission (clue-preserving, §7).
 8. Variety caps on `primary`/`tensionKind` in `feed-cadence.ts`.
