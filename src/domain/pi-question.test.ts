@@ -94,19 +94,37 @@ describe("pi-question", () => {
     expect(questionAdds("Are smaller holders replacing someone bigger?", "MORE BELIEVERS. LESS CAPITAL")).toBe(true);
   });
 
-  it("rations to one per shape and a hard window cap", () => {
+  it("charges repeated shapes, and lets exceptional evidence past the budget", () => {
+    /* Insider is allowed to be curious more than three times an hour. What it
+       is not allowed to do is ask the same shape over and over while a
+       stronger clue below it stays silent — so a repeat is decayed, not
+       banned, and clues above PREMIUM_GAIN sit outside the budget entirely. */
     const rows = [
-      { id: "a", kind: "nonresponse" as QuestionKind, gain: 0.9 },
-      { id: "b", kind: "nonresponse" as QuestionKind, gain: 0.8 },
-      { id: "c", kind: "before_price" as QuestionKind, gain: 0.7 },
-      { id: "d", kind: "concentrating" as QuestionKind, gain: 0.6 },
-      { id: "e", kind: "unusual" as QuestionKind, gain: 0.5 },
+      { id: "a", kind: "nonresponse" as QuestionKind, gain: 0.9, text: "a" },
+      { id: "b", kind: "nonresponse" as QuestionKind, gain: 0.8, text: "b" },
+      { id: "c", kind: "before_price" as QuestionKind, gain: 0.7, text: "c" },
+      { id: "d", kind: "concentrating" as QuestionKind, gain: 0.2, text: "d" },
+      { id: "e", kind: "unusual" as QuestionKind, gain: 0.15, text: "e" },
     ];
-    const keep = rationQuestions(rows);
-    expect(keep.size).toBe(3);
+    const keep = rationQuestions(rows, 2);
+    // The three premium clues are kept whatever the budget says…
     expect(keep.has("a")).toBe(true);
-    expect(keep.has("b")).toBe(false);
+    expect(keep.has("b")).toBe(true);
+    expect(keep.has("c")).toBe(true);
+    // …and the ordinary budget is spent separately, on distinct shapes.
+    expect(keep.has("d")).toBe(true);
+    expect(keep.has("e")).toBe(true);
+
+    // With no premium clues in the window, the budget is the whole story.
+    const modest = rationQuestions(
+      rows.map((r) => ({ ...r, gain: Math.min(r.gain, 0.5) })),
+      2,
+    );
+    expect(modest.size).toBe(2);
+    // Second "nonresponse" is decayed below the distinct shape beneath it.
+    expect(modest.has("b")).toBe(false);
   });
+
 });
 
 describe("the person question does not depend on an unrelated missing field", () => {
