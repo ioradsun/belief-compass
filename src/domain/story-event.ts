@@ -616,8 +616,12 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
     return {
       type: "market_reawakened",
       tier: TIER.market_reawakened,
-      headline: "This question is alive again",
-      detail: `First trades in a week — ${a.trades24h} ${plural(a.trades24h, "trade", "trades")} today.`,
+      /* "This question is alive again / First trades in a week — 1 trade today"
+         is telemetry: it reports the query that found the row. The fact is that
+         a room nobody had entered in a week has people in it, and saying it as
+         before-and-after is both truer to what happened and worth reading. */
+      headline: "Back from the dead",
+      detail: `Nobody touched this for a week. Then ${a.trades24h} ${plural(a.trades24h, "trade", "trades")} landed.`,
       evidence: [{ label: "Trades today", value: String(a.trades24h) }],
       fingerprint: "market_reawakened:market",
     };
@@ -665,7 +669,15 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
           : m.metric === "price"
             ? `${where} ${m.direction === "up" ? "got more expensive" : "got cheaper"}`
             : m.metric === "capital"
-              ? `Capital on ${where} ${dir} ${pct ?? ""}`.trim()
+              ? /* MONEY MOVING, NOT AN ACCOUNTING LINE. "Capital on YES rose
+                   +12%" is a ledger entry; money piling in is a crowd doing
+                   something. Note the fall stays measured on purpose — an exit
+                   already suppresses this row, so what survives is a holder
+                   trimming, and calling that a collapse would be a lie told for
+                   drama. */
+                m.direction === "up"
+                ? `Money is piling into ${where}`
+                : `Money is leaving ${where}`
               : `Believers on ${where} ${dir} ${pct ?? ""}`.trim();
 
     return {
