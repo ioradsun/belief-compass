@@ -222,9 +222,15 @@ behind an unchanged surface, each step proven by parity tests.
    unify the YES/NO side rails (`CaseFile` / `LiveTape`) so ONE market fetch feeds
    both side projections client-side instead of a per-side server query — a real
    fetch-behavior change that needs an app run to verify UX.
-3. **Insight/Pulse onto `InsiderPulse`.** Move `MarketVitality` /
-   `market-vitals` momentum math behind one `InsiderPulse`; Market Insight becomes
-   the human explanation of that pulse.
+3. **Insight/Pulse — ✅ pure seam landed.** `pulse.ts` `insiderPulse` computes one
+   `InsiderPulse` (direction, momentum, acceleration, activity, participation,
+   capital flow, imbalance, volatility, novelty) by COMPOSING the existing
+   primitives — one definition of each: shape ← `pulseLabel`, "normal" ←
+   `unusualness`/`dailyBaseline`, price move ← `relativeMove`.
+   `projections/insight.ts` `insight(pulse)` is the calm human sentence. Pure +
+   tested. **UI adoption** (`MarketVitality` "Market Momentum" → Insider Insight)
+   changes the rendered read, so it lands with an app run — same discipline as the
+   side-rail flip.
 4. **Now onto the Insider.** Pull significance, discovery, grouping, editorial
    selection, PI narrative out of `live.functions`/`LiveTape` into the Now
    projection. Leave animation / update-gating in the component
@@ -246,12 +252,12 @@ src/domain/insider/
     types.ts        # the contract                         ✅ landed
     index.ts        # barrel + INSIDER_CONSTITUTION         ✅ landed
     signals.ts      # canonical activity → InsiderSignal[]  ✅ landed (activity seam)
+    pulse.ts        # market facts → InsiderPulse           ✅ landed
     features.ts     # universal evidence extraction (calculate once)   — next
-    pulse.ts        # signals → InsiderPulse                            — next
     scoring.ts      # evidence → judgments (momentum/importance/confidence) — next
     read.ts         # house-read, moved inward                          — later
     projections/
-        activity.ts  # ✅ landed          now.ts  insight.ts  read.ts   — next/later
+        activity.ts  # ✅ landed   insight.ts  # ✅ landed   now.ts  read.ts  — next/later
 
 src/lib/insider/
     source.server.ts   build.server.ts   functions.ts   cache.ts       — next

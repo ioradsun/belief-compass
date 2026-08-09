@@ -28,7 +28,9 @@
  */
 export * from "./types";
 export * from "./signals";
+export { insiderPulse, type PulseFacts } from "./pulse";
 export { activity } from "./projections/activity";
+export { insight } from "./projections/insight";
 
 /**
  * The constitutional rule, as a single importable source of truth so docs, tests,
