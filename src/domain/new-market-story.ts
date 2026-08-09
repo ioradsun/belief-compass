@@ -103,7 +103,7 @@ export function tellNewMarketStory(input: NewMarketInput): NewMarketVerdict {
   // ── INTELLIGENCE: a reaction we can prove ────────────────────────────────
   if (reacted) {
     const fast = age != null && age <= FAST_HOURS;
-    const took = side ? `took ${side}` : "took a side";
+    const taken = side ? `taken ${side}` : "taken a side";
     const crowd = backers > 0 ? countWord(backers) : null;
 
     // Someone the reader knows was early. That is the lead, and it is a fact.
@@ -128,8 +128,8 @@ export function tellNewMarketStory(input: NewMarketInput): NewMarketVerdict {
 
     const body = crowd
       ? fast
-        ? `${crowd} ${took} within the first hours.`
-        : `${crowd} ${backers === 1 ? "has" : "have"} already ${took}.`
+        ? `${crowd} ${side ? `took ${side}` : "took a side"} within the first hours.`
+        : `${crowd} ${backers === 1 ? "has" : "have"} already ${taken}.`
       : `${money} is already behind it.`;
 
     return {
