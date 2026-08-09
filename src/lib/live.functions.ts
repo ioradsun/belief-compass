@@ -1408,12 +1408,15 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       const id = `standing:${s.key}`;
       /* TWO KINDS, NOT FIVE. The pipeline's kind is the CLASS — every mapping
          downstream (family caps, pace, the social-vector set, the renderer)
-         only ever needs to know "receipt or intelligence". The specific shape
-         travels in `motif`, where the mixer's variety caps read it. */
-      const kind = s.klass === "intelligence" ? "standing_signal" : "standing_fact";
+         only ever needs to know "receipt or something with a market fact in
+         it". The specific shape travels in `motif` and in `standingKindById`,
+         where the mixer's variety caps and the question layer read it. */
+      const kind = s.klass === "receipt" ? "standing_fact" : "standing_signal";
+      standingKindById.set(id, { kind: s.kind, klass: s.klass });
       /* A standing story is "about you" when one of the people standing there
          is someone the reader knows — not because it is a standing story. */
       const personal = s.people.some((p) => p.relationship != null);
+
 
 
       /* INTELLIGENCE EARNS A REAL VECTOR; A RECEIPT DOES NOT.
