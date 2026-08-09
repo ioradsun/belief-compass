@@ -61,10 +61,12 @@ export function AppMenu({
       >
         <div className="mb-4 flex items-center gap-2">
           <BrandMark size={22} className="shrink-0 text-[var(--text)]" />
-          <span className="text-sm font-semibold tracking-[-0.01em] text-[var(--text)]">
-            conviction
+          <span className="text-sm font-semibold tracking-[-0.01em]">
+            <span style={{ color: "var(--yes)" }}>Conviction</span>{" "}
+            <span style={{ color: "var(--no)" }}>Company</span>
           </span>
         </div>
+
 
         <div className="space-y-1">
           {/* HOME — the intro and an example. A destination in the menu like
