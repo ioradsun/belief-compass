@@ -704,6 +704,9 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
      guess. It sits between the two halves of the significance pass because the
      markets to read are only known once the candidates exist. */
   const pricePaths = await loadPricePaths(sb, candidateMarkets(scored));
+  /* One clock for the whole pass, shared with the standing rows composed below
+     so both halves of the feed measure age against the same instant. */
+  const signalNowMs = Date.now();
 
   const {
     floor,
@@ -716,7 +719,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     pulseIds,
     material,
     unadmitted,
-  } = runSignificancePass({ scored, momentumById, pricePaths });
+  } = runSignificancePass({ scored, momentumById, pricePaths, nowMs: signalNowMs });
 
   /* ── STANDING IS A STORY TYPE, NOT A LANE ──────────────────────────────────
      Persistence enters the SAME pool as change, at the SAME point, and earns
