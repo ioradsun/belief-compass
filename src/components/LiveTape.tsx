@@ -58,6 +58,13 @@ type LiveResult = {
   copyVersion?: string;
   error: string | null;
 };
+/**
+ * How much market history the shared side-rail fetch pulls. Matches the market
+ * query `CurrentMarketActivity` already runs, so the YES rail, the NO rail and
+ * the Market Insider rail are ONE request.
+ */
+const SIDE_RAIL_FETCH_LIMIT = 200;
+
 
 /** Beyond this gap since our newest cached event, a delta would be large — just
  *  do a full fetch (the persisted cache already gave the instant paint). */
