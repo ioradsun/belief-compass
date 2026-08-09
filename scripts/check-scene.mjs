@@ -1,7 +1,7 @@
 /**
  * THE SCENE LAB, DRIVEN BY A MACHINE.
  *
- * /testingscene renders the shipped Challenge surfaces against a controlled world
+ * /lab-9f3c7a21b4 renders the shipped Challenge surfaces against a controlled world
  * and computes whether every side of the story agrees. A person still has to look
  * at it — that is the point of a lab — but the parts a person is worst at checking
  * can be checked here, across every scene and every point of view, in one command:
@@ -28,7 +28,7 @@
 import { chromium } from "playwright";
 
 const PORT = process.argv[2] ?? "5177";
-const BASE = `http://127.0.0.1:${PORT}/testingscene`;
+const BASE = `http://127.0.0.1:${PORT}/lab-9f3c7a21b4`;
 const SCENES = [
   "quiet",
   "fresh",

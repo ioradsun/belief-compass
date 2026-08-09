@@ -1,5 +1,5 @@
 /**
- * /testingscene — a camera pointed at the real product under controlled light.
+ * /lab-9f3c7a21b4 — a camera pointed at the real product under controlled light.
  *
  * NOT A MOCKUP. There is no demo card and no demo copy anywhere on this page. The
  * scenario is written into a React Query cache and the REAL components mount
