@@ -33,7 +33,7 @@ import {
   type ConvictionAction,
 } from "@/domain/conviction-event";
 import { tellPiStory, voiceLevel, applyViewerAngle } from "@/domain/pi-voice";
-import { modernizeTransitionCopy } from "@/domain/legacy-voice";
+import { retellTransition, type CopyLevel } from "@/domain/transition-denominator";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
 import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
 import {
@@ -875,6 +875,16 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
    * them). Better silence than "undefined — 0 believers reached NaN months".
    */
   const unrenderable = new Set<string>();
+  /**
+   * THE CEILING A ROW'S OWN COPY PUTS ON ITS VOLUME.
+   *
+   * A "−100% over 24H" on $1.80, or a bare "first believers just stepped in",
+   * is factually fine and editorially a receipt (see transition-denominator).
+   * The signal vector cannot see this — it reads market state, not the sentence
+   * we ended up printing — so the copy pass records the ceiling here and the
+   * mixer applies it.
+   */
+  const copyLevel = new Map<string, CopyLevel>();
 
   for (const r of live) {
     const w = r.wallet?.toLowerCase();
@@ -989,7 +999,17 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
          still speak the old product's language forever. modernizeTransitionCopy
          recognises those labels at read time and re-says them in the current
          voice, using only the numbers the stored detail already printed. */
-      const modern = modernizeTransitionCopy(p.headline ?? "", p.detail ?? "", String(r.id));
+      /* AND THE PERCENTAGE GETS ITS DENOMINATOR BACK. The emitter froze
+         "−100% over 24H" without knowing whether that was $2,000 or $1.80; the
+         side's 24h capital movement is the money the percentage was computed
+         over, and it lives in market state, here. */
+      const mkt = momentumById.get(Number(r.marketId));
+      const delta = r.side === "NO" ? mkt?.noCapitalDelta24h : mkt?.yesCapitalDelta24h;
+      const modern = retellTransition(p.headline ?? "", p.detail ?? "", String(r.id), {
+        usd: typeof delta === "number" && Number.isFinite(delta) ? Math.abs(delta) : null,
+        side: r.side ?? null,
+      });
+      copyLevel.set(r.id, modern.level);
       const kicker = modern.headline.trim();
       r.story = {
         category: "momentum",
@@ -1470,7 +1490,10 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
          again (plan §6). The level is the viewer-blind vector's, so the mixer
          charges for a run of contradictions without ever being able to turn a
          true clue into a receipt — a high `signalGain` skips the cost. */
-      voice: voiceLevel(signalById.get(r.id) ?? null),
+      /* The vector's level, CAPPED by what the printed copy can support. A row
+         whose only claim is an unsized percentage cannot be Intelligence no
+         matter what the market state around it looks like. */
+      voice: capVoice(voiceLevel(signalById.get(r.id) ?? null), copyLevel.get(r.id)),
       signalGain: signalById.get(r.id)?.informationGain ?? 0,
       /* THE SHAPE OF THE CLUE, capped window-wide (plan §11.8). The motif keys
          on composed copy, so the same observation across four markets reads as
