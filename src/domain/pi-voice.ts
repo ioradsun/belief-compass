@@ -388,19 +388,24 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
         ];
 
       case "joined":
+        /* A GROUPED ARRIVAL IS A SOCIAL FACT, NOT A COUNT. "2 came in" recites
+           the number and stops; what actually changed is that somebody on that
+           side is no longer standing there alone. The count still appears — in
+           the sentence, where it belongs — and the amount is said ONCE. */
         if (people > 1)
           return [
             {
-              headline: `${people} came in`,
-              body: `${people} people stepped into ${s || "this one"}.`,
-              angle: amount >= 0.005 ? `${money} came in.` : null,
+              headline: side ? `${s} got company` : "Got company",
+              body: `${countWord(people)} stepped into ${s || "this one"}${amount >= 0.005 ? ` with ${money}` : ""}.`,
+              angle: remaining ? `${remaining} believers now.` : null,
             },
             {
-              headline: "Got company",
-              body: `${s || "This one"} got company.`,
+              headline: `${countWord(people)} just stepped in`,
+              body: amount >= 0.005 ? `${money} landed on ${s || "one side"}.` : `${s || "This one"} got company.`,
               angle: remaining ? `${remaining} believers now.` : null,
             },
           ];
+
         return [
           {
             headline: "New believer",
