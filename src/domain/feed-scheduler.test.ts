@@ -139,9 +139,13 @@ describe("standing facts fill silence and nothing else", () => {
   });
 
   it("stays held through recent activity, even with nothing else queued", () => {
+    // Relative to the threshold, not a literal: this asserted "held at 10s",
+    // which was only meaningful while the gate happened to be 20s. Tied to the
+    // constant, it keeps meaning "not yet silent" whatever the gate becomes.
     const s = enqueue(createScheduleState(T0), [celebration]);
-    expect(modeFor(s, T0 + 10_000)).toBe("idle");
-    expect(tick(s, T0 + 10_000).release).toBeNull();
+    const justBefore = T0 + SCHEDULE.quietAfterMs - 1;
+    expect(modeFor(s, justBefore)).toBe("idle");
+    expect(tick(s, justBefore).release).toBeNull();
   });
 
   it("appears once the silence is genuine", () => {
