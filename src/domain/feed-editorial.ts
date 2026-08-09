@@ -260,11 +260,22 @@ export function secondSentenceAdds(headline: string, detail: string): boolean {
   // A figure, a share, a name or a counterpoint is always new information.
   if (/[\d$%]/.test(d)) return true;
   if (/\b(but|while|without|yet|still|hasn't|hasn'|no one|nobody|first two)\b/.test(d)) return true;
+  /* Synonym families. A restatement rarely reuses the exact words — "NO just
+     got company" and "First believers just stepped in" share no vocabulary and
+     make the identical claim. Collapse each family to one token so the overlap
+     check sees the claim rather than the phrasing. */
+  const FAMILIES: Array<[RegExp, string]> = [
+    [/got company|first believers?|first backers?|stepped in|showed up|someone backed|opened up|no longer empty/g, "arrival"],
+    [/got heavier|piling in|money (came|went) (in|on)|capital arrived/g, "inflow"],
+    [/money (is )?leaving|money came off|capital left|thinned out|emptied/g, "outflow"],
+    [/back from the dead|woke up|reawakened|quiet again/g, "revival"],
+  ];
+  const fold = (t: string) => FAMILIES.reduce((acc, [re, tok]) => acc.replace(re, tok), t);
   // Otherwise: does the body reuse the headline's own words and nothing else?
   const stop = new Set(["the", "a", "an", "just", "is", "was", "in", "on", "it", "its", "to", "of", "and", "this", "that", "has", "have", "some", "into", "off", "up", "down", "now", "here", "they", "their"]);
   const words = (t: string) => new Set(t.replace(/[^a-z\s]/g, " ").split(/\s+/).filter((w) => w && !stop.has(w)));
-  const hw = words(h);
-  const dw = [...words(d)];
+  const hw = words(fold(h));
+  const dw = [...words(fold(d))];
   if (dw.length === 0) return false;
   const fresh = dw.filter((w) => !hw.has(w) && ![...hw].some((x) => x.startsWith(w) || w.startsWith(x)));
   return fresh.length >= 2;
