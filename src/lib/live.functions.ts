@@ -33,6 +33,7 @@ import {
   type ConvictionAction,
 } from "@/domain/conviction-event";
 import { tellPiStory } from "@/domain/pi-voice";
+import { modernizeTransitionCopy } from "@/domain/legacy-voice";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
 import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
 import {
@@ -901,15 +902,21 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
        * machine-generated. The composed headline IS the kicker now; the detail
        * (the number and the window) is the sentence under it.
        */
-      const kicker = (p.headline ?? "").trim();
+      /* STORED COPY IS FROZEN AT EMIT TIME, so rows written before the PI voice
+         still speak the old product's language forever. modernizeTransitionCopy
+         recognises those labels at read time and re-says them in the current
+         voice, using only the numbers the stored detail already printed. */
+      const modern = modernizeTransitionCopy(p.headline ?? "", p.detail ?? "", String(r.id));
+      const kicker = modern.headline.trim();
       r.story = {
         category: "momentum",
         headline: kicker ? kicker.toUpperCase() : "MARKET SIGNAL",
-        body: p.detail ?? "",
+        body: modern.detail,
         attribution: null,
         tone: r.side === "YES" ? "yes" : r.side === "NO" ? "no" : "neutral",
         personal: false,
       };
+
       r.text = flattenStory(r.story);
       continue;
     }

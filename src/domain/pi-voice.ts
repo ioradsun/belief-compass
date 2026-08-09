@@ -368,6 +368,10 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
 
       // RUSH / SCALE — several people, or one unusually large arrival.
       case "big_backing":
+        /* HEADLINE = WHAT CHANGED, BODY = WHAT PROVES IT. "Got heavier / YES
+           just got heavier." says one thought twice and wastes the only two
+           lines the card has. The kicker names the change; the sentence under
+           it carries the evidence and nothing else. */
         if (people > 1)
           return [
             {
@@ -376,25 +380,39 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
               angle: remaining ? `${remaining} believers now.` : null,
             },
             {
-              headline: "Got heavier",
-              body: `${s || "That side"} just got heavier.`,
-              angle: amount > 0 ? `${countWord(people)} brought in ${money}.` : null,
+              headline: side ? `${s} just got heavier` : "Got heavier",
+              body:
+                amount > 0
+                  ? `${countWord(people)} brought in ${money}.`
+                  : `${countWord(people)} stepped in at once.`,
+              angle: remaining ? `${remaining} believers now.` : null,
             },
+            ...(amount > 0
+              ? [
+                  {
+                    headline: `${money} just landed`,
+                    body: `${countWord(people)} stepped into ${s || "one side"}.`,
+                    angle: remaining ? `${remaining} believers now.` : null,
+                  },
+                ]
+              : []),
           ];
+
 
         return [
           {
-            headline: `${money} landed`,
-            body: `${money} just landed on ${s || "one side"}.`,
+            headline: `${money} just landed`,
+            body: `${who} put it behind ${s || "their side"}.`,
             angle: scale,
           },
           { headline: "Backed", body: `${who} put ${money} behind ${s || "their side"}.` },
           {
-            headline: "Got heavier",
-            body: `${s || "That side"} got heavier.`,
-            angle: `${who} added ${money}.`,
+            headline: side ? `${s} just got heavier` : "Got heavier",
+            body: `${who} added ${money}.`,
+            angle: scale,
           },
         ];
+
 
       case "joined":
         /* A GROUPED ARRIVAL IS A SOCIAL FACT, NOT A COUNT. "2 came in" recites
@@ -527,10 +545,19 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
             angle: amount >= 0.005 ? `${money} left with them.` : scale,
           },
           {
+            /* HEADLINE = CONSEQUENCE, BODY = EVIDENCE. "One less / One less
+               believer on YES." is the same sentence twice; the body's job is
+               to name who, and how much walked with them. */
             headline: "One less",
-            body: side ? `One less believer on ${s}.` : "One less believer.",
-            angle: amount >= 0.005 ? `${who} pulled ${money}.` : scale,
+            body:
+              amount >= 0.005
+                ? `${who} pulled ${money} from ${s || "it"}.`
+                : side
+                  ? `${who} left ${s}.`
+                  : `${who} left.`,
+            angle: scale,
           },
+
           { headline: "Out", body: `${who} is out.`, angle: scale },
         ];
 
@@ -596,8 +623,8 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
       case "last_believer_left":
         return [
           {
-            headline: "Emptied out",
-            body: side ? `${s} just emptied out.` : "That side just emptied out.",
+            headline: side ? `${s} just emptied out` : "Emptied out",
+            body: amount >= 0.005 ? `${who} took the last ${money} off it.` : `${who} was the last one on ${s || "it"}.`,
           },
           {
             headline: "Last one left",
@@ -605,6 +632,7 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
             angle: side ? `Nobody is on ${s} now.` : null,
           },
         ];
+
 
       case "swept_out": {
         const markets = n(c.marketCount);
@@ -671,17 +699,17 @@ export function capitalDrainLine(side: string, pct: number, key: string): Draft 
   const m = Math.abs(pct);
   if (m >= 99)
     return pickVariant(key, [
-      { headline: `${side} emptied out`, body: `Every dollar behind ${side} is gone.` },
+      { headline: `${side} just emptied out`, body: `Every dollar that was there is gone.` },
       { headline: "Emptied out", body: `${side} has nothing behind it now.` },
     ]);
   if (m >= 60)
     return pickVariant(key, [
-      { headline: `${side} is getting thin`, body: `Most of the money behind ${side} left.` },
+      { headline: `${side} is getting thin`, body: `Most of the money behind it left.` },
       { headline: "Money walked", body: `${side} lost the bulk of what was behind it.` },
     ]);
   return pickVariant(key, [
-    { headline: `${side} is getting lighter`, body: `Money is drifting out of ${side}.` },
-    { headline: "Money is leaving", body: `Some of what was behind ${side} walked.` },
+    { headline: `${side} is getting lighter`, body: `Some of what was behind it walked.` },
+    { headline: `Money is drifting out of ${side}`, body: `Not all of it. Enough to notice.` },
   ]);
 }
 
@@ -694,8 +722,8 @@ export function capitalArrivalLine(side: string, pct: number, key: string): Draf
       { headline: "Piling in", body: `${side} is carrying close to twice what it was.` },
     ]);
   return pickVariant(key, [
-    { headline: `Money is piling into ${side}`, body: `${side} is getting heavier.` },
-    { headline: `${side} got heavier`, body: `More money is standing behind ${side}.` },
+    { headline: `Money is piling into ${side}`, body: `It is carrying more than it was.` },
+    { headline: `${side} got heavier`, body: `More money is standing behind it.` },
   ]);
 }
 
