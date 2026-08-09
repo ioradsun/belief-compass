@@ -12,6 +12,7 @@
  *
  * Not wired into ranking, cadence, or copy. Diagnostic first, influential later.
  */
+import type { PriceProof } from "./price-proof";
 
 // ---------------------------------------------------------------------------
 // Constants — each one traceable to a measured property of the corpus.
