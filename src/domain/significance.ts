@@ -109,7 +109,18 @@ export function compose(
  */
 export function scoreLiveAction(
   c: FeedCandidate,
-  extra: { daysHeld?: number | null; fullExit?: boolean; rank?: number | null } = {},
+  extra: {
+    daysHeld?: number | null;
+    fullExit?: boolean;
+    rank?: number | null;
+    /**
+     * Viewer-blind market anomaly for the row (src/domain/signal-vector).
+     * Supporting evidence, never the lead: it can lift a true-but-quiet row out
+     * of recency's shadow, and the individual-action cap below still stops it
+     * manufacturing structural importance.
+     */
+    signal?: { informationGain: number; primary: string } | null;
+  } = {},
 ): Significance {
   const { score, tier } = scoreFeedEvent(c);
   // Tier floors keep families comparable: a Tier-1 trade is at least "high".
@@ -119,6 +130,15 @@ export function scoreLiveAction(
   const parts: Array<{ weight: number; value: number; why?: string }> = [
     { weight: 0.35, value: within, why: `feed score ${score}/100` },
   ];
+
+  const gain = extra.signal?.informationGain ?? 0;
+  if (gain > 0) {
+    parts.push({
+      weight: 0.3,
+      value: clamp01(gain),
+      why: `${extra.signal?.primary ?? "signal"} anomaly ${gain.toFixed(2)}`,
+    });
+  }
 
   // Behaviour that a raw amount cannot express. These are the cases the brief
   // calls out: a switch, or a long belief ending, outranks an ordinary buy.
