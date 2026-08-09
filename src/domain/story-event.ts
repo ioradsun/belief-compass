@@ -39,6 +39,7 @@
 import { capitalTrigger, FEED_TRIGGERS } from "./feed-event";
 import { formatPct } from "./metric-display";
 import { MATERIAL, type MaterialMove } from "./market-change";
+import { classifyFirstEvent } from "./first-event";
 
 export type Side = "YES" | "NO";
 
@@ -150,6 +151,14 @@ export interface StoryEvent {
   evidence: MetricEvidence[];
   /** Stable id of the state (type + side) — for dedup and anti-spam. */
   fingerprint: string;
+  /**
+   * WHAT WAS MEASURED, when this event is a derived market-state movement.
+   * Capital, price and believers are three different measurements and must
+   * never be treated as interchangeable evidence — a downstream reader needs
+   * to know which one moved, not merely that something did.
+   */
+  metric?: "capital" | "price" | "believers";
+  direction?: "up" | "down";
 }
 
 const TIER: Record<StoryEventType, 1 | 2 | 3> = {
@@ -187,6 +196,10 @@ const BEL = FEED_TRIGGERS.believers.minAbs;
  * nobody, is the smallest fact that honestly reads as a return.
  */
 const MIN_REAWAKEN_TRADES = 3;
+/** …and this many before the return is loud enough for the universal feed. */
+const STRONG_REAWAKEN_TRADES = 5;
+/** …or this much money moving in the same window. */
+const STRONG_REAWAKEN_USD = 25;
 /** A Tribe cluster this size on one side reads as a movement forming. */
 const TRIBE_FORMING_MIN = 3;
 /** Believer counts worth announcing when a side crosses them. */
@@ -620,9 +633,17 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
        to agree it happened. */
     if (!a || a.trades24h < MIN_REAWAKEN_TRADES || a.trades7d !== a.trades24h) return null;
     if (yes.capitalBaseUsd + no.capitalBaseUsd <= 0) return null;
+    /* STRENGTH, NOT JUST TRUTH. "Activity resumed" is mathematically true off a
+       handful of fills and tells a reader almost nothing. A STRONG return has
+       either a crowd behind it or real money moving; a WEAK one is demoted to
+       tier 3, which the feed gate (TRANSITION_EMIT.maxFeedTier) keeps out of
+       the universal feed while the center panel may still show it. */
+    const arrivals = Math.max(0, yes.believerDelta) + Math.max(0, no.believerDelta);
+    const cashIn = Math.abs(yes.capitalDeltaUsd) + Math.abs(no.capitalDeltaUsd);
+    const strong = a.trades24h >= STRONG_REAWAKEN_TRADES || arrivals >= 2 || cashIn >= STRONG_REAWAKEN_USD;
     return {
       type: "market_reawakened",
-      tier: TIER.market_reawakened,
+      tier: strong ? TIER.market_reawakened : 3,
       /* "This question is alive again / First trades in a week — 1 trade today"
          is telemetry: it reports the query that found the row. The fact is that
          a room nobody had entered in a week has people in it, and saying it as
@@ -630,7 +651,7 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
       headline: "Back from the dead",
       detail: `Nobody touched this for a week. Then ${a.trades24h} ${plural(a.trades24h, "trade", "trades")} landed.`,
       evidence: [{ label: "Trades today", value: String(a.trades24h) }],
-      fingerprint: "market_reawakened:market",
+      fingerprint: `market_reawakened:${strong ? "strong" : "weak"}`,
     };
   };
 
@@ -652,6 +673,22 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
        one fact, and makes the named telling — the better one — look like a
        different class of news. First CAPITAL has no such twin, so it stays. */
     if (m.kind === "arrival" && m.metric !== "capital") return null;
+
+    /* FIRST CAPITAL IS ONLY A SEPARATE STORY ON AN OCCUPIED SIDE. When the side
+       went 0 → populated in the same window, "First capital backs NO" and the
+       named "Nobody had backed NO. Then …" are one transition wearing two
+       grammars. See src/domain/first-event for the taxonomy this enforces. */
+    if (
+      m.kind === "arrival" &&
+      m.metric === "capital" &&
+      sw &&
+      classifyFirstEvent({
+        believersBefore: sw.believerBase,
+        believersAfter: sw.believerBase + sw.believerDelta,
+        peopleCount: sw.believerDelta,
+      }) !== null
+    )
+      return null;
 
     /* CAPITAL LEFT BECAUSE A PERSON LEFT. When the side's believers fall in the
        same window, the exit is already reported with a name, an amount and the
@@ -706,6 +743,8 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
       // The metric is part of the identity: without it, a capital move and a
       // price move on the same side would collapse into one episode and the
       // second would never be told.
+      metric: m.metric,
+      direction: m.direction,
       fingerprint: `material_move:${m.metric}:${side ?? "market"}`,
     };
   };
