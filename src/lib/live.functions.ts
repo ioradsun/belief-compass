@@ -32,7 +32,7 @@ import {
   isCelebration,
   type ConvictionAction,
 } from "@/domain/conviction-event";
-import { tellPiStory } from "@/domain/pi-voice";
+import { tellPiStory, voiceLevel } from "@/domain/pi-voice";
 import { modernizeTransitionCopy } from "@/domain/legacy-voice";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
 import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
@@ -1420,6 +1420,12 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         r.kind === "market_transition"
           ? `state:${(r.payload as { type?: string } | null)?.type ?? "move"}:${(r.payload as { metric?: string } | null)?.metric ?? ""}`
           : `${r.kind}:${r.side ?? "market"}:${r.story.headline}`,
+      /* HOW LOUD THIS ROW IS ALLOWED TO BE, and what it costs to be that loud
+         again (plan §6). The level is the viewer-blind vector's, so the mixer
+         charges for a run of contradictions without ever being able to turn a
+         true clue into a receipt — a high `signalGain` skips the cost. */
+      voice: voiceLevel(signalById.get(r.id) ?? null),
+      signalGain: signalById.get(r.id)?.informationGain ?? 0,
     } satisfies MixCandidate;
   }
 

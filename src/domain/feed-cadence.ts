@@ -80,7 +80,15 @@ export interface MixCandidate {
    * story ("another 30-day cohort on YES"), even when they are different rows.
    */
   motif?: string;
+  /**
+   * How loudly the PI speaks about this row (src/domain/pi-voice `voiceLevel`).
+   * Used for one thing only: charging for repeated Intelligence, below.
+   */
+  voice?: "receipt" | "observation" | "intelligence";
+  /** `informationGain` for the row — lets a genuine clue buy its way past the cost. */
+  signalGain?: number;
 }
+
 
 export const CADENCE = {
   /** Above this an event is breaking news and ignores sequencing. */
@@ -111,6 +119,9 @@ export const CADENCE = {
     motif: 0.3,
     side: 0.05,
     overCap: 0.35,
+    /** Per Intelligence row over the window's allowance. Escalates; never blocks. */
+    intelligence: 0.12,
+
   },
   /** The most a pacing target can ever be worth. Never enough to beat real news. */
   targetNudge: 0.12,
@@ -123,7 +134,23 @@ export const CADENCE = {
   discoveryLift: 0.85,
   /** A person not yet met in this window. Small, and never a reason on its own. */
   newPersonBonus: 0.1,
+  /**
+   * SCARCITY IS A COST, NEVER A CEILING (plan §6).
+   *
+   * Roughly a quarter of a healthy window speaks at Intelligence volume. Held
+   * as a quota it would make the PI deliberately dumber: an hour with six real
+   * contradictions must be allowed to report six. So the target is enforced as
+   * an ESCALATING PRICE — the first rows over the allowance pay a little, the
+   * fifth pays five times that — and a genuinely strong clue skips it entirely,
+   * exactly as `breakingAt` skips sequencing.
+   */
+  intelligenceTarget: 0.25,
+  /** Above this `informationGain`, the row is a real clue and pays nothing. */
+  intelligenceBypass: 0.6,
+  /** The smallest window the allowance is computed against, so early rows aren't taxed. */
+  intelligenceFloorWindow: 4,
 } as const;
+
 
 /**
  * Pacing guidance, not quotas. Read as "roughly this much of a HEALTHY feed",
@@ -211,7 +238,31 @@ function dominancePenalty(
   return p;
 }
 
+/**
+ * The price of speaking at Intelligence volume again.
+ *
+ * `intelCount` rows already read as intelligence; this candidate would be the
+ * next. The allowance grows with the window, so a short feed of three genuine
+ * clues is untouched, while a long one that keeps escalating pays more for each
+ * additional clue than it did for the last. A row whose `informationGain` is
+ * genuinely high pays nothing at all — the quota must never downgrade a true
+ * contradiction into a receipt.
+ */
+export function intelligenceCost(
+  c: MixCandidate,
+  intelCount: number,
+  pickedTotal: number,
+): number {
+  if (c.voice !== "intelligence") return 0;
+  if ((c.signalGain ?? 0) >= CADENCE.intelligenceBypass) return 0;
+  const window = Math.max(pickedTotal + 1, CADENCE.intelligenceFloorWindow);
+  const allowance = Math.max(1, Math.round(CADENCE.intelligenceTarget * window));
+  const over = intelCount + 1 - allowance;
+  return over <= 0 ? 0 : CADENCE.penalty.intelligence * over;
+}
+
 const FAMILIES = Object.keys(FAMILY_TARGET) as EventFamily[];
+
 
 /**
  * THE BUDGET FOR THE DAY THAT ACTUALLY HAPPENED.
@@ -324,6 +375,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
   const walletCount = new Map<string, number>();
   const marketCount = new Map<string, number>();
   const motifCount = new Map<string, number>();
+  let intelCount = 0;
 
   while (pool.length > 0) {
     const recent = picked.slice(-CADENCE.lookback).reverse();
@@ -342,7 +394,8 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
           ? base + 1
           : base -
             adjacencyPenalty(c, recent) -
-            dominancePenalty(c, walletCount, marketCount, motifCount) +
+            dominancePenalty(c, walletCount, marketCount, motifCount) -
+            intelligenceCost(c, intelCount, picked.length) +
             targetBonus(c, picked, want) +
             noveltyBonus(c, walletCount);
 
@@ -363,6 +416,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
     picked.push(chosen);
     marketCount.set(chosen.marketId, (marketCount.get(chosen.marketId) ?? 0) + 1);
     if (chosen.motif) motifCount.set(chosen.motif, (motifCount.get(chosen.motif) ?? 0) + 1);
+    if (chosen.voice === "intelligence") intelCount += 1;
     for (const s of chosen.subjects ?? []) walletCount.set(s, (walletCount.get(s) ?? 0) + 1);
   }
 
