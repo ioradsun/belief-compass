@@ -39,7 +39,8 @@ const PERSIST_PREFIXES = new Set([
   // painted before the first byte comes back on a return visit.
   "opp-feed",
   "market-row",
-  "live-tape",
+  // The Insider cache root — the global feed and the per-market activity.
+  "insider",
   "market-pulses",
   "my-convictions",
   "positions-tape",
