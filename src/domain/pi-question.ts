@@ -234,9 +234,11 @@ export function piQuestion(input: QuestionInput): PIQuestion | null {
     kind = "person_unwinding";
     variants = personQuestions(input.actorName ?? null);
   }
-  // ...and it overrides a bare concentration read, where the person IS the gap.
+  // ...and it overrides a bare concentration or unusualness read, where the
+  // person IS the gap: "busier than usual" is a weaker reading of the same
+  // rows than "the same person stepped back from two questions".
   if (
-    (kind === "largest_holder_left" || kind === "concentrating") &&
+    (kind === "largest_holder_left" || kind === "concentrating" || kind === "unusual") &&
     input.pattern &&
     UNWINDING.test(input.pattern)
   ) {
