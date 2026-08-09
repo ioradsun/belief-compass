@@ -70,6 +70,8 @@ export type ConvictionEventType =
   | "swept_out"
   | "swept_in"
   | "first_believer"
+  /** An EMPTY side became a populated one, several people at once. */
+  | "side_opened"
   | "doubled_down"
   | "big_backing"
   | "joined"
