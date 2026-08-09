@@ -125,11 +125,16 @@ export function piQuestion(input: QuestionInput): PIQuestion | null {
      Everything else stays declarative. */
   const level = voiceLevel(v);
   const unwinding = !!input.pattern && UNWINDING.test(input.pattern);
+  /* A pronounced before-price gap qualifies too: `voiceLevel` deliberately
+     tops out at observation for it (it is one reading, not a contradiction),
+     but "the positions moved and the price didn't" is precisely an unresolved
+     pair of facts. */
   const hierarchyGap = v.signals.concentration >= 0.6;
+  const beforePriceGap = v.signals.beforePrice >= 0.6;
   const eligible =
     level === "intelligence" ||
     unwinding ||
-    (hierarchyGap && v.informationGain >= INTELLIGENCE_GAIN_MIN);
+    ((hierarchyGap || beforePriceGap) && v.informationGain >= INTELLIGENCE_GAIN_MIN);
   if (!eligible) return null;
   // RULE 2 — a clue with a proven ending answers itself.
   if (v.clue === "resolved") return null;
