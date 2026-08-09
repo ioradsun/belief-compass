@@ -78,15 +78,19 @@ interface SignalVector {
 }
 ```
 
-`TensionKind`: `people_up_capital_down`, `capital_up_price_flat`, `price_up_believers_flat`, `believers_left_price_rose`, `whales_out_newcomers_in`, `tribe_against_market`.
+`TensionKind`: `people_up_capital_down`, `capital_up_price_flat`, `price_up_believers_flat`, `believers_left_price_rose`, `whales_out_newcomers_in`. All viewer-blind. "Tribe went the other way" is deliberately **not** a tension kind — it is viewer-relative and belongs to the angle layer (§7).
 
-`ConcentrationKind`: `concentrating`, `distributing`, `largest_holder_left`, `newcomers_replaced_a_whale`. This is a first-class signal because five wallets at $2 and one wallet at $200 are psychologically different, and "five people came in, one big holder walked out" explains the *shape* of a contradiction without inventing motive. The existing `concentration_rising` transition family feeds this rather than staying siloed.
+`ConcentrationKind`: `concentrating`, `distributing`, `largest_holder_left`, `newcomers_replaced_a_whale`. First-class because five wallets at $2 and one wallet at $200 are psychologically different, and "five people came in, one big holder walked out" explains the *shape* of a contradiction without inventing motive. The existing `concentration_rising` transition family feeds this rather than staying siloed. Gated on the §2 audit.
 
-**`nonresponse`, precisely modelled.** Never "the expected move didn't happen" — we cannot establish expectation. The model is: *meaningful input occurred, and the observable response stayed below threshold for N hours.* Copy: "$200 entered YES four hours ago. Price is still basically where it was." Never: "Price should have moved by now."
+**`nonresponse`, precisely modelled.** Never "the expected move didn't happen" — we cannot establish expectation. The model is: *meaningful input occurred, and the observable response stayed below threshold for N hours.* Copy: "$200 entered YES four hours ago. Price is still basically where it was." Never: "Price should have moved by now." Scope: at most one surviving nonresponse story per underlying input **within a build/editorial window**. Cross-poll deduplication is explicitly not guaranteed until seen-state exists — and seen-state, when it comes, is client-side, not a table.
 
-## 4. CONTEXT has no market signal
+**`beforePrice`, precisely modelled.** "Quiet" is a measured band, never `priceChange === 0`: input signal above a defined materiality threshold **and** absolute price change below a market-relative quiet band. That is what licenses "Three wallets stepped in. Price is still basically where it was."
 
-Social/personal rows (Tribe/Rival/Twin activity, milestones, cohorts, new markets, `showed_up`, `standing_fact`) carry an **all-zero vector** — not weak signals. They rank purely on the existing personal axis (`viewerBoost` + `stakeBoost` + `discovery`). A Rival flipping is high personal relevance with zero market signal, and the ranker should say exactly that.
+## 4. Social rows carry zero market signal — which is not the same as unimportant
+
+Social/personal rows (Tribe/Rival/Twin activity, discovery moments, milestones, cohorts, new markets, `showed_up`, `standing_fact`) receive an **all-zero SignalVector**. Their existing significance and relevance behaviour is untouched — `significance.ts` already lets a Twin/Opp discovery reach the exceptional band and ordinary Tribe discovery reach high, and that stays exactly as it is.
+
+Zero vector means "this row tells us nothing about market anomaly". It does not mean "this row is unimportant". Meeting a new Rival can be the most important thing in Now while carrying no market signal at all.
 
 Exception: a person-driven row that also carries market weight — the 32-day whale exiting — gets both, because both are true.
 
