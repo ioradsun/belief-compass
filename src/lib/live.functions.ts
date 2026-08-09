@@ -29,16 +29,6 @@ import {
 import type { ConvictionAction } from "@/domain/conviction-event";
 import { voiceLevel, applyViewerAngle } from "@/domain/pi-voice";
 import {
-  piQuestion,
-  questionAdds,
-  questionBudget,
-  rationQuestions,
-  SEMANTIC_GAIN,
-
-  type QuestionKind,
-} from "@/domain/pi-question";
-import { composeClues, type ComposedClue } from "@/domain/composed-clue";
-import {
   capVoice,
   RECEIPT_SIGNIFICANCE_CEILING,
   type CopyLevel,
@@ -55,16 +45,9 @@ import { SIGNIFICANCE, isCovered, fallbackRate } from "@/domain/significance";
 import { familyOf, VOICE_CEILING, type MixCandidate } from "@/domain/feed-cadence";
 import { signalVector } from "@/domain/signal-vector";
 import { COPY_VERSION } from "@/domain/copy-version";
-import {
-  ONE_SIDED_MIN_DAYS,
-  LOPSIDED_MIN_LEAD_USD,
-  LOPSIDED_RATIO,
-  type SemanticInput,
-} from "@/domain/semantic-question";
+import { secondSentenceAdds } from "@/domain/feed-editorial";
 import { factsForRow } from "@/domain/signal-facts";
 import { groupPricePaths, type PriceSample } from "@/domain/price-proof";
-import { editFeed, secondSentenceAdds } from "@/domain/feed-editorial";
-import { findPersonPatterns } from "@/domain/person-pattern";
 
 import { stakeBoost, NO_STAKES } from "@/domain/viewer-stake";
 import { currentHoldDays, holdStartIsFloor } from "@/domain/tenure";
