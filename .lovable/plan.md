@@ -208,7 +208,15 @@ Model fix first (step-4 problem 1). The vector now separates `marketGain` (the m
 Wiring: `scoreLiveAction` takes an optional `signal` and adds one bounded part (weight 0.3 × gain) with a reason. The individual-action cap is untouched, so an anomalous market still cannot lift a single trade past a majority flip. `buildTape` computes the vector once per candidate row before scoring and reuses it for the `SIGNAL_DIAGNOSTIC=1` attach; the shipped payload is unchanged.
 
 Corpus after the fix: the top 20 is no longer one market twenty times — it leads with three `tension` rows (`believers_left_price_rose`, now firing since the read model populates `people_yes_change_24h`), then `unusual`, `beforePrice` and one `largest_holder_left`. 2,363 tests green.
-6. Voice levels in `pi-voice.ts` + soft Intelligence cost with exceptional bypass in the cadence pass.
+6. Voice levels in `pi-voice.ts` + soft Intelligence cost with exceptional bypass in the cadence pass. **Done.**
+
+### Step-6 findings (measured, 2026-08-09)
+
+`voiceLevel(vector)` in `pi-voice.ts` classifies a row as `receipt | observation | intelligence` from the viewer-blind vector alone. Intelligence requires a contradiction *kind* (`tension`, `nonresponse`, or `unusual >= 0.6`) **and** `informationGain >= 0.12` — so the carrier discount from step 5 does the volume control for free: the row holding the evidence speaks at full volume, the trades inheriting a share of the same anomaly drop to observation. `building` alone can never exceed a receipt (accumulation is the weather, not an observation), and an all-zero social vector is a receipt.
+
+Cadence: `MixCandidate` gains `voice` and `signalGain`; `intelligenceCost` charges `0.12 × (rows over the window's 25% allowance)`, escalating per extra row, and returns 0 outright when `informationGain >= 0.6`. It is a cost, not a ceiling — tested: six genuine contradictions all survive the mix, while four weak-gain intelligence rows get spaced out among equally-scored receipts. Breaking significance still skips the whole branch.
+
+Corpus supply the cost is pricing: 342 rows → receipt 79.5%, observation 18.7%, intelligence 1.8%. Today the feed is nowhere near the 25% target, which is the correct state — the budget only bites on a genuinely chaotic hour. 2,374 tests green.
 7. Viewer-relative angle selection, post-admission (clue-preserving, §7).
 8. Variety caps on `primary`/`tensionKind` in `feed-cadence.ts`.
 9. Confirmation and developing clues only after §8's temporal proof exists.
