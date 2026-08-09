@@ -52,7 +52,7 @@ const base = (i: number, o: Partial<Omit<LiveRow, "text" | "story">>) => ({
   amountEth: null,
   amountUsd: 12,
   wallet: null,
-  payload: {} as Record<string, unknown>,
+  payload: {} as LiveRow["payload"],
   ...o,
 });
 

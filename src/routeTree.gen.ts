@@ -17,6 +17,7 @@ import { Route as HowRouteImport } from './routes/how'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MMidRouteImport } from './routes/m.$mid'
+import { Route as DevVoiceRouteImport } from './routes/dev.voice'
 import { Route as DevTransitionsRouteImport } from './routes/dev.transitions'
 import { Route as DevRailRouteImport } from './routes/dev.rail'
 import { Route as OgMarketMidRouteImport } from './routes/og/market.$mid'
@@ -70,6 +71,11 @@ const IndexRoute = IndexRouteImport.update({
 const MMidRoute = MMidRouteImport.update({
   id: '/m/$mid',
   path: '/m/$mid',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevVoiceRoute = DevVoiceRouteImport.update({
+  id: '/dev/voice',
+  path: '/dev/voice',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevTransitionsRoute = DevTransitionsRouteImport.update({
@@ -161,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/value': typeof ValueRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
+  '/dev/voice': typeof DevVoiceRoute
   '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/health': typeof ApiPublicHealthRoute
@@ -185,6 +192,7 @@ export interface FileRoutesByTo {
   '/value': typeof ValueRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
+  '/dev/voice': typeof DevVoiceRoute
   '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/health': typeof ApiPublicHealthRoute
@@ -210,6 +218,7 @@ export interface FileRoutesById {
   '/value': typeof ValueRoute
   '/dev/rail': typeof DevRailRoute
   '/dev/transitions': typeof DevTransitionsRoute
+  '/dev/voice': typeof DevVoiceRoute
   '/m/$mid': typeof MMidRoute
   '/api/public/build-id': typeof ApiPublicBuildIdRoute
   '/api/public/health': typeof ApiPublicHealthRoute
@@ -236,6 +245,7 @@ export interface FileRouteTypes {
     | '/value'
     | '/dev/rail'
     | '/dev/transitions'
+    | '/dev/voice'
     | '/m/$mid'
     | '/api/public/build-id'
     | '/api/public/health'
@@ -260,6 +270,7 @@ export interface FileRouteTypes {
     | '/value'
     | '/dev/rail'
     | '/dev/transitions'
+    | '/dev/voice'
     | '/m/$mid'
     | '/api/public/build-id'
     | '/api/public/health'
@@ -284,6 +295,7 @@ export interface FileRouteTypes {
     | '/value'
     | '/dev/rail'
     | '/dev/transitions'
+    | '/dev/voice'
     | '/m/$mid'
     | '/api/public/build-id'
     | '/api/public/health'
@@ -309,6 +321,7 @@ export interface RootRouteChildren {
   ValueRoute: typeof ValueRoute
   DevRailRoute: typeof DevRailRoute
   DevTransitionsRoute: typeof DevTransitionsRoute
+  DevVoiceRoute: typeof DevVoiceRoute
   MMidRoute: typeof MMidRoute
   ApiPublicBuildIdRoute: typeof ApiPublicBuildIdRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
@@ -380,6 +393,13 @@ declare module '@tanstack/react-router' {
       path: '/m/$mid'
       fullPath: '/m/$mid'
       preLoaderRoute: typeof MMidRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/voice': {
+      id: '/dev/voice'
+      path: '/dev/voice'
+      fullPath: '/dev/voice'
+      preLoaderRoute: typeof DevVoiceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dev/transitions': {
@@ -493,6 +513,7 @@ const rootRouteChildren: RootRouteChildren = {
   ValueRoute: ValueRoute,
   DevRailRoute: DevRailRoute,
   DevTransitionsRoute: DevTransitionsRoute,
+  DevVoiceRoute: DevVoiceRoute,
   MMidRoute: MMidRoute,
   ApiPublicBuildIdRoute: ApiPublicBuildIdRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
@@ -510,13 +531,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
