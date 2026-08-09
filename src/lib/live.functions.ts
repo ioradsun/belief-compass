@@ -677,12 +677,20 @@ async function loadPricePaths(
   marketIds: number[],
 ): Promise<Map<number, PriceSample[]>> {
   if (marketIds.length === 0) return new Map();
-  const { data, error } = await sb.rpc("market_price_path", {
-    p_ids: marketIds,
-    p_hours: 72,
-  });
-  if (error || !Array.isArray(data)) return new Map();
-  return groupPricePaths(data as Parameters<typeof groupPricePaths>[0]);
+  // Test doubles and any client without this RPC simply yield no proof, which is
+  // the same state as an empty history: the feed keeps working and stays silent
+  // about ordering.
+  if (typeof (sb as { rpc?: unknown }).rpc !== "function") return new Map();
+  try {
+    const { data, error } = await sb.rpc("market_price_path", {
+      p_ids: marketIds,
+      p_hours: 72,
+    });
+    if (error || !Array.isArray(data)) return new Map();
+    return groupPricePaths(data as Parameters<typeof groupPricePaths>[0]);
+  } catch {
+    return new Map();
+  }
 }
 
 export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = REAL_DEPS) {
