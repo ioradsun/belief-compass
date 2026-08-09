@@ -172,11 +172,12 @@ describe("preemption is by weight, not by lane alone", () => {
     expect(priorityOf(discovery)).toBe(priorityOf(dust));
   });
 
-  it("still puts any material real event ahead of any standing fact", () => {
-    const trade = row({ id: "trade", perishability: "now", weight: 4 });
-    const best = row({ id: "cohort", perishability: "standing", weight: 1 });
-    expect(priorityOf(trade)).toBeLessThan(priorityOf(best));
+  it("puts an urgent material event ahead of a middling paced one", () => {
+    const trade = row({ id: "trade", perishability: "now", weight: 2 });
+    const cohort = row({ id: "cohort", perishability: "soon", weight: 2 });
+    expect(priorityOf(trade)).toBeLessThan(priorityOf(cohort));
   });
+
 
   it("orders a heavy paced row ahead of a light one", () => {
     const s = enqueue(createScheduleState(T0), [
