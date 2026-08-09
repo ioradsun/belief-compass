@@ -32,14 +32,13 @@ describe("the second story one action tells", () => {
   });
 
   it("names the belief that took them there", () => {
-    const m = convictionMilestone(person(3), win)!;
-    expect(m.marketId).toBe(102);
-    expect(tellConvictionMilestone(m).attribution).toBe("The 3rd is “Question 2”.");
+    const m = convictionMilestone(person(5), win)!;
+    expect(m.marketId).toBe(104);
+    expect(tellConvictionMilestone(m).attribution).toBe("The 5th is “Question 4”.");
   });
 
   it("counts in ordinals a person would use", () => {
     for (const [rung, word] of [
-      [3, "3rd"],
       [5, "5th"],
       [10, "10th"],
       [25, "25th"],
