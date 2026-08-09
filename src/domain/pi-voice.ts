@@ -452,30 +452,48 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
           },
         ];
 
-      // TURN — the highest-value human story in the feed.
+      /**
+       * TURN — the highest-value human story in the feed, and it was getting
+       * the least storytelling: "kodak.base.eth changed their mind." said less
+       * than a $1.80 add. A flip is a binary market, so the side they LEFT is
+       * known the moment the side they arrived on is — no new data, a much
+       * better sentence. Tenure, where the index has it, is the whole drama.
+       */
       case "changed_mind": {
+        const from = side === "YES" ? "NO" : side === "NO" ? "YES" : null;
+        // "kodak.base.eth" is an address in a headline; "kodak" is a person.
+        const shortName = name ? name.split(".")[0]! : null;
+        const kicker = shortName ? `${shortName} flipped` : "Flipped";
         const base: Draft[] = held
           ? [
               {
-                headline: "Flipped",
-                body: `${who} held ${side ? "on" : "out"} for ${held}. Then flipped${side ? ` to ${s}` : ""}.`,
+                headline: kicker,
+                body: from
+                  ? `Held ${from} for ${held}. Now they're on ${s}.`
+                  : `${who} held on for ${held}. Then changed their mind.`,
+                angle: null,
               },
               {
-                headline: "Changed sides",
-                body: `${held} on one side. Now ${s || "the other"}.`,
+                headline: kicker,
+                body: from ? `${from} for ${held}. Then ${s}.` : `${held} of holding, then the turn.`,
                 angle: `${who} changed their mind.`,
               },
             ]
           : [
               {
-                headline: "Flipped",
+                headline: kicker,
+                body: from ? `${from} before. ${s} now.` : `${who} changed their mind.`,
+                angle: from && name ? null : side ? `${who} flipped to ${s}.` : null,
+              },
+              {
+                headline: "Changed sides",
                 body: side ? `${who} flipped to ${s}.` : `${who} changed their mind.`,
               },
             ];
         if (rel)
           base.push({
             headline: REL_KICKER[rel],
-            body: `${who} just changed sides${side ? ` to ${s}` : ""}.`,
+            body: from ? `${who} was on ${from}. Now ${s}.` : `${who} just changed sides.`,
             angle: question
               ? "What do they see differently here?"
               : held
@@ -484,6 +502,7 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
           });
         return base;
       }
+
 
       case "round_trip":
         return [
