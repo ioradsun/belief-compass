@@ -48,7 +48,7 @@ import {
   type CopyLevel,
 } from "@/domain/transition-denominator";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
-import { adaptiveFloor, admissionOf, admitToFeed, silenceAdjustedFloor } from "@/domain/feed-density";
+import { adaptiveFloor, admissionOf, silenceAdjustedFloor } from "@/domain/feed-density";
 import {
   scoreLiveAction,
   scoreDiscoveryMoment,
@@ -2112,7 +2112,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         marketId: String(r.marketId),
         marketTitle: r.marketTitle ?? null,
         wallet: r.wallet ?? null,
-        name: r.face?.name ?? labelByWallet.get((r.wallet ?? "").toLowerCase()) ?? null,
+        name: r.face?.name ?? null,
         relationship: (r.face?.relationship as string | null) ?? null,
         side: r.side === "YES" || r.side === "NO" ? r.side : null,
         action: actionById.get(r.id) ?? null,
