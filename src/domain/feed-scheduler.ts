@@ -88,11 +88,20 @@ export const SCHEDULE = {
   /** Real rows pending at which the cadence tightens. */
   busyDepth: 4,
   /** Silence this long before a standing fact may be drawn at all. */
-  // TWENTY SECONDS. At 45s a tape only reached `quiet` on a genuinely dead
-  // market, so the reserve built on every fetch was rarely drawn and slow
-  // periods read as broken rather than calm. Twenty seconds of nothing is
-  // already a silence a reader notices.
-  quietAfterMs: 20_000,
+  // TEN SECONDS, arrived at twice by the same evidence. At 45s a tape only
+  // reached `quiet` on a genuinely dead market, so the reserve built on every
+  // fetch was rarely drawn and slow periods read as broken rather than calm.
+  // Twenty fixed that for dead markets and not for slow ones: a reader watching
+  // a real feed still never saw a standing fact, while eighteen true things sat
+  // in reserve behind the gate.
+  //
+  // Ten is chosen against the cost of being wrong, which is asymmetric. Drawing
+  // one too eagerly costs a true, calm sentence in a gap the reader was already
+  // staring at; drawing one too late costs the entire feature, silently, which
+  // is what has happened twice. The reserve holds ~18 and the pacing below still
+  // spaces them 15–30s apart, so this changes WHEN the first one appears, not
+  // how many arrive.
+  quietAfterMs: 10_000,
   /**
    * The longest a "soon" row may be held. Past this the queue is behind reality
    * and the cadence drops to the floor — a feed that is pleasant and wrong is
