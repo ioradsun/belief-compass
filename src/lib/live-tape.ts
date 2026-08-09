@@ -98,6 +98,14 @@ export interface LiveRow {
    * "this just happened", which is the one thing it does not mean.
    */
   timeless?: boolean;
+  /**
+   * HEARTBEAT, NOT NEWS. This row failed standard admission and got in only at
+   * the silence-adjusted floor (src/domain/feed-density `admissionOf`). It is
+   * true and ordinary; the client holds it until this reader has actually been
+   * looking at a still page (src/domain/pulse-release). Nothing about its
+   * meaning differs — same significance, same voice, same vector.
+   */
+  pulse?: boolean;
   payload: Record<string, JsonValue>;
 }
 
