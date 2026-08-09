@@ -185,7 +185,20 @@ The distinction `new | developing | resolved` is written into the model now even
 1. Widen the `market_state` select in `loadTapeSource` to §2 columns; extend `Momentum`. Behaviour-neutral. **Done.**
 2. **2a.** Audit concentration + nonresponse derivability and baseline math against real data. **Done — see §2a findings.**
 3. Add `src/domain/signal-vector.ts` + tests, including the one canonical baseline helper (daily rate, `trade_count_7d >= 7` guard, relative quiet band). Pure, unused at first.
-4. **Diagnostic before influential.** Attach the vector to rows in `buildTape` and print the **top 20 and bottom 20 candidate rows by `informationGain`**, with every signal value and every reason, over a real corpus. If ordinary trades outrank contradictions, fix the model here — never compensate downstream in the mixer. Nothing is wired to ranking during this step.
+4. **Diagnostic before influential.** Attach the vector to rows in `buildTape` and print the **top 20 and bottom 20 candidate rows by `informationGain`**, with every signal value and every reason, over a real corpus. If ordinary trades outrank contradictions, fix the model here — never compensate downstream in the mixer. Nothing is wired to ranking during this step. **Done — see step-4 findings.**
+
+### Step-4 findings (measured, 2026-08-09)
+
+Wiring: one shared mapping, `src/domain/signal-facts.ts` (`factsForRow`), used by both `buildTape` and the diagnostic script so the feed and the review can never disagree about what the vector was shown. In `buildTape` the vector is attached to `LiveRow.signal` **only under `SIGNAL_DIAGNOSTIC=1`**; ranking, cadence, copy and the shipped payload are unchanged. `preEventHolders` is null in-feed (the hierarchy needs a bounded historical read), so concentration is reviewed only in the script — a large amount is never allowed to stand in for "a whale left". `yes_price_usd` added to the `market_state` select: without the price *level* the quiet band (a percentage) could not be evaluated at all.
+
+Corpus: 343 candidate rows / 216 active markets. 72 rows with non-zero gain. `unusual` 20, `beforePrice` 7, `concentration` 2 (one `largest_holder_left`, one `distributing`), `reversing` 1, `tension` 0, `nonresponse` 0.
+
+Three real problems, to fix in the model before step 5:
+
+1. **Gain is market-scoped, so rows clump.** Every trade row in market #2804 scored the identical `gain=0.2587` as the market row itself — the top 20 is one market, twenty times. Ranking on this today would hand the feed to whichever market is busiest. The row's own evidence (actor, amount, direction, position after) currently contributes nothing. Fix in the vector: either the row must add evidence to earn the market's gain, or market-level gain is expressed once per market and rows inherit a discounted share.
+2. **`tension` still cannot fire.** `people_yes_change_24h` is now derived in the read model but only 254/2806 markets have refreshed and only 9 are non-zero, and none of those coincided with capital leaving. Re-measure once refresh has swept the corpus; do not loosen the tension conditions to make it appear.
+3. **`nonresponse` never fired** — the largest qualifying input in-window was $9 against a $50 floor. Corpus-limited, exactly as 2a predicted. Leave the floor alone.
+
 5. Wire `informationGain` into the derived branch of `significance.ts`.
 6. Voice levels in `pi-voice.ts` + soft Intelligence cost with exceptional bypass in the cadence pass.
 7. Viewer-relative angle selection, post-admission (clue-preserving, §7).

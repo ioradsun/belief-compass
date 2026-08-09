@@ -44,6 +44,8 @@ import {
   fallbackRate,
 } from "@/domain/significance";
 import { familyOf, type MixCandidate } from "@/domain/feed-cadence";
+import { signalVector } from "@/domain/signal-vector";
+import { factsForRow } from "@/domain/signal-facts";
 import { editFeed } from "@/domain/feed-editorial";
 import { findPersonPatterns } from "@/domain/person-pattern";
 
@@ -156,6 +158,8 @@ type Momentum = {
   /** Days since the market opened — lets a standing fact claim "since the start". */
   marketAgeDays: number | null;
   // ---- Signal inputs. Carried, not yet read by any story. ----
+  /** The level the moves are relative to — the quiet band is a percentage, not cents. */
+  yesPrice: number | null;
   /** Price moves. Null means "not computed", never "flat" — the difference matters. */
   yesPriceChange1h: number | null;
   yesPriceChange24h: number | null;
@@ -337,7 +341,7 @@ async function loadTapeSource(
       sb
         .from("market_state")
         .select(
-          "onchain_id, believers_yes, believers_no, new_believers_1h, money_yes_pct, people_yes_pct, opportunity_type, market_age_days, yes_price_change_1h, yes_price_change_24h, yes_price_change_7d, yes_capital_delta_24h, no_capital_delta_24h, capital_held_yes, capital_held_no, trade_count_1h, trade_count_24h, trade_count_7d, unique_wallets_1h, unique_wallets_24h, new_believers_24h, new_believers_yes_24h, new_believers_no_24h, people_yes_change_24h, side_flips_24h, last_trade_at",
+          "onchain_id, believers_yes, believers_no, new_believers_1h, money_yes_pct, people_yes_pct, opportunity_type, market_age_days, yes_price_usd, yes_price_change_1h, yes_price_change_24h, yes_price_change_7d, yes_capital_delta_24h, no_capital_delta_24h, capital_held_yes, capital_held_no, trade_count_1h, trade_count_24h, trade_count_7d, unique_wallets_1h, unique_wallets_24h, new_believers_24h, new_believers_yes_24h, new_believers_no_24h, people_yes_change_24h, side_flips_24h, last_trade_at",
         )
         .in("onchain_id", marketIds),
     ]);
@@ -359,6 +363,7 @@ async function loadTapeSource(
         peopleYesPct: num("people_yes_pct"),
         opportunityType: (r.opportunity_type as string | null) ?? null,
         marketAgeDays: num("market_age_days"),
+        yesPrice: num("yes_price_usd"),
         yesPriceChange1h: num("yes_price_change_1h"),
         yesPriceChange24h: num("yes_price_change_24h"),
         yesPriceChange7d: num("yes_price_change_7d"),
@@ -1356,6 +1361,57 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
           : `${r.kind}:${r.side ?? "market"}:${r.story.headline}`,
     } satisfies MixCandidate;
   }
+
+  /* DIAGNOSTIC BEFORE INFLUENTIAL (plan §11 step 4).
+     The anomaly vector is measured for every composed row and attached — but
+     ONLY under SIGNAL_DIAGNOSTIC=1, and nothing downstream reads it. Ranking,
+     cadence and copy are byte-for-byte unchanged; this exists so the model can
+     be judged against real rows before it is allowed to move anything.
+     `preEventHolders` is deliberately null here: reconstructing the hierarchy
+     needs a bounded historical read the tape does not do, and a large amount is
+     never allowed to stand in for "a whale left". Concentration stays 0 in-feed
+     and is reviewed in scripts/check-feed-signal-rows.ts. */
+  if (process.env["SIGNAL_DIAGNOSTIC"] === "1") {
+    const nowMs = Date.now();
+    for (const r of material) {
+      const m = momentumById.get(Number(r.marketId));
+      r.signal = signalVector(
+        factsForRow(
+          {
+            kind: r.kind,
+            wallet: r.wallet,
+            action: (r.payload as { action?: "BUY" | "SELL" }).action ?? null,
+            amountUsd: r.amountUsd,
+            occurredAt: r.occurredAt,
+          },
+          m
+            ? {
+                yesPrice: m.yesPrice,
+                yesPriceChange1h: m.yesPriceChange1h,
+                yesPriceChange24h: m.yesPriceChange24h,
+                yesPriceChange7d: m.yesPriceChange7d,
+                yesCapitalDelta24h: m.yesCapitalDelta24h,
+                noCapitalDelta24h: m.noCapitalDelta24h,
+                capitalHeldYes: m.capitalHeldYes,
+                capitalHeldNo: m.capitalHeldNo,
+                tradeCount24h: m.tradeCount24h,
+                tradeCount7d: m.tradeCount7d,
+                believersYes: m.believersYes,
+                believersNo: m.believersNo,
+                newBelievers24h: m.newBelievers24h,
+                newBelieversYes24h: m.newBelieversYes24h,
+                newBelieversNo24h: m.newBelieversNo24h,
+                peopleYesChange24h: m.peopleYesChange24h,
+                sideFlips24h: m.sideFlips24h,
+                lastTradeAt: m.lastTradeAt,
+              }
+            : null,
+          nowMs,
+        ),
+      );
+    }
+  }
+
 
   // ── THE EDITORIAL PASS: subtraction, after everything is composed ────────
   // Two rules a reader would state out loud — a second row about the same

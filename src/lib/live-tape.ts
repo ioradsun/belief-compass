@@ -14,6 +14,7 @@ import { CONVICTION_EVENT, type ConvictionAction } from "@/domain/conviction-eve
 import { tellPiStory } from "@/domain/pi-voice";
 import type { StackPerson } from "@/domain/conviction-cohort";
 import type { MixCandidate } from "@/domain/feed-cadence";
+import type { SignalVector } from "@/domain/signal-vector";
 import { findWashTrades, WASH } from "@/domain/wash-trading";
 import type { Perishability } from "@/domain/feed-scheduler";
 import { marketTitle } from "@/domain/market-title";
@@ -77,6 +78,12 @@ export interface LiveRow {
    * ordering decided earlier.
    */
   mix?: MixCandidate;
+  /**
+   * DIAGNOSTIC ONLY (plan §11 step 4). The viewer-blind anomaly measurement for
+   * this row. Nothing reads it — not ranking, not cadence, not copy — and it is
+   * only attached when SIGNAL_DIAGNOSTIC=1, so the shipped payload is unchanged.
+   */
+  signal?: SignalVector;
   /**
    * What the presentation scheduler needs: how urgent this row is, and how much
    * of the reader's attention it is owed. Both are decided server-side, where

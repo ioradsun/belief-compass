@@ -18,6 +18,7 @@ import {
   type SignalVector,
   type CanonicalTrade,
 } from "../src/domain/signal-vector";
+import { factsForRow, type MarketSignalSource } from "../src/domain/signal-facts";
 
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -63,7 +64,7 @@ async function main() {
       "onchain_id, yes_price_usd, yes_price_change_1h, yes_price_change_24h, yes_price_change_7d," +
         " yes_capital_delta_24h, no_capital_delta_24h, capital_held_yes, capital_held_no," +
         " trade_count_24h, trade_count_7d, believers_yes, believers_no, new_believers_24h," +
-        " people_yes_change_24h, side_flips_24h, last_trade_at",
+        " people_yes_change_24h, side_flips_24h, last_trade_at, new_believers_yes_24h, new_believers_no_24h",
     )
     .or("trade_count_7d.gt.0,trade_count_24h.gt.0")
     .limit(600);
@@ -122,7 +123,9 @@ async function main() {
     const trades = tradesByMarket.get(id) ?? [];
     const recent = trades.filter((t) => t.atMs >= nowMs - 24 * HOUR);
 
-    const marketFacts: SignalFacts = {
+    // ONE mapping, shared with buildTape — the script and the feed must never
+    // disagree about what the vector was shown.
+    const source: MarketSignalSource = {
       yesPrice: s.yes_price_usd,
       yesPriceChange1h: s.yes_price_change_1h,
       yesPriceChange24h: s.yes_price_change_24h,
@@ -136,11 +139,13 @@ async function main() {
       believersYes: s.believers_yes,
       believersNo: s.believers_no,
       newBelievers24h: s.new_believers_24h,
+      newBelieversYes24h: s.new_believers_yes_24h,
+      newBelieversNo24h: s.new_believers_no_24h,
       peopleYesChange24h: s.people_yes_change_24h,
       sideFlips24h: s.side_flips_24h,
-      newcomers24h: s.new_believers_24h,
-      nowMs,
+      lastTradeAt: s.last_trade_at,
     };
+    const marketFacts: SignalFacts = factsForRow({ kind: "trade" }, source, nowMs);
 
     // Nonresponse candidate: the biggest single input inside the window.
     const inputs = trades.filter(
