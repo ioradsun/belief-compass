@@ -149,6 +149,19 @@ export type SignalVector = {
   signals: Signals;
   tensionKind?: TensionKind;
   concentrationKind?: ConcentrationKind;
+  /**
+   * The anomaly of the MARKET, identical for every row about it. This is the
+   * number the signals actually measure.
+   */
+  marketGain: number;
+  /**
+   * How much of the market's anomaly THIS row is entitled to (0..1). A market's
+   * story is told once; a row that adds no evidence of its own inherits only a
+   * discounted share of it, so a busy market cannot hand the feed twenty copies
+   * of the same observation.
+   */
+  carrier: number;
+  /** `marketGain × carrier` — the ranking number. */
   informationGain: number;
   primary: SignalKey;
   reasons: string[];
