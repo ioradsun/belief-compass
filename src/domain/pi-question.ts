@@ -156,12 +156,58 @@ function personQuestions(name: string | null): string[] {
 }
 
 /**
+ * THE QUESTION COMES FROM THE CONTRAST, NEVER FROM THE TENURE. "How long have
+ * they held?" is answered by the row itself. "The price moved and the longest
+ * holder didn't" is two facts that have to be reconciled, which is the only
+ * thing worth asking about a standing story.
+ */
+function standingQuestions(kind: string, name: string | null): string[] {
+  const who = name && name.trim().length > 0 ? name.trim() : "the longest holder";
+  switch (kind) {
+    case "held_through_price_move":
+      return [
+        "The price moved. The longest-held positions didn't. What is holding that conviction in place?",
+        "Everything around them repriced and they sat still. Which of those two readings is the market?",
+      ];
+    case "whale_stayed_others_left":
+      return [
+        `Smaller positions left and the biggest one stayed. Is ${who} early, or the last one out?`,
+        "The crowd thinned and the weight didn't move. Who is right about this side?",
+      ];
+    case "holder_stayed_capital_left":
+      return [
+        "Money came off this side and the oldest position stayed on it. Which one is reading it wrong?",
+        `Capital left. ${cap(who)} didn't. What do they know about this side that the money doesn't?`,
+      ];
+    case "one_sided_persistence":
+      return [
+        "One side has been occupied for weeks and nobody has taken the other. Is that agreement, or absence?",
+      ];
+    default:
+      return [];
+  }
+}
+
+/**
  * The question this row has earned, or null — which is the answer for the large
  * majority of rows.
  */
 export function piQuestion(input: QuestionInput): PIQuestion | null {
   const v = input.signal;
   if (!v) return null;
+
+  /* CONTINUITY ROWS ANSWER TO THEIR OWN RULE. A receipt and an observation are
+     true and finished; only a proven contrast leaves something open, and what
+     it leaves open is the contrast rather than anything the vector saw. */
+  if (input.standing) {
+    if (input.standing.klass !== "intelligence") return null;
+    const variants = standingQuestions(input.standing.kind, input.actorName ?? null);
+    if (variants.length === 0) return null;
+    const text = pickVariant(`${input.key}:standing_contrast`, variants);
+    if (!questionAdds(text, `${input.headline} ${input.body}`)) return null;
+    return { text, kind: "standing_contrast" };
+  }
+
 
   /* RULE 1 — only a genuine clue may ask anything.
      Intelligence (a contradiction, a timed silence, pronounced unusualness)
