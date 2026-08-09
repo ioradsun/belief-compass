@@ -235,9 +235,13 @@ behind an unchanged surface, each step proven by parity tests.
    selection, PI narrative out of `live.functions`/`LiveTape` into the Now
    projection. Leave animation / update-gating in the component
    (intelligence server-side; attention mechanics UI-side).
-5. **Read last.** Keep the House Read state machine; rename the *surface* to
-   **Insider Read**; expand its inputs from "your DNA" to "your DNA + everything
-   Insider sees in this market."
+5. **Read — ✅ pure seam landed.** `read.ts` `insiderRead(source, { pulse })` lifts
+   the pure house-read state machine into `InsiderRead` unchanged (learning →
+   predicted → correct/incorrect), and adds the additive `marketAligned` context
+   (does the market's `InsiderPulse` agree with the side we think you'll back?),
+   which NEVER changes the prediction — the seam through which the read gets richer
+   over time. **UI adoption** (the House Read surface → "Insider Read", including
+   the visible label) changes rendering, so it lands with an app run.
 6. **Collapse realtime around the Insider.** Keep the one-socket architecture; as
    consumers converge, surface-specific cache families give way to
    `["insider", marketId]` and `["insider","now"]`.
@@ -253,11 +257,11 @@ src/domain/insider/
     index.ts        # barrel + INSIDER_CONSTITUTION         ✅ landed
     signals.ts      # canonical activity → InsiderSignal[]  ✅ landed (activity seam)
     pulse.ts        # market facts → InsiderPulse           ✅ landed
+    read.ts         # house-read, lifted into InsiderRead   ✅ landed
     features.ts     # universal evidence extraction (calculate once)   — next
     scoring.ts      # evidence → judgments (momentum/importance/confidence) — next
-    read.ts         # house-read, moved inward                          — later
     projections/
-        activity.ts  # ✅ landed   insight.ts  # ✅ landed   now.ts  read.ts  — next/later
+        activity.ts  # ✅ landed   insight.ts  # ✅ landed   now.ts  — next
 
 src/lib/insider/
     source.server.ts   build.server.ts   functions.ts   cache.ts       — next

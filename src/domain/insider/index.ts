@@ -29,6 +29,7 @@
 export * from "./types";
 export * from "./signals";
 export { insiderPulse, type PulseFacts } from "./pulse";
+export { insiderRead, fromHouseReadState, type InsiderReadContext } from "./read";
 export { activity } from "./projections/activity";
 export { insight } from "./projections/insight";
 

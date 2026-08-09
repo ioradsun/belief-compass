@@ -296,6 +296,13 @@ export interface InsiderRead {
   confidence?: number | null;
   /** Cold start: how many more picks until the Insider will call your move. */
   remainingPicks?: number | null;
+  /**
+   * Market-context signal: does the market's aggregate direction (InsiderPulse)
+   * agree with the side we think you'll back? ADDITIVE context only — it never
+   * changes the prediction, which stays the house-read state machine. null/absent
+   * when there is no prediction or the market has no clear direction.
+   */
+  marketAligned?: boolean | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
