@@ -215,7 +215,7 @@ export function classifyConvictionEvent(e: ConvictionEvent): ConvictionEventType
  * stay flat on purpose: they are the quiet ground the rare rows stand out
  * against, and promoting them would cost the rare ones their force.
  */
-const KICKER: Record<ConvictionEventType, string> = {
+export const EVENT_KICKER: Record<ConvictionEventType, string> = {
   swept_out: "CLEARING OUT",
   swept_in: "GOING BROAD",
   // A rank is a label; going first is an act.
@@ -294,7 +294,7 @@ export function isCelebration(type: ConvictionEventType): boolean {
   return CELEBRATION_TYPES.has(type);
 }
 
-const CATEGORY: Record<ConvictionEventType, LiveCategory> = {
+export const EVENT_CATEGORY: Record<ConvictionEventType, LiveCategory> = {
   swept_out: "capital_out",
   swept_in: "capital_in",
   first_believer: "growing",
@@ -321,6 +321,8 @@ export const formatStoryMoney = (v: number): string =>
   (v >= 1000
     ? v.toLocaleString("en-US", { maximumFractionDigits: 0 })
     : v.toLocaleString("en-US", { maximumFractionDigits: v < 10 ? 2 : 0 }));
+
+const money = formatStoryMoney;
 
 /**
  * "43 days" / "a day" / "3 months" — how long they believed it.
@@ -388,7 +390,7 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
   if (type === "new_market") {
     return {
       category: "fresh_market",
-      headline: KICKER.new_market,
+      headline: EVENT_KICKER.new_market,
       body: c.question?.trim() || "A new question opened.",
       attribution: name ? `${name} opened it.` : null,
       tone: "neutral",
@@ -400,7 +402,7 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
     const t = n(c.threshold).toLocaleString("en-US");
     return {
       category: "milestone",
-      headline: KICKER.milestone,
+      headline: EVENT_KICKER.milestone,
       body: side ? `${s} reached ${t} believers.` : `${t} people back this question.`,
       attribution: null,
       tone: toneFor(side, false),
@@ -411,7 +413,7 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
   if (type === "surging") {
     return {
       category: "momentum",
-      headline: KICKER.surging,
+      headline: EVENT_KICKER.surging,
       body: side ? `Believers in ${s} doubled today.` : "Believers doubled today.",
       attribution: null,
       tone: toneFor(side, false),
@@ -558,7 +560,7 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
         : null,
     ].filter(Boolean);
     return {
-      category: rel ?? CATEGORY[type],
+      category: rel ?? EVENT_CATEGORY[type],
       headline: rel
         ? REL_KICKER[rel]
         : side
@@ -582,13 +584,13 @@ export function tellConvictionStory(e: ConvictionEvent): LiveStory {
       ? `${money(bigAmt)} JUST HIT ${s}`
       : rel
         ? REL_KICKER[rel]
-        : KICKER[type];
+        : EVENT_KICKER[type];
 
   return {
     // A RELATIONSHIP FRAMES THE ROW, it no longer replaces it. The kicker says
     // who this person is to the reader; the sentence below says what they
     // actually did, side and all — where it used to say only "entered".
-    category: rel ?? CATEGORY[type],
+    category: rel ?? EVENT_CATEGORY[type],
     headline: ownedHeadline,
     body,
     // "N believers now" is noise next to "the last one left" or "the first to back".
