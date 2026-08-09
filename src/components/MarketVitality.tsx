@@ -345,6 +345,8 @@ export function MarketMomentum({
   footer,
   dense,
   faces,
+  state,
+
 }: {
   /** Still needed for the window phrase and the cold-start read. Never for a delta. */
   tape: TapeTrade[] | undefined;
