@@ -336,10 +336,12 @@ describe("classifyPace", () => {
     expect(classifyPace({ kind: "position_changed_side" })).toBe("soon");
   });
 
-  it("treats duration facts as standing, because they have no when", () => {
-    expect(classifyPace({ kind: "conviction_cohort" })).toBe("standing");
-    expect(classifyPace({ kind: "believer_milestone" })).toBe("standing");
-    expect(classifyPace({ kind: "tribe_doubled" })).toBe("standing");
+  it("paces duration facts, because they have no when of their own", () => {
+    expect(classifyPace({ kind: "conviction_cohort" })).toBe("soon");
+    expect(classifyPace({ kind: "believer_milestone" })).toBe("soon");
+    expect(classifyPace({ kind: "tribe_doubled" })).toBe("soon");
+    expect(classifyPace({ kind: "standing_fact" })).toBe("soon");
+    expect(classifyPace({ kind: "standing_signal" })).toBe("soon");
   });
 
   /**
@@ -380,13 +382,13 @@ describe("classifyPace", () => {
 
 /**
  * A person's conviction count became true at a moment and then stays true — the
- * same shape as "someone has held YES for 43 days". Scheduling it as standing is
- * what lets a quiet stretch draw on it, which is the whole reason it exists.
+ * same shape as "someone has held YES for 43 days". Neither is urgent, and
+ * neither is withheld: they queue as "soon" and win or lose on significance.
  */
 describe("a conviction count is a standing fact, not news that ages", () => {
   it("paces a person milestone with the other things that do not rot", () => {
-    expect(classifyPace({ kind: "person_milestone" })).toBe("standing");
-    expect(classifyPace({ kind: "conviction_cohort" })).toBe("standing");
+    expect(classifyPace({ kind: "person_milestone" })).toBe("soon");
+    expect(classifyPace({ kind: "conviction_cohort" })).toBe("soon");
   });
 
   it("still yields to the reader's own move", () => {
