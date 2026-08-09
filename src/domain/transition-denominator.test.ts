@@ -78,3 +78,16 @@ describe("a structural announcement with nothing else to add is a receipt", () =
     expect(r.detail).toBe("A sentence.");
   });
 });
+
+describe("percentages that are not money", () => {
+  it("leaves a price re-rating alone even with capital in context", () => {
+    const r = retellTransition(
+      "THE PRICE MOVED. THE CROWD DIDN'T.",
+      "YES re-rated +5.3% with no new believers behind it.",
+      "k",
+      { usd: 6931, side: "YES" },
+    );
+    expect(r.detail).toContain("re-rated");
+    expect(r.detail).not.toContain("$6,931");
+  });
+});

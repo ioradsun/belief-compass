@@ -98,7 +98,12 @@ export function retellTransition(
   // NO PERCENTAGE, NO NUMBER AT ALL — "First believers just stepped in." is a
   // true structural fact with nothing else to contribute. It stays a receipt:
   // the headline may keep it, but it must not be ranked as a clue.
-  if (!move) {
+  /* A percentage only earns a dollar denominator when it IS money. Price
+     re-ratings ("YES re-rated +5.3%") are a different quantity: restating one
+     as "$6,931 arrived" would be a fabrication. */
+  const aboutMoney = /money|capital|funded|behind it|walked|left/i.test(raw);
+
+  if (!move || !aboutMoney) {
     return { ...base, usd, level: hasFigure(base.detail) ? "observation" : "receipt" };
   }
 

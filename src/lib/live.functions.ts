@@ -1010,12 +1010,11 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
          over, and it lives in market state, here. */
       const mkt = momentumById.get(Number(r.marketId));
       const delta = r.side === "NO" ? mkt?.noCapitalDelta24h : mkt?.yesCapitalDelta24h;
-      /* market_state carries capital in ETH, and the reader thinks in dollars —
-         the denominator is meaningless in the wrong unit. No rate, no claim. */
+      /* market_state's *_capital_delta_24h is already USD (derived from
+         yes/no_capital_usd against the 24h snapshot), unlike the sibling
+         capital_held_* columns which are ETH. No conversion here. */
       const deltaUsd =
-        typeof delta === "number" && Number.isFinite(delta) && ethUsd > 0
-          ? Math.abs(delta) * ethUsd
-          : null;
+        typeof delta === "number" && Number.isFinite(delta) ? Math.abs(delta) : null;
       const modern = retellTransition(p.headline ?? "", p.detail ?? "", String(r.id), {
         usd: deltaUsd,
         side: r.side ?? null,
