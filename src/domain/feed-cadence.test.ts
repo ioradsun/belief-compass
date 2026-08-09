@@ -441,3 +441,62 @@ describe("the pacing budget follows what actually happened", () => {
     expect(CADENCE.targetNudge).toBeLessThan(CADENCE.breakingAt - CADENCE.minQuality);
   });
 });
+
+/**
+ * A KIND OF STORY CAN DOMINATE TOO.
+ *
+ * A real feed showed "Back from the dead" six times in ten rows. Each row was
+ * true and each earned its place, but the phrase stopped meaning anything — and
+ * the adjacency penalty could not see it, because adjacency looks back three
+ * rows and decays, so repeats that sit apart cost almost nothing.
+ */
+describe("no single kind of story takes over the window", () => {
+  const woken = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      c({
+        family: "market_transition",
+        significance: 0.5,
+        marketId: `m${i}`,
+        motif: "market_transition:market:Back from the dead",
+      }),
+    );
+
+  it("pushes repeats of one motif below other stories of equal strength", () => {
+    // Genuinely varied alternatives — different families, markets and motifs —
+    // so this measures the motif cap rather than the alternatives penalising
+    // each other for sharing a family.
+    const fams: EventFamily[] = [
+      "live_action",
+      "conviction_celebration",
+      "collective_story",
+      "relationship_story",
+      "live_action",
+      "conviction_celebration",
+    ];
+    const varied = fams.map((family, i) =>
+      c({ family, significance: 0.5, marketId: `v${i}`, motif: `varied:${i}` }),
+    );
+    // Judged on what a reader actually sees first. Twelve candidates into ten
+    // rows would force four repeats however good the ordering, so the property
+    // that matters is that they sink — not that they vanish.
+    const top = mixFeed([...woken(6), ...varied]).slice(0, 6);
+    const repeats = top.filter((r) => r.motif?.includes("Back from the dead")).length;
+    expect(repeats).toBeLessThanOrEqual(CADENCE.maxPerMotif + 1);
+  });
+
+  it("still shows them when they are the only thing that happened", () => {
+    // A penalty, never a filter: a quiet day of one kind is still a feed.
+    expect(mixFeed(woken(5))).toHaveLength(5);
+  });
+
+  it("never holds back genuinely breaking news of a repeated kind", () => {
+    const breaking = c({
+      family: "market_transition",
+      significance: 0.95,
+      marketId: "big",
+      motif: "market_transition:market:Back from the dead",
+    });
+    const rows = mixFeed([...woken(4), breaking]);
+    expect(rows[0].id).toBe(breaking.id);
+  });
+});
