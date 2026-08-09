@@ -1588,7 +1588,17 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       /* The vector's level, CAPPED by what the printed copy can support. A row
          whose only claim is an unsized percentage cannot be Intelligence no
          matter what the market state around it looks like. */
-      voice: capVoice(voiceLevel(signalById.get(r.id) ?? null), copyLevel.get(r.id)),
+      voice: (() => {
+        const capped = capVoice(voiceLevel(signalById.get(r.id) ?? null), copyLevel.get(r.id));
+        /* A FLOOR, NOT A BOOST. Social kinds get an all-zero vector by design,
+           so a new market with a proven reaction (or a proven silence) would
+           rank as a receipt on a technicality. The floor is only ever set from
+           a fact the copy layer verified. */
+        const floor = voiceFloor.get(r.id);
+        if (!floor) return capped;
+        const RANK = { receipt: 0, observation: 1, intelligence: 2 } as const;
+        return RANK[floor] > RANK[capped] ? floor : capped;
+      })(),
       signalGain: signalById.get(r.id)?.informationGain ?? 0,
       /* THE SHAPE OF THE CLUE, capped window-wide (plan §11.8). The motif keys
          on composed copy, so the same observation across four markets reads as
