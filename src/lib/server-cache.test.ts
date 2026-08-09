@@ -134,3 +134,31 @@ describe("single flight", () => {
     expect(runs).toBe(2);
   });
 });
+
+describe("a build that is slow but alive", () => {
+  it("is not turned into an error by the wedge watchdog", async () => {
+    vi.useFakeTimers();
+    _clearSwrCache();
+    let settle!: (v: string) => void;
+    const p = swrCache("slow", { ttlMs: 1000 }, () => new Promise<string>((r) => (settle = r)));
+    // Well past the 10s in-flight window — the slot is expired, the build is not.
+    await vi.advanceTimersByTimeAsync(12_000);
+    settle("real content");
+    await expect(p).resolves.toBe("real content");
+    vi.useRealTimers();
+  });
+
+  it("lets a later caller start fresh instead of joining the expired build", async () => {
+    vi.useFakeTimers();
+    _clearSwrCache();
+    const calls: Array<(v: string) => void> = [];
+    const fn = () => new Promise<string>((r) => calls.push(r));
+    void swrCache("slow2", { ttlMs: 1000 }, fn);
+    await vi.advanceTimersByTimeAsync(12_000);
+    const second = swrCache("slow2", { ttlMs: 1000 }, fn);
+    expect(calls).toHaveLength(2);
+    calls[1]!("fresh");
+    await expect(second).resolves.toBe("fresh");
+    vi.useRealTimers();
+  });
+});
