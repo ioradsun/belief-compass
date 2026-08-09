@@ -1797,6 +1797,14 @@ export type Database = {
         Args: { p_market: number; p_now: string }
         Returns: Json
       }
+      market_price_path: {
+        Args: { p_hours?: number; p_ids: number[] }
+        Returns: {
+          captured_at: string
+          onchain_id: number
+          yes_price_usd: number
+        }[]
+      }
       market_transition_windows: {
         Args: { p_market: number; p_now: string }
         Returns: Json
