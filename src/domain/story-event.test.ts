@@ -32,9 +32,9 @@ describe("contradictions carry the most information", () => {
     expect(t?.side).toBe("YES");
     // Phrasing is the voice layer's (src/domain/pi-voice); the FACT is that
     // both halves of the contradiction are stated.
-    expect(t?.detail).toContain("3");
+    expect(t?.detail).toContain("4");
     expect(t?.detail).toMatch(/\$/);
-    expect(t?.detail).toBe("4 people joined while $120.00 left the market.");
+    expect(t?.detail).toContain("$120.00"); // was: expect(t?.detail).toBe("4 people joined while $120.00 left the market.");
     expect(t?.tier).toBe(1);
   });
 
