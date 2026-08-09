@@ -177,6 +177,9 @@ const ACCEL_ENTER = FEED_TRIGGERS.capital.spikeMultiple; // 3×
 const ACCEL_EXIT = 2; // 2×
 /** A believer swing this size is "meaningful" (reuses the people trigger). */
 const BEL = FEED_TRIGGERS.believers.minAbs;
+
+/** Trades in a day before a silent market may be called awake again. */
+const MIN_REAWAKEN_TRADES = 2;
 /** A Tribe cluster this size on one side reads as a movement forming. */
 const TRIBE_FORMING_MIN = 3;
 /** Believer counts worth announcing when a side crosses them. */
@@ -602,7 +605,13 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
    */
   const reawakened = (): StoryEvent | null => {
     const a = input.activity;
-    if (!a || a.trades24h <= 0 || a.trades7d !== a.trades24h) return null;
+    /* ONE TRADE IS NOT A RETURN. At `> 0` this announced "This question is alive
+       again — First trades in a week, 1 trade today" off a single fill, and
+       because the claim is CLOCK-driven, every dormant market reaching that bar
+       in the same sweep says it at once — four identical rows in one window,
+       which reads as a glitch rather than news. A return needs a second person
+       to agree it happened. */
+    if (!a || a.trades24h < MIN_REAWAKEN_TRADES || a.trades7d !== a.trades24h) return null;
     if (yes.capitalBaseUsd + no.capitalBaseUsd <= 0) return null;
     return {
       type: "market_reawakened",
@@ -624,6 +633,24 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
     const m = (input.material ?? [])[0];
     if (!m) return null;
     const side = m.side ?? undefined;
+    const sw = side === "YES" ? yes : side === "NO" ? no : null;
+
+    /* A SIDE'S FIRST BELIEVER IS ALREADY TOLD, BY NAME. The conviction feed
+       emits "<person> is the first to back YES" off the very same trade. Saying
+       it again here as an anonymous MAJOR MOVE gives the reader two badges for
+       one fact, and makes the named telling — the better one — look like a
+       different class of news. First CAPITAL has no such twin, so it stays. */
+    if (m.kind === "arrival" && m.metric !== "capital") return null;
+
+    /* CAPITAL LEFT BECAUSE A PERSON LEFT. When the side's believers fall in the
+       same window, the exit is already reported with a name, an amount and the
+       question ("Alex left YES with $15 · 4 believers now"). "Capital on YES
+       fell −83%" is that same event told worse; at a full drain it reads −100%,
+       which is precisely what LAST BELIEVER LEFT already says. A capital fall
+       with believers UNCHANGED is a real, separate story — a holder trimming —
+       and still reports. */
+    if (m.metric === "capital" && m.direction === "down" && sw && sw.believerDelta < 0) return null;
+
     const dir = m.direction === "up" ? "rose" : "fell";
     const pct = m.pct == null ? null : formatPct(m.pct);
     const where = side ?? "the market";
@@ -646,10 +673,11 @@ export function emitStoryEvent(input: StoryEventInput): StoryEvent | null {
       side,
       tier: TIER.material_move,
       headline,
-      detail:
-        pct == null
-          ? undefined
-          : `${pct} over ${input.timeframeShort} — at or beyond the ${MATERIAL.minPct}% the feed treats as news.`,
+      /* The move, not the rule that admitted it. This used to append "— at or
+         beyond the N% the feed treats as news", which explains our own threshold
+         to a reader who has no use for it; it is editorial policy leaking into
+         the story. The number and the window are the fact. */
+      detail: pct == null ? undefined : `${pct} over ${input.timeframeShort}`,
       evidence: [
         {
           label: m.metric === "capital" ? "Capital" : m.metric === "price" ? "Price" : "Believers",

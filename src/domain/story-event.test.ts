@@ -606,3 +606,125 @@ describe("a market that went quiet and came back", () => {
     );
   });
 });
+
+/**
+ * WHAT THE FEED MUST NOT SAY TWICE.
+ *
+ * These rules exist because a real logged-out feed showed the same fact wearing
+ * two badges: "Alex left YES with $15" immediately beside "Capital on YES fell
+ * −83%" on the same market in the same hour, and "duckfacts is the first to back
+ * NO" beside an anonymous "NO has its first believers". One event, told twice,
+ * reads as two events — which is worse than saying it once.
+ */
+describe("one fact is told once", () => {
+  const movesFor = (over: Parameters<typeof changeFrom24hRow>[0]) =>
+    materialMoves(changeFrom24hRow(over));
+
+  it("stays silent on a side's first believers — the conviction feed names them", () => {
+    const t = emitStoryEvent(
+      input({
+        yes: side({ believerDelta: 1, believerBase: 0, capitalDeltaUsd: 0, capitalBaseUsd: 0 }),
+        no: side({ believerBase: 0, capitalBaseUsd: 0 }),
+        material: movesFor({
+          believersYes: 1,
+          newBelieversYes24h: 1,
+          yesCapitalUsd: 0,
+          yesCapitalDelta24h: 0,
+          believersNo: 0,
+          newBelieversNo24h: 0,
+          noCapitalUsd: 0,
+          noCapitalDelta24h: 0,
+        }),
+      }),
+    );
+    expect(t?.headline ?? "").not.toMatch(/has its first believers/);
+  });
+
+  it("stays silent on capital leaving when the believers leaving is the story", () => {
+    // −$400 of $500 is a −80% drain, and a believer went with it.
+    const t = emitStoryEvent(
+      input({
+        yes: side({
+          believerDelta: -1,
+          believerBase: 4,
+          capitalDeltaUsd: -400,
+          capitalBaseUsd: 500,
+        }),
+        material: movesFor({
+          believersYes: 3,
+          newBelieversYes24h: -1,
+          yesCapitalUsd: 100,
+          yesCapitalDelta24h: -400,
+          believersNo: 20,
+          newBelieversNo24h: 0,
+          noCapitalUsd: 500,
+          noCapitalDelta24h: 0,
+        }),
+      }),
+    );
+    expect(t?.headline ?? "").not.toMatch(/Capital on YES fell/);
+  });
+
+  it("still reports capital leaving when NOBODY left — that is a holder trimming", () => {
+    const t = emitStoryEvent(
+      input({
+        yes: side({
+          believerDelta: 0,
+          believerBase: 4,
+          capitalDeltaUsd: -400,
+          capitalBaseUsd: 500,
+        }),
+        material: movesFor({
+          believersYes: 4,
+          newBelieversYes24h: 0,
+          yesCapitalUsd: 100,
+          yesCapitalDelta24h: -400,
+          believersNo: 20,
+          newBelieversNo24h: 0,
+          noCapitalUsd: 500,
+          noCapitalDelta24h: 0,
+        }),
+      }),
+    );
+    expect(t).not.toBeNull();
+  });
+
+  it("never explains its own threshold to the reader", () => {
+    const t = emitStoryEvent(
+      input({
+        yes: side({ believerDelta: 1, capitalDeltaUsd: 60, capitalBaseUsd: 500 }),
+        material: movesFor({
+          believersYes: 21,
+          newBelieversYes24h: 1,
+          yesCapitalUsd: 560,
+          yesCapitalDelta24h: 60,
+          believersNo: 20,
+          newBelieversNo24h: 0,
+          noCapitalUsd: 500,
+          noCapitalDelta24h: 0,
+        }),
+      }),
+    );
+    expect(t?.detail).toBe("+12% over 1D");
+    expect(t?.detail ?? "").not.toMatch(/treats as news/);
+  });
+});
+
+describe("a return needs more than one trade", () => {
+  const woken = (trades: number) =>
+    emitStoryEvent(
+      input({
+        yes: side({ capitalBaseUsd: 500 }),
+        no: side({ capitalBaseUsd: 500 }),
+        activity: { trades24h: trades, trades7d: trades },
+      }),
+    );
+
+  it("says nothing on a single fill — one trade is not a market waking up", () => {
+    expect(woken(1)?.type).not.toBe("market_reawakened");
+  });
+
+  it("calls it awake once a second person agrees", () => {
+    expect(woken(2)?.type).toBe("market_reawakened");
+  });
+});
