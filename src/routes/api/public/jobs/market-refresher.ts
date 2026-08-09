@@ -25,6 +25,30 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
         const started = Date.now();
         const limit = Number(new URL(request.url).searchParams.get("limit") ?? "100");
 
+        // KEEP QUIET MARKETS EVALUATABLE. Every other enqueue is activity-driven,
+        // so in a lull this queue drains empty, `ids` below is [], and
+        // emitStoryEvents returns at its first line — the tape stops having
+        // anything to say precisely when trading pauses. Worse, an unrefreshed
+        // market_state never slides its 24h windows, so the story INPUTS freeze
+        // too. This sweeps the few oldest still-active markets back in, ahead of
+        // the claim so they are refreshed and evaluated on this same tick.
+        let sweptStale = 0;
+        let sweepError: string | null = null;
+        try {
+          const { data, error } = await sb.rpc("enqueue_stale_markets", {
+            p_limit: 25,
+            p_active_days: 30,
+          });
+          if (error) throw new Error(error.message);
+          sweptStale = Number(data ?? 0) || 0;
+        } catch (e) {
+          // Same rule as every other step here: non-critical, but never silent.
+          // If this stops working the symptom is subtle — the feed just goes
+          // quiet — so it has to leave a trace rather than look like a slow day.
+          sweepError = e instanceof Error ? e.message : String(e);
+          console.error("[market-refresher] enqueue_stale_markets failed:", sweepError);
+        }
+
         const out = await refreshDirtyBatch(sb, limit);
 
         // Emit community events off the just-refreshed counts: believer-rung
@@ -105,8 +129,11 @@ export const Route = createFileRoute("/api/public/jobs/market-refresher")({
           market_refresh_failures: out.failed,
           transitions_error: transitionsError,
           cohorts_error: cohortsError,
+          sweep_error: sweepError,
           wash_error: washError,
           wash,
+          // Should be non-zero on a quiet tick — that is the whole point of it.
+          stale_markets_swept: sweptStale,
           milestones_emitted: milestonesEmitted,
           tribe_doublings_emitted: doublingsEmitted,
           transitions_emitted: transitionsEmitted,
