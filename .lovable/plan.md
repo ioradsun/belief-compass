@@ -217,7 +217,11 @@ Corpus after the fix: the top 20 is no longer one market twenty times — it lea
 Cadence: `MixCandidate` gains `voice` and `signalGain`; `intelligenceCost` charges `0.12 × (rows over the window's 25% allowance)`, escalating per extra row, and returns 0 outright when `informationGain >= 0.6`. It is a cost, not a ceiling — tested: six genuine contradictions all survive the mix, while four weak-gain intelligence rows get spaced out among equally-scored receipts. Breaking significance still skips the whole branch.
 
 Corpus supply the cost is pricing: 342 rows → receipt 79.5%, observation 18.7%, intelligence 1.8%. Today the feed is nowhere near the 25% target, which is the correct state — the budget only bites on a genuinely chaotic hour. 2,374 tests green.
-7. Viewer-relative angle selection, post-admission (clue-preserving, §7).
+7. Viewer-relative angle selection, post-admission (clue-preserving, §7). **Done.**
+
+### Step-7 findings (measured, 2026-08-09)
+
+`clueLine(vector)` renders the market observation from the viewer-blind vector alone — one sentence per tension/concentration kind, plus nonresponse, beforePrice, reversing and unusual — and returns null for a receipt-level or `building`-only vector, so the PI stays quiet when it has nothing to add. `applyViewerAngle(story, { relationship, signal })` runs in `buildTape` **after admission and scoring**: no relationship, or no clue, and the story is returned byte-identical. With both, the kicker becomes the relationship (`YOUR RIVAL`), the body keeps the behaviour, and the clue takes the third line — so the personal angle is bought without spending the intelligence. Ranking, the vector and the shipped signal attach are untouched; only the rendered copy of already-admitted rows changes. Tested: no-relationship and zero-vector rows are identity, the clue survives the foregrounding, and no clue line contains caused/because/drove/sent/since then while §8 stays gated. 2,384 tests green.
 8. Variety caps on `primary`/`tensionKind` in `feed-cadence.ts`.
 9. Confirmation and developing clues only after §8's temporal proof exists.
 
