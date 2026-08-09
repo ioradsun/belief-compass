@@ -23,7 +23,7 @@
  * of wallets have no Tribe and no wallet has a Rival — so the empty copy says
  * what is actually true rather than implying something is broken.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { YourTable, useTable, railSideKey } from "@/components/YourTable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
