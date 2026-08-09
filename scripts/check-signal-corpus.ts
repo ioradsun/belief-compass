@@ -223,6 +223,15 @@ async function main() {
     `Corpus: ${rows.length} candidate rows across ${(states ?? []).length} active markets. ` +
       `eth_usd=${rate}. Non-zero gain: ${rows.filter((r) => r.vector.informationGain > 0).length}.`,
   );
+  // Voice mix (plan §6): how much of the corpus would speak at each volume
+  // BEFORE the cadence cost. The cost is a repetition price in the mixer, so
+  // this is the supply it is pricing, not the shipped share.
+  const levels = rows.map((r) => voiceLevel(r.vector));
+  const share = (l: string) =>
+    `${levels.filter((x) => x === l).length} (${((levels.filter((x) => x === l).length / Math.max(1, levels.length)) * 100).toFixed(1)}%)`;
+  console.log(
+    `Voice mix — receipt ${share("receipt")}, observation ${share("observation")}, intelligence ${share("intelligence")}.`,
+  );
   section("TOP 20 BY informationGain", ranked.slice(0, 20));
   section("BOTTOM 20 BY informationGain", ranked.slice(-20));
   section("NON-ZERO tension", rows.filter((r) => r.vector.signals.tension > 0));
