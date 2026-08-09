@@ -1341,8 +1341,24 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   // without carrying it forward every row arrived at the client looking
   // equally important, whatever it was.
   const tierById = new Map<string, number>();
+  /* Rows that got in ONLY because the bar bent for silence. Comparative by
+     construction (see `admissionOf`): a genuinely meaningful row that happens
+     to arrive in a quiet window is NOT one of these, so it keeps every right a
+     row has, including the right to be questioned. */
+  const pulseIds = new Set<string>();
+  /* DUST IS NOT NEWS AND IS STILL EVIDENCE.
+     A $0.02 add can never earn a slot of its own — that is the dust rule in
+     `admitToFeed` and it does not move. But three of them by one person are how
+     "KODAK IS REPOSITIONING" gets proved, so the rejected small moves are kept
+     here and handed to the composition layer as non-surviving evidence, exactly
+     like the receipts a promoted behavioural story absorbs. */
+  const unadmitted: typeof scored = [];
   const material = scored
-    .filter(({ candidate }) => admitToFeed(candidate, floor))
+    .filter(({ r, candidate }) => {
+      const a = admissionOf(candidate, { floor, silenceFloor: pulseBar });
+      if (a === "pulse") pulseIds.add(r.id);
+      return a !== null;
+    })
     .map(({ r, candidate, fullExit, daysHeld }) => {
       const v = signalById.get(r.id);
       derived.set(
@@ -1356,6 +1372,8 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       tierById.set(r.id, scoreFeedEvent(candidate).tier);
       return r;
     });
+  for (const s of scored)
+    if (!material.some((r) => r.id === s.r.id) && s.r.wallet) unadmitted.push(s);
 
   /* ── STANDING IS A STORY TYPE, NOT A LANE ──────────────────────────────────
      Persistence enters the SAME pool as change, at the SAME point, and earns
