@@ -140,9 +140,14 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
     const flips = acts.filter((r) => r.action === "flip");
     const key = `${wallet}:${anchor.id}`;
 
+    /* A CLEAN SWAP IS A ROTATION, NOT A REPOSITIONING. One sale here, one
+       purchase there, and we can name both questions — which is a better line
+       than a count of "changes". Anything busier than that is repositioning. */
+    const cleanSwap = acts.length === 2 && cut.length === 1 && put.length === 1 && markets.size > 1;
+
     // REPOSITIONING — money leaving one belief while joining another, or a
     // string of changes too varied to call a retreat.
-    if ((cut.length > 0 && (put.length > 0 || flips.length > 0)) || acts.length >= 3) {
+    if (!cleanSwap && ((cut.length > 0 && (put.length > 0 || flips.length > 0)) || acts.length >= 3)) {
       const n = acts.length;
       const spread = markets.size > 1;
       out.push({

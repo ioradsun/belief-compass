@@ -370,7 +370,11 @@ export function rationQuestions(
       used.set(r.kind, (used.get(r.kind) ?? 0) + 1);
     }
 
-  while (keep.size < max) {
+  /* The budget governs ORDINARY picks. Premium clues sit outside it — counting
+     them against it would make the strongest evidence in the window crowd out
+     everything else, which is the opposite of what a budget is for. */
+  const premiumCount = keep.size;
+  while (keep.size - premiumCount < max) {
     let best: (typeof pool)[number] | null = null;
     let bestW = -Infinity;
     for (const r of pool) {
