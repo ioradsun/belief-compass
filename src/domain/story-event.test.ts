@@ -34,7 +34,7 @@ describe("contradictions carry the most information", () => {
     // both halves of the contradiction are stated.
     expect(t?.detail).toContain("4");
     expect(t?.detail).toMatch(/\$/);
-    expect(t?.detail).toContain("$120.00"); // was: expect(t?.detail).toBe("4 people joined while $120.00 left the market.");
+    expect(t?.detail).toContain("$120.00");
     expect(t?.tier).toBe(1);
   });
 
