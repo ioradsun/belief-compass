@@ -504,6 +504,65 @@ async function loadActorBeliefs(
   return beliefByKey;
 }
 
+/** The four relationship buckets the DNA engine caches per viewer. */
+interface ViewerDnaRow {
+  twin_matches: unknown;
+  tribe_matches: unknown;
+  opp_matches: unknown;
+  inverse_matches: unknown;
+}
+
+/**
+ * VIEWER READ — the reader's own relationship graph, as the DNA engine cached it.
+ *
+ * The last two reads in this file that depend on WHO IS ASKING. Naming them is
+ * the point: with the five global loaders above, every query in the tape is now
+ * declared as global or viewer-specific at its definition, so the eventual cache
+ * key can be checked by reading signatures instead of tracing 1100 lines.
+ *
+ * Returns the raw cached row. Turning it into labels, relationships and
+ * discovery moments is pure and stays at the call site — this moves the IO, not
+ * the meaning.
+ */
+async function loadViewerDna(viewer: string): Promise<ViewerDnaRow | null> {
+  const { serviceClient } = await import("@/lib/supabase-clients");
+  const { data } = await serviceClient()
+    .from("viewer_dna_cache")
+    .select("twin_matches, tribe_matches, opp_matches, inverse_matches")
+    .eq("viewer_wallet", viewer)
+    .maybeSingle();
+  return (data as ViewerDnaRow | null) ?? null;
+}
+
+/**
+ * VIEWER READ — which of these markets the reader actually has money in.
+ *
+ * A closed position is not a stake: holding nothing here is the same as never
+ * having been here, for the purpose of what to show someone. Failure is
+ * swallowed deliberately — no key means the feed is impersonal, never absent.
+ */
+async function loadViewerHoldings(viewer: string, marketIds: number[]): Promise<Set<number>> {
+  const holding = new Set<number>();
+  try {
+    const { serviceClientOrNull } = await import("@/lib/supabase-clients");
+    const svc = serviceClientOrNull();
+    if (svc) {
+      const { data: mine } = await svc
+        .from("wallet_beliefs")
+        .select("onchain_id, yes_shares, no_shares")
+        .eq("wallet", viewer)
+        .in("onchain_id", marketIds);
+      for (const b of (mine ?? []) as Record<string, unknown>[]) {
+        if (Number(b.yes_shares ?? 0) > 0 || Number(b.no_shares ?? 0) > 0)
+          holding.add(Number(b.onchain_id));
+      }
+    }
+  } catch {
+    // No key, no stake. The feed is impersonal rather than absent.
+  }
+  return holding;
+}
+
 async function buildTape(data: z.output<typeof input>) {
   const sb = serviceClient();
   const limit = data?.limit ?? 120;
@@ -632,12 +691,7 @@ async function buildTape(data: z.output<typeof input>) {
   const viewerBoost = new Map<string, number>();
   let moments: DiscoveryMoment[] = [];
   if (viewer) {
-    const { serviceClient } = await import("@/lib/supabase-clients");
-    const { data: cache } = await serviceClient()
-      .from("viewer_dna_cache")
-      .select("twin_matches, tribe_matches, opp_matches, inverse_matches")
-      .eq("viewer_wallet", viewer)
-      .maybeSingle();
+    const cache = await loadViewerDna(viewer);
     if (cache) {
       const add = (rows: unknown, label: NetLabel): CachedRelationship[] => {
         const out = ((rows as CachedRelationship[] | null) ?? []).filter((r) => r.wallet);
@@ -1007,26 +1061,7 @@ async function buildTape(data: z.output<typeof input>) {
   if (viewer && marketIds.length > 0) {
     const created = new Set<number>();
     for (const [id, w] of creatorByMarket) if (w === viewer) created.add(id);
-    const holding = new Set<number>();
-    try {
-      const { serviceClientOrNull } = await import("@/lib/supabase-clients");
-      const svc = serviceClientOrNull();
-      if (svc) {
-        const { data: mine } = await svc
-          .from("wallet_beliefs")
-          .select("onchain_id, yes_shares, no_shares")
-          .eq("wallet", viewer)
-          .in("onchain_id", marketIds);
-        for (const b of (mine ?? []) as Record<string, unknown>[]) {
-          // A closed position is not a stake. Holding nothing here is the same
-          // as never having been here, for the purpose of what to show you.
-          if (Number(b.yes_shares ?? 0) > 0 || Number(b.no_shares ?? 0) > 0)
-            holding.add(Number(b.onchain_id));
-        }
-      }
-    } catch {
-      // No key, no stake. The feed is impersonal rather than absent.
-    }
+    const holding = await loadViewerHoldings(viewer, marketIds);
     stakes = { created, holding };
   }
 
