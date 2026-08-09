@@ -139,9 +139,9 @@ describe("the champagne case", () => {
     const q = semanticQuestion({
       key: "row-2",
       title: DATA,
-      state: "back_from_dead",
-      side: null,
-      facts: { quietDays: 11, trades: 2 },
+      state: "side_got_company",
+      side: "NO",
+      facts: { days: 9 },
     })!;
     // The fragment is quoted, not spliced bare into the grammar.
     expect(q).toMatch(/“selling your data worth a \$20 airdrop”/);
@@ -154,7 +154,9 @@ describe("the champagne case", () => {
  * A question that quotes the whole proposition back is the tape repeating
  * itself at double length: "Nothing for 7 days and now this. Did something
  * change about “if you suddenly became rich, would you still work”, or just
- * the attention on it?" The quoted topic is a HANDLE, never a second copy.
+ * the attention on it?" The quoted topic is a HANDLE, never a second copy —
+ * and for a dormancy row it is not needed at all, because the proposition is
+ * printed directly above the question.
  */
 describe("a question is a handle on the headline, not a copy of it", () => {
   const LONG = "If you suddenly became rich, would you still work?";
@@ -167,11 +169,12 @@ describe("a question is a handle on the headline, not a copy of it", () => {
       facts: { quietDays: 7, trades: 3 },
     });
 
-  it("quotes only the first clause of a two-clause proposition", () => {
+  it("asks about the silence instead of quoting the proposition", () => {
     const q = back(LONG)!;
     expect(q).toBeTruthy();
     expect(q).not.toMatch(/would you still work/);
-    expect(q).toMatch(/“you suddenly became rich”/);
+    expect(q).not.toMatch(/became rich/);
+    expect(q).toMatch(/7/);
   });
 
   it("never ships a question longer than the cap", () => {
@@ -185,11 +188,39 @@ describe("a question is a handle on the headline, not a copy of it", () => {
     }
   });
 
-  it("says nothing rather than quoting a sprawling proposition", () => {
+  it("stays human under a sprawling proposition rather than quoting it", () => {
+    const q = back(
+      "Will the committee, after months of deliberation and public pressure, finally publish the full report before the end of the year?",
+    )!;
+    expect(q).toBeTruthy();
+    expect(q).not.toMatch(/committee/);
+  });
+
+  it("still refuses to speak on a joke market", () => {
+    expect(back("Would you rather fight one horse-sized duck or 100 duck-sized horses?")).toBeNull();
+  });
+});
+
+/**
+ * THE GOLDEN PAIR. Identical structural state, radically different reason for
+ * Insider to open its mouth: a proposition with a concrete trade-off, and a
+ * joke with none.
+ */
+describe("the $20 airdrop / horse-sized duck fixture", () => {
+  const ask = (title: string) =>
+    semanticQuestion({ key: "gold", title, state: "side_emptied", side: "NO" });
+
+  it("asks the proposition question when a side empties out", () => {
+    const q = ask("Is selling your data worth a $20 airdrop?")!;
+    expect(q).toBeTruthy();
+    expect(q).toContain("$20");
+    expect(q).toMatch(/NO/);
+  });
+
+  it("says nothing on the same state under a joke", () => {
     expect(
-      back(
-        "Will the committee, after months of deliberation and public pressure, finally publish the full report before the end of the year?",
-      ),
+      ask("Would you rather fight one horse-sized duck or 100 duck-sized horses?"),
     ).toBeNull();
   });
 });
+
