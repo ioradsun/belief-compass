@@ -1124,7 +1124,10 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         // is the shared one: this sits with a believer milestone, not with a
         // market flip. Persisted in the payload because that is where the
         // mixer reads an EMITTED significance from.
-        payload: { significance: m.rung >= 10 ? 0.72 : 0.6 },
+        // `rung` travels with the row so the editorial pass can ask whether a
+        // count is interesting to a STRANGER, not merely true.
+        payload: { significance: m.rung >= 10 ? 0.72 : 0.6, rung: m.rung },
+
       } as (typeof material)[number]);
     }
   }
