@@ -315,7 +315,8 @@ const CATEGORY: Record<ConvictionEventType, LiveCategory> = {
   new_market: "fresh_market",
 };
 
-const money = (v: number): string =>
+/** The one money formatter the story layers share. */
+export const formatStoryMoney = (v: number): string =>
   "$" +
   (v >= 1000
     ? v.toLocaleString("en-US", { maximumFractionDigits: 0 })
