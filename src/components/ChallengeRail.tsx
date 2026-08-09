@@ -90,13 +90,18 @@ export function ChallengeRail({
 }) {
   const qc = useQueryClient();
   /**
-   * A SIGNED-OUT READER HAS NO CHALLENGES, so opening on that tab shows them
-   * "connect a wallet to see who wants you at the table" and nothing else —
-   * which is now the first screen on a phone. Without a wallet the rail opens
-   * on Insider, the one thing that is true for everyone. Connecting a wallet
-   * still lands on Challenge, because then there is something there.
+   * NO CHALLENGES MEANS INSIDER. An empty Challenge tab is a dead first screen,
+   * so the rail always opens on Insider — the one thing that is true for
+   * everyone — and only promotes Challenge once real open calls exist for this
+   * reader. A reader who picks a tab themselves keeps it.
    */
-  const [tab, setTab] = useState<Tab>(wallet ? "challenge" : "insider");
+  const [tab, setTab] = useState<Tab>("insider");
+  const chose = useRef(false);
+  const pick = (t: Tab) => {
+    chose.current = true;
+    setTab(t);
+  };
+
 
   /**
    * Which side is showing. Seeded from the cache so "See yours", pressed in the
