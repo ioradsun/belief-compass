@@ -35,6 +35,22 @@ export interface EditorialRow {
   personal?: boolean | null;
   /** The rung a person-milestone row crossed. */
   rung?: number | null;
+  /** Which side the row is about, when it is about one. */
+  side?: "YES" | "NO" | null;
+  /**
+   * True when the row is a DERIVED reading of market state (a capital/price
+   * move) rather than a named thing a person did. Derived rows are the ones
+   * that can restate somebody else's story.
+   */
+  derived?: boolean | null;
+  /** What the derived row measured. */
+  metric?: "capital" | "price" | "believers" | null;
+  /**
+   * Whether the reader has enough context to understand the row on its own —
+   * chiefly, whether we know WHICH QUESTION it is about. `undefined` means the
+   * caller is not asserting either way; only an explicit `false` drops the row.
+   */
+  context?: boolean | null;
 }
 
 export const EDITORIAL = {
@@ -55,6 +71,12 @@ export const EDITORIAL = {
    * know the person.
    */
   minMilestoneRung: 5,
+  /**
+   * How close a derived market move has to be to a named trade on the same side
+   * before it counts as a restatement of it. Six hours is the window in which a
+   * reader would still connect the two as one development.
+   */
+  causalWindowMs: 6 * 3_600_000,
 } as const;
 
 const num = (v: number | null | undefined): number =>
@@ -71,11 +93,38 @@ function magnitude(r: EditorialRow): number {
  * should not take a slot.
  */
 export function earnsSlot(r: EditorialRow): boolean {
+  // A row a reader cannot place — no question, no market — is a fact without a
+  // subject. "NEW BELIEVER · Someone backed YES" of WHAT?
+  if (r.context === false) return false;
   if (r.action === "exit" && r.amountUsd != null && num(r.amountUsd) < EDITORIAL.minExitUsd)
     return false;
   if (r.kind === "person_milestone" && (r.rung ?? 0) < EDITORIAL.minMilestoneRung && !r.personal)
     return false;
   return true;
+}
+
+/**
+ * A DERIVED MOVE THAT SOMEBODY ELSE'S STORY ALREADY EXPLAINS IS NOT NEWS.
+ *
+ * "BELIEVER LEFT NO — Alex left with $15" and "Capital on NO fell 83%" are one
+ * event measured twice: the second is the arithmetic consequence of the first.
+ * The named telling is strictly better (it has a person, an amount and a
+ * reason), so when both are in hand for the same market and side inside the
+ * causal window, the derived reading yields.
+ */
+export function collapseCausal<T extends EditorialRow>(rows: readonly T[]): T[] {
+  const causal = rows.filter((r) => !r.derived);
+  if (causal.length === 0) return [...rows];
+  const at = (r: EditorialRow) => Date.parse(r.occurredAt) || 0;
+  return rows.filter((r) => {
+    if (!r.derived) return true;
+    return !causal.some(
+      (c) =>
+        c.marketId === r.marketId &&
+        (r.side == null || c.side == null || c.side === r.side) &&
+        Math.abs(at(c) - at(r)) <= EDITORIAL.causalWindowMs,
+    );
+  });
 }
 
 /** Materially different tellings of the same story, in either direction. */
@@ -116,5 +165,5 @@ export function pruneRepeats<T extends EditorialRow>(rows: readonly T[]): T[] {
 
 /** Both rules, in the order an editor applies them. */
 export function editFeed<T extends EditorialRow>(rows: readonly T[]): T[] {
-  return pruneRepeats(rows.filter(earnsSlot));
+  return pruneRepeats(collapseCausal(rows.filter(earnsSlot)));
 }

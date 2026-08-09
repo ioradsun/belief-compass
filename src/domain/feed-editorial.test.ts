@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { earnsSlot, editFeed, pruneRepeats, type EditorialRow } from "./feed-editorial";
+import {
+  collapseCausal,
+  earnsSlot,
+  editFeed,
+  pruneRepeats,
+  type EditorialRow,
+} from "./feed-editorial";
 
 const row = (o: Partial<EditorialRow>): EditorialRow => ({
   id: Math.random().toString(36).slice(2),
@@ -63,5 +69,77 @@ describe("editFeed", () => {
       row({ id: "keep", action: "exit", amountUsd: 12 }),
     ];
     expect(editFeed(rows).map((r) => r.id)).toEqual(["keep"]);
+  });
+});
+
+describe("a derived move must not restate a named one", () => {
+  const trade = row({
+    id: "trade",
+    kind: "trade",
+    marketId: "7",
+    side: "NO",
+    occurredAt: "2026-08-09T10:00:00.000Z",
+  });
+
+  it("drops the capital reading that a believer's exit already explained", () => {
+    const derived = row({
+      id: "capital",
+      kind: "market_transition",
+      marketId: "7",
+      side: "NO",
+      derived: true,
+      metric: "capital",
+      occurredAt: "2026-08-09T09:30:00.000Z",
+    });
+    expect(collapseCausal([trade, derived]).map((r) => r.id)).toEqual(["trade"]);
+  });
+
+  it("drops the price reading for the same reason", () => {
+    const derived = row({
+      id: "price",
+      kind: "market_transition",
+      marketId: "7",
+      side: "NO",
+      derived: true,
+      metric: "price",
+      occurredAt: "2026-08-09T11:00:00.000Z",
+    });
+    expect(collapseCausal([trade, derived])).toHaveLength(1);
+  });
+
+  it("keeps a derived move on the other side", () => {
+    const derived = row({
+      id: "yes",
+      marketId: "7",
+      side: "YES",
+      derived: true,
+      metric: "capital",
+      occurredAt: "2026-08-09T10:05:00.000Z",
+    });
+    expect(collapseCausal([trade, derived])).toHaveLength(2);
+  });
+
+  it("keeps a derived move far outside the causal window", () => {
+    const derived = row({
+      id: "old",
+      marketId: "7",
+      side: "NO",
+      derived: true,
+      occurredAt: "2026-08-08T10:00:00.000Z",
+    });
+    expect(collapseCausal([trade, derived])).toHaveLength(2);
+  });
+
+  it("keeps a derived move in a market with no named story", () => {
+    const derived = row({ id: "lonely", marketId: "9", side: "NO", derived: true });
+    expect(collapseCausal([trade, derived]).map((r) => r.id)).toEqual(["trade", "lonely"]);
+  });
+});
+
+describe("a row the reader cannot place is not a story", () => {
+  it("drops a row with no market context", () => {
+    expect(earnsSlot(row({ context: false }))).toBe(false);
+    expect(earnsSlot(row({ context: true }))).toBe(true);
+    expect(earnsSlot(row({}))).toBe(true);
   });
 });

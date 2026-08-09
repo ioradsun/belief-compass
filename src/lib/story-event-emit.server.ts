@@ -300,6 +300,11 @@ export async function emitStoryEvents(
           headline: transition.headline,
           detail: transition.detail ?? null,
           side: transition.side ?? null,
+          // WHICH MEASUREMENT MOVED. Persisted so the read-time editorial pass
+          // can tell a capital reading from a price reading instead of lumping
+          // every derived move together.
+          metric: transition.metric ?? null,
+          direction: transition.direction ?? null,
           // Universal significance, persisted at emission so the mixer compares
           // this against every other family on the one shared scale. Nothing
           // viewer-relative belongs here — that is a read-time boost.

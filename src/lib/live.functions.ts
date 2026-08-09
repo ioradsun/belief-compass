@@ -1312,6 +1312,13 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
           action: actionById.get(r.id) ?? null,
           personal: r.story?.personal ?? false,
           rung: (r.payload as { rung?: number } | null)?.rung ?? null,
+          side: r.side === "YES" || r.side === "NO" ? r.side : null,
+          // A market_transition is a DERIVED reading of state; every other
+          // family is somebody doing something, with a name attached.
+          derived: r.kind === "market_transition",
+          metric: (r.payload as { metric?: "capital" | "price" | "believers" } | null)?.metric ?? null,
+          // Market-scoped rows need the question to make sense standalone.
+          context: r.marketId ? (r.marketTitle ?? "").trim().length > 0 : true,
         })),
       ).map((r) => r.id),
     );
