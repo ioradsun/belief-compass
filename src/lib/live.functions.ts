@@ -58,7 +58,7 @@ import {
   type DiscoveryMoment,
 } from "@/domain/discovery-moment";
 import { viewerNetwork } from "@/domain/viewer-network";
-import { namePerson, knownFirst } from "@/domain/feed-people";
+import { namePerson, knownFirst, type ProfileLike } from "@/domain/feed-people";
 import type { CachedRelationship } from "@/lib/dna/viewer-dna-cache.server";
 import { weiToEth } from "@/domain/money";
 import {
@@ -565,8 +565,47 @@ async function loadViewerHoldings(viewer: string, marketIds: number[]): Promise<
   return holding;
 }
 
-async function buildTape(data: z.output<typeof input>) {
-  const sb = serviceClient();
+/**
+ * EVERY WAY THE TAPE TOUCHES THE WORLD, in one injectable record.
+ *
+ * buildTape had no test coverage for one reason: it reached for a Supabase
+ * client and seven queries inline, so there was no way to run it twice with two
+ * readers and compare. That is also why the remaining work — removing row
+ * mutation so composition can be pure — has been too dangerous to attempt: it is
+ * an all-or-nothing change across four passes with nothing to catch a slip.
+ *
+ * Naming the five loaders made this cheap. Each is already classified global or
+ * viewer-specific by its signature; collecting them here lets a test supply
+ * fixtures instead of a database, which is what finally makes the multi-viewer
+ * guarantees assertable against the REAL composition path rather than against
+ * the pure pieces alone.
+ *
+ * Production passes nothing and gets the real ones. The default is the only
+ * behaviour that ships.
+ */
+export interface TapeDeps {
+  client: () => ReturnType<typeof serviceClient>;
+  loadTapeSource: typeof loadTapeSource;
+  loadBelieverFaces: typeof loadBelieverFaces;
+  loadActorBeliefs: typeof loadActorBeliefs;
+  loadViewerDna: typeof loadViewerDna;
+  loadViewerHoldings: typeof loadViewerHoldings;
+  resolveProfiles: (wallets: string[], budget: number) => Promise<Map<string, ProfileLike>>;
+}
+
+const REAL_DEPS: TapeDeps = {
+  client: () => serviceClient(),
+  loadTapeSource,
+  loadBelieverFaces,
+  loadActorBeliefs,
+  loadViewerDna,
+  loadViewerHoldings,
+  resolveProfiles: (wallets, budget) =>
+    import("@/lib/profiles.server").then((m) => m.resolveProfiles(wallets, budget)),
+};
+
+export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = REAL_DEPS) {
+  const sb = deps.client();
   const limit = data?.limit ?? 120;
   const viewer = data?.wallet?.toLowerCase() ?? null;
 
@@ -574,7 +613,7 @@ async function buildTape(data: z.output<typeof input>) {
   // Scoped to specific markets == rendered inside a market panel, which already
   // shows the question and the side. Unscoped == the app-wide tape, which does not.
   const scoped = scope != null;
-  const source = await loadTapeSource(sb, data);
+  const source = await deps.loadTapeSource(sb, data);
   if (source.error)
     return { rows: [] as LiveRow[], standing: [] as LiveRow[], error: source.error };
   const { rows, marketIds, titleById, creatorByMarket, momentumById, ethUsd } = source;
@@ -672,7 +711,7 @@ async function buildTape(data: z.output<typeof input>) {
     ),
   ];
   /** marketId → believer wallets, biggest position first. */
-  const believersByMarket = await loadBelieverFaces(sb, signalMarkets);
+  const believersByMarket = await deps.loadBelieverFaces(sb, signalMarkets);
 
   const labelByWallet = new Map<string, NetLabel>();
   /**
@@ -693,7 +732,7 @@ async function buildTape(data: z.output<typeof input>) {
   const viewerBoost = new Map<string, number>();
   let moments: DiscoveryMoment[] = [];
   if (viewer) {
-    const net = viewerNetwork(await loadViewerDna(viewer), scoped);
+    const net = viewerNetwork(await deps.loadViewerDna(viewer), scoped);
     for (const [w, l] of net.labelByWallet) labelByWallet.set(w, l);
     for (const [w, r] of net.relByWallet) relByWallet.set(w, r);
     moments = net.moments;
@@ -709,9 +748,7 @@ async function buildTape(data: z.output<typeof input>) {
   ];
 
   const profiles =
-    profileWallets.length > 0
-      ? await import("@/lib/profiles.server").then((m) => m.resolveProfiles(profileWallets, 15))
-      : new Map();
+    profileWallets.length > 0 ? await deps.resolveProfiles(profileWallets, 15) : new Map();
 
   /**
    * WHAT MAKES A MOVE MEAN SOMETHING. A sale is just a sale until you know the
@@ -732,7 +769,7 @@ async function buildTape(data: z.output<typeof input>) {
    * a bulk-queryable table of who holds what. Every other server path already
    * reads it with the service role — this now matches them.
    */
-  const beliefByKey = await loadActorBeliefs(sb, actorWallets, marketIds);
+  const beliefByKey = await deps.loadActorBeliefs(sb, actorWallets, marketIds);
 
   /** Cohort members with their tenure kept — the face stack only needs names. */
   const cohortPeople = new Map<string, CohortHolder[]>();
@@ -1015,7 +1052,7 @@ async function buildTape(data: z.output<typeof input>) {
   if (viewer && marketIds.length > 0) {
     const created = new Set<number>();
     for (const [id, w] of creatorByMarket) if (w === viewer) created.add(id);
-    const holding = await loadViewerHoldings(viewer, marketIds);
+    const holding = await deps.loadViewerHoldings(viewer, marketIds);
     stakes = { created, holding };
   }
 
