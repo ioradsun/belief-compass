@@ -27,6 +27,7 @@ import {
   type PendingRow,
   type ScheduleState,
 } from "@/domain/feed-scheduler";
+import { pulseReleaseCount } from "@/domain/pulse-release";
 
 /** The minimum a row must carry to be scheduled. */
 export interface SchedulableRow {
