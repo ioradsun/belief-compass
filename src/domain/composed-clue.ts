@@ -68,7 +68,21 @@ export interface ComposedClue {
   members: string[];
   /** Plain-language reason, for the corpus diagnostic. */
   why: string;
+  /**
+   * THE COMPOSITION SHOULD OWN THE ROW IT ASKS ABOUT.
+   *
+   * A question about four moves bolted onto a receipt that establishes one of
+   * them is a mismatch the reader can see: "NO had no one. Then Md.Sabbir
+   * stepped in. … 4 changes in a few hours. Backing away, or moving conviction
+   * somewhere else?" The body proves the wrong thing. Where the clue is about a
+   * PERSON — the only family where the composition is a behaviour rather than a
+   * coincidence of timing — it carries the headline and body the row should be
+   * wearing, and the caller promotes it and consumes the ordinary receipts
+   * underneath. Null where the receipt is still the better subject.
+   */
+  lead?: { headline: string; body: string } | null;
 }
+
 
 const HOUR = 3600_000;
 const ms = (iso: string) => Date.parse(iso) || 0;
@@ -125,6 +139,25 @@ export function composeClues(rows: ClueRow[]): ComposedClue[] {
 
 // ── PERSON: several actions by one person become one behaviour ───────────────
 
+/** The latest receipt, as one clause of evidence under a behavioural headline. */
+function latestLine(anchor: ClueRow): string | null {
+  const where = subject(anchor.marketTitle);
+  const a = anchor.action ?? "";
+  const s = anchor.side ?? null;
+  const verb = REDUCING.has(a)
+    ? s
+      ? `out of ${s}`
+      : "out"
+    : a === "flip"
+      ? s
+        ? `over to ${s}`
+        : "over"
+      : s
+        ? `into ${s}`
+        : "in";
+  return where ? `Latest: ${verb} on ${where}.` : null;
+}
+
 function personClues(rows: ClueRow[]): ComposedClue[] {
   const out: ComposedClue[] = [];
   for (const [wallet, all] of group(rows, (r) => r.wallet?.toLowerCase())) {
@@ -134,11 +167,15 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
     if (!anchor) continue;
     const members = acts.map((r) => r.id);
     const who = anchor.name?.trim() || "they";
+    const named = (anchor.name ?? acts.find((r) => r.name)?.name ?? "").trim();
+    const NAME = named.toUpperCase();
     const markets = new Set(acts.map((r) => r.marketId));
     const cut = acts.filter((r) => REDUCING.has(r.action!));
     const put = acts.filter((r) => ADDING.has(r.action!));
     const flips = acts.filter((r) => r.action === "flip");
     const key = `${wallet}:${anchor.id}`;
+    const evidence = latestLine(anchor);
+
 
     /* A CLEAN SWAP IS A ROTATION, NOT A REPOSITIONING. One sale here, one
        purchase there, and we can name both questions — which is a better line
@@ -174,7 +211,20 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
                 `Out of one, into another. Changing the read, or just moving capital?`,
                 `Several positions changed at once. One decision, or one exit?`,
               ]),
+        /* THE BEHAVIOUR IS THE STORY; THE RECEIPT IS THE EVIDENCE. */
+        lead: named
+          ? {
+              headline: `${NAME} is moving around`,
+              body: [
+                `${markets.size > 1 ? `${n} positions changed across ${markets.size} questions` : `${n} changes on one question`} in the last few hours.`,
+                evidence,
+              ]
+                .filter(Boolean)
+                .join(" "),
+            }
+          : null,
       });
+
       continue;
     }
 
@@ -192,6 +242,13 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
           from && into && from !== into
             ? `Out of ${from}, into ${into}. A new read, or the same money looking for a home?`
             : `${who} sold one belief and bought another. New read, or same money, new home?`,
+        lead:
+          named && from && into && from !== into
+            ? {
+                headline: `${NAME} moved their conviction`,
+                body: `Out of ${from}. Into ${into}.`,
+              }
+            : null,
       });
       continue;
     }
@@ -210,7 +267,14 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
           `Same side on ${markets.size} questions today. Building conviction, or just adding exposure?`,
           `Everything they touched today is ${side}. One thesis, or one habit?`,
         ]),
+        lead: named
+          ? {
+              headline: `${NAME} keeps leaning ${side}`,
+              body: `${markets.size} questions today, every one of them ${side}.`,
+            }
+          : null,
       });
+
       continue;
     }
 

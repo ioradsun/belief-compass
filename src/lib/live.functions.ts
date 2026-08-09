@@ -38,6 +38,8 @@ import {
   questionAdds,
   questionBudget,
   rationQuestions,
+  SEMANTIC_GAIN,
+
   type QuestionKind,
 } from "@/domain/pi-question";
 import { composeClues, type ComposedClue } from "@/domain/composed-clue";
@@ -1946,6 +1948,26 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   /* Constituent receipts a promoted behavioural story now contains. Dropped
      from the GLOBAL surface only — see below. */
   const consumedByPattern = new Set<string>();
+  /**
+   * IS THIS ROW ORDINARY EVIDENCE — i.e. may a story that contains it absorb it?
+   *
+   * Receipts → evidence → pattern → story. Once the pattern has been told at
+   * full volume, the constituent transactions are proof, not news; leaving them
+   * in makes the reader assemble the same conclusion a second time underneath
+   * the one the feed already reached. The exception is the constituent that
+   * would have been a story without the pattern: anything the voice layer calls
+   * an observation or intelligence keeps its slot.
+   */
+  const ORDINARY_EVIDENCE_MAX = 0.5;
+  const ordinaryEvidence = (id: string): boolean => {
+    const r = material.find((x) => x.id === id);
+    if (!r) return false;
+    return (
+      (r.mix?.voice ?? "receipt") === "receipt" &&
+      (r.mix?.significance ?? 0) < ORDINARY_EVIDENCE_MAX
+    );
+  };
+
   for (const p of findPersonPatterns(
     material.map((r) => ({
       id: r.id,
@@ -1989,7 +2011,15 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         target.mix.voice = "observation";
         target.mix.significance = Math.max(target.mix.significance, 0.5);
       }
-      if (collapsible) for (const id of p.consumes) consumedByPattern.add(id);
+      /* ORDINARY EVIDENCE IS CONSUMED; AN UNUSUAL CONSTITUENT SURVIVES.
+         The promoted story now contains the constituent transactions, so
+         reprinting them makes the reader reconstruct a pattern the feed has
+         already told them. That is only true of ORDINARY receipts, though: a
+         constituent that is itself intelligence-grade (a contradiction, a
+         whale, a market state change) is news in its own right and is not
+         absorbed just because the same wallet is in it. */
+      if (collapsible) for (const id of p.consumes) if (ordinaryEvidence(id)) consumedByPattern.add(id);
+
       continue;
     }
     target.story = { ...target.story, pattern: p.note };
@@ -2056,6 +2086,9 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       text?: string;
     }> = [];
     const drafted = new Map<string, string>();
+    /** Ordinary receipts absorbed by a promoted composed clue (see stage 2). */
+    const consumedByClue = new Set<string>();
+
 
     /* THE PROPOSITION PAIR. Which already-proven STATE, if any, this row sits
        on — the only input the semantic question layer takes beyond the title.
@@ -2149,12 +2182,22 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       });
       if (!q) continue;
       drafted.set(r.id, q.text);
+      /* A SEMANTIC QUESTION CARRIES ITS OWN WEIGHT. Its evidence is the proven
+         state shape and the proposition, not the row's mechanical vector —
+         which on a derived state reading ("NO has nothing behind it now") is
+         near zero, i.e. under the rationer's floor. Weighing it that way is why
+         the best layup in the corpus was never asked. */
+      const gain =
+        q.kind === "semantic"
+          ? Math.max(signalById.get(r.id)?.informationGain ?? 0, SEMANTIC_GAIN)
+          : (signalById.get(r.id)?.informationGain ?? 0);
       asked.push({
         id: r.id,
         kind: q.kind,
-        gain: signalById.get(r.id)?.informationGain ?? 0,
+        gain,
         personal: r.face?.relationship != null,
         text: q.text,
+
       });
       questionLedger.push({
         id: r.id,
@@ -2231,6 +2274,45 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         text: c.text,
       });
       questionLedger.push(clueEntry(c));
+
+      /* THE COMPOSITION OWNS THE ROW IT ASKS ABOUT — AND CONSUMES ITS EVIDENCE.
+         Hanging "4 changes in a few hours, backing away or moving conviction?"
+         under a body that only establishes "NO had no one, then they stepped
+         in" is a mismatch the reader can see: the question is about a behaviour
+         the row does not describe. Where the clue is a person's behaviour and
+         the anchor is an ordinary receipt, the behaviour becomes the headline
+         and the receipt becomes the evidence line under it. The other ordinary
+         constituents are then absorbed: they are how the behaviour was proved,
+         not nine separate things that happened. */
+      if (!scoped && c.lead && (target.mix?.voice ?? "receipt") === "receipt") {
+        target.story = {
+          ...target.story,
+          category: "momentum",
+          headline: c.lead.headline.toUpperCase(),
+          body: c.lead.body,
+          pattern: null,
+        };
+        target.text = flattenStory(target.story);
+        if (target.mix) {
+          target.mix.voice = "observation";
+          target.mix.significance = Math.max(target.mix.significance, 0.5);
+        }
+        for (const id of c.members)
+          if (id !== c.rowId && ordinaryEvidence(id)) consumedByClue.add(id);
+      }
+    }
+
+    /* Absorb before rationing, never after: the budget must be spent on rows
+       the reader will actually see, and a question attached to a row that is
+       about to disappear is a slot thrown away. */
+    if (consumedByClue.size > 0) {
+      for (let i = material.length - 1; i >= 0; i--)
+        if (consumedByClue.has(material[i]!.id)) {
+          const [gone] = material.splice(i, 1);
+          if (gone) consumedRows.push({ id: gone.id, headline: gone.story?.headline ?? "" });
+        }
+      for (let i = asked.length - 1; i >= 0; i--)
+        if (consumedByClue.has(asked[i]!.id)) asked.splice(i, 1);
     }
 
     /* STAGE 3 — RATIONING, over exactly the rows the reader will see. */
@@ -2247,6 +2329,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     }
     for (const e of questionLedger) if (keep.has(e.id) && !e.rejected) e.kept = true;
   }
+
 
 
 

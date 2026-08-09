@@ -158,6 +158,19 @@ export const MAX_QUESTION_BUDGET = 9;
 export const QUESTION_WEIGHT_FLOOR = 0.1;
 /** A clue this strong is kept even when the budget is spent. */
 export const PREMIUM_GAIN = 0.6;
+/**
+ * WHAT A SEMANTIC QUESTION IS WORTH IN THE RATIONER.
+ *
+ * This is the fix for the best layup in the corpus going unasked. "NO has
+ * nothing behind it now" on a market that literally asks whether $20 is worth
+ * the trade-off is the strongest question the product can ask — and it was
+ * being weighed with the DERIVED ROW'S mechanical `informationGain`, which for
+ * a state reading is ~0, i.e. below `QUESTION_WEIGHT_FLOOR`. The row never lost
+ * an argument; it was never in the room. A semantic question's evidence is the
+ * proven STATE SHAPE, not the vector, so it carries its own weight.
+ */
+export const SEMANTIC_GAIN = 0.45;
+
 
 /**
  * How many questions this window has earned.
