@@ -13,6 +13,7 @@
  * desktop deck uses (marketBook / evidence / house read), so the
  * two experiences can never disagree.
  */
+import { insiderPulseKey } from "@/lib/insider/keys";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

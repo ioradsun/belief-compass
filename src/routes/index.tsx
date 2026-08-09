@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { insiderPulseKey } from "@/lib/insider/keys";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { lazyRetry } from "@/lib/lazy-retry";
 
