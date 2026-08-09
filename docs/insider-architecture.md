@@ -268,9 +268,16 @@ behind an unchanged surface, each step proven by parity tests.
     transition copy in the current voice, making a new market answer "who opened
     it", and running everything else through the conviction grammar + PI voice. It
     returns the per-row judgements (action, celebration, unrenderable, copy
-    ceiling/floor) the ranking and question layers read. **Still to pull in:** the
-    editorial/person-pattern/clue/question composition tail out of
-    `live.functions` into `src/lib/insider/*` behind the same projection.
+    ceiling/floor) the ranking and question layers read. **Editorial pass
+    landed:** `insider/composition/editorial-pass.ts` `runEditorialPass(...)`
+    owns the composition tail in its load-bearing order — editorial subtraction,
+    then cross-market person patterns (a promoted pattern consumes its ordinary
+    receipts on the app-wide tape), then the question layer (single-row clues →
+    composed clues → rationing over exactly the corpus the reader sees). The
+    stage-order invariant is enforced on the source in
+    `src/lib/feed-question-order.test.ts`. `live.functions` is now the
+    orchestration script for the passes: source → narration → significance →
+    discovery → editorial.
 
 5. **Read — ✅ pure seam landed.** `read.ts` `insiderRead(source, { pulse })` lifts
    the pure house-read state machine into `InsiderRead` unchanged (learning →

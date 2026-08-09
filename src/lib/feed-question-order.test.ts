@@ -16,7 +16,13 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const src = readFileSync(resolve(process.cwd(), "src/lib/live.functions.ts"), "utf8");
+/* The stages now live in one pure pass; the tape only calls it. Both files are
+   read so the invariant survives the extraction. */
+const src = readFileSync(
+  resolve(process.cwd(), "src/lib/insider/composition/editorial-pass.ts"),
+  "utf8",
+);
+const tape = readFileSync(resolve(process.cwd(), "src/lib/live.functions.ts"), "utf8");
 
 const at = (needle: string): number => {
   const i = src.indexOf(needle);
@@ -57,5 +63,10 @@ describe("questions are rationed over the rows that actually render", () => {
   it("keeps a promoted person pattern readable by the question layer", () => {
     expect(src).toMatch(/patternById/);
     expect(src).toMatch(/pattern: r\.story\.pattern \?\? patternById\.get\(r\.id\)/);
+  });
+
+  it("runs the pass from the tape, after narration composed the copy", () => {
+    expect(tape).toMatch(/runEditorialPass\(/);
+    expect(tape.indexOf("runEditorialPass(")).toBeGreaterThan(tape.indexOf("runNarrationPass({"));
   });
 });
