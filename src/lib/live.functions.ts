@@ -1226,6 +1226,12 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   const { floor, relaxed } = adaptiveFloor(
     scored.map(({ candidate }) => scoreFeedEvent(candidate).score),
   );
+  /* THE HEARTBEAT BAR. The server cannot know how long a reader has been
+     watching a still page — the anonymous tape is one cached answer handed to
+     everyone — so it does not try to. It computes CANDIDACY at full silence
+     pressure and marks what only clears that bar; the client, which is the only
+     place a per-reader clock exists, decides release (src/domain/pulse-release). */
+  const pulseBar = silenceAdjustedFloor(floor, 1);
 
   /* ANOMALY, MEASURED ONCE PER ROW (plan §11 step 5).
      The vector is viewer-blind and pure, so it is computed here — before
