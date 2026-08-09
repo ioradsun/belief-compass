@@ -45,11 +45,25 @@ imports, retired opportunity types in the engine, full-refold outside repair
 modules, chronological `feed_events` reads, and non-diagnostic `trades` product
 reads.
 
+`npm run check:insider` enforces the interpretation boundary above. Alongside the
+contract invariants it now runs a STATIC pass: nothing under `src/components` or
+`src/routes` may import an intelligence primitive (`mixFeed`, `arrangeFeed`,
+`tailState`, `pulseLabel`, `unusualness`, `dailyBaseline`, `relativeMove`,
+`scoreFeed`) — each has a projection that owns it. Constants, types and attention
+mechanics (`HEARTBEAT_MS`, `MixCandidate`, reveal paging) are not intelligence and
+stay allowed, which is why `LiveTape` can keep its scheduler while owning no
+judgement. The same gate asserts the three superseded modules deleted in
+migration step 7 (`domain/conviction.ts`, `domain/side-feed.ts`,
+`domain/what-connects-you.ts`) do not come back.
+
 ## Blockers (honest)
 - **Phase 6 (personal relevance / `rank-for-viewer`) was never built** — this repo
   went Phase 5 → 6.5. So there is no relevance module to own final personalization,
   and the criteria about "client relevance scoring removed" are vacuously true
-  (none exists). The legacy `ConvictionFeed` right-column still uses the old
-  `feed.functions`/`conviction-feed` ranking engine and is **live UI**; removing it
-  would redesign the right Live tape (a non-goal) and needs the Phase-6 replacement
-  first. Listed on the removal ledger.
+  (none exists). The old right-column ranking engine that used to be the honest
+  exception here is **gone**: `ConvictionFeed.tsx`, `feed.functions.ts`,
+  `conviction-feed.ts` and `feed-copy.ts` no longer exist, and the live tape now
+  reads the Insider `now` projection. What remains unowned is the *concept* —
+  personal relevance is applied as a viewer overlay inside the Insider rather than
+  by a dedicated relevance module.
+
