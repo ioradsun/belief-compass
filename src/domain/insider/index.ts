@@ -45,6 +45,14 @@ export { evidenceFromPulse, freshnessOf, FRESH_HALF_LIFE_MS } from "./features";
 export { score, scoreSignal, IMPORTANCE_WEIGHTS } from "./scoring";
 export { activity } from "./projections/activity";
 export { insight } from "./projections/insight";
+export {
+  now,
+  nowRanking,
+  type NowRow,
+  type NowQuery,
+  type InsiderNowFeed,
+} from "./projections/now";
+
 
 /**
  * The constitutional rule, as a single importable source of truth so docs, tests,
