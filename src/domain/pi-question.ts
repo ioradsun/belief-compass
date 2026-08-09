@@ -322,11 +322,16 @@ export function piQuestion(input: QuestionInput): PIQuestion | null {
     ];
   } else if (s.unusual >= 0.8) {
     kind = "unusual";
+    /* "What is different about it?" is not a question, it is a shrug: it names
+       no fact and could sit under any row in the feed. An unusualness question
+       has to point at the one thing the reader could actually go and check —
+       whether the volume is one participant or many. */
     variants = [
-      "This much activity, on this question, today. What is different about it?",
       "Busier than this market has ever been. Is that one participant, or many?",
+      "This is the heaviest hour this question has had. Did it come from one side?",
     ];
   }
+
 
   // A person visibly unwinding is the one PERSON-shaped question. It may lead
   // when the market shapes above found nothing, because the behaviour is the
