@@ -24,7 +24,7 @@ is `src/routes/__root.tsx`.
 
 | Route | What it is |
 | --- | --- |
-| `/testingscene` | The scene lab. One `World` of facts, rendered by the **real** Challenge components against a private seeded cache, from every point of view at once — plus an oracle that computes whether the sides agree. Dev-only, `noindex`. Drive it with `npm run check:scene` (needs `vite dev` running). |
+| `/lab-9f3c7a21b4` | The scene lab. One `World` of facts, rendered by the **real** Challenge components against a private seeded cache, from every point of view at once — plus an oracle that computes whether the sides agree. Dev-only, `noindex`. Drive it with `npm run check:scene` (needs `vite dev` running). |
 | `/dev/rail` | Right-rail layout fixture for `npm run check:rail`. |
 | `/dev/transitions` | Market-to-market transition fixture. |
 

@@ -1,5 +1,5 @@
 /**
- * /testingscene — a camera pointed at the real product under controlled light.
+ * /lab-9f3c7a21b4 — a camera pointed at the real product under controlled light.
  *
  * NOT A MOCKUP. There is no demo card and no demo copy anywhere on this page. The
  * scenario is written into a React Query cache and the REAL components mount
@@ -57,7 +57,7 @@ import { railSideKey, tableKey } from "@/components/YourTable";
 import { networkQO } from "@/lib/network-query";
 import type { NetworkResponse } from "@/lib/dna.functions";
 
-export const Route = createFileRoute("/testingscene")({
+export const Route = createFileRoute("/lab-9f3c7a21b4")({
   // The scenario lives in a client-side cache, so a server render would paint a
   // shell the client immediately replaces. And it is not for search engines.
   ssr: false,
@@ -163,14 +163,11 @@ function TestingScene() {
   const failed = checks.filter((c) => !c.ok);
   const subject = world.audience.find((p) => p.name === who) ?? world.audience[0] ?? null;
 
-  // Local dev → always on. Production → only when VITE_ENABLE_SCENE_LAB is
-  // explicitly set at build time. Normal visitors never see it.
-  const sceneLabEnabled =
-    import.meta.env.DEV || import.meta.env.VITE_ENABLE_SCENE_LAB === "true";
-  if (!sceneLabEnabled) {
-    return (
-      <div className="p-8 text-sm text-[var(--text-muted)]">The scene lab is not enabled here.</div>
-    );
+  // Dev: always on. Production: only when the build was published with the flag.
+  const labEnabled =
+    import.meta.env.DEV || import.meta.env['VITE_ENABLE_SCENE_LAB'] === "true";
+  if (!labEnabled) {
+    return <div className="p-8 text-sm text-[var(--text-muted)]">Not found.</div>;
   }
 
 

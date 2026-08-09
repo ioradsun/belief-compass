@@ -143,7 +143,7 @@ describe("one world, many points of view", () => {
 /**
  * THE FIXTURES ARE THE PRODUCT'S OWN PAYLOADS.
  *
- * /testingscene renders the shipped components by writing these into a query
+ * /lab-9f3c7a21b4 renders the shipped components by writing these into a query
  * cache. If they ever stopped being the same shape the server returns, the page
  * would quietly become a mockup — so the properties are asserted here, where a
  * DOM is not needed.

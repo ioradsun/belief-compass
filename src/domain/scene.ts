@@ -1,5 +1,5 @@
 /**
- * ONE WORLD, MANY POINTS OF VIEW — the model behind /testingscene.
+ * ONE WORLD, MANY POINTS OF VIEW — the model behind /lab-9f3c7a21b4.
  *
  * SCENARIO = FACTS. ROLE = POINT OF VIEW. There is no separate fixture for
  * "Challenger Sarah" and "Challenged Mike" when they are describing the same
@@ -146,7 +146,7 @@ export function challengedView(w: World, who: Participant): ChallengedView {
 /**
  * THE WORLD, IN THE SHAPES THE REAL COMPONENTS ASK FOR.
  *
- * These two functions are the whole reason /testingscene can claim to be a camera
+ * These two functions are the whole reason /lab-9f3c7a21b4 can claim to be a camera
  * rather than a mockup: the page does not build cards, it builds `TableRow[]` and
  * `Challenge[]` — the exact payloads `getTable` and `getChallenges` return — and
  * hands them to the shipped components. They live here rather than in the route so

@@ -9,7 +9,7 @@
  * be a disabled `<button>`, which is invalid the moment the face sits inside a
  * card that is itself a button: the HTML parser refuses nested buttons, so the
  * server's markup and React's tree disagree and hydration breaks. The Challenge
- * card is exactly that shape, and /testingscene caught it the first time the
+ * card is exactly that shape, and /lab-9f3c7a21b4 caught it the first time the
  * shipped rail was rendered under the scene lab.
  */
 import { useState } from "react";
