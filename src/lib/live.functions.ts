@@ -30,9 +30,9 @@ import {
 import {
   classifyConvictionEvent,
   isCelebration,
-  tellConvictionStory,
   type ConvictionAction,
 } from "@/domain/conviction-event";
+import { tellPiStory } from "@/domain/pi-voice";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
 import { adaptiveFloor, admitToFeed } from "@/domain/feed-density";
 import {
