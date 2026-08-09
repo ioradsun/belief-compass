@@ -64,6 +64,10 @@ export type QuestionKind =
   | "concentrating"
   | "person_unwinding"
   | "unusual"
+  /* CONTINUITY AGAINST CHANGE. Tenure alone asks nothing; tenure that survived
+     a proven move is two facts that do not sit together. */
+  | "standing_contrast"
+
   /* COMPOSED SHAPES — earned by a GROUP of rows rather than by one vector.
      See src/domain/composed-clue.ts. A clue built from several plain receipts
      is often the most interesting thing in the window, so these rank beside
@@ -90,7 +94,15 @@ export type QuestionInput = {
   pattern?: string | null;
   /** Display name of the single actor, when the row is about one person. */
   actorName?: string | null;
+  /**
+   * Set for continuity rows. `klass` decides whether the row may ask at all —
+   * a receipt ("still here") and an observation ("still here, and one position
+   * left") have nothing unresolved in them; only a proven contrast does — and
+   * `kind` decides which contrast is being asked about.
+   */
+  standing?: { kind: string; klass: string } | null;
 };
+
 
 /**
  * The floor of the editorial budget — a quiet window still gets to be curious.
@@ -144,12 +156,58 @@ function personQuestions(name: string | null): string[] {
 }
 
 /**
+ * THE QUESTION COMES FROM THE CONTRAST, NEVER FROM THE TENURE. "How long have
+ * they held?" is answered by the row itself. "The price moved and the longest
+ * holder didn't" is two facts that have to be reconciled, which is the only
+ * thing worth asking about a standing story.
+ */
+function standingQuestions(kind: string, name: string | null): string[] {
+  const who = name && name.trim().length > 0 ? name.trim() : "the longest holder";
+  switch (kind) {
+    case "held_through_price_move":
+      return [
+        "The price moved. The longest-held positions didn't. What is holding that conviction in place?",
+        "Everything around them repriced and they sat still. Which of those two readings is the market?",
+      ];
+    case "whale_stayed_others_left":
+      return [
+        `Smaller positions left and the biggest one stayed. Is ${who} early, or the last one out?`,
+        "The crowd thinned and the weight didn't move. Who is right about this side?",
+      ];
+    case "holder_stayed_capital_left":
+      return [
+        "Money came off this side and the oldest position stayed on it. Which one is reading it wrong?",
+        `Capital left. ${cap(who)} didn't. What do they know about this side that the money doesn't?`,
+      ];
+    case "one_sided_persistence":
+      return [
+        "One side has been occupied for weeks and nobody has taken the other. Is that agreement, or absence?",
+      ];
+    default:
+      return [];
+  }
+}
+
+/**
  * The question this row has earned, or null — which is the answer for the large
  * majority of rows.
  */
 export function piQuestion(input: QuestionInput): PIQuestion | null {
   const v = input.signal;
   if (!v) return null;
+
+  /* CONTINUITY ROWS ANSWER TO THEIR OWN RULE. A receipt and an observation are
+     true and finished; only a proven contrast leaves something open, and what
+     it leaves open is the contrast rather than anything the vector saw. */
+  if (input.standing) {
+    if (input.standing.klass !== "intelligence") return null;
+    const variants = standingQuestions(input.standing.kind, input.actorName ?? null);
+    if (variants.length === 0) return null;
+    const text = pickVariant(`${input.key}:standing_contrast`, variants);
+    if (!questionAdds(text, `${input.headline} ${input.body}`)) return null;
+    return { text, kind: "standing_contrast" };
+  }
+
 
   /* RULE 1 — only a genuine clue may ask anything.
      Intelligence (a contradiction, a timed silence, pronounced unusualness)
@@ -264,11 +322,16 @@ export function piQuestion(input: QuestionInput): PIQuestion | null {
     ];
   } else if (s.unusual >= 0.8) {
     kind = "unusual";
+    /* "What is different about it?" is not a question, it is a shrug: it names
+       no fact and could sit under any row in the feed. An unusualness question
+       has to point at the one thing the reader could actually go and check —
+       whether the volume is one participant or many. */
     variants = [
-      "This much activity, on this question, today. What is different about it?",
       "Busier than this market has ever been. Is that one participant, or many?",
+      "This is the heaviest hour this question has had. Did it come from one side?",
     ];
   }
+
 
   // A person visibly unwinding is the one PERSON-shaped question. It may lead
   // when the market shapes above found nothing, because the behaviour is the

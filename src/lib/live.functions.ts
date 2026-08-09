@@ -1247,6 +1247,11 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     [...new Set(scored.map(({ r }) => Number(r.marketId)).filter(Number.isFinite))],
   );
   const signalById = new Map<string, ReturnType<typeof signalVector>>();
+  /* Standing rows carry their shape here so the question layer can ask about
+     the CONTRAST rather than about the tenure — and can stay silent for a
+     receipt or an observation, which have nothing unresolved in them. */
+  const standingKindById = new Map<string, { kind: string; klass: string }>();
+
   for (const { r } of scored) {
     const m = momentumById.get(Number(r.marketId));
     const occurredMs = r.occurredAt ? Date.parse(r.occurredAt) : NaN;
@@ -1408,12 +1413,15 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       const id = `standing:${s.key}`;
       /* TWO KINDS, NOT FIVE. The pipeline's kind is the CLASS — every mapping
          downstream (family caps, pace, the social-vector set, the renderer)
-         only ever needs to know "receipt or intelligence". The specific shape
-         travels in `motif`, where the mixer's variety caps read it. */
-      const kind = s.klass === "intelligence" ? "standing_signal" : "standing_fact";
+         only ever needs to know "receipt or something with a market fact in
+         it". The specific shape travels in `motif` and in `standingKindById`,
+         where the mixer's variety caps and the question layer read it. */
+      const kind = s.klass === "receipt" ? "standing_fact" : "standing_signal";
+      standingKindById.set(id, { kind: s.kind, klass: s.klass });
       /* A standing story is "about you" when one of the people standing there
          is someone the reader knows — not because it is a standing story. */
       const personal = s.people.some((p) => p.relationship != null);
+
 
 
       /* INTELLIGENCE EARNS A REAL VECTOR; A RECEIPT DOES NOT.
@@ -1861,13 +1869,16 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
              milestone) and read as one sentence repeated. When the printed
              kicker makes the first-participation claim, that IS the family, so
              the cap can ration it. */
-          family: /got company|first believers?|first capital|stepped in/i.test(
-            r.story?.headline ?? "",
-          )
-            ? "side_opened"
-            : r.kind === "market_transition"
-              ? ((r.payload as { type?: string } | null)?.type ?? null)
-              : r.kind,
+          family: /emptied out|nothing behind it now/i.test(r.story?.headline ?? "")
+            ? "side_emptied"
+            : /got company|first believers?|first capital|stepped in/i.test(
+                  r.story?.headline ?? "",
+                )
+              ? "side_opened"
+              : r.kind === "market_transition"
+                ? ((r.payload as { type?: string } | null)?.type ?? null)
+                : r.kind,
+
           // Market-scoped rows need the question to make sense standalone.
           context: r.marketId ? (r.marketTitle ?? "").trim().length > 0 : true,
           suppressed: copySuppressed.has(r.id),
@@ -2021,6 +2032,8 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         body: r.story.body,
         pattern: r.story.pattern ?? patternById.get(r.id) ?? null,
         actorName: r.face?.name ?? r.people?.[0]?.name ?? null,
+        standing: standingKindById.get(r.id) ?? null,
+
       });
       if (!q) continue;
       drafted.set(r.id, q.text);
