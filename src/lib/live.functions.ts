@@ -1595,8 +1595,16 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
           // Every derived market read is a rolling-window statement ("in the
           // last hour"), so two of them are two looks at one state.
           rolling: r.kind === "market_transition",
-          family:
-            r.kind === "market_transition"
+          /* FAMILY IS THE CLAIM, NOT THE TABLE. Five "just got company" rows
+             arrive as three different kinds (a trade, a transition, a
+             milestone) and read as one sentence repeated. When the printed
+             kicker makes the first-participation claim, that IS the family, so
+             the cap can ration it. */
+          family: /got company|first believers?|first capital|stepped in/i.test(
+            r.story?.headline ?? "",
+          )
+            ? "side_opened"
+            : r.kind === "market_transition"
               ? ((r.payload as { type?: string } | null)?.type ?? null)
               : r.kind,
           // Market-scoped rows need the question to make sense standalone.
