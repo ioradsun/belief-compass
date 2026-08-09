@@ -373,16 +373,17 @@ export function tellPiStory(e: ConvictionEvent, key: string): LiveStory {
         if (people > 1)
           return [
             {
-              headline: `${people} piled in`,
-              body: `${people} people piled into ${s || "one side"}.`,
-              angle: amount > 0 ? `${money} came with them.` : null,
+              headline: side ? `${s} got company` : "Got company",
+              body: `${countWord(people)} piled into ${s || "one side"}${amount > 0 ? ` with ${money}` : ""}.`,
+              angle: remaining ? `${remaining} believers now.` : null,
             },
             {
               headline: "Got heavier",
               body: `${s || "That side"} just got heavier.`,
-              angle: amount > 0 ? `${people} people brought in ${money}.` : null,
+              angle: amount > 0 ? `${countWord(people)} brought in ${money}.` : null,
             },
           ];
+
         return [
           {
             headline: `${money} landed`,
