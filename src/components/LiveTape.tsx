@@ -46,6 +46,7 @@ import {
 } from "@/domain/live-display";
 import type { BeatTone } from "@/domain/story";
 import { ago } from "@/domain/relative-time";
+import { COPY_VERSION, sameCopyVersion } from "@/domain/copy-version";
 
 type LiveResult = {
   rows: LiveRow[];
@@ -55,6 +56,8 @@ type LiveResult = {
    * full fetch only, so a delta poll carries the previous reserve forward.
    */
   standing?: LiveRow[];
+  /** The build that COMPOSED these sentences — see src/domain/copy-version. */
+  copyVersion?: string;
   error: string | null;
 };
 
@@ -149,8 +152,14 @@ export function LiveTape({
       // instead of the whole list every 6s. Falls back to a full fetch for the
       // scoped tapes, a cold cache, or a long absence.
       const cached = qc.getQueryData<LiveResult>(key);
-      const prev = cached?.rows ?? [];
-      const prevStanding = cached?.standing ?? [];
+      /* A TAIL COMPOSED BY AN OLDER BUILD IS NOT REUSABLE. The rows carry
+         server-written copy, and the merge below keeps anything older than the
+         overlap window indefinitely — so without this a shipped PI-copy fix
+         could sit invisible behind sentences the repository no longer contains.
+         A version change costs exactly one full rebuild. */
+      const fresh = cached != null && sameCopyVersion(cached.copyVersion);
+      const prev = fresh ? (cached?.rows ?? []) : [];
+      const prevStanding = fresh ? (cached?.standing ?? []) : [];
       const newestMs = prev.length ? Date.parse(prev[0].occurredAt) : 0;
       const canDelta =
         scopeKey === null &&
@@ -165,9 +174,14 @@ export function LiveTape({
         const res = (await listLiveEvents({
           data: { wallet, limit, since: sinceIso },
         })) as LiveResult;
-        if (res.error) return { rows: prev, standing: prevStanding, error: res.error };
+        if (res.error)
+          return { rows: prev, standing: prevStanding, copyVersion: COPY_VERSION, error: res.error };
+        // The server may have redeployed mid-session: never merge across builds.
+        if (!sameCopyVersion(res.copyVersion))
+          return (await listLiveEvents({ data: { wallet, limit } })) as LiveResult;
         return {
           rows: mergeLiveRows(prev, res.rows, sinceIso, limit ?? 120),
+          copyVersion: res.copyVersion,
           // Continuity is a slow-moving fact, and re-deriving it on every delta
           // would put a wallet_beliefs read on the fast path.
           standing: prevStanding,
@@ -207,8 +221,12 @@ export function LiveTape({
     refetchIntervalInBackground: false,
     // The seed only answers the question it was built for: the unscoped,
     // signed-out tape. Anything scoped or personal must show its own rows.
+    // A seed composed by an older build would paint stale sentences on arrival.
     placeholderData: (prev) =>
-      prev ?? (scopeKey === null && side == null && !wallet ? (initial ?? undefined) : undefined),
+      prev ??
+      (scopeKey === null && side == null && !wallet && sameCopyVersion(initial?.copyVersion)
+        ? (initial ?? undefined)
+        : undefined),
   });
   // Sticky: the tape holds its rows until fresh ones arrive.
   const sticky = useStickyRows(data?.rows);
