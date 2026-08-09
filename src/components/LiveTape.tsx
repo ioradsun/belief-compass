@@ -117,7 +117,7 @@ export function LiveTape({
    */
   holdUpdates?: boolean;
   /**
-   * The tape's own heading ("Now"). Given here rather than rendered by the
+   * The tape's own heading ("Insider"). Given here rather than rendered by the
    * parent so the UPDATE CONTROL can sit on the same line — see the header
    * below for why that placement is the whole point.
    */
@@ -569,7 +569,7 @@ export function LiveTape({
           {/* THE TAIL NEVER LOOKS FROZEN. Three honest states, and only ever one:
               older stories to reveal, or a plain "you're caught up". A fetch in
               flight or arrivals waiting up top say nothing here, so the tail does
-              not compete with the "N New" control. Only the standalone "Now"
+              not compete with the "N New" control. Only the standalone "Insider"
               column carries it — an embedded rail is short and its host owns the
               end of its own list. See src/domain/live-display. */}
           {label != null && tail === "more" && (
