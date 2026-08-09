@@ -699,17 +699,17 @@ export function capitalDrainLine(side: string, pct: number, key: string): Draft 
   const m = Math.abs(pct);
   if (m >= 99)
     return pickVariant(key, [
-      { headline: `${side} emptied out`, body: `Every dollar behind ${side} is gone.` },
+      { headline: `${side} just emptied out`, body: `Every dollar that was there is gone.` },
       { headline: "Emptied out", body: `${side} has nothing behind it now.` },
     ]);
   if (m >= 60)
     return pickVariant(key, [
-      { headline: `${side} is getting thin`, body: `Most of the money behind ${side} left.` },
+      { headline: `${side} is getting thin`, body: `Most of the money behind it left.` },
       { headline: "Money walked", body: `${side} lost the bulk of what was behind it.` },
     ]);
   return pickVariant(key, [
-    { headline: `${side} is getting lighter`, body: `Money is drifting out of ${side}.` },
-    { headline: "Money is leaving", body: `Some of what was behind ${side} walked.` },
+    { headline: `${side} is getting lighter`, body: `Some of what was behind it walked.` },
+    { headline: `Money is drifting out of ${side}`, body: `Not all of it. Enough to notice.` },
   ]);
 }
 
@@ -722,8 +722,8 @@ export function capitalArrivalLine(side: string, pct: number, key: string): Draf
       { headline: "Piling in", body: `${side} is carrying close to twice what it was.` },
     ]);
   return pickVariant(key, [
-    { headline: `Money is piling into ${side}`, body: `${side} is getting heavier.` },
-    { headline: `${side} got heavier`, body: `More money is standing behind ${side}.` },
+    { headline: `Money is piling into ${side}`, body: `It is carrying more than it was.` },
+    { headline: `${side} got heavier`, body: `More money is standing behind it.` },
   ]);
 }
 
