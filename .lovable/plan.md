@@ -119,6 +119,8 @@ Conceptually: `informationGain ≈ anomaly + tension + change-from-baseline + vi
 
 **Anomaly-first does not mean anomaly-overrides.** Information gain may lift a story within its truthful significance class; it may not manufacture structural importance. "$8 arrived at 4× normal velocity" must not outrank "the market majority flipped". `compose()`'s bounded shape mostly gives this for free — pin it with a test anyway.
 
+**`building` is the lowest-information market signal, and evidence is never counted twice.** Accumulation is the default state of a growing market, so `building` contributes near-nothing to the score when `tension`, `beforePrice`, `unusual`, `concentration`, `reversing`, or `nonresponse` already explains the same event. The vector may show several non-zero signals — the *score* must attribute each piece of underlying evidence once. Concretely: `building` enters as a residual after the higher-information signals have taken their share, never as an independent additive term.
+
 Ranking touches, both subtractive:
 1. `significance.ts` — `informationGain` becomes a `compose()` part on the derived path. No migration; emitted scores untouched.
 2. `feed-cadence.ts` — `primary`/`tensionKind` added to `MixCandidate` for **variety only** (consecutive-run caps, small target bonus when tension is absent from a window). `breakingAt` stays on significance alone.
