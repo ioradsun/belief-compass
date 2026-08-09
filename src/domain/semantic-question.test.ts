@@ -15,6 +15,7 @@ import {
   proposition,
   stakeInTitle,
   BANNED_QUESTION_PATTERNS,
+  MAX_QUESTION_CHARS,
 } from "./semantic-question";
 
 const DATA = "Is selling your data worth a $20 airdrop?";
