@@ -454,6 +454,16 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
     picked.push(chosen);
     marketCount.set(chosen.marketId, (marketCount.get(chosen.marketId) ?? 0) + 1);
     if (chosen.motif) motifCount.set(chosen.motif, (motifCount.get(chosen.motif) ?? 0) + 1);
+    if (chosen.signalKind)
+      shapeCount.set(
+        `kind:${chosen.signalKind}`,
+        (shapeCount.get(`kind:${chosen.signalKind}`) ?? 0) + 1,
+      );
+    if (chosen.signalPrimary && chosen.signalPrimary !== "none")
+      shapeCount.set(
+        `primary:${chosen.signalPrimary}`,
+        (shapeCount.get(`primary:${chosen.signalPrimary}`) ?? 0) + 1,
+      );
     if (chosen.voice === "intelligence") intelCount += 1;
     for (const s of chosen.subjects ?? []) walletCount.set(s, (walletCount.get(s) ?? 0) + 1);
   }
