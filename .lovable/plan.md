@@ -175,9 +175,12 @@ The distinction `new | developing | resolved` is written into the model now even
 
 Storytelling invariants first — the numbers exist to serve them:
 
+- **Viewer-blindness:** two different viewers looking at the same market facts get the **identical** SignalVector. They may get different reasons to care.
 - A larger ordinary trade does **not** always outrank a smaller market-relative anomaly.
 - Two individually ordinary facts become high information gain when their *relationship* is unusual.
 - Personal relevance can change the selected angle, never the underlying market signal.
+- **No editorial layer without informational value:** a fact with nothing added stays a Receipt ("Alex pulled $15 from YES." never becomes a headline restating itself).
+- **Anomaly cannot manufacture structural significance:** a high-unusualness small event never outranks a majority flip.
 - A high-information story bypasses editorial scarcity.
 - No PI observation states an expectation the data model did not encode (no "should have", no "expected").
 - No copy contains "caused", "because", "drove", "sent", or "since then" while §8 is ungated.
@@ -185,9 +188,10 @@ Storytelling invariants first — the numbers exist to serve them:
 Plus the numerical ones:
 
 - Signals are independent: people↑ / capital flat / price flat / 6× normal pace yields non-zero `building`, `beforePrice` and `unusual` simultaneously.
-- Social/personal kinds return an all-zero vector, asserted per kind.
-- `nonresponse` fires only after the input threshold *and* the N-hour window, and only once.
-- Concentration: five small arrivals plus one large exit classifies as `newcomers_replaced_a_whale`, not as plain `building`.
+- Social/personal kinds return an all-zero vector, asserted per kind — while their existing significance behaviour is unchanged (a Twin discovery still reaches the exceptional band).
+- `nonresponse` fires only after the input threshold *and* the N-hour window, and at most once per underlying input **per build/editorial window**; cross-poll repetition is a known, accepted phase-1 limitation.
+- `beforePrice` requires input above the materiality threshold and price inside the quiet band — not `priceChange === 0`.
+- Concentration: five small arrivals plus one large exit classifies as `newcomers_replaced_a_whale` — but only if §2's audit proved the pre-event hierarchy is reconstructable; otherwise the kind is not emitted at all.
 - Regression: full suite green; existing `feed-cadence` breaking-band and dominance tests unchanged; `buildTape` output unchanged after step 1.
 
 ## Technical notes
