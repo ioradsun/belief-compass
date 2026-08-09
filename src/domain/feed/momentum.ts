@@ -257,6 +257,8 @@ export function classifyMomentum(
   };
 }
 
+import { MATERIAL_USD } from "../transition-denominator";
+
 const pct = (x: number): string =>
   `${Math.abs(x) >= 10 ? Math.round(Math.abs(x)) : Math.abs(x).toFixed(1)}%`;
 const usd = (x: number): string => {
@@ -294,6 +296,14 @@ export function momentumReason(m: MaterialMove, window: string): string {
       : `${side} lost ${people(m.delta)} ${win}`;
   }
   if (m.metric === "capital") {
+    // A PERCENTAGE OF POCKET CHANGE IS NOT NEWS. "up 62%" on a side holding $8
+    // is arithmetic dressed as momentum; the dollar figure is both smaller and
+    // more honest, so below the material floor the size replaces the rate.
+    const moved = Math.abs(m.delta ?? 0);
+    if (moved > 0 && moved < MATERIAL_USD)
+      return m.direction === "up"
+        ? `${usd(moved)} into ${side} ${win}`
+        : `${usd(moved)} off ${side} ${win}`;
     // A total exit is a DEPARTURE, not a rate — the mirror image of an arrival,
     // and the largest thing that can happen to a side in the other direction.
     // "down 100%" is technically true and reads like a rounding artefact.
