@@ -242,6 +242,13 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
           from && into && from !== into
             ? `Out of ${from}, into ${into}. A new read, or the same money looking for a home?`
             : `${who} sold one belief and bought another. New read, or same money, new home?`,
+        lead:
+          named && from && into && from !== into
+            ? {
+                headline: `${NAME} moved their conviction`,
+                body: `Out of ${from}. Into ${into}.`,
+              }
+            : null,
       });
       continue;
     }
@@ -260,7 +267,14 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
           `Same side on ${markets.size} questions today. Building conviction, or just adding exposure?`,
           `Everything they touched today is ${side}. One thesis, or one habit?`,
         ]),
+        lead: named
+          ? {
+              headline: `${NAME} keeps leaning ${side}`,
+              body: `${markets.size} questions today, every one of them ${side}.`,
+            }
+          : null,
       });
+
       continue;
     }
 
