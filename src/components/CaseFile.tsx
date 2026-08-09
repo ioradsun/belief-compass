@@ -884,7 +884,7 @@ function CaseActivity({
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-          Recent activity
+          Insider Moves
         </span>
       </div>
       <div className="overflow-hidden" style={{ height: "var(--case-row-activity)" }}>

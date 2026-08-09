@@ -1,5 +1,5 @@
 /**
- * "In this market" — the pinned scope of the Live feed.
+ * "Market Insider" — the pinned scope of the Insider feed.
  *
  * This market's own activity, gently elevated above the global feed: a thin
  * accent rail, a faint tint, a tiny uppercase label. It does exactly ONE job —
@@ -16,7 +16,7 @@
  *
  * 1. `if (count === 0) return null`. The rail is a flex column and the live tape
  *    below is `flex-1`, so this card's height is subtracted from the tape's.
- *    Returning null removed ~60px in a single frame: the "Now" heading jumped
+ *    Returning null removed ~60px in a single frame: the "Insider" heading jumped
  *    up, the tape's viewport grew, and every row moved. It fired on the most
  *    common interaction there is — changing markets — and then fired again in
  *    reverse the moment the first event landed. The old comment here claimed
@@ -37,10 +37,12 @@
  *    about. It now grows downward from where it sits, bounded and internally
  *    scrolled, and the tape below keeps whatever height is left.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
+import { activity, signalsFromActivityRows } from "@/domain/insider";
+import type { LiveRow } from "@/lib/live-tape";
 import { LiveTape } from "@/components/LiveTape";
 import { Collapsible } from "@/components/Collapsible";
 
@@ -66,8 +68,8 @@ const BEAT_MIN_H = 36;
  * How far the expanded feed may push down.
  *
  * Bounded so the tape underneath never collapses to nothing: the panel scrolls
- * internally past this, rather than growing without limit and pushing "Now" off
- * the bottom of a short rail.
+ * internally past this, rather than growing without limit and pushing "Insider"
+ * off the bottom of a short rail.
  */
 const EXPANDED_MAX = "min(46vh, 340px)";
 
@@ -110,9 +112,18 @@ export function CurrentMarketActivity({
     // this one's.
     placeholderData: (prev) => prev,
   });
-  const rows = live?.rows ?? [];
-  const hasActivity = rows.length > 0;
-  const latest = rows[0]?.text ?? "";
+  // THE MARKET INSIDER RAIL reads from the Insider ACTIVITY projection: the same
+  // market-scoped history, filtered and ordered by ONE shared rule
+  // (`insider.activity`) rather than by this component. Each signal's `payload`
+  // is the source LiveRow the beat renders from, so the rows are unchanged — only
+  // their owner is. The server already scopes to this market and orders newest
+  // first, so the projection reproduces the same set and order.
+  const acts = useMemo(
+    () => activity(signalsFromActivityRows(live?.rows ?? []), { marketId, limit: 200 }).signals,
+    [live, marketId],
+  );
+  const hasActivity = acts.length > 0;
+  const latest = (acts[0]?.payload as LiveRow | undefined)?.text ?? "";
   // A FIXED FRAME. The card used to mount/unmount (and animate open/closed)
   // with the data, so every market change jumped the rail: the frame vanished,
   // then reappeared a fetch later. The frame is now permanent and only its
@@ -181,7 +192,7 @@ export function CurrentMarketActivity({
             className="text-[10px] font-semibold uppercase tracking-[0.14em]"
             style={{ color: RAIL }}
           >
-            In this market
+            Market Insider
           </span>
           {hasActivity && (
             <span
@@ -234,7 +245,7 @@ export function CurrentMarketActivity({
                   background: "var(--surface-raised, var(--surface, #101014))",
                 }}
                 role="dialog"
-                aria-label="Activity in this market"
+                aria-label="Market Insider activity"
               >
                 <div
                   className="overflow-y-auto px-3 py-2"

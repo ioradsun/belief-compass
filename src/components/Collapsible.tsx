@@ -4,7 +4,7 @@
  * THE PROBLEM IT SOLVES. The right rail is a flex column: three blocks that come
  * and go, stacked above a `flex-1` live tape. Any one of them appearing,
  * disappearing or reflowing instantly re-lays-out everything below it — the
- * "Now" heading moves, the tape's viewport resizes, and the row the reader was
+ * "Insider" heading moves, the tape's viewport resizes, and the row the reader was
  * looking at is somewhere else. `if (count === 0) return null` is the sharpest
  * version: switch markets and a whole card blinks out of existence, taking 60px
  * of the column with it in a single frame.

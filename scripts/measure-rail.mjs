@@ -141,7 +141,7 @@ const CASES = [
     anchor: "rowY",
   },
   {
-    name: "expand 'In this market'",
+    name: "expand 'Market Insider'",
     setup: (p) => setAll(p, { topCard: true, activity: true }),
     act: (p) => p.evaluate(() => window.__rail.setExpanded(true)),
   },

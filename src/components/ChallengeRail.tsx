@@ -1,10 +1,10 @@
 /**
- * CHALLENGE | NOW — the right rail.
+ * CHALLENGE | INSIDER — the right rail.
  *
  * TWO QUESTIONS, AND KEEPING THEM APART IS THE WHOLE DESIGN:
  *
  *   CHALLENGE  Where are my people waiting for my take?
- *   NOW        What is happening across Conviction?
+ *   INSIDER    What is happening across Conviction?
  *
  * The tape answers "what is happening"; Challenge answers "what is happening TO
  * YOU". Anything that cannot tell those apart belongs in the tape. That is why
@@ -35,7 +35,7 @@ import { RELATIONSHIP_MIN_SHARED } from "@/domain/dna/config";
 import { relationshipTone } from "@/lib/dna-labels";
 import { PersonAvatar } from "@/components/PersonAvatar";
 
-type Tab = "challenge" | "now";
+type Tab = "challenge" | "insider";
 /**
  * WHOSE TABLE, and the words are chosen against two wrong pairs.
  *
@@ -76,26 +76,27 @@ type Side = "yours" | "challenged";
 export function ChallengeRail({
   wallet,
   onSelect,
-  now,
+  insider,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
   /**
-   * The live tape, rendered by the route. Passed as a node rather than as five
-   * more props: this component is about YOUR calls, and threading the tape's
-   * state through it would make it the owner of something it does not decide.
+   * The Insider feed (live tape), rendered by the route. Passed as a node rather
+   * than as five more props: this component is about YOUR calls, and threading
+   * the tape's state through it would make it the owner of something it does not
+   * decide.
    */
-  now: ReactNode;
+  insider: ReactNode;
 }) {
   const qc = useQueryClient();
   /**
    * A SIGNED-OUT READER HAS NO CHALLENGES, so opening on that tab shows them
    * "connect a wallet to see who wants you at the table" and nothing else —
    * which is now the first screen on a phone. Without a wallet the rail opens
-   * on Now, the one thing that is true for everyone. Connecting a wallet still
-   * lands on Challenge, because then there is something there.
+   * on Insider, the one thing that is true for everyone. Connecting a wallet
+   * still lands on Challenge, because then there is something there.
    */
-  const [tab, setTab] = useState<Tab>(wallet ? "challenge" : "now");
+  const [tab, setTab] = useState<Tab>(wallet ? "challenge" : "insider");
 
   /**
    * Which side is showing. Seeded from the cache so "See yours", pressed in the
@@ -153,9 +154,9 @@ export function ChallengeRail({
         className="mb-3 flex shrink-0 rounded-[10px] p-0.5"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
         role="tablist"
-        aria-label="Challenge or Now"
+        aria-label="Challenge or Insider"
       >
-        {(["challenge", "now"] as Tab[]).map((t) => (
+        {(["challenge", "insider"] as Tab[]).map((t) => (
           <button
             key={t}
             role="tab"
@@ -207,8 +208,8 @@ export function ChallengeRail({
         </div>
       )}
 
-      {tab === "now" ? (
-        now
+      {tab === "insider" ? (
+        insider
       ) : !wallet ? (
         <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
           Connect a wallet to see who wants you at the table.

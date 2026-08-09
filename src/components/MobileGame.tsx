@@ -754,7 +754,7 @@ function BothSides({
                   {events.filter((e) => e.side === s).length > 0 && (
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
-                        Recent activity
+                        Insider Moves
                       </div>
                       <ul className="mt-2 space-y-2">
                         {events

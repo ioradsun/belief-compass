@@ -1,8 +1,8 @@
 /**
  * RIGHT-RAIL LAYOUT FIXTURE — does anything jump?
  *
- * The right rail is a flex column: a top card, a market-activity card, a
- * "Now" heading, and a live tape that takes whatever height is left. Because the
+ * The right rail is a flex column: a top card, a market-activity card, an
+ * "Insider" heading, and a live tape that takes whatever height is left. Because the
  * tape is `flex-1`, ANY height change in the blocks above it moves the heading
  * and resizes the tape's viewport — so the rows a reader is looking at move.
  *
@@ -121,7 +121,7 @@ function RailHarness() {
     >
       <div className="flex w-full items-center gap-2 px-3 pb-1 pt-2">
         <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-          In this market
+          Market Insider
         </span>
       </div>
       <div className="px-3 pb-2 pt-0.5">
@@ -180,14 +180,14 @@ function RailHarness() {
             data-probe="now"
             className="mb-4 shrink-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]"
           >
-            Now
+            Insider
           </div>
         ) : (
           // The heading and the update control share ONE fixed-height row, so
           // the control arriving costs the list nothing.
           <div data-probe="now" className="mb-4 flex h-[22px] shrink-0 items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-              Now
+              Insider
             </span>
             <button
               type="button"
