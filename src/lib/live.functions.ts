@@ -1291,6 +1291,35 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     } satisfies MixCandidate;
   }
 
+  // ── THE EDITORIAL PASS: subtraction, after everything is composed ────────
+  // Two rules a reader would state out loud — a second row about the same
+  // market has to say something the first didn't, and low-value truth is still
+  // not news. It runs HERE because it needs the finished copy (the motif is the
+  // composed headline) and the finished amounts, and it only ever removes rows,
+  // so nothing downstream — ordering, pacing, delta merge — changes shape.
+  {
+    const keep = new Set(
+      editFeed(
+        material.map((r) => ({
+          id: r.id,
+          kind: r.kind,
+          marketId: String(r.marketId),
+          occurredAt: r.occurredAt,
+          motif: r.mix?.motif ?? null,
+          amountUsd: r.amountUsd ?? null,
+          significance: r.mix?.significance ?? null,
+          action: actionById.get(r.id) ?? null,
+          personal: r.story?.personal ?? false,
+          rung: (r.payload as { rung?: number } | null)?.rung ?? null,
+        })),
+      ).map((r) => r.id),
+    );
+    for (let i = material.length - 1; i >= 0; i--)
+      if (!keep.has(material[i]!.id)) material.splice(i, 1);
+  }
+
+
+
   // PACING INPUTS. How urgent (from what the row is) and how heavy (from the
   // tier the gate already computed). Every row gets these, including the
   // synthesized discovery moments, so the client never has to guess — a row
