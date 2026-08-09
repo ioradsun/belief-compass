@@ -87,6 +87,15 @@ export interface MixCandidate {
   voice?: "receipt" | "observation" | "intelligence";
   /** `informationGain` for the row — lets a genuine clue buy its way past the cost. */
   signalGain?: number;
+  /**
+   * The SHAPE of the clue: the vector's `primary` signal, and the tension kind
+   * when there is one (src/domain/signal-vector). A motif keys on the composed
+   * copy, so two rows can read as the same observation — "believers left while
+   * price rose", four times, in four different markets — and pay nothing. The
+   * shape is what the reader recognises, so the shape is what gets capped.
+   */
+  signalPrimary?: string | null;
+  signalKind?: string | null;
 }
 
 
@@ -111,6 +120,18 @@ export const CADENCE = {
    * pattern, and a pattern is what makes a feed read as generated.
    */
   maxPerMotif: 2,
+  /**
+   * How many rows in one window may have the SAME SIGNAL SHAPE.
+   *
+   * Distinct from the motif: the motif is the copy's identity, the shape is the
+   * observation's. Three markets can each honestly report "believers left while
+   * price rose" with different wallets, different numbers and three different
+   * motifs — and the reader still experiences one sentence, three times. The
+   * kind (`believers_left_price_rose`) is the tighter cap because it is the more
+   * recognisable phrase; the primary signal is the looser one.
+   */
+  maxPerSignalKind: 2,
+  maxPerSignalPrimary: 3,
   /** Penalties. Deliberately smaller than the significance range they compete with. */
   penalty: {
     family: 0.18,
@@ -219,6 +240,7 @@ function dominancePenalty(
   walletCount: Map<string, number>,
   marketCount: Map<string, number>,
   motifCount: Map<string, number>,
+  shapeCount?: Map<string, number>,
 ): number {
   let p = 0;
   const m = marketCount.get(c.marketId) ?? 0;
@@ -234,6 +256,21 @@ function dominancePenalty(
   if (c.motif) {
     const k = motifCount.get(c.motif) ?? 0;
     if (k >= CADENCE.maxPerMotif) p += CADENCE.penalty.overCap * (1 + k - CADENCE.maxPerMotif);
+  }
+  // The same OBSERVATION, in different markets, with different copy. Same cost
+  // shape as the motif cap, and equally soft: a fourth genuine contradiction is
+  // quietened, never dropped, and breaking rows skip it entirely.
+  if (shapeCount) {
+    if (c.signalKind) {
+      const k = shapeCount.get(`kind:${c.signalKind}`) ?? 0;
+      if (k >= CADENCE.maxPerSignalKind)
+        p += CADENCE.penalty.overCap * (1 + k - CADENCE.maxPerSignalKind);
+    }
+    if (c.signalPrimary && c.signalPrimary !== "none") {
+      const k = shapeCount.get(`primary:${c.signalPrimary}`) ?? 0;
+      if (k >= CADENCE.maxPerSignalPrimary)
+        p += CADENCE.penalty.overCap * (1 + k - CADENCE.maxPerSignalPrimary);
+    }
   }
   return p;
 }
@@ -375,6 +412,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
   const walletCount = new Map<string, number>();
   const marketCount = new Map<string, number>();
   const motifCount = new Map<string, number>();
+  const shapeCount = new Map<string, number>();
   let intelCount = 0;
 
   while (pool.length > 0) {
@@ -394,7 +432,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
           ? base + 1
           : base -
             adjacencyPenalty(c, recent) -
-            dominancePenalty(c, walletCount, marketCount, motifCount) -
+            dominancePenalty(c, walletCount, marketCount, motifCount, shapeCount) -
             intelligenceCost(c, intelCount, picked.length) +
             targetBonus(c, picked, want) +
             noveltyBonus(c, walletCount);
@@ -416,6 +454,16 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
     picked.push(chosen);
     marketCount.set(chosen.marketId, (marketCount.get(chosen.marketId) ?? 0) + 1);
     if (chosen.motif) motifCount.set(chosen.motif, (motifCount.get(chosen.motif) ?? 0) + 1);
+    if (chosen.signalKind)
+      shapeCount.set(
+        `kind:${chosen.signalKind}`,
+        (shapeCount.get(`kind:${chosen.signalKind}`) ?? 0) + 1,
+      );
+    if (chosen.signalPrimary && chosen.signalPrimary !== "none")
+      shapeCount.set(
+        `primary:${chosen.signalPrimary}`,
+        (shapeCount.get(`primary:${chosen.signalPrimary}`) ?? 0) + 1,
+      );
     if (chosen.voice === "intelligence") intelCount += 1;
     for (const s of chosen.subjects ?? []) walletCount.set(s, (walletCount.get(s) ?? 0) + 1);
   }
