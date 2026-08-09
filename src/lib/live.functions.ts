@@ -50,6 +50,11 @@ import {
   type CopyLevel,
 } from "@/domain/transition-denominator";
 import { scoreFeedEvent, type NetTag } from "@/domain/feed-event";
+import {
+  buildCandidates,
+  candidateMarkets,
+  runSignificancePass,
+} from "@/lib/insider/composition/significance-pass";
 import { adaptiveFloor, admissionOf, silenceAdjustedFloor } from "@/domain/feed-density";
 import {
   scoreLiveAction,
@@ -685,190 +690,33 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   // cost. Judged on dollars alone this feed reported capital and missed the
   // only thing it is about: a $12 exit after three months is a story, and a
   // $200 entry by someone who arrived this morning often is not.
-  const scored = live
-    .filter((r) => !unrenderable.has(r.id))
-    .map((r) => {
-      const m = momentumById.get(Number(r.marketId));
-      const marketBelievers = m ? (m.believersYes ?? 0) + (m.believersNo ?? 0) : null;
-      const b = r.wallet
-        ? beliefByKey.get(`${r.wallet.toLowerCase()}:${Number(r.marketId)}`)
-        : null;
-      const heldSide = r.side === "YES" ? b?.yesShares : b?.noShares;
-      const sell = (r.payload as { action?: string }).action === "SELL";
-      const fullExit = sell && heldSide != null && heldSide <= 0;
-      const conviction = beliefAction(actionById.get(r.id));
-      const candidate = {
-        kind: r.kind,
-        side: r.side,
-        amountUsd: r.amountUsd,
-        walletCount: r.walletCount,
-        tradeCount: r.tradeCount,
-        windowMs: Number((r.payload as { window_ms?: number }).window_ms ?? 0) || null,
-        relationship: (r.face?.relationship as NetTag | null) ?? null,
-        marketBelievers,
-        conviction,
-        daysHeld: b?.daysHeld ?? null,
-      };
-      return { r, candidate, fullExit, daysHeld: b?.daysHeld ?? null };
-    });
+  const scored = buildCandidates({
+    live,
+    unrenderable,
+    momentumById,
+    beliefByKey,
+    actionById,
+  });
 
-  // ADAPTIVE DENSITY. The gate above is absolute — "is this big?" — and on a
-  // quiet chain the honest answer is no for everything, which is how a live
-  // market renders as two rows. The editorial question is "is this the biggest
-  // thing that happened today?", so the bar comes from the distribution of
-  // what actually exists. On a busy day this changes nothing; on a quiet one
-  // the small true things get to speak. Washes and dust never return.
-  const { floor, relaxed } = adaptiveFloor(
-    scored.map(({ candidate }) => scoreFeedEvent(candidate).score),
-  );
-  /* THE HEARTBEAT BAR. The server cannot know how long a reader has been
-     watching a still page — the anonymous tape is one cached answer handed to
-     everyone — so it does not try to. It computes CANDIDACY at full silence
-     pressure and marks what only clears that bar; the client, which is the only
-     place a per-reader clock exists, decides release (src/domain/pulse-release). */
-  const pulseBar = silenceAdjustedFloor(floor, 1);
+  /* TEMPORAL PROOF. One bounded read — hourly price observations for just the
+     markets with a candidate row — is what licenses "since then". Without it the
+     vector can only ever say `new`, which is the correct silence rather than a
+     guess. It sits between the two halves of the significance pass because the
+     markets to read are only known once the candidates exist. */
+  const pricePaths = await loadPricePaths(sb, candidateMarkets(scored));
 
-  /* ANOMALY, MEASURED ONCE PER ROW (plan §11 step 5).
-     The vector is viewer-blind and pure, so it is computed here — before
-     significance — and reused by the diagnostic attach further down. It feeds
-     significance as SUPPORTING evidence only: `scoreLiveAction` still caps an
-     individual action below the exceptional band, so an anomalous market can
-     never manufacture a structural story.
-     `preEventHolders` is deliberately null in-feed: reconstructing the holder
-     hierarchy needs a bounded historical read the tape does not do, and a large
-     amount is never allowed to stand in for "a whale left". Concentration
-     therefore stays 0 here and is reviewed in the corpus script. */
-  const signalNowMs = Date.now();
-  /* TEMPORAL PROOF (plan §8/§9).
-     One bounded read — hourly price observations for just the markets with a
-     candidate row — is what licenses "since then". Without it the vector can
-     only ever say `new`, which is the correct silence rather than a guess. */
-  const pricePaths = await loadPricePaths(
-    sb,
-    [...new Set(scored.map(({ r }) => Number(r.marketId)).filter(Number.isFinite))],
-  );
-  const signalById = new Map<string, ReturnType<typeof signalVector>>();
-  /* Standing rows carry their shape here so the question layer can ask about
-     the CONTRAST rather than about the tenure — and can stay silent for a
-     receipt or an observation, which have nothing unresolved in them. */
-  const standingKindById = new Map<string, { kind: string; klass: string }>();
-
-  for (const { r } of scored) {
-    const m = momentumById.get(Number(r.marketId));
-    const occurredMs = r.occurredAt ? Date.parse(r.occurredAt) : NaN;
-    const proof = Number.isFinite(occurredMs)
-      ? priceProofSince(pricePaths.get(Number(r.marketId)), occurredMs, signalNowMs)
-      : null;
-    signalById.set(
-      r.id,
-      signalVector(
-        factsForRow(
-          {
-            kind: r.kind,
-            wallet: r.wallet,
-            action: (r.payload as { action?: "BUY" | "SELL" }).action ?? null,
-            amountUsd: r.amountUsd,
-            occurredAt: r.occurredAt,
-          },
-          m
-            ? {
-                yesPrice: m.yesPrice,
-                yesPriceChange1h: m.yesPriceChange1h,
-                yesPriceChange24h: m.yesPriceChange24h,
-                yesPriceChange7d: m.yesPriceChange7d,
-                yesCapitalDelta24h: m.yesCapitalDelta24h,
-                noCapitalDelta24h: m.noCapitalDelta24h,
-                capitalHeldYes: m.capitalHeldYes,
-                capitalHeldNo: m.capitalHeldNo,
-                tradeCount24h: m.tradeCount24h,
-                tradeCount7d: m.tradeCount7d,
-                believersYes: m.believersYes,
-                believersNo: m.believersNo,
-                newBelievers24h: m.newBelievers24h,
-                newBelieversYes24h: m.newBelieversYes24h,
-                newBelieversNo24h: m.newBelieversNo24h,
-                peopleYesChange24h: m.peopleYesChange24h,
-                sideFlips24h: m.sideFlips24h,
-                lastTradeAt: m.lastTradeAt,
-              }
-            : null,
-          signalNowMs,
-          proof,
-        ),
-      ),
-    );
-
-    /* A DERIVED READING CARRIES ITS OWN EVIDENCE (see transition-signal).
-       The vector above reads market state as it is NOW; a transition emitted
-       four hours ago was measured against windows that have since rolled, so
-       a proven contradiction was arriving with an all-zero vector — ranked as
-       a receipt and, worse, structurally unable to earn the open question.
-       The emitter's frozen type and significance are re-read here, decayed by
-       age, and merged so the live state still wins wherever it sees more. */
-    if (r.kind === "market_transition") {
-      const p = r.payload as { type?: string | null; significance?: number | null } | null;
-      const atMs = r.occurredAt ? Date.parse(r.occurredAt) : NaN;
-      const own = Number.isFinite(atMs)
-        ? signalFromTransition({
-            type: p?.type ?? null,
-            significance: p?.significance ?? null,
-            ageHours: (signalNowMs - atMs) / 3_600_000,
-          })
-        : null;
-      const live = signalById.get(r.id);
-      if (own && live) {
-        const merged = mergeSignals(live, own);
-        signalById.set(r.id, {
-          ...merged,
-          primary:
-            live.informationGain >= own.informationGain
-              ? live.primary
-              : (dominantKey(own) as typeof live.primary),
-        });
-      }
-    }
-  }
-
-
-  const derived = new Map<string, number>();
-  // The tier the admission gate computes and used to discard. It is exactly
-  // "how much of the reader's attention is this owed", already calculated —
-  // without carrying it forward every row arrived at the client looking
-  // equally important, whatever it was.
-  const tierById = new Map<string, number>();
-  /* Rows that got in ONLY because the bar bent for silence. Comparative by
-     construction (see `admissionOf`): a genuinely meaningful row that happens
-     to arrive in a quiet window is NOT one of these, so it keeps every right a
-     row has, including the right to be questioned. */
-  const pulseIds = new Set<string>();
-  /* DUST IS NOT NEWS AND IS STILL EVIDENCE.
-     A $0.02 add can never earn a slot of its own — that is the dust rule in
-     `admitToFeed` and it does not move. But three of them by one person are how
-     "KODAK IS REPOSITIONING" gets proved, so the rejected small moves are kept
-     here and handed to the composition layer as non-surviving evidence, exactly
-     like the receipts a promoted behavioural story absorbs. */
-  const unadmitted: typeof scored = [];
-  const material = scored
-    .filter(({ r, candidate }) => {
-      const a = admissionOf(candidate, { floor, silenceFloor: pulseBar });
-      if (a === "pulse") pulseIds.add(r.id);
-      return a !== null;
-    })
-    .map(({ r, candidate, fullExit, daysHeld }) => {
-      const v = signalById.get(r.id);
-      derived.set(
-        r.id,
-        scoreLiveAction(candidate, {
-          daysHeld,
-          fullExit,
-          signal: v ? { informationGain: v.informationGain, primary: v.primary } : null,
-        }).score,
-      );
-      tierById.set(r.id, scoreFeedEvent(candidate).tier);
-      return r;
-    });
-  for (const s of scored)
-    if (!material.some((r) => r.id === s.r.id) && s.r.wallet) unadmitted.push(s);
+  const {
+    floor,
+    relaxed,
+    pulseBar,
+    signalById,
+    standingKindById,
+    derived,
+    tierById,
+    pulseIds,
+    material,
+    unadmitted,
+  } = runSignificancePass({ scored, momentumById, pricePaths });
 
   /* ── STANDING IS A STORY TYPE, NOT A LANE ──────────────────────────────────
      Persistence enters the SAME pool as change, at the SAME point, and earns
