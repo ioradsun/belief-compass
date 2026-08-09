@@ -60,21 +60,28 @@ function pair(
   return { current, base: m.base == null ? current : m.base / divisor };
 }
 
+/** A market with no tape replay in hand — the state row still speaks. */
+const EMPTY_METRIC = { current: 0, base: 0, events: 0 };
+
 export function pulseFactsFromMarket({
   book,
   change,
   state,
   ethUsd,
 }: {
-  book: MarketBook;
+  /** The canonical tape replay. Optional: a surface holding only the state row
+   *  (the personal read, a card) still gets direction and standing facts. */
+  book?: MarketBook | null;
   change?: MarketChange | null;
   state?: MarketStateFacts | null;
   /** ETH→USD rate; non-positive means unknown and USD facts are dropped. */
   ethUsd: number;
 }): PulseFacts {
   const rate = ethUsd > 0 ? ethUsd : null;
-  const believers = pair(change?.market.believers, book.believers.market, 1);
-  const capital = pair(change?.market.capital, book.capitalEth.market, rate);
+  const believerBook = book?.believers.market ?? EMPTY_METRIC;
+  const capitalBook = book?.capitalEth.market ?? EMPTY_METRIC;
+  const believers = pair(change?.market.believers, believerBook, 1);
+  const capital = pair(change?.market.capital, capitalBook, rate);
 
   return {
     believerDelta: believers.current - believers.base,
@@ -82,7 +89,7 @@ export function pulseFactsFromMarket({
     believers: believers.current,
     capitalDeltaEth: capital.current - capital.base,
     capitalBaseEth: capital.base,
-    events: book.believers.market.events + book.capitalEth.market.events,
+    events: believerBook.events + capitalBook.events,
 
     believersYes: num(state?.believersYes),
     believersNo: num(state?.believersNo),
