@@ -375,6 +375,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
   const walletCount = new Map<string, number>();
   const marketCount = new Map<string, number>();
   const motifCount = new Map<string, number>();
+  let intelCount = 0;
 
   while (pool.length > 0) {
     const recent = picked.slice(-CADENCE.lookback).reverse();
@@ -394,6 +395,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
           : base -
             adjacencyPenalty(c, recent) -
             dominancePenalty(c, walletCount, marketCount, motifCount) +
+            intelligenceCost(c, intelCount, picked.length) +
             targetBonus(c, picked, want) +
             noveltyBonus(c, walletCount);
 
@@ -414,6 +416,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
     picked.push(chosen);
     marketCount.set(chosen.marketId, (marketCount.get(chosen.marketId) ?? 0) + 1);
     if (chosen.motif) motifCount.set(chosen.motif, (motifCount.get(chosen.motif) ?? 0) + 1);
+    if (chosen.voice === "intelligence") intelCount += 1;
     for (const s of chosen.subjects ?? []) walletCount.set(s, (walletCount.get(s) ?? 0) + 1);
   }
 
