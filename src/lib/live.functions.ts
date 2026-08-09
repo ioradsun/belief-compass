@@ -2029,6 +2029,8 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         body: r.story.body,
         pattern: r.story.pattern ?? patternById.get(r.id) ?? null,
         actorName: r.face?.name ?? r.people?.[0]?.name ?? null,
+        standing: standingKindById.get(r.id) ?? null,
+
       });
       if (!q) continue;
       drafted.set(r.id, q.text);
