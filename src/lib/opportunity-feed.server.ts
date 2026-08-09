@@ -721,11 +721,19 @@ function isAnonDefault(input: OpportunityFeedInput): boolean {
  */
 export async function opportunityFeed(input: OpportunityFeedInput): Promise<OpportunityFeedResult> {
   if (!isAnonDefault(input)) return buildOpportunityFeed(input);
-  return swrCache(SSR_FEED_KEY, { ttlMs: 15_000 }, async () => {
-    const feed = await buildOpportunityFeed(input);
-    // Awaited on purpose: work left running after a response is cancelled by
-    // the runtime, and a seed that never lands is a seed that never helps.
-    await writeSeed(feed);
-    return feed;
-  });
+  try {
+    return await swrCache(SSR_FEED_KEY, { ttlMs: 15_000 }, async () => {
+      const feed = await buildOpportunityFeed(input);
+      // Awaited on purpose: work left running after a response is cancelled by
+      // the runtime, and a seed that never lands is a seed that never helps.
+      await writeSeed(feed);
+      return feed;
+    });
+  } catch {
+    // THE CACHE IS AN OPTIMISATION, NEVER A DEPENDENCY. If the shared build
+    // fails for this caller, the reader still gets a feed — an uncached build
+    // is slower, but a slow feed is a feed and a thrown one is a blank screen.
+    return buildOpportunityFeed(input);
+  }
 }
+
