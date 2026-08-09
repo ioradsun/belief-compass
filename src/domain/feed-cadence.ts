@@ -412,6 +412,7 @@ export function mixFeed(candidates: MixCandidate[]): MixCandidate[] {
   const walletCount = new Map<string, number>();
   const marketCount = new Map<string, number>();
   const motifCount = new Map<string, number>();
+  const shapeCount = new Map<string, number>();
   let intelCount = 0;
 
   while (pool.length > 0) {
