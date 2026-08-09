@@ -18,6 +18,7 @@
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { shouldRevalidateOnReturn } from "@/lib/focus-policy";
+import { insiderRootKey } from "@/lib/insider/keys";
 
 import {
   applyMarketStateBatch,
@@ -117,7 +118,7 @@ export function startRealtime(qc: QueryClient): () => void {
     }
     // The live tape is chronological across all markets, so any trade can change
     // it; refetch only the mounted (active) tapes, never the whole family.
-    void qc.invalidateQueries({ queryKey: ["live-tape"], refetchType: "active" });
+    void qc.invalidateQueries({ queryKey: insiderRootKey(), refetchType: "active" });
   };
   const noteActivity = (marketId: number) => {
     if (Number.isFinite(marketId)) affected.add(marketId);
@@ -140,7 +141,7 @@ export function startRealtime(qc: QueryClient): () => void {
       reconcileTimer = null;
       if (disposed) return;
       void qc.invalidateQueries({ queryKey: ["opp-feed"] });
-      void qc.invalidateQueries({ queryKey: ["live-tape"], refetchType: "active" });
+      void qc.invalidateQueries({ queryKey: insiderRootKey(), refetchType: "active" });
       void qc.invalidateQueries({ queryKey: ["market-pulses"], refetchType: "active" });
       // The viewer's network. It has no event of its own to listen for — it is
       // derived from `viewer_dna_cache`, which a background worker recomputes

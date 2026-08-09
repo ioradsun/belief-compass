@@ -43,6 +43,7 @@ import { useQuery } from "@tanstack/react-query";
 import { listLiveEvents } from "@/lib/live.functions";
 import { activity, signalsFromActivityRows } from "@/domain/insider";
 import type { LiveRow } from "@/lib/live-tape";
+import { insiderMarketKey } from "@/lib/insider/keys";
 import { LiveTape } from "@/components/LiveTape";
 import { Collapsible } from "@/components/Collapsible";
 
@@ -102,9 +103,9 @@ export function CurrentMarketActivity({
   // The SAME scoped live query LiveTape runs, so what the header says and what
   // opens beneath it are the same rows, and React Query never double-fetches.
   const { data: live } = useQuery({
-    queryKey: ["live-tape", wallet ?? null, [marketId], 200],
+    queryKey: insiderMarketKey(marketId, { wallet, limit: 200 }),
     queryFn: () => listLiveEvents({ data: { wallet, marketIds: [marketId], limit: 200 } }),
-    // Same family, same reason: the coordinator invalidates `["live-tape"]` on
+    // Same family, same reason: the coordinator invalidates `["insider"]` on
     // every trade, so this poll was slower than the socket and redundant with
     // it. See LiveTape for the full note.
     staleTime: 60_000,

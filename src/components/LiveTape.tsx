@@ -35,6 +35,7 @@ import { useStandingMemory } from "@/hooks/useStandingMemory";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { mergeLiveRows, LIVE_DELTA_OVERLAP_MS, type LiveRow } from "@/lib/live-tape";
+import { insiderMarketKey, insiderNowKey } from "@/lib/insider/keys";
 import { useTapeGate } from "@/hooks/useTapeGate";
 import { arrivalLabel } from "@/domain/tape-arrivals";
 import { type MixCandidate } from "@/domain/feed-cadence";
@@ -160,9 +161,12 @@ export function LiveTape({
    */
   const railMarketId = side != null && scopeKey?.length === 1 ? scopeKey[0] : null;
   const sideRail = railMarketId != null;
-  const key = sideRail
-    ? ["live-tape", wallet ?? null, scopeKey, SIDE_RAIL_FETCH_LIMIT]
-    : ["live-tape", wallet ?? null, scopeKey, side ?? null, limit ?? null];
+  // Insider cache scopes (step 6): a side rail reads the PER-MARKET resource
+  // — the same key the Market Insider rail uses, so the three rails share one
+  // fetch — and every other tape reads the global feed resource.
+  const key: readonly unknown[] = sideRail
+    ? insiderMarketKey(railMarketId as number, { wallet, limit: SIDE_RAIL_FETCH_LIMIT })
+    : insiderNowKey({ wallet, marketIds: scopeKey, side, limit });
 
   const { data, isLoading } = useQuery({
     queryKey: key,
@@ -218,7 +222,7 @@ export function LiveTape({
     /**
      * FRESHNESS IS THE SOCKET'S JOB; the timer below is NOT a freshness poll.
      *
-     * The realtime coordinator invalidates `["live-tape"]` on every trade event
+     * The realtime coordinator invalidates `["insider"]` on every trade event
      * — coalesced to at most one refetch per 1.5s — and again on reconnect and
      * on a hidden tab becoming visible. That is what keeps the tape current, and
      * a 30-second freshness poll was retired for being both slower than the
