@@ -890,21 +890,29 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     // (the emitter already ran the interpretation + dedup) — render it directly.
     if (r.kind === "market_transition") {
       const p = r.payload as { headline?: string; detail?: string | null; type?: string | null };
+      /**
+       * THE EVENT OWNS ITS OWN ROW.
+       *
+       * "MAJOR MOVE / Money is leaving YES" spends the loudest line in the row
+       * on a category name and demotes the only interesting phrase to the
+       * subtitle. Both wrappers were generic by construction — every signal got
+       * one of two labels — which is exactly what makes a feed read as
+       * machine-generated. The composed headline IS the kicker now; the detail
+       * (the number and the window) is the sentence under it.
+       */
+      const kicker = (p.headline ?? "").trim();
       r.story = {
         category: "momentum",
-        // A material move is the product's own news line — a change of five
-        // percent or more in believers, capital or price. Labelling it the
-        // same as every other signal would hide the one the reader was
-        // promised would always be reported.
-        headline: p.type === "material_move" ? "MAJOR MOVE" : "MARKET SIGNAL",
-        body: p.headline ?? "",
-        attribution: p.detail ?? null,
+        headline: kicker ? kicker.toUpperCase() : "MARKET SIGNAL",
+        body: p.detail ?? "",
+        attribution: null,
         tone: r.side === "YES" ? "yes" : r.side === "NO" ? "no" : "neutral",
         personal: false,
       };
       r.text = flattenStory(r.story);
       continue;
     }
+
 
     // Milestone / surge rows are already final from grouping (no actor to name).
     if (r.kind === "believer_milestone" || r.kind === "tribe_doubled") continue;
