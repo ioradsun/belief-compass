@@ -272,16 +272,18 @@ function variantsFor(i: SemanticInput, title: string, short: string | null): str
 
     /* THE ARRIVAL IS ONLY INTERESTING AGAINST THE PROPOSITION. "Does this expose
        a real split, or only test the consensus?" is abstraction — expose, real
-       split and consensus are not things in the evidence. What is genuinely
-       unresolved is WHO is willing to argue the thing the market asks, now that
-       somebody has put money there. Without a usable handle on the proposition
-       the arrival speaks for itself and this shape stays silent. */
+       split and consensus are not things in the evidence. And restating the
+       arrival is the duplication bug: the kicker directly above already said it.
+       What is genuinely unresolved is who is prepared to argue the thing the
+       market asks. Without a usable handle on the proposition the arrival speaks
+       for itself and this shape stays silent. */
     case "side_got_company":
       if (!topic) return [];
       return [
-        `Somebody finally put money behind ${s}. Who is willing to argue ${topic}?`,
-        `${s} finally has money behind it. What did they see in ${topic}?`,
+        `Who is willing to argue ${topic}?`,
+        `Is there a real case on ${topic}, or is this one stray dollar?`,
       ];
+
 
 
     /* QUESTION WHETHER ATTENTION CHANGED — attention, never outcome.
