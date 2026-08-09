@@ -30,6 +30,7 @@ import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
+import { marketStateFacts } from "@/domain/insider";
 import { relationFromGroup } from "@/domain/participant-social";
 import { convictionMatch, presentRelationship } from "@/domain/relationship";
 import { SharedConviction } from "@/components/SharedConviction";
@@ -411,6 +412,8 @@ export function MarketDeck({
         win={deckWin}
         change={marketChange}
         faces={participantFaces}
+        state={marketStateFacts(rr)}
+
         footer={
           onToggleCase && !mobileCaseOpen ? (
             <ExamineCta open={caseOpen} onToggle={onToggleCase} houseRead={houseReadState_} />

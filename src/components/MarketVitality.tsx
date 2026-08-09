@@ -7,10 +7,15 @@
  * the story (the narrative sentence, the House voice, the activity) lives in the
  * right feed. The center never becomes a feed.
  *
- * Every number is read off the canonical marketBook, so the totals reconcile with
- * the side panels; the label comes from marketPulse — existing calculations,
- * unchanged. Side-blind by construction. The SAME component renders on desktop and
- * mobile; only the layout changes.
+ * WHO OWNS THE MOMENTUM READ. Not this file. The numbers are canonical
+ * (`marketBook` + the shared `MarketChange`), their copy comes from the shared
+ * metric-display rule, and the INTERPRETATION — direction, momentum, whether
+ * this is fast or calm — is the Insider's: `pulseFactsFromMarket` → `insiderPulse`
+ * → `insight`. The component renders that read; it does not compute one. This is
+ * the constitutional rule in `src/domain/insider` applied to the center panel.
+ *
+ * Side-blind by construction. The SAME component renders on desktop and mobile;
+ * only the layout changes.
  */
 import { useMemo, useState, type ReactNode } from "react";
 import { PersonAvatar } from "@/components/PersonAvatar";
@@ -23,6 +28,13 @@ import { useDisplayUnit } from "@/lib/display-unit";
 import { believerMove, capitalMove, type MetricMove } from "@/domain/metric-display";
 import type { MarketChange, MetricChange } from "@/domain/market-change";
 import { participantSocial, type ParticipantRelation } from "@/domain/participant-social";
+import {
+  insiderPulse,
+  insight,
+  pulseFactsFromMarket,
+  type MarketStateFacts,
+} from "@/domain/insider";
+
 
 /**
  * A shared MetricChange in the shape believerMove/capitalMove expect.
@@ -333,6 +345,8 @@ export function MarketMomentum({
   footer,
   dense,
   faces,
+  state,
+
 }: {
   /** Still needed for the window phrase and the cold-start read. Never for a delta. */
   tape: TapeTrade[] | undefined;
@@ -358,6 +372,12 @@ export function MarketMomentum({
   dense?: boolean;
   /** Who the participant count is made of — faces beside the Participants label. */
   faces?: MomentumFace[];
+  /**
+   * The `market_state` facts the Insider needs to read direction and pace
+   * (per-side believers and capital, trade counts, price move). Optional: with
+   * none of it the read stays calm and balanced rather than inventing movement.
+   */
+  state?: MarketStateFacts | null;
 }) {
   const book = useMemo(() => marketBook(tape ?? [], nowMs, win), [tape, nowMs, win]);
   const { unit } = useDisplayUnit();
@@ -375,11 +395,23 @@ export function MarketMomentum({
   const b = fromChange(change?.market.believers, book.believers.market, 1);
   const c = fromChange(change?.market.capital, book.capitalEth.market, ethUsd > 0 ? ethUsd : null);
 
+  /**
+   * THE READ, from the Insider — the same facts these two rows print, handed to
+   * the one momentum owner. Nothing visual depends on it yet (the figures are
+   * unchanged, which is the parity requirement); it names the panel for anyone
+   * listening to it, and it is the seam the Case File / House Read adopt next.
+   */
+  const read = useMemo(
+    () => insight(insiderPulse(pulseFactsFromMarket({ book, change, state, ethUsd }))),
+    [book, change, state, ethUsd],
+  );
+
   // ONE analytical container: heading → believers → cap → insight → Case File.
   // No floating typography, no nested cards — a single market instrument.
   return (
     <section
-      aria-label="Total market"
+      aria-label={`Total market — ${read.headline}`}
+
       className={`momentum${dense ? " momentum-dense" : ""} shrink-0 overflow-hidden rounded-[16px]`}
       style={{ background: "var(--surface)", border: "1px solid var(--hairline)" }}
     >
