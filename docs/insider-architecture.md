@@ -348,8 +348,23 @@ src/domain/insider/
         activity.ts  # ✅ landed   insight.ts  # ✅ landed   now.ts  — needs app run
 
 src/lib/insider/
-    source.server.ts   build.server.ts   functions.ts   cache.ts       — next
+    source.server.ts  # every read the tape makes             ✅ landed
+    composition/      # narration · significance · discovery · editorial ✅ landed
+    build.server.ts   # buildTape — the orchestration script   ✅ landed
+    cache.ts          # the shared-answer cache (key + scope)  ✅ landed
+    keys.ts           # React Query scopes                     ✅ landed
+    (lib/live.functions.ts is now only the two server functions)
 ```
+
+8. **Module layout — ✅ landed.** `buildTape` moved out of `lib/live.functions.ts`
+   into `lib/insider/build.server.ts`, and the shared-answer cache (`TAPE_KEY`,
+   `TAPE_TTL_MS`, `isSharedTape`, `tapeCacheKey`) into `lib/insider/cache.ts`.
+   `live.functions.ts` is now a thin wrapper holding only `listLiveEvents` and
+   `getWarmTape` — which is also the framework rule for a server-function module:
+   anything declared beside a `createServerFn` is stripped from the server build.
+   Behaviour is unchanged (same builder, same cache key per limit); scripts, the
+   builder tests and the stage-order invariant read the new path.
+
 
 ---
 
