@@ -37,7 +37,11 @@ const MAX_INFLIGHT_MS = 10_000;
 /** A background refresh that never settles must not block later refreshes. */
 const MAX_REFRESH_MS = 15_000;
 
+/** Sentinel for "the build I joined is taking too long", distinct from any value. */
+const TIMED_OUT = Symbol("swr-timeout");
+
 const store = new Map<string, Entry<unknown>>();
+
 
 /**
  * COLD COMPUTES CURRENTLY RUNNING, so concurrent callers share one.
