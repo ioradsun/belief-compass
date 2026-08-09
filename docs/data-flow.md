@@ -64,9 +64,16 @@ in Phase 2; the block-time backfill's propagation was removed in Phase 2.5.
 
 - **Chronological activity (product):** only via `events.functions.ts`
   (`listLatestEvents`, `listMarketEvents`, `listWalletEvents`,
-  `readLatestTradeEvents`). Consumers: `feed.functions.ts` (feed spine),
-  `markets.functions.ts` (`listMarketPulses`, `getMarket`), `belief-rollup.ts`
-  (new-believers window). Legacy DTO preserved via `toLegacyFeedEventRow`.
+  `readLatestTradeEvents`). Consumers today: `markets.functions.ts`
+  (`listMarketPulses`, `getMarket`) and `belief-rollup.ts` (new-believers window).
+  The Insider's tape source (`lib/insider/source.server.ts`) reads the same
+  canonical `events`/`wallet_beliefs` facts through the service client with the
+  query shape declared in `insider/tape-input.ts`. The old `feed.functions.ts` /
+  `conviction-feed.ts` spine is deleted — the feed is now the Insider `now`
+  projection over those canonical reads. Legacy DTO preserved via
+  `toLegacyFeedEventRow`.
+
+
 - **`trades` readers (compatibility/diagnostic only):** `chain-poller` re-fold,
   `belief-rollup` (velocity + market selection), `getIngestStatus` (diagnostic
   counts), backfill/diagnostic scripts. No product feature reads `trades`.

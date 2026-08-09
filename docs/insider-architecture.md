@@ -308,20 +308,29 @@ behind an unchanged surface, each step proven by parity tests.
    the canonical market families (`conviction-market`, `market-row`, `opp-feed`)
    stay as they are — they are FACTS, not Insider interpretation, so they only
    move if a surface starts reading them through a projection.
-7. **Reference audit + delete — 🚧 first sweep landed.** A whole-graph import audit
-   over current `main` (every `src/**/*.ts(x)`, resolving `@/` and relative
-   specifiers) found only three modules still alive purely through their own
-   tests — pre-Insider plumbing whose surfaces now read projections:
-   `domain/conviction.ts` (side "diamond hands" ranking, superseded by the
-   believers/roster read), `domain/side-feed.ts` (a per-side chronological feed,
-   superseded by `projections/activity.ts` + the side rails' client-side
-   projection) and `domain/what-connects-you.ts` (superseded by
-   `relationship-narrative.ts` on the profile). Deleted with their tests;
-   typecheck, `check:insider` and the full suite (2,550 tests) stay green.
-   `lib/shims/events.ts` looks orphaned to the import graph but is load-bearing —
-   it is wired as a Vite alias for `events` in `vite.config.ts`, so it stays.
-   Remaining: update `data-flow.md` / `data-ownership.md` and grow the
-   architecture checks so the boundary is enforced rather than audited.
+7. **Reference audit + delete — ✅ landed.** A whole-graph import audit over current
+   `main` (every `src/**/*.ts(x)`, resolving `@/` and relative specifiers) found
+   only three modules still alive purely through their own tests — pre-Insider
+   plumbing whose surfaces now read projections: `domain/conviction.ts` (side
+   "diamond hands" ranking, superseded by the believers/roster read),
+   `domain/side-feed.ts` (a per-side chronological feed, superseded by
+   `projections/activity.ts` + the side rails' client-side projection) and
+   `domain/what-connects-you.ts` (superseded by `relationship-narrative.ts` on the
+   profile). Deleted with their tests. `lib/shims/events.ts` looks orphaned to the
+   import graph but is load-bearing — it is wired as a Vite alias for `events` in
+   `vite.config.ts`, so it stays.
+   **The boundary is now enforced, not audited.** `check:insider` gained a static
+   pass: nothing under `src/components` or `src/routes` may import an intelligence
+   PRIMITIVE (`mixFeed`, `arrangeFeed`, `tailState`, `pulseLabel`, `unusualness`,
+   `dailyBaseline`, `relativeMove`, `scoreFeed`) — each has a projection that owns
+   it. The rule reads the import clause only, and deliberately allows constants,
+   types and attention mechanics (`HEARTBEAT_MS`, `MixCandidate`, reveal paging),
+   which is why `LiveTape` keeps its scheduler while owning no judgement. A second
+   assertion keeps the three deleted modules deleted, so the sweep cannot silently
+   regress. `data-flow.md` (the chronological-reader list no longer names the
+   deleted feed spine) and `data-ownership.md` (enforcement + an honest rewrite of
+   the Phase-6 blocker) are updated to match.
+
 
 
 ### Proposed code organization (target)

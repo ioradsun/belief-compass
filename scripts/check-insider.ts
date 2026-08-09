@@ -12,9 +12,17 @@
  *   4. The activity projection reproduces the server's scope/side/order semantics.
  *   5. The pulse composes the canonical shape label; scoring stays bounded and is
  *      three distinct judgments, never one universal score.
+ *   6. THE BOUNDARY (static): no product surface — anything under src/components
+ *      or src/routes — imports an intelligence PRIMITIVE. Surfaces read
+ *      projections (activity / insight / now / read); they never rank, score,
+ *      classify a shape, or draft a question themselves. Constants, types and
+ *      attention mechanics are not intelligence and stay allowed.
+ *   7. Deleted pre-Insider plumbing stays deleted (step 7 of the migration).
  *
  * Run:  npx tsx scripts/check-insider.ts   (npm run check:insider)
  */
+import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import {
   INSIDER_CONSTITUTION,
   INSIDER_SIGNAL_KINDS,
@@ -33,6 +41,7 @@ const check = (ok: boolean, msg: string) => {
   if (!ok) failures.push(msg);
 };
 const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) <= eps;
+
 
 // 1. Constitution ------------------------------------------------------------
 check(
@@ -113,6 +122,60 @@ check(
   near(j.momentumScore, 1) && j.importanceScore >= 0 && j.importanceScore <= 1,
   "scoring: judgments out of the 0..1 range",
 );
+
+// 6. The boundary — surfaces render intelligence, they never compute it -------
+/**
+ * Primitives a product surface must not import. Each one is a JUDGEMENT: it
+ * decides what matters, what order it matters in, what shape a market is in, or
+ * what to ask about it. Every one of them has a projection that owns it.
+ */
+const FORBIDDEN_ON_SURFACES: Record<string, string> = {
+  mixFeed: "ranking — use projections/now",
+  arrangeFeed: "temporal arrangement — use projections/now",
+  tailState: "tail naming — use projections/now",
+  pulseLabel: "market shape — use insiderPulse / projections/insight",
+  unusualness: "novelty — use insiderPulse",
+  dailyBaseline: "baseline — use insiderPulse",
+  relativeMove: "price judgement — use insiderPulse",
+  scoreFeed: "retired lens scoring",
+};
+const SURFACE_DIRS = ["src/components", "src/routes"];
+
+function walk(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  const out: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) out.push(...walk(p));
+    else if (/\.(ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name) && name !== "routeTree.gen.ts")
+      out.push(p);
+  }
+  return out;
+}
+
+const surfaces = SURFACE_DIRS.flatMap(walk);
+for (const path of surfaces) {
+  const text = readFileSync(path, "utf8");
+  // Only the import clause counts: a `type` re-export or a comment naming a
+  // primitive is documentation, not a surface doing the thinking.
+  for (const clause of text.matchAll(/import\s+(?!type\s)\{([^}]*)\}\s*from\s*["'][^"']+["']/g)) {
+    for (const raw of clause[1].split(",")) {
+      const name = raw.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]?.trim();
+      if (name && FORBIDDEN_ON_SURFACES[name])
+        check(false, `boundary: ${path} imports ${name}() — ${FORBIDDEN_ON_SURFACES[name]}`);
+    }
+  }
+}
+
+// 7. Deleted pre-Insider plumbing stays deleted ------------------------------
+for (const gone of [
+  "src/domain/conviction.ts",
+  "src/domain/side-feed.ts",
+  "src/domain/what-connects-you.ts",
+]) {
+  check(!existsSync(gone), `step 7: ${gone} came back — it was superseded by a projection`);
+}
+
 
 // ----------------------------------------------------------------------------
 if (failures.length > 0) {
