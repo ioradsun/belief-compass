@@ -99,6 +99,21 @@ export interface MixCandidate {
 }
 
 
+/**
+ * TWO LAYERS, ONE FEED.
+ *
+ * Insider is an intelligence layer with an activity layer underneath it, and
+ * the ranking has to make that obvious without a second tab. A row's VOICE is
+ * already decided by the signal vector and the copy it can support; this is the
+ * band of significance each voice is allowed to occupy, so a clue outranks an
+ * ordinary receipt even when the receipt is about the reader's own money.
+ */
+export const VOICE_CEILING: Record<"receipt" | "observation" | "intelligence", number> = {
+  receipt: 0.3,
+  observation: 0.65,
+  intelligence: 1,
+};
+
 export const CADENCE = {
   /** Above this an event is breaking news and ignores sequencing. */
   breakingAt: 0.8,

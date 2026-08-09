@@ -56,7 +56,7 @@ import {
   priceProofSince,
   type PriceSample,
 } from "@/domain/price-proof";
-import { editFeed } from "@/domain/feed-editorial";
+import { editFeed, secondSentenceAdds } from "@/domain/feed-editorial";
 import { findPersonPatterns } from "@/domain/person-pattern";
 
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
@@ -890,6 +890,8 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
    * mixer applies it.
    */
   const copyLevel = new Map<string, CopyLevel>();
+  /** Rows the copy layer refuses to print at all — see `retellTransition`. */
+  const copySuppressed = new Set<string>();
 
   for (const r of live) {
     const w = r.wallet?.toLowerCase();
@@ -1020,6 +1022,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         side: r.side ?? null,
       });
       copyLevel.set(r.id, modern.level);
+      if (modern.suppress) copySuppressed.add(r.id);
       const kicker = modern.headline.trim();
       r.story = {
         category: "momentum",
@@ -1576,6 +1579,12 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
               : r.kind,
           // Market-scoped rows need the question to make sense standalone.
           context: r.marketId ? (r.marketTitle ?? "").trim().length > 0 : true,
+          suppressed: copySuppressed.has(r.id),
+          /* A first-participation row earns its slot when the body says
+             something the kicker didn't — a number, a person, a counterpoint.
+             Otherwise it is one of five identical "just got company" rows and
+             the family cap rations it to one. */
+          secondFact: secondSentenceAdds(r.story?.headline ?? "", r.story?.body ?? ""),
         })),
       ).map((r) => r.id),
     );
