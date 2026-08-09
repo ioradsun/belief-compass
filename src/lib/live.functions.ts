@@ -38,6 +38,8 @@ import {
   questionAdds,
   questionBudget,
   rationQuestions,
+  SEMANTIC_GAIN,
+
   type QuestionKind,
 } from "@/domain/pi-question";
 import { composeClues, type ComposedClue } from "@/domain/composed-clue";
