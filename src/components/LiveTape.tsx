@@ -339,27 +339,22 @@ export function LiveTape({
     gate.admitNonce,
   );
 
-  // WINDOW + ORDER, in one place. For the standalone "Insider" column the mixer's
-  // rank chooses the best `revealCount` stories and time orders them; `hidden`
-  // is what "Show earlier" will surface. Embedded tapes (no label) are short and
-  // scroll inside a host panel, so they keep showing everything the scheduler
-  // has released, in the scheduler's order — the windowing is the Insider column's
-  // concern, not theirs.
-  const arranged =
-    label != null
-      ? arrangeFeed(released, {
-          rankOf: (id) => rankById?.get(id),
-          limit: revealCount,
-          pinned: pinnedIds,
-        })
-      : { shown: released, hidden: 0 };
-  const shown = arranged.shown;
-  const tail = tailState({
-    shown: shown.length,
-    hidden: arranged.hidden,
+  // WINDOW + ORDER + TAIL, from one projection. For the standalone "Insider"
+  // column the Insider ranks the whole admitted pool, chooses the best
+  // `revealCount` stories and time-orders them; `hidden` is what "Show earlier"
+  // will surface. Embedded tapes (no label) are short and scroll inside a host
+  // panel, so they keep showing everything the scheduler has released, in the
+  // scheduler's order — the windowing is the Insider column's concern, not theirs.
+  const feed = insiderNow(released, {
+    limit: label != null ? revealCount : null,
+    rankOver: visible,
+    pinned: pinnedIds,
     pending: gate.pending,
     loading: isLoading,
   });
+  const shown = feed.shown;
+  const tail = feed.tail;
+
 
   /**
    * THE TAP HAS TO LAND SOMEWHERE THE READER CAN SEE.
