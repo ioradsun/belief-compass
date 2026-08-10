@@ -606,8 +606,8 @@ export function MyConvictions({
                     <span className="font-normal text-[var(--text-muted)]">
                       {hasBasis
                         ? partial
-                          ? `since you started · ${marked.length} of ${built.length} priced`
-                          : "since you started"
+                          ? `since start · ${marked.length}/${built.length}`
+                          : "since start"
                         : winLabel.toLowerCase()}
                     </span>
                   </>
