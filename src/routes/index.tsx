@@ -1827,6 +1827,7 @@ function Feed() {
               )}
             </>
           )}
+          <div aria-hidden className={railMask} />
         </aside>
 
         {/* ONE MENU, EVERY PAGE — the same drawer the standing pages open. */}
