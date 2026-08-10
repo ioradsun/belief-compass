@@ -561,15 +561,17 @@ export function MyConvictions({
               <span className="num min-w-0 truncate text-[24px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
                 {money(total)}
               </span>
-              <span
+              <Signed
+                value={pct ?? "—"}
                 className="num shrink-0 text-[24px] font-semibold leading-none tabular-nums"
-                style={{ color: tone }}
               >
-                {pct ?? "—"}
                 {arrow && pct ? (
-                  <span className="ml-1.5 align-middle text-[0.6em]">{arrow}</span>
+                  <span className="ml-1.5 align-middle text-[0.6em]" style={{ color: tone }}>
+                    {arrow}
+                  </span>
                 ) : null}
-              </span>
+              </Signed>
+
             </div>
             <div className="mt-1.5 flex items-baseline justify-between gap-3">
               <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
