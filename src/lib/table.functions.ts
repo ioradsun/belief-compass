@@ -29,6 +29,24 @@ export const getTable = createServerFn({ method: "GET" })
     return tableFor(data.wallet);
   });
 
+/**
+ * WHAT AN EMPTY SLOT COULD HOLD — markets this wallet is already in.
+ *
+ * Reading your own possibilities grants nothing and names nobody, so it stays
+ * unsigned for the same reason `getTable` is.
+ */
+export const getTableCandidates = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({ wallet: WALLET.nullish(), limit: z.number().int().min(0).max(3).default(3) })
+      .parse(raw ?? {}),
+  )
+  .handler(async ({ data }): Promise<TableCandidate[]> => {
+    if (!data.wallet || data.limit === 0) return [];
+    const { tableCandidates } = await import("@/lib/table.server");
+    return tableCandidates(data.wallet, data.limit);
+  });
+
 /** Choose this market as one of the three things in front of my people. */
 export const putOnTable = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
