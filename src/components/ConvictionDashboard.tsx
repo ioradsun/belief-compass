@@ -497,12 +497,11 @@ export function ConvictionDashboard({
                   />
                   <div className="flex items-center justify-between border-t border-[var(--hairline)] bg-[var(--bg)]/40 px-4 py-3.5">
                     <span className="text-[13px] font-medium text-[var(--text)]">Net Profit</span>
-                    <span
+                    <Signed
+                      value={fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
                       className="text-[18px] font-semibold tabular-nums"
-                      style={{ color: journey.netProfitUsd >= 0 ? "var(--gain)" : "var(--loss)" }}
-                    >
-                      {fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
-                    </span>
+                    />
+
                   </div>
                 </div>
                 <p className="mt-2.5 px-1 text-[11.5px] leading-relaxed tabular-nums text-[var(--text-muted)]">
