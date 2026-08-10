@@ -36,6 +36,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { NamedPerson } from "@/domain/challenge";
 import { showedUpFor } from "@/domain/dependability";
 import { closedCallsKey } from "@/hooks/useAnswerCalls";
+import { KeepChainMoving } from "@/components/KeepChainMoving";
 
 export function LaunchRail({
   wallet,
@@ -89,6 +90,12 @@ export function LaunchRail({
           said now lives where it can be acted on: the Challenge tab below counts
           what is waiting, and every free slot there is an invitation carrying its
           own market. This says the one fact, and gets out of the way. */}
+      {/* AND THEN THE ONLY THING WORTH ASKING FOR HERE. They showed up because
+          somebody asked; the same act is available to them, once, and this is the
+          one second where that is obvious rather than admin. Self-hides unless
+          this buy actually answered a call and somebody is left to reach. */}
+      {kind === "backed" && <KeepChainMoving wallet={wallet} marketId={marketId} />}
+
       <button
         type="button"
         onClick={onDone}
