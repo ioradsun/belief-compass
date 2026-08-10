@@ -172,6 +172,12 @@ export function ChallengeRail({
             {t === "challenge" && lock.unlocked && challengeCount > 0 && (
               <span className="num text-[11px] opacity-70">{challengeCount}</span>
             )}
+            {/* WHAT IS WAITING, NOT WHAT EXISTS. The tape holds new stories back
+                until they are asked for, so this is the same number the "↑ new"
+                pill would show — never a total, which would just be noise. */}
+            {t === "insider" && tab !== "insider" && (insiderCount ?? 0) > 0 && (
+              <span className="num text-[11px] opacity-70">{insiderCount}</span>
+            )}
           </button>
         ))}
       </div>
