@@ -781,8 +781,8 @@ function ShareConviction() {
               Embedded media
             </div>
             <p className="mt-2 text-[13px] text-[var(--text-secondary)]">
-              Markets can embed the original content they&rsquo;re about — YouTube, Instagram,
-              TikTok, Spotify, X — and link back to its creator, rather than re-hosting a copy. The
+              Markets can embed the original content they&rsquo;re about — YouTube, Spotify, X —
+              and link back to its creator, rather than re-hosting a copy. The
               media starts the conversation; the market measures the conviction around it.
             </p>
           </Card>

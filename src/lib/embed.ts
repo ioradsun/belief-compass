@@ -12,15 +12,14 @@
  * there is no arbitrary-iframe or arbitrary-domain path.
  */
 
-export type EmbedPlatform = "youtube" | "instagram" | "tiktok" | "x" | "spotify";
+export type EmbedPlatform = "youtube" | "x" | "spotify";
 
 export const PLATFORM_LABEL: Record<EmbedPlatform, string> = {
   youtube: "YouTube",
-  instagram: "Instagram",
-  tiktok: "TikTok",
   x: "X",
   spotify: "Spotify",
 };
+
 
 /**
  * How each embed occupies the stage. `ratio` is width/height; `fixedHeight`
@@ -65,8 +64,6 @@ const SHAPES = {
 /** Hosts we preconnect to so the first frame paints as early as possible. */
 export const EMBED_ORIGINS: Record<EmbedPlatform, string[]> = {
   youtube: ["https://www.youtube-nocookie.com", "https://i.ytimg.com"],
-  instagram: ["https://www.instagram.com"],
-  tiktok: ["https://www.tiktok.com"],
   x: ["https://platform.twitter.com"],
   spotify: ["https://open.spotify.com"],
 };
@@ -106,7 +103,7 @@ export function embedUrlCandidates(raw: string): string[] {
   attr("data-instgrm-permalink");
   attr("data-video-id");
   attr("href");
-  // Bare URLs inside the snippet (TikTok/X blockquotes end with one).
+  // Bare URLs inside the snippet (X blockquotes end with one).
   for (const m of raw.matchAll(/https?:\/\/[^\s"'<>\\]+/gi)) push(m[0]);
   return out;
 }
@@ -151,37 +148,10 @@ function parseEmbedUrl(raw: string): ParsedEmbed | null {
     return id ? youtube(id, false) : null;
   }
 
-  // ── Instagram (post, reel, tv) ──────────────────────────────────────────
-  if (h === "instagram.com" || h.endsWith(".instagram.com")) {
-    const m = path.match(/\/(p|reel|reels|tv)\/([\w-]+)/);
-    if (!m) return null;
-    const type = m[1] === "reels" ? "reel" : m[1];
-    const id = m[2];
-    return {
-      platform: "instagram",
-      id,
-      url: `https://www.instagram.com/${type}/${id}/`,
-      embedUrl: `https://www.instagram.com/${type}/${id}/embed/captioned/`,
-      shape: type === "reel" ? SHAPES.portrait : SHAPES.square,
-    };
-  }
+  // Instagram and TikTok are deliberately unsupported: their embeds refuse to
+  // play inline in a third-party frame, so a market would show a dead card.
 
-  // ── TikTok (full video URL, or a short link we can't expand client-side) ─
-  if (h === "tiktok.com" || h.endsWith(".tiktok.com")) {
-    const m = path.match(/\/video\/(\d{6,25})/) ?? path.match(/^\/(?:v|embed)\/(\d{6,25})/);
-    const id = m?.[1];
-    if (!id) return null;
-    const user = path.match(/^\/(@[\w.-]+)\//)?.[1] ?? "";
-    return {
-      platform: "tiktok",
-      id,
-      url: user
-        ? `https://www.tiktok.com/${user}/video/${id}`
-        : `https://www.tiktok.com/embed/v2/${id}`,
-      embedUrl: `https://www.tiktok.com/embed/v2/${id}`,
-      shape: SHAPES.portrait,
-    };
-  }
+
 
   // ── X / Twitter ─────────────────────────────────────────────────────────
   if (h === "x.com" || h === "twitter.com" || h === "mobile.twitter.com" || h === "mobile.x.com") {
@@ -250,4 +220,4 @@ export function embedFromRecord(raw: unknown): EmbedMedia | null {
   };
 }
 
-export const EMBED_HINT = "Paste a link or embed code — YouTube, Instagram, TikTok, X or Spotify.";
+export const EMBED_HINT = "Paste a link or embed code — YouTube, X or Spotify.";
