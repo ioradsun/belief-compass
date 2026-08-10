@@ -238,28 +238,17 @@ function MomentumMetric({
   faces?: MomentumFace[];
   facesTotal?: number;
 }) {
-  // Only a trusted (headline) % earns the big right-hand figure. A small-base %
-  // is demoted to a quiet suffix on the absolute line so it never overstates the
-  // move.
+  // THE RIGHT SLOT IS ALWAYS THE RATE. The exact change is already printed
+  // directly underneath, so this column has one job: state the percentage.
+  // Putting the move up here too ("+2" over "+2 believers over 1D") said the
+  // same thing twice and left the reader with no rate at all.
   //
-  // AND WITH NO % AT ALL, THE MOVE ITSELF TAKES THE SLOT. It used to stay empty,
-  // which is how a blank space came to argue for a looser percentage rule: the
-  // believer floor was lowered from ten to three to fill this gap, and at a base
-  // of three "3 → 6 participants" prints "+100%". The gap was the bug. Believers
-  // and capital both read faster as a count and an amount anyway — that is this
-  // module's own stated rule — so the fallback is not a compromise.
-  // ATTENTION IS RANKED, NOT SHARED. The question is the only thing on this
-  // panel a reader must decide about; the counts are the evidence they consult
-  // *after* reading it. At 30px these totals matched the headline exactly, so
-  // the eye had two equal entry points and picked the number — the cheaper
-  // read — first. Sizing them a clear step below the question (20/22 against
-  // the title's 20–30) restores one obvious first stop without making the
-  // evidence any harder to find: they keep the same weight, tabular figures
-  // and position, so they are still the strongest thing under the headline.
-  const headlinePct =
-    copy.pct && !copy.pctQuiet
-      ? copy.pct
-      : copy.figure || copy.pct || (copy.direction === "flat" ? "0%" : "");
+  // A small-base % is still risky read alone — which is exactly why it never
+  // is: the absolute line under it carries the denominator in words. Flat is
+  // "0%". With no prior base there is no rate to compute, and the honest word
+  // for that is "New", not a number.
+  const headlinePct = copy.pct ?? (copy.direction === "flat" ? "0%" : null);
+
   return (
     /* Every dimension here is a token the container sets (see `.momentum` in
        styles.css): width chooses the type scale, height chooses the air. */
@@ -308,13 +297,23 @@ function MomentumMetric({
         </span>
         <span className="shrink-0 text-right">
           {/* One rule decides the treatment (see @/components/Signed): a rate is
-          a verdict — coloured, arrow-trailing; a count or an amount is a fact —
-          signed but neutral, whatever fills this slot. */}
-          <Signed
-            value={headlinePct}
-            className="num block font-semibold leading-none tabular-nums"
-            style={{ fontSize: "var(--mom-pct, 16px)" }}
-          />
+          a verdict — coloured, arrow-trailing. "New" is not a rate, so it stays
+          a quiet word. */}
+          {headlinePct ? (
+            <Signed
+              value={headlinePct}
+              className="num block font-semibold leading-none tabular-nums"
+              style={{ fontSize: "var(--mom-pct, 16px)" }}
+            />
+          ) : (
+            <span
+              className="block font-semibold uppercase leading-none tracking-[0.08em] text-[var(--text-muted)]"
+              style={{ fontSize: "var(--mom-pct, 16px)" }}
+            >
+              New
+            </span>
+          )}
+
           {/* The exact move sits directly under its percentage — one column,
           one story, for both participants and capital. */}
           <span
