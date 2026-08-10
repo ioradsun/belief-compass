@@ -17,6 +17,7 @@
  * Side-blind by construction. The SAME component renders on desktop and mobile;
  * only the layout changes.
  */
+import { Signed } from "@/components/Signed";
 import { useMemo, useState, type ReactNode } from "react";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { ParticipantSheet, RingedAvatar, RELATION_RING } from "@/components/ParticipantSheet";
@@ -240,8 +241,6 @@ function MomentumMetric({
   faces?: MomentumFace[];
   facesTotal?: number;
 }) {
-  const tone = dirTone(copy.direction);
-  const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
   // Only a trusted (headline) % earns the big right-hand figure. A small-base %
   // is demoted to a quiet suffix on the absolute line so it never overstates the
   // move.
@@ -311,16 +310,14 @@ function MomentumMetric({
           ) : null}
         </span>
         <span className="shrink-0 text-right">
-          <span
+          {/* One rule decides the treatment (see @/components/Signed): a rate is
+          a verdict — coloured, arrow-trailing; a count or an amount is a fact —
+          signed but neutral, whatever fills this slot. */}
+          <Signed
+            value={headlinePct}
             className="num block font-semibold leading-none tabular-nums"
-            style={{ color: tone, fontSize: "var(--mom-pct, 16px)" }}
-            suppressHydrationWarning
-          >
-            {headlinePct}
-            {arrow && headlinePct ? (
-              <span className="ml-1.5 text-[0.6em] align-middle">{arrow}</span>
-            ) : null}
-          </span>
+            style={{ fontSize: "var(--mom-pct, 16px)" }}
+          />
           {/* The exact move sits directly under its percentage — one column,
           one story, for both participants and capital. */}
           <span
