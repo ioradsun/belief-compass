@@ -218,38 +218,47 @@ export function runNarrationPass<R extends LiveRow>({
       continue;
     }
 
-    // Market-wide transitions carry their own composed copy in the payload
-    // (the emitter already ran the interpretation + dedup) — render it directly.
+    // Market-wide transitions are RE-DERIVED from their structured fields.
     if (r.kind === "market_transition") {
-      const p = r.payload as { headline?: string; detail?: string | null; type?: string | null };
+      const p = r.payload as {
+        type?: string | null;
+        metric?: "capital" | "price" | "believers" | null;
+        direction?: "up" | "down" | null;
+      };
       /**
        * THE EVENT OWNS ITS OWN ROW.
        *
        * "MAJOR MOVE / Money is leaving YES" spends the loudest line in the row
        * on a category name and demotes the only interesting phrase to the
-       * subtitle. Both wrappers were generic by construction — every signal got
-       * one of two labels — which is exactly what makes a feed read as
-       * machine-generated. The composed headline IS the kicker now; the detail
-       * (the number and the window) is the sentence under it.
+       * subtitle. The composed headline IS the kicker; the detail (the number
+       * and the window) is the sentence under it.
        */
-      /* STORED COPY IS FROZEN AT EMIT TIME, so rows written before the PI voice
-         still speak the old product's language forever. `retellTransition`
-         recognises those labels at read time and re-says them in the current
-         voice, using only the numbers the stored detail already printed. */
-      /* AND THE PERCENTAGE GETS ITS DENOMINATOR BACK. The emitter froze
-         "−100% over 24H" without knowing whether that was $2,000 or $1.80; the
-         side's 24h capital movement is the money the percentage was computed
-         over, and it lives in market state, here. */
+      /* AND NOTHING FROZEN IS EVER PRINTED. The payload's stored headline and
+         detail are not read at all: they were written in a voice this product
+         no longer speaks, against numbers nobody can check now. The sentence
+         is composed here from type/side/metric plus the market's live state,
+         so the row can always be verified against what the market says today,
+         and a shape we cannot support in numbers is suppressed. */
       const mkt = momentumById.get(Number(r.marketId));
       const delta = r.side === "NO" ? mkt?.noCapitalDelta24h : mkt?.yesCapitalDelta24h;
       /* market_state's *_capital_delta_24h is already USD (derived from
          yes/no_capital_usd against the 24h snapshot), unlike the sibling
          capital_held_* columns which are ETH. No conversion here. */
-      const deltaUsd =
-        typeof delta === "number" && Number.isFinite(delta) ? Math.abs(delta) : null;
-      const modern = retellTransition(p.headline ?? "", p.detail ?? "", String(r.id), {
-        usd: deltaUsd,
-        side: r.side ?? null,
+      const deltaUsd = typeof delta === "number" && Number.isFinite(delta) ? delta : null;
+      /* The YES-referenced price move, re-pointed at this row's side. */
+      const yesMove =
+        typeof mkt?.yesPriceChange24h === "number" && Number.isFinite(mkt.yesPriceChange24h)
+          ? mkt.yesPriceChange24h
+          : null;
+      const modern = composeTransition({
+        type: p.type ?? null,
+        side: r.side === "YES" || r.side === "NO" ? r.side : null,
+        metric: p.metric ?? null,
+        direction: p.direction ?? null,
+        capitalDeltaUsd: deltaUsd,
+        pricePct: yesMove == null ? null : r.side === "NO" ? -yesMove : yesMove,
+        believersYes: mkt?.believersYes ?? null,
+        believersNo: mkt?.believersNo ?? null,
       });
       copyLevel.set(r.id, modern.level);
       if (modern.suppress) copySuppressed.add(r.id);
