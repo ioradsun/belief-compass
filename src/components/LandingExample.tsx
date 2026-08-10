@@ -7,6 +7,7 @@
  * people and capital joined that side, the early position became worth more,
  * and it can be sold at any time.
  */
+import { Signed } from "@/components/Signed";
 export type LandingExample = {
   question: string;
   yesPeople: number;
