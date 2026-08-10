@@ -632,12 +632,11 @@ export function ConvictionDashboard({
                     <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[var(--text)]">
                       {m.title}
                     </span>
-                    <span
+                    <Signed
+                      value={fmtUsd(m.amountUsd, true)}
                       className="shrink-0 text-[14px] font-semibold tabular-nums"
-                      style={{ color: "var(--gain)" }}
-                    >
-                      {fmtUsd(m.amountUsd, true)}
-                    </span>
+                    />
+
                     <Badge kind={m.kind} />
                   </button>
                 ))}
