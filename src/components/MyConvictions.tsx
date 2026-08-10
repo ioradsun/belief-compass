@@ -138,7 +138,7 @@ function ConvictionCard({
   signedMoney: MoneyFmt;
 }) {
   const sideColor = p.side === "YES" ? "var(--yes)" : "var(--no)";
-  const { story } = p.signal;
+  const story = p.story;
   // The personal outcome, by the one rule: value leads, P&L is the answer, the
   // return % is paired to it. Never a market price %. Null → no trusted cost basis.
   const ret = positionReturn({
