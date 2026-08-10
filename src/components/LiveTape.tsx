@@ -22,6 +22,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWarmMarket } from "@/lib/realtime/warm-market";
+import { Signed } from "@/components/Signed";
+
 
 import { PersonStack } from "@/components/PersonStack";
 import { showsAmountFooter } from "@/domain/amount-footer";
