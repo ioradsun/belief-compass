@@ -292,7 +292,11 @@ export function ConvictionDashboard({
 
   const strongestEdge = [...sources].filter((s) => s.usd > 0).sort((a, b) => b.usd - a.usd)[0];
   const navSummary: Record<SectionId, string> = {
-    overview: fmtUsd(sinceStart, true),
+    // The nav label for a section IS that section's headline. This showed
+    // `sinceStart` (holding + trading + creating, before fees) while the
+    // Overview hero showed `journey.netProfitUsd` (the same story, after fees
+    // and reconciled against capital in) — two different totals under one word.
+    overview: fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0),
     journey: fmtUsd(worthToday),
     edge: strongestEdge ? fmtUsd(strongestEdge.usd, true) : "",
     wins: bestMarkets.length ? `${bestMarkets.length}` : "",
@@ -567,7 +571,46 @@ export function ConvictionDashboard({
                     </p>
                   </div>
                 ))}
+                {/*
+                 * RECONCILE TO THE HEADLINE. The three sources sum to gains
+                 * BEFORE fees, so the section quietly ended on a number that
+                 * was not the Net Profit at the top of the page. Fees are a
+                 * real cost of the same story; showing them here closes the
+                 * gap instead of leaving the reader to find it.
+                 */}
+                {tradingFees > 0 && (
+                  <div className="border-t border-[var(--hairline)] px-4 py-3.5">
+                    <div className="flex items-center">
+                      <span className="text-[14px] font-medium text-[var(--text)]">
+                        Trading Fees
+                      </span>
+                      <span
+                        className="ml-auto text-[15px] font-semibold tabular-nums"
+                        style={{ color: "var(--loss)" }}
+                      >
+                        {fmtUsd(-tradingFees, true)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
+                      Paid to the protocol on every buy. Already counted in your Net Profit.
+                    </p>
+                  </div>
+                )}
+                <div className="border-t border-[var(--hairline)] px-4 py-3.5">
+                  <div className="flex items-center">
+                    <span className="text-[14px] font-semibold text-[var(--text)]">Net Profit</span>
+                    <span
+                      className="ml-auto text-[15px] font-semibold tabular-nums"
+                      style={{
+                        color: journey.netProfitUsd >= 0 ? "var(--gain)" : "var(--loss)",
+                      }}
+                    >
+                      {fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
+                    </span>
+                  </div>
+                </div>
               </div>
+
             </Section>
           )}
 
