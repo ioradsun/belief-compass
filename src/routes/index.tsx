@@ -746,6 +746,27 @@ function Feed() {
       : {}),
   });
 
+  /**
+   * THE DECK CORE THE SHELL ALREADY PAID FOR. The loader read the warm/seeded
+   * trade tape for the markets it is about to paint; putting it in the cache
+   * under the deck's own key means the first frame has numbers in it instead of
+   * a card that appears and then fills in. Written in a render-time initializer
+   * (once, and never over fresher data) so it is there for the FIRST paint, not
+   * an effect later. React Query still refetches it on its own schedule.
+   */
+  useState(() => {
+    const deck = loaderData?.deck;
+    if (!deck) return null;
+    for (const [id, core] of Object.entries(deck)) {
+      const key = ["market-change", Number(id)] as const;
+      if (qc.getQueryData(key) === undefined) {
+        qc.setQueryData(key, core, { updatedAt: loaderData?.fetchedAt ?? Date.now() });
+      }
+    }
+    return null;
+  });
+
+
   // First principle: once a valid contract-backed market snapshot reaches the
   // browser, it is durable for this page lifetime. Query retries, wallet
   // reconnection, POV outages and empty enrichment responses may update it, but
