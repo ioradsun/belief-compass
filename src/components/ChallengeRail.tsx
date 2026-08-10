@@ -216,16 +216,8 @@ export function ChallengeRail({
               Could not load who is waiting on you. This is a fault on our side, not an empty room —
               try again in a moment.
             </p>
-          ) : open.length === 0 ? (
-            <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
-              {/* Honest, and deliberately not "no challenges yet!" — the reason
-                  is that nobody has qualified, which is a fact about the graph
-                  rather than about the reader. Quiet, not broken — the sentence
-                  promises the room rather than apologising for it. */}
-              Your people are quiet. For now. When your Tribe or Rivals want your take, their open
-              questions land here.
-            </p>
-          ) : (
+          ) : open.length === 0 ? null : (
+
             <ul className="space-y-2">
               {open.slice(0, shown).map((c) => (
                 <ChallengeRow key={c.marketId} challenge={c} onSelect={onSelect} onDismiss={pass} />
