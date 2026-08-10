@@ -28,6 +28,7 @@ export function OmniHeader({
   onOpenMenu,
   right,
   center,
+  focus,
 }: {
   wallet?: string;
   onSelectMarket: (id: number) => void;
@@ -37,6 +38,8 @@ export function OmniHeader({
   right?: ReactNode;
   /** Mobile-only center slot — the primary action (+ Conviction). */
   center?: ReactNode;
+  /** Desktop-only slot — the Focus Mode toggle. */
+  focus?: ReactNode;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
