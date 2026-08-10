@@ -550,7 +550,7 @@ export function MyConvictions({
   const hasBasis = marked.length > 0 && markedBasis > 0;
   // Only when nothing at all can be marked does the window move stand in.
   const periodUsd = built.reduce((s, p) => s + (windowDelta(p.value, p.chg) ?? 0), 0);
-  const partial = marked.length > 0 && marked.length < built.length;
+  
 
   const count = built.length;
   useEffect(() => {
