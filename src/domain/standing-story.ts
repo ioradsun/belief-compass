@@ -241,10 +241,16 @@ export function findStandingIntelligence(ev: StandingEvidence): StandingStoryRow
       side: ev.side,
       people,
       headline: "THEY DIDN'T BUDGE",
-      body: `${moved(move, ev.side)}. ${countPositions(held.length)} held ${heldText(
+      /* THE OLDEST HOLDER CARRIES THE TENURE, NOT THE WHOLE GROUP. `lead` is the
+         longest-held of the subset, so "N positions held Xd or more" overclaimed
+         (only the lead cleared X) and doubled the floor: heldText already prints
+         "16+ days", and " or more" said it a second time. Attribute the age to
+         the oldest position; the count (always ≥ minHolders here) speaks for the
+         group. */
+      body: `${moved(move, ev.side)}. ${countPositions(held.length)}, the oldest held ${heldText(
         lead.daysHeld,
         lead.tenureIsFloor === true,
-      )} or more ${held.length === 1 ? "is" : "are"} still there.`,
+      )}, are still there.`,
       strength: clamp01(0.55 + Math.min(0.2, Math.abs(move)) + 0.04 * Math.min(3, held.length)),
       motif: `standing:held_through_price_move:${ev.side}`,
     });
