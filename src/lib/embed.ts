@@ -64,8 +64,6 @@ const SHAPES = {
 /** Hosts we preconnect to so the first frame paints as early as possible. */
 export const EMBED_ORIGINS: Record<EmbedPlatform, string[]> = {
   youtube: ["https://www.youtube-nocookie.com", "https://i.ytimg.com"],
-  instagram: ["https://www.instagram.com"],
-  tiktok: ["https://www.tiktok.com"],
   x: ["https://platform.twitter.com"],
   spotify: ["https://open.spotify.com"],
 };
