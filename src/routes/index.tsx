@@ -1611,8 +1611,11 @@ function Feed() {
                   onCreate={() => acceptIdea(false)}
                   onEdit={() => acceptIdea(true)}
                   onDismiss={() => {
+                    // Passing on the idea returns the reader to the market
+                    // whose slot the card was borrowing — it does not spend a
+                    // market. The latch releases, so the centre falls through.
                     houseIdea.onDismiss();
-                    nextMarket();
+                    setIdeaView("idle");
                   }}
                 />
               </div>
