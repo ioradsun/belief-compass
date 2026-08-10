@@ -40,6 +40,7 @@ export type Database = {
           created_at: string
           id: number
           market_id: number
+          parent_call: number | null
           slot_no: number
         }
         Insert: {
@@ -49,6 +50,7 @@ export type Database = {
           created_at?: string
           id?: number
           market_id: number
+          parent_call?: number | null
           slot_no: number
         }
         Update: {
@@ -58,9 +60,18 @@ export type Database = {
           created_at?: string
           id?: number
           market_id?: number
+          parent_call?: number | null
           slot_no?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "challenges_parent_call_fkey"
+            columns: ["parent_call"]
+            isOneToOne: false
+            referencedRelation: "market_calls"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       conviction_markets: {
         Row: {
@@ -535,30 +546,36 @@ export type Database = {
           called_at: string
           caller_wallet: string
           challenge_id: number | null
+          id: number
           market_id: number
           passed_at: string | null
           relation_at_call: string
           responded_at: string | null
+          responded_side: string | null
           responder_wallet: string
         }
         Insert: {
           called_at?: string
           caller_wallet: string
           challenge_id?: number | null
+          id?: number
           market_id: number
           passed_at?: string | null
           relation_at_call: string
           responded_at?: string | null
+          responded_side?: string | null
           responder_wallet: string
         }
         Update: {
           called_at?: string
           caller_wallet?: string
           challenge_id?: number | null
+          id?: number
           market_id?: number
           passed_at?: string | null
           relation_at_call?: string
           responded_at?: string | null
+          responded_side?: string | null
           responder_wallet?: string
         }
         Relationships: [
