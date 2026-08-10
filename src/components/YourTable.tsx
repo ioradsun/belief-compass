@@ -332,7 +332,7 @@ function TableRowCard({
       <button
         type="button"
         onClick={onOpen}
-        className={`w-full rounded-xl border p-3 pr-8 text-left transition-colors ${finished ? "" : "pl-6 "}${
+        className={`w-full rounded-xl border p-3 pr-8 text-left transition-colors ${
           finished
             ? // QUIETER, NOT GREYED OUT. A finished Challenge is the best thing
               // that happens here; disabling its appearance would say the opposite.
@@ -341,15 +341,10 @@ function TableRowCard({
             : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-strong)]"
         }`}
       >
-        {/* IT IS LIVE — a dot, not a word. The one thing a creator wants to know at
-            a glance is whether this is still out there collecting answers, and a
-            breathing dot says it without spending a line of copy. */}
-        {!finished && (
-          <span className="absolute left-3 top-3.5 grid h-1.5 w-1.5 place-items-center" aria-label="Still open">
-            <span className="absolute inline-flex h-1.5 w-1.5 animate-ping rounded-full bg-[var(--yes)] opacity-70" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--yes)]" />
-          </span>
-        )}
+        {/* NO PER-CARD LIVE DOT. The blue dot in the heading already says this
+            section is the live side, and the dashed border says which cards have
+            ended — a dot on every open card was the same fact told twice. */}
+
 
         <p
           className={`line-clamp-2 text-[13px] leading-snug ${finished ? "text-[var(--text-secondary)]" : "text-[var(--text)]"}`}
