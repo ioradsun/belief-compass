@@ -98,6 +98,34 @@ const REQUIRED: Requirement[] = [
     anonMustRead: true,
   },
   {
+    /**
+     * THE CHAIN'S THREE COLUMNS — and why a check exists at all.
+     *
+     * The application deliberately TOLERATES these being absent: `markCallsAnswered`
+     * catches Postgres 42703 and stamps the answer without a side, and `putOnTable`
+     * retries without lineage. That tolerance is correct — an answer is worth more
+     * than a decoration — and it is exactly what makes the missing migration
+     * invisible. Sides and ancestry would simply never be recorded, forever, and
+     * every screen would look like a working feature.
+     *
+     * So the schema is checked here rather than inferred from the app not crashing.
+     */
+    feature: "Challenge Chain — the answered side and the lineage pointer",
+    table: "market_calls",
+    columns: ["id", "responded_side"],
+    migration: "20260906000000_challenge_chain.sql",
+    // RLS with no policy: the anon key gets 200 and an empty array, so a row
+    // count here proves nothing about emptiness and must not be read as such.
+    anonMustRead: false,
+  },
+  {
+    feature: "Challenge Chain — who brought this Challenge's author in",
+    table: "challenges",
+    columns: ["parent_call"],
+    migration: "20260906000000_challenge_chain.sql",
+    anonMustRead: false,
+  },
+  {
     feature: "Story Engine — the 24h baseline those deltas are measured against",
     table: "market_state_snapshots",
     columns: ["onchain_id", "captured_at", "yes_capital_usd", "no_capital_usd"],

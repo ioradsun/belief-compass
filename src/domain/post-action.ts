@@ -1,41 +1,36 @@
 /**
  * WHAT HAPPENS AFTER A CONFIRMED ACTION — decided once, for every branch.
  *
- * THE PROBLEM THIS EXISTS TO END. The moment after a trade was owned by four
- * things at once: `ConvictionReveal` chose the personal story, `LaunchRail`
- * decided whether anybody had been answered, `KeepChainMoving` decided whether
- * to offer a relay, and the route decided where "done" went. None of them could
- * see the others, so the screen was assembled by whichever component happened to
- * render — and a state nobody had thought about (sold out while a Challenge was
- * live; answered a call in a market already on your table) produced whatever
- * fell out.
+ * THE PROBLEM THIS EXISTS TO END. The moment after a trade is owned by four
+ * things at once: `ConvictionReveal` chooses the personal story, `LaunchRail`
+ * decides whether anybody was answered, `KeepChainMoving` decides whether to
+ * offer a relay, and the route decides where "done" goes. None can see the
+ * others, so the screen is assembled by whichever component happens to render —
+ * and a state nobody thought about (sold out while a Challenge was live;
+ * answered a call in a market already on your table) produces whatever falls out.
  *
- * So the decision moves here, ONCE, as a total function over a discriminated
- * union. Every branch is enumerated and `assertNever` makes a new action a
- * COMPILE error rather than a silent default. A component's job is to render
- * what this returns, never to work out what it should be.
+ * THIS MODULE IS THE FOUNDATION FOR ENDING THAT, NOT THE END OF IT. Nothing in
+ * production calls it yet. The four owners above still decide the live
+ * experience independently, and they will until the wiring PR lands. Until then
+ * this is a correct answer nobody is asking for, which is worth saying out loud
+ * so the next reader does not assume the problem is solved.
  *
- * WHAT THIS DOES NOT DO. It does not write the personal story — `conviction-reveal`
- * still owns that, and it is better at it. This decides whether the personal
- * story is what the reader should be shown AT ALL, because a social consequence
- * ("you showed up for Maya") outranks "you're early", and only something that can
- * see both can say so.
+ * WHAT IT DOES NOT DO: write the personal story. `conviction-reveal` owns that
+ * and is better at it. This decides whether the personal story should be shown
+ * AT ALL — "you showed up for Maya" outranks "you're early", and only something
+ * that can see both can say so. `consequence: "reveal"` hands the moment back.
  *
- * ZERO IO, pure, fully testable — which is the point. Every scenario in the
- * brief is a case in a table rather than a screen somebody has to reproduce.
+ * THE INPUT IS A DISCRIMINATED UNION, and that is load-bearing rather than
+ * tidy. A single wide interface let a create carry answered callers, a sell
+ * carry buy-only fields, and a market exit carry remaining holdings — states
+ * that cannot exist, silently representable, waiting to be branched on. Each
+ * action now admits only the fields it can actually have, so the impossible
+ * combinations are compile errors instead of tests nobody wrote.
+ *
+ * ZERO IO, pure, fully testable.
  */
 
 export type Side = "YES" | "NO";
-
-/** What the person just did. Adding one here breaks every switch until handled. */
-export type PostAction =
-  | "create_market"
-  | "first_buy"
-  | "buy_more"
-  | "buy_opposite_side"
-  | "partial_sell"
-  | "side_exit"
-  | "market_exit";
 
 /** Their standing in THIS market, which decides whose screen this is. */
 export type MarketRole = "market_maker" | "believer" | "market_maker_and_believer";
@@ -50,6 +45,25 @@ export type MarketRole = "market_maker" | "believer" | "market_maker_and_believe
  */
 export type AudienceStatus = "loading" | "available" | "none" | "failed";
 
+export interface Audience {
+  status: AudienceStatus;
+  total: number;
+  /**
+   * THE ONE PERSON THIS WOULD REACH — and it must come from the AUDIENCE.
+   *
+   * The CTA used to read `primaryCallerName` here, which is a different human
+   * entirely: the person who challenged the viewer, not the person the viewer
+   * would be challenging. With an audience of one that rendered "Challenge Maya"
+   * where Maya had just challenged THEM — naming the wrong side of the
+   * relationship on a button that then contacts somebody else.
+   *
+   * Null until §4's canonical audience supplies it. The label falls back to a
+   * sentence that names nobody rather than guessing, because the only thing
+   * worse than no name is a confident wrong one.
+   */
+  singleRecipientName: string | null;
+}
+
 /** What the viewer already has on this market. */
 export type OutgoingState = "none" | "live" | "completed" | "removed";
 
@@ -58,37 +72,86 @@ export interface Holdings {
   no: number;
 }
 
-export interface PostActionInput {
-  action: PostAction;
+/**
+ * NOTHING LEFT, EXPRESSED IN THE TYPE.
+ *
+ * The literal zeroes are the point: a `market_exit` carrying remaining holdings
+ * is a contradiction, and now it does not compile rather than reaching a branch
+ * that has to decide what it meant.
+ */
+export interface NoHoldings {
+  yes: 0;
+  no: 0;
+}
+
+/** Everything true regardless of which action happened. */
+interface Common {
   role: MarketRole;
-  /** The side acted on. Null for a creation with no seeded position. */
-  side: Side | null;
-  before: Holdings;
-  /**
-   * AFTER, AND WHETHER WE ACTUALLY KNOW IT.
-   *
-   * A sell must never claim "you're out" or "you took some off" from a balance
-   * the indexer has not confirmed. When `afterKnown` is false the screen says
-   * the position is updating and stops — guessing here is how somebody who
-   * still holds $40 gets told they left.
-   */
-  after: Holdings;
-  afterKnown: boolean;
-  /** How many incoming calls this action answered. Zero means organic. */
-  answeredCallers: number;
-  /** The canonical primary caller — earliest still-active call. */
-  primaryCallerName: string | null;
   outgoing: OutgoingState;
   capacity: { active: number; total: number };
-  audience: { status: AudienceStatus; total: number };
+  audience: Audience;
+}
+
+/**
+ * WHO WAS ANSWERED. The name is REQUIRED, not optional.
+ *
+ * With an optional name a count of one fell through to the plural branch and
+ * produced "You showed up for 1 people." The type now makes that unreachable:
+ * a caller who cannot be named is a caller this product refuses to speak about,
+ * and every server path already falls back to a wallet alias rather than null.
+ */
+export interface AnsweredCalls {
+  count: number;
+  primaryCallerName: string;
+}
+
+export interface CreateMarketInput extends Common {
+  action: "create_market";
+  /** A creation is authored by definition; `believer` is not a thing here. */
+  role: "market_maker" | "market_maker_and_believer";
+  /** The seeded position, when the creation also took one. */
+  side: Side | null;
+}
+
+export interface BuyInput extends Common {
+  action: "first_buy" | "buy_more" | "buy_opposite_side";
+  /** A buy always has a side. There is no directionless purchase. */
+  side: Side;
+  after: Holdings;
+  /** Null when nobody had asked — an organic buy. */
+  answered: AnsweredCalls | null;
   /** Somebody else still waiting, for the fallback after this screen. */
   nextIncoming: { name: string } | null;
+}
+
+interface SellCommon extends Common {
+  side: Side;
   /** Canonical realised P&L. Null means proceeds may NEVER be called profit. */
   realizedGainUsd: number | null;
   proceedsUsd: number | null;
-  /** What the remaining position is worth, when it is known. */
   remainingValueUsd: number | null;
 }
+
+export interface PartialSellInput extends SellCommon {
+  action: "partial_sell";
+  /** Null when the post-sell balance read failed. Never guessed. */
+  after: Holdings | null;
+}
+
+export interface SideExitInput extends SellCommon {
+  action: "side_exit";
+  after: Holdings | null;
+}
+
+export interface MarketExitInput extends SellCommon {
+  action: "market_exit";
+  /** Nothing left, or unknown. Remaining holdings do not typecheck. */
+  after: NoHoldings | null;
+}
+
+export type SellInput = PartialSellInput | SideExitInput | MarketExitInput;
+export type PostActionInput = CreateMarketInput | BuyInput | SellInput;
+export type PostAction = PostActionInput["action"];
 
 export type CtaKind =
   | "challenge"
@@ -109,11 +172,6 @@ export type Consequence = "reveal" | "branch_live" | "challenge_live" | null;
 /** At most one social module, and `make_room` is one of its shapes. */
 export type ChallengeModule = "relay" | "organic" | "make_room" | null;
 
-/**
- * Which family of copy the hook came from. Reported so the analytics can say
- * what was shown without the component having to guess, and so the rotation in
- * §9 has something stable to key on.
- */
 export type CopyCategory =
   | "reciprocity"
   | "market_maker"
@@ -130,6 +188,7 @@ export interface PostActionExperience {
   consequence: Consequence;
   challengeModule: ChallengeModule;
   primary: Cta;
+  /** Null whenever it would repeat the primary. Never the same action twice. */
   secondary: Cta | null;
   /** A sell never leaves the market it happened in. */
   stayOnMarket: boolean;
@@ -141,7 +200,6 @@ function assertNever(x: never): never {
   throw new Error(`unhandled post action: ${JSON.stringify(x)}`);
 }
 
-const held = (h: Holdings): boolean => h.yes > 0 || h.no > 0;
 const spotsOpen = (c: { active: number; total: number }): number =>
   Math.max(0, c.total - Math.max(0, c.active));
 
@@ -152,69 +210,26 @@ const usd = (v: number): string => `$${Math.abs(v).toFixed(2)}`;
  * CAN THIS PERSON PUT THE QUESTION UP RIGHT NOW?
  *
  * `loading` and `failed` both answer NO, and both do it silently: the module is
- * simply absent rather than rendered empty or rendered as an error. A social
- * offer is an enhancement, and an enhancement that cannot be made is one the
- * reader should never learn was attempted.
+ * absent rather than rendered empty or rendered as an error. A social offer is
+ * an enhancement, and an enhancement that cannot be made is one the reader
+ * should never learn was attempted.
  */
 function canOffer(i: PostActionInput): boolean {
   return i.audience.status === "available" && i.audience.total > 0 && i.outgoing !== "live";
 }
 
-/** "Challenge all 13" / "Challenge Maya" / "Challenge both" — §9's CTA rules. */
-export function challengeLabel(total: number, onlyName?: string | null): string {
-  if (total === 1) return onlyName?.trim() ? `Challenge ${onlyName.trim()}` : "Challenge all 1";
-  if (total === 2) return "Challenge both";
-  return `Challenge all ${total}`;
-}
-
 /**
- * THE ONE NEXT ACTION, chosen by §21's hierarchy and nothing else.
+ * "Challenge all 13" / "Challenge Maya" / "Challenge both" / "Challenge them".
  *
- * The order is not cosmetic. Offering the chain first is what makes this a relay
- * rather than a receipt; "Make room" before "Next Question" is what stops a full
- * table silently swallowing the one moment somebody wanted to ask; and a waiting
- * caller outranks a generic next question because a person is waiting on a human
- * answer rather than on engagement.
- *
- * NOTHING HERE IS EVER RENDERED DISABLED. A CTA that cannot be used is a smaller
- * version of a promise that cannot be kept, so each branch returns the strongest
- * action that is actually available.
+ * The name may ONLY come from the audience. At one person with no name the
+ * label says "them" — nobody is named, nothing is guessed, and the button still
+ * reads like a sentence rather than "Challenge all 1".
  */
-function nextForBuy(i: PostActionInput): { primary: Cta; module: ChallengeModule } {
-  if (canOffer(i) && spotsOpen(i.capacity) > 0) {
-    return {
-      primary: {
-        kind: "challenge",
-        label: challengeLabel(i.audience.total, i.primaryCallerName),
-      },
-      module: i.answeredCallers > 0 ? "relay" : "organic",
-    };
-  }
-  if (canOffer(i) && spotsOpen(i.capacity) === 0) {
-    return { primary: { kind: "make_room", label: "Make room" }, module: "make_room" };
-  }
-  if (i.nextIncoming?.name.trim()) {
-    return {
-      primary: { kind: "answer", label: `Answer ${i.nextIncoming.name.trim()}` },
-      module: null,
-    };
-  }
-  return { primary: { kind: "next_question", label: "Next Question" }, module: null };
-}
-
-/**
- * WHAT A SELL IS ALLOWED TO SAY ABOUT MONEY.
- *
- * Proceeds are what came back; a gain is what was made. They are different
- * numbers and only one of them is a claim about whether the trade was good.
- * With no canonical realised P&L the sentence says "returned" and stops —
- * calling proceeds profit is the single most tempting lie on this screen.
- */
-function sellSupport(i: PostActionInput, leftSide: Side | null): string | null {
-  const parts: string[] = [];
-  if (leftSide) parts.push(`Closed ${leftSide}.`);
-  if (i.proceedsUsd != null && i.proceedsUsd > 0) parts.push(`${usd(i.proceedsUsd)} returned.`);
-  return parts.length > 0 ? parts.join(" ") : null;
+export function challengeLabel(audience: Audience): string {
+  const only = audience.singleRecipientName?.trim();
+  if (audience.total === 1) return only ? `Challenge ${only}` : "Challenge them";
+  if (audience.total === 2) return "Challenge both";
+  return `Challenge all ${audience.total}`;
 }
 
 /** The realised line, and ONLY when the canonical number exists. */
@@ -224,30 +239,80 @@ export function realizedLine(realizedGainUsd: number | null): string | null {
 }
 
 /**
- * THE POST-ACTION SCREEN, resolved.
+ * THE ONE NEXT ACTION, chosen by §21's hierarchy and nothing else.
  *
- * Headline priority follows §5: an answered call outranks being a Market Maker,
- * which outranks being first, which outranks everything the personal reveal
- * could say. `consequence: "reveal"` is how this hands the story back to
- * `conviction-reveal` — it says "the personal story wins here", it does not try
- * to write one.
+ * The order is not cosmetic. Offering the chain first is what makes this a relay
+ * rather than a receipt; "Make room" before "Next Question" stops a full table
+ * silently swallowing the one moment somebody wanted to ask; and a waiting
+ * caller outranks a generic next question because a person is waiting on a human
+ * answer rather than on engagement.
+ *
+ * NOTHING HERE IS EVER RENDERED DISABLED. A CTA that cannot be used is a smaller
+ * version of a promise that cannot be kept, so each branch returns the strongest
+ * action that is actually available.
  */
+function nextForBuy(i: CreateMarketInput | BuyInput): { primary: Cta; module: ChallengeModule } {
+  if (canOffer(i) && spotsOpen(i.capacity) > 0) {
+    return {
+      primary: { kind: "challenge", label: challengeLabel(i.audience) },
+      module: i.action !== "create_market" && i.answered ? "relay" : "organic",
+    };
+  }
+  if (canOffer(i) && spotsOpen(i.capacity) === 0) {
+    return { primary: { kind: "make_room", label: "Make room" }, module: "make_room" };
+  }
+  const waiting = i.action !== "create_market" ? i.nextIncoming?.name.trim() : null;
+  if (waiting) return { primary: { kind: "answer", label: `Answer ${waiting}` }, module: null };
+  return { primary: { kind: "next_question", label: "Next Question" }, module: null };
+}
+
+/**
+ * WHAT A SELL IS ALLOWED TO SAY ABOUT MONEY.
+ *
+ * Proceeds are what came back; a gain is what was made. They are different
+ * numbers and only one is a claim about whether the trade was good. With no
+ * canonical realised P&L the sentence says "returned" and stops — calling
+ * proceeds profit is the single most tempting lie on this screen.
+ */
+function sellSupport(i: SellInput): string | null {
+  const parts = [`Closed ${i.side}.`];
+  if (i.proceedsUsd != null && i.proceedsUsd > 0) parts.push(`${usd(i.proceedsUsd)} returned.`);
+  return parts.join(" ");
+}
+
+/** The still-in sentence, with a value only when there is one. */
+function stillBacking(remaining: Side, valueUsd: number | null): string {
+  return valueUsd != null
+    ? `Still backing ${remaining} with ${usd(valueUsd)}.`
+    : `Still backing ${remaining}.`;
+}
+
+/**
+ * SECONDARY IS NULL WHENEVER IT WOULD REPEAT THE PRIMARY.
+ *
+ * The create screen returned View Market as BOTH actions whenever there was no
+ * audience — one destination rendered twice, which reads as a bug and teaches
+ * the reader that one of the two buttons is decorative.
+ */
+function secondaryUnless(primary: Cta, candidate: Cta): Cta | null {
+  return primary.kind === candidate.kind ? null : candidate;
+}
+
 export function resolvePostAction(i: PostActionInput): PostActionExperience {
   switch (i.action) {
     case "create_market": {
-      const { primary, module } = nextForBuy(i);
+      const { primary: chosen, module } = nextForBuy(i);
+      const viewMarket: Cta = { kind: "view_market", label: "View Market" };
+      // A creation has nowhere else to send anybody: "Next Question" is a buy's
+      // exit, not a creator's.
+      const primary = chosen.kind === "next_question" ? viewMarket : chosen;
       return {
         headline: "Your market is live.",
         support: i.side ? `You're backing ${i.side}.` : null,
         consequence: null,
-        // A creation offers the question to people; it never "relays", because
-        // nobody brought the creator in.
-        challengeModule: module === "relay" ? "organic" : module,
-        primary:
-          primary.kind === "next_question"
-            ? { kind: "view_market", label: "View Market" }
-            : primary,
-        secondary: { kind: "view_market", label: "View Market" },
+        challengeModule: module,
+        primary,
+        secondary: secondaryUnless(primary, viewMarket),
         stayOnMarket: true,
         copyCategory: "market_maker",
       };
@@ -257,8 +322,10 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
     case "buy_more":
     case "buy_opposite_side": {
       const { primary, module } = nextForBuy(i);
-      const secondary: Cta | null =
-        primary.kind === "next_question" ? null : { kind: "next_question", label: "Next Question" };
+      const secondary = secondaryUnless(primary, {
+        kind: "next_question",
+        label: "Next Question",
+      });
 
       /**
        * SOMEBODY ASKED, AND YOU ANSWERED — the strongest thing this screen can
@@ -268,14 +335,17 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
        * whether the reader agreed with Maya or not; the side is a separate
        * sentence. A Rival who turns up turned up.
        */
-      if (i.answeredCallers > 0) {
-        const who =
-          i.answeredCallers === 1 && i.primaryCallerName?.trim()
-            ? `You showed up for ${i.primaryCallerName.trim()}.`
-            : `You showed up for ${i.answeredCallers} people.`;
+      if (i.answered) {
+        const who = i.answered.primaryCallerName.trim();
+        const headline =
+          i.answered.count === 1
+            ? // The type requires a name; an empty one is still refused rather
+              // than rendered as "1 people".
+              `You showed up for ${who || "someone"}.`
+            : `You showed up for ${i.answered.count} people.`;
         return {
-          headline: who,
-          support: i.side ? `You backed ${i.side}.` : null,
+          headline,
+          support: `You backed ${i.side}.`,
           // Already asked their people about this one — say so instead of
           // offering a second Challenge for the same market.
           consequence: i.outgoing === "live" ? "branch_live" : null,
@@ -289,12 +359,11 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
 
       /**
        * BOTH SIDES HELD IS NOT A CHANGE OF MIND. Only a proven transition — the
-       * original side gone — may be called a flip, and that is `market_exit` or
-       * `side_exit` territory, not this.
+       * original side gone — may be called a flip, and that is exit territory.
        */
       if (i.action === "buy_opposite_side" && i.after.yes > 0 && i.after.no > 0) {
         return {
-          headline: i.side ? `You added ${i.side}.` : "You added the other side.",
+          headline: `You added ${i.side}.`,
           support: "You now hold both sides.",
           consequence: null,
           challengeModule: module,
@@ -309,7 +378,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
 
       if (i.action === "buy_more") {
         return {
-          headline: i.side ? `You added to ${i.side}.` : "Your conviction grew.",
+          headline: `You added to ${i.side}.`,
           support: null,
           consequence: i.outgoing === "live" ? "branch_live" : null,
           challengeModule: module,
@@ -324,7 +393,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
       if (i.role !== "believer") {
         return {
           headline: "You made the question. Now you're in.",
-          support: i.side ? `You're backing ${i.side}.` : null,
+          support: `You're backing ${i.side}.`,
           consequence: null,
           challengeModule: module,
           primary,
@@ -341,7 +410,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
        */
       return {
         headline: "That's a real call.",
-        support: i.side ? `You backed ${i.side}.` : null,
+        support: `You backed ${i.side}.`,
         consequence: "reveal",
         challengeModule: module,
         primary,
@@ -357,8 +426,9 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
       /**
        * A SELL NEVER LEAVES THE MARKET, and never offers "Next Question". The
        * reader just changed their position in this question; sending them
-       * somewhere else treats the sale as a completed errand rather than a
-       * decision they may still be making.
+       * elsewhere treats the sale as a completed errand rather than a decision
+       * they may still be making. `SellInput` carries no `nextIncoming` at all,
+       * so the buy hierarchy is not merely unused here — it is unreachable.
        */
       const backToMarket: Cta = { kind: "back_to_market", label: "Back to Market" };
 
@@ -367,7 +437,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
        * confirmed — and refuse to characterise it. "You're out" to somebody who
        * still holds half their position is worse than saying nothing.
        */
-      if (!i.afterKnown) {
+      if (i.after == null) {
         return {
           headline: "Sale confirmed.",
           support: "Your position is updating.",
@@ -380,12 +450,18 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
         };
       }
 
-      const stillIn = held(i.after);
       const offer = canOffer(i) && spotsOpen(i.capacity) > 0;
       const full = canOffer(i) && spotsOpen(i.capacity) === 0;
+      const sellPrimary: Cta = offer
+        ? { kind: "challenge", label: challengeLabel(i.audience) }
+        : full
+          ? { kind: "make_room", label: "Make room" }
+          : backToMarket;
+      const sellModule: ChallengeModule = offer ? "organic" : full ? "make_room" : null;
+      const sellSecondary = secondaryUnless(sellPrimary, backToMarket);
+      const challengeLive: Consequence = i.outgoing === "live" ? "challenge_live" : null;
 
-      // FULLY OUT.
-      if (!stillIn) {
+      if (i.action === "market_exit") {
         /**
          * A MARKET MAKER MAY STILL ASK. They are inviting people to answer their
          * QUESTION, not to copy a position — so the offer survives an exit that
@@ -395,77 +471,56 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
         const makerMayAsk = i.role !== "believer";
         return {
           headline: makerMayAsk ? "Your position is closed." : "You're out.",
-          support: makerMayAsk ? "Your question is still alive." : sellSupport(i, i.side),
-          consequence: i.outgoing === "live" ? "challenge_live" : null,
-          challengeModule:
-            makerMayAsk && offer ? "organic" : makerMayAsk && full ? "make_room" : null,
-          primary:
-            makerMayAsk && offer
-              ? { kind: "challenge", label: challengeLabel(i.audience.total) }
-              : makerMayAsk && full
-                ? { kind: "make_room", label: "Make room" }
-                : backToMarket,
-          secondary: makerMayAsk && (offer || full) ? backToMarket : null,
+          support: makerMayAsk ? "Your question is still alive." : sellSupport(i),
+          consequence: challengeLive,
+          challengeModule: makerMayAsk ? sellModule : null,
+          primary: makerMayAsk ? sellPrimary : backToMarket,
+          secondary: makerMayAsk ? sellSecondary : null,
           stayOnMarket: true,
           copyCategory: makerMayAsk ? "market_maker" : "exit",
         };
       }
 
-      // LEFT ONE SIDE, STILL HOLDS THE OTHER.
       const remaining: Side = i.after.yes > 0 ? "YES" : "NO";
+
       if (i.action === "side_exit") {
         return {
-          headline: i.side ? `You left ${i.side}.` : "You left that side.",
-          support:
-            i.remainingValueUsd != null
-              ? `Still backing ${remaining} with ${usd(i.remainingValueUsd)}.`
-              : `Still backing ${remaining}.`,
-          consequence: i.outgoing === "live" ? "challenge_live" : null,
-          challengeModule: offer ? "organic" : full ? "make_room" : null,
-          primary: offer
-            ? { kind: "challenge", label: challengeLabel(i.audience.total) }
-            : full
-              ? { kind: "make_room", label: "Make room" }
-              : backToMarket,
-          secondary: offer || full ? backToMarket : null,
+          headline: `You left ${i.side}.`,
+          support: stillBacking(remaining, i.remainingValueUsd),
+          consequence: challengeLive,
+          challengeModule: sellModule,
+          primary: sellPrimary,
+          secondary: sellSecondary,
           stayOnMarket: true,
           copyCategory: "general",
         };
       }
 
-      // TOOK SOME OFF.
       return {
         headline: "You took some off.",
-        support:
-          i.remainingValueUsd != null
-            ? `Still backing ${remaining} with ${usd(i.remainingValueUsd)}.`
-            : `Still backing ${remaining}.`,
-        consequence: i.outgoing === "live" ? "challenge_live" : null,
-        challengeModule: offer ? "organic" : full ? "make_room" : null,
-        primary: offer
-          ? { kind: "challenge", label: challengeLabel(i.audience.total) }
-          : full
-            ? { kind: "make_room", label: "Make room" }
-            : backToMarket,
-        secondary: offer || full ? backToMarket : null,
+        support: stillBacking(remaining, i.remainingValueUsd),
+        consequence: challengeLive,
+        challengeModule: sellModule,
+        primary: sellPrimary,
+        secondary: sellSecondary,
         stayOnMarket: true,
         copyCategory: "general",
       };
     }
 
     default:
-      return assertNever(i.action);
+      return assertNever(i);
   }
 }
 
 /**
  * Words this screen must never use, whatever the branch.
  *
- * Three families, and each one is a lie of a different kind. The workflow words
- * describe a record changing rather than two people doing something. The
- * delivery words claim a channel this product does not have — there is no push,
- * no email, no inbox, so "notified" is simply false. And the casino words import
- * a reward system this product decided against.
+ * Three families, each a lie of a different kind. The workflow words describe a
+ * record changing rather than two people doing something. The delivery words
+ * claim a channel this product does not have — no push, no email, no inbox, so
+ * "notified" is simply false. The casino words import a reward system this
+ * product decided against.
  */
 export const POST_ACTION_BANNED: readonly string[] = [
   "accepted",
