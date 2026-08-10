@@ -1492,10 +1492,12 @@ function Feed() {
                       lensExhausted={lensExhausted}
                       loading={feedLoading}
                       failed={feedFailed}
-                      entries={feedEntries}
+                      entries={playlistEntries}
                       rows={knownRowsRef.current}
-                      activeId={activeMarket}
-                      onSelect={selectMarket}
+                      activeId={ideaDue ? IDEA_ROW_ID : activeMarket}
+                      onSelect={(id) =>
+                        id === IDEA_ROW_ID ? setIdeaView("open") : selectMarket(id)
+                      }
                       filters={filters}
                       onFilters={selectFilters}
                       availableNetworks={availableNetworks}
