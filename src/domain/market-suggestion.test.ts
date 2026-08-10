@@ -65,7 +65,7 @@ describe("eligibility", () => {
   it("inserts only when every session rule passes", () => {
     expect(shouldInsertSuggestion(gate)).toBe(true);
     expect(shouldInsertSuggestion({ ...gate, hasReadySuggestion: false })).toBe(false);
-    expect(shouldInsertSuggestion({ ...gate, cardsViewed: 4 })).toBe(false);
+    expect(shouldInsertSuggestion({ ...gate, cardsViewed: 0 })).toBe(true);
     expect(shouldInsertSuggestion({ ...gate, cardsSinceSuggestion: 11 })).toBe(false);
     expect(shouldInsertSuggestion({ ...gate, suggestionsThisSession: 1 })).toBe(false);
   });

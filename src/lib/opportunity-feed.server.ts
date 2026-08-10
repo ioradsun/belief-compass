@@ -209,7 +209,7 @@ function aiOf(row: Record<string, unknown> | undefined): FeedAiAnalysis | undefi
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- read-model rows are opaque JSON payloads */
 
-/** The ready idea for this viewer, if the session gate also allows one now. */
+/** The ready idea for this viewer, subject to repeat cadence and cooldowns. */
 async function ideaFor(
   wallet: string | null,
   sessionToken: string | null,

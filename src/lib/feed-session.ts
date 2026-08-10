@@ -17,18 +17,15 @@ export interface FeedSessionSnapshot {
 
 const MAX_SEEN = 200;
 
-/** The session gate the server applies (SUGGESTION.MIN_SESSION_CARDS_VIEWED). */
+/** The server's initial-admission floor (currently immediate for ready ideas). */
 const MIN_CARDS_FOR_IDEA = SUGGESTION.MIN_SESSION_CARDS_VIEWED;
 
 /**
  * A BROWSING SESSION SURVIVES A PAGE LOAD.
  *
- * The counters below are what the server's idea gate reads: it will not offer
- * "The House has an idea" until this session has actually watched a few cards.
- * Held only in module memory, every full document load — opening a market from
- * search, a preview reload, a return from an info page — reset the count to
- * zero, so in practice the gate almost never opened and the idea never arrived.
- * sessionStorage is exactly the right lifetime: one tab, one visit.
+ * The counters below let the server enforce repeat cadence consistently across
+ * a full document load, a market opened from search, or a return from an info
+ * page. sessionStorage is exactly the right lifetime: one tab, one visit.
  */
 const KEY = "feed-session:v1";
 
@@ -83,11 +80,8 @@ function persist(): void {
 /**
  * Anyone who needs to REACT to the session changing, not just read it.
  *
- * The feed request carries these counters, but React Query keys the request on
- * the reader's choices only — so crossing a threshold (five cards viewed, the
- * gate the House idea waits behind) changed nothing until the next 60s poll,
- * and on a fresh key it re-sent `cardsViewed: 0`. Subscribers let the gate
- * become part of the key.
+ * The feed request carries these counters. Subscribers keep cadence changes
+ * observable without coupling them to a particular navigation path.
  */
 const listeners = new Set<() => void>();
 let version = 0;
@@ -108,7 +102,7 @@ export function feedSessionVersion(): number {
   return version;
 }
 
-/** Has this session watched enough cards for the House to be allowed an idea? */
+/** Is this session past the initial admission floor for a ready House idea? */
 export function ideaGateOpen(): boolean {
   hydrate();
   return state.cardsViewed >= MIN_CARDS_FOR_IDEA;
