@@ -107,6 +107,21 @@ describe("progress a creator can actually be told", () => {
     expect(progressLine(tableProgress([]))).toBeNull();
   });
 
+  /**
+   * The card printed "0 of 7 showed up" and then, underneath, "7 of your people
+   * can weigh in. No smoke yet." — one fact, three tellings, led by a nought.
+   * Before anybody answers there is one sentence to say.
+   */
+  it("says it is early once, in one line, without a nought", () => {
+    const line = progressLine(tableProgress(many(7, open)));
+    expect(line).toBe("Waiting on 7");
+    expect(line).not.toMatch(/^0 of/);
+  });
+
+  it("switches to the count the moment anybody answers", () => {
+    expect(progressLine(tableProgress([passed(), open(), open()]))).toBe("0 of 3 showed up · 1 passed");
+  });
+
   it("never claims a view, a believer or a dollar", () => {
     // The only view signal this product has is client-reported and unverifiable,
     // and capital/believer totals are market facts rather than Challenge effects.
