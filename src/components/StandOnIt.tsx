@@ -77,6 +77,69 @@ export function StandOnIt({
   // sits beside a heading (GitHub's permalink icon). Borderless, quiet until
   // hovered, and it answers with a plain "Link copied" pill.
   if (variant === "title") {
+    // With media attached there are two links worth having — this market, and
+    // the thing it argues about — so the single glyph becomes a small overflow.
+    if (mediaUrl) {
+      return (
+        <span className={`relative inline-flex shrink-0 ${className}`}>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setMenu((m) => !m);
+            }}
+            aria-label="Market options"
+            aria-expanded={menu}
+            title="Options"
+            className="grid h-9 w-9 place-items-center rounded-[10px] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]"
+          >
+            <MoreIcon className="h-[19px] w-[19px]" />
+          </button>
+          {menu && (
+            <>
+              <span className="fixed inset-0 z-20" onClick={() => setMenu(false)} aria-hidden />
+              <span
+                className="absolute right-0 top-full z-30 mt-1 flex w-[190px] flex-col overflow-hidden rounded-[10px] py-1 text-left"
+                style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    setMenu(false);
+                    void go(e);
+                  }}
+                  className="px-3 py-2 text-left text-[13px] font-medium text-[var(--text)] transition-colors hover:bg-[var(--surface)]"
+                >
+                  Copy Conviction Link
+                </button>
+                <a
+                  href={mediaUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenu(false);
+                  }}
+                  className="px-3 py-2 text-left text-[13px] font-medium text-[var(--text)] transition-colors hover:bg-[var(--surface)]"
+                >
+                  Open Media URL ↗
+                </a>
+              </span>
+            </>
+          )}
+          {copied && (
+            <span
+              role="status"
+              className="pointer-events-none absolute right-0 top-full z-40 mt-1 whitespace-nowrap rounded-[8px] px-2 py-1 text-[11px] font-semibold text-[var(--text)]"
+              style={{ background: "var(--surface-2)" }}
+            >
+              Link copied
+            </span>
+          )}
+        </span>
+      );
+    }
     return (
       <span className={`relative inline-flex shrink-0 ${className}`}>
         <button
@@ -100,6 +163,7 @@ export function StandOnIt({
       </span>
     );
   }
+
 
   // Icon-only for dense surfaces (market/position cards); labelled everywhere else.
   if (variant === "card") {
