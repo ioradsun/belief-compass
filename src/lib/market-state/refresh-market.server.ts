@@ -28,6 +28,7 @@ import { evaluateOpportunity, type OpportunityType } from "@/domain/opportunity"
 import { OPP } from "@/domain/opportunity-config";
 import { buildOpportunityInput } from "@/lib/opportunity/build-input";
 import { renderReason } from "@/lib/opportunity/render-reason";
+import { chainDerivedPrices } from "@/lib/market-state/chain-price.server";
 
 type SB = SupabaseClient;
 
@@ -56,7 +57,8 @@ export async function refreshMarket(
     const now = Date.now();
 
     const [mkt, ms, ev, pos, tr, snap, snap1h] = await Promise.all([
-      sb.from("markets").select("created_at").eq("onchain_id", market).maybeSingle(),
+      sb.from("markets").select("created_at, pov_uuid").eq("onchain_id", market).maybeSingle(),
+
       sb
         .from("market_state")
         .select(
@@ -98,21 +100,47 @@ export async function refreshMarket(
     // Participation
     const capHeldYes = num(p.capital_held_yes);
     const capHeldNo = num(p.capital_held_no);
+
+    /**
+     * WHO OWNS THE MONEY FIELDS FOR THIS MARKET.
+     *
+     * POV prices and sizes the markets POV created. It has never heard of the
+     * ones created inside this app (`pov_uuid IS NULL`) — they 404 there — so
+     * for those the chain is the only witness and this job is their only
+     * writer. Left to POV, those rows kept NULL prices and a capital figure
+     * that was really ETH sitting in a column named `_usd`: a wallet holding a
+     * real share of a real market counted as nobody, holding nothing.
+     */
+    const povBacked = mkt.data?.pov_uuid != null;
+
+    // Prices: POV's when POV has one, otherwise the last price the side
+    // actually traded at on-chain. A side that never traded stays NULL.
+    const chainPx =
+      povBacked && state.yes_price_usd != null && state.no_price_usd != null
+        ? { yes: null, no: null }
+        : await chainDerivedPrices(sb, market, ethUsd);
+    const yesPrice = numOrNull(state.yes_price_usd) ?? chainPx.yes;
+    const noPrice = numOrNull(state.no_price_usd) ?? chainPx.no;
+
+    // Capital, in the unit the column name promises. `capital_held_*` is ETH
+    // cost basis; USD needs the calibration applied exactly once, here.
+    const yesCapUsd = povBacked ? num(state.yes_capital_usd) : capHeldYes * ethUsd;
+    const noCapUsd = povBacked ? num(state.no_capital_usd) : capHeldNo * ethUsd;
+
     // A side holding capital always has at least one believer behind it — the
     // market's initial investment isn't an indexed position.
-    const believersYes = seededBelievers(
-      num(p.believers_yes),
-      num(state.yes_capital_usd) || capHeldYes,
-    );
-    const believersNo = seededBelievers(
-      num(p.believers_no),
-      num(state.no_capital_usd) || capHeldNo,
-    );
+    const believersYes = seededBelievers(num(p.believers_yes), yesCapUsd || capHeldYes);
+    const believersNo = seededBelievers(num(p.believers_no), noCapUsd || capHeldNo);
     const mixed = num(p.mixed_wallets);
     const directional = believersYes + believersNo;
     const pYes = peopleYesPct(believersYes, believersNo);
     const pNo = peopleNoPct(believersYes, believersNo);
-    const moneyYes = numOrNull(state.money_yes_pct);
+    const moneyYes = povBacked
+      ? numOrNull(state.money_yes_pct)
+      : yesCapUsd + noCapUsd > 0
+        ? (yesCapUsd / (yesCapUsd + noCapUsd)) * 100
+        : null;
+
 
     // Activity windows (events)
     const volEth = {
@@ -127,7 +155,7 @@ export async function refreshMarket(
     };
     const buy24 = num(e.buy_count_24h);
     const sell24 = num(e.sell_count_24h);
-    const totalCapitalUsd = num(state.yes_capital_usd) + num(state.no_capital_usd);
+    const totalCapitalUsd = yesCapUsd + noCapUsd;
 
     // Per-side 24h capital delta = current per-side capital − the authoritative
     // snapshot baseline from ~24h ago. Null when there is no old-enough snapshot,
@@ -141,9 +169,8 @@ export async function refreshMarket(
       believers_no?: number | null;
     } | null;
     const yesCapitalDelta24h =
-      snapBase == null ? null : num(state.yes_capital_usd) - num(snapBase.yes_capital_usd);
-    const noCapitalDelta24h =
-      snapBase == null ? null : num(state.no_capital_usd) - num(snapBase.no_capital_usd);
+      snapBase == null ? null : yesCapUsd - num(snapBase.yes_capital_usd);
+    const noCapitalDelta24h = snapBase == null ? null : noCapUsd - num(snapBase.no_capital_usd);
 
     // People% 24h change, in PERCENTAGE POINTS, from the same authoritative
     // snapshot baseline as the capital deltas. Null when there is no old-enough
@@ -178,8 +205,8 @@ export async function refreshMarket(
       return m.rank === "unknown" ? null : m.pct;
     };
     const snap1hBase = (snap1h.data ?? null) as { yes_price_usd?: number | null } | null;
-    const yesChg1h = pctMove(numOrNull(state.yes_price_usd), numOrNull(snap1hBase?.yes_price_usd));
-    const yesChg24h = pctMove(numOrNull(state.yes_price_usd), numOrNull(snapBase?.yes_price_usd));
+    const yesChg1h = pctMove(yesPrice, numOrNull(snap1hBase?.yes_price_usd));
+    const yesChg24h = pctMove(yesPrice, numOrNull(snapBase?.yes_price_usd));
 
     // Milestone: only when a believer threshold was crossed within the 24h window.
     const rung = believerMilestoneAtOrBelow(directional);
@@ -227,6 +254,22 @@ export async function refreshMarket(
       yes_capital_delta_24h: yesCapitalDelta24h,
       no_capital_delta_24h: noCapitalDelta24h,
       side_balance: directional > 0 ? (believersYes - believersNo) / directional : null,
+      /**
+       * The money fields, written ONLY for markets POV does not own. For a POV
+       * market these keys are absent so POV's own numbers survive untouched;
+       * for one of ours they are the only numbers that will ever exist, and
+       * they are in USD — which is what the column names have always claimed.
+       */
+      ...(povBacked
+        ? {}
+        : {
+            yes_capital_usd: yesCapUsd,
+            no_capital_usd: noCapUsd,
+            // `capital_usd` is generated from the two sides — never written.
+            money_yes_pct: moneyYes,
+            ...(yesPrice != null ? { yes_price_usd: yesPrice } : {}),
+            ...(noPrice != null ? { no_price_usd: noPrice } : {}),
+          }),
       // tenure / conviction evidence
       avg_directional_days: numOrNull(p.avg_directional_days),
       median_directional_days: numOrNull(p.median_directional_days),
@@ -294,11 +337,11 @@ export async function refreshMarket(
     const inputRow: Record<string, unknown> = {
       onchain_id: market,
       ...update,
-      yes_price_usd: state.yes_price_usd,
-      no_price_usd: state.no_price_usd,
+      yes_price_usd: yesPrice,
+      no_price_usd: noPrice,
       money_yes_pct: moneyYes,
-      yes_capital_usd: state.yes_capital_usd,
-      no_capital_usd: state.no_capital_usd,
+      yes_capital_usd: yesCapUsd,
+      no_capital_usd: noCapUsd,
       market_created_at: createdAt,
     };
     const opp = evaluateOpportunity(buildOpportunityInput(inputRow, now), {
