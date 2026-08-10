@@ -250,4 +250,4 @@ export function embedFromRecord(raw: unknown): EmbedMedia | null {
   };
 }
 
-export const EMBED_HINT = "Paste a YouTube, Instagram, TikTok, X or Spotify link.";
+export const EMBED_HINT = "Paste a link or embed code — YouTube, Instagram, TikTok, X or Spotify.";
