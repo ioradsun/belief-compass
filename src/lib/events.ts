@@ -32,7 +32,7 @@ export type JsonValue =
 // ── Taxonomy ────────────────────────────────────────────────────────────────
 // The schema allows any string, so future kinds need no code change here; these
 // are the values Phase 2 actually writes and reads.
-export const EVENT_SOURCES = ["chain", "pov", "system", "legacy"] as const;
+export const EVENT_SOURCES = ["chain", "pov", "conviction", "system", "legacy"] as const;
 export type EventSource = (typeof EVENT_SOURCES)[number];
 
 export const EVENT_KINDS = ["trade", "market_created", "legacy_event"] as const;
