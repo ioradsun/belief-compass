@@ -1,17 +1,19 @@
 /**
- * LEFT PANEL — "Your Convictions". A dashboard of living beliefs, not a portfolio.
+ * LEFT PANEL — "Your Convictions". A PORTFOLIO VIEW, not a second newsroom.
  *
- * Each card answers four questions at a glance: what do I believe (the question),
- * what side am I on (a badge), how is my conviction performing (worth + gain, not
- * cost), and — the reason to open the market today — how is it reacting (ONE
- * dynamic story + a personal Pulse). Cards are ranked by urgency, so a Twin/Tribe/
- * Opp arrival or a believer surge rises to the top; money is a consequence, never
- * the headline. Story selection, pulse and ranking come from the pure
- * src/domain/position-story engine. Clicking opens the market in the center.
+ * Each card answers, in order: what am I backing (the question), which side am I
+ * on, what is it worth now, how is it doing (return %) — and, only when the
+ * platform's own persisted market fact is material, one quiet line of context.
+ *
+ * Positions computes no intelligence. It reads the shared financial functions
+ * (@/domain/position-value, @/domain/position, @/domain/metric-display) and the
+ * canonical `market_state.live_line`, re-told from the owner's seat by the pure
+ * @/domain/position-story. It does NOT scan the tape, score attention, rank by
+ * newsworthiness, or ask questions — that is Insider's job, and duplicating it
+ * here produced a second, weaker answer to the same question.
  */
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { listLiveEvents } from "@/lib/live.functions";
 import { type VolumeWindow } from "@/lib/markets.functions";
 import { positionValueUsd, isMeasured } from "@/domain/position-value";
 import { myConvictionsQO } from "@/lib/positions-query";
@@ -22,12 +24,13 @@ import { formatMoney } from "@/domain/money";
 import { StandOnIt } from "@/components/StandOnIt";
 import { useDisplayUnit } from "@/lib/display-unit";
 import {
-  positionSignal,
+  positionStory,
   type CanonicalLine,
-  type PositionSignal,
+  type PositionStory,
   type Side,
 } from "@/domain/position-story";
 import { marketTitle } from "@/domain/market-title";
+
 
 type Position = {
   onchain_id: number;
@@ -105,24 +108,24 @@ type Built = {
   /** The window's short name, e.g. "24H" / "1W" — what newInWindow is measured over. */
   windowLabel: string;
   chg: number | null;
-  signal: PositionSignal;
+  /** The persisted canonical fact, in the owner's voice — or null: stay quiet. */
+  story: PositionStory | null;
 };
 
 /**
- * ONE CONVICTION, ONE STORY.
+ * ONE CONVICTION, FOUR ANSWERS.
  *
- * The card answers, in order: what do I believe (the question) → what is
- * happening to my side (one plain sentence) → where do I stand (side, what it is
- * worth, what it has done). Nothing else earns space:
+ * What am I backing → which side → what is it worth → how is it doing. A fifth
+ * line appears only when the platform already knows something material about the
+ * market. Nothing else earns space:
  *
- *  • Pulse label — removed. "Accelerating / Capital-led" is a classification the
- *    reader has to decode, and the story sentence already says it in words.
- *  • Believers row — removed. The story sentence carries the count when it is the
- *    news; a standing number with no movement is not a reason to look.
- *  • Shares and entry → now — removed. Neither changes a decision; the worth and
- *    the return already state the outcome, and this is a belief, not a brokerage.
- *  • Dividers — removed. Spacing separates; lines only add noise.
+ *  • Absolute P&L — removed from the scan surface. Value and return % answer
+ *    "how is it doing" in one read; the dollar gain is one tap away on Full P&L.
+ *    The number is still computed, still exact, just not printed twice here.
+ *  • Pulse label, believers row, shares/entry, dividers — removed earlier, for
+ *    the same reason: they do not change a decision at a glance.
  */
+
 function ConvictionCard({
   p,
   onSelect,
@@ -135,7 +138,7 @@ function ConvictionCard({
   signedMoney: MoneyFmt;
 }) {
   const sideColor = p.side === "YES" ? "var(--yes)" : "var(--no)";
-  const { story } = p.signal;
+  const story = p.story;
   // The personal outcome, by the one rule: value leads, P&L is the answer, the
   // return % is paired to it. Never a market price %. Null → no trusted cost basis.
   const ret = positionReturn({
@@ -186,12 +189,17 @@ function ConvictionCard({
         {p.title}
       </div>
 
-      {/* 2 — One concise sentence explaining what changed. */}
-      <div className="mt-1.5 text-[12px] leading-snug text-[var(--text-muted)]">
-        {story.headline}
-      </div>
+      {/* 2 — The platform's own material fact about this market, in the owner's
+        voice. Absent when nothing material is on file: a position card does not
+        require commentary. */}
+      {story && (
+        <div className="mt-1.5 text-[12px] leading-snug text-[var(--text-muted)]">
+          {story.headline}
+        </div>
+      )}
 
-      {/* 3 — Side, current value, and the return, each under its own label. */}
+      {/* 3 — Side, current value, and the return %. Two figures, one weight:
+        neither is subordinate to the other at a glance. */}
       <div className="mt-3 flex items-end gap-6">
         <div>
           <div className="text-[10px] font-semibold tracking-wide" style={{ color: sideColor }}>
@@ -200,24 +208,21 @@ function ConvictionCard({
           <div className="num mt-0.5 text-[18px] font-semibold leading-none text-[var(--text)]">
             {money(p.value)}
           </div>
-          <div className="mt-1 text-[10px] text-[var(--text-muted)]">Current value</div>
+          <div className="mt-1 text-[10px] text-[var(--text-muted)]">Value</div>
         </div>
 
-        {ret || windowMove != null ? (
+        {ret?.pct || windowMove != null ? (
           <div className="ml-auto text-right">
             <div
-              className="num text-[14px] font-semibold leading-none"
+              className="num text-[18px] font-semibold leading-none"
               style={{ color: outcomeTone }}
             >
-              {/* A sub-cent dollar move drops its dollar line and lets the
-                percentage take the slot — never a misleading "+$0.00". */}
-              {ret ? (ret.pnl ?? ret.pct) : signedMoney(windowMove as number)}
-              {ret?.pnl && ret.pct && <span className="ml-3">{ret.pct}</span>}
+              {/* The return %, whenever a cost basis exists. Without one there is
+                no percentage to state, so the window's dollar move stands in —
+                the only honest measure left. */}
+              {ret?.pct ?? signedMoney(windowMove as number)}
             </div>
-            <div className="mt-1 text-[10px] text-[var(--text-muted)]">
-              {ret && !ret.pnl ? "Return %" : "Return"}
-              {ret?.pnl && ret.pct && <span className="ml-3">Return %</span>}
-            </div>
+            <div className="mt-1 text-[10px] text-[var(--text-muted)]">Return</div>
           </div>
         ) : (
           // NOT PRICED IS NOT FLAT. Saying so plainly beats a dash the holder
@@ -229,6 +234,7 @@ function ConvictionCard({
           )
         )}
       </div>
+
 
       {/* The only other fact worth a line: you hold the other side of this same
         question, so two cards under one belief read as deliberate. */}
@@ -407,45 +413,12 @@ export function MyConvictions({
     believerDelta: number | null;
   }[];
 
-  // Per-market network signal: pass the wallet so the tape tags Twin/Tribe/Opp
-  // and milestones. These lift a card to the top when your people arrive.
-  // One tape per MARKET — holding both sides must not fetch it twice.
-  const tapeIds = Array.from(new Set(facts.slice(0, 80).map((f) => f.id))).slice(0, 40);
-  const { data: tape } = useQuery({
-    queryKey: ["positions-tape", wallet ?? null, [...tapeIds].sort((a, b) => a - b)],
-    queryFn: () => listLiveEvents({ data: { wallet, marketIds: tapeIds, limit: 120 } }),
-    enabled: tapeIds.length > 0,
-    // NO INTERVAL — same reason as the pulses. `affectedPositionsTapeKeys` matches
-    // this key's id array against the markets that just traded and invalidates it
-    // precisely, so the tape is refreshed by the trade rather than by the clock.
-    staleTime: 60_000,
-    placeholderData: (prev) => prev,
-  });
-  const netByMarket = new Map<
-    number,
-    {
-      twin?: "YES" | "NO" | true;
-      tribe?: "YES" | "NO" | true;
-      opp?: "YES" | "NO" | true;
-      milestone?: number | null;
-    }
-  >();
-  for (const r of tape?.rows ?? []) {
-    const id = Number(r.marketId);
-    const cur = netByMarket.get(id) ?? {};
-    const cat = r.story?.category;
-    // The side when the row carries one, `true` when it only says they moved.
-    // A grouped or non-trade row has no side, and the story still works without.
-    const which = r.side ?? true;
-    if (cat === "twin") cur.twin = which;
-    else if (cat === "tribe") cur.tribe = which;
-    else if (cat === "opp") cur.opp = which;
-    if (r.kind === "believer_milestone") {
-      const th = Number((r.payload as { threshold?: unknown } | null)?.threshold ?? 0);
-      if (th > 0) cur.milestone = th;
-    }
-    netByMarket.set(id, cur);
-  }
+  // THE TAPE SCAN IS GONE. This used to fetch `listLiveEvents` for up to 40 held
+  // markets and reconstruct Twin / Tribe / Opp / milestone signals from raw rows —
+  // Positions reading the feed to decide what a market meant, in parallel with
+  // (and weaker than) the Insider pipeline that owns that judgement. Network
+  // intelligence belongs to Insider; a portfolio does not re-derive it.
+
 
   // The delta always answers "over the period you selected". For a finite window
   // that's the mark-to-mark move (value now − value at the start of the window,
@@ -465,16 +438,13 @@ export function MyConvictions({
   const sidesPerMarket = new Map<number, number>();
   for (const f of facts) sidesPerMarket.set(f.id, (sidesPerMarket.get(f.id) ?? 0) + 1);
 
-  // Second pass: attach the story + pulse, then rank by urgency.
+  // Second pass: attach the optional canonical line. No scoring happens here.
   const built: Built[] = facts.map((f) => {
-    const net = netByMarket.get(f.id);
-    const signal = positionSignal({
+    const story = positionStory({
       side: f.side,
       believers: f.believers,
       live: f.live,
       believerDelta: f.believerDelta,
-      net,
-      milestone: net?.milestone ?? null,
     });
     return {
       key: f.key,
@@ -495,18 +465,18 @@ export function MyConvictions({
       newInWindow: f.newInWindow,
       windowLabel: lifetime ? "all time" : winLabel.toUpperCase(),
       chg: f.chg,
-      signal,
+      story,
     };
   });
 
-  // Rank by "what's alive": urgency first, then the size of the move, then scale.
-  built.sort(
-    (a, b) =>
-      b.signal.urgency - a.signal.urgency ||
-      Math.abs(b.deltaUsd ?? 0) - Math.abs(a.deltaUsd ?? 0) ||
-      (b.believers ?? 0) - (a.believers ?? 0) ||
-      b.value - a.value,
-  );
+  // WHERE IS MY MONEY — the only question a portfolio order can answer honestly.
+  // The old sort led with STORY_RANK, an editorial urgency scale: a card rose
+  // because its sentence was interesting, not because the holding was large. That
+  // is a second newsroom, and it buried the biggest position under the loudest
+  // one. Value descending, with the position key as the deterministic tie-break
+  // so equal values never shuffle between renders.
+  built.sort((a, b) => b.value - a.value || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+
   // Both sides of one market read as one belief with two positions, so the
   // second side follows its partner instead of landing somewhere far down the
   // list under the same question. The market's rank is its strongest side's.
@@ -552,10 +522,16 @@ export function MyConvictions({
   const periodUsd = built.reduce((s, p) => s + (windowDelta(p.value, p.chg) ?? 0), 0);
   
 
-  const count = built.length;
+  // ONE COUNT, ONE MEANING. The tab strip used to receive `built.length` — a
+  // count of POSITIONS — while the rail printed "Backing N beliefs" from the same
+  // number, so a market held on both sides silently counted as two beliefs. The
+  // tab now receives the number of distinct markets, which is what "Positions N"
+  // reads as, and the rail no longer prints a second count beside it.
+  const marketCount = sidesPerMarket.size;
   useEffect(() => {
-    onCount?.(count);
-  }, [count, onCount]);
+    onCount?.(marketCount);
+  }, [marketCount, onCount]);
+
 
   if (!wallet || built.length === 0) {
     return <EmptyState onExplore={onExplore} />;
@@ -563,8 +539,11 @@ export function MyConvictions({
 
   return (
     <div>
-      {/* Summary — one financial story: the value leads, the % is the big right-hand
-          figure (same rhythm as the market instrument), the exact move sits beneath. */}
+      {/* Summary — the portfolio outcome in two figures of equal weight: what it
+          is worth, and what it has returned. The unrealized dollar line and the
+          "Backing N beliefs" count are gone: the first repeated the percentage in
+          another unit, the second repeated the tab's count with subtly different
+          semantics. Both totals are still exact on Full P&L. */}
       {(() => {
         // The cards' own arithmetic, summed. A percentage exists whenever a cost
         // basis does — a sub-cent dollar move must never blank the return, which
@@ -574,7 +553,6 @@ export function MyConvictions({
         const pct = basis > 0 && (hasBasis || move !== 0)
           ? formatPct((move / basis) * 100, { precise: true })
           : null;
-        const shownMove = Math.abs(move) >= 0.005 ? move : 0;
         const tone = move > 0 ? "var(--gain)" : move < 0 ? "var(--loss)" : "var(--text-muted)";
         const arrow = move > 0 ? "▲" : move < 0 ? "▼" : "";
         return (
@@ -584,7 +562,7 @@ export function MyConvictions({
                 {money(total)}
               </span>
               <span
-                className="num shrink-0 text-[20px] font-semibold leading-none tabular-nums"
+                className="num shrink-0 text-[24px] font-semibold leading-none tabular-nums"
                 style={{ color: tone }}
               >
                 {pct ?? "—"}
@@ -593,41 +571,26 @@ export function MyConvictions({
                 ) : null}
               </span>
             </div>
-            <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-              Backing {count} belief{count === 1 ? "" : "s"}
+            <div className="mt-1.5 flex items-baseline justify-between gap-3">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                Portfolio value
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                Return
+              </span>
             </div>
-            <div className="mt-0.5 flex items-baseline justify-between gap-3">
-              <div className="num text-[12px]" style={{ color: tone }}>
-                {shownMove === 0 ? (
-                  <span className="text-[var(--text-muted)]">—</span>
-                ) : (
-                  <>
-                    {signedMoney(shownMove)}{" "}
-                    <span className="font-normal text-[var(--text-muted)]">
-                      {/*
-                       * SCOPE, NOT JUST A NUMBER. This rail measures the value
-                       * of positions you still hold against what they cost —
-                       * it does NOT include realized trades, creator earnings,
-                       * or fees, which is why it differs from Net Profit on the
-                       * Full P&L page. "Since start" read like a lifetime total
-                       * and made two correct numbers look like a contradiction.
-                       */}
-                      {hasBasis ? "unrealized" : winLabel.toLowerCase()}
-                    </span>
-                  </>
-                )}
-              </div>
 
-              {onOpenDashboard && (
+            {onOpenDashboard && (
+              <div className="mt-2.5">
                 <button
                   type="button"
                   onClick={onOpenDashboard}
-                  className="shrink-0 text-[11px] font-semibold text-[var(--text-secondary)] underline-offset-2 hover:underline"
+                  className="text-[11px] font-semibold text-[var(--text-secondary)] underline-offset-2 hover:underline"
                 >
                   Full P&amp;L &rarr;
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         );
       })()}

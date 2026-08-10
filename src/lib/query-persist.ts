@@ -42,7 +42,6 @@ const PERSIST_PREFIXES = new Set([
   // The Insider cache root — the global feed and the per-market activity.
   "insider",
   "my-convictions",
-  "positions-tape",
   "market-change",
   "evidence",
   "network",

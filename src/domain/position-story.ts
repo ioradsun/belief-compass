@@ -1,36 +1,39 @@
 /**
- * Position story — the OWNER'S view of the platform's canonical market narrative.
+ * Position line — the OWNER'S reading of the platform's canonical market fact.
  *
- * This module deliberately does NOT compute a second narrative. The single
- * source of truth for "what is happening in this market" is the live line
- * selected by src/lib/market-state/read-model.ts (`selectLiveLine`) and stored
- * on `market_state.live_line{,_kind,_window,_payload}` — the same line the feed,
- * the market panel and the recommendation surfaces read. Here we only:
+ * This module computes NO intelligence. The single source of truth for "what is
+ * happening in this market" is the line selected by
+ * src/lib/market-state/read-model.ts (`selectLiveLine`) and persisted on
+ * `market_state.live_line{,_kind,_window,_payload}` — the same fact every other
+ * market surface reads. Here we only re-phrase it from the holder's seat: the
+ * same event, said as "your side" vs "the other side".
  *
- *   1. take the viewer's own network arrivals on that market (Twin / Tribe / Opp,
- *      already produced by the live tape) — those outrank everything for an owner;
- *   2. otherwise take the CANONICAL line and re-tell it from the owner's seat:
- *      the same event, phrased as "your side" vs "the other side";
- *   3. rank the result, so the convictions where something actually happened rise
- *      to the top of the panel.
+ * WHAT WAS REMOVED, AND WHY
  *
- * Nothing here derives momentum, price moves, or capital flow. The previous
- * version did: it read a per-window price % that is a near-uniform valuation
- * artifact across all markets, so almost every card printed "Money is moving
- * into YES without new believers" and flip-flopped as that number drifted. That
- * whole branch is gone — a story is only told when the read model has evidence
- * for it.
+ *  • STORY_RANK — a second editorial hierarchy. Positions ranked the holder's
+ *    money by how newsworthy a sentence was. A portfolio answers "where is my
+ *    money", so the list is now sorted by position value. There is no urgency
+ *    score, no attention score, and nothing to replace it with.
+ *  • Twin / Tribe / Opp / milestone — these were reconstructed on the client by
+ *    scanning raw tape events, i.e. Positions interpreting the feed to decide
+ *    what a market meant. Network intelligence belongs to the Insider pipeline;
+ *    Positions does not re-derive it.
+ *  • "Still early" / "Nothing changed today" — filler that occupied the line
+ *    whenever there was no fact. A position card does not require commentary.
+ *    With no material persisted fact this returns null and the card is quiet.
+ *
+ * Materiality is NOT decided here: `liveLineIsMaterial` is the producer's own
+ * rule, read from the persisted kind + window. Positions cannot alter, upgrade
+ * or reinterpret the factual meaning of a line — only whose seat it is told from.
  *
  * ZERO IO, pure, fully testable.
  */
+import { liveLineIsMaterial } from "@/lib/market-state/read-model";
 
 export type Side = "YES" | "NO";
 
-/** The one story a card tells, in priority order (also its urgency rank). */
+/** The one line a card may tell. Each maps 1:1 to a canonical `live_line_kind`. */
 export type StoryKind =
-  | "twin"
-  | "tribe"
-  | "opp"
   | "side_overtake"
   | "milestone"
   | "believers_your_side"
@@ -38,31 +41,13 @@ export type StoryKind =
   | "believers"
   | "selling"
   | "capital"
-  | "first_trade"
-  | "early"
-  | "quiet";
-
-export const STORY_RANK: Record<StoryKind, number> = {
-  twin: 100,
-  tribe: 90,
-  opp: 80,
-  side_overtake: 75,
-  milestone: 70,
-  believers_your_side: 65,
-  believers_other_side: 60,
-  believers: 55,
-  selling: 45,
-  capital: 40,
-  first_trade: 30,
-  early: 15,
-  quiet: 0,
-};
+  | "first_trade";
 
 export type StoryTone = "up" | "down" | "neutral" | "muted";
 
 export interface PositionStory {
   kind: StoryKind;
-  /** The one-sentence reason to open the market — the card's footer. */
+  /** The one-sentence fact, in the owner's voice — the card's footer. */
   headline: string;
   /** Optional supporting line. */
   body?: string;
@@ -90,19 +75,9 @@ export interface PositionStoryInput {
   believerDelta?: number | null;
   /** The canonical market narrative for this market (single source of truth). */
   live?: CanonicalLine | null;
-  /**
-   * Network activity on THIS market, from the live tape. A side when we know
-   * which way they went, `true` when we only know they moved.
-   */
-  net?: { twin?: Side | true; tribe?: Side | true; opp?: Side | true };
-  /** A believer milestone this market just crossed, from the tape (or null). */
-  milestone?: number | null;
   /** Now, for the staleness check. Defaults to the caller's clock. */
   nowMs?: number;
 }
-
-/** Below this many believers a side is still forming — "still early". */
-export const EARLY_BELIEVERS = 10;
 
 const HOUR = 3_600_000;
 
@@ -111,7 +86,7 @@ const HOUR = 3_600_000;
  * it was measured over. The read model keeps the last line on the row until a new
  * one wins, so a dormant market can carry a line for days — and "6 people joined
  * YES today" is a lie the moment "today" has passed. Each window gets roughly
- * twice its own span before the card falls back to the standing state.
+ * twice its own span before the card falls silent.
  */
 export const LINE_MAX_AGE_MS: Record<string, number> = {
   "1h": 6 * HOUR,
@@ -148,11 +123,11 @@ const num = (v: unknown): number | null => {
 const sideOf = (v: unknown): Side | null => (v === "YES" || v === "NO" ? v : null);
 const other = (s: Side): Side => (s === "YES" ? "NO" : "YES");
 const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
+const lowerFirst = (s: string) => (s ? s[0].toLowerCase() + s.slice(1) : s);
 
 /**
- * Re-tell the canonical line from the owner's seat. Returns null when the read
- * model has no line, or when its kind carries nothing an owner should be pulled
- * back for — the caller then falls back to the standing state of their side.
+ * Re-tell the canonical line from the owner's seat. Returns null when its kind
+ * carries nothing an owner should be pulled back for — the card then says nothing.
  */
 function ownerViewOfCanonical(
   side: Side,
@@ -240,8 +215,7 @@ function ownerViewOfCanonical(
   }
 
   if (kind === "capital_flow") {
-    // Factual only: the read model knows money moved, not who it favoured. The
-    // old copy claimed "money is moving into YES", which it never had evidence for.
+    // Factual only: the read model knows money moved, not who it favoured.
     return {
       kind: "capital",
       headline: live.line
@@ -261,95 +235,20 @@ function ownerViewOfCanonical(
   return null;
 }
 
-const lowerFirst = (s: string) => (s ? s[0].toLowerCase() + s.slice(1) : s);
-
 /**
- * The one story for a card, chosen by what matters most to an OWNER: their people
- * arriving, then the canonical market line seen from their side, then the standing
- * state of that side.
+ * The optional line for a card: the persisted canonical fact, re-told from the
+ * holder's seat — but only while it is both MATERIAL (the producer's own rule)
+ * and still TRUE (its window has not aged out). Otherwise null: silence.
  */
-export function positionStory(input: PositionStoryInput): PositionStory {
-  const { side, believers } = input;
-  const net = input.net ?? {};
-
-  // 1–3 — your people arrived, and WHICH WAY when we know. On your own position
-  // card that is the whole signal: your Twin agreeing with you and your Twin
-  // taking the other side are opposite news.
-  const way = (v: Side | true | undefined): Side | null => (typeof v === "string" ? v : null);
-  const agrees = (s: Side | null) => (s == null ? null : s === side);
-  if (net.twin) {
-    const s = way(net.twin);
-    return {
-      kind: "twin",
-      headline: s
-        ? `Your Conviction Twin just backed ${s}.`
-        : "Your Conviction Twin just entered this market.",
-      body: agrees(s) === false ? "Your closest match is on the other side of you." : undefined,
-      tone: "up",
-    };
-  }
-  if (net.tribe) {
-    const s = way(net.tribe);
-    return {
-      kind: "tribe",
-      headline: s ? `Your Tribe is backing ${s} here.` : "Your Tribe is becoming active here.",
-      body: s ? undefined : "Someone you move with just entered.",
-      tone: "up",
-    };
-  }
-  if (net.opp) {
-    const s = way(net.opp);
-    return {
-      kind: "opp",
-      headline: s
-        ? `Your strongest Opp just backed ${s}.`
-        : "Your strongest Opp entered this market.",
-      tone: "neutral",
-    };
-  }
-
-  // 4 — a milestone the tape saw directly.
-  if (input.milestone != null)
-    return {
-      kind: "milestone",
-      headline: `This market just reached ${input.milestone.toLocaleString("en-US")} believers.`,
-      tone: "up",
-    };
-
-  // 5 — THE CANONICAL MARKET STORY, told from the owner's seat — but only while
-  // it is still true. A stale line is worse than no line: it invents news.
-  if (input.live && isLineFresh(input.live, input.nowMs ?? Date.now())) {
-    const s = ownerViewOfCanonical(side, input.live, believers, input.believerDelta ?? null);
-    if (s) return s;
-  }
-
-  // 6 — no canonical evidence: the standing state of your side.
-  if (believers != null && believers > 0 && believers < EARLY_BELIEVERS)
-    return {
-      kind: "early",
-      headline:
-        believers === 1
-          ? `You are the only believer on ${side} so far.`
-          : `Only ${believers.toLocaleString("en-US")} people back ${side} so far.`,
-      tone: "muted",
-    };
-  if (believers != null && believers > 0)
-    return {
-      kind: "quiet",
-      headline: `Nothing changed today — ${believers.toLocaleString("en-US")} still back ${side}.`,
-      tone: "muted",
-    };
-  return { kind: "quiet", headline: "Nothing has changed here today.", tone: "muted" };
-}
-
-export interface PositionSignal {
-  story: PositionStory;
-  /** Higher = more deserving of the top of the list. */
-  urgency: number;
-}
-
-/** Everything a card needs to render + its rank for sorting by "what's alive". */
-export function positionSignal(input: PositionStoryInput): PositionSignal {
-  const story = positionStory(input);
-  return { story, urgency: STORY_RANK[story.kind] };
+export function positionStory(input: PositionStoryInput): PositionStory | null {
+  const live = input.live;
+  if (!live) return null;
+  if (!liveLineIsMaterial(live.kind, live.window)) return null;
+  if (!isLineFresh(live, input.nowMs ?? Date.now())) return null;
+  return ownerViewOfCanonical(
+    input.side,
+    live,
+    input.believers,
+    input.believerDelta ?? null,
+  );
 }
