@@ -116,6 +116,16 @@ export function isTallMedia(media: StageMedia | null | undefined): boolean {
   return media.kind === "image" || media.kind === "video";
 }
 
+/**
+ * EVERY market with media reads the same way: Media / Market tabs under the
+ * question. A Spotify bar and a YouTube player get identical chrome; only the
+ * fill rule differs — tall media stretches to the stage, short media sits at
+ * its natural height at the top of the pane.
+ */
+export function usesStageSwitch(media: StageMedia | null | undefined): boolean {
+  return !!media;
+}
+
 export function MediaSwitch({
   value,
   onChange,
