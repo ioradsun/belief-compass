@@ -20,7 +20,7 @@ const code = (p: string) =>
 describe("the create surface tells one story, and the rails follow it", () => {
   it("shows a spark in the right rail while writing, not a recruiting desk", () => {
     const route = code("src/routes/index.tsx");
-    expect(route).toMatch(/createOpen \? \(\s*<IdeasRail/);
+    expect(route).toMatch(/createOpen \|\| ideaDue \? \(\s*<IdeasRail/);
   });
 
   it("keeps Challenge out of the composer entirely", () => {
