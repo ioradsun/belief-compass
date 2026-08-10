@@ -582,12 +582,11 @@ export function ConvictionDashboard({
                       <span className="text-[14px] font-medium text-[var(--text)]">
                         Trading Fees
                       </span>
-                      <span
+                      <Signed
+                        value={fmtUsd(-tradingFees, true)}
                         className="ml-auto text-[15px] font-semibold tabular-nums"
-                        style={{ color: "var(--loss)" }}
-                      >
-                        {fmtUsd(-tradingFees, true)}
-                      </span>
+                      />
+
                     </div>
                     <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
                       Paid to the protocol on every buy. Already counted in your Net Profit.
