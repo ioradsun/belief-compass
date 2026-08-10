@@ -42,10 +42,36 @@ import {
   finishedLine,
   spotsOpen,
   TABLE_SLOTS,
+  showedUpHeadline,
+  showedUpSide,
   type RecipientFact,
   type CloseReason,
+  type Responder,
 } from "@/domain/table";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
+
+/**
+ * ONLY THE WORDS YES AND NO CARRY A SIDE COLOUR.
+ *
+ * The same rule the Case File already follows. Tinting the whole sentence would
+ * make agreement look like a bigger success than disagreement, which is the one
+ * thing this surface must never say.
+ */
+function SideWord({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\bYES\b|\bNO\b)/g).map((part, i) =>
+        part === "YES" || part === "NO" ? (
+          <span key={i} style={{ color: part === "YES" ? "var(--yes)" : "var(--no)" }}>
+            {part}
+          </span>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
 
 export const tableKey = (wallet?: string) => ["table", wallet ?? null] as const;
 
@@ -85,7 +111,6 @@ export function YourTable({
   const { data: rows, isError } = useTable(wallet);
   const [adding, setAdding] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-
 
   const close = useMutation({
     mutationFn: async (challengeId: number) =>
@@ -224,6 +249,7 @@ export function YourTable({
               id={row.id}
               title={row.title}
               recipients={row.recipients}
+              responders={row.responders}
               closeReason={row.closeReason}
               onOpen={() => onSelect(row.marketId)}
               onClose={() => close.mutate(row.id)}
@@ -232,7 +258,6 @@ export function YourTable({
           ))}
         </ul>
       )}
-
     </div>
   );
 }
@@ -309,11 +334,11 @@ function TablePicker({
   );
 }
 
-
 function TableRowCard({
   id,
   title,
   recipients,
+  responders,
   closeReason,
   onOpen,
   onClose,
@@ -322,6 +347,8 @@ function TableRowCard({
   id: number;
   title: string | null;
   recipients: RecipientFact[];
+  /** Who turned up, newest first. Passers can never appear here. */
+  responders: Responder[];
   /** Set once it has ended — the card becomes an outcome rather than a status. */
   closeReason: CloseReason | null;
   onOpen: () => void;
@@ -331,6 +358,20 @@ function TableRowCard({
   const progress = tableProgress(recipients);
   const finished = closeReason != null;
   const line = finished ? finishedLine(progress, closeReason) : progressLine(progress);
+  /**
+   * WHO TURNED UP, ABOVE THE COUNT — the whole point of putting a question up.
+   *
+   * The card used to lead with "3 of 8 showed up", which is a true sentence
+   * about a fraction. The thing that actually happened is that Casey read your
+   * question and took a public position because you asked, and her name was the
+   * one fact the card refused to print.
+   *
+   * SIDE-BLIND HEADLINE. "Casey showed up" is identical whether she agreed or
+   * not — a Rival who turns up turned up — and the side sits underneath in its
+   * own colour rather than tinting the celebration.
+   */
+  const headline = showedUpHeadline(responders);
+  const sideLine = showedUpSide(responders);
   const [more, setMore] = useState(false);
 
   return (
@@ -351,12 +392,25 @@ function TableRowCard({
             section is the live side, and the dashed border says which cards have
             ended — a dot on every open card was the same fact told twice. */}
 
-
         <p
           className={`line-clamp-2 text-[13px] leading-snug ${finished ? "text-[var(--text-secondary)]" : "text-[var(--text)]"}`}
         >
           {title ?? "This question"}
         </p>
+
+        {/* SOMEBODY SHOWED UP. Above the fraction, because a person is a bigger
+            fact than a ratio — and absent entirely until one has, so the card
+            never leads with a promise. */}
+        {headline && (
+          <p className="mt-1.5 text-[12px] leading-snug font-semibold text-[var(--text)]">
+            {headline}
+          </p>
+        )}
+        {sideLine && (
+          <p className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
+            <SideWord text={sideLine} />
+          </p>
+        )}
 
         {/* WHAT HAPPENED BECAUSE YOU PUT IT UP. Absent entirely until somebody has
             been reached — a Challenge with no audience has no story yet, and
@@ -373,7 +427,6 @@ function TableRowCard({
         {/* NO SECOND LINE. "0 of 7 showed up" plus "7 of your people can weigh
             in. No smoke yet." was one fact told three times. The early state now
             lives inside `progressLine` as a single sentence. */}
-
       </button>
 
       {/* TAKE IT OFF THE TABLE — casual, because it is. Not "Delete", not "Cancel":
