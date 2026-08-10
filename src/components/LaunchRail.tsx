@@ -33,9 +33,7 @@
  * qualifies yet → no reach line. Neither is ever rendered as a zero.
  */
 import { useQuery } from "@tanstack/react-query";
-import { getCallReach } from "@/lib/challenge.functions";
-import { callReachLine, type NamedPerson } from "@/domain/challenge";
-import { PutOnTable } from "@/components/PutOnTable";
+import type { NamedPerson } from "@/domain/challenge";
 import { showedUpFor } from "@/domain/dependability";
 import { closedCallsKey } from "@/hooks/useAnswerCalls";
 
@@ -43,25 +41,15 @@ export function LaunchRail({
   wallet,
   kind = "created",
   marketId,
-  onSeeTable,
   onDone,
 }: {
   wallet?: string;
   kind?: "created" | "backed";
   /** Which market just happened — how the backward line finds who was answered. */
   marketId?: number;
-  /** Take me to Yours — the only place a Challenge can actually be managed. */
-  onSeeTable?: () => void;
   /** Dismiss the moment — the market is just a market now. */
   onDone: () => void;
 }) {
-  const { data: reach } = useQuery({
-    queryKey: ["call-reach", wallet ?? null, marketId ?? null],
-    queryFn: () => getCallReach({ data: { wallet: wallet ?? null, marketId: marketId ?? null } }),
-    enabled: !!wallet,
-    staleTime: 60_000,
-  });
-
   // Written by useAnswerCalls when the trade settled. No queryFn: this is a
   // handoff, not a fetch — there is nothing to go and ask for, and a request
   // here would race the write it is waiting on.
@@ -73,7 +61,6 @@ export function LaunchRail({
 
   if (!wallet) return null;
 
-  const line = reach ? callReachLine(reach) : null;
   // Creating a market answers nobody — a creator was not called into their own
   // question — so the backward line belongs to a taken side only.
   const answered = kind === "backed" ? showedUpFor((closed ?? []).map((p) => p.name ?? "")) : null;
