@@ -1222,32 +1222,37 @@ const finLoose = (v: unknown): number | null =>
 export const getMarketBaselines = createServerFn({ method: "GET" })
   .inputValidator((d: { id: number }) => z.object({ id: z.number().int().nonnegative() }).parse(d))
   .handler(async ({ data }): Promise<MarketBaselines> => {
-    const sb = serviceClient() as unknown as {
-      rpc: (
-        fn: string,
-        args: Record<string, unknown>,
-      ) => Promise<{ data: unknown; error: unknown }>;
-    };
-    try {
-      const { data: rows, error } = await sb.rpc("market_window_baselines", { p_id: data.id });
-      if (error || !Array.isArray(rows)) return {};
-      const out: MarketBaselines = {};
-      for (const raw of rows as Array<Record<string, unknown>>) {
-        const key = String(raw.window_key) as VolumeWindow;
-        out[key] = {
-          believersYes: finLoose(raw.believers_yes),
-          believersNo: finLoose(raw.believers_no),
-          yesCapitalUsd: finLoose(raw.yes_capital_usd),
-          noCapitalUsd: finLoose(raw.no_capital_usd),
-          yesPriceUsd: finLoose(raw.yes_price_usd),
-          noPriceUsd: finLoose(raw.no_price_usd),
-        };
+    // Viewer-blind: one RPC per market per window, shared by every reader on it.
+    const { sharedMarketRead } = await import("@/lib/market-core-cache.server");
+    return sharedMarketRead("baselines", data.id, async () => {
+      const sb = serviceClient() as unknown as {
+        rpc: (
+          fn: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: unknown; error: unknown }>;
+      };
+      try {
+        const { data: rows, error } = await sb.rpc("market_window_baselines", { p_id: data.id });
+        if (error || !Array.isArray(rows)) return {};
+        const out: MarketBaselines = {};
+        for (const raw of rows as Array<Record<string, unknown>>) {
+          const key = String(raw.window_key) as VolumeWindow;
+          out[key] = {
+            believersYes: finLoose(raw.believers_yes),
+            believersNo: finLoose(raw.believers_no),
+            yesCapitalUsd: finLoose(raw.yes_capital_usd),
+            noCapitalUsd: finLoose(raw.no_capital_usd),
+            yesPriceUsd: finLoose(raw.yes_price_usd),
+            noPriceUsd: finLoose(raw.no_price_usd),
+          };
+        }
+        return out;
+      } catch {
+        return {}; // pre-migration or transient error → tape fallback
       }
-      return out;
-    } catch {
-      return {}; // pre-migration or transient error → tape fallback
-    }
+    });
   });
+
 
 /**
  * Per-market pulse strips: the most recent real trade events for each of the
