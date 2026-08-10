@@ -604,7 +604,15 @@ export function MyConvictions({
                   <>
                     {signedMoney(shownMove)}{" "}
                     <span className="font-normal text-[var(--text-muted)]">
-                      {hasBasis ? "since start" : winLabel.toLowerCase()}
+                      {/*
+                       * SCOPE, NOT JUST A NUMBER. This rail measures the value
+                       * of positions you still hold against what they cost —
+                       * it does NOT include realized trades, creator earnings,
+                       * or fees, which is why it differs from Net Profit on the
+                       * Full P&L page. "Since start" read like a lifetime total
+                       * and made two correct numbers look like a contradiction.
+                       */}
+                      {hasBasis ? "unrealized" : winLabel.toLowerCase()}
                     </span>
                   </>
                 )}

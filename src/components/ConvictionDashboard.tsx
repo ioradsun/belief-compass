@@ -292,7 +292,11 @@ export function ConvictionDashboard({
 
   const strongestEdge = [...sources].filter((s) => s.usd > 0).sort((a, b) => b.usd - a.usd)[0];
   const navSummary: Record<SectionId, string> = {
-    overview: fmtUsd(sinceStart, true),
+    // The nav label for a section IS that section's headline. This showed
+    // `sinceStart` (holding + trading + creating, before fees) while the
+    // Overview hero showed `journey.netProfitUsd` (the same story, after fees
+    // and reconciled against capital in) — two different totals under one word.
+    overview: fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0),
     journey: fmtUsd(worthToday),
     edge: strongestEdge ? fmtUsd(strongestEdge.usd, true) : "",
     wins: bestMarkets.length ? `${bestMarkets.length}` : "",
