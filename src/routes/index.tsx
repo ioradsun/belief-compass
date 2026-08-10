@@ -23,7 +23,12 @@ import {
 import { readSessionToken } from "@/lib/wallet-session";
 
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
-import { FeedListPanel, type FeedListEntry } from "@/components/FeedListPanel";
+import { FeedListPanel, IDEA_ROW_ID, type FeedListEntry } from "@/components/FeedListPanel";
+
+/** Markets left ahead of the reader before the queue asks for more. */
+const FEED_LOW_WATER = 4;
+/** Floor between two refill requests, so a drained queue cannot loop. */
+const FEED_REFILL_MS = 10_000;
 import { toLens, type Lens } from "@/domain/feed/lens";
 import { DEFAULT_SENSITIVITY, type Sensitivity } from "@/domain/market-change";
 import { useFeedSensitivity } from "@/lib/feed-sensitivity";
