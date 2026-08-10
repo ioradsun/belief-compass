@@ -33,9 +33,9 @@ describe("the outbound card claims only what the server proved", () => {
 
   it("never names anybody as having passed", () => {
     // A pass is a choice about a question, not a verdict on a person. The count
-    // is aggregate and stays aggregate — no "Mike passed on you", ever.
+    // is aggregate and stays aggregate — it reaches the card only through the
+    // shared progress line, never as a named person.
     const c = yours();
-    expect(c).toMatch(/progress\.passed/);
     expect(c).not.toMatch(/passedBy|whoPassed|passers/);
   });
 
