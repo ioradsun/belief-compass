@@ -136,7 +136,7 @@ export function MediaSwitch({
           onClick={() => onChange(key)}
           // Fixed width per tab: the label never re-measures the row when the
           // selected tab changes, so nothing beside or below it shifts.
-          className={`w-[68px] rounded-full py-1 text-center transition-colors ${
+          className={`w-[58px] shrink-0 rounded-full py-1 text-center transition-colors ${
             value === key
               ? "bg-[var(--surface-2,rgba(255,255,255,0.08))] text-[var(--text)]"
               : "text-[var(--text-muted)]"
