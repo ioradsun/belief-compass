@@ -33,16 +33,19 @@ describe("the outbound card claims only what the server proved", () => {
 
   it("never names anybody as having passed", () => {
     // A pass is a choice about a question, not a verdict on a person. The count
-    // is aggregate and stays aggregate — no "Mike passed on you", ever.
+    // is aggregate and stays aggregate — it reaches the card only through the
+    // shared progress line, never as a named person.
     const c = yours();
-    expect(c).toMatch(/progress\.passed/);
     expect(c).not.toMatch(/passedBy|whoPassed|passers/);
   });
 
-  it("says it is early rather than printing a row of noughts", () => {
+  it("tells the early state once, in the one progress line", () => {
+    // "0 of 7 showed up" + "7 of your people can weigh in. No smoke yet." was the
+    // same fact three times. `progressLine` owns the early sentence now, so the
+    // card must not carry a second one of its own.
     const c = yours();
-    expect(c).toMatch(/No smoke yet/);
-    expect(c).toMatch(/progress\.showedUp === 0 && progress\.passed === 0/);
+    expect(c).not.toMatch(/No smoke yet|can weigh in/);
+    expect(c).toMatch(/progressLine\(/);
   });
 
   it("counts capacity from the live rows only", () => {
