@@ -580,6 +580,19 @@ export function MarketDeck({
         </MediaStage>
       )}
 
+      {/* SEE BOTH SIDES SURVIVES THE MEDIA TAB. The CTA lives inside
+        `marketInner`, which on a tall-media market is the hidden pane — so a
+        media market simply had no way into the Case File until you switched
+        tabs. The tab is a view of the body, not of the market's controls, so
+        the CTA is rendered here for exactly the state where the body is
+        offscreen. */}
+      {!mobileCaseOpen && onToggleCase && stageMedia && tallMedia && stageTab === "media" && (
+        <div className="shrink-0 pt-[var(--deck-gap,12px)]">
+          <ExamineCta open={caseOpen} onToggle={onToggleCase} insiderRead={insiderRead_} />
+        </div>
+      )}
+
+
       {/* Decision dock — buy by default; sell takes over when opened on a holding.
         Reaching the dock is the strongest signal a wallet is about to be needed,
         so hover/touch/focus here starts the wallet chunks before the click. */}
