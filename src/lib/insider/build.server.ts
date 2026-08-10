@@ -51,6 +51,8 @@ import { stakeBoost, NO_STAKES } from "@/domain/viewer-stake";
 import { currentHoldDays, holdStartIsFloor } from "@/domain/tenure";
 import { classifyPace } from "@/domain/feed-scheduler";
 import { buildStandingStories } from "@/lib/standing-facts.server";
+import { accumulatePatterns } from "@/domain/insider/pattern";
+import type { StandingStoryRow } from "@/domain/standing-story";
 import { buildPersonMilestones } from "@/lib/person-milestones.server";
 import { tellConvictionMilestone } from "@/domain/person-milestone";
 
@@ -479,7 +481,60 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       limit: STANDING_CANDIDATES,
     }).catch(() => []);
 
-    for (const s of standingRows) {
+    /* ── PATTERN: FACT + FACT + FACT → ONE STRONGER CLUE ────────────────────
+       Two surveillance photos of the same table are one story. When several
+       standing observations about one market point at the same underlying
+       truth — the same holders sat through two proven moves, or one side has
+       been held for weeks while the other is still empty — the composer merges
+       them into a single dossier and CONSUMES its constituents so the reader
+       gets one strong story instead of four correct ones.
+
+       It reads the STRUCTURED evidence each row carries (signed price move,
+       opposite occupancy, holder count, tenure) and never the sentence. */
+    const inScope = standingRows.filter((s) => !data?.side || s.side === data.side);
+    const dossiers = accumulatePatterns(
+      inScope.map((s) => ({
+        key: s.key,
+        marketId: s.marketId,
+        marketTitle: s.marketTitle,
+        side: s.side,
+        holderCount: s.evidence?.holderCount ?? s.people.length,
+        maxDaysHeld: s.evidence?.maxDaysHeld ?? 0,
+        priceMove: s.evidence?.priceMove ?? null,
+        oppositeBelievers: s.evidence?.oppositeBelievers ?? null,
+        kind: s.kind,
+        strength: s.strength,
+      })),
+    );
+    const absorbed = new Set(dossiers.flatMap((d) => d.consumes));
+    /* A dossier prints exactly like a standing story — same admission, same
+       ranking, same editorial — so it is expressed as one, with the members'
+       people behind it and a strength that outranks any single part. */
+    const patternRows: StandingStoryRow[] = dossiers.map((d) => {
+      const members = inScope.filter((s) => d.consumes.includes(s.key));
+      const seen = new Set<string>();
+      const people = members
+        .flatMap((m) => m.people)
+        .filter((p) => (seen.has(p.wallet) ? false : (seen.add(p.wallet), true)));
+      return {
+        kind: (members[0]?.kind ?? "held_through_price_move") as StandingStoryRow["kind"],
+        klass: "intelligence",
+        key: `pattern:${d.kind}:${d.marketId}:${d.side}:${d.consumes.length}`,
+        marketId: d.marketId,
+        marketTitle: members[0]?.marketTitle ?? "",
+        side: d.side,
+        people,
+        headline: d.headline,
+        body: d.body,
+        strength: d.strength,
+        motif: `pattern:${d.kind}:${d.side}`,
+      };
+    });
+
+    for (const s of [...patternRows, ...standingRows]) {
+      // Absorbed into a dossier above — the evidence is spoken for, so the
+      // constituent must not also print.
+      if (absorbed.has(s.key)) continue;
       // A YES/NO activity rail is a side ledger. Standing stories are built
       // from the whole market, so the same side boundary applies or a quiet
       // YES rail fills with NO continuity.
