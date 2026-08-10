@@ -136,6 +136,7 @@ export function noteIdeaShown(): void {
 }
 
 export function feedSession(): FeedSessionSnapshot {
+  hydrate();
   return {
     seenIds: [...state.seen],
     cardsViewed: state.cardsViewed,
