@@ -12,15 +12,14 @@
  * there is no arbitrary-iframe or arbitrary-domain path.
  */
 
-export type EmbedPlatform = "youtube" | "instagram" | "tiktok" | "x" | "spotify";
+export type EmbedPlatform = "youtube" | "x" | "spotify";
 
 export const PLATFORM_LABEL: Record<EmbedPlatform, string> = {
   youtube: "YouTube",
-  instagram: "Instagram",
-  tiktok: "TikTok",
   x: "X",
   spotify: "Spotify",
 };
+
 
 /**
  * How each embed occupies the stage. `ratio` is width/height; `fixedHeight`
