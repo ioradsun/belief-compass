@@ -37,6 +37,7 @@ import {
   ONE_SIDED_MIN_DAYS,
   LOPSIDED_MIN_LEAD_USD,
   LOPSIDED_RATIO,
+  isAbsoluteClaim,
   type SemanticInput,
 } from "@/domain/semantic-question";
 import type { SignalVector } from "@/domain/signal-vector";
