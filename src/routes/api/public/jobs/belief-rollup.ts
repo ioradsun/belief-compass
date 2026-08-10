@@ -59,7 +59,15 @@ export const Route = createFileRoute("/api/public/jobs/belief-rollup")({
 
         // Choose affected market set
         let marketIds: number[];
-        if (mode === "full" || mode === "sweep") {
+        // An explicit market list, for repairing a known market without a
+        // whole-corpus sweep.
+        const only = (url.searchParams.get("markets") ?? "")
+          .split(",")
+          .map((s) => Number(s.trim()))
+          .filter((n) => Number.isFinite(n) && n > 0);
+        if (only.length > 0) {
+          marketIds = only;
+        } else if (mode === "full" || mode === "sweep") {
           const { data } = await sb.from("markets").select("onchain_id");
           marketIds = (data ?? []).map((r) => Number(r.onchain_id));
         } else {
