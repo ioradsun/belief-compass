@@ -24,7 +24,8 @@ import {
   type ConvictionAction,
 } from "@/domain/conviction-event";
 import { tellPiStory } from "@/domain/pi-voice";
-import { retellTransition, type CopyLevel } from "@/domain/transition-denominator";
+import { type CopyLevel } from "@/domain/transition-denominator";
+import { composeTransition } from "@/domain/transition-copy";
 import { tellNewMarketStory } from "@/domain/new-market-story";
 import { enrichPeople, orderForViewer, relationshipBoost } from "@/domain/viewer-relationship";
 import { namePerson, knownFirst, type ProfileLike } from "@/domain/feed-people";
