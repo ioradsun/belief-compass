@@ -608,7 +608,7 @@
     justify-content: center;
   }
   .deck-stage {
-    flex: 0 1 auto;
+    flex: 1 1 0%;
   }
 }
 @media (min-height: 1100px) {

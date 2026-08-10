@@ -83,7 +83,7 @@ export function MediaStage({
   return (
     <div className={`relative min-h-0 overflow-hidden ${className}`}>
       <div
-        className="flex h-full w-full min-w-full shrink-0 flex-col overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]"
+        className="relative flex min-h-0 flex-1 w-full min-w-full shrink-0 flex-col overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]"
         style={{ gap: "var(--deck-gap, 12px)" }}
       >
         {children}
@@ -170,7 +170,7 @@ export function StagePane({
 }) {
   return (
     <div
-      className={`min-h-0 flex-1 flex-col overflow-hidden ${active ? "flex" : "hidden"} ${className}`}
+      className={`absolute inset-0 min-h-0 flex-col overflow-hidden ${active ? "visible z-[1] flex" : "invisible z-0 flex pointer-events-none"} ${className}`}
       inert={!active ? true : undefined}
       aria-hidden={!active || undefined}
     >
@@ -182,9 +182,9 @@ export function StagePane({
 
 
 
-export function MediaEvidence({ media }: { media: StageMedia }) {
+export function MediaEvidence({ media, fitContainer = false }: { media: StageMedia; fitContainer?: boolean }) {
   if (media.kind === "embed" && media.embed)
-    return <MediaEmbed media={media.embed} caption={false} />;
+    return <MediaEmbed media={media.embed} caption={false} fitContainer={fitContainer} />;
   const url = media.url as string;
   if (media.kind === "image") {
     return (
@@ -192,7 +192,7 @@ export function MediaEvidence({ media }: { media: StageMedia }) {
         src={url}
         alt={media.alt ?? "Evidence attached to this market"}
         loading="lazy"
-        className="max-h-full w-full rounded-[16px] object-contain"
+        className={`${fitContainer ? "h-full" : "max-h-full"} w-full rounded-[16px] object-contain`}
       />
     );
   }
@@ -203,7 +203,7 @@ export function MediaEvidence({ media }: { media: StageMedia }) {
         controls
         playsInline
         preload="metadata"
-        className="max-h-full w-full rounded-[16px] bg-black object-contain"
+        className={`${fitContainer ? "h-full" : "max-h-full"} w-full rounded-[16px] bg-black object-contain`}
       />
     );
   }

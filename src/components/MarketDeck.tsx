@@ -560,7 +560,7 @@ export function MarketDeck({
               {/* Both panes stay mounted in the SAME flex-1 slot: switching
                 changes which one is visible, never the stage's height. */}
               <StagePane active={stageTab === "media"} className="items-stretch justify-start">
-                <MediaEvidence media={stageMedia} />
+                <MediaEvidence media={stageMedia} fitContainer />
               </StagePane>
               <StagePane
                 active={stageTab !== "media"}
