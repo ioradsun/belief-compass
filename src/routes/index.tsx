@@ -1056,7 +1056,7 @@ function Feed() {
   // markets to have created or to be holding, and offering the option would be
   // offering an empty feed.
   const availableNetworks: FeedNetwork[] = wallet
-    ? ["everyone", "mine", "tribe", "rivals", "following"]
+    ? ["everyone", "mine", "tribe", "rivals"]
     : ["everyone"];
 
   // Refresh the discovery feed: re-fetch (newly created markets may appear) and
