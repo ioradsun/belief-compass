@@ -33,7 +33,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Plus, Search, X } from "lucide-react";
+import { MoreHorizontal, Plus, Search, X } from "lucide-react";
 import { getTable, getTableCandidates, putOnTable, takeOffTable } from "@/lib/table.functions";
 import { searchMarkets } from "@/lib/markets.functions";
 import {
@@ -164,11 +164,19 @@ export function YourTable({
 
   return (
     <div className="space-y-2">
-      {/* CAPACITY AS A FRACTION, AND ONE WAY TO SPEND IT. */}
-      <div className="flex items-center justify-between">
-        <span className="num text-[11px] tabular-nums text-[var(--text-muted)]">
-          {live.length}/{TABLE_SLOTS} on the table
-        </span>
+      {/* WHOSE MOVE IT IS, IN TWO WORDS AND A COLOUR. Blue is this product's own
+          side-of-the-question colour for the reader; amber is the other side. So
+          the rail reads without a legend: blue is what you asked, amber is what
+          was asked of you. The fraction sits beside the heading because capacity
+          is a fact about this section, not a sentence of its own. */}
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--yes)]" aria-hidden />
+          You Challenged
+          <span className="num tabular-nums font-normal">
+            {live.length}/{TABLE_SLOTS}
+          </span>
+        </h3>
         <button
           type="button"
           aria-label={adding ? "Close" : "Put something on the table"}
@@ -324,7 +332,7 @@ function TableRowCard({
       <button
         type="button"
         onClick={onOpen}
-        className={`w-full rounded-xl border p-3 pr-8 text-left transition-colors ${
+        className={`w-full rounded-xl border p-3 pr-8 text-left transition-colors ${finished ? "" : "pl-6 "}${
           finished
             ? // QUIETER, NOT GREYED OUT. A finished Challenge is the best thing
               // that happens here; disabling its appearance would say the opposite.
@@ -337,12 +345,9 @@ function TableRowCard({
             a glance is whether this is still out there collecting answers, and a
             breathing dot says it without spending a line of copy. */}
         {!finished && (
-          <span className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            <span className="relative grid h-1.5 w-1.5 place-items-center">
-              <span className="absolute inline-flex h-1.5 w-1.5 animate-ping rounded-full bg-[var(--yes)] opacity-70" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--yes)]" />
-            </span>
-            Live
+          <span className="absolute left-3 top-3.5 grid h-1.5 w-1.5 place-items-center" aria-label="Still open">
+            <span className="absolute inline-flex h-1.5 w-1.5 animate-ping rounded-full bg-[var(--yes)] opacity-70" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--yes)]" />
           </span>
         )}
 
@@ -391,17 +396,19 @@ function TableRowCard({
             onClick={() => setMore((m) => !m)}
             className="absolute right-1.5 top-2.5 grid h-6 w-6 place-items-center rounded-full text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
           >
-            <ChevronDown size={13} className={more ? "rotate-180 transition-transform" : "transition-transform"} />
+            <MoreHorizontal size={14} />
           </button>
           {more && (
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={closing}
-              className="mt-1 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-50"
-            >
-              Take off the table
-            </button>
+            <div className="absolute right-1.5 top-9 z-10 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={closing}
+                className="block w-full whitespace-nowrap rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text)] transition-colors hover:bg-[var(--bg)] disabled:opacity-50"
+              >
+                Take off the table
+              </button>
+            </div>
           )}
         </>
       )}
