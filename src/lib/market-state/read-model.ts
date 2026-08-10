@@ -296,6 +296,36 @@ export function selectLiveLine(i: LiveLineInput): LiveLine | null {
   };
 }
 
+/**
+ * MATERIAL, OR CONTINUITY? — the producer's own decision, exposed.
+ *
+ * `selectLiveLine` climbs an evidence ladder: 1h → 24h → 7d. A 7d window is
+ * therefore never a choice; it is what is left when BOTH fresher rungs were
+ * empty, i.e. "nothing has happened lately" dressed as a sentence ("1 believer
+ * backed in the last 7 days."). Everything else the selector can emit is either
+ * recent (1h/24h) or a discrete state change that does not decay with a window
+ * (an overtake, a believer milestone, a first trade).
+ *
+ * That distinction already lives in the two persisted fields
+ * `market_state.live_line_kind` and `live_line_window`, so no surface needs a
+ * threshold of its own to make it. This predicate is the single place the
+ * producer's rule is read — consumed by any surface (Positions included) that
+ * must choose between telling the line and staying silent. It introduces no new
+ * number: it only names the rung the ladder stopped on.
+ */
+export function liveLineIsMaterial(
+  kind: string | null | undefined,
+  window: string | null | undefined,
+): boolean {
+  if (!kind) return false;
+  // Discrete state changes — a window would misdescribe them.
+  if (kind === "side_overtake" || kind === "believer_milestone" || kind === "first_trade")
+    return true;
+  // Everything measured over a window is material only on the recent rungs.
+  return window === "1h" || window === "24h";
+}
+
+
 /** The largest round believer threshold at or below n (for milestone detection). */
 export function believerMilestoneAtOrBelow(n: number): number | null {
   const rungs = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
