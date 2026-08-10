@@ -33,7 +33,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MoreHorizontal, Plus, Search, X } from "lucide-react";
+import { ChevronDown, MoreHorizontal, Search } from "lucide-react";
 import { getTable, getTableCandidates, putOnTable, takeOffTable } from "@/lib/table.functions";
 import { searchMarkets } from "@/lib/markets.functions";
 import {
@@ -76,17 +76,16 @@ export const candidatesKey = (wallet?: string, limit = 0) =>
 export function YourTable({
   wallet,
   onSelect,
-  currentMarketId,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
-  /** What the centre column is showing — the "use this one" shortcut. */
-  currentMarketId?: number;
 }) {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
   const { data: rows, isError } = useTable(wallet);
-  const [adding, setAdding] = useState<null | "menu" | "search">(null);
+  const [adding, setAdding] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
 
   const close = useMutation({
     mutationFn: async (challengeId: number) =>
@@ -114,7 +113,7 @@ export function YourTable({
         }),
       ),
     onSuccess: () => {
-      setAdding(null);
+      setAdding(false);
       void qc.invalidateQueries({ queryKey: tableKey(wallet) });
       void qc.invalidateQueries({ queryKey: ["table-candidates", wallet ?? null] });
     },
@@ -135,19 +134,21 @@ export function YourTable({
   const open = spotsOpen(live.length);
 
   /**
-   * SUGGESTIONS LIVE BEHIND THE +, NOT IN THE LIST. Empty-slot cards were three
-   * rectangles asking to be read; the same offer as the first thing inside one
-   * control is the same offer without the furniture.
+   * SUGGESTIONS AND SEARCH ARE ONE SURFACE. Opening "Add" shows the markets you
+   * are already in; typing replaces them in place with matches. Two lists in two
+   * modes was a menu about a menu — the suggestions were the answer most of the
+   * time, and searching used to throw them away.
    */
   const { data: candidates } = useQuery({
     queryKey: candidatesKey(wallet, open),
     queryFn: () => getTableCandidates({ data: { wallet: wallet ?? null, limit: open } }),
-    enabled: !!wallet && open > 0 && !isError && adding === "menu",
+    enabled: !!wallet && open > 0 && !isError && adding,
     staleTime: 60_000,
   });
   const suggestions = (candidates ?? [])
     .filter((c) => !live.some((r) => r.marketId === c.marketId))
-    .slice(0, open);
+    .slice(0, open)
+    .map((c) => ({ id: c.marketId, title: c.title ?? "This question" }));
 
   if (isError) {
     // A failed read is not an empty table. Same rule the incoming side follows:
@@ -159,103 +160,93 @@ export function YourTable({
     );
   }
 
-  const canUseCurrent =
-    currentMarketId != null && !live.some((r) => r.marketId === currentMarketId) && open > 0;
-
   return (
     <div className="space-y-2">
       {/* WHOSE MOVE IT IS, IN TWO WORDS AND A COLOUR. Blue is this product's own
           side-of-the-question colour for the reader; amber is the other side. So
           the rail reads without a legend: blue is what you asked, amber is what
           was asked of you. The fraction sits beside the heading because capacity
-          is a fact about this section, not a sentence of its own. */}
+          is a fact about this section, not a sentence of its own.
+
+          THE HEADING IS THE CONTROL. Pressing it folds the section away — the dot
+          and the fraction still report the state while it is closed, which is why
+          the cards no longer repeat the blue dot one per row. */}
       <div className="flex items-center justify-between gap-2">
-        <h3 className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-expanded={!collapsed}
+          className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
+        >
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--yes)]" aria-hidden />
           You Challenged
           <span className="num tabular-nums font-normal">
             {live.length}/{TABLE_SLOTS}
           </span>
-        </h3>
-        <button
-          type="button"
-          aria-label={adding ? "Close" : "Put something on the table"}
-          aria-expanded={adding != null}
-          disabled={open === 0 || !wallet}
-          onClick={() => setAdding((a) => (a ? null : "menu"))}
-          className="grid h-6 w-6 place-items-center rounded-full border border-[var(--border)] text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] disabled:opacity-30"
-        >
-          {adding ? <X size={13} /> : <Plus size={14} />}
+          <ChevronDown
+            size={12}
+            className={`transition-transform ${collapsed ? "-rotate-90" : ""}`}
+            aria-hidden
+          />
         </button>
-      </div>
-
-      {adding === "menu" && (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1">
-          {canUseCurrent && (
-            <button
-              type="button"
-              disabled={put.isPending}
-              onClick={() => put.mutate(currentMarketId)}
-              className="block w-full rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text)] transition-colors hover:bg-[var(--bg)] disabled:opacity-50"
-            >
-              Use this market
-            </button>
-          )}
+        {!collapsed && (
           <button
             type="button"
-            onClick={() => setAdding("search")}
-            className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text)] transition-colors hover:bg-[var(--bg)]"
+            aria-expanded={adding}
+            disabled={open === 0 || !wallet}
+            onClick={() => setAdding((a) => !a)}
+            className="text-[11px] font-medium uppercase tracking-wide text-[var(--text-secondary)] transition-colors hover:text-[var(--text)] disabled:opacity-30"
           >
-            <Search size={12} /> Search
+            {adding ? "Close" : "Add"}
           </button>
-          {suggestions.length > 0 && (
-            <div className="mt-1 border-t border-[var(--border)] pt-1">
-              {suggestions.map((c) => (
-                <button
-                  key={c.marketId}
-                  type="button"
-                  disabled={put.isPending}
-                  onClick={() => put.mutate(c.marketId)}
-                  className="block w-full truncate rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg)] hover:text-[var(--text)] disabled:opacity-50"
-                >
-                  {c.title ?? "This question"}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
+      </div>
+
+      {!collapsed && adding && (
+        <TablePicker
+          suggestions={suggestions}
+          onPick={(id) => put.mutate(id)}
+          pending={put.isPending}
+        />
       )}
 
-      {adding === "search" && (
-        <TablePicker onPick={(id) => put.mutate(id)} pending={put.isPending} />
+      {!collapsed && (
+        <ul className="space-y-2">
+          {ordered.map((row) => (
+            <TableRowCard
+              key={row.id}
+              id={row.id}
+              title={row.title}
+              recipients={row.recipients}
+              closeReason={row.closeReason}
+              onOpen={() => onSelect(row.marketId)}
+              onClose={() => close.mutate(row.id)}
+              closing={close.isPending}
+            />
+          ))}
+        </ul>
       )}
 
-      <ul className="space-y-2">
-        {ordered.map((row) => (
-          <TableRowCard
-            key={row.id}
-            id={row.id}
-            title={row.title}
-            recipients={row.recipients}
-            closeReason={row.closeReason}
-            onOpen={() => onSelect(row.marketId)}
-            onClose={() => close.mutate(row.id)}
-            closing={close.isPending}
-          />
-        ))}
-      </ul>
     </div>
   );
 }
 
 /**
- * FIND ONE — the same market search the header runs, sized for a rail.
- *
- * It reuses `searchMarkets` rather than a second index, so a question found here
- * and a question found in the header are ranked identically. No empty state, no
- * result count: an empty list already says nothing matched.
+ * ONE LIST THAT CHANGES ITS MIND. Before you type it offers the markets you are
+ * already in — including whatever the centre column is showing, which is why
+ * there is no separate "use this market" line any more. Type two characters and
+ * the same rows are replaced by matches from the same index the header searches.
+ * No empty state, no result count: an empty list already says nothing matched.
  */
-function TablePicker({ onPick, pending }: { onPick: (id: number) => void; pending: boolean }) {
+function TablePicker({
+  suggestions,
+  onPick,
+  pending,
+}: {
+  suggestions: { id: number; title: string }[];
+  onPick: (id: number) => void;
+  pending: boolean;
+}) {
   const [q, setQ] = useState("");
   const [term, setTerm] = useState("");
   const box = useRef<HTMLInputElement>(null);
@@ -268,34 +259,42 @@ function TablePicker({ onPick, pending }: { onPick: (id: number) => void; pendin
     return () => clearTimeout(t);
   }, [q]);
 
+  const searching = term.length >= 2;
   const { data: hits } = useQuery({
     queryKey: ["table-search", term],
     queryFn: () => searchMarkets({ data: { query: term, limit: 6 } }),
-    enabled: term.length >= 2,
+    enabled: searching,
     staleTime: 30_000,
   });
 
+  const rows = searching
+    ? (hits ?? []).map((h) => ({ id: h.onchain_id, title: h.title as string }))
+    : suggestions;
+
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2">
-      <input
-        ref={box}
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Search markets"
-        aria-label="Search markets to put on the table"
-        className="w-full rounded-lg bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
-      />
-      {(hits ?? []).length > 0 && (
+      <div className="flex items-center gap-1.5 rounded-lg bg-[var(--bg)] px-2">
+        <Search size={12} className="shrink-0 text-[var(--text-muted)]" aria-hidden />
+        <input
+          ref={box}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search markets"
+          aria-label="Search markets to put on the table"
+          className="w-full bg-transparent py-1.5 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
+        />
+      </div>
+      {rows.length > 0 && (
         <div className="mt-1 space-y-0.5">
-          {(hits ?? []).map((h) => (
+          {rows.map((r) => (
             <button
-              key={h.onchain_id}
+              key={r.id}
               type="button"
               disabled={pending}
-              onClick={() => onPick(h.onchain_id)}
+              onClick={() => onPick(r.id)}
               className="block w-full truncate rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg)] hover:text-[var(--text)] disabled:opacity-50"
             >
-              {h.title}
+              {r.title}
             </button>
           ))}
         </div>
@@ -303,6 +302,7 @@ function TablePicker({ onPick, pending }: { onPick: (id: number) => void; pendin
     </div>
   );
 }
+
 
 function TableRowCard({
   id,
@@ -332,7 +332,7 @@ function TableRowCard({
       <button
         type="button"
         onClick={onOpen}
-        className={`w-full rounded-xl border p-3 pr-8 text-left transition-colors ${finished ? "" : "pl-6 "}${
+        className={`w-full rounded-xl border p-3 pr-8 text-left transition-colors ${
           finished
             ? // QUIETER, NOT GREYED OUT. A finished Challenge is the best thing
               // that happens here; disabling its appearance would say the opposite.
@@ -341,15 +341,10 @@ function TableRowCard({
             : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-strong)]"
         }`}
       >
-        {/* IT IS LIVE — a dot, not a word. The one thing a creator wants to know at
-            a glance is whether this is still out there collecting answers, and a
-            breathing dot says it without spending a line of copy. */}
-        {!finished && (
-          <span className="absolute left-3 top-3.5 grid h-1.5 w-1.5 place-items-center" aria-label="Still open">
-            <span className="absolute inline-flex h-1.5 w-1.5 animate-ping rounded-full bg-[var(--yes)] opacity-70" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--yes)]" />
-          </span>
-        )}
+        {/* NO PER-CARD LIVE DOT. The blue dot in the heading already says this
+            section is the live side, and the dashed border says which cards have
+            ended — a dot on every open card was the same fact told twice. */}
+
 
         <p
           className={`line-clamp-2 text-[13px] leading-snug ${finished ? "text-[var(--text-secondary)]" : "text-[var(--text)]"}`}

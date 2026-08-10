@@ -67,12 +67,9 @@ export function ChallengeRail({
   wallet,
   onSelect,
   insider,
-  currentMarketId,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
-  /** What the centre column is showing — offered as "Use this market". */
-  currentMarketId?: number;
   /**
    * The Insider feed (live tape), rendered by the route. Passed as a node rather
    * than as five more props: this component is about YOUR calls, and threading
@@ -243,7 +240,7 @@ export function ChallengeRail({
 
           {/* YOUR OWN TABLE, IN THE SAME COLUMN — what you put up, what became of
               it, and one + for filling a free slot. */}
-          <YourTable wallet={wallet} onSelect={onSelect} currentMarketId={currentMarketId} />
+          <YourTable wallet={wallet} onSelect={onSelect} />
 
           {/* MORE, SAID OUT LOUD. A railful is what reads as a set of things
               waiting for you; past that it becomes a feed, and the feed already
