@@ -598,13 +598,17 @@ export function MyConvictions({
             </div>
             <div className="mt-0.5 flex items-baseline justify-between gap-3">
               <div className="num text-[12px]" style={{ color: tone }}>
-                {move === 0 ? (
+                {shownMove === 0 ? (
                   <span className="text-[var(--text-muted)]">—</span>
                 ) : (
                   <>
-                    {signedMoney(move)}{" "}
+                    {signedMoney(shownMove)}{" "}
                     <span className="font-normal text-[var(--text-muted)]">
-                      {lifetimeMove ? "since you started" : winLabel.toLowerCase()}
+                      {hasBasis
+                        ? partial
+                          ? `since you started · ${marked.length} of ${built.length} priced`
+                          : "since you started"
+                        : winLabel.toLowerCase()}
                     </span>
                   </>
                 )}
