@@ -193,6 +193,9 @@ export async function buildConvictionDashboard(
 
   let worthUsd = 0;
   let holdCostUsd = 0;
+  /** Worth and cost restricted to positions we can actually mark — the gain pair. */
+  let markedWorthUsd = 0;
+  let markedCostUsd = 0;
   let portfolioTodayUsd = 0;
   let heldCount = 0;
   let longestHeldDays = 0;
@@ -203,17 +206,23 @@ export async function buildConvictionDashboard(
     const id = Number(b.onchain_id);
     // `*_value_usd` is a column nothing writes. Reading it alone made `w` zero
     // for everyone, so `heldCount` never incremented and the dashboard told
-    // every reader they held nothing. Fall back to what they committed.
+    // every reader they held nothing. Shares x the live price is rank 2 and is
+    // what the Positions rail uses, so both screens now mark the same way.
     const at = b.value_updated_at as string | null;
+    const price = priceById.get(id);
     const yes = positionValueUsd({
       valueUsd: b.yes_value_usd,
       valueUpdatedAt: at,
+      shares: b.yes_shares,
+      priceUsd: price?.yes ?? null,
       costEth: b.yes_cost,
       ethUsd,
     });
     const no = positionValueUsd({
       valueUsd: b.no_value_usd,
       valueUpdatedAt: at,
+      shares: b.no_shares,
+      priceUsd: price?.no ?? null,
       costEth: b.no_cost,
       ethUsd,
     });
@@ -222,13 +231,17 @@ export async function buildConvictionDashboard(
     // A GAIN needs a real valuation on both sides of the subtraction. Where the
     // worth fell back to the cost basis, "worth − cost" is a guaranteed zero
     // wearing the costume of a measurement, so no gain is claimed at all.
-    const marked = yes.source === "marked" || no.source === "marked";
+    // `isMeasured` is the shared test — a live mark counts exactly as a written
+    // one does, which the old `source === "marked"` check silently denied.
+    const measured = isMeasured(yes) || isMeasured(no);
     if (w > 0) heldCount++;
     worthUsd += w;
     holdCostUsd += c;
     // Per-position gain (only when a real cost basis exists — never invented).
-    if (marked && w > 0 && c > 0) {
+    if (measured && w > 0 && c > 0) {
       const gain = w - c;
+      markedWorthUsd += w;
+      markedCostUsd += c;
       if (gain > 0) anyHeldProfit = true;
       heldGains.push({
         onchainId: id,
