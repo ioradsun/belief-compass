@@ -40,6 +40,8 @@ import {
   MediaEvidence,
   MediaStage,
   MediaSwitch,
+  StagePane,
+
   isTallMedia,
   mediaSwitchLabel,
   stageMediaFrom,
