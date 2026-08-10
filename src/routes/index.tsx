@@ -98,6 +98,7 @@ const CreateMarket = lazyRetry(() =>
 const MyWorld = lazyRetry(() =>
   import("@/components/MyWorld").then((m) => ({ default: m.MyWorld })),
 );
+import { Crosshair } from "lucide-react";
 import { OmniHeader } from "@/components/OmniHeader";
 import { ProfileMenu } from "@/components/ProfileMenu";
 
@@ -454,6 +455,16 @@ function Feed() {
   // phone is for action, so it never exposes Case File (button, columns, or the
   // ?case flag). Desktop is >= lg, where the three columns actually sit together.
   const isDesktop = useIsDesktop();
+  // FOCUS MODE — desktop only. The rails stay exactly where they are (same
+  // widths, same content, still interactive); a translucent mask simply pulls
+  // the eye back to the center column.
+  const [focusMode, setFocusMode] = useState(false);
+  useEffect(() => {
+    if (!isDesktop) setFocusMode(false);
+  }, [isDesktop]);
+  const railMask = `pointer-events-none absolute inset-0 z-30 hidden bg-[var(--bg)]/80 backdrop-blur-[1px] transition-opacity duration-300 ease-out motion-reduce:transition-none lg:block ${
+    focusMode ? "opacity-100" : "opacity-0"
+  }`;
   // Desktop only needs the Case File once the user opens a case, so warm that
   // split chunk when the browser is idle. MobileGame is kept in the route bundle:
   // it is the primary phone surface and must never be stranded behind a chunk.
@@ -1395,6 +1406,22 @@ function Feed() {
             onSelectMarket={selectMarket}
             onSelectPerson={selectPerson}
             onOpenMenu={() => setMenuOpen(true)}
+            focus={
+              <button
+                type="button"
+                onClick={() => setFocusMode((v) => !v)}
+                aria-pressed={focusMode}
+                aria-label="Focus mode"
+                title="Focus mode"
+                className={`hidden h-9 w-9 shrink-0 place-items-center rounded-full border transition-colors lg:grid ${
+                  focusMode
+                    ? "border-[var(--text)] text-[var(--text)]"
+                    : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text-secondary)] hover:text-[var(--text-secondary)]"
+                }`}
+              >
+                <Crosshair className="h-4 w-4" aria-hidden />
+              </button>
+            }
             center={
               wallet ? (
                 <button
@@ -1450,7 +1477,7 @@ function Feed() {
       <div className="grid h-full min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:320px_minmax(0,1fr)_320px]">
         {/* LEFT — Feed | Convictions | Tribe | Rivals — fixed 320px rail */}
         <aside
-          className={`${show("mine")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
+          className={`${show("mine")} relative row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
           style={{ borderRight: "1px solid var(--hairline)" }}
         >
           {caseActive && currentRow ? (
@@ -1535,6 +1562,7 @@ function Feed() {
               />
             </>
           )}
+          <div aria-hidden className={railMask} />
         </aside>
 
         {/* CENTER — Belief. Fluid column, but the reading measure is capped at
@@ -1704,7 +1732,7 @@ function Feed() {
 
         {/* RIGHT — The Room — fixed 320px rail */}
         <aside
-          className={`${show("room")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
+          className={`${show("room")} relative row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
           style={{ borderLeft: "1px solid var(--hairline)" }}
         >
           {caseActive && currentRow ? (
@@ -1799,6 +1827,7 @@ function Feed() {
               )}
             </>
           )}
+          <div aria-hidden className={railMask} />
         </aside>
 
         {/* ONE MENU, EVERY PAGE — the same drawer the standing pages open. */}
