@@ -1732,7 +1732,7 @@ function Feed() {
 
         {/* RIGHT — The Room — fixed 320px rail */}
         <aside
-          className={`${show("room")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
+          className={`${show("room")} relative row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-3 lg:flex`}
           style={{ borderLeft: "1px solid var(--hairline)" }}
         >
           {caseActive && currentRow ? (
