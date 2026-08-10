@@ -40,7 +40,6 @@ import {
 import { LiveTape } from "@/components/LiveTape";
 import { getWarmTape } from "@/lib/live.functions";
 
-import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { TakeASide } from "@/components/TakeASide";
 
 import { SimilarMarkets } from "@/components/SimilarMarkets";
