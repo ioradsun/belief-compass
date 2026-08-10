@@ -260,7 +260,7 @@ describe("the continuation state", () => {
 
   it("says the two lines and nothing more", () => {
     expect(feed).toMatch(/You&rsquo;re caught up\./);
-    expect(feed).toMatch(/Continue with For You/);
+    expect(feed).toMatch(/Continue with Up Next/);
   });
 
   it("renders only on a real verdict, never inferred from an empty list", () => {

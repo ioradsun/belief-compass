@@ -272,7 +272,7 @@ function Continuation({ onContinue }: { onContinue: () => void }) {
         className="mt-1 text-[12px] font-semibold transition-opacity hover:opacity-80"
         style={{ color: "var(--rel,#9b87f5)" }}
       >
-        Continue with For You <span aria-hidden>&rarr;</span>
+        Continue with Up Next <span aria-hidden>&rarr;</span>
       </button>
     </li>
   );
