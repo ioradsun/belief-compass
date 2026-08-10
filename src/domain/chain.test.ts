@@ -144,7 +144,7 @@ describe("the relay offer", () => {
 describe("passing stays nameless", () => {
   it("has no vocabulary for a person who declined", () => {
     const src = readFileSync(join(process.cwd(), "src/domain/chain.ts"), "utf8");
-    expect(src).not.toMatch(/passedBy|whoPassed|passers|declinedBy/);
+    expect(src).not.toMatch(/passedBy|whoPassed|declinedBy|passerNames/);
   });
 
   it("carries relay names only, which are public acts", () => {
