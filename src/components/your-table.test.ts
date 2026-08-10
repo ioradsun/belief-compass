@@ -71,19 +71,28 @@ describe("taking it off the table", () => {
   });
 });
 
-describe("whose table", () => {
-  it("uses neither messaging nor plumbing words", () => {
+describe("one column, no whose-table filter", () => {
+  it("has no side tabs at all", () => {
+    // "Challenged" and "Yours" was a filter over a handful of cards. The card
+    // already says which it is: an incoming call names the person asking, one of
+    // yours carries its own progress, a free slot is an invitation.
     const c = rail();
-    expect(c).toMatch(/Yours/);
-    expect(c).toMatch(/Challenged/);
-    // Sent/Received is messaging; Outbound/Inbound is describing the pipes.
     expect(c).not.toMatch(/"Sent"|"Received"|"Outbound"|"Inbound"/);
+    expect(c).not.toMatch(/railSideKey/);
+    expect(c).not.toMatch(/side === "yours"/);
   });
 
-  it("offers no choice to somebody with nothing up", () => {
-    // A control that asks a question the reader cannot answer is the surface
-    // talking to itself.
-    expect(rail()).toMatch(/\(table\?\.length \?\? 0\) > 0 &&/);
+  it("renders both sides in the same column", () => {
+    const c = rail();
+    expect(c).toMatch(/<ChallengeRow/);
+    expect(c).toMatch(/<YourTable/);
+  });
+
+  it("counts everything live on the tab", () => {
+    // People waiting on you plus what you have up. Finished rows are history.
+    const c = rail();
+    expect(c).toMatch(/challengeCount/);
+    expect(c).toMatch(/closedAtMs == null/);
   });
 });
 
