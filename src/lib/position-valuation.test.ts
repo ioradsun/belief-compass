@@ -168,6 +168,47 @@ describe("the Positions list does not rank worth on its own", () => {
     expect(MY).not.toMatch(/if \(!\(value > 0\)\) return null/);
     expect(MY).toMatch(/if \(!\(shares > 0\)\) return null/);
   });
+
+  /**
+   * THE HEADLINE IS THE CARDS, SUMMED. The summary read the market's window
+   * price change while the cards read cost-basis P&L, so a rail full of real
+   * returns sat under a blank "—" whenever no window change was on file.
+   */
+  it("sums the same P&L its cards print", () => {
+    expect(MY).toMatch(/const marked = built\.filter\(\(p\) => p\.gainUsd != null\)/);
+    expect(MY).toMatch(/markedGain/);
+    expect(MY).toMatch(/markedBasis/);
+    // The window move survives only as the no-basis-anywhere fallback.
+    expect(MY).not.toMatch(/lifetime && fullBasis/);
+  });
+});
+
+/**
+ * The Full P&L page and the Positions rail are one wallet's money told twice.
+ * The dashboard used to read neither shares nor the live price, so its holdings
+ * could only reach the COST rank while the rail marked the same position live.
+ */
+describe("the dashboard marks positions the way the rail does", () => {
+  const DASH = code("src/lib/conviction-dashboard.server.ts");
+
+  it("selects the fields a live mark needs", () => {
+    for (const col of ["yes_shares", "no_shares", "value_updated_at"])
+      expect(DASH, col).toContain(col);
+  });
+
+  it("hands shares and price to the canonical valuation", () => {
+    expect(DASH).toMatch(/shares: b\.yes_shares/);
+    expect(DASH).toMatch(/priceUsd: price\?\.yes/);
+  });
+
+  it("accepts a live mark as a measurement, not only a written one", () => {
+    expect(DASH).toMatch(/isMeasured\(yes\) \|\| isMeasured\(no\)/);
+    expect(DASH).not.toMatch(/yes\.source === "marked" \|\| no\.source === "marked"/);
+  });
+
+  it("computes gain over the positions it could mark", () => {
+    expect(DASH).toMatch(/gainUsd: markedWorthUsd - markedCostUsd/);
+  });
 });
 
 /**
