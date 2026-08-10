@@ -438,16 +438,13 @@ export function MyConvictions({
   const sidesPerMarket = new Map<number, number>();
   for (const f of facts) sidesPerMarket.set(f.id, (sidesPerMarket.get(f.id) ?? 0) + 1);
 
-  // Second pass: attach the story + pulse, then rank by urgency.
+  // Second pass: attach the optional canonical line. No scoring happens here.
   const built: Built[] = facts.map((f) => {
-    const net = netByMarket.get(f.id);
-    const signal = positionSignal({
+    const story = positionStory({
       side: f.side,
       believers: f.believers,
       live: f.live,
       believerDelta: f.believerDelta,
-      net,
-      milestone: net?.milestone ?? null,
     });
     return {
       key: f.key,
@@ -468,18 +465,18 @@ export function MyConvictions({
       newInWindow: f.newInWindow,
       windowLabel: lifetime ? "all time" : winLabel.toUpperCase(),
       chg: f.chg,
-      signal,
+      story,
     };
   });
 
-  // Rank by "what's alive": urgency first, then the size of the move, then scale.
-  built.sort(
-    (a, b) =>
-      b.signal.urgency - a.signal.urgency ||
-      Math.abs(b.deltaUsd ?? 0) - Math.abs(a.deltaUsd ?? 0) ||
-      (b.believers ?? 0) - (a.believers ?? 0) ||
-      b.value - a.value,
-  );
+  // WHERE IS MY MONEY — the only question a portfolio order can answer honestly.
+  // The old sort led with STORY_RANK, an editorial urgency scale: a card rose
+  // because its sentence was interesting, not because the holding was large. That
+  // is a second newsroom, and it buried the biggest position under the loudest
+  // one. Value descending, with the position key as the deterministic tie-break
+  // so equal values never shuffle between renders.
+  built.sort((a, b) => b.value - a.value || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+
   // Both sides of one market read as one belief with two positions, so the
   // second side follows its partner instead of landing somewhere far down the
   // list under the same question. The market's rank is its strongest side's.
