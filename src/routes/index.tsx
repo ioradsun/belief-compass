@@ -5,7 +5,12 @@ import { lazyRetry } from "@/lib/lazy-retry";
 
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
-import { listMarketPulses, getMarketRow, type VolumeWindow } from "@/lib/markets.functions";
+import {
+  listMarketPulses,
+  getMarketRow,
+  getWarmDeckCore,
+  type VolumeWindow,
+} from "@/lib/markets.functions";
 import { marketChangeQO } from "@/lib/market-queries";
 import { getOpportunityFeed, getWarmFeed } from "@/lib/opportunity-feed.functions";
 import { feedSession, resetFeedSession } from "@/lib/feed-session";
@@ -329,10 +334,21 @@ export const Route = createFileRoute("/")({
       // rule — warm read only, never a build, and in parallel so it can never
       // add to the shell's budget.
       const [feed, tape] = await Promise.all([getWarmFeed(), getWarmTape()]);
-      return { feed, tape, fetchedAt: Date.now() };
+      // AND THE CENTRE PANEL'S NUMBERS. The seeded feed gives the shell a real
+      // market TITLE; its deck core (the trade tape every number on the card is
+      // rebuilt from) was still a client round trip, so the market appeared and
+      // then filled in. Same rule as the tape: warm/seed read only, never a
+      // build — on a miss it is simply null and the client fetches as before.
+      const ids = (feed?.items ?? [])
+        .filter((i) => i.kind === "market")
+        .slice(0, 3)
+        .map((i) => (i as { onchainId: number }).onchainId);
+      const deck = ids.length ? await getWarmDeckCore({ data: { ids } }).catch(() => null) : null;
+      return { feed, tape, deck, fetchedAt: Date.now() };
     } catch {
-      return { feed: null, tape: null, fetchedAt: Date.now() };
+      return { feed: null, tape: null, deck: null, fetchedAt: Date.now() };
     }
+
   },
 
   staleTime: 10_000,
@@ -425,7 +441,14 @@ function Feed() {
     if (!isDesktop) return;
     const idle = (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
       .requestIdleCallback;
-    const warm = () => void import("@/components/CaseFile");
+    // THE LEFT RAIL IS SPLIT OUT TOO, and unlike the Case File it renders
+    // immediately — so its chunk is the one thing standing between the shell and
+    // a populated left column. Warm it in the same idle window.
+    const warm = () => {
+      void import("@/components/MyWorld");
+      void import("@/components/CaseFile");
+    };
+
     if (idle) idle(warm);
     else setTimeout(warm, 1500);
   }, [isDesktop]);
@@ -729,6 +752,27 @@ function Feed() {
         : { initialData: initialFeed, initialDataUpdatedAt: loaderData?.fetchedAt ?? Date.now() }
       : {}),
   });
+
+  /**
+   * THE DECK CORE THE SHELL ALREADY PAID FOR. The loader read the warm/seeded
+   * trade tape for the markets it is about to paint; putting it in the cache
+   * under the deck's own key means the first frame has numbers in it instead of
+   * a card that appears and then fills in. Written in a render-time initializer
+   * (once, and never over fresher data) so it is there for the FIRST paint, not
+   * an effect later. React Query still refetches it on its own schedule.
+   */
+  useState(() => {
+    const deck = loaderData?.deck;
+    if (!deck) return null;
+    for (const [id, core] of Object.entries(deck)) {
+      const key = ["market-change", Number(id)] as const;
+      if (qc.getQueryData(key) === undefined) {
+        qc.setQueryData(key, core, { updatedAt: loaderData?.fetchedAt ?? Date.now() });
+      }
+    }
+    return null;
+  });
+
 
   // First principle: once a valid contract-backed market snapshot reaches the
   // browser, it is durable for this page lifetime. Query retries, wallet

@@ -87,116 +87,121 @@ const BELIEVERS_LIMIT = 200;
 export const getMarketEvidence = createServerFn({ method: "GET" })
   .validator((raw: unknown) => z.object({ marketId: z.number().int().nonnegative() }).parse(raw))
   .handler(async ({ data }): Promise<MarketEvidence> => {
-    // wallet_beliefs is not publicly readable (RLS locked); this function only
-    // ever returns the derived, non-sensitive face/side/conviction shape.
-    const sb = serviceClient();
-    const id = data.marketId;
+    // Viewer-blind: four service-client reads per market, shared by every
+    // reader on it instead of paid once each.
+    const { sharedMarketRead } = await import("@/lib/market-core-cache.server");
+    return sharedMarketRead("evidence", data.marketId, async () => {
+      // wallet_beliefs is not publicly readable (RLS locked); this function only
+      // ever returns the derived, non-sensitive face/side/conviction shape.
+      const sb = serviceClient();
+      const id = data.marketId;
 
-    const [ethUsd, beliefsRes, seriesRes, marketRes] = await Promise.all([
-      readEthUsd(sb),
-      sb
-        .from("wallet_beliefs")
-        .select(
-          "wallet, stance_side, expressed_side, yes_shares, no_shares, yes_value_usd, no_value_usd, value_updated_at, yes_cost, no_cost, conviction, days_held",
-        )
-        .eq("onchain_id", id)
-        .in("stance_side", ["YES", "NO"])
-        .order("conviction", { ascending: false })
-        .limit(BELIEVERS_LIMIT),
-      sb.rpc("price_series_daily", { p_ids: [id], p_days: 60 }),
-      sb.from("markets").select("agent_opinions").eq("onchain_id", id).maybeSingle(),
-    ]);
+      const [ethUsd, beliefsRes, seriesRes, marketRes] = await Promise.all([
+        readEthUsd(sb),
+        sb
+          .from("wallet_beliefs")
+          .select(
+            "wallet, stance_side, expressed_side, yes_shares, no_shares, yes_value_usd, no_value_usd, value_updated_at, yes_cost, no_cost, conviction, days_held",
+          )
+          .eq("onchain_id", id)
+          .in("stance_side", ["YES", "NO"])
+          .order("conviction", { ascending: false })
+          .limit(BELIEVERS_LIMIT),
+        sb.rpc("price_series_daily", { p_ids: [id], p_days: 60 }),
+        sb.from("markets").select("agent_opinions").eq("onchain_id", id).maybeSingle(),
+      ]);
 
-    const rows = (beliefsRes.data ?? []) as Array<{
-      wallet: string;
-      stance_side: string | null;
-      expressed_side: string | null;
-      yes_shares: number | null;
-      no_shares: number | null;
-      yes_value_usd: number | null;
-      yes_cost: number | null;
-      no_cost: number | null;
-      value_updated_at: string | null;
-      no_value_usd: number | null;
-      conviction: number | null;
-      days_held: number | null;
-    }>;
+      const rows = (beliefsRes.data ?? []) as Array<{
+        wallet: string;
+        stance_side: string | null;
+        expressed_side: string | null;
+        yes_shares: number | null;
+        no_shares: number | null;
+        yes_value_usd: number | null;
+        yes_cost: number | null;
+        no_cost: number | null;
+        value_updated_at: string | null;
+        no_value_usd: number | null;
+        conviction: number | null;
+        days_held: number | null;
+      }>;
 
-    // Resolve faces for the holders we're about to show (bounded lazy fill).
-    const wallets = rows.map((r) => r.wallet);
-    const { resolveProfiles } = await import("@/lib/profiles.server");
-    const profiles = await resolveProfiles(
-      wallets.map((w) => w.toLowerCase()),
-      8,
-    );
-
-    // `*_value_usd` is a column nothing writes, so a position read from it alone
-    // values at $0 and a whole field ranks as dust — which is how the previous
-    // whale found nobody, ever. `positionValueUsd` falls back to cost basis and
-    // reports "unknown" rather than inventing a figure.
-    const valueOf = (r: (typeof rows)[number], side: "YES" | "NO") =>
-      Math.max(
-        0,
-        positionValueUsd({
-          valueUsd: side === "YES" ? r.yes_value_usd : r.no_value_usd,
-          valueUpdatedAt: r.value_updated_at,
-          costEth: side === "YES" ? r.yes_cost : r.no_cost,
-          ethUsd,
-        }).usd,
+      // Resolve faces for the holders we're about to show (bounded lazy fill).
+      const wallets = rows.map((r) => r.wallet);
+      const { resolveProfiles } = await import("@/lib/profiles.server");
+      const profiles = await resolveProfiles(
+        wallets.map((w) => w.toLowerCase()),
+        8,
       );
-    /**
-     * ONE SEAT, EARNED. This used to flag up to two wallets per side purely on
-     * size ($250, or $5000 absolute), which meant the title could be bought
-     * minutes before you looked at it and up to four people held it at once.
-     *
-     * The Conviction Whale is the largest position among holders who have
-     * CONTINUOUSLY held their side for at least a week — one per market, or
-     * none. `days_held` is the right input and already here: the reducer derives
-     * it from `directional_since`, which survives adds and trims, resets on a
-     * flip and clears on exit. Scarcity is what makes the seat mean anything, so
-     * a market that has not earned one shows nobody.
-     */
-    const whale = findConvictionWhale(
-      rows.map((r) => {
+
+      // `*_value_usd` is a column nothing writes, so a position read from it alone
+      // values at $0 and a whole field ranks as dust — which is how the previous
+      // whale found nobody, ever. `positionValueUsd` falls back to cost basis and
+      // reports "unknown" rather than inventing a figure.
+      const valueOf = (r: (typeof rows)[number], side: "YES" | "NO") =>
+        Math.max(
+          0,
+          positionValueUsd({
+            valueUsd: side === "YES" ? r.yes_value_usd : r.no_value_usd,
+            valueUpdatedAt: r.value_updated_at,
+            costEth: side === "YES" ? r.yes_cost : r.no_cost,
+            ethUsd,
+          }).usd,
+        );
+      /**
+       * ONE SEAT, EARNED. This used to flag up to two wallets per side purely on
+       * size ($250, or $5000 absolute), which meant the title could be bought
+       * minutes before you looked at it and up to four people held it at once.
+       *
+       * The Conviction Whale is the largest position among holders who have
+       * CONTINUOUSLY held their side for at least a week — one per market, or
+       * none. `days_held` is the right input and already here: the reducer derives
+       * it from `directional_since`, which survives adds and trims, resets on a
+       * flip and clears on exit. Scarcity is what makes the seat mean anything, so
+       * a market that has not earned one shows nobody.
+       */
+      const whale = findConvictionWhale(
+        rows.map((r) => {
+          const side = (r.stance_side ?? r.expressed_side) === "YES" ? "YES" : "NO";
+          return {
+            wallet: r.wallet.toLowerCase(),
+            side,
+            daysHeld: Number(r.days_held) || 0,
+            valueUsd: valueOf(r, side),
+          };
+        }),
+      );
+
+      let believersYes = 0;
+      let believersNo = 0;
+      const believers: Believer[] = rows.map((r) => {
         const side = (r.stance_side ?? r.expressed_side) === "YES" ? "YES" : "NO";
+        if (side === "YES") believersYes++;
+        else believersNo++;
+        const p = profiles.get(r.wallet.toLowerCase());
+        const valueUsd = valueOf(r, side);
         return {
-          wallet: r.wallet.toLowerCase(),
+          wallet: r.wallet,
+          name: p?.displayName ?? aliasFor(r.wallet),
+          avatarUrl: p?.pfpUrl ?? null,
           side,
-          daysHeld: Number(r.days_held) || 0,
-          valueUsd: valueOf(r, side),
+          shares: Number(side === "YES" ? r.yes_shares : r.no_shares) || 0,
+          conviction: Number(r.conviction) || 0,
+          daysHeld: Math.max(0, Math.round(Number(r.days_held) || 0)),
+          valueUsd,
+          whale: whale?.wallet === r.wallet.toLowerCase(),
         };
-      }),
-    );
+      });
 
-    let believersYes = 0;
-    let believersNo = 0;
-    const believers: Believer[] = rows.map((r) => {
-      const side = (r.stance_side ?? r.expressed_side) === "YES" ? "YES" : "NO";
-      if (side === "YES") believersYes++;
-      else believersNo++;
-      const p = profiles.get(r.wallet.toLowerCase());
-      const valueUsd = valueOf(r, side);
-      return {
-        wallet: r.wallet,
-        name: p?.displayName ?? aliasFor(r.wallet),
-        avatarUrl: p?.pfpUrl ?? null,
-        side,
-        shares: Number(side === "YES" ? r.yes_shares : r.no_shares) || 0,
-        conviction: Number(r.conviction) || 0,
-        daysHeld: Math.max(0, Math.round(Number(r.days_held) || 0)),
-        valueUsd,
-        whale: whale?.wallet === r.wallet.toLowerCase(),
-      };
+      const series = (seriesRes.data ?? []) as Array<{ bucket: string; pct: number | null }>;
+      const priceSeries: PricePoint[] = series
+        .filter((s) => s.pct != null)
+        .map((s) => ({ date: String(s.bucket), yesPct: Number(s.pct) }));
+
+      const defense = toDefense(
+        (marketRes.data as { agent_opinions?: unknown } | null)?.agent_opinions,
+      );
+
+      return { believers, believersYes, believersNo, priceSeries, defense };
     });
-
-    const series = (seriesRes.data ?? []) as Array<{ bucket: string; pct: number | null }>;
-    const priceSeries: PricePoint[] = series
-      .filter((s) => s.pct != null)
-      .map((s) => ({ date: String(s.bucket), yesPct: Number(s.pct) }));
-
-    const defense = toDefense(
-      (marketRes.data as { agent_opinions?: unknown } | null)?.agent_opinions,
-    );
-
-    return { believers, believersYes, believersNo, priceSeries, defense };
   });

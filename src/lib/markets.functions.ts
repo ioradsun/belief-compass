@@ -1176,66 +1176,26 @@ export interface MarketChange {
 export const getMarketChange = createServerFn({ method: "GET" })
   .inputValidator((d: { id: number }) => z.object({ id: z.number().int().nonnegative() }).parse(d))
   .handler(async ({ data }): Promise<MarketChange> => {
-    // ONE read: the canonical trade tape. Every windowed number the deck shows is
-    // rebuilt from it client-side (marketBook + conviction-series), so there is no
-    // second, precomputed source of truth to drift from — and no wasted per-request
-    // snapshot/flow queries. `amount_eth`/`price` are wei (strings on the wire, so
-    // precision survives); scaled to whole ETH here.
-    // Server-side read: the public events policy only exposes the last 3 days,
-    // which would silently truncate the tape the book is rebuilt from.
-    const trades = await readLatestTradeEvents(serviceClient(), {
-      marketIds: [data.id],
-      limit: 1000,
-    });
-    const tape: TapeTrade[] = [];
-    for (const t of trades) {
-      const side = t.side === "YES" || t.side === "NO" ? t.side : null;
-      const action = t.action === "SELL" ? "SELL" : t.action === "BUY" ? "BUY" : null;
-      if (!side || !action || !t.wallet) continue;
-      const wei = Number(t.amount_eth ?? 0);
-      const eth = weiToEth(wei);
-      const at = new Date(t.occurred_at).getTime();
-      const priceWei = t.price == null ? null : Number(t.price);
-      // Chain order inside the block. Whole blocks share one occurred_at, so
-      // without this a SELL can be replayed before the BUY it closes and the
-      // wallet keeps phantom shares (and phantom believer/capital totals).
-      const blk = Number(t.block_number ?? 0);
-      const lg = Number(t.log_index ?? 0);
-      const seq = Number.isFinite(blk) && Number.isFinite(lg) ? blk * 100_000 + Math.max(0, lg) : 0;
-      tape.push({
-        // Short, stable key — enough to count distinct believers, and nothing
-        // more than the feed already publishes.
-        w: t.wallet.slice(0, 10),
-        side,
-        action,
-        eth,
-        price: priceWei == null ? null : weiToEth(priceWei),
-        t: at,
-        seq,
-      });
-    }
-
-    // The ranker's acceleration baseline, surfaced through this canonical path so
-    // the center's state-transition emitter reads "× normal" from the same source
-    // of truth. One tiny market_state read; the multiple is computed by the shared
-    // accelerationFrom helper — never a second client-side baseline.
-    let acceleration: number | null = null;
-    const { data: ms } = await publicClient()
-      .from("market_state")
-      .select("trade_count_1h, trade_count_24h, velocity_5m")
-      .eq("onchain_id", data.id)
-      .maybeSingle();
-    if (ms) {
-      const r = ms as Record<string, unknown>;
-      acceleration = accelerationFrom(
-        Number(r.trade_count_1h ?? 0) || 0,
-        Number(r.trade_count_24h ?? 0) || 0,
-        Number(r.velocity_5m ?? 0) || 0,
-      );
-    }
-
-    return { tape, acceleration };
+    // The read itself lives in market-core.server so the background warmer can
+    // run it too, and it is shared per market: two readers on one market are
+    // one trade replay, not two.
+    const { readMarketChange } = await import("@/lib/market-core.server");
+    return readMarketChange(data.id);
   });
+
+/**
+ * The SSR read for the centre panel: warm/seeded deck cores for the markets the
+ * shell is about to paint. Never builds.
+ */
+export const getWarmDeckCore = createServerFn({ method: "GET" })
+  .inputValidator((d: { ids?: number[] }) =>
+    z.object({ ids: z.array(z.number().int().nonnegative()).max(6).optional() }).parse(d ?? {}),
+  )
+  .handler(async ({ data }) => {
+    const { warmDeckCore } = await import("@/lib/deck-seed.server");
+    return (await warmDeckCore(data.ids ?? [])) ?? null;
+  });
+
 
 /** One window's authoritative believers/capital/price as of its opening boundary. */
 export interface WindowBaseline {
@@ -1262,32 +1222,37 @@ const finLoose = (v: unknown): number | null =>
 export const getMarketBaselines = createServerFn({ method: "GET" })
   .inputValidator((d: { id: number }) => z.object({ id: z.number().int().nonnegative() }).parse(d))
   .handler(async ({ data }): Promise<MarketBaselines> => {
-    const sb = serviceClient() as unknown as {
-      rpc: (
-        fn: string,
-        args: Record<string, unknown>,
-      ) => Promise<{ data: unknown; error: unknown }>;
-    };
-    try {
-      const { data: rows, error } = await sb.rpc("market_window_baselines", { p_id: data.id });
-      if (error || !Array.isArray(rows)) return {};
-      const out: MarketBaselines = {};
-      for (const raw of rows as Array<Record<string, unknown>>) {
-        const key = String(raw.window_key) as VolumeWindow;
-        out[key] = {
-          believersYes: finLoose(raw.believers_yes),
-          believersNo: finLoose(raw.believers_no),
-          yesCapitalUsd: finLoose(raw.yes_capital_usd),
-          noCapitalUsd: finLoose(raw.no_capital_usd),
-          yesPriceUsd: finLoose(raw.yes_price_usd),
-          noPriceUsd: finLoose(raw.no_price_usd),
-        };
+    // Viewer-blind: one RPC per market per window, shared by every reader on it.
+    const { sharedMarketRead } = await import("@/lib/market-core-cache.server");
+    return sharedMarketRead("baselines", data.id, async () => {
+      const sb = serviceClient() as unknown as {
+        rpc: (
+          fn: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: unknown; error: unknown }>;
+      };
+      try {
+        const { data: rows, error } = await sb.rpc("market_window_baselines", { p_id: data.id });
+        if (error || !Array.isArray(rows)) return {};
+        const out: MarketBaselines = {};
+        for (const raw of rows as Array<Record<string, unknown>>) {
+          const key = String(raw.window_key) as VolumeWindow;
+          out[key] = {
+            believersYes: finLoose(raw.believers_yes),
+            believersNo: finLoose(raw.believers_no),
+            yesCapitalUsd: finLoose(raw.yes_capital_usd),
+            noCapitalUsd: finLoose(raw.no_capital_usd),
+            yesPriceUsd: finLoose(raw.yes_price_usd),
+            noPriceUsd: finLoose(raw.no_price_usd),
+          };
+        }
+        return out;
+      } catch {
+        return {}; // pre-migration or transient error → tape fallback
       }
-      return out;
-    } catch {
-      return {}; // pre-migration or transient error → tape fallback
-    }
+    });
   });
+
 
 /**
  * Per-market pulse strips: the most recent real trade events for each of the
