@@ -557,12 +557,11 @@ export function ConvictionDashboard({
                   >
                     <div className="flex items-center">
                       <span className="text-[14px] font-medium text-[var(--text)]">{s.label}</span>
-                      <span
+                      <Signed
+                        value={fmtUsd(s.usd, true)}
                         className="ml-auto text-[15px] font-semibold tabular-nums"
-                        style={{ color: s.usd >= 0 ? "var(--gain)" : "var(--loss)" }}
-                      >
-                        {fmtUsd(s.usd, true)}
-                      </span>
+                      />
+
                     </div>
                     <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
                       {edgeCopy(s.key, s.usd)}
