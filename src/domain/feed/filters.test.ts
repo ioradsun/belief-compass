@@ -51,10 +51,10 @@ describe("within a group, selections are OR", () => {
   });
 
   it("accepts a market matching either network", () => {
-    const f = toggleNetwork(toggleNetwork(ALL, "tribe"), "following");
+    const f = toggleNetwork(toggleNetwork(ALL, "tribe"), "rivals");
     expect(matches(f, m({ tribeCount: 1 }))).toBe(true);
-    expect(matches(f, m({ followedHere: 2 }))).toBe(true);
-    expect(matches(f, m({ oppCount: 3 }))).toBe(false);
+    expect(matches(f, m({ oppCount: 3 }))).toBe(true);
+    expect(matches(f, m({}))).toBe(false);
   });
 });
 
@@ -85,7 +85,7 @@ describe("the title stays short", () => {
   it("counts instead of listing beyond two", () => {
     let f = toggleTopic(ALL, "ai");
     f = toggleTopic(f, "crypto");
-    f = toggleNetwork(f, "following");
+    f = toggleNetwork(f, "tribe");
     expect(filterTitle(f)).toBe("3 Filters");
   });
 });
@@ -260,7 +260,7 @@ describe("Explore narrows by the same relationship words the People tab shows", 
 
   it("still narrows by every level it does offer", () => {
     const has = (k: string) => NETWORK_OPTIONS.some((n) => n.key === k);
-    for (const k of ["everyone", "mine", "tribe", "rivals", "following"]) {
+    for (const k of ["everyone", "mine", "tribe", "rivals"]) {
       expect(has(k), k).toBe(true);
     }
   });
