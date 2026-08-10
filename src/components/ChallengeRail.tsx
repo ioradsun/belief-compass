@@ -249,7 +249,7 @@ export function ChallengeRail({
                   answered call vanished from one place and reappeared in another
                   with no visible connection between them. */}
               <ul className="space-y-2">
-                {[...open.slice(0, shown), ...recent].map((c) => (
+                {[...open.slice(0, shown), ...recent.slice(0, CHALLENGE.maxRecent)].map((c) => (
                   <ChallengeRow
                     key={c.marketId}
                     challenge={c}
