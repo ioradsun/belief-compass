@@ -63,7 +63,7 @@ import { StandOnIt } from "@/components/StandOnIt";
 import { ShareImpact } from "@/components/ShareImpact";
 
 import { getConvictionMarket } from "@/lib/market-create.functions";
-import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
+import { MediaEvidence, MediaStage, stageMediaFrom } from "@/components/MediaStage";
 import { marketTitle } from "@/domain/market-title";
 
 /**
@@ -489,8 +489,12 @@ export function MarketDeck({
             title={title}
             side={side ?? dock.sellSide ?? dock.owned.only}
             hasMedia={!!stageMedia}
+            mediaUrl={stageMedia?.embed?.url ?? stageMedia?.url ?? null}
           />
         </div>
+        {/* Evidence sits directly under the question — above the byline, the
+          same place on every market that has it. */}
+        {stageMedia && <MediaEvidence media={stageMedia} />}
         {/* The byline renders nothing until the creator lookup lands, and
           nothing at all for a market with no creator on record. Reserving its
           row means the market body below starts at the same y either way,
