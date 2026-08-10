@@ -14,10 +14,9 @@ describe("pasted embed code", () => {
     expect(parseEmbed(html)?.url).toBe("https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT");
   });
 
-  it("reads an Instagram blockquote permalink", () => {
-    const html =
-      '<blockquote class="instagram-media" data-instgrm-permalink="https://www.instagram.com/reel/CxYz123abc/?utm_source=ig_embed" data-instgrm-version="14"><a href="https://www.instagram.com/reel/CxYz123abc/">post</a></blockquote>';
-    expect(parseEmbed(html)?.url).toBe("https://www.instagram.com/reel/CxYz123abc/");
+  it("refuses Instagram and TikTok, which cannot play inline", () => {
+    expect(parseEmbed("https://www.instagram.com/reel/CxYz123abc/")).toBeNull();
+    expect(parseEmbed("https://www.tiktok.com/@someone/video/7123456789012345678")).toBeNull();
   });
 
   it("reads an X blockquote", () => {
