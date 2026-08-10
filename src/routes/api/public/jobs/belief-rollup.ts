@@ -167,10 +167,28 @@ export const Route = createFileRoute("/api/public/jobs/belief-rollup")({
             }
           }
 
+          /**
+           * SECOND-WRITER GUARD. Believer counts derive from stance_side, and
+           * stance_side is only meaningful when the market has a price. On an
+           * unpriced market every position evaluates to INACTIVE, so writing
+           * these counts publishes a confident `0 believers` over the numbers
+           * refreshMarket() just derived from the chain. Absence of a price is
+           * not absence of believers: leave the counts alone and ask the owner
+           * of market-level facts to recompute (it can derive the price itself).
+           */
+          if (!canMark) {
+            await sb.rpc("enqueue_market_refresh", {
+              p_market_ids: [mid],
+              p_kind: "positions",
+            });
+            continue;
+          }
+
           const total = by + bn;
           const peoplePct = total > 0 ? (by / total) * 100 : null;
           const divergence =
             peoplePct != null && p.moneyYesPct != null ? Math.abs(p.moneyYesPct - peoplePct) : null;
+
 
           // Velocity: canonical trade EVENTS in the last 5m by event time. Reads
           // the events log (not the trades projection); is_canonical excludes
