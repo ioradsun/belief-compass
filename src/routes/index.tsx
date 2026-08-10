@@ -13,7 +13,13 @@ import {
 } from "@/lib/markets.functions";
 import { marketChangeQO } from "@/lib/market-queries";
 import { getOpportunityFeed, getWarmFeed } from "@/lib/opportunity-feed.functions";
-import { feedSession, resetFeedSession } from "@/lib/feed-session";
+import {
+  feedSession,
+  feedSessionVersion,
+  ideaGateOpen,
+  resetFeedSession,
+  subscribeFeedSession,
+} from "@/lib/feed-session";
 import { readSessionToken } from "@/lib/wallet-session";
 
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
