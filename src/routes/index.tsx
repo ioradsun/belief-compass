@@ -1623,6 +1623,7 @@ function Feed() {
                 <ChallengeRail
                   wallet={wallet}
                   onSelect={selectMarket}
+                  insiderCount={insiderPending}
 
                   insider={
                     <div className="min-h-0 flex-1 overflow-hidden">
@@ -1633,10 +1634,12 @@ function Feed() {
                         holdUpdates
                         label="Insider"
                         initial={loaderData?.tape ?? null}
+                        onPending={setInsiderPending}
                       />
                     </div>
                   }
                 />
+
               )}
             </>
           )}
