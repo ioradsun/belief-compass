@@ -265,7 +265,7 @@ export async function refreshMarket(
         : {
             yes_capital_usd: yesCapUsd,
             no_capital_usd: noCapUsd,
-            capital_usd: yesCapUsd + noCapUsd,
+            // `capital_usd` is generated from the two sides — never written.
             money_yes_pct: moneyYes,
             ...(yesPrice != null ? { yes_price_usd: yesPrice } : {}),
             ...(noPrice != null ? { no_price_usd: noPrice } : {}),
