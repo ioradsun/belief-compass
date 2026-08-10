@@ -42,8 +42,19 @@ export function stageMediaFrom(
 
   if (kind === "embed") {
     const embed = embedFromRecord(raw);
-    if (!embed) return null;
-    return { kind: "embed", url: embed.url, embed, title: embed.title ?? null };
+    if (embed) return { kind: "embed", url: embed.url, embed, title: embed.title ?? null };
+    // Legacy records from platforms we no longer play inline (Instagram,
+    // TikTok) still deserve a visible link rather than a silently empty
+    // market — the same card a pasted link gets.
+    const legacy = typeof raw.url === "string" ? raw.url : null;
+    if (!legacy) return null;
+    return {
+      kind: "link",
+      url: legacy,
+      title: typeof raw.title === "string" ? raw.title : null,
+      image: typeof raw.thumbnail === "string" ? raw.thumbnail : null,
+      site: typeof raw.platform === "string" ? raw.platform : null,
+    };
   }
 
   if (!["image", "video", "audio", "link"].includes(kind)) return null;
