@@ -45,14 +45,14 @@ describe("the outbound card claims only what the server proved", () => {
     expect(c).toMatch(/progress\.showedUp === 0 && progress\.passed === 0/);
   });
 
-  it("reads capacity from the canonical line, never its own arithmetic", () => {
+  it("counts capacity from the live rows only", () => {
     const c = yours();
     // `live`, not `table` — the payload now also carries Challenges that ended in
     // the last week so their author finds out what happened, and counting those as
     // occupied slots would tell somebody with three good outcomes that their table
     // was full. Closing is exactly what gave the slot back.
-    expect(c).toMatch(/tableLine\(live\.length\)/);
-    expect(c).not.toMatch(/\/ 3|of 3 used|TABLE_SLOTS -/i);
+    expect(c).toMatch(/\{live\.length\}\/\{TABLE_SLOTS\}/);
+    expect(c).toMatch(/spotsOpen\(live\.length\)/);
   });
 });
 
@@ -63,13 +63,20 @@ describe("taking it off the table", () => {
     expect(c).not.toMatch(/Delete|Cancel|Remove Challenge/i);
   });
 
+  it("keeps it behind a chevron rather than under every card", () => {
+    const c = yours();
+    expect(c).toMatch(/ChevronDown/);
+    expect(c).toMatch(/more &&/);
+  });
+
   it("never reports a failed read as an empty table", () => {
     // Same rule the incoming side follows: silence is earned by an answer.
     const c = yours();
     expect(c).toMatch(/isError/);
-    expect(c.indexOf("isError")).toBeLessThan(c.indexOf("Nothing on the table"));
+    expect(c).toMatch(/Could not load your table/);
   });
 });
+
 
 describe("one column, no whose-table filter", () => {
   it("has no side tabs at all", () => {
