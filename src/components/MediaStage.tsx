@@ -1,5 +1,5 @@
 /**
- * MediaStage — the two-state stage for markets that carry evidence.
+ * MediaStage — the plain market scroller.
  *
  * A market with uploaded media gets ONE extra surface, not a new layout: the
  * existing market panel becomes page 1, the evidence becomes page 2, and the
@@ -86,7 +86,6 @@ export function MediaStage({
         className="flex h-full w-full min-w-full shrink-0 flex-col overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]"
         style={{ gap: "var(--deck-gap, 12px)" }}
       >
-        {media && <Evidence media={media} />}
         {children}
       </div>
     </div>
@@ -94,8 +93,9 @@ export function MediaStage({
 }
 
 
-function Evidence({ media }: { media: StageMedia }) {
-  if (media.kind === "embed" && media.embed) return <MediaEmbed media={media.embed} />;
+export function MediaEvidence({ media }: { media: StageMedia }) {
+  if (media.kind === "embed" && media.embed)
+    return <MediaEmbed media={media.embed} caption={false} />;
   const url = media.url as string;
   if (media.kind === "image") {
     return (

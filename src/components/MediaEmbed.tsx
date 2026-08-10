@@ -36,7 +36,17 @@ export function preconnectEmbed(platform: EmbedMedia["platform"]) {
   }
 }
 
-export function MediaEmbed({ media, className = "" }: { media: EmbedMedia; className?: string }) {
+export function MediaEmbed({
+  media,
+  className = "",
+  caption = true,
+}: {
+  media: EmbedMedia;
+  className?: string;
+  /** The title + "View on <Platform>" row. Off inside a market: the overflow
+   * menu beside the question carries the media link instead. */
+  caption?: boolean;
+}) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -98,20 +108,22 @@ export function MediaEmbed({ media, className = "" }: { media: EmbedMedia; class
         )}
       </div>
 
+      {caption && (
       <figcaption className="mt-2 flex items-center justify-between gap-3 text-[11px] text-[var(--text-muted)]">
-        <span className="min-w-0 truncate">
-          {media.author ? `${media.author} · ` : ""}
-          {media.title ?? label}
-        </span>
-        <a
-          href={media.url}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="shrink-0 font-medium text-[var(--text-secondary)] underline"
-        >
-          View on {label} ↗
-        </a>
-      </figcaption>
+          <span className="min-w-0 truncate">
+            {media.author ? `${media.author} · ` : ""}
+            {media.title ?? label}
+          </span>
+          <a
+            href={media.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="shrink-0 font-medium text-[var(--text-secondary)] underline"
+          >
+            View on {label} ↗
+          </a>
+        </figcaption>
+        )}
     </figure>
   );
 }

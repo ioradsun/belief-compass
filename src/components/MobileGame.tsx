@@ -36,7 +36,7 @@ import { marketChangeQO, evidenceQO } from "@/lib/market-queries";
 import { useMarketChange } from "@/lib/market-change-query";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 import { marketAgeCopy } from "@/domain/market-freshness";
-import { MediaStage, stageMediaFrom } from "@/components/MediaStage";
+import { MediaEvidence, MediaStage, stageMediaFrom } from "@/components/MediaStage";
 import { StandOnIt } from "@/components/StandOnIt";
 import { CaseRoster } from "@/components/CaseFile";
 import { ShareImpact } from "@/components/ShareImpact";
@@ -359,8 +359,14 @@ export function MobileGame({
           title={title}
           side={side}
           hasMedia={!!stageMedia}
+          mediaUrl={stageMedia?.embed?.url ?? stageMedia?.url ?? null}
         />
       </div>
+      {stageMedia && (
+        <div className="mt-2">
+          <MediaEvidence media={stageMedia} />
+        </div>
+      )}
       {/* Creator + age under the question — and, for the POV-sourced markets
           with no author on record, the age alone rather than nothing. */}
       {cm?.creator ? (
