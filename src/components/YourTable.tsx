@@ -129,7 +129,13 @@ export function YourTable({
    * as 3/3 would be the opposite of the truth: closing is what gave the slot back.
    */
   const live = table.filter((r) => r.closedAtMs == null);
-  const ended = table.filter((r) => r.closedAtMs != null);
+  /**
+   * ONLY WHAT ENDED ON ITS OWN. "You took it off the table" reports back a thing
+   * the person just did, in the same session, on this screen — a receipt for
+   * their own click. What survives the close is the outcome they did NOT already
+   * know: everybody answered.
+   */
+  const ended = table.filter((r) => r.closedAtMs != null && r.closeReason === "all_responded");
   const ordered = [...live, ...ended];
   const open = spotsOpen(live.length);
 
