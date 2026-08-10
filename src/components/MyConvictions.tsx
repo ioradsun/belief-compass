@@ -550,7 +550,7 @@ export function MyConvictions({
   const hasBasis = marked.length > 0 && markedBasis > 0;
   // Only when nothing at all can be marked does the window move stand in.
   const periodUsd = built.reduce((s, p) => s + (windowDelta(p.value, p.chg) ?? 0), 0);
-  const partial = marked.length > 0 && marked.length < built.length;
+  
 
   const count = built.length;
   useEffect(() => {
@@ -604,11 +604,7 @@ export function MyConvictions({
                   <>
                     {signedMoney(shownMove)}{" "}
                     <span className="font-normal text-[var(--text-muted)]">
-                      {hasBasis
-                        ? partial
-                          ? `since start · ${marked.length}/${built.length}`
-                          : "since start"
-                        : winLabel.toLowerCase()}
+                      {hasBasis ? "since start" : winLabel.toLowerCase()}
                     </span>
                   </>
                 )}
