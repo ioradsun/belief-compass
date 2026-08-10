@@ -1477,7 +1477,7 @@ function Feed() {
       <div className="grid h-full min-h-0 w-full flex-1 grid-cols-1 grid-rows-1 overflow-hidden lg:[grid-template-columns:320px_minmax(0,1fr)_320px]">
         {/* LEFT — Feed | Convictions | Tribe | Rivals — fixed 320px rail */}
         <aside
-          className={`${show("mine")} row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
+          className={`${show("mine")} relative row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
           style={{ borderRight: "1px solid var(--hairline)" }}
         >
           {caseActive && currentRow ? (
