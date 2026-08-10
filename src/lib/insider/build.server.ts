@@ -227,9 +227,12 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
             }
           : r.kind === "market_transition"
             ? {
-                headline: ((r as Record<string, unknown>).transition_headline as string) ?? "",
-                detail: ((r as Record<string, unknown>).transition_detail as string | null) ?? null,
+                /* NO STORED PROSE. The sentence is composed at read time from
+                   these structured fields — see src/domain/transition-copy. */
                 type: ((r as Record<string, unknown>).transition_type as string | null) ?? null,
+                metric: ((r as Record<string, unknown>).transition_metric as string | null) ?? null,
+                direction:
+                  ((r as Record<string, unknown>).transition_direction as string | null) ?? null,
                 // Stored as text by `payload->>`; a malformed value stays absent
                 // so the mixer falls back rather than ranking on a NaN.
                 significance: (() => {

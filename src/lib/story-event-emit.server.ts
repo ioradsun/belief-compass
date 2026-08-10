@@ -299,8 +299,9 @@ export async function emitStoryEvents(
         payload: {
           type: transition.type,
           tier: transition.tier,
-          headline: transition.headline,
-          detail: transition.detail ?? null,
+          /* NO FROZEN PROSE. The sentence is composed at read time from the
+             structured fields below (src/domain/transition-copy), so a row
+             written today can never speak an obsolete voice tomorrow. */
           side: transition.side ?? null,
           // WHICH MEASUREMENT MOVED. Persisted so the read-time editorial pass
           // can tell a capital reading from a price reading instead of lumping
