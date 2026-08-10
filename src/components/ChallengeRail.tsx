@@ -226,8 +226,8 @@ export function ChallengeRail({
           )}
 
           {/* YOUR OWN TABLE, IN THE SAME COLUMN — what you put up, what became of
-              it, and an invitation for every slot still open. */}
-          <YourTable wallet={wallet} onSelect={onSelect} />
+              it, and one + for filling a free slot. */}
+          <YourTable wallet={wallet} onSelect={onSelect} currentMarketId={currentMarketId} />
 
           {/* MORE, SAID OUT LOUD. A railful is what reads as a set of things
               waiting for you; past that it becomes a feed, and the feed already
@@ -244,15 +244,6 @@ export function ChallengeRail({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => {
-              void qc.invalidateQueries({ queryKey: ["challenges", wallet] });
-            }}
-            className="mt-2 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-          >
-            Refresh
-          </button>
         </div>
       )}
     </div>
