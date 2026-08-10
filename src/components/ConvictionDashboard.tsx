@@ -382,13 +382,13 @@ export function ConvictionDashboard({
             </p>
             {/* The living pulse — did my conviction grow today? */}
             {netToday !== 0 && (
+              // An amount is a fact, not a verdict: it carries its sign and no
+              // colour. Only rates are coloured (see @/components/Signed).
               <div className="mt-3 text-[13px] font-medium tabular-nums text-[var(--text)]">
-                <span style={{ color: netToday >= 0 ? "var(--gain)" : "var(--loss)" }}>
-                  {netToday >= 0 ? "↑" : "↓"}
-                </span>{" "}
                 Today <Signed value={fmtUsd(netToday, true)} />
               </div>
             )}
+
 
           </section>
 
@@ -523,7 +523,9 @@ export function ConvictionDashboard({
 
                     <FlowRow
                       label="Lifetime ROI"
-                      value={journey.roiPct == null ? "—" : fmtPct(journey.roiPct)}
+                      value={
+                        journey.roiPct == null ? "—" : <Signed value={fmtPct(journey.roiPct)} />
+                      }
                     />
                     <FlowRow label="Markets Created" value={`${createdIds.length}`} />
                     <FlowRow
@@ -851,7 +853,7 @@ function FlowRow({
   hint,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   strong?: boolean;
   /** Plain-language explanation, shown as a native tooltip on the label. */
   hint?: string;
