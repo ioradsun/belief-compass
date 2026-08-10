@@ -43,6 +43,7 @@ import {
   StagePane,
 
   isTallMedia,
+  usesStageSwitch,
   mediaSwitchLabel,
   stageMediaFrom,
 } from "@/components/MediaStage";
@@ -298,7 +299,8 @@ export function MobileGame({
   useAnswerCalls(viewerWallet, marketId, trade.isSuccess && !!trade.hash);
 
   const stageMedia = stageMediaFrom(cm);
-  const tallMedia = isTallMedia(stageMedia);
+  const tallMedia = usesStageSwitch(stageMedia);
+  const fitMedia = isTallMedia(stageMedia);
   const [stageTab, setStageTab] = useState<"market" | "media">("media");
   useEffect(() => {
     // A market that leads with evidence opens on that evidence.
@@ -377,11 +379,6 @@ export function MobileGame({
           mediaUrl={stageMedia?.embed?.url ?? stageMedia?.url ?? null}
         />
       </div>
-      {stageMedia && !tallMedia && (
-        <div className="mt-2">
-          <MediaEvidence media={stageMedia} />
-        </div>
-      )}
       {stageMedia && tallMedia && (
         <MediaSwitch
           value={stageTab}
@@ -470,7 +467,7 @@ export function MobileGame({
             {tallMedia ? (
               <>
                 <StagePane active={stageTab === "media"}>
-                  <MediaEvidence media={stageMedia} fitContainer />
+                  <MediaEvidence media={stageMedia} fitContainer={fitMedia} />
                 </StagePane>
                 <StagePane active={stageTab !== "media"} className="gap-3">
                   {marketBody}

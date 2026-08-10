@@ -69,6 +69,7 @@ import {
   MediaSwitch,
   StagePane,
   isTallMedia,
+  usesStageSwitch,
   mediaSwitchLabel,
   stageMediaFrom,
 
@@ -208,7 +209,8 @@ export function MarketDeck({
   const stageMedia = useMemo(() => stageMediaFrom(cm), [cm]);
   // Tall evidence (a video player, an X post) can't sit inline without pushing
   // the market off the panel, so those markets get a Market / Media switch.
-  const tallMedia = isTallMedia(stageMedia);
+  const tallMedia = usesStageSwitch(stageMedia);
+  const fitMedia = isTallMedia(stageMedia);
   const [stageTab, setStageTab] = useState<"market" | "media">("media");
   useEffect(() => {
     // A market that leads with evidence opens on that evidence.
@@ -511,7 +513,6 @@ export function MarketDeck({
         </div>
         {/* Evidence sits directly under the question — above the byline, the
           same place on every market that has it. */}
-        {stageMedia && !tallMedia && <MediaEvidence media={stageMedia} />}
         {stageMedia && tallMedia && (
           <MediaSwitch
             value={stageTab}
@@ -561,7 +562,7 @@ export function MarketDeck({
               {/* Both panes stay mounted in the SAME flex-1 slot: switching
                 changes which one is visible, never the stage's height. */}
               <StagePane active={stageTab === "media"} className="items-stretch justify-start">
-                <MediaEvidence media={stageMedia} fitContainer />
+                <MediaEvidence media={stageMedia} fitContainer={fitMedia} />
               </StagePane>
               <StagePane
                 active={stageTab !== "media"}
