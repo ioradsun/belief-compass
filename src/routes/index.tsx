@@ -454,6 +454,16 @@ function Feed() {
   // phone is for action, so it never exposes Case File (button, columns, or the
   // ?case flag). Desktop is >= lg, where the three columns actually sit together.
   const isDesktop = useIsDesktop();
+  // FOCUS MODE — desktop only. The rails stay exactly where they are (same
+  // widths, same content, still interactive); a translucent mask simply pulls
+  // the eye back to the center column.
+  const [focusMode, setFocusMode] = useState(false);
+  useEffect(() => {
+    if (!isDesktop) setFocusMode(false);
+  }, [isDesktop]);
+  const railMask = `pointer-events-none absolute inset-0 z-30 hidden bg-[var(--bg)]/80 backdrop-blur-[1px] transition-opacity duration-300 ease-out motion-reduce:transition-none lg:block ${
+    focusMode ? "opacity-100" : "opacity-0"
+  }`;
   // Desktop only needs the Case File once the user opens a case, so warm that
   // split chunk when the browser is idle. MobileGame is kept in the route bundle:
   // it is the primary phone surface and must never be stranded behind a chunk.
