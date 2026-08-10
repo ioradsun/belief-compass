@@ -24,8 +24,8 @@
  * what is actually true rather than implying something is broken.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { YourTable, useTable, railSideKey } from "@/components/YourTable";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { YourTable, useTable } from "@/components/YourTable";
+import { useQueryClient } from "@tanstack/react-query";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
 import { passOnCall } from "@/lib/table.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
@@ -36,15 +36,6 @@ import { relationshipTone } from "@/lib/dna-labels";
 import { PersonAvatar } from "@/components/PersonAvatar";
 
 type Tab = "challenge" | "insider";
-/**
- * WHOSE TABLE, and the words are chosen against two wrong pairs.
- *
- * NOT Sent/Received — that is messaging, and a Challenge is not a message. NOT
- * Outbound/Inbound — that is plumbing described to a user. The parent surface
- * already says Challenge, so these only have to say whose: the ones you put up,
- * and the ones put in front of you.
- */
-type Side = "yours" | "challenged";
 
 /**
  * WHY THERE IS NO ACKNOWLEDGEMENT STATE HERE ANY MORE.
