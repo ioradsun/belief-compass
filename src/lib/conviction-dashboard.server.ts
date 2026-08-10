@@ -10,7 +10,7 @@
 import { serviceClient } from "@/lib/supabase-clients";
 import { rowsOf } from "@/lib/supabase-read";
 import { loadWindowChanges, pricePct } from "@/lib/window-change.server";
-import { positionValueUsd } from "@/domain/position-value";
+import { positionValueUsd, isMeasured } from "@/domain/position-value";
 import { readWalletTradesAscending } from "@/lib/conviction-dashboard.trades.server";
 import { decodeBuyCreatorFeeWei, decodeBuyTotalFeeWei } from "@/chain/decoder";
 import { readEthUsd } from "@/lib/eth-usd.server";
