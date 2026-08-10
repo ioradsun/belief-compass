@@ -4,6 +4,11 @@ import { join } from "node:path";
 import {
   TABLE_SLOTS,
   TABLE_BANNED,
+  showedUpHeadline,
+  showedUpSide,
+  keptItMovingLine,
+  keepMovingLine,
+  branchLiveLine,
   TERMINAL_STATES,
   recipientState,
   tableProgress,
@@ -119,7 +124,9 @@ describe("progress a creator can actually be told", () => {
   });
 
   it("switches to the count the moment anybody answers", () => {
-    expect(progressLine(tableProgress([passed(), open(), open()]))).toBe("0 of 3 showed up · 1 passed");
+    expect(progressLine(tableProgress([passed(), open(), open()]))).toBe(
+      "0 of 3 showed up · 1 passed",
+    );
   });
 
   it("never claims a view, a believer or a dollar", () => {
@@ -288,5 +295,99 @@ describe("the ending, told to the person who asked", () => {
     // table would be the exact opposite of what closing means.
     expect(canPutOnTable(0)).toBe(true);
     expect(tableLine(0)).toBeNull();
+  });
+});
+
+/**
+ * THE CHAIN'S VOCABULARY.
+ *
+ * A Challenge does not end when somebody answers — the answer is the reward for
+ * the asker and the trigger for the next branch. Everything below is a way that
+ * loop could start lying about people.
+ */
+describe("somebody showed up, named on the card", () => {
+  const p = (name: string, side: "YES" | "NO" | null = null) => ({ name, side });
+
+  it("names one or two, and counts beyond that", () => {
+    expect(showedUpHeadline([p("Casey")])).toBe("Casey showed up");
+    expect(showedUpHeadline([p("Maya"), p("John")])).toBe("Maya and John showed up");
+    expect(showedUpHeadline([p("a"), p("b"), p("c")])).toBe("3 of your people showed up");
+  });
+
+  it("says nothing rather than 'somebody showed up'", () => {
+    expect(showedUpHeadline([])).toBeNull();
+    expect(showedUpHeadline([p("  ")])).toBeNull();
+  });
+
+  it("celebrates agreement and disagreement in the SAME headline", () => {
+    // The invariant the whole feature rests on: a Rival who turns up turned up.
+    expect(showedUpHeadline([p("Casey", "NO")])).toBe(showedUpHeadline([p("Casey", "YES")]));
+  });
+
+  it("puts the side in a separate clause, never in the celebration", () => {
+    expect(showedUpSide([p("Casey", "NO")])).toBe("Casey backed NO.");
+    expect(showedUpSide([p("Casey", "YES")])).toBe("Casey backed YES.");
+    // "with you" is only allowed when the caller can actually prove they agreed.
+    expect(showedUpSide([p("Casey", "YES")], "YES")).toBe("Casey backed YES with you.");
+    expect(showedUpSide([p("Casey", "NO")], "YES")).toBe("Casey backed NO.");
+  });
+
+  it("prints no side for a row written before the side was kept", () => {
+    // Not backfillable, and a guess would claim somebody went a way they may not
+    // have. Silence is the honest degradation.
+    expect(showedUpSide([p("Casey", null)])).toBeNull();
+  });
+
+  it("refuses a side clause for a crowd", () => {
+    // Three people did three different things; one sentence cannot say so.
+    expect(showedUpSide([p("a", "YES"), p("b", "NO")])).toBeNull();
+  });
+});
+
+describe("keeping the chain moving", () => {
+  it("never says 'pass it on', because Pass already means not for me", () => {
+    const all = [
+      keepMovingLine(9),
+      branchLiveLine(13),
+      keptItMovingLine(["John"], 8),
+      showedUpHeadline([{ name: "Casey", side: "NO" }]),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    expect(all).not.toContain("pass");
+  });
+
+  it("reports reach as tables, never as people who have answered", () => {
+    // A relay puts the question in front of a network; how many answer is not
+    // known yet, and saying "8 more people showed up" would invent behaviour.
+    expect(keptItMovingLine(["John"], 8)).toBe(
+      "John kept it moving. The question is now on 8 more tables.",
+    );
+    expect(branchLiveLine(13)).toBe("The question is now on 13 more tables.");
+    expect(branchLiveLine(1)).toBe("The question is now on 1 more table.");
+  });
+
+  it("offers nothing when there is nobody left to ask", () => {
+    expect(keepMovingLine(0)).toBeNull();
+    expect(branchLiveLine(0)).toBeNull();
+    expect(keptItMovingLine([], 8)).toBeNull();
+  });
+
+  it("states the relay without a reach it cannot prove", () => {
+    expect(keptItMovingLine(["John"], 0)).toBe("John kept it moving.");
+  });
+
+  it("uses no banned word in any branch", () => {
+    const lines = [
+      keepMovingLine(9),
+      branchLiveLine(13),
+      keptItMovingLine(["John"], 8),
+      keptItMovingLine(["a", "b", "c"], 4),
+      showedUpHeadline([{ name: "Casey", side: "NO" }]),
+      showedUpSide([{ name: "Casey", side: "NO" }]),
+    ].filter(Boolean) as string[];
+    for (const line of lines)
+      for (const w of TABLE_BANNED) expect(line.toLowerCase(), line).not.toContain(w);
   });
 });

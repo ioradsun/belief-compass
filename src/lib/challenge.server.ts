@@ -314,7 +314,11 @@ export async function buildChallenges(viewer: string): Promise<Challenge[]> {
  * either sufficient: the canonical current stance, or a canonical directional
  * trade. Neither is the client talking.
  */
-async function tookAPosition(sb: Sb, wallet: string, marketId: number): Promise<boolean> {
+async function tookAPosition(
+  sb: Sb,
+  wallet: string,
+  marketId: number,
+): Promise<{ proved: boolean; side: "YES" | "NO" | null }> {
   const w = wallet.toLowerCase();
   const [{ data: stance }, { data: trade }] = await Promise.all([
     sb
@@ -324,17 +328,39 @@ async function tookAPosition(sb: Sb, wallet: string, marketId: number): Promise<
       .eq("onchain_id", marketId)
       .in("stance_side", ["YES", "NO"])
       .maybeSingle(),
+    // `side` joins the select for the chain card. The proof is unchanged — the
+    // row's EXISTENCE is what proves the position — but the same read already
+    // knows which way it went, and asking again later would be asking a
+    // different question: by then they may have sold.
     sb
       .from("events")
-      .select("id")
+      .select("id, side")
       .eq("wallet", w)
       .eq("market_id", String(marketId))
       .eq("kind", "trade")
       .eq("is_canonical", true)
+      .in("side", ["YES", "NO"])
+      .order("occurred_at", { ascending: true })
       .limit(1)
       .maybeSingle(),
   ]);
-  return !!stance || !!trade;
+  /**
+   * THE SIDE AT THIS MOMENT, and the order of preference is the whole point.
+   *
+   * The canonical stance is what they hold NOW; the earliest directional trade
+   * is what they did when they answered. For a first answer these agree, and
+   * when they do not — somebody who answered YES in March and flipped in April —
+   * the trade is the honest one, because the card is reporting a moment rather
+   * than a position. Falling back to the stance covers the case where the
+   * indexer has the belief but not yet the event.
+   */
+  const fromTrade = (trade as { side?: string } | null)?.side;
+  const fromStance = (stance as { stance_side?: string } | null)?.stance_side;
+  const pick = fromTrade === "YES" || fromTrade === "NO" ? fromTrade : fromStance;
+  return {
+    proved: !!stance || !!trade,
+    side: pick === "YES" || pick === "NO" ? pick : null,
+  };
 }
 
 /**
@@ -353,22 +379,59 @@ export async function markCallsAnswered(
   marketId: number,
 ): Promise<{ closed: NamedPerson[]; pending: boolean }> {
   const sb = serviceClient();
-  if (!(await tookAPosition(sb, wallet, marketId))) {
+  const proof = await tookAPosition(sb, wallet, marketId);
+  if (!proof.proved) {
     // Not a failure and not a forgery — just not visible yet. Said out loud so a
     // persistent gap in the logs is distinguishable from a quiet one.
     console.warn("[challenge] answer not provable yet, nothing stamped", { wallet, marketId });
     return { closed: [], pending: true };
   }
+  /**
+   * THE SIDE IS WRITTEN WITH THE STAMP, ONCE, AND NEVER AGAIN.
+   *
+   * It rides the SAME update as `responded_at`, guarded by the same
+   * `responded_at IS NULL` filter, so the pair can never disagree: a row either
+   * has both or neither, and a later trade cannot rewrite the side somebody
+   * answered with. Reading it back from their position afterwards would claim
+   * they "went NO" in a market they exited last week.
+   *
+   * It is PRESENTATION CONTEXT AND NOTHING ELSE. `CallFact` — what the
+   * dependability ladder consumes — still carries two timestamps and no side,
+   * so a Rival who answers every call still reads as somebody who turns up.
+   */
+  const stamp: Record<string, unknown> = { responded_at: new Date().toISOString() };
+  if (proof.side) stamp["responded_side"] = proof.side;
+
   // `.select()` on the UPDATE returns exactly the rows this call closed — the
   // ones that were still open a moment ago. Reading them separately afterwards
   // would race a second tab and could name somebody this trade did not answer.
-  const { data, error } = await sb
+  let res = await sb
     .from("market_calls")
-    .update({ responded_at: new Date().toISOString() })
+    .update(stamp)
     .eq("market_id", marketId)
     .eq("responder_wallet", wallet.toLowerCase())
     .is("responded_at", null)
     .select("caller_wallet");
+  /**
+   * THE COLUMN MAY NOT BE THERE YET, AND THE STAMP MATTERS MORE THAN THE SIDE.
+   *
+   * Code ships before a migration is applied. `42703` is "column does not
+   * exist" — if the chain migration has not landed, retrying WITHOUT the side
+   * records the thing that has always mattered rather than losing an answer to a
+   * column that is only there to decorate a card. Once the migration is applied
+   * this branch never runs again.
+   */
+  if (res.error?.code === "42703" && proof.side) {
+    console.warn("[challenge] responded_side not present yet — stamping without it");
+    res = await sb
+      .from("market_calls")
+      .update({ responded_at: stamp["responded_at"] as string })
+      .eq("market_id", marketId)
+      .eq("responder_wallet", wallet.toLowerCase())
+      .is("responded_at", null)
+      .select("caller_wallet");
+  }
+  const { data, error } = res;
   if (error) {
     console.error("[challenge] could not stamp answers", {
       code: error.code,

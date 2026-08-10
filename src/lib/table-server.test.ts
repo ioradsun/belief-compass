@@ -19,7 +19,13 @@ describe("a Challenge cannot claim what the server did not see", () => {
     // anyone could have made any of it true with a curl command.
     const c = code("src/lib/challenge.server.ts");
     expect(c).toMatch(/async function tookAPosition/);
-    expect(c).toMatch(/if \(!\(await tookAPosition\(sb, wallet, marketId\)\)\)/);
+    // The gate now also RETURNS the side, so the call is destructured rather than
+    // used as a bare predicate. The proof itself is unchanged: the row's
+    // existence is what proves the position, and the side is only carried along
+    // for the card. Nothing may make the side a condition of being stamped.
+    expect(c).toMatch(/const proof = await tookAPosition\(sb, wallet, marketId\)/);
+    expect(c).toMatch(/if \(!proof\.proved\)/);
+    expect(c).not.toMatch(/if \(!proof\.side\) return|proof\.side &&[^\n]*pending: true/);
     // Both proofs are server-read canonical facts, never the request body.
     expect(c).toMatch(/from\("wallet_beliefs"\)[\s\S]*?stance_side/);
     expect(c).toMatch(/is_canonical", true\)/);

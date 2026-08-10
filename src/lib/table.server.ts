@@ -23,6 +23,7 @@
  * say which deliberate act produced it. One relationship ledger, still.
  */
 import { serviceClient } from "@/lib/supabase-clients";
+import { aliasFor } from "@/lib/wallet-identity";
 import { qualifiedCallers, type Sb } from "@/lib/challenge.server";
 import {
   TABLE_SLOTS,
@@ -32,6 +33,7 @@ import {
   FINISHED_WINDOW_MS,
   type RecipientFact,
   type CloseReason,
+  type Responder,
 } from "@/domain/table";
 
 export interface TableRow {
@@ -52,6 +54,20 @@ export interface TableRow {
    */
   closedAtMs: number | null;
   closeReason: CloseReason | null;
+  /**
+   * WHO SHOWED UP, NAMED — the payoff the card could never print.
+   *
+   * The creator has always been told a COUNT ("3 of 8 showed up") because the
+   * aggregate rule was written for PASSES, where naming somebody would build a
+   * ledger of rejection. A responder is the opposite kind of fact: they took a
+   * public on-chain position, and the tape has named them since it shipped
+   * ("Sarah and Mike showed up for you"). This is that sentence arriving on the
+   * card the asking happened from.
+   *
+   * NEWEST FIRST, and passers are ABSENT — not anonymised, absent. Nothing in
+   * this array can identify somebody who declined.
+   */
+  responders: Responder[];
 }
 
 interface ChallengeRecord {
@@ -306,15 +322,30 @@ export async function tableFor(wallet: string): Promise<TableRow[]> {
   const ids = active.map((r) => Number(r.id));
   const marketIds = [...new Set(active.map((r) => Number(r.market_id)))];
   const [{ data: calls }, { data: markets }] = await Promise.all([
-    sb.from("market_calls").select("challenge_id, responded_at, passed_at").in("challenge_id", ids),
+    /* `responder_wallet` and `responded_side` join the read so the card can name
+       who turned up and say which way they went. The side may be null on rows
+       stamped before it was kept, and on rows written while the chain migration
+       is still unapplied — the card simply prints no side, which is the honest
+       degradation rather than a guess at somebody's position. */
+    sb
+      .from("market_calls")
+      .select("challenge_id, responded_at, passed_at, responder_wallet, responded_side")
+      .in("challenge_id", ids),
     sb.from("markets").select("onchain_id, title").in("onchain_id", marketIds),
   ]);
 
   const byChallenge = new Map<number, RecipientFact[]>();
+  /** Only people who ANSWERED, newest first. A passer can never enter this map. */
+  const answeredBy = new Map<
+    number,
+    { wallet: string; atMs: number; side: "YES" | "NO" | null }[]
+  >();
   for (const c of (calls ?? []) as {
     challenge_id: number | null;
     responded_at: string | null;
     passed_at: string | null;
+    responder_wallet: string | null;
+    responded_side: string | null;
   }[]) {
     const key = Number(c.challenge_id);
     if (!Number.isFinite(key)) continue;
@@ -322,7 +353,26 @@ export async function tableFor(wallet: string): Promise<TableRow[]> {
       respondedAtMs: c.responded_at ? Date.parse(c.responded_at) : null,
       passedAtMs: c.passed_at ? Date.parse(c.passed_at) : null,
     });
+    if (c.responded_at && c.responder_wallet) {
+      (answeredBy.get(key) ?? answeredBy.set(key, []).get(key)!).push({
+        wallet: String(c.responder_wallet).toLowerCase(),
+        atMs: Date.parse(c.responded_at),
+        side: c.responded_side === "YES" || c.responded_side === "NO" ? c.responded_side : null,
+      });
+    }
   }
+
+  /**
+   * NAMES FOR THE PEOPLE WHO TURNED UP — one profile read for the whole table.
+   *
+   * `resolveProfiles` falls back to the wallet alias, so nobody is ever rendered
+   * as "someone": the domain refuses to speak about a person it cannot name, and
+   * an unnamed avatar would be the feeling without the person.
+   */
+  const responderWallets = [...new Set([...answeredBy.values()].flat().map((r) => r.wallet))];
+  const { resolveProfiles } = await import("@/lib/profiles.server");
+  const profiles = responderWallets.length ? await resolveProfiles(responderWallets, 0) : new Map();
+  const nameOf = (w: string) => profiles.get(w)?.displayName?.trim() || aliasFor(w);
   const titleOf = new Map(
     ((markets ?? []) as { onchain_id: number; title: string | null }[]).map((m) => [
       Number(m.onchain_id),
@@ -358,6 +408,11 @@ export async function tableFor(wallet: string): Promise<TableRow[]> {
       recipients,
       closedAtMs,
       closeReason,
+      // Newest first: the card leads with the person who just turned up, which
+      // is the only part of this that is news.
+      responders: (answeredBy.get(Number(r.id)) ?? [])
+        .sort((a, b) => b.atMs - a.atMs)
+        .map((x) => ({ name: nameOf(x.wallet), side: x.side })),
     });
   }
   return out;

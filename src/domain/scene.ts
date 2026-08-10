@@ -48,6 +48,14 @@ export interface Participant {
   /** What they did. `open` means they have not answered. */
   state: RecipientState;
   /**
+   * WHICH WAY THEY WENT WHEN THEY ANSWERED. Declared, never derived.
+   *
+   * Only meaningful for `showed_up`. Absent means the card prints no side — the
+   * honest rendering of a row stamped before the side was kept, and a state the
+   * lab must be able to show because production is full of them.
+   */
+  side?: "YES" | "NO" | null;
+  /**
    * PRIOR ANSWERED CHALLENGES BETWEEN THIS PAIR — the reciprocity run.
    *
    * A declared fact of the scenario, exactly like `together`/`shared` beside it,
@@ -189,6 +197,15 @@ export function tableRowsFor(w: World, now = 0): TableRow[] {
     recipients: w.audience.map(facts),
     closedAtMs: w.closed ? now : null,
     closeReason: w.closed,
+    /**
+     * WHO TURNED UP, NAMED — and the side comes from the scenario, not from a
+     * guess. `showed_up` participants are the only ones here: a passer must not
+     * be nameable on the creator's card, and the fixture is where that would be
+     * easiest to get wrong.
+     */
+    responders: w.audience
+      .filter((p) => p.state === "showed_up")
+      .map((p) => ({ name: p.name, side: p.side ?? null })),
   };
   if (w.activeChallenges <= 0) return w.closed ? [first] : [];
   return [
@@ -203,6 +220,7 @@ export function tableRowsFor(w: World, now = 0): TableRow[] {
       recipients: [],
       closedAtMs: null,
       closeReason: null,
+      responders: [],
     })),
   ];
 }

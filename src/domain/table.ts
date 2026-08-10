@@ -187,6 +187,105 @@ export function progressLine(p: TableProgress): string | null {
   return p.passed > 0 ? `${showed} · ${p.passed} passed` : showed;
 }
 
+/* ── The chain ───────────────────────────────────────────────────────────── */
+
+/**
+ * SOMEBODY SHOWED UP FOR YOU — said on the card, with their name.
+ *
+ * THE AGGREGATE RULE STILL HOLDS WHERE IT WAS WRITTEN. "1 passed" stays a count
+ * forever: a pass is a choice about a question, and a ledger of who would not is
+ * a ledger of rejection with a friendlier label. Naming a RESPONDER is the
+ * opposite kind of fact — they took a public position, on-chain, visible to
+ * anyone who opens the market — and the product already names them in the tape
+ * ("Sarah and Mike showed up for you"). This is that sentence arriving on the
+ * card the asking happened from.
+ *
+ * SIDE-BLIND HEADLINE, SIDED DETAIL, AND THE SPLIT IS THE POINT. "Casey showed
+ * up" reads identically whether Casey agreed or not, because whether she agreed
+ * has nothing to do with whether she turned up. The side is a separate clause a
+ * caller may render in its own colour — never a reason to celebrate harder.
+ */
+export interface Responder {
+  name: string;
+  /** What they took WHEN THEY ANSWERED. Null on rows written before it was kept. */
+  side: "YES" | "NO" | null;
+}
+
+/** "Casey showed up" / "Maya and John showed up" / "3 of your people showed up". */
+export function showedUpHeadline(people: readonly Responder[]): string | null {
+  const names = people.map((p) => p.name.trim()).filter(Boolean);
+  if (names.length === 0) return null;
+  if (names.length === 1) return `${names[0]} showed up`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} showed up`;
+  return `${names.length} of your people showed up`;
+}
+
+/**
+ * The side clause, and only when one person is being reported.
+ *
+ * NEVER "she backed YES WITH YOU" unless the caller can prove the pair agreed —
+ * and this module cannot: it holds the responder's side and not the creator's.
+ * A caller that knows both may pass `creatorSide`; without it the sentence
+ * states what the responder did and stops, which is always true.
+ */
+export function showedUpSide(
+  people: readonly Responder[],
+  creatorSide?: "YES" | "NO" | null,
+): string | null {
+  if (people.length !== 1) return null;
+  const only = people[0];
+  if (!only?.side || !only.name.trim()) return null;
+  if (creatorSide && only.side === creatorSide) return `${only.name} backed ${only.side} with you.`;
+  return `${only.name} backed ${only.side}.`;
+}
+
+/**
+ * SOMEBODY CARRIED IT FURTHER — the second win, and the one that makes this a chain.
+ *
+ * Answering is a person doing something because you asked. Relaying is that
+ * person spending one of their own three slots to ask their people, which is a
+ * far scarcer act — so it gets its own sentence rather than being folded into
+ * the count.
+ *
+ * IT SAYS TABLES, NOT PEOPLE, and the distinction is honest: a relay puts the
+ * question in front of somebody's network, and how many of them answer is not
+ * known yet. "On 8 more tables" is a fact about reach; "8 more people showed up"
+ * would be a claim about behaviour that has not happened.
+ */
+export function keptItMovingLine(names: readonly string[], tables: number): string | null {
+  const clean = names.map((n) => n.trim()).filter(Boolean);
+  if (clean.length === 0) return null;
+  const who =
+    clean.length === 1
+      ? `${clean[0]} kept it moving`
+      : clean.length === 2
+        ? `${clean[0]} and ${clean[1]} kept it moving`
+        : `${clean.length} people kept it moving`;
+  if (tables <= 0) return `${who}.`;
+  return `${who}. The question is now on ${tables} more table${tables === 1 ? "" : "s"}.`;
+}
+
+/**
+ * THE RELAY OFFER, at the emotional peak and nowhere else.
+ *
+ * NEVER "PASS IT ON". `Pass` already means "not for me" in this system, and
+ * reusing it for the opposite act would make the one word mean both declining
+ * and continuing. The vocabulary is "keep the chain moving".
+ *
+ * Absent when there is nobody left to ask — an offer that leads to an empty
+ * audience is worse than silence, which is the rule `PutOnTable` already follows.
+ */
+export function keepMovingLine(reachable: number): string | null {
+  if (reachable <= 0) return null;
+  return `${reachable} of your people haven't answered.`;
+}
+
+/** "The question is now on 13 more tables." — after the relay lands. */
+export function branchLiveLine(reached: number): string | null {
+  if (reached <= 0) return null;
+  return `The question is now on ${reached} more table${reached === 1 ? "" : "s"}.`;
+}
+
 /**
  * HOW LONG A FINISHED CHALLENGE STAYS ON YOUR TABLE.
  *
