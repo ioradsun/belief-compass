@@ -40,7 +40,6 @@ import {
 import { LiveTape } from "@/components/LiveTape";
 import { getWarmTape } from "@/lib/live.functions";
 
-import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { TakeASide } from "@/components/TakeASide";
 
 import { SimilarMarkets } from "@/components/SimilarMarkets";
@@ -1352,18 +1351,10 @@ function Feed() {
                 feedList={
                   <div className="flex min-h-0 flex-1 flex-col">
                     {/* FIRST TEN CONVICTIONS — the brief owns this slot until
-                      the reader has taken ten sides. After that it retires and
-                      IN THIS MARKET takes it back: "where am I" and "what's
-                      next" belong in the same column. */}
-                    <TakeASide wallet={wallet} window={win}>
-                      {shownId != null && (
-                        <CurrentMarketActivity
-                          marketId={shownId}
-                          wallet={wallet}
-                          onSelect={selectMarket}
-                        />
-                      )}
-                    </TakeASide>
+                      the reader has taken ten sides, then the rail simply
+                      leads with the feed. */}
+                    <TakeASide wallet={wallet} window={win} />
+
 
                     <FeedListPanel
                       lens={lens}
