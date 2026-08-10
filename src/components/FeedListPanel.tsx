@@ -202,6 +202,7 @@ export function FeedListPanel({
   }, [activeId]);
 
   const renderRow = (e: FeedListEntry, opts: { first: boolean; leaving?: boolean }) => {
+    if (e.idea) return renderIdeaRow(e, e.idea, opts);
     const f = factsOf(rows[e.onchainId], nowMs);
     /**
      * THREE LINES, IN ONE HIERARCHY: the question, why it is here, and
