@@ -33,11 +33,24 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+/**
+ * The synthetic id a House idea occupies in the running order.
+ *
+ * An idea is a first-class card in the sequence, so it must hold a PLACE in the
+ * playlist exactly like a market does — otherwise it can only ever be seen in
+ * the centre, and the moment the reader moves on it is gone with nothing on
+ * screen admitting it existed. Negative because no onchain market can collide
+ * with it, and the route routes this id to the idea rather than to `?m=`.
+ */
+export const IDEA_ROW_ID = -1;
+
 /** One entry in the running order, as the panel needs it. */
 export interface FeedListEntry {
   onchainId: number;
   /** The sentence from `reasonFor`. Null when nothing true could be said. */
   reason: string | null;
+  /** Present only on the House idea row — it has no market row to read. */
+  idea?: { question: string } | null;
 }
 
 /**
