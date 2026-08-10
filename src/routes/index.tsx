@@ -1349,20 +1349,20 @@ function Feed() {
                 launchPanel={<SimilarMarkets wallet={wallet} onJoin={selectMarket} />}
                 feedList={
                   <div className="flex min-h-0 flex-1 flex-col">
-                    {/* IN THIS MARKET — pinned above the running order, because
-                      "where am I" and "what's next" belong in the same column.
-                      WHAT is happening here, only. WHY the reader is here is the
-                      centre panel's line, said once above the question — this
-                      card carried it too for a few commits and the duplicate was
-                      the problem: one sentence in two columns, neither of them
-                      looking like the authoritative one. */}
-                    {shownId != null && (
-                      <CurrentMarketActivity
-                        marketId={shownId}
-                        wallet={wallet}
-                        onSelect={selectMarket}
-                      />
-                    )}
+                    {/* FIRST TEN CONVICTIONS — the brief owns this slot until
+                      the reader has taken ten sides. After that it retires and
+                      IN THIS MARKET takes it back: "where am I" and "what's
+                      next" belong in the same column. */}
+                    <TakeASide wallet={wallet} window={win}>
+                      {shownId != null && (
+                        <CurrentMarketActivity
+                          marketId={shownId}
+                          wallet={wallet}
+                          onSelect={selectMarket}
+                        />
+                      )}
+                    </TakeASide>
+
                     <FeedListPanel
                       lens={lens}
                       onLens={selectLens}
