@@ -57,7 +57,7 @@ function hydrate(): void {
     // `ideasShown` is deliberately NOT restored: an idea that was shown but
     // never acted on is still unanswered, and the cap exists to stop repeats
     // inside one continuous read, not to hide it forever.
-
+  } catch {
     // A corrupt entry must never cost the reader their feed.
   }
 }
