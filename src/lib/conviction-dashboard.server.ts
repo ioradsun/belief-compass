@@ -122,16 +122,24 @@ export async function buildConvictionDashboard(
   const beliefs = rowsOf(
     await sb
       .from("wallet_beliefs")
-      .select("onchain_id, yes_cost, no_cost, yes_value_usd, no_value_usd, first_backed_at")
+      .select(
+        // ONE SOURCE OF TRUTH WITH THE POSITIONS RAIL. This used to omit shares,
+        // the live price and `value_updated_at`, so `positionValueUsd` could only
+        // reach its LAST rank — cost basis — while the rail marked the very same
+        // holding live at shares x price. Two screens, two answers, same wallet.
+        "onchain_id, yes_shares, no_shares, yes_cost, no_cost, yes_value_usd, no_value_usd, value_updated_at, first_backed_at",
+      )
       .eq("wallet", wallet)
       .limit(500),
     "this wallet's positions",
   ) as Array<{
     onchain_id: number | string;
+    yes_shares: unknown;
+    no_shares: unknown;
     yes_cost: unknown;
     no_cost: unknown;
     yes_value_usd: unknown;
-    value_updated_at: unknown;
+    value_updated_at: string | null;
     no_value_usd: unknown;
     first_backed_at: string | null;
   }>;
