@@ -1,17 +1,19 @@
 /**
- * LEFT PANEL — "Your Convictions". A dashboard of living beliefs, not a portfolio.
+ * LEFT PANEL — "Your Convictions". A PORTFOLIO VIEW, not a second newsroom.
  *
- * Each card answers four questions at a glance: what do I believe (the question),
- * what side am I on (a badge), how is my conviction performing (worth + gain, not
- * cost), and — the reason to open the market today — how is it reacting (ONE
- * dynamic story + a personal Pulse). Cards are ranked by urgency, so a Twin/Tribe/
- * Opp arrival or a believer surge rises to the top; money is a consequence, never
- * the headline. Story selection, pulse and ranking come from the pure
- * src/domain/position-story engine. Clicking opens the market in the center.
+ * Each card answers, in order: what am I backing (the question), which side am I
+ * on, what is it worth now, how is it doing (return %) — and, only when the
+ * platform's own persisted market fact is material, one quiet line of context.
+ *
+ * Positions computes no intelligence. It reads the shared financial functions
+ * (@/domain/position-value, @/domain/position, @/domain/metric-display) and the
+ * canonical `market_state.live_line`, re-told from the owner's seat by the pure
+ * @/domain/position-story. It does NOT scan the tape, score attention, rank by
+ * newsworthiness, or ask questions — that is Insider's job, and duplicating it
+ * here produced a second, weaker answer to the same question.
  */
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { listLiveEvents } from "@/lib/live.functions";
 import { type VolumeWindow } from "@/lib/markets.functions";
 import { positionValueUsd, isMeasured } from "@/domain/position-value";
 import { myConvictionsQO } from "@/lib/positions-query";
@@ -22,12 +24,13 @@ import { formatMoney } from "@/domain/money";
 import { StandOnIt } from "@/components/StandOnIt";
 import { useDisplayUnit } from "@/lib/display-unit";
 import {
-  positionSignal,
+  positionStory,
   type CanonicalLine,
-  type PositionSignal,
+  type PositionStory,
   type Side,
 } from "@/domain/position-story";
 import { marketTitle } from "@/domain/market-title";
+
 
 type Position = {
   onchain_id: number;
