@@ -15,6 +15,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { assertIngestBearer } from "@/lib/service-supabase.server";
 import { buildTape } from "@/lib/insider/build.server";
 import { writeTapeSeed, type TapeResult } from "@/lib/insider/seed.server";
+import { writeDeckSeed, DECK_SEED_MARKETS } from "@/lib/deck-seed.server";
+
 
 export const Route = createFileRoute("/api/public/jobs/tape-warm")({
   server: {
