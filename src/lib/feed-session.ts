@@ -94,6 +94,7 @@ let version = 0;
 
 function bump(): void {
   version += 1;
+  persist();
   for (const l of listeners) l();
 }
 
