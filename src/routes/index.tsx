@@ -750,8 +750,20 @@ function Feed() {
     lens === "for_you"
       ? (loaderData?.feed ?? undefined)
       : undefined;
+  /**
+   * The session's idea gate, as a rendered value. `useSyncExternalStore` because
+   * the counter lives outside React (the feed session module) and crossing the
+   * threshold has to re-key the feed query rather than wait for the slow poll.
+   */
+  const ideaGate = useSyncExternalStore(
+    subscribeFeedSession,
+    () => ideaGateOpen(),
+    () => false,
+  );
+  // Keep the version subscription honest for future readers of the store.
+  void feedSessionVersion;
   const { data, isError: isFeedError } = useQuery({
-    ...feedQO(wallet, win, filters, originMarket, sensitivity, lens),
+    ...feedQO(wallet, win, filters, originMarket, sensitivity, lens, ideaGate),
     // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
     // React Query ages it against staleTime instead of refetching on hydration.
     //
@@ -760,8 +772,12 @@ function Feed() {
     // initial data would date it as fresh and the real feed would never be
     // fetched, leaving the reader on three cards. As placeholder it paints and
     // is replaced the moment the full feed lands.
+    //
+    // Once the gate is open the loader snapshot is, by construction, a feed
+    // built when an idea was not allowed — adopt it only as a placeholder so
+    // the gated request actually runs.
     ...(initialFeed
-      ? wallet || initialFeed.partial
+      ? wallet || initialFeed.partial || ideaGate
         ? { placeholderData: initialFeed }
         : { initialData: initialFeed, initialDataUpdatedAt: loaderData?.fetchedAt ?? Date.now() }
       : {}),
