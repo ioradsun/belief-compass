@@ -350,6 +350,13 @@ export function LiveTape({
     wasWaiting.current = waiting;
   }, [gate.pending]);
 
+  // Same number, said out loud once per change.
+  useEffect(() => {
+    onPending?.(gate.pending);
+  }, [gate.pending, onPending]);
+
+
+
   // The rows the last tap admitted — kept in the window and shown at the top,
   // so "Update" always visibly changes the feed.
   const pinnedIds = useMemo(() => new Set(gate.lastAdmitted), [gate.lastAdmitted]);
