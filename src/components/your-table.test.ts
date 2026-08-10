@@ -7,7 +7,12 @@ const code = (p: string) =>
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/.*$/gm, "");
 
-const yours = () => code("src/components/YourTable.tsx");
+/**
+ * THE OUTBOUND CARD LIVES IN `ChainList` NOW. It was merged with the incoming
+ * call that produced it — one card per person per market — so every rule below
+ * still applies, to the component that actually renders them.
+ */
+const yours = () => code("src/components/ChainList.tsx");
 const rail = () => code("src/components/ChallengeRail.tsx");
 
 /**
@@ -93,10 +98,15 @@ describe("one column, no whose-table filter", () => {
     expect(c).not.toMatch(/side === "yours"/);
   });
 
-  it("renders both sides in the same column", () => {
+  it("renders both sides as ONE card, not two lists", () => {
+    // A reader brought into a question who then relays it used to appear twice
+    // in this column with no visible connection between the two cards — the
+    // chain passing THROUGH a person was the one thing it could not show.
     const c = rail();
-    expect(c).toMatch(/<ChallengeRow/);
-    expect(c).toMatch(/<YourTable/);
+    expect(c).toMatch(/<ChainList/);
+    expect(c).not.toMatch(/<ChallengeRow/);
+    expect(c).not.toMatch(/<YourTable/);
+    expect(yours()).toMatch(/mergeChain\(/);
   });
 
   it("counts everything live on the tab", () => {

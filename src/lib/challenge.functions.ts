@@ -14,7 +14,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { CallReach, Challenge, NamedPerson } from "@/domain/challenge";
-import type { ChallengeHistory, PairCalls, PairSummary } from "@/lib/challenge.server";
+import type { ChainContext, ChallengeHistory, PairCalls, PairSummary } from "@/lib/challenge.server";
 
 const WALLET = z.string().min(3).max(80);
 
@@ -108,7 +108,10 @@ export const answerCalls = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
     z.object({ wallet: WALLET, marketId: z.number().int().nonnegative() }).parse(raw),
   )
-  .handler(async ({ data }): Promise<{ closed: NamedPerson[]; pending: boolean }> => {
+  .handler(
+    async ({
+      data,
+    }): Promise<{ closed: NamedPerson[]; pending: boolean; parentCall: number | null }> => {
     const { markCallsAnswered } = await import("@/lib/challenge.server");
     // WHO this trade just answered, not merely that it succeeded. It is the one
     // moment the product can tell somebody they were counted on, and a bare
@@ -116,5 +119,28 @@ export const answerCalls = createServerFn({ method: "POST" })
     // `pending` travels with the result rather than being flattened away: the
     // caller needs to tell "nobody was waiting" from "we could not prove it yet",
     // and those are the same empty array otherwise.
-    return markCallsAnswered(data.wallet, data.marketId);
+      return markCallsAnswered(data.wallet, data.marketId);
+    },
+  );
+
+/**
+ * HOW EACH QUESTION REACHED YOU — one read for the whole rail.
+ *
+ * Unsigned like the rest of the reads here: it describes the viewer's own
+ * position in chains they are already looking at, and names only people who
+ * publicly put a question up or publicly asked somebody.
+ */
+export const getChainContext = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({
+        wallet: WALLET.nullish(),
+        marketIds: z.array(z.number().int().nonnegative()).max(60).default([]),
+      })
+      .parse(raw ?? {}),
+  )
+  .handler(async ({ data }): Promise<Record<number, ChainContext>> => {
+    if (!data.wallet || data.marketIds.length === 0) return {};
+    const { chainContextFor } = await import("@/lib/challenge.server");
+    return chainContextFor(data.wallet, data.marketIds);
   });

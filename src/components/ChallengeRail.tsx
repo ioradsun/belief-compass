@@ -24,7 +24,8 @@
  * what is actually true rather than implying something is broken.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { YourTable, useTable } from "@/components/YourTable";
+import { ChainList } from "@/components/ChainList";
+import { useTable } from "@/components/YourTable";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
 import { passOnCall } from "@/lib/table.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
@@ -228,42 +229,22 @@ export function ChallengeRail({
               Could not load who is waiting on you. This is a fault on our side, not an empty room —
               try again in a moment.
             </p>
-          ) : open.length === 0 && recent.length === 0 ? null : (
-            <section className="space-y-2">
-              {/* WHO IS OWED AN ANSWER, SAID IN TWO WORDS. Amber is the same colour
-                  this product uses for the other side of a question, so the eye
-                  learns the mapping once: amber means somebody is waiting on you,
-                  blue means you are waiting on them. */}
-              <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--no)]" aria-hidden />
-                Challenged You
-              </h3>
-              {/* ONE LIST, AND THE CARD SAYS WHICH IT IS.
-                  A finished interaction is not a different kind of object that
-                  belongs under a second heading — it is the SAME card, later. Its
-                  key is the market, so React reuses the element rather than
-                  unmounting one and mounting another: the row a reader was looking
-                  at when they took a side stays exactly where it was and changes
-                  what it says. That is the entire point. A separate "recent"
-                  section would have re-created the thing this replaces, where an
-                  answered call vanished from one place and reappeared in another
-                  with no visible connection between them. */}
-              <ul className="space-y-2">
-                {[...open.slice(0, shown), ...recent.slice(0, CHALLENGE.maxRecent)].map((c) => (
-                  <ChallengeRow
-                    key={c.marketId}
-                    challenge={c}
-                    onSelect={onSelect}
-                    onDismiss={pass}
-                  />
-                ))}
-              </ul>
-            </section>
-          )}
+          ) : null}
 
-          {/* YOUR OWN TABLE, IN THE SAME COLUMN — what you put up, what became of
-              it, and one + for filling a free slot. */}
-          <YourTable wallet={wallet} onSelect={onSelect} />
+          {/* ONE LIST, ONE CARD PER QUESTION.
+              "Challenged You" and "You Challenged" were the same market twice
+              whenever a reader was brought into a question and then relayed it —
+              two cards, no visible connection, and the chain passing THROUGH a
+              person was the one thing this column could not show. `ChainList`
+              merges them by market and lets a single card change colour as the
+              reader stops being the one who was asked and becomes the one
+              asking. */}
+          <ChainList
+            wallet={wallet}
+            incoming={[...open.slice(0, shown), ...recent.slice(0, CHALLENGE.maxRecent)]}
+            onSelect={onSelect}
+            onPass={pass}
+          />
 
           {/* MORE, SAID OUT LOUD. A railful is what reads as a set of things
               waiting for you; past that it becomes a feed, and the feed already

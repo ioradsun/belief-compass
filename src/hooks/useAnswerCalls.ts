@@ -29,6 +29,15 @@ import { answerCalls } from "@/lib/challenge.functions";
 /** Where the just-closed callers wait for the panel that names them. */
 export const closedCallsKey = (marketId: number) => ["calls-closed", marketId] as const;
 
+/**
+ * WHICH CALL THIS BUY ANSWERED — the link a relay hangs off.
+ *
+ * Parked beside the callers rather than inside them: the names are what a panel
+ * PRINTS, this is what the next write POINTS AT, and folding a database id into
+ * a list of people would make one of the two lie about what it is for.
+ */
+export const answeredCallKey = (marketId: number) => ["calls-answered", marketId] as const;
+
 export function useAnswerCalls(
   wallet: string | undefined,
   marketId: number,
@@ -64,7 +73,12 @@ export function useAnswerCalls(
           // WHO was just answered, parked where the post-order panel can find it.
           // The panel is a sibling of the deck, not a child, so the cache is the
           // seam — and it is the same cache the panel already reads its reach from.
-          if (r.closed.length > 0) qc.setQueryData(closedCallsKey(marketId), r.closed);
+          if (r.closed.length > 0) {
+            qc.setQueryData(closedCallsKey(marketId), r.closed);
+            // The lineage travels with the names, so the relay offer beside them
+            // can continue the chain rather than starting a parallel one.
+            qc.setQueryData(answeredCallKey(marketId), { parentCall: r.parentCall });
+          }
           if (r.pending && left > 0) {
             // Let the guard go, so a genuine retry is not mistaken for a repeat.
             done.current = null;

@@ -25,6 +25,7 @@
  * proving it FAILS on worlds that are genuinely inconsistent. A green oracle that
  * cannot go red is worse than no oracle.
  */
+import { mergeChain } from "@/domain/chain";
 import { convictionMatch } from "@/domain/relationship";
 import { recipientState, tableProgress, progressLine, tableLine } from "@/domain/table";
 import type { RecipientFact, RecipientState } from "@/domain/table";
@@ -388,6 +389,28 @@ export function checkWorld(w: World): Check[] {
       invented.length > 0
         ? `${invented.length} card(s) show a back & forth the World never stated`
         : "every run on screen is a fact the scenario declared",
+  });
+
+  // 6c · ONE CARD PER PERSON PER MARKET, whichever roles the reader is playing.
+  //
+  // The rail merges the incoming call and the reader's own Challenge by market,
+  // so a person who was brought into a question and then relayed it must see ONE
+  // card that changed colour — never the same question twice in one column. This
+  // maps every incoming card onto the market the fixture's table row uses, which
+  // is the exact collision the merge exists to resolve.
+  const overlapped = mergeChain(
+    challengesFor(w).map((c) => ({ ...c, marketId: 1 })),
+    tableRowsFor(w),
+  );
+  const dupes = overlapped.length - new Set(overlapped.map((c) => c.marketId)).size;
+  const bothRoles = overlapped.filter((c) => c.incoming && c.mine);
+  out.push({
+    name: "One card per person per market, in both roles at once",
+    ok: dupes === 0 && bothRoles.every((c) => c.tone === "blue"),
+    detail:
+      dupes > 0
+        ? `${dupes} question(s) would appear twice in one column`
+        : `${overlapped.length} card(s), and a reader who relayed reads as the one asking`,
   });
 
   // 7 · The cap is never exceeded, whatever the fixture says.

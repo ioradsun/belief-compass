@@ -205,12 +205,10 @@ describe("a failed read is not an empty room", () => {
     const c = rail();
     expect(c).toMatch(/failed \?/);
     expect(c).toMatch(/Could not load who is waiting on you/);
-    // The quiet case renders nothing at all now, and it must still sit BEHIND
-    // the failure check — never in front of it. "Quiet" means nothing waiting AND
-    // nothing that recently happened: an outcome on screen is not an empty room.
-    expect(c.indexOf("failed ?")).toBeLessThan(
-      c.indexOf("open.length === 0 && recent.length === 0 ? null"),
-    );
+    // The quiet case renders nothing at all, and the failure sentence sits ABOVE
+    // the merged list — never instead of nothing. "Quiet" means nothing waiting
+    // AND nothing that recently happened: an outcome on screen is not empty.
+    expect(c.indexOf("failed ?")).toBeLessThan(c.indexOf("<ChainList"));
   });
 
   it("surfaces the error from the shared hook rather than swallowing it", () => {
@@ -272,12 +270,13 @@ describe("an answered card stops asking and stays", () => {
   it("reuses the element rather than unmounting one and mounting another", () => {
     // Keyed by market on ONE list, so the row a reader was looking at when they
     // took a side stays where it is and changes what it says. Two lists would
-    // have re-created the bug: a card vanishing here and reappearing there.
+    // have re-created the bug: a card vanishing here and reappearing there —
+    // which is exactly why the outbound side is merged into the same card now.
     const c = rail();
     expect(c).toMatch(
       /\[\.\.\.open\.slice\(0, shown\), \.\.\.recent\.slice\(0, CHALLENGE\.maxRecent\)\]/,
     );
-    expect(c).toMatch(/key=\{c\.marketId\}/);
+    expect(code("src/components/ChainList.tsx")).toMatch(/key=\{card\.marketId\}/);
   });
 
   it("never lets outcomes crowd out the people still waiting", () => {

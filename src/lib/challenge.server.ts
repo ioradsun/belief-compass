@@ -377,14 +377,14 @@ async function tookAPosition(
 export async function markCallsAnswered(
   wallet: string,
   marketId: number,
-): Promise<{ closed: NamedPerson[]; pending: boolean }> {
+): Promise<{ closed: NamedPerson[]; pending: boolean; parentCall: number | null }> {
   const sb = serviceClient();
   const proof = await tookAPosition(sb, wallet, marketId);
   if (!proof.proved) {
     // Not a failure and not a forgery — just not visible yet. Said out loud so a
     // persistent gap in the logs is distinguishable from a quiet one.
     console.warn("[challenge] answer not provable yet, nothing stamped", { wallet, marketId });
-    return { closed: [], pending: true };
+    return { closed: [], pending: true, parentCall: null };
   }
   /**
    * THE SIDE IS WRITTEN WITH THE STAMP, ONCE, AND NEVER AGAIN.
@@ -411,7 +411,7 @@ export async function markCallsAnswered(
     .eq("market_id", marketId)
     .eq("responder_wallet", wallet.toLowerCase())
     .is("responded_at", null)
-    .select("caller_wallet");
+    .select("id, caller_wallet, called_at");
   /**
    * THE COLUMN MAY NOT BE THERE YET, AND THE STAMP MATTERS MORE THAN THE SIDE.
    *
@@ -429,7 +429,7 @@ export async function markCallsAnswered(
       .eq("market_id", marketId)
       .eq("responder_wallet", wallet.toLowerCase())
       .is("responded_at", null)
-      .select("caller_wallet");
+      .select("id, caller_wallet, called_at");
   }
   const { data, error } = res;
   if (error) {
@@ -437,16 +437,21 @@ export async function markCallsAnswered(
       code: error.code,
       message: error.message,
     });
-    return { closed: [], pending: false };
+    return { closed: [], pending: false, parentCall: null };
   }
-  const wallets = [
-    ...new Set(
-      ((data ?? []) as { caller_wallet: string }[]).map((r) =>
-        String(r.caller_wallet).toLowerCase(),
-      ),
-    ),
-  ];
-  if (wallets.length === 0) return { closed: [], pending: false };
+  const rows = (data ?? []) as { id?: number | null; caller_wallet: string; called_at?: string }[];
+  const wallets = [...new Set(rows.map((r) => String(r.caller_wallet).toLowerCase()))];
+  if (wallets.length === 0) return { closed: [], pending: false, parentCall: null };
+  /**
+   * THE LINK THIS ANSWER HANGS OFF — the EARLIEST call still open for this
+   * market, because that is the person who actually brought the reader in. Two
+   * people asking the same question does not fork the chain; the first one owns
+   * the lineage and the second is simply also waiting.
+   */
+  const parentCall =
+    rows
+      .filter((r) => typeof r.id === "number")
+      .sort((a, b) => Date.parse(a.called_at ?? "") - Date.parse(b.called_at ?? ""))[0]?.id ?? null;
   const { resolveProfiles } = await import("@/lib/profiles.server");
   const profiles = await resolveProfiles(wallets, 0);
   return {
@@ -455,6 +460,7 @@ export async function markCallsAnswered(
       name: profiles.get(w)?.displayName?.trim() || aliasFor(w),
     })),
     pending: false,
+    parentCall,
   };
 }
 
@@ -959,4 +965,131 @@ async function titlesFor(sb: Sb, ids: readonly number[]): Promise<Map<number, st
       .filter((m) => m.title)
       .map((m) => [Number(m.onchain_id), String(m.title)]),
   );
+}
+
+/* ── Provenance: how a question reached you, and where it went next ───────── */
+
+export interface ChainContext {
+  startedBy: string | null;
+  through: string | null;
+  relayedBy: string[];
+  relayTables: number;
+}
+
+/**
+ * WHERE THIS CAME FROM AND WHERE IT WENT — read once for the whole rail.
+ *
+ * Walking `challenges.parent_call → market_calls.id → that call's challenge` is
+ * the entire lineage model. There is no chain table and no denormalised path
+ * string: a pointer per link, walked at read time over the handful of markets a
+ * rail is showing, is cheaper than a second ledger that can disagree with the
+ * first one.
+ *
+ * NOBODY WHO PASSED IS REACHABLE FROM HERE. Every name this returns either put a
+ * question up (a `challenges` row) or was the caller on a call — both public,
+ * deliberate acts. A pass writes `passed_at` and never becomes a link.
+ */
+export async function chainContextFor(
+  viewer: string,
+  marketIds: number[],
+): Promise<Record<number, ChainContext>> {
+  const ids = [...new Set(marketIds.filter((n) => Number.isFinite(n)))];
+  if (ids.length === 0 || !viewer) return {};
+  const me = viewer.toLowerCase();
+  const sb = serviceClient();
+
+  const [ch, cl] = await Promise.all([
+    sb.from("challenges").select("id, market_id, challenger_wallet, parent_call").in("market_id", ids),
+    sb
+      .from("market_calls")
+      .select("id, market_id, caller_wallet, responder_wallet, called_at, challenge_id")
+      .in("market_id", ids),
+  ]);
+  // A missing lineage column is not an error worth failing a rail over — the
+  // cards simply render without their provenance line.
+  if (ch.error || cl.error) {
+    console.warn("[challenge] chain context unavailable", {
+      code: ch.error?.code ?? cl.error?.code,
+    });
+    return {};
+  }
+
+  type Ch = { id: number; market_id: number; challenger_wallet: string; parent_call: number | null };
+  type Cl = {
+    id: number | null;
+    market_id: number;
+    caller_wallet: string;
+    responder_wallet: string;
+    called_at: string;
+    challenge_id: number | null;
+  };
+  const challenges = (ch.data ?? []) as Ch[];
+  const calls = (cl.data ?? []) as Cl[];
+  const challengeById = new Map<number, Ch>(challenges.map((c) => [Number(c.id), c]));
+  const callById = new Map<number, Cl>(
+    calls.filter((c) => c.id != null).map((c) => [Number(c.id), c]),
+  );
+
+  const out: Record<number, ChainContext> = {};
+  const wanted = new Set<string>();
+
+  for (const marketId of ids) {
+    const mine = calls
+      .filter((c) => Number(c.market_id) === marketId && c.responder_wallet?.toLowerCase() === me)
+      .sort((a, b) => Date.parse(a.called_at) - Date.parse(b.called_at));
+    const first = mine[0] ?? null;
+    const through = first ? String(first.caller_wallet).toLowerCase() : null;
+
+    // WALK UP. Bounded, because a cycle written by a bug must not hang a read.
+    let startedBy: string | null = null;
+    let cursor = first?.challenge_id != null ? challengeById.get(Number(first.challenge_id)) : null;
+    for (let hop = 0; hop < 8 && cursor; hop++) {
+      startedBy = String(cursor.challenger_wallet).toLowerCase();
+      const parent = cursor.parent_call != null ? callById.get(Number(cursor.parent_call)) : null;
+      const next =
+        parent?.challenge_id != null ? challengeById.get(Number(parent.challenge_id)) : null;
+      if (!next || next.id === cursor.id) break;
+      cursor = next;
+    }
+
+    // WHO CARRIED IT PAST ME — relays hanging off a call I made in this market.
+    const myCallIds = new Set(
+      calls
+        .filter((c) => Number(c.market_id) === marketId && c.caller_wallet?.toLowerCase() === me)
+        .map((c) => Number(c.id)),
+    );
+    const children = challenges.filter(
+      (c) =>
+        Number(c.market_id) === marketId &&
+        c.parent_call != null &&
+        myCallIds.has(Number(c.parent_call)),
+    );
+    const relayedBy = [...new Set(children.map((c) => String(c.challenger_wallet).toLowerCase()))];
+
+    out[marketId] = {
+      startedBy: startedBy && startedBy !== me ? startedBy : null,
+      through: through && through !== me ? through : null,
+      relayedBy,
+      relayTables: children.length,
+    };
+    for (const w of [out[marketId].startedBy, out[marketId].through, ...relayedBy])
+      if (w) wanted.add(w);
+  }
+
+  if (wanted.size === 0) return out;
+  const { resolveProfiles } = await import("@/lib/profiles.server");
+  const profiles = await resolveProfiles([...wanted], 0);
+  const name = (w: string | null) =>
+    w ? profiles.get(w)?.displayName?.trim() || aliasFor(w) : null;
+  for (const key of Object.keys(out)) {
+    const c = out[Number(key)];
+    if (!c) continue;
+    out[Number(key)] = {
+      startedBy: name(c.startedBy),
+      through: name(c.through),
+      relayedBy: c.relayedBy.map((w) => name(w) ?? "").filter(Boolean),
+      relayTables: c.relayTables,
+    };
+  }
+  return out;
 }

@@ -40,7 +40,7 @@ describe("a Challenge cannot claim what the server did not see", () => {
     expect(c).toMatch(/closed: \[\], pending: false/);
     // And the distinction survives the wire rather than being flattened.
     expect(code("src/lib/challenge.functions.ts")).toMatch(
-      /Promise<\{ closed: NamedPerson\[\]; pending: boolean \}>/,
+      /Promise<\{\s*closed: NamedPerson\[\]; pending: boolean; parentCall: number \| null;?\s*\}>/,
     );
   });
 });
