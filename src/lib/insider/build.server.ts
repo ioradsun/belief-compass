@@ -18,12 +18,7 @@ import { serviceClient } from "@/lib/supabase-clients";
 
 import { aliasFor } from "@/lib/wallet-identity";
 import { showedUpInMarket } from "@/domain/dependability";
-import {
-  flattenStory,
-  groupLiveRows,
-  type LiveEventInput,
-  type LiveRow,
-} from "@/lib/live-tape";
+import { flattenStory, groupLiveRows, type LiveEventInput, type LiveRow } from "@/lib/live-tape";
 import type { ConvictionAction } from "@/domain/conviction-event";
 import { voiceLevel, applyViewerAngle } from "@/domain/pi-voice";
 import {
@@ -56,10 +51,7 @@ import type { StandingStoryRow } from "@/domain/standing-story";
 import { buildPersonMilestones } from "@/lib/person-milestones.server";
 import { tellConvictionMilestone } from "@/domain/person-milestone";
 
-import {
-  findDiscoveryMoments,
-  type DiscoveryMoment,
-} from "@/domain/discovery-moment";
+import { findDiscoveryMoments, type DiscoveryMoment } from "@/domain/discovery-moment";
 import { viewerNetwork } from "@/domain/viewer-network";
 import type { ProfileLike } from "@/domain/feed-people";
 import type { CachedRelationship } from "@/lib/dna/viewer-dna-cache.server";
@@ -109,11 +101,7 @@ const CELEBRATION_TRANSITIONS = new Set([
   "market_dividing",
 ]);
 
-
-
 const input = tapeInput;
-
-
 
 /**
  * How many standing stories one full fetch may offer the pipeline.
@@ -126,7 +114,6 @@ const input = tapeInput;
  * tape already needs.
  */
 const STANDING_CANDIDATES = 18;
-
 
 /** How far back an answered call can be and still be news. */
 const SHOWED_UP_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
@@ -180,6 +167,22 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   // Scoped to specific markets == rendered inside a market panel, which already
   // shows the question and the side. Unscoped == the app-wide tape, which does not.
   const scoped = scope != null;
+  /**
+   * MY MARKETS — the same tape, scoped to the questions this reader opened.
+   *
+   * It is NOT `scoped`, and the distinction matters downstream. `scoped` means
+   * "rendered inside one market's panel", which suppresses titles and the
+   * showed-up family because the reader is already looking at the question.
+   * This column is the opposite: many markets, all of them the reader's, and
+   * every one of them needs its title.
+   */
+  const mine = data?.scope === "mine" && viewer != null;
+  /**
+   * One significance for every row in the My Markets scope. Mid-scale so the
+   * client's pacing still treats these as ordinary rows rather than as a wall of
+   * breaking news — what is removed is the ORDERING, not the manners.
+   */
+  const FLAT_SIGNIFICANCE = 0.5;
   const source = await deps.loadTapeSource(sb, data);
   T.mark("source");
   if (source.error)
@@ -424,7 +427,15 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     pulseIds,
     material,
     unadmitted,
-  } = runSignificancePass({ scored, momentumById, pricePaths, nowMs: signalNowMs });
+  } = runSignificancePass({
+    scored,
+    momentumById,
+    pricePaths,
+    nowMs: signalNowMs,
+    // MY MARKETS HAS NO BAR. See the flag's own comment for why a floor tuned
+    // for the whole network is the wrong instrument for five of your questions.
+    admitEverything: mine,
+  });
   T.mark("significance");
 
   /* ── STANDING IS A STORY TYPE, NOT A LANE ──────────────────────────────────
@@ -554,8 +565,6 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
          is someone the reader knows — not because it is a standing story. */
       const personal = s.people.some((p) => p.relationship != null);
 
-
-
       /* INTELLIGENCE EARNS A REAL VECTOR; A RECEIPT DOES NOT.
          `standing_signal` is absent from SOCIAL_SIGNAL_KINDS precisely so it
          reads live market facts here — the contrast IS the market's own
@@ -636,11 +645,9 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
            day counts differ, so the motif keys on the shape the domain named
            and never on the composed copy. */
         payload: { significance: s.strength, motif: s.motif, standingKind: s.kind },
-
       } as (typeof material)[number]);
     }
   }
-
 
   // ── YOUR OWN STAKE ───────────────────────────────────────────────────────
   // The ranker knew about PEOPLE the reader is connected to and nothing about
@@ -718,7 +725,6 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         // `rung` travels with the row so the editorial pass can ask whether a
         // count is interesting to a STRANGER, not merely true.
         payload: { significance: m.rung >= 10 ? 0.72 : 0.6, rung: m.rung },
-
       } as (typeof material)[number]);
     }
   }
@@ -740,7 +746,6 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   T.mark("discovery");
   for (const row of momentRows) material.unshift(row as (typeof material)[number]);
 
-
   // MIXER INPUTS, not the mix itself. The server is where significance, the
   // viewer's relationships and the event families live, so it computes them —
   // but it must NOT reorder here. Delta-sync merges the fresh head into the
@@ -749,6 +754,20 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   // applied once, after the merge, at the render boundary. One mixer, one
   // implementation, applied where the final order actually lives.
   for (const r of material) {
+    /**
+     * YOUR MARKET — the marker, from the stake the ranker already computed.
+     *
+     * `stakes.created` is the same set `stakeBoost` reads two dozen lines below,
+     * so the badge and the ranking can never disagree about whose market this
+     * is. There is no second lookup and no second definition of ownership.
+     *
+     * NOT SET IN THE MY MARKETS SCOPE, and that is the whole reason it reads as
+     * a marker rather than as chrome: in a column where every row is yours,
+     * stamping every row "YOUR MARKET" says nothing and costs a line. It marks
+     * an exception, so it only exists where there is something to except it
+     * from.
+     */
+    if (!mine && stakes.created.has(Number(r.marketId))) r.yourMarket = true;
     if (r.kind === "discovery_moment") continue; // already carries its own inputs
     r.mix = {
       id: r.id,
@@ -766,19 +785,33 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       discovery: discovery.get(r.id) ?? 0,
       // Emitted (our own emitters persist it) → derived (scored just above)
       // → fallback, which is now only reachable by a legacy or unknown kind.
-      significance: Math.min(
-        1,
-        /* A receipt-grade sentence is capped, not deleted: an unsized
-           percentage sits below the clues instead of leading over them. */
-        copyLevel.get(r.id) === "receipt" ? RECEIPT_SIGNIFICANCE_CEILING : 1,
-        (typeof (r.payload as { significance?: number }).significance === "number"
-          ? (r.payload as { significance: number }).significance
-          : (derived.get(r.id) ?? SIGNIFICANCE.fallback)) +
-          (viewerBoost.get(r.id) ?? 0) +
-          // Your own question, or one your money is in. Never both added —
-          // stakeBoost takes the strongest, not the sum.
-          stakeBoost(Number(r.marketId), stakes),
-      ),
+      /**
+       * MY MARKETS RANKS NOTHING, AND THAT IS EXPRESSED AS ONE FLAT NUMBER.
+       *
+       * The mixer orders by significance at the render boundary. Giving every
+       * row in this scope the SAME significance leaves the only order the rows
+       * already have — `occurred_at` descending, straight from the events query
+       * — which is exactly the chronological column that was asked for.
+       *
+       * Done this way rather than by teaching the mixer a second mode: one
+       * scheduler, one implementation, and "no ranking" said literally instead
+       * of as a branch somebody would later have to keep in sync.
+       */
+      significance: mine
+        ? FLAT_SIGNIFICANCE
+        : Math.min(
+            1,
+            /* A receipt-grade sentence is capped, not deleted: an unsized
+               percentage sits below the clues instead of leading over them. */
+            copyLevel.get(r.id) === "receipt" ? RECEIPT_SIGNIFICANCE_CEILING : 1,
+            (typeof (r.payload as { significance?: number }).significance === "number"
+              ? (r.payload as { significance: number }).significance
+              : (derived.get(r.id) ?? SIGNIFICANCE.fallback)) +
+              (viewerBoost.get(r.id) ?? 0) +
+              // Your own question, or one your money is in. Never both added —
+              // stakeBoost takes the strongest, not the sum.
+              stakeBoost(Number(r.marketId), stakes),
+          ),
       occurredAt: r.occurredAt,
       marketId: String(r.marketId),
       side: r.side,
@@ -896,16 +929,6 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     unadmitted,
   });
 
-
-
-
-
-
-
-
-
-
-
   // PACING INPUTS. How urgent (from what the row is) and how heavy (from the
   // tier the gate already computed). Every row gets these, including the
   // synthesized discovery moments, so the client never has to guess — a row
@@ -961,8 +984,6 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   // Standing stories are built with the rest of the material, far above this
   // point — they are a story TYPE, not a lane, and nothing about them belongs
   // in the tail of the pipeline any more.
-
-
 
   // ── SOMEBODY SHOWED UP ───────────────────────────────────────────────────
   // The one family in this tape that is about the READER rather than a market:
@@ -1047,4 +1068,3 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
       : {}),
   };
 }
-

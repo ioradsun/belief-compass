@@ -106,6 +106,18 @@ export interface LiveRow {
    * meaning differs — same significance, same voice, same vector.
    */
   pulse?: boolean;
+  /**
+   * THIS HAPPENED IN A QUESTION THE READER OPENED.
+   *
+   * Set from `stakes.created` — the same set the ranker's `stakeBoost` reads —
+   * so the marker on screen and the boost in the ordering can never disagree
+   * about whose market this is.
+   *
+   * ONLY EVER SET IN THE ALL MARKETS SCOPE. It marks an exception, and in a
+   * column filtered to the reader's own markets there is nothing to except: a
+   * badge on every row is not a signal, it is a margin.
+   */
+  yourMarket?: boolean;
   payload: Record<string, JsonValue>;
 }
 

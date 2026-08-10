@@ -42,6 +42,7 @@ import { networkQO } from "@/lib/network-query";
 import { type NetworkPersonRow } from "@/lib/dna.functions";
 import { hueFor, initialsFor } from "@/lib/wallet-identity";
 import { WalletConnectButton } from "@/components/WalletConnect";
+import { DotFilter } from "@/components/DotFilter";
 import { presentRelationship, type RelationshipPresentation } from "@/domain/relationship";
 import { getDependability } from "@/lib/challenge.functions";
 import { bondFor, EMPTY_TALLY, type Bond, type Tally } from "@/domain/dependability";
@@ -234,9 +235,12 @@ export function NetworkPanel({
 }
 
 /**
- * The one control on this list: which region of the continuum to look at. It is
- * a colour-led menu, not a row of words — the same blue→amber language the ring
- * around every face already speaks.
+ * WHICH REGION OF THE CONTINUUM TO LOOK AT.
+ *
+ * THE CONTROL ITSELF MOVED to `components/DotFilter`, unchanged, because the
+ * Insider column needed the same one and a second copy would have drifted — a
+ * different close behaviour here, a missing aria role there. What is left is the
+ * only part that was ever about people: the vocabulary.
  */
 function SpectrumFilterControl({
   value,
@@ -245,72 +249,13 @@ function SpectrumFilterControl({
   value: SpectrumFilter;
   onChange: (f: SpectrumFilter) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => {
-      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", away);
-    return () => document.removeEventListener("mousedown", away);
-  }, [open]);
-
-  const current = SPECTRUM_FILTERS.find((f) => f.id === value) ?? SPECTRUM_FILTERS[0];
-
   return (
-    <div ref={box} className="relative shrink-0">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={`Filter people: ${current.label}`}
-        className="flex items-center gap-1.5 rounded-md bg-[var(--surface)] px-2 py-1.5 text-[12px] text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
-        style={{ border: "1px solid var(--border)" }}
-      >
-        <span
-          aria-hidden
-          className="h-2.5 w-2.5 rounded-full"
-          style={{ background: FILTER_DOT[value] }}
-        />
-        <span aria-hidden className="text-[9px] leading-none">
-          ▾
-        </span>
-      </button>
-      {open && (
-        <ul
-          role="listbox"
-          className="absolute right-0 z-30 mt-1 w-[150px] overflow-hidden rounded-[10px] py-1 shadow-lg"
-          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-        >
-          {SPECTRUM_FILTERS.map((f) => (
-            <li key={f.id}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={f.id === value}
-                onClick={() => {
-                  onChange(f.id);
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] transition-colors hover:bg-[var(--bg)] ${
-                  f.id === value ? "text-[var(--text)]" : "text-[var(--text-secondary)]"
-                }`}
-              >
-                <span
-                  aria-hidden
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ background: FILTER_DOT[f.id] }}
-                />
-                {f.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <DotFilter
+      value={value}
+      onChange={onChange}
+      ariaLabel="Filter people"
+      options={SPECTRUM_FILTERS.map((f) => ({ id: f.id, label: f.label, dot: FILTER_DOT[f.id] }))}
+    />
   );
 }
 

@@ -41,7 +41,24 @@ export async function loadSharedTapeSource(
   sb: ReturnType<typeof serviceClient>,
   data: TapeQuery,
 ): Promise<TapeSource> {
-  if (data?.since) return loadTapeSource(sb, data);
+  /**
+   * MY MARKETS IS NEVER SHARED, AND THIS IS THE LINE THAT GUARANTEES IT.
+   *
+   * Everything about this cache rests on one property stated at the top of the
+   * file: the source half does not depend on `data.wallet`. The `mine` scope
+   * breaks that property on purpose — `loadTapeSource` resolves it against
+   * `author_wallet`, so the rows it returns are one specific person's.
+   *
+   * The key is deliberately viewer-BLIND, so caching a `mine` read would file
+   * one reader's markets under a key every other reader also computes, and the
+   * next signed-in visitor would be handed somebody else's questions under a
+   * heading that says they are theirs. Adding the wallet to the key would
+   * "fix" that and quietly destroy the thing the cache is for.
+   *
+   * So this scope skips the cache entirely, exactly as a `since` delta does,
+   * and for the same reason: it is not the shared question.
+   */
+  if (data?.since || data?.scope === "mine") return loadTapeSource(sb, data);
   try {
     return await swrCache(sourceCacheKey(data), { ttlMs: SOURCE_TTL_MS }, async () => {
       const source = await loadTapeSource(sb, data);
@@ -55,4 +72,3 @@ export async function loadSharedTapeSource(
     return loadTapeSource(sb, data);
   }
 }
-
