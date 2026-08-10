@@ -620,7 +620,7 @@ function EmbedPicker({
           autoCorrect="off"
           spellCheck={false}
           onChange={(e) => setRaw(e.target.value)}
-          placeholder="Paste a YouTube, Instagram, TikTok, X or Spotify link"
+          placeholder="Paste a link or embed code — YouTube, Instagram, TikTok, X, Spotify"
           className="min-w-0 flex-1 rounded-[10px] bg-[var(--surface)] px-3 py-2 text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
           style={{ border: "1px solid var(--border)" }}
         />
