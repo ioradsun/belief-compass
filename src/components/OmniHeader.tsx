@@ -254,6 +254,7 @@ export function OmniHeader({
           )}
         </div>
 
+        {focus}
         {right}
       </div>
 
