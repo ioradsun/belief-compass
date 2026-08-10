@@ -441,7 +441,14 @@ function Feed() {
     if (!isDesktop) return;
     const idle = (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
       .requestIdleCallback;
-    const warm = () => void import("@/components/CaseFile");
+    // THE LEFT RAIL IS SPLIT OUT TOO, and unlike the Case File it renders
+    // immediately — so its chunk is the one thing standing between the shell and
+    // a populated left column. Warm it in the same idle window.
+    const warm = () => {
+      void import("@/components/MyWorld");
+      void import("@/components/CaseFile");
+    };
+
     if (idle) idle(warm);
     else setTimeout(warm, 1500);
   }, [isDesktop]);
