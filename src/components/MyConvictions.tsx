@@ -539,8 +539,11 @@ export function MyConvictions({
 
   return (
     <div>
-      {/* Summary — one financial story: the value leads, the % is the big right-hand
-          figure (same rhythm as the market instrument), the exact move sits beneath. */}
+      {/* Summary — the portfolio outcome in two figures of equal weight: what it
+          is worth, and what it has returned. The unrealized dollar line and the
+          "Backing N beliefs" count are gone: the first repeated the percentage in
+          another unit, the second repeated the tab's count with subtly different
+          semantics. Both totals are still exact on Full P&L. */}
       {(() => {
         // The cards' own arithmetic, summed. A percentage exists whenever a cost
         // basis does — a sub-cent dollar move must never blank the return, which
@@ -550,7 +553,6 @@ export function MyConvictions({
         const pct = basis > 0 && (hasBasis || move !== 0)
           ? formatPct((move / basis) * 100, { precise: true })
           : null;
-        const shownMove = Math.abs(move) >= 0.005 ? move : 0;
         const tone = move > 0 ? "var(--gain)" : move < 0 ? "var(--loss)" : "var(--text-muted)";
         const arrow = move > 0 ? "▲" : move < 0 ? "▼" : "";
         return (
@@ -560,7 +562,7 @@ export function MyConvictions({
                 {money(total)}
               </span>
               <span
-                className="num shrink-0 text-[20px] font-semibold leading-none tabular-nums"
+                className="num shrink-0 text-[24px] font-semibold leading-none tabular-nums"
                 style={{ color: tone }}
               >
                 {pct ?? "—"}
@@ -569,41 +571,29 @@ export function MyConvictions({
                 ) : null}
               </span>
             </div>
-            <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-              Backing {count} belief{count === 1 ? "" : "s"}
+            <div className="mt-1.5 flex items-baseline justify-between gap-3">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                Portfolio value
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                Return
+              </span>
             </div>
-            <div className="mt-0.5 flex items-baseline justify-between gap-3">
-              <div className="num text-[12px]" style={{ color: tone }}>
-                {shownMove === 0 ? (
-                  <span className="text-[var(--text-muted)]">—</span>
-                ) : (
-                  <>
-                    {signedMoney(shownMove)}{" "}
-                    <span className="font-normal text-[var(--text-muted)]">
-                      {/*
-                       * SCOPE, NOT JUST A NUMBER. This rail measures the value
-                       * of positions you still hold against what they cost —
-                       * it does NOT include realized trades, creator earnings,
-                       * or fees, which is why it differs from Net Profit on the
-                       * Full P&L page. "Since start" read like a lifetime total
-                       * and made two correct numbers look like a contradiction.
-                       */}
-                      {hasBasis ? "unrealized" : winLabel.toLowerCase()}
-                    </span>
-                  </>
-                )}
-              </div>
 
-              {onOpenDashboard && (
+            {onOpenDashboard && (
+              <div className="mt-2.5">
                 <button
                   type="button"
                   onClick={onOpenDashboard}
-                  className="shrink-0 text-[11px] font-semibold text-[var(--text-secondary)] underline-offset-2 hover:underline"
+                  className="text-[11px] font-semibold text-[var(--text-secondary)] underline-offset-2 hover:underline"
                 >
                   Full P&amp;L &rarr;
                 </button>
-              )}
-            </div>
+              </div>
+            )}
+          </div>
+        );
+
           </div>
         );
       })()}
