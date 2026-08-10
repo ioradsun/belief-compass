@@ -98,6 +98,7 @@ const CreateMarket = lazyRetry(() =>
 const MyWorld = lazyRetry(() =>
   import("@/components/MyWorld").then((m) => ({ default: m.MyWorld })),
 );
+import { Crosshair } from "lucide-react";
 import { OmniHeader } from "@/components/OmniHeader";
 import { ProfileMenu } from "@/components/ProfileMenu";
 
