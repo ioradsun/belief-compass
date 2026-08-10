@@ -1344,6 +1344,22 @@ function Feed() {
     openCreate();
   };
 
+  /**
+   * A Market Idea reaching the stage IS the create screen, pre-filled. The
+   * draft is seeded once per suggestion so re-renders never overwrite an edit
+   * the reader has already made to the question.
+   */
+  const seededIdeaRef = useRef<string | null>(null);
+  useEffect(() => {
+    const s = houseIdea.suggestion;
+    if (!ideaDue || !s) return;
+    if (seededIdeaRef.current === s.id) return;
+    seededIdeaRef.current = s.id;
+    startDraftFromSuggestion(s.question, { suggestionId: s.id, originalQuestion: s.question });
+    houseIdea.onShown();
+  }, [ideaDue, houseIdea]);
+
+
   // On mobile only the active tab's column is mounted-visible; from lg up all
   // three columns are always shown side by side.
   const show = (t: MobileTab) => (tab === t ? "flex" : "hidden");
