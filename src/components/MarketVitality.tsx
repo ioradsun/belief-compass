@@ -244,6 +244,7 @@ function MomentumMetric({
   total,
   label,
   copy,
+  pct,
   dense,
   faces,
   facesTotal,
@@ -251,12 +252,15 @@ function MomentumMetric({
   total: string;
   label: string;
   copy: MetricMove;
+  /** The window's proportion — always stated in this slot (see windowPct). */
+  pct: string;
   /** Phone-tight rhythm so the whole market fits one screen without scrolling. */
   dense?: boolean;
   /** Optional identity for this metric — rendered opposite the label. */
   faces?: MomentumFace[];
   facesTotal?: number;
 }) {
+
   const tone = dirTone(copy.direction);
   const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
   // Only a trusted (headline) % earns the big right-hand figure. A small-base %
