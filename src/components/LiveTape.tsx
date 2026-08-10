@@ -432,7 +432,8 @@ export function LiveTape({
   };
 
   const header =
-    label == null ? null : (
+    (
+
       /**
        * THE HEADING AND THE UPDATE CONTROL SHARE ONE LINE, AND THAT LINE NEVER
        * CHANGES HEIGHT.
