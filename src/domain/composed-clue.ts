@@ -89,7 +89,6 @@ export interface ComposedClue {
   lead?: { headline: string; body: string } | null;
 }
 
-
 const HOUR = 3600_000;
 const ms = (iso: string) => Date.parse(iso) || 0;
 const money = (n: number) => (n >= 1000 ? `$${Math.round(n / 100) / 10}k` : `$${Math.round(n)}`);
@@ -182,7 +181,6 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
     const key = `${wallet}:${anchor.id}`;
     const evidence = latestLine(anchor);
 
-
     /* A CLEAN SWAP IS A ROTATION, NOT A REPOSITIONING. One sale here, one
        purchase there, and we can name both questions — which is a better line
        than a count of "changes". Anything busier than that is repositioning. */
@@ -203,35 +201,52 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
 
     // REPOSITIONING — money leaving one belief while joining another, or a
     // string of changes too varied to call a retreat.
-    if (!cleanSwap && ((cut.length > 0 && (put.length > 0 || flips.length > 0)) || acts.length >= 3)) {
+    if (
+      !cleanSwap &&
+      ((cut.length > 0 && (put.length > 0 || flips.length > 0)) || acts.length >= 3)
+    ) {
       const n = acts.length;
       const spread = markets.size > 1;
+      const retreat = put.length + flips.length === 0;
+      /* THE LEAD OWNS THE COUNT; THE QUESTION MUST NOT REPEAT IT. When a named
+         lead is present the body already says "N positions changed across M
+         questions in the last few hours" — so a question that opens "N changes
+         in a few hours" is the same count twice in one row. With a lead, the
+         question drops to the ask alone; without one (attached to a receipt),
+         it keeps the self-contained form because nothing else states the count. */
+      const canLead = !!named && meaningful;
+      const repoText = canLead
+        ? retreat
+          ? pickVariant(`${key}:retreatq`, [
+              `Backing away, or making room for something else?`,
+              `Losing conviction, or just lightening up?`,
+            ])
+          : pickVariant(`${key}:repositionq`, [
+              `Backing away, or moving conviction somewhere else?`,
+              `Changing the read, or just moving capital?`,
+            ])
+        : retreat
+          ? pickVariant(`${key}:retreat`, [
+              /* POSITIONS ARE QUESTIONS, NOT TRANSACTIONS. Four sells across two
+                 markets is two positions cut; saying "4 positions" next to a
+                 body that says "two" is the kind of small contradiction that
+                 costs the whole feed its credibility. */
+              `${markets.size} position${markets.size === 1 ? "" : "s"} cut in a few hours. Backing away, or making room for something else?`,
+              `${n} changes, all in one direction. Losing conviction, or just lightening up?`,
+            ])
+          : pickVariant(`${key}:reposition`, [
+              `${n} changes in a few hours. Backing away, or moving conviction somewhere else?`,
+              `Out of one, into another. Changing the read, or just moving capital?`,
+            ]);
       out.push({
         rowId: anchor.id,
         kind: "person_repositioning",
         gain: 0.42 + Math.min(0.06, 0.015 * n) + (spread ? 0.03 : 0),
         members,
         why: `${n} actions by one person across ${markets.size} question(s)`,
-        /* The wording has to match the SHAPE of the evidence: "out of one,
-           into another" under a person who only sold is a small lie. Rotation
-           language is available only when money actually went somewhere. */
-        text:
-          put.length + flips.length === 0
-            ? pickVariant(`${key}:retreat`, [
-                /* POSITIONS ARE QUESTIONS, NOT TRANSACTIONS. Four sells across
-                   two markets is two positions cut; saying "4 positions" next
-                   to a body that says "two" is the kind of small contradiction
-                   that costs the whole feed its credibility. */
-                `${markets.size} position${markets.size === 1 ? "" : "s"} cut in a few hours. Backing away, or making room for something else?`,
-                `${n} changes, all in one direction. Losing conviction, or just lightening up?`,
-              ])
-            : pickVariant(`${key}:reposition`, [
-                `${n} changes in a few hours. Backing away, or moving conviction somewhere else?`,
-                `Out of one, into another. Changing the read, or just moving capital?`,
-              ]),
+        text: repoText,
         /* THE BEHAVIOUR IS THE STORY; THE RECEIPT IS THE EVIDENCE. */
-        lead:
-          named && meaningful
+        lead: canLead
           ? {
               headline: `${NAME} is moving around`,
               body: [
@@ -251,23 +266,36 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
     if (cut.length > 0 && put.length > 0 && markets.size > 1) {
       const from = subject(cut[0]!.marketTitle);
       const into = subject(put[0]!.marketTitle);
+      const swap = !!(from && into && from !== into);
+      /* WHEN THE LEAD CARRIES THE MOVE, THE QUESTION MUST NOT REPEAT IT. With a
+         named lead the row already says "Out of X. Into Y."; a question that
+         opens "Out of X, into Y" again is the same clause twice in one row. So
+         the question drops to the ask alone here — and is varied, so several
+         rotations in one window don't all ask in unison. Only the
+         receipt-attached form (no lead) still spells the move out, because
+         nothing else in that row does. */
+      const canLead = !!named && swap;
       out.push({
         rowId: anchor.id,
         kind: "person_rotation",
         gain: 0.44,
         members,
         why: "one person left one question and backed another",
-        text:
-          from && into && from !== into
+        text: canLead
+          ? pickVariant(`${key}:rotq`, [
+              `A new read, or the same money looking for a home?`,
+              `Changing the thesis, or just chasing a warmer spot?`,
+              `New conviction, or the same capital hunting a home?`,
+            ])
+          : swap
             ? `Out of ${from}, into ${into}. A new read, or the same money looking for a home?`
             : `${who} sold one belief and bought another. New read, or same money, new home?`,
-        lead:
-          named && from && into && from !== into
-            ? {
-                headline: `${NAME} moved their conviction`,
-                body: `Out of ${from}. Into ${into}.`,
-              }
-            : null,
+        lead: canLead
+          ? {
+              headline: `${NAME} moved their conviction`,
+              body: `Out of ${from}. Into ${into}.`,
+            }
+          : null,
       });
       continue;
     }
@@ -384,7 +412,7 @@ function marketClues(rows: ClueRow[]): ComposedClue[] {
         out.push({
           rowId: sizedAnchor.id,
           kind: "capital_concentrated_arrival",
-          gain: 0.40,
+          gain: 0.4,
           members: sized.map((r) => r.id),
           why: `${wallets.size} wallets, ${money(total)}, ${Math.round((top / total) * 100)}% from one`,
           text: `${wallets.size} wallets, ${money(total)}. Is the weight spread out, or mostly one person?`,
@@ -413,7 +441,7 @@ function networkClues(rows: ClueRow[]): ComposedClue[] {
         ? {
             rowId: anchor.id,
             kind: "network_convergence",
-            gain: 0.50,
+            gain: 0.5,
             members: known.map((r) => r.id),
             why: `${people.size} of the reader's people took ${[...sides][0]} here`,
             text: `${people.size} of your people landed on the same side here. One conversation, or two independent reads?`,
