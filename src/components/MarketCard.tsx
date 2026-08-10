@@ -184,7 +184,7 @@ function SideBlock({
       </div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-lg font-semibold tabular-nums">{fmtShare(price)}</span>
-        {/* One rule for a rate everywhere: coloured, arrow-led (see Signed). */}
+        {/* One rule for a rate everywhere: coloured, arrow-trailing (see Signed). */}
         <Signed
           className="text-xs font-medium tabular-nums"
           value={

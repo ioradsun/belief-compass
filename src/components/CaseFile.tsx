@@ -450,7 +450,8 @@ export function PctChip({ pct, muted = false }: { pct: number | null; muted?: bo
       className="num shrink-0 text-[12px] font-semibold"
       style={{ color, opacity: muted ? 0.55 : 1 }}
     >
-      {arrow} {Math.abs(pct).toFixed(pct !== 0 && Math.abs(pct) < 10 ? 1 : 0)}%
+      {/* Arrow trails the rate, matching @/components/Signed everywhere else. */}
+      {Math.abs(pct).toFixed(pct !== 0 && Math.abs(pct) < 10 ? 1 : 0)}% {arrow}
     </span>
   );
 }
@@ -540,7 +541,9 @@ function MetricRow({
           className={`num mt-0.5 ${leadAbsolute ? "text-[12.5px] font-medium" : "text-[11px]"}`}
           style={{ color: "var(--text-muted)", opacity: active ? 1 : 0.6 }}
         >
-          <span style={{ color: tone }}>{absolute.split(" ")[0]}</span>
+          {/* An amount is a fact, never a verdict: the change keeps its sign and
+              stays neutral. Only the rate above is coloured. */}
+          <span>{absolute.split(" ")[0]}</span>
           {absolute.slice(absolute.split(" ")[0].length)}
         </div>
       )}

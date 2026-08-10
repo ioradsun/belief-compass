@@ -17,6 +17,7 @@
  * Side-blind by construction. The SAME component renders on desktop and mobile;
  * only the layout changes.
  */
+import { Signed } from "@/components/Signed";
 import { useMemo, useState, type ReactNode } from "react";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { ParticipantSheet, RingedAvatar, RELATION_RING } from "@/components/ParticipantSheet";
@@ -25,8 +26,7 @@ import type { TapeTrade } from "@/domain/conviction-series";
 import type { FlowWindow } from "@/domain/market-flow";
 import { formatMoney, convertMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
-import { believerMove, capitalMove, formatPct, type MetricMove } from "@/domain/metric-display";
-import { Signed } from "@/components/Signed";
+import { believerMove, capitalMove, type MetricMove } from "@/domain/metric-display";
 import type { MarketChange, MetricChange } from "@/domain/market-change";
 import { participantSocial, type ParticipantRelation } from "@/domain/participant-social";
 import {
@@ -54,26 +54,6 @@ function fromChange(
   const current = m.current / divisor;
   return { current, base: m.base == null ? current : m.base / divisor };
 }
-
-const dirTone = (d: "up" | "down" | "flat"): string =>
-  d === "up" ? "var(--gain)" : d === "down" ? "var(--loss)" : "var(--text-muted)";
-
-/**
- * THE TILE ALWAYS QUOTES A RATE.
- *
- * metric-display decides when a percentage may *lead the story*; this slot is a
- * fixed instrument reading beside a total, so it always states the proportion
- * for the window. The exact change still sits underneath it, which is what keeps
- * a small-base ratio honest: "+100%" never appears without "+1 participant".
- * With no base at all there is no proportion to state — that reads "New".
- */
-function windowPct(current: number, base: number): string {
-  const delta = current - base;
-  if (!Number.isFinite(delta) || Math.abs(delta) < 1e-9) return "0%";
-  if (!(base > 0)) return "New";
-  return formatPct((delta / base) * 100);
-}
-
 
 /** Formats an ETH-native capital amount in the viewer's chosen unit. */
 type CapFmt = (eth: number, signed?: boolean) => string;
@@ -245,7 +225,6 @@ function MomentumMetric({
   total,
   label,
   copy,
-  pct,
   dense,
   faces,
   facesTotal,
@@ -253,25 +232,34 @@ function MomentumMetric({
   total: string;
   label: string;
   copy: MetricMove;
-  /** The window's proportion — always stated in this slot (see windowPct). */
-  pct: string;
   /** Phone-tight rhythm so the whole market fits one screen without scrolling. */
   dense?: boolean;
   /** Optional identity for this metric — rendered opposite the label. */
   faces?: MomentumFace[];
   facesTotal?: number;
 }) {
-
-  // THE SLOT IS AN INSTRUMENT READING, NOT AN ARGUMENT. It always quotes the
-  // window's proportion (see windowPct) and the exact change is printed directly
-  // beneath it, so a small-base ratio can never be read on its own.
+  // Only a trusted (headline) % earns the big right-hand figure. A small-base %
+  // is demoted to a quiet suffix on the absolute line so it never overstates the
+  // move.
   //
+  // AND WITH NO % AT ALL, THE MOVE ITSELF TAKES THE SLOT. It used to stay empty,
+  // which is how a blank space came to argue for a looser percentage rule: the
+  // believer floor was lowered from ten to three to fill this gap, and at a base
+  // of three "3 → 6 participants" prints "+100%". The gap was the bug. Believers
+  // and capital both read faster as a count and an amount anyway — that is this
+  // module's own stated rule — so the fallback is not a compromise.
   // ATTENTION IS RANKED, NOT SHARED. The question is the only thing on this
   // panel a reader must decide about; the counts are the evidence they consult
-  // *after* reading it. Sizing the totals a clear step below the question
-  // (20/22 against the title's 20–30) restores one obvious first stop.
-  const headlinePct = pct;
-
+  // *after* reading it. At 30px these totals matched the headline exactly, so
+  // the eye had two equal entry points and picked the number — the cheaper
+  // read — first. Sizing them a clear step below the question (20/22 against
+  // the title's 20–30) restores one obvious first stop without making the
+  // evidence any harder to find: they keep the same weight, tabular figures
+  // and position, so they are still the strongest thing under the headline.
+  const headlinePct =
+    copy.pct && !copy.pctQuiet
+      ? copy.pct
+      : copy.figure || copy.pct || (copy.direction === "flat" ? "0%" : "");
   return (
     /* Every dimension here is a token the container sets (see `.momentum` in
        styles.css): width chooses the type scale, height chooses the air. */
@@ -319,13 +307,14 @@ function MomentumMetric({
           ) : null}
         </span>
         <span className="shrink-0 text-right">
-          {/* Signed owns the colour and the arrow for a percentage. */}
+          {/* One rule decides the treatment (see @/components/Signed): a rate is
+          a verdict — coloured, arrow-trailing; a count or an amount is a fact —
+          signed but neutral, whatever fills this slot. */}
           <Signed
             value={headlinePct}
             className="num block font-semibold leading-none tabular-nums"
             style={{ fontSize: "var(--mom-pct, 16px)" }}
           />
-
           {/* The exact move sits directly under its percentage — one column,
           one story, for both participants and capital. */}
           <span
@@ -425,7 +414,6 @@ export function MarketMomentum({
         total={b.current.toLocaleString("en-US")}
         label="Total participants"
         copy={believerCopy(b, book.window)}
-        pct={windowPct(b.current, b.base)}
         faces={faces}
         facesTotal={Math.max(faces?.length ?? 0, Math.round(b.current))}
       />
@@ -435,9 +423,7 @@ export function MarketMomentum({
         total={money(c.current)}
         label="Total capital"
         copy={capitalCopy(c, book.window, usd, money)}
-        pct={windowPct(c.current, c.base)}
       />
-
 
       {footer && (
         <>

@@ -114,14 +114,13 @@ export function LandingExampleCard({
                 {example.current}
               </div>
               {/* The amount is a fact (neutral); the rate is the verdict
-                  (coloured, arrow-led) — see @/components/Signed. */}
+                  (coloured, arrow-trailing) — see @/components/Signed. */}
               <div className="num mt-1 text-[13px] font-semibold leading-none text-[var(--text)]">
                 {example.gain}{" "}
                 <span className="text-[0.95em]">
                   (<Signed value={example.gainPct} />)
                 </span>
               </div>
-
             </div>
           </div>
         </div>

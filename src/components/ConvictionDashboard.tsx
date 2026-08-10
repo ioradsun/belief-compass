@@ -382,13 +382,11 @@ export function ConvictionDashboard({
             </p>
             {/* The living pulse — did my conviction grow today? */}
             {netToday !== 0 && (
-              // An amount is a fact, not a verdict: it carries its sign and no
-              // colour. Only rates are coloured (see @/components/Signed).
               <div className="mt-3 text-[13px] font-medium tabular-nums text-[var(--text)]">
+                {/* An amount is a fact, not a verdict: no arrow, no colour. */}
                 Today <Signed value={fmtUsd(netToday, true)} />
               </div>
             )}
-
 
           </section>
 

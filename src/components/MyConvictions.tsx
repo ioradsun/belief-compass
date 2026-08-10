@@ -191,7 +191,7 @@ function ConvictionCard({
           <div className="text-[10px] font-semibold tracking-wide" style={{ color: sideColor }}>
             {p.side}
           </div>
-          <div className="num mt-0.5 text-[18px] font-semibold leading-none text-[var(--text)]">
+          <div className="num mt-0.5 text-[18px] leading-none text-[var(--text)]">
             {money(p.value)}
           </div>
           <div className="mt-1 text-[10px] text-[var(--text-muted)]">Value</div>
@@ -204,7 +204,7 @@ function ConvictionCard({
               the only honest measure left. Only the sign is coloured. */}
             <Signed
               value={ret?.pct ?? signedMoney(windowMove as number)}
-              className="num block text-[18px] font-semibold leading-none"
+              className="num block text-[18px] leading-none"
             />
 
             <div className="mt-1 text-[10px] text-[var(--text-muted)]">Return</div>
@@ -544,12 +544,11 @@ export function MyConvictions({
               <span className="num min-w-0 truncate text-[24px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
                 {money(total)}
               </span>
-              {/* Signed owns the arrow and the colour for a percentage. */}
+              {/* Signed owns the arrow and the colour — see @/components/Signed. */}
               <Signed
                 value={pct ?? "—"}
                 className="num shrink-0 text-[24px] font-semibold leading-none tabular-nums"
               />
-
 
             </div>
             <div className="mt-1.5 flex items-baseline justify-between gap-3">
