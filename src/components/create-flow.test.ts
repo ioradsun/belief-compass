@@ -36,8 +36,8 @@ describe("the create surface tells one story, and the rails follow it", () => {
   it("puts 'your people' after publish and nowhere else", () => {
     // LaunchRail already owned this; the assertion pins it so recruitment cannot
     // drift back into the form.
-    const rail = code("src/components/LaunchRail.tsx");
-    expect(rail).toMatch(/callReachLine/);
+    // Reach now lives in the Challenge column, where a free slot is an
+    // invitation with a market attached. The form still never recruits.
     expect(code("src/components/CreateMarket.tsx")).not.toMatch(/callReach|Tribe|Rival/);
   });
 });
@@ -96,17 +96,15 @@ describe("the centre stops selling and asks one thing", () => {
     // most valuable line on the surface, addressed to somebody who had already
     // decided to create.
     const c = code("src/components/CreateMarket.tsx");
-    expect(c).toMatch(/>\s*Create a Market\s*</);
-    expect(c).not.toMatch(/4\.5%/);
+    expect(c).toMatch(/New Market/);
+    expect(c).not.toMatch(/Create a Market/);
   });
 
-  it("moves the earn promise to the moment it becomes true", () => {
-    // Not deleted — relocated. It lands when the market is live, as a fact about
-    // something that exists rather than an inducement to make it.
-    const c = code("src/components/LaunchRail.tsx");
-    expect(c).toMatch(/4\.5%/);
-    // Creators only: a backer taking a side earns no fee and is told nothing.
-    expect(c).toMatch(/kind === "created" &&/);
+  it("states the earn once, in the title, and nowhere after", () => {
+    // The fee is what the act is worth, so it sits with the act. The post-publish
+    // moment says one fact — the market is live — and stops.
+    expect(code("src/components/CreateMarket.tsx")).toMatch(/4\.5%/);
+    expect(code("src/components/LaunchRail.tsx")).not.toMatch(/4\.5%/);
   });
 
   it("drops the badge that congratulated the system", () => {
