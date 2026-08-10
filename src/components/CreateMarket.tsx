@@ -262,7 +262,7 @@ export function CreateMarket({
     (submit.error instanceof Error ? submit.error.message.split("\n")[0] : null);
 
   return (
-    <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[600px] flex-col">
+    <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[600px] flex-col justify-center">
       {/* 1 · THE TITLE NAMES THE ACT, AND STOPS SELLING.
           It read "Create a Market. Earn 4.5% on Every Trade." — a revenue pitch
           in the most valuable line on the surface, addressed to somebody who has
@@ -276,7 +276,7 @@ export function CreateMarket({
       </div>
 
       {/* Scrolls only on short (mobile) viewports; on desktop the whole form fits. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pt-3">
+      <div className="flex min-h-0 flex-initial flex-col gap-4 overflow-y-auto pt-3">
         {source && (
           <p className="text-[11px] text-[var(--text-muted)]">
             <span aria-hidden>🏠</span> The House found this question — edit anything before it goes
