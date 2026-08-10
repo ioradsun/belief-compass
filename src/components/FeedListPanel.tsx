@@ -331,13 +331,19 @@ export function FeedListPanel({
           Couldn&rsquo;t load markets. Retry from the centre.
         </p>
       ) : upcoming.length === 0 && !lensExhausted ? (
-        <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
-          {/* An empty result under a filter is a TRUE answer, and saying it
-              plainly beats a loading state that will never resolve. */}
-          {entries.length === 0
-            ? "Nothing matches this feed yet. Try widening it."
-            : "You're at the end of this feed."}
-        </p>
+        entries.length === 0 ? (
+          <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
+            {/* An empty result under a filter is a TRUE answer, and saying it
+                plainly beats a loading state that will never resolve. */}
+            Nothing matches this feed yet. Try widening it.
+          </p>
+        ) : (
+          /* THE QUEUE DRAINED, BUT THE POOL HAS NOT. The server only says
+             `exhausted` when it has nothing left; short of that, a top-up is
+             already in flight (see the route's low-water refill) and telling the
+             reader they are "at the end" would be a claim nobody made. */
+          <PlaylistSkeleton />
+        )
       ) : (
         <ol className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
           {departing && renderRow(departing, { first: false, leaving: true })}
