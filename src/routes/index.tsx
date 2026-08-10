@@ -66,7 +66,6 @@ import { MarketScene } from "@/components/MarketScene";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { PanelBoundary } from "@/components/PanelBoundary";
 
-import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
 
 const CaseColumn = lazyRetry(() =>
   import("@/components/CaseFile").then((m) => ({ default: m.CaseColumn })),
@@ -1759,7 +1758,7 @@ function Feed() {
                 "what is happening across Conviction". Anything that cannot tell
                 those apart belongs in the tape, which is why the tape is passed
                 in rather than owned here. */}
-              {createOpen ? (
+              {createOpen || ideaDue ? (
                 /* THE RIGHT RAIL WHILE WRITING — rewrites of your own question
                    first, then a House spark. Alternates take their natural height
                    on top; the spark fills what's left and self-hides when there is
