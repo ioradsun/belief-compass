@@ -103,7 +103,7 @@ export function embedUrlCandidates(raw: string): string[] {
   attr("data-instgrm-permalink");
   attr("data-video-id");
   attr("href");
-  // Bare URLs inside the snippet (TikTok/X blockquotes end with one).
+  // Bare URLs inside the snippet (X blockquotes end with one).
   for (const m of raw.matchAll(/https?:\/\/[^\s"'<>\\]+/gi)) push(m[0]);
   return out;
 }
@@ -220,4 +220,4 @@ export function embedFromRecord(raw: unknown): EmbedMedia | null {
   };
 }
 
-export const EMBED_HINT = "Paste a link or embed code — YouTube, Instagram, TikTok, X or Spotify.";
+export const EMBED_HINT = "Paste a link or embed code — YouTube, X or Spotify.";

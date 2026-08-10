@@ -631,7 +631,7 @@ function EmbedPicker({
             setRaw(value);
           }}
 
-          placeholder="Paste a link or embed code — YouTube, Instagram, TikTok, X, Spotify"
+          placeholder="Paste a link or embed code — YouTube, X or Spotify"
           className="min-w-0 flex-1 rounded-[10px] bg-[var(--surface)] px-3 py-2 text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
           style={{ border: "1px solid var(--border)" }}
         />
