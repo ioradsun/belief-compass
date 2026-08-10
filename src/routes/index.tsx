@@ -1562,6 +1562,7 @@ function Feed() {
               />
             </>
           )}
+          <div aria-hidden className={railMask} />
         </aside>
 
         {/* CENTER — Belief. Fluid column, but the reading measure is capped at
