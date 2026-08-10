@@ -215,15 +215,14 @@ function ConvictionCard({
 
         {ret?.pct || windowMove != null ? (
           <div className="ml-auto text-right">
-            <div
-              className="num text-[18px] font-semibold leading-none"
-              style={{ color: outcomeTone }}
-            >
-              {/* The return %, whenever a cost basis exists. Without one there is
-                no percentage to state, so the window's dollar move stands in —
-                the only honest measure left. */}
-              {ret?.pct ?? signedMoney(windowMove as number)}
-            </div>
+            {/* The return %, whenever a cost basis exists. Without one there is
+              no percentage to state, so the window's dollar move stands in —
+              the only honest measure left. Only the sign is coloured. */}
+            <Signed
+              value={ret?.pct ?? signedMoney(windowMove as number)}
+              className="num block text-[18px] font-semibold leading-none"
+            />
+
             <div className="mt-1 text-[10px] text-[var(--text-muted)]">Return</div>
           </div>
         ) : (
