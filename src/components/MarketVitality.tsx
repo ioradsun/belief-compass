@@ -261,30 +261,16 @@ function MomentumMetric({
   facesTotal?: number;
 }) {
 
-  const tone = dirTone(copy.direction);
-  const arrow = copy.direction === "up" ? "▲" : copy.direction === "down" ? "▼" : "";
-  // Only a trusted (headline) % earns the big right-hand figure. A small-base %
-  // is demoted to a quiet suffix on the absolute line so it never overstates the
-  // move.
+  // THE SLOT IS AN INSTRUMENT READING, NOT AN ARGUMENT. It always quotes the
+  // window's proportion (see windowPct) and the exact change is printed directly
+  // beneath it, so a small-base ratio can never be read on its own.
   //
-  // AND WITH NO % AT ALL, THE MOVE ITSELF TAKES THE SLOT. It used to stay empty,
-  // which is how a blank space came to argue for a looser percentage rule: the
-  // believer floor was lowered from ten to three to fill this gap, and at a base
-  // of three "3 → 6 participants" prints "+100%". The gap was the bug. Believers
-  // and capital both read faster as a count and an amount anyway — that is this
-  // module's own stated rule — so the fallback is not a compromise.
   // ATTENTION IS RANKED, NOT SHARED. The question is the only thing on this
   // panel a reader must decide about; the counts are the evidence they consult
-  // *after* reading it. At 30px these totals matched the headline exactly, so
-  // the eye had two equal entry points and picked the number — the cheaper
-  // read — first. Sizing them a clear step below the question (20/22 against
-  // the title's 20–30) restores one obvious first stop without making the
-  // evidence any harder to find: they keep the same weight, tabular figures
-  // and position, so they are still the strongest thing under the headline.
-  const headlinePct =
-    copy.pct && !copy.pctQuiet
-      ? copy.pct
-      : copy.figure || copy.pct || (copy.direction === "flat" ? "0%" : "");
+  // *after* reading it. Sizing the totals a clear step below the question
+  // (20/22 against the title's 20–30) restores one obvious first stop.
+  const headlinePct = pct;
+
   return (
     /* Every dimension here is a token the container sets (see `.momentum` in
        styles.css): width chooses the type scale, height chooses the air. */
