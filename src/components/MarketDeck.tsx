@@ -65,12 +65,13 @@ import { ShareImpact } from "@/components/ShareImpact";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 import {
   MediaEvidence,
-
   MediaStage,
   MediaSwitch,
+  StagePane,
   isTallMedia,
   mediaSwitchLabel,
   stageMediaFrom,
+
 } from "@/components/MediaStage";
 import { marketTitle } from "@/domain/market-title";
 
