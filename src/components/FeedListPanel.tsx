@@ -18,7 +18,7 @@
  * The centre panel is where a market gets its space, and this column must never
  * compete with it.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { composeDiscoveryRow } from "@/domain/market-discovery";
 import type { FeedFilters, FeedNetwork } from "@/domain/feed/filters";
 import type { MarketRow } from "@/components/MarketCard";
