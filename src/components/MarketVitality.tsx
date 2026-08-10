@@ -318,16 +318,13 @@ function MomentumMetric({
           ) : null}
         </span>
         <span className="shrink-0 text-right">
-          <span
+          {/* Signed owns the colour and the arrow for a percentage. */}
+          <Signed
+            value={headlinePct}
             className="num block font-semibold leading-none tabular-nums"
-            style={{ color: tone, fontSize: "var(--mom-pct, 16px)" }}
-            suppressHydrationWarning
-          >
-            {headlinePct}
-            {arrow && headlinePct ? (
-              <span className="ml-1.5 text-[0.6em] align-middle">{arrow}</span>
-            ) : null}
-          </span>
+            style={{ fontSize: "var(--mom-pct, 16px)" }}
+          />
+
           {/* The exact move sits directly under its percentage — one column,
           one story, for both participants and capital. */}
           <span
