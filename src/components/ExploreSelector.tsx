@@ -39,7 +39,6 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import {
   DISCOVER_LENSES,
-  EXPLORE_LABEL,
   LENS_LABELS,
   LENS_QUESTIONS,
   type Lens,
