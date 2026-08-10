@@ -511,8 +511,20 @@ export function MarketDeck({
             mediaUrl={stageMedia?.embed?.url ?? stageMedia?.url ?? null}
           />
         </div>
-        {/* Evidence sits directly under the question — above the byline, the
-          same place on every market that has it. */}
+        {/* WHO ASKED, THEN WHAT IT IS. The byline is provenance for the question
+          above it, so it stays welded to the question; the switcher is a control
+          over the body below, and a control belongs next to what it controls.
+          The byline renders nothing until the creator lookup lands, and nothing at
+          all for a market with no creator on record. Reserving its row means the
+          market body below starts at the same y either way, instead of jumping as
+          the lookup resolves. */}
+        <div style={{ minHeight: "var(--deck-byline, 32px)" }}>
+          <MarketByline
+            onchainId={Number(row.onchain_id)}
+            viewerWallet={viewer}
+            onSelectPerson={onSelectPerson}
+          />
+        </div>
         {stageMedia && tallMedia && (
           <MediaSwitch
             value={stageTab}
@@ -521,17 +533,7 @@ export function MarketDeck({
             className="self-start"
           />
         )}
-        {/* The byline renders nothing until the creator lookup lands, and
-          nothing at all for a market with no creator on record. Reserving its
-          row means the market body below starts at the same y either way,
-          instead of jumping as the lookup resolves. */}
-        <div style={{ minHeight: "var(--deck-byline, 32px)" }}>
-          <MarketByline
-            onchainId={Number(row.onchain_id)}
-            viewerWallet={viewer}
-            onSelectPerson={onSelectPerson}
-          />
-        </div>
+
       </div>
 
       {mobileCaseOpen ? (
