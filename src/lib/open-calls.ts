@@ -29,6 +29,7 @@ import { useQuery } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
 import { getChallenges } from "@/lib/challenge.functions";
 import { challengeLock, type Challenge } from "@/domain/challenge";
+import { passedNow } from "@/domain/dependability";
 
 const HIDDEN_KEY = "conviction:calls-hidden";
 
@@ -92,8 +93,17 @@ export function useHiddenCalls(): ReadonlySet<string> {
 
 export interface OpenCalls {
   lock: ReturnType<typeof challengeLock>;
-  /** The queue minus anything this reader has waved off. */
+  /** The queue: people actually waiting on this reader, and nothing else. */
   open: Challenge[];
+  /**
+   * WHAT RECENTLY BECAME OF THE ONES THAT WERE WAITING.
+   *
+   * Somebody showed up, or this reader passed. Kept apart from `open` rather than
+   * mixed into it because the count on the tab and the badge in the mobile menu
+   * must keep meaning "people are waiting on you" — an outcome asks for nothing,
+   * and badging it would turn the payoff into another chore.
+   */
+  recent: Challenge[];
   /**
    * THE READ FAILED — which is NOT the same as nobody waiting.
    *
@@ -148,10 +158,44 @@ export function useOpenCalls(wallet?: string): OpenCalls {
     staleTime: 60_000,
   });
 
+  /**
+   * THE LOCAL SET NO LONGER DELETES A CARD — IT PASSES ON IT.
+   *
+   * It used to remove the row from the payload entirely, which was right while a
+   * pass was a private preference owed to nobody. It stopped being right the day
+   * the server started recording the pass and the card started surviving its own
+   * ending: a row filtered out here would vanish on the tap, then reappear as an
+   * outcome on the next refetch. A card that disappears and comes back looks like
+   * a bug, and this store is the only thing that knows the difference.
+   *
+   * So a locally-passed row is RESTATED, not removed. `passedNow` produces exactly
+   * what the server will produce once the write lands — the run ends, it does not
+   * silently shrink — which is what makes the optimistic render and the eventual
+   * truth the same sentence rather than two.
+   */
   const dismissed = useHiddenCalls();
+  const now = Date.now();
+  const all = (challenges ?? []).map(
+    (c): Challenge =>
+      c.state === "waiting" && dismissed.has(String(c.marketId))
+        ? {
+            ...c,
+            state: "passed",
+            stateAtMs: now,
+            reciprocity: c.reciprocity ? passedNow(c.reciprocity) : null,
+          }
+        : // ALREADY TERMINAL ON THE SERVER, so the local set has nothing to say. A
+          // market waved off last month and then answered anyway reads as the
+          // answer: taking a side outranks a pass everywhere else in this system,
+          // and a stale local preference must not be the one place it does not.
+          c,
+  );
   return {
     lock,
-    open: (challenges ?? []).filter((c) => !dismissed.has(String(c.marketId))),
+    open: all.filter((c) => c.state === "waiting"),
+    recent: all
+      .filter((c) => c.state !== "waiting")
+      .sort((a, b) => b.stateAtMs - a.stateAtMs || a.marketId - b.marketId),
     failed: isError,
     lockUnknown,
   };

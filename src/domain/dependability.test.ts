@@ -4,15 +4,23 @@ import {
   DEPENDABILITY,
   EMPTY_TALLY,
   bondFor,
+  backAndForthLine,
   bucketOf,
   eligible,
   historyRows,
+  NO_RECIPROCITY,
+  outcomeLine,
+  passedNow,
+  RECIPROCITY,
+  reciprocity,
+  runEndedLine,
   rateFor,
   rungFor,
   showedUpFor,
   showedUpInMarket,
   tally,
   type CallFact,
+  type PairCall,
   type Tally,
 } from "./dependability";
 
@@ -310,7 +318,17 @@ describe("no string this module can emit names the machinery or blames anyone", 
         "Sarah",
       ).map((r) => r.label),
     );
-    return out;
+    // The reciprocity vocabulary goes through the SAME guard as everything else,
+    // which is what stops "streak" — banned on both sides of this feature — from
+    // arriving through the one function that had a reason to want it.
+    for (let run = 0; run <= 12; run++) {
+      const r = { run, bothWays: true, endedRun: run };
+      out.push(backAndForthLine(r) ?? "", runEndedLine(r) ?? "");
+    }
+    for (const state of ["waiting", "showed_up", "passed"] as const) {
+      out.push(outcomeLine(state, "Sarah") ?? "");
+    }
+    return out.filter(Boolean);
   };
 
   it("emits a real corpus, so this guard is not vacuously passing", () => {
@@ -398,5 +416,229 @@ describe("showing up and Conviction Match never touch", () => {
     expect(bondFor.length).toBe(3);
     const keys = Object.keys(bondFor("Sarah", t(8, 2), t(1)));
     for (const k of keys) expect(k).not.toMatch(/dna|agree|match|compat|score/i);
+  });
+});
+
+/**
+ * BACK & FORTH — the run between two people, and every way it could become a lie.
+ *
+ * THE THING THIS IS NOT. A daily streak counts calendar days and rewards opening
+ * an app; this counts answered challenges between one pair and cannot see a date
+ * at all. The distinction is not stylistic — it decides whether the number
+ * describes a relationship or an engagement metric, and every assertion below is
+ * a way the second one could sneak back in.
+ */
+const DAY = 86_400_000;
+const pc = (over: Partial<PairCall> = {}): PairCall => ({
+  calledAtMs: 0,
+  respondedAtMs: null,
+  passedAtMs: null,
+  fromViewer: true,
+  ...over,
+});
+/** I asked, they answered. */
+const theyShowed = (at: number, gap = 1) =>
+  pc({ calledAtMs: at, respondedAtMs: at + gap, fromViewer: true });
+/** They asked, I answered. */
+const youShowed = (at: number, gap = 1) =>
+  pc({ calledAtMs: at, respondedAtMs: at + gap, fromViewer: false });
+
+describe("a run is earned by answering, and by nothing else", () => {
+  it("counts one answered challenge per step, in either direction", () => {
+    const r = reciprocity([theyShowed(1 * DAY), youShowed(2 * DAY), theyShowed(3 * DAY)]);
+    expect(r.run).toBe(3);
+    expect(r.bothWays).toBe(true);
+  });
+
+  it("cannot be manufactured by issuing challenges", () => {
+    // The failure mode with teeth: somebody spams ten challenges at one person
+    // and the software congratulates them on a relationship. An unanswered call
+    // contributes nothing, however many there are.
+    const asked = Array.from({ length: 10 }, (_, i) => pc({ calledAtMs: i * DAY }));
+    expect(reciprocity(asked)).toEqual(NO_RECIPROCITY);
+  });
+
+  it("cannot be manufactured by market activity unrelated to the challenge", () => {
+    // Structural rather than behavioural, and it is the strongest form available:
+    // a trade that answered nobody's call produces no `market_calls` row, so there
+    // is no input here that could carry it. `PairCall` is two timestamps, a
+    // direction and a pass — there is nowhere for ambient activity to enter.
+    expect(Object.keys(pc()).sort()).toEqual([
+      "calledAtMs",
+      "fromViewer",
+      "passedAtMs",
+      "respondedAtMs",
+    ]);
+  });
+
+  it("does not care which side anybody took, because it cannot see one", () => {
+    for (const k of Object.keys(pc())) expect(k).not.toMatch(/side|yes|no|agree|same|oppos/i);
+  });
+
+  it("has no relationship to consecutive days", () => {
+    // Two answers a year apart are two. A daily streak would read this as one and
+    // a broken one; a relationship reads it as two times somebody turned up.
+    const far = reciprocity([theyShowed(0), youShowed(400 * DAY)]);
+    const near = reciprocity([theyShowed(0), youShowed(DAY)]);
+    expect(far.run).toBe(near.run);
+    expect(far).toEqual(near);
+  });
+
+  it("orders by when the challenge was made, not by the order rows arrive", () => {
+    const rows = [youShowed(3 * DAY), theyShowed(1 * DAY), pc({ calledAtMs: 2 * DAY })];
+    expect(reciprocity(rows)).toEqual(reciprocity([...rows].reverse()));
+  });
+});
+
+describe("a run is one-way until both people have turned up", () => {
+  it("refuses to call a one-way pattern back & forth", () => {
+    // Four answered challenges, all in one direction. That is a pattern and the
+    // ladder already has a sentence for it — "Sarah shows up for you" — and
+    // calling it back & forth would be the software flattering the relationship.
+    const oneWay = reciprocity([0, 1, 2, 3].map((i) => theyShowed(i * DAY)));
+    expect(oneWay.run).toBe(4);
+    expect(oneWay.bothWays).toBe(false);
+    expect(backAndForthLine(oneWay)).toBeNull();
+  });
+
+  it("agrees with the ladder's own definition of reciprocal", () => {
+    // ONE ANSWER, TWO PLACES, and this is the assertion that keeps them together.
+    // `rungFor` decides "each_other" from the tallies; `reciprocity` decides
+    // `bothWays` from the merged sequence. They read the same rows and must never
+    // disagree about whether a relationship goes both ways.
+    const cases: PairCall[][] = [
+      [],
+      [theyShowed(0)],
+      [youShowed(0)],
+      [theyShowed(0), youShowed(DAY)],
+      [theyShowed(0), pc({ calledAtMs: DAY, fromViewer: false })],
+      [theyShowed(0), youShowed(DAY), theyShowed(2 * DAY)],
+    ];
+    for (const calls of cases) {
+      const mine = calls.filter((c) => c.fromViewer);
+      const hers = calls.filter((c) => !c.fromViewer);
+      const rung = rungFor(tally(mine, 1), tally(hers, 1));
+      expect(reciprocity(calls).bothWays, JSON.stringify(calls)).toBe(rung === "each_other");
+    }
+  });
+});
+
+describe("a pass ends a run, and silence does not", () => {
+  it("ends it on a pass, and remembers what it ended", () => {
+    const r = reciprocity([
+      theyShowed(0),
+      youShowed(DAY),
+      pc({ calledAtMs: 2 * DAY, passedAtMs: 2 * DAY + 1, fromViewer: true }),
+    ]);
+    expect(r.run).toBe(0);
+    expect(r.endedRun).toBe(2);
+  });
+
+  it("PAUSES on a call nobody has answered yet", () => {
+    // Not answering is the absence of a positive, never the presence of a
+    // negative — the rule this whole module is built on. A question asked
+    // yesterday and not yet answered must not read as a refusal.
+    const r = reciprocity([theyShowed(0), youShowed(DAY), pc({ calledAtMs: 2 * DAY })]);
+    expect(r.run).toBe(2);
+    expect(r.endedRun).toBe(0);
+  });
+
+  it("starts again from zero after a pass", () => {
+    const r = reciprocity([
+      theyShowed(0),
+      pc({ calledAtMs: DAY, passedAtMs: DAY + 1 }),
+      youShowed(2 * DAY),
+      theyShowed(3 * DAY),
+    ]);
+    expect(r.run).toBe(2);
+    expect(r.endedRun).toBe(0);
+  });
+
+  it("lets an answer outrank a pass on the same call", () => {
+    // Waving a card off and then finding the market anyway is a real path, and
+    // `recipientState` already resolves it the same way on the creator's side.
+    const r = reciprocity([pc({ calledAtMs: 0, passedAtMs: 1, respondedAtMs: 2 })]);
+    expect(r.run).toBe(1);
+    expect(r.endedRun).toBe(0);
+  });
+
+  it("optimistic pass says exactly what the server will say", () => {
+    // `passedNow` is a shortcut the rail uses so a card does not vanish and come
+    // back. It is only allowed to exist while it produces the same answer as
+    // appending the pass and recomputing.
+    for (const calls of [
+      [theyShowed(0), youShowed(DAY)],
+      [theyShowed(0), youShowed(DAY), theyShowed(2 * DAY)],
+      [theyShowed(0)],
+      [],
+    ] as PairCall[][]) {
+      const before = reciprocity(calls);
+      const after = reciprocity([...calls, pc({ calledAtMs: 9 * DAY, passedAtMs: 9 * DAY + 1 })]);
+      expect(passedNow(before), JSON.stringify(calls)).toEqual(after);
+    }
+  });
+});
+
+describe("what the run is allowed to say out loud", () => {
+  it("says nothing about a run too short to be a pattern", () => {
+    for (let run = 0; run < RECIPROCITY.minRun; run++)
+      expect(backAndForthLine({ run, bothWays: true, endedRun: 0 })).toBeNull();
+    expect(backAndForthLine({ run: RECIPROCITY.minRun, bothWays: true, endedRun: 0 })).toBe(
+      `${RECIPROCITY.minRun} back & forth`,
+    );
+  });
+
+  it("never says streak, and never keeps a personal best", () => {
+    // A best-ever beside a current run turns a relationship into a score to
+    // defend, and the moment the current one is smaller the line is telling
+    // somebody they are losing at friendship.
+    const lines = [
+      backAndForthLine({ run: 7, bothWays: true, endedRun: 0 }),
+      runEndedLine({ run: 0, bothWays: true, endedRun: 7 }),
+    ].join(" ");
+    for (const w of ["streak", "best", "record", "lost", "broken", "🔥", "!"])
+      expect(lines.toLowerCase()).not.toContain(w);
+  });
+
+  it("states an ending once, quietly, and only when there was one", () => {
+    expect(runEndedLine({ run: 0, bothWays: true, endedRun: 7 })).toBe("Your run of 7 ends here.");
+    expect(runEndedLine({ run: 0, bothWays: true, endedRun: 1 })).toBeNull();
+    expect(runEndedLine(NO_RECIPROCITY)).toBeNull();
+  });
+});
+
+/**
+ * WHOSE RAIL IS THIS? The sentence on an answered call names the person who
+ * turned up, and on the reader's own rail that person is the reader.
+ */
+describe("the outcome of a call addressed to me", () => {
+  it("puts the reader in the subject, because they are the one who showed up", () => {
+    expect(outcomeLine("showed_up", "Maya")).toBe("You showed up for Maya.");
+  });
+
+  it("says the same thing whichever side the reader took", () => {
+    // There is no side in the input, so there is no branch to get wrong. This is
+    // the surface where that matters most: a Rival who turns up must read as
+    // somebody who turned up.
+    expect(outcomeLine("showed_up", "Maya")).toBe(outcomeLine("showed_up", "Maya"));
+    expect(outcomeLine.length).toBe(2);
+  });
+
+  it("lets the reader own their own pass, and names nobody else", () => {
+    const line = outcomeLine("passed", "Maya") as string;
+    expect(line).toBe("You passed.");
+    expect(line).not.toContain("Maya");
+  });
+
+  it("says nothing at all while the call is still waiting", () => {
+    expect(outcomeLine("waiting", "Maya")).toBeNull();
+  });
+
+  it("never uses acceptance language, because nothing was accepted", () => {
+    for (const state of ["waiting", "showed_up", "passed"] as const) {
+      const line = (outcomeLine(state, "Maya") ?? "").toLowerCase();
+      for (const w of ["accept", "declin", "reject", "complet", "respond", "status"])
+        expect(line).not.toContain(w);
+    }
   });
 });

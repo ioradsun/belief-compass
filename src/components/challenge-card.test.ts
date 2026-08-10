@@ -124,9 +124,15 @@ describe("dismissal is private, and costs nothing", () => {
   it("removes the card from the count, not just from view", () => {
     // The badge must equal what is on screen — three means three people are
     // actually waiting, which is what makes the number worth having.
-    expect(code("src/lib/open-calls.ts")).toMatch(
-      /challenges \?\? \[\]\)\.filter\(\(c\) => !dismissed\.has/,
-    );
+    //
+    // THE MECHANISM CHANGED AND THE PROPERTY DID NOT. This used to `.filter()` the
+    // row out of the payload entirely. The card now survives its own ending, so
+    // filtering would make it vanish on the tap and return as an outcome on the
+    // next refetch — a card that disappears and comes back looks like a bug. It is
+    // RESTATED as passed instead, which takes it out of `open` just as completely.
+    const c = code("src/lib/open-calls.ts");
+    expect(c).toMatch(/c\.state === "waiting" && dismissed\.has\(String\(c\.marketId\)\)/);
+    expect(c).toMatch(/open: all\.filter\(\(c\) => c\.state === "waiting"\)/);
   });
 
   it("gives the phone a hit target a thumb can actually find", () => {
@@ -200,14 +206,168 @@ describe("a failed read is not an empty room", () => {
     expect(c).toMatch(/failed \?/);
     expect(c).toMatch(/Could not load who is waiting on you/);
     // The quiet case renders nothing at all now, and it must still sit BEHIND
-    // the failure check — never in front of it.
-    expect(c.indexOf("failed ?")).toBeLessThan(c.indexOf("open.length === 0 ? null"));
-
+    // the failure check — never in front of it. "Quiet" means nothing waiting AND
+    // nothing that recently happened: an outcome on screen is not an empty room.
+    expect(c.indexOf("failed ?")).toBeLessThan(
+      c.indexOf("open.length === 0 && recent.length === 0 ? null"),
+    );
   });
 
   it("surfaces the error from the shared hook rather than swallowing it", () => {
     const c = code("src/lib/open-calls.ts");
     expect(c).toMatch(/isError/);
     expect(c).toMatch(/failed: isError/);
+  });
+});
+
+/**
+ * THE CARD TRANSFORMS RATHER THAN DISAPPEARING.
+ *
+ * WHAT THIS REPLACED, AND WHY IT WAS WRONG. `buildChallenges` filtered
+ * `responded_at IS NULL`, so the instant somebody took a side their card was gone.
+ * The reasoning was that a queue with completed items in it is a to-do list, and
+ * that is true of a to-do list — it is not true of the one thing this entire system
+ * exists to produce. Somebody revealing where they stand because somebody else
+ * asked was the single fact most likely to be deleted at the exact moment it became
+ * true. The card now survives its own ending, says what happened, asks for nothing,
+ * and ages out on the same week the creator's side already keeps.
+ */
+describe("an answered card stops asking and stays", () => {
+  it("renders the outcome from the shared composer, never a status word", () => {
+    const c = rail();
+    expect(c).toMatch(/outcomeLine\(c\.state, c\.caller\.name/);
+    // No state name, no record vocabulary, no id. The row says what two people did.
+    for (const w of ["Completed", "Responded", "Answered by", "Status", "Challenge #"])
+      expect(c).not.toContain(w);
+  });
+
+  it("drops the prompt once the reader has taken a side", () => {
+    // "Maya believes YES. Take this one." beside a position already held is the
+    // product asking for something it already got.
+    expect(rail()).toMatch(/\{!done && \(/);
+  });
+
+  it("takes the pass control away when there is nothing left to pass on", () => {
+    // A control that would re-record a choice already made invites a reader to
+    // undo something the other person has been told about.
+    expect(rail()).toMatch(/\{!done && \(\s*<button/);
+  });
+
+  it("goes quieter in exactly the way the outbound side already does", () => {
+    // One vocabulary for "this ended": dashed, transparent, never greyed out —
+    // it steps back because it needs nothing, not because it stopped mattering.
+    const c = rail();
+    expect(c).toMatch(/border-dashed/);
+    expect(c).not.toMatch(/opacity-40|grayscale|disabled:/);
+  });
+
+  it("keeps the badge counting people, never outcomes", () => {
+    // The mobile badge and the tab number must keep meaning "somebody is waiting
+    // on you". Badging the payoff would turn it into another chore.
+    const calls = code("src/lib/open-calls.ts");
+    expect(calls).toMatch(/open: all\.filter\(\(c\) => c\.state === "waiting"\)/);
+    expect(code("src/routes/index.tsx")).toMatch(/useOpenCalls\(wallet\)\.open\.length/);
+  });
+
+  it("reuses the element rather than unmounting one and mounting another", () => {
+    // Keyed by market on ONE list, so the row a reader was looking at when they
+    // took a side stays where it is and changes what it says. Two lists would
+    // have re-created the bug: a card vanishing here and reappearing there.
+    const c = rail();
+    expect(c).toMatch(/\[\.\.\.open\.slice\(0, shown\), \.\.\.recent\]/);
+    expect(c).toMatch(/key=\{c\.marketId\}/);
+  });
+});
+
+describe("a pass is the reader's own, said in the reader's own words", () => {
+  it("restates the card instead of deleting it, so nothing flickers back", () => {
+    // A row filtered out locally would vanish on the tap and return as an outcome
+    // on the next refetch. A card that disappears and comes back looks like a bug.
+    const c = code("src/lib/open-calls.ts");
+    expect(c).toMatch(/passedNow\(/);
+    expect(c).toMatch(/state: "passed"/);
+  });
+
+  it("never names anybody else as having passed", () => {
+    // The creator is told a count and never a name — a pass is a choice about a
+    // question, not a verdict on a person.
+    const c = rail() + code("src/components/ChallengeHistory.tsx");
+    for (const w of ["passed on you", "they passed", "passedBy", "whoPassed"])
+      expect(c).not.toContain(w);
+  });
+});
+
+/**
+ * THE RUN, AND THE WORD IT IS NOT ALLOWED TO USE.
+ */
+describe("reciprocity reaches the card as a fact, not a score", () => {
+  it("reads the run from the payload rather than counting anything locally", () => {
+    const c = rail();
+    expect(c).toMatch(/backAndForthLine\(/);
+    // Nothing here recomputes a run: one calculation, one answer, every surface.
+    expect(c).not.toMatch(/\.filter\(.*responded|run \+= 1|reduce\(/);
+  });
+
+  it("says none of the words that would make it a game", () => {
+    // "badge" is deliberately absent from this list: the TRIBE / RIVAL chip has
+    // been called a badge since long before any of this, and it names a
+    // relationship the engine measured rather than an achievement anybody earned.
+    const c = rail();
+    for (const w of ["streak", "Streak", "🔥", "confetti", "leaderboard", "combo", "milestone"])
+      expect(c).not.toContain(w);
+    expect(c).not.toMatch(/\bXP\b|\bpoints\b|\bcoins\b/);
+  });
+});
+
+/**
+ * SEE ALL — the complete history, and the ways it could become a second feed.
+ */
+describe("the full history is complete, chronological, and not a feed", () => {
+  const history = () => code("src/components/ChallengeHistory.tsx");
+
+  it("is reachable from the rail", () => {
+    expect(rail()).toMatch(/<ChallengeHistory/);
+    expect(history()).toMatch(/See all/);
+  });
+
+  it("runs through no scorer, no ranking and no admission rule", () => {
+    // The invariant that keeps this from becoming the Insider tape with a
+    // different heading. Insider already answers "what is happening", one tab
+    // across, for everybody; this answers "what have we done", for two people.
+    const c = history();
+    for (const w of ["significance", "score", "rank", "eligib", "admit", "boost", "trending"])
+      expect(c.toLowerCase()).not.toContain(w);
+  });
+
+  it("reuses the one sheet rather than growing a second one", () => {
+    expect(history()).toMatch(/from "@\/components\/Sheet"/);
+    // And the roster it came from now renders the same component.
+    expect(code("src/components/CaseFile.tsx")).toMatch(/<Sheet/);
+  });
+
+  it("speaks the same row vocabulary as the profile's own history", () => {
+    // One interaction cannot be described two ways on two screens.
+    expect(history()).toMatch(/historyRows\(/);
+    expect(code("src/components/PersonProfile.tsx")).toMatch(/historyRows\(/);
+  });
+
+  it("never reports a failed read as an empty history", () => {
+    // Here the confident zero would tell somebody with a year of relationships
+    // that they have never challenged anybody.
+    const c = history();
+    expect(c).toMatch(/isError/);
+    expect(c).toMatch(/Could not load your history/);
+    expect(c.indexOf("isError ?")).toBeLessThan(c.indexOf("groups.length === 0"));
+  });
+
+  it("admits when it stopped at its read bound", () => {
+    // A bounded read presented as the whole story is the worst possible lie on
+    // the one surface whose entire promise is completeness.
+    expect(history()).toMatch(/truncated/);
+    expect(code("src/lib/challenge.server.ts")).toMatch(/truncated:/);
+  });
+
+  it("costs the rail nothing until somebody asks for it", () => {
+    expect(history()).toMatch(/enabled: !!wallet && open/);
   });
 });

@@ -12,7 +12,7 @@
  * roster ordering from the pure src/domain/case-file engine.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Sheet } from "@/components/Sheet";
 import { setDeckLens, useDeckLens } from "@/lib/deck-lens";
 import { convictionMatch } from "@/domain/relationship";
 import { useQuery } from "@tanstack/react-query";
@@ -802,7 +802,14 @@ function FacePile({
   );
 }
 
-/** Bottom sheet holding the complete roster — scrolls on its own, X to close. */
+/**
+ * Bottom sheet holding the complete roster.
+ *
+ * THE SHEET ITSELF MOVED to `components/Sheet`, unchanged, because the Challenge
+ * history needed the same one and a second copy would have drifted — a different
+ * close key here, a different scrim there. What is left is the only part that was
+ * ever about believers: the title.
+ */
 function RosterSheet({
   side,
   count,
@@ -814,52 +821,17 @@ function RosterSheet({
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  // An ancestor rail can create a containing block (transform/contain), which
-  // would trap a `fixed` sheet inside one column. The panel is portalled to the
-  // body so "full width" really is the viewport.
-  if (typeof document === "undefined") return null;
-  return createPortal(
-    <div
-      className="fixed inset-x-0 bottom-0 top-0 z-[80] flex flex-col"
-      role="dialog"
-      aria-modal="true"
+  return (
+    <Sheet
+      onClose={onClose}
+      title={
+        <>
+          Who backs {side} · <span className="num text-[var(--text-muted)]">{count}</span>
+        </>
+      }
     >
-      <button
-        type="button"
-        aria-label="Close"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/50"
-      />
-      {/* Fills the column top to bottom: a pinned header over one scroll area,
-        so the roster never resizes the sheet as it loads. */}
-      <div className="relative mt-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-t-[16px] border-t border-[var(--border)] bg-[var(--bg)] pt-3">
-        <div className="mx-auto mb-2 flex w-full max-w-[720px] shrink-0 items-center justify-between px-4">
-          <span className="text-[12px] font-semibold text-[var(--text)]">
-            Who backs {side} · <span className="num text-[var(--text-muted)]">{count}</span>
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="-mr-1 rounded-full px-2 py-1 text-[14px] text-[var(--text-muted)] hover:text-[var(--text)]"
-          >
-            ×
-          </button>
-        </div>
-        <div className="mx-auto min-h-0 w-full max-w-[720px] flex-1 overflow-y-auto px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
-          {children}
-        </div>
-      </div>
-    </div>,
-    document.body,
+      {children}
+    </Sheet>
   );
 }
 
@@ -907,4 +879,3 @@ function CaseActivity({
     </div>
   );
 }
-

@@ -169,11 +169,53 @@ describe("what the lab hands to the real components", () => {
     expect(progressLine(tableProgress(row.recipients))).toBe(challengerView(w).progress);
   });
 
-  it("only sends a card to somebody who still holds one", () => {
+  /**
+   * THE CARD SURVIVES ITS OWN ANSWER, WHICH IS WHAT THIS USED TO ASSERT AGAINST.
+   *
+   * It read `challengesFor(w).length === inQueue.length`: a card existed only
+   * while somebody still owed an answer, and disappeared the moment they gave one.
+   * That was a faithful model of the behaviour and the behaviour was the bug —
+   * the single most valuable thing this product produces was deleted at the exact
+   * instant it became true.
+   *
+   * So the count is now everyone the question reached, and the QUESTION MOVED to
+   * whether each card is asking or reporting. A card that keeps asking after it
+   * was answered is still the original failure and is still caught, one line down.
+   */
+  it("keeps a card for everyone the question reached, asking or reporting", () => {
+    for (const key of SCENE_KEYS) {
+      const w = SCENES[key].world;
+      // A closed Challenge takes every card with it: the creator took the
+      // question down, so there is nothing on anybody's rail to be quiet about.
+      const expected = w.closed != null ? 0 : w.audience.length;
+      expect(challengesFor(w), key).toHaveLength(expected);
+    }
+  });
+
+  it("never leaves a card asking somebody who already answered", () => {
     for (const key of SCENE_KEYS) {
       const w = SCENES[key].world;
       const waiting = w.audience.filter((p) => challengedView(w, p).inQueue).length;
-      expect(challengesFor(w), key).toHaveLength(waiting);
+      expect(
+        challengesFor(w).filter((c) => c.state === "waiting"),
+        key,
+      ).toHaveLength(waiting);
+    }
+  });
+
+  it("reports the recipient's own state on the card, never the creator's", () => {
+    // `showed_up` and `passed` are terminal for the person holding the card, and
+    // `viewed` is not — a glance leaves the card asking, which is the reason that
+    // state exists in the model at all.
+    for (const key of SCENE_KEYS) {
+      const w = SCENES[key].world;
+      if (w.closed != null) continue;
+      const cards = challengesFor(w);
+      for (const [i, p] of w.audience.entries()) {
+        const expected =
+          p.state === "showed_up" ? "showed_up" : p.state === "passed" ? "passed" : "waiting";
+        expect(cards[i].state, `${key}/${p.name}`).toBe(expected);
+      }
     }
   });
 

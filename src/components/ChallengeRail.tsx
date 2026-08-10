@@ -30,9 +30,11 @@ import { passOnCall } from "@/lib/table.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { CHALLENGE, type Challenge, type CallerRelation } from "@/domain/challenge";
 import { convictionMatch } from "@/domain/relationship";
+import { backAndForthLine, outcomeLine, runEndedLine } from "@/domain/dependability";
 import { RELATIONSHIP_MIN_SHARED } from "@/domain/dna/config";
 import { relationshipTone } from "@/lib/dna-labels";
 import { PersonAvatar } from "@/components/PersonAvatar";
+import { ChallengeHistory } from "@/components/ChallengeHistory";
 
 type Tab = "challenge" | "insider";
 
@@ -66,11 +68,17 @@ type Tab = "challenge" | "insider";
 export function ChallengeRail({
   wallet,
   onSelect,
+  onSelectPerson,
   insider,
   insiderCount,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
+  /**
+   * Open somebody's profile — where the pair's own complete history already
+   * lives. Optional, so the lab can mount the rail without a router.
+   */
+  onSelectPerson?: (personWallet: string) => void;
   /**
    * The Insider feed (live tape), rendered by the route. Passed as a node rather
    * than as five more props: this component is about YOUR calls, and threading
@@ -93,7 +101,6 @@ export function ChallengeRail({
     chose.current = true;
     setTab(t);
   };
-
 
   /** How many of the open calls are on screen. A railful, then a railful more. */
   const [shown, setShown] = useState<number>(CHALLENGE.maxOpen);
@@ -122,10 +129,11 @@ export function ChallengeRail({
   };
   const { data: table } = useTable(wallet);
 
-  // The open queue, minus anything this reader has waved off. The count follows
-  // the list rather than the payload, so the badge always equals what is on
-  // screen — three means three people are actually waiting on you.
-  const { lock, open, failed, lockUnknown } = useOpenCalls(wallet);
+  // The open queue, minus anything this reader has waved off, plus what recently
+  // became of the ones that were waiting. The count follows the WAITING list
+  // rather than the payload, so the badge always equals the number of people
+  // actually waiting on you — an outcome is the payoff, never another chore.
+  const { lock, open, recent, failed, lockUnknown } = useOpenCalls(wallet);
 
   // Challenge earns the rail only when someone is actually waiting. Until then
   // — signed out, locked, or an empty queue — Insider holds it.
@@ -140,12 +148,7 @@ export function ChallengeRail({
    * live — people waiting on you, plus what you have up. Finished rows are
    * history, not a queue, so they are not counted.
    */
-  const challengeCount =
-    open.length + (table ?? []).filter((r) => r.closedAtMs == null).length;
-
-
-
-
+  const challengeCount = open.length + (table ?? []).filter((r) => r.closedAtMs == null).length;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -225,7 +228,7 @@ export function ChallengeRail({
               Could not load who is waiting on you. This is a fault on our side, not an empty room —
               try again in a moment.
             </p>
-          ) : open.length === 0 ? null : (
+          ) : open.length === 0 && recent.length === 0 ? null : (
             <section className="space-y-2">
               {/* WHO IS OWED AN ANSWER, SAID IN TWO WORDS. Amber is the same colour
                   this product uses for the other side of a question, so the eye
@@ -235,8 +238,18 @@ export function ChallengeRail({
                 <span className="h-1.5 w-1.5 rounded-full bg-[var(--no)]" aria-hidden />
                 Challenged You
               </h3>
+              {/* ONE LIST, AND THE CARD SAYS WHICH IT IS.
+                  A finished interaction is not a different kind of object that
+                  belongs under a second heading — it is the SAME card, later. Its
+                  key is the market, so React reuses the element rather than
+                  unmounting one and mounting another: the row a reader was looking
+                  at when they took a side stays exactly where it was and changes
+                  what it says. That is the entire point. A separate "recent"
+                  section would have re-created the thing this replaces, where an
+                  answered call vanished from one place and reappeared in another
+                  with no visible connection between them. */}
               <ul className="space-y-2">
-                {open.slice(0, shown).map((c) => (
+                {[...open.slice(0, shown), ...recent].map((c) => (
                   <ChallengeRow
                     key={c.marketId}
                     challenge={c}
@@ -247,7 +260,6 @@ export function ChallengeRail({
               </ul>
             </section>
           )}
-
 
           {/* YOUR OWN TABLE, IN THE SAME COLUMN — what you put up, what became of
               it, and one + for filling a free slot. */}
@@ -268,6 +280,14 @@ export function ChallengeRail({
             </button>
           )}
 
+          {/* THE WAY OUT OF THE RAIL, AND THE ONLY ONE.
+              Everything above goes quiet after a week, which is right for a
+              column somebody has to look past to reach the tape — and wrong as
+              the end of the story. "See all" is where the whole thing lives:
+              every challenge, both directions, chronological, complete. It sits
+              last because it is the least urgent thing here and because a reader
+              only wants it once they have read what is above it. */}
+          <ChallengeHistory wallet={wallet} onSelect={onSelect} onSelectPerson={onSelectPerson} />
         </div>
       )}
     </div>
@@ -334,6 +354,26 @@ function ChallengeRow({
   // 82% in one surface and 79% in another, so nothing is recomputed here.
   const match = convictionMatch(c.together ?? 0, c.shared ?? 0);
   const showMatch = match != null && (c.shared ?? 0) >= RELATIONSHIP_MIN_SHARED;
+  /**
+   * THE CARD AFTER SOMETHING HAPPENED.
+   *
+   * `waiting` is unchanged in every respect. The other two states are the same
+   * card with its question answered: the prompt goes (it would be inviting an act
+   * already taken), the outcome takes its place, and the × goes with it because
+   * there is nothing left to wave off.
+   *
+   * QUIETER, NOT DISABLED — the same dashed, transparent treatment the outbound
+   * side already uses for a Challenge that ended, and for the same stated reason:
+   * this is the best thing that happens here, so it steps back because it no
+   * longer needs anything from the reader, not because it stopped mattering.
+   */
+  const done = c.state !== "waiting";
+  const outcome = outcomeLine(c.state, c.caller.name ?? "");
+  // The run, said in the product's own words. Never on a card whose pair has not
+  // actually gone both ways — see `backAndForthLine`.
+  const run = c.reciprocity
+    ? (backAndForthLine(c.reciprocity) ?? runEndedLine(c.reciprocity))
+    : null;
 
   return (
     <li className="relative">
@@ -347,11 +387,16 @@ function ChallengeRow({
           showMatch
             ? `${match} percent Conviction Match, ${c.together} of ${c.shared} together`
             : null,
-          c.reason,
+          done ? outcome : c.reason,
+          run,
         ]
           .filter(Boolean)
           .join(". ")}
-        className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 pr-9 text-left transition-colors hover:border-[var(--border-strong)]"
+        className={`w-full rounded-xl border p-3 pr-9 text-left transition-colors ${
+          done
+            ? "border-dashed border-[var(--border)] bg-transparent hover:border-[var(--border-strong)]"
+            : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-strong)]"
+        }`}
       >
         {/* WHO — named here rather than only inside the sentence below, so the
             card has a subject before it has a claim. */}
@@ -379,12 +424,21 @@ function ChallengeRow({
         </div>
 
         {/* WHAT THEY WERE ASKED */}
-        <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-[var(--text)]">{c.title}</p>
-
-        {/* WHAT THEY BELIEVE. It never names a side the reader has not taken. */}
-        <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-[var(--text-secondary)]">
-          {c.reason}
+        <p
+          className={`mt-1.5 line-clamp-2 text-[13px] leading-snug ${done ? "text-[var(--text-secondary)]" : "text-[var(--text)]"}`}
+        >
+          {c.title}
         </p>
+
+        {/* WHAT THEY BELIEVE. It never names a side the reader has not taken.
+            Gone once the reader HAS taken one: "Maya believes YES. Take this one."
+            beside a position already held is the product asking for something it
+            already got. */}
+        {!done && (
+          <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-[var(--text-secondary)]">
+            {c.reason}
+          </p>
+        )}
 
         {/* WHY THEIR BELIEF IS WORTH YOUR TIME — the record between the two of
             you, and the arithmetic that proves it. Last, because it explains the
@@ -396,6 +450,24 @@ function ChallengeRow({
             {match}% Conviction Match · {c.together} of {c.shared} together
           </p>
         )}
+
+        {/* WHAT HAPPENED. The one line this whole surface exists to be able to
+            print, and it took the place of the row silently disappearing.
+
+            NOT A STATUS, AND NOT A SIDE. "You showed up for Maya" is true whether
+            the reader answered YES or NO — the sentence has no branch on agreement
+            because its input cannot carry one. Nothing here says "completed",
+            "responded" or "answered by": those describe a record changing, and what
+            actually happened is that two people put their convictions on the table. */}
+        {done && outcome && (
+          <p className="mt-1.5 text-[12px] leading-snug font-medium text-[var(--text)]">
+            {outcome}
+          </p>
+        )}
+
+        {/* THE RUN — what the two of you have actually done, compressed.
+            No flame, no personal best, no word that would make it a score. */}
+        {run && <p className="num mt-1 text-[11px] text-[var(--text-muted)]">{run}</p>}
       </button>
 
       {/* NOT FOR ME — quiet, and private. Never "Decline": nothing is reported
@@ -410,16 +482,23 @@ function ChallengeRow({
           opening it — and dismissal is deliberately undoable by nothing. The
           opacity is no longer hover-only for the same reason. A phone has no
           hover, so `opacity-50 hover:opacity-100` left the × permanently at half
-          strength on the surface where it was hardest to hit. */}
-      <button
-        type="button"
-        onClick={() => onDismiss(c.marketId)}
-        aria-label={`Hide this call from ${c.caller.name ?? "them"}`}
-        title="Not for me"
-        className="absolute right-0 top-0 flex h-8 w-8 items-center justify-center text-[15px] leading-none text-[var(--text-muted)] opacity-60 transition-opacity hover:opacity-100"
-      >
-        ×
-      </button>
+          strength on the surface where it was hardest to hit.
+
+          GONE ONCE THE CARD HAS AN ENDING. There is nothing left to wave off, and
+          a control that would re-record a choice already made is worse than
+          absent — it invites a reader to undo something the other person has
+          already been told about. */}
+      {!done && (
+        <button
+          type="button"
+          onClick={() => onDismiss(c.marketId)}
+          aria-label={`Pass on this call from ${c.caller.name ?? "them"}`}
+          title="Not for me"
+          className="absolute right-0 top-0 flex h-8 w-8 items-center justify-center text-[15px] leading-none text-[var(--text-muted)] opacity-60 transition-opacity hover:opacity-100"
+        >
+          ×
+        </button>
+      )}
     </li>
   );
 }
