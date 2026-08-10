@@ -5,7 +5,12 @@ import { lazyRetry } from "@/lib/lazy-retry";
 
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSticky, useStickyRows } from "@/hooks/useSticky";
-import { listMarketPulses, getMarketRow, type VolumeWindow } from "@/lib/markets.functions";
+import {
+  listMarketPulses,
+  getMarketRow,
+  getWarmDeckCore,
+  type VolumeWindow,
+} from "@/lib/markets.functions";
 import { marketChangeQO } from "@/lib/market-queries";
 import { getOpportunityFeed, getWarmFeed } from "@/lib/opportunity-feed.functions";
 import { feedSession, resetFeedSession } from "@/lib/feed-session";
