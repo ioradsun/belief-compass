@@ -22,6 +22,8 @@ import { positionPnl } from "@/domain/position";
 import { positionReturn, formatPct } from "@/domain/metric-display";
 import { formatMoney } from "@/domain/money";
 import { StandOnIt } from "@/components/StandOnIt";
+import { Signed } from "@/components/Signed";
+
 import { useDisplayUnit } from "@/lib/display-unit";
 import {
   positionStory,
