@@ -175,6 +175,10 @@ const feedQO = (
       originMarketId,
       sensitivity,
       lens,
+      // Admission semantics changed from five centre-stage views to immediate
+      // placement. Version the boundary so a cached pre-fix `true` response
+      // cannot keep a ready idea hidden until its normal expiry.
+      "idea-immediate-v2",
       ideaGate,
     ],
     queryFn: async () => {
