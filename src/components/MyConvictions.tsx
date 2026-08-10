@@ -170,8 +170,13 @@ function ConvictionCard({
       style={{ background: "var(--surface)" }}
     >
       {/* 1 — What do I believe? pr-9 reserves the corner for the "Stand on it"
-        share control layered above the card. */}
-      <div className="pr-9 text-[14px] font-semibold leading-snug text-[var(--text)]">
+        share control layered above the card.
+
+        THE QUESTION IS THE ONLY BRIGHT THING HERE. Everything under it — the
+        story, the side, the figures — is supporting evidence, so it borrows the
+        Insider tape's scale (13/11px, secondary and muted) rather than
+        competing at full strength. A card that shouts four times says nothing. */}
+      <div className="pr-9 text-[13px] font-semibold leading-snug text-[var(--text)]">
         {p.title}
       </div>
 
@@ -179,19 +184,24 @@ function ConvictionCard({
         voice. Absent when nothing material is on file: a position card does not
         require commentary. */}
       {story && (
-        <div className="mt-1.5 text-[12px] leading-snug text-[var(--text-muted)]">
+        <div className="mt-1.5 text-[11px] leading-snug text-[var(--text-muted)]">
           {story.headline}
         </div>
       )}
 
-      {/* 3 — Side, current value, and the return %. Two figures, one weight:
-        neither is subordinate to the other at a glance. */}
-      <div className="mt-3 flex items-end gap-6">
+      {/* 3 — Side, current value, and the return. One quiet row: the side is a
+        label, not a banner, so its colour is mixed back toward the muted text
+        it sits beside; the figures step down to 15px so the question above
+        stays the first read. */}
+      <div className="mt-2.5 flex items-end gap-6">
         <div>
-          <div className="text-[10px] font-semibold tracking-wide" style={{ color: sideColor }}>
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.08em]"
+            style={{ color: `color-mix(in oklab, ${sideColor} 70%, var(--text-muted))` }}
+          >
             {p.side}
           </div>
-          <div className="num mt-0.5 text-[18px] leading-none text-[var(--text)]">
+          <div className="num mt-1 text-[15px] leading-none text-[var(--text)]">
             {money(p.value)}
           </div>
           <div className="mt-1 text-[10px] text-[var(--text-muted)]">Value</div>
@@ -201,10 +211,10 @@ function ConvictionCard({
           <div className="ml-auto text-right">
             {/* The return %, whenever a cost basis exists. Without one there is
               no percentage to state, so the window's dollar move stands in —
-              the only honest measure left. Only the sign is coloured. */}
+              the only honest measure left. Colour follows @/components/Signed. */}
             <Signed
               value={ret?.pct ?? signedMoney(windowMove as number)}
-              className="num block text-[18px] leading-none"
+              className="num block text-[15px] leading-none"
             />
 
             <div className="mt-1 text-[10px] text-[var(--text-muted)]">Return</div>
@@ -219,6 +229,7 @@ function ConvictionCard({
           )
         )}
       </div>
+
 
 
       {/* The only other fact worth a line: you hold the other side of this same
