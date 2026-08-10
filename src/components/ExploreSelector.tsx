@@ -37,7 +37,14 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
-import { DISCOVER_LENSES, LENS_LABELS, LENS_QUESTIONS, type Lens } from "@/domain/feed/lens";
+import {
+  DISCOVER_LENSES,
+  EXPLORE_LABEL,
+  LENS_LABELS,
+  LENS_QUESTIONS,
+  type Lens,
+} from "@/domain/feed/lens";
+
 import {
   NETWORK_OPTIONS,
   TOPIC_OPTIONS,
@@ -140,9 +147,15 @@ export function ExploreSelector({
         className="flex w-full items-start gap-1.5 rounded-[10px] py-1 text-left transition-colors hover:opacity-80"
       >
         <span className="min-w-0">
+          {/* THE HEADING IS THE DESTINATION, NOT THE SORT. Picking "Most
+            Capital" is choosing a ranking lens, not going somewhere else, so
+            this word never changes — otherwise navigation feels unstable and
+            the reader loses track of where they are. The selected row's
+            checkmark is what says how the list is ordered. */}
           <span className="block truncate text-[15px] font-semibold leading-[20px] tracking-[-0.01em] text-[var(--text)]">
-            {LENS_LABELS[lens]}
+            {EXPLORE_LABEL}
           </span>
+
           {/* Narrowing is secondary information and reads as such — one quiet
             line, never a row of chips with their own dismiss targets.
             ALWAYS RENDERED, never conditionally: choosing a topic would

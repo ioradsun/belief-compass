@@ -87,17 +87,36 @@ export const LENS_QUESTIONS: Record<Lens, string> = {
   for_you: "What should I look at?",
   moving: "What is changing?",
   capital: "Where is the money?",
-  participants: "Where are the people?",
+  participants: "Where is the crowd?",
   fresh: "Where can I be early?",
 };
 
+/**
+ * WHAT EACH CHOICE IS CALLED.
+ *
+ * "Up Next" replaced "For You": in this menu these are not personalised
+ * recommendations, they are different ways to find markets worth acting on now.
+ * "Up Next" claims cadence, not intimacy. And "Most People" replaced "Most
+ * Participants" — the product's vocabulary is human (people, believers,
+ * conviction) and "participants" reads like analytics software.
+ *
+ * The CLOSED control does not use this map: the section is always "Up Next"
+ * (see `EXPLORE_LABEL`), because choosing a ranking is not going somewhere else.
+ */
 export const LENS_LABELS: Record<Lens, string> = {
-  for_you: "For You",
+  for_you: "Up Next",
   moving: "Moving",
   capital: "Most Capital",
-  participants: "Most Participants",
+  participants: "Most People",
   fresh: "Fresh",
 };
+
+/**
+ * THE STABLE DESTINATION NAME. The header never changes when the sort changes —
+ * the label says where you are, the checkmark says how it is ranked.
+ */
+export const EXPLORE_LABEL = "Up Next";
+
 
 /**
  * Which whole-market total a lens RANKS on — and therefore the one figure it has
