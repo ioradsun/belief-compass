@@ -379,14 +379,6 @@ export function MobileGame({
           mediaUrl={stageMedia?.embed?.url ?? stageMedia?.url ?? null}
         />
       </div>
-      {stageMedia && tallMedia && (
-        <MediaSwitch
-          value={stageTab}
-          onChange={setStageTab}
-          label={mediaSwitchLabel(stageMedia)}
-          className="mt-2 self-start"
-        />
-      )}
       {/* Creator + age under the question — and, for the POV-sourced markets
           with no author on record, the age alone rather than nothing. */}
       {cm?.creator ? (
@@ -418,6 +410,16 @@ export function MobileGame({
       ) : openedWhen ? (
         <p className="mt-1.5 text-[12px] text-[var(--text-muted)]">Opened · {openedWhen}</p>
       ) : null}
+      {/* The switcher sits BELOW the byline: who asked is provenance for the
+          question, while the tabs are a control over the body underneath. */}
+      {stageMedia && tallMedia && (
+        <MediaSwitch
+          value={stageTab}
+          onChange={setStageTab}
+          label={mediaSwitchLabel(stageMedia)}
+          className="mt-2 self-start"
+        />
+      )}
     </div>
   );
 
