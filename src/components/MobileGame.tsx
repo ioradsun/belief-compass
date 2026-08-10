@@ -299,9 +299,10 @@ export function MobileGame({
 
   const stageMedia = stageMediaFrom(cm);
   const tallMedia = isTallMedia(stageMedia);
-  const [stageTab, setStageTab] = useState<"market" | "media">("market");
+  const [stageTab, setStageTab] = useState<"market" | "media">("media");
   useEffect(() => {
-    setStageTab("market");
+    // A market that leads with evidence opens on that evidence.
+    setStageTab("media");
   }, [marketId]);
   const createdAt = cm?.createdAt ?? cm?.creator?.createdAt ?? null;
   // The same byline the desktop deck prints: who opened the question and how
