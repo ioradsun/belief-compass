@@ -151,7 +151,119 @@ export function FeedListPanel({
     rowRefs.current.get(activeId)?.scrollIntoView({ block: "nearest" });
   }, [activeId]);
 
-  const upcoming = entries.filter((e) => e.onchainId !== activeId);
+  /**
+   * WHAT IS LEFT, NOT WHAT IS NOT PLAYING.
+   *
+   * Filtering out the active market left everything BEFORE it in the queue at
+   * the top of the column — markets already read, presented as if they were
+   * still coming. A queue only ever points forward, so the list starts after
+   * the market on stage. A market opened from outside the order (search, a
+   * position, a Live row) has no position in it; then, and only then, does the
+   * whole order minus the active one stand in.
+   */
+  const activeIdx = activeId == null ? -1 : entries.findIndex((e) => e.onchainId === activeId);
+  const upcoming =
+    activeIdx >= 0 ? entries.slice(activeIdx + 1) : entries.filter((e) => e.onchainId !== activeId);
+
+  /**
+   * THE ROW THAT LEFT.
+   *
+   * When the reader opens the market at the front of the queue, that row is not
+   * deleted — it travels: it lifts out of the top of the column while its height
+   * collapses, so the queue closes the gap instead of the list snapping shorter.
+   * The ghost is a copy held for the length of the animation only, and only when
+   * the market genuinely came FROM the queue (an arrival from search never
+   * "leaves" a place it was never in).
+   */
+  const [departing, setDeparting] = useState<FeedListEntry | null>(null);
+  const prevUpcoming = useRef<FeedListEntry[]>([]);
+  useEffect(() => {
+    const left = prevUpcoming.current.find((e) => e.onchainId === activeId);
+    prevUpcoming.current = upcoming;
+    if (!left) return;
+    setDeparting(left);
+    const t = setTimeout(() => setDeparting(null), 480);
+    return () => clearTimeout(t);
+    // Only a change of the market on stage can make a row leave.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
+
+  const renderRow = (e: FeedListEntry, opts: { first: boolean; leaving?: boolean }) => {
+    const f = factsOf(rows[e.onchainId], nowMs);
+    /**
+     * THREE LINES, IN ONE HIERARCHY: the question, why it is here, and
+     * the scale of the market.
+     *
+     * WHY IT IS HERE depends on the lens, and on one rule. Most Capital,
+     * Most Believers and Fresh rank on a WHOLE-MARKET total, so their
+     * hero is that total and it never names a side — turning "Most
+     * Capital" into "YES has $505" would describe a side while ranking
+     * on the sum. For You and Moving rank on something that genuinely is
+     * about a side, so their hero is the sentence the canonical engines
+     * already wrote ("Your Tribe is backing YES", "YES moved up 8.4%
+     * today") and it may say so.
+     */
+    const hero = f ? lensHero(lens, f.scale, f.ageHours) : null;
+    // Only the reason-led lenses fall back to the market's own story: a
+    // ranked lens with no hero has nothing to claim, and the discovery
+    // sentence would be answering a question the reader did not ask.
+    const line = hero ? null : (e.reason ?? f?.discovery.story ?? null);
+    // The quiet grounding, minus whatever the hero just said out loud.
+    const scale = f ? scaleLine(lens, f.scale) : null;
+    return (
+      <li
+        key={opts.leaving ? `leaving-${e.onchainId}` : e.onchainId}
+        aria-hidden={opts.leaving || undefined}
+        // The front of the queue is a place, and it reads like one: an accent
+        // rail and full-strength text, one step above everything behind it.
+        className={`relative ${opts.leaving ? "queue-depart" : ""} ${
+          opts.first && !opts.leaving ? "queue-promote queue-rail pl-1" : ""
+        }`}
+        ref={
+          opts.leaving
+            ? undefined
+            : (el) => {
+                if (el) rowRefs.current.set(e.onchainId, el);
+                else rowRefs.current.delete(e.onchainId);
+              }
+        }
+      >
+        <button
+          type="button"
+          onClick={() => onSelect(e.onchainId)}
+          className="w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--surface)]"
+        >
+          {opts.first && !opts.leaving && (
+            <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--rel,#9b87f5)]">
+              Up next
+            </span>
+          )}
+          <span
+            className={`block text-[13px] font-medium leading-snug ${
+              opts.first && !opts.leaving ? "text-[var(--text)]" : "text-[var(--text-secondary)]"
+            }`}
+          >
+            {f?.question ?? marketTitleFallback(e.onchainId)}
+          </span>
+          {/* The hero of a ranked lens is a FACT ABOUT THE MARKET, so it
+            is not painted in the discovery purple — that accent means
+            "this one is about you" everywhere else in the product, and
+            "$505 committed" is not. It takes the text weight instead. */}
+          {hero && (
+            <span className="num mt-0.5 block text-[12px] font-semibold text-[var(--text)]">
+              {hero}
+            </span>
+          )}
+          <WhyThis reason={line} className="mt-0.5 whitespace-normal" />
+          {/* Believers and capital ground every market under every lens.
+            The quietest line on the row, and never a repeat of the hero. */}
+          {scale && (
+            <span className="num mt-0.5 block text-[11px] text-[var(--text-muted)]">{scale}</span>
+          )}
+        </button>
+      </li>
+    );
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -179,71 +291,15 @@ export function FeedListPanel({
         </p>
       ) : (
         <ol className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
-          {upcoming.map((e) => {
-            const f = factsOf(rows[e.onchainId], nowMs);
-            /**
-             * THREE LINES, IN ONE HIERARCHY: the question, why it is here, and
-             * the scale of the market.
-             *
-             * WHY IT IS HERE depends on the lens, and on one rule. Most Capital,
-             * Most Believers and Fresh rank on a WHOLE-MARKET total, so their
-             * hero is that total and it never names a side — turning "Most
-             * Capital" into "YES has $505" would describe a side while ranking
-             * on the sum. For You and Moving rank on something that genuinely is
-             * about a side, so their hero is the sentence the canonical engines
-             * already wrote ("Your Tribe is backing YES", "YES moved up 8.4%
-             * today") and it may say so.
-             */
-            const hero = f ? lensHero(lens, f.scale, f.ageHours) : null;
-            // Only the reason-led lenses fall back to the market's own story: a
-            // ranked lens with no hero has nothing to claim, and the discovery
-            // sentence would be answering a question the reader did not ask.
-            const line = hero ? null : (e.reason ?? f?.discovery.story ?? null);
-            // The quiet grounding, minus whatever the hero just said out loud.
-            const scale = f ? scaleLine(lens, f.scale) : null;
-            return (
-              <li
-                key={e.onchainId}
-                ref={(el) => {
-                  if (el) rowRefs.current.set(e.onchainId, el);
-                  else rowRefs.current.delete(e.onchainId);
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => onSelect(e.onchainId)}
-                  className="w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--surface)]"
-                >
-                  <span className="block text-[13px] font-medium leading-snug text-[var(--text-secondary)]">
-                    {f?.question ?? marketTitleFallback(e.onchainId)}
-                  </span>
-                  {/* The hero of a ranked lens is a FACT ABOUT THE MARKET, so it
-                    is not painted in the discovery purple — that accent means
-                    "this one is about you" everywhere else in the product, and
-                    "$505 committed" is not. It takes the text weight instead. */}
-                  {hero && (
-                    <span className="num mt-0.5 block text-[12px] font-semibold text-[var(--text)]">
-                      {hero}
-                    </span>
-                  )}
-                  <WhyThis reason={line} className="mt-0.5 whitespace-normal" />
-                  {/* Believers and capital ground every market under every lens.
-                    The quietest line on the row, and never a repeat of the hero. */}
-                  {scale && (
-                    <span className="num mt-0.5 block text-[11px] text-[var(--text-muted)]">
-                      {scale}
-                    </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
+          {departing && renderRow(departing, { first: false, leaving: true })}
+          {upcoming.map((e, i) => renderRow(e, { first: i === 0 }))}
           {/* THE LAST ITEM IN THE PLAYLIST, not a modal, a banner or a takeover.
             The reader chose this lens and finished it; the market they are on
             stays in the centre and this is simply what follows the final row. */}
           {lensExhausted && <Continuation onContinue={() => onLens("for_you")} />}
         </ol>
       )}
+
     </div>
   );
 }
