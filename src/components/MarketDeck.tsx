@@ -63,7 +63,14 @@ import { StandOnIt } from "@/components/StandOnIt";
 import { ShareImpact } from "@/components/ShareImpact";
 
 import { getConvictionMarket } from "@/lib/market-create.functions";
-import { MediaEvidence, MediaStage, stageMediaFrom } from "@/components/MediaStage";
+import {
+  MediaEvidence,
+  MediaStage,
+  MediaSwitch,
+  isTallMedia,
+  mediaSwitchLabel,
+  stageMediaFrom,
+} from "@/components/MediaStage";
 import { marketTitle } from "@/domain/market-title";
 
 /**
@@ -197,6 +204,13 @@ export function MarketDeck({
   });
   // Evidence, when the creator attached any. Null keeps the layout untouched.
   const stageMedia = useMemo(() => stageMediaFrom(cm), [cm]);
+  // Tall evidence (a video player, an X post) can't sit inline without pushing
+  // the market off the panel, so those markets get a Market / Media switch.
+  const tallMedia = isTallMedia(stageMedia);
+  const [stageTab, setStageTab] = useState<"market" | "media">("market");
+  useEffect(() => {
+    setStageTab("market");
+  }, [marketId]);
 
   const connected = useEffectiveWallet();
   const viewer = viewerWallet ?? connected;
@@ -494,7 +508,15 @@ export function MarketDeck({
         </div>
         {/* Evidence sits directly under the question — above the byline, the
           same place on every market that has it. */}
-        {stageMedia && <MediaEvidence media={stageMedia} />}
+        {stageMedia && !tallMedia && <MediaEvidence media={stageMedia} />}
+        {stageMedia && tallMedia && (
+          <MediaSwitch
+            value={stageTab}
+            onChange={setStageTab}
+            label={mediaSwitchLabel(stageMedia)}
+            className="self-start"
+          />
+        )}
         {/* The byline renders nothing until the creator lookup lands, and
           nothing at all for a market with no creator on record. Reserving its
           row means the market body below starts at the same y either way,
@@ -531,7 +553,11 @@ export function MarketDeck({
           media={stageMedia}
           className="deck-stage flex min-h-0 flex-1 touch-pan-y flex-col"
         >
-          {marketInner}
+          {stageMedia && tallMedia && stageTab === "media" ? (
+            <MediaEvidence media={stageMedia} />
+          ) : (
+            marketInner
+          )}
         </MediaStage>
       )}
 

@@ -36,7 +36,14 @@ import { marketChangeQO, evidenceQO } from "@/lib/market-queries";
 import { useMarketChange } from "@/lib/market-change-query";
 import { getConvictionMarket } from "@/lib/market-create.functions";
 import { marketAgeCopy } from "@/domain/market-freshness";
-import { MediaEvidence, MediaStage, stageMediaFrom } from "@/components/MediaStage";
+import {
+  MediaEvidence,
+  MediaStage,
+  MediaSwitch,
+  isTallMedia,
+  mediaSwitchLabel,
+  stageMediaFrom,
+} from "@/components/MediaStage";
 import { StandOnIt } from "@/components/StandOnIt";
 import { CaseRoster } from "@/components/CaseFile";
 import { ShareImpact } from "@/components/ShareImpact";
@@ -289,6 +296,11 @@ export function MobileGame({
   useAnswerCalls(viewerWallet, marketId, trade.isSuccess && !!trade.hash);
 
   const stageMedia = stageMediaFrom(cm);
+  const tallMedia = isTallMedia(stageMedia);
+  const [stageTab, setStageTab] = useState<"market" | "media">("market");
+  useEffect(() => {
+    setStageTab("market");
+  }, [marketId]);
   const createdAt = cm?.createdAt ?? cm?.creator?.createdAt ?? null;
   // The same byline the desktop deck prints: who opened the question and how
   // old it reads — under the title, never a category strip above it.
@@ -362,10 +374,18 @@ export function MobileGame({
           mediaUrl={stageMedia?.embed?.url ?? stageMedia?.url ?? null}
         />
       </div>
-      {stageMedia && (
+      {stageMedia && !tallMedia && (
         <div className="mt-2">
           <MediaEvidence media={stageMedia} />
         </div>
+      )}
+      {stageMedia && tallMedia && (
+        <MediaSwitch
+          value={stageTab}
+          onChange={setStageTab}
+          label={mediaSwitchLabel(stageMedia)}
+          className="mt-2 self-start"
+        />
       )}
       {/* Creator + age under the question — and, for the POV-sourced markets
           with no author on record, the age alone rather than nothing. */}
@@ -444,7 +464,11 @@ export function MobileGame({
         <>
           <div className="shrink-0 pt-1">{questionBlock}</div>
           <MediaStage media={stageMedia} className="mt-2 flex min-h-0 flex-1 flex-col gap-3 pb-1">
-            {marketBody}
+            {tallMedia && stageTab === "media" ? (
+              <MediaEvidence media={stageMedia} />
+            ) : (
+              marketBody
+            )}
           </MediaStage>
         </>
       ) : (
