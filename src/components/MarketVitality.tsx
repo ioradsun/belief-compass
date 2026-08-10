@@ -26,6 +26,7 @@ import type { FlowWindow } from "@/domain/market-flow";
 import { formatMoney, convertMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
 import { believerMove, capitalMove, formatPct, type MetricMove } from "@/domain/metric-display";
+import { Signed } from "@/components/Signed";
 import type { MarketChange, MetricChange } from "@/domain/market-change";
 import { participantSocial, type ParticipantRelation } from "@/domain/participant-social";
 import {
