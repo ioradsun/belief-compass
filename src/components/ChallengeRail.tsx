@@ -67,12 +67,9 @@ export function ChallengeRail({
   wallet,
   onSelect,
   insider,
-  currentMarketId,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
-  /** What the centre column is showing — offered as "Use this market". */
-  currentMarketId?: number;
   /**
    * The Insider feed (live tape), rendered by the route. Passed as a node rather
    * than as five more props: this component is about YOUR calls, and threading
