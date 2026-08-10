@@ -63,11 +63,12 @@ describe("taking it off the table", () => {
     expect(c).not.toMatch(/Delete|Cancel|Remove Challenge/i);
   });
 
-  it("keeps it behind a chevron rather than under every card", () => {
+  it("keeps it behind an overflow menu rather than under every card", () => {
     const c = yours();
-    expect(c).toMatch(/ChevronDown/);
+    expect(c).toMatch(/MoreHorizontal/);
     expect(c).toMatch(/more &&/);
   });
+
 
   it("never reports a failed read as an empty table", () => {
     // Same rule the incoming side follows: silence is earned by an answer.

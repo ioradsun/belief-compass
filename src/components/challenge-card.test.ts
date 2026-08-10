@@ -199,8 +199,10 @@ describe("a failed read is not an empty room", () => {
     const c = rail();
     expect(c).toMatch(/failed \?/);
     expect(c).toMatch(/Could not load who is waiting on you/);
-    // The empty state must sit BEHIND the failure check, never in front of it.
-    expect(c.indexOf("failed ?")).toBeLessThan(c.indexOf("Your people are quiet"));
+    // The quiet case renders nothing at all now, and it must still sit BEHIND
+    // the failure check — never in front of it.
+    expect(c.indexOf("failed ?")).toBeLessThan(c.indexOf("open.length === 0 ? null"));
+
   });
 
   it("surfaces the error from the shared hook rather than swallowing it", () => {
