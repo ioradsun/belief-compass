@@ -59,7 +59,11 @@ export const NETWORK_OPTIONS: { key: FeedNetwork; label: string; blurb: string }
     label: "Rivals",
     blurb: "Markets people who disagree with you created or traded.",
   },
-  { key: "following", label: "Following", blurb: "People you chose to follow." },
+  /**
+   * NO "FOLLOWING" ROW. Follow was removed from the product, so the option can
+   * only ever narrow to nothing. The key stays in `FeedNetwork` so an old saved
+   * selection still parses instead of throwing.
+   */
 ];
 
 /** Topic keys, matching the POV category slugs the read-model stores. */
