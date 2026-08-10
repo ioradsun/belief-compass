@@ -19,16 +19,14 @@
  * highlight. Clicking a row selects that market; clicking a face opens that
  * person.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWarmMarket } from "@/lib/realtime/warm-market";
 import { Signed } from "@/components/Signed";
 
-
 import { PersonStack } from "@/components/PersonStack";
 import { showsAmountFooter } from "@/domain/amount-footer";
 import { fixStoryAgreement } from "@/domain/grammar";
-
 
 import { listLiveEvents } from "@/lib/live.functions";
 import { useStickyRows } from "@/hooks/useSticky";
@@ -52,8 +50,6 @@ import { ago } from "@/domain/relative-time";
 import { COPY_VERSION, sameCopyVersion } from "@/domain/copy-version";
 import { activity, now as insiderNow, signalsFromActivityRows } from "@/domain/insider";
 
-
-
 type LiveResult = {
   rows: LiveRow[];
   /** The build that COMPOSED these sentences — see src/domain/copy-version. */
@@ -66,7 +62,6 @@ type LiveResult = {
  * the Market Insider rail are ONE request.
  */
 const SIDE_RAIL_FETCH_LIMIT = 200;
-
 
 /** Beyond this gap since our newest cached event, a delta would be large — just
  *  do a full fetch (the persisted cache already gave the instant paint). */
@@ -96,6 +91,8 @@ export function LiveTape({
   skeletonRows = 8,
   holdUpdates = false,
   label,
+  leading,
+  scope,
   initial,
   onPending,
 }: {
@@ -133,6 +130,27 @@ export function LiveTape({
    * below for why that placement is the whole point.
    */
   label?: string;
+  /**
+   * THE LEFT END OF THE UPDATE ROW — a control the host owns.
+   *
+   * The heading and the update pill already share one fixed-height line (see the
+   * header below for why that placement is the whole point), and that line had an
+   * empty left slot in every tape that renders without a label. The Insider
+   * column's scope filter belongs exactly there: beside the pill, on a row that
+   * already exists and already reserves its height, so adding it costs the list
+   * nothing and moves no row.
+   *
+   * PASSED IN RATHER THAN OWNED, for the same reason the tape itself is passed
+   * into `ChallengeRail` as a node: this component renders what happened, and it
+   * should not become the owner of a decision it does not make.
+   */
+  leading?: ReactNode;
+  /**
+   * WHOSE MARKETS. Threaded to the request and the cache key, not interpreted
+   * here — "mine" means something the server resolves from `author_wallet`, and
+   * a client that decided it for itself would be a second definition.
+   */
+  scope?: "all" | "mine";
   /**
    * ROWS FROM THE SERVER, for paint only. The shared signed-out tape is built
    * once and cached server-side, so SSR can hand the first rows down and the
@@ -175,7 +193,7 @@ export function LiveTape({
   // fetch — and every other tape reads the global feed resource.
   const key: readonly unknown[] = sideRail
     ? insiderMarketKey(railMarketId as number, { wallet, limit: SIDE_RAIL_FETCH_LIMIT })
-    : insiderNowKey({ wallet, marketIds: scopeKey, side, limit });
+    : insiderNowKey({ wallet, marketIds: scopeKey, side, limit, scope });
 
   const { data, isLoading } = useQuery({
     queryKey: key,
@@ -210,8 +228,12 @@ export function LiveTape({
         !dueForFullRebuild(lastFullAt.current, Date.now());
       if (canDelta) {
         const sinceIso = new Date(newestMs - LIVE_DELTA_OVERLAP_MS).toISOString();
+        /* THE SCOPE TRAVELS WITH THE POLL. Without it a My Markets delta would
+           ask the server for the WHOLE NETWORK since that timestamp and merge
+           strangers' trades onto a tail the reader was told was theirs — the
+           kind of bug that looks like a feature until somebody reads it. */
         const res = (await listLiveEvents({
-          data: { wallet, limit, since: sinceIso },
+          data: { wallet, limit, since: sinceIso, ...(scope ? { scope } : {}) },
         })) as LiveResult;
         if (res.error) {
           trace("delta-error", `keeping ${prev.length} prev rows: ${res.error}`);
@@ -229,7 +251,7 @@ export function LiveTape({
       const full = (await listLiveEvents({
         data: sideRail
           ? { wallet, marketIds: scopeKey ?? undefined, limit: SIDE_RAIL_FETCH_LIMIT }
-          : { wallet, marketIds: scopeKey ?? undefined, side, limit },
+          : { wallet, marketIds: scopeKey ?? undefined, side, limit, ...(scope ? { scope } : {}) },
       })) as LiveResult;
 
       // Only a SUCCESSFUL full build resets the clock — an errored one did not
@@ -308,7 +330,6 @@ export function LiveTape({
   // `insider.now`. What stays here is attention mechanics: the update gate, the
   // arrival scheduler, and the scroll behaviour.
 
-
   // ARRIVAL. A live feed should feel like it is being written, so rows are
   // released one at a time by the presentation scheduler rather than rendered
   // as whatever the last poll returned — eight events landing in one frame is a
@@ -357,8 +378,6 @@ export function LiveTape({
     onPending?.(gate.pending);
   }, [gate.pending, onPending]);
 
-
-
   // The rows the last tap admitted — kept in the window and shown at the top,
   // so "Update" always visibly changes the feed.
   const pinnedIds = useMemo(() => new Set(gate.lastAdmitted), [gate.lastAdmitted]);
@@ -384,7 +403,6 @@ export function LiveTape({
   });
   const shown = feed.shown;
   const tail = feed.tail;
-
 
   /**
    * THE TAP HAS TO LAND SOMEWHERE THE READER CAN SEE.
@@ -433,63 +451,62 @@ export function LiveTape({
     return undefined;
   };
 
-  const header =
-    (
+  const header = (
+    /**
+     * THE HEADING AND THE UPDATE CONTROL SHARE ONE LINE, AND THAT LINE NEVER
+     * CHANGES HEIGHT.
+     *
+     * The control used to be `sticky top-0 mb-2` INSIDE the scroller. So it
+     * pushed every row down by ~34px the moment activity arrived, and the rows
+     * snapped back up the instant it was tapped — a jump on arrival and a
+     * second one on the tap that was supposed to be the calm, deliberate act.
+     * The reader's own click moved the thing they were aiming at.
+     *
+     * Out here it is a sibling of the label in a fixed-height row, so appearing
+     * and disappearing costs the list nothing. It fades rather than popping,
+     * and the row reserves its height whether or not it is there.
+     */
+    <div className="mb-4 flex h-[26px] shrink-0 items-center gap-2 overflow-visible">
+      {leading}
+      {label != null && (
+        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          {label}
+        </span>
+      )}
 
-      /**
-       * THE HEADING AND THE UPDATE CONTROL SHARE ONE LINE, AND THAT LINE NEVER
-       * CHANGES HEIGHT.
-       *
-       * The control used to be `sticky top-0 mb-2` INSIDE the scroller. So it
-       * pushed every row down by ~34px the moment activity arrived, and the rows
-       * snapped back up the instant it was tapped — a jump on arrival and a
-       * second one on the tap that was supposed to be the calm, deliberate act.
-       * The reader's own click moved the thing they were aiming at.
-       *
-       * Out here it is a sibling of the label in a fixed-height row, so appearing
-       * and disappearing costs the list nothing. It fades rather than popping,
-       * and the row reserves its height whether or not it is there.
-       */
-      <div className="mb-4 flex h-[26px] shrink-0 items-center gap-2 overflow-visible">
-        {label != null && (
-          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            {label}
-          </span>
-        )}
-
-        <button
-          type="button"
-          onClick={admit}
-          /**
-           * ONE PULSE, ON ARRIVAL, THEN STILLNESS.
-           *
-           * Remounting on the 0 → N edge (and only that edge) lets the CSS
-           * animation play exactly once. Every later increment is just a number
-           * changing inside a pill that is already sitting there, so the control
-           * never nags: it announces itself once and then waits.
-           */
-          key={`pill-${pulseKey}`}
-          // Present but inert at zero pending: the slot is always occupied, so
-          // nothing reflows when it becomes available.
-          aria-hidden={gate.pending === 0 || undefined}
-          tabIndex={gate.pending === 0 ? -1 : undefined}
-          className="ml-auto rounded-full border px-2.5 py-[3px] text-[11px] font-semibold leading-[14px] backdrop-blur-sm transition-[opacity,transform,background-color] duration-200 ease-out motion-reduce:transition-none motion-reduce:animate-none"
-          style={{
-            // A quiet system indicator, not a call to action: the filled white
-            // button is reserved for Connect Wallet and Back YES/NO.
-            background: "color-mix(in oklab, var(--notice) 12%, transparent)",
-            borderColor: "color-mix(in oklab, var(--notice) 45%, transparent)",
-            color: "var(--notice)",
-            opacity: gate.pending > 0 ? 1 : 0,
-            transform: gate.pending > 0 ? "scale(1)" : "scale(0.98)",
-            pointerEvents: gate.pending > 0 ? "auto" : "none",
-            animation: gate.pending > 0 ? "tape-pill-in 640ms ease-out 1" : undefined,
-          }}
-        >
-          ↑ {arrivalLabel(gate.pending)}
-        </button>
-      </div>
-    );
+      <button
+        type="button"
+        onClick={admit}
+        /**
+         * ONE PULSE, ON ARRIVAL, THEN STILLNESS.
+         *
+         * Remounting on the 0 → N edge (and only that edge) lets the CSS
+         * animation play exactly once. Every later increment is just a number
+         * changing inside a pill that is already sitting there, so the control
+         * never nags: it announces itself once and then waits.
+         */
+        key={`pill-${pulseKey}`}
+        // Present but inert at zero pending: the slot is always occupied, so
+        // nothing reflows when it becomes available.
+        aria-hidden={gate.pending === 0 || undefined}
+        tabIndex={gate.pending === 0 ? -1 : undefined}
+        className="ml-auto rounded-full border px-2.5 py-[3px] text-[11px] font-semibold leading-[14px] backdrop-blur-sm transition-[opacity,transform,background-color] duration-200 ease-out motion-reduce:transition-none motion-reduce:animate-none"
+        style={{
+          // A quiet system indicator, not a call to action: the filled white
+          // button is reserved for Connect Wallet and Back YES/NO.
+          background: "color-mix(in oklab, var(--notice) 12%, transparent)",
+          borderColor: "color-mix(in oklab, var(--notice) 45%, transparent)",
+          color: "var(--notice)",
+          opacity: gate.pending > 0 ? 1 : 0,
+          transform: gate.pending > 0 ? "scale(1)" : "scale(0.98)",
+          pointerEvents: gate.pending > 0 ? "auto" : "none",
+          animation: gate.pending > 0 ? "tape-pill-in 640ms ease-out 1" : undefined,
+        }}
+      >
+        ↑ {arrivalLabel(gate.pending)}
+      </button>
+    </div>
+  );
 
   const body = (
     <div
@@ -570,11 +587,28 @@ export function LiveTape({
                   {/* A standing fact has no "when" — printing an age beside it
                     would read as "this just happened", which is the one thing
                     it does not mean. */}
-                  {!r.timeless && (
-                    <div className="text-[10px] font-medium tabular-nums text-[var(--text-muted)]">
-                      {ago(r.occurredAt)}
-                    </div>
-                  )}
+                  {/* YOUR MARKET — the strongest claim anybody can have on a
+                    question is having asked it, and this is the one row property
+                    that outranks the time. Set only in the All Markets scope: in
+                    a column filtered to your own questions it would sit on every
+                    row and say nothing. Amber-on-amber would fight the side
+                    colours, so it borrows the notice tone the update pill uses —
+                    a system marker, not a third opinion about YES and NO. */}
+                  <div className="flex items-baseline gap-1.5">
+                    {r.yourMarket && (
+                      <span
+                        className="shrink-0 text-[9.5px] font-semibold uppercase tracking-[0.08em]"
+                        style={{ color: "var(--notice)" }}
+                      >
+                        Your market
+                      </span>
+                    )}
+                    {!r.timeless && (
+                      <div className="text-[10px] font-medium tabular-nums text-[var(--text-muted)]">
+                        {ago(r.occurredAt)}
+                      </div>
+                    )}
+                  </div>
                   <div className="mt-0.5 text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--text)]">
                     <SideText text={s.headline} />
                   </div>
@@ -603,7 +637,6 @@ export function LiveTape({
                       {s.question}
                     </div>
                   )}
-
 
                   {/* WHO + HOW MUCH. Every row that has people ends with their
                     faces, and every row that has money ends with the money.
@@ -644,7 +677,6 @@ export function LiveTape({
                           traded
                         </span>
                       )}
-
                     </div>
                   )}
                 </div>

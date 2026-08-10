@@ -29,6 +29,16 @@ export const LIVE_KINDS = [
 /** The live feed only reports the last 72 hours. Older events are history. */
 export const LIVE_WINDOW_MS = 72 * 60 * 60_000;
 
+/**
+ * How many of your own markets the "My Markets" scope will read.
+ *
+ * Bounded like every other read in this layer, and generous enough that nobody
+ * real is truncated — the cap on OPEN Challenges is three, and authoring two
+ * hundred questions is not a shape this platform has. If somebody ever reaches
+ * it, the tape shows their two hundred newest markets rather than failing.
+ */
+const MINE_MARKET_CAP = 200;
+
 export type Momentum = {
   believersYes: number | null;
   believersNo: number | null;
@@ -116,7 +126,36 @@ export async function loadTapeSource(
   data: TapeQuery,
 ): Promise<TapeSource> {
   const limit = data?.limit ?? 120;
-  const scope = data?.marketIds?.map((n) => String(n)) ?? null;
+  let scope = data?.marketIds?.map((n) => String(n)) ?? null;
+
+  /**
+   * MY MARKETS — resolved here, from the one column that already says who asked.
+   *
+   * `markets.author_wallet` is the Market Maker, and it is the same column
+   * `tableCandidates` and the creator lookup below already read. Nothing new is
+   * stored and nothing is inferred: a market has exactly one author.
+   *
+   * AN AUTHOR WITH NO MARKETS GETS AN EMPTY TAPE, NOT THE WHOLE NETWORK. Leaving
+   * `scope` null on an empty result would silently widen "my markets" to
+   * everything — the confident-fallback failure this codebase keeps paying for,
+   * and here it would put strangers' trades under a heading that says they are
+   * yours. An impossible scope is the honest answer, and the column says so.
+   */
+  if (data?.scope === "mine") {
+    if (!data.wallet) return { ...EMPTY_SOURCE };
+    const { data: mine, error: mineErr } = await sb
+      .from("markets")
+      .select("onchain_id")
+      .eq("author_wallet", data.wallet.toLowerCase())
+      .limit(MINE_MARKET_CAP);
+    // Loudly, then refuse. A blocked read here must not become "you have no
+    // markets", which is a statement about the reader rather than about us.
+    if (mineErr) return { ...EMPTY_SOURCE, error: mineErr.message };
+    scope = (mine ?? []).map((m) => String((m as { onchain_id: number }).onchain_id));
+    // `.in()` with an empty list matches nothing, which is exactly right — but
+    // spelling it out beats relying on that, and it saves the round trip.
+    if (scope.length === 0) return { ...EMPTY_SOURCE };
+  }
 
   let q = sb
     .from("events")
@@ -213,7 +252,6 @@ export async function loadTapeSource(
         lastTradeAt: (r.last_trade_at as string | null) ?? null,
       });
     }
-
   }
 
   // ETH/USD comes from the cron-refreshed snapshot (calc_cache), NOT the live
@@ -428,7 +466,10 @@ export async function loadViewerDna(viewer: string): Promise<ViewerDnaRow | null
  * having been here, for the purpose of what to show someone. Failure is
  * swallowed deliberately — no key means the feed is impersonal, never absent.
  */
-export async function loadViewerHoldings(viewer: string, marketIds: number[]): Promise<Set<number>> {
+export async function loadViewerHoldings(
+  viewer: string,
+  marketIds: number[],
+): Promise<Set<number>> {
   const holding = new Set<number>();
   try {
     const { serviceClientOrNull } = await import("@/lib/supabase-clients");

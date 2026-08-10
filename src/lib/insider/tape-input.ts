@@ -25,5 +25,27 @@ export const tapeInput = z
      * for a full fetch.
      */
     since: z.string().datetime().optional(),
+    /**
+     * WHOSE MARKETS — the one filter the Insider column offers.
+     *
+     * NOT A SECOND FEED, AND THE SCHEMA IS WHERE THAT IS DECIDED. This is a
+     * scope on the existing tape, exactly like `marketIds` and `side` above it:
+     * same events, same grouping, same narration, same delta sync. A separate
+     * endpoint for "my markets" would have been a second event system that
+     * happened to read the same table, and the two would have drifted the first
+     * time either one learned a new row kind.
+     *
+     *   all   the curated pulse of the whole network — significance-scored,
+     *         family-capped, paced. The default, and unchanged.
+     *   mine  markets I opened. Every grouped row, newest first, with no
+     *         significance floor: in your own question a $25 buy is not noise,
+     *         it is the entire point.
+     *
+     * DELIBERATELY NOT `marketIds`. Scoping by id would cap at 60 markets and
+     * ship the whole list on every poll; the server already knows who authored
+     * what, so it resolves the set itself and a prolific creator is not silently
+     * truncated.
+     */
+    scope: z.enum(["all", "mine"]).optional(),
   })
   .optional();

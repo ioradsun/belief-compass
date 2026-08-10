@@ -55,6 +55,24 @@ import { TakeASide } from "@/components/TakeASide";
 
 import { SimilarMarkets } from "@/components/SimilarMarkets";
 import { ChallengeRail } from "@/components/ChallengeRail";
+import { DotFilter, type DotOption } from "@/components/DotFilter";
+
+/**
+ * THE TWO SCOPES, AND THE COLOURS THAT SAY WHICH IS WHICH.
+ *
+ * `all` is the whole spectrum — the same blue→amber gradient the People filter
+ * uses for "everybody", so a reader who has met one control has met both. `mine`
+ * is the notice tone, the same one the update pill and the YOUR MARKET marker
+ * already speak: this column is about you.
+ */
+const INSIDER_SCOPES: readonly DotOption<"all" | "mine">[] = [
+  {
+    id: "all",
+    label: "All Markets",
+    dot: "linear-gradient(90deg, var(--yes), var(--text-muted), var(--no))",
+  },
+  { id: "mine", label: "My Markets", dot: "var(--notice)" },
+];
 import { IdeasRail } from "@/components/IdeasRail";
 import { AlternatesRail } from "@/components/AlternatesRail";
 import { useOpenCalls } from "@/lib/open-calls";
@@ -65,7 +83,6 @@ import { MarketScene } from "@/components/MarketScene";
 
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { PanelBoundary } from "@/components/PanelBoundary";
-
 
 const CaseColumn = lazyRetry(() =>
   import("@/components/CaseFile").then((m) => ({ default: m.CaseColumn })),
@@ -707,6 +724,21 @@ function Feed() {
     landing.collapse();
   }, [tabParam, deepCenter]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /**
+   * WHOSE MARKETS THE INSIDER COLUMN IS ABOUT.
+   *
+   * ALL MARKETS IS THE DEFAULT, AND IT STAYS THE DEFAULT ON EVERY VISIT. The
+   * curated pulse of the whole network is the one view that is true for
+   * everybody, including the reader who has never opened a question — and most
+   * have not. Remembering "mine" across sessions would leave somebody staring at
+   * an empty column they do not remember choosing.
+   *
+   * NOT IN THE URL EITHER. A scope is a way of looking at the same column, not a
+   * destination worth linking to, and putting it in the URL would make every
+   * shared link carry one reader's filter into somebody else's session.
+   */
+  const [insiderScope, setInsiderScope] = useState<"all" | "mine">("all");
+
   const [menuOpen, setMenuOpen] = useState(false);
 
   /** How many people are waiting on this reader — badged on the menu's Room
@@ -1338,7 +1370,6 @@ function Feed() {
     void qc.invalidateQueries({ queryKey: ["opp-feed"] });
   }, [remainingAhead, queue, stableFeed?.exhausted, qc]);
 
-
   const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
   useEffect(() => {
     if (viewedId != null) houseIdea.noteCardViewed(viewedId);
@@ -1369,7 +1400,6 @@ function Feed() {
     houseIdea.onShown();
   }, [ideaDue, houseIdea]);
 
-
   // On mobile only the active tab's column is mounted-visible; from lg up all
   // three columns are always shown side by side.
   const show = (t: MobileTab) => (tab === t ? "flex" : "hidden");
@@ -1377,8 +1407,6 @@ function Feed() {
   // Stories the Insider tape is holding back, lifted only so the tab can repeat
   // the number while the reader is looking at Challenge.
   const [insiderPending, setInsiderPending] = useState(0);
-
-
 
   // Case File mode only applies to the single-market view. When on, the side
   // columns become the YES/NO case for the current market (existing intelligence,
@@ -1527,7 +1555,6 @@ function Feed() {
                       leads with the feed. */}
                     <TakeASide wallet={wallet} window={win} />
 
-
                     <FeedListPanel
                       lens={lens}
                       onLens={selectLens}
@@ -1667,7 +1694,6 @@ function Feed() {
                   />
                 </Suspense>
               </div>
-
             ) : currentRow ? (
               /* A MARKET ON SCREEN OUTRANKS EVERY EMPTY STATE.
                 This branch used to sit BELOW the `rows.length === 0` check, so
@@ -1810,7 +1836,6 @@ function Feed() {
                   onSelect={selectMarket}
                   onSelectPerson={selectPerson}
                   insiderCount={insiderPending}
-
                   insider={
                     <div className="min-h-0 flex-1 overflow-hidden">
                       <LiveTape
@@ -1819,13 +1844,46 @@ function Feed() {
                         excludeMarketId={shownId ?? undefined}
                         holdUpdates
                         label={undefined}
+                        scope={insiderScope}
+                        /* THE EMPTY ROOM SAYS WHICH ROOM IT IS. "Nothing yet."
+                           under My Markets reads as a broken filter to somebody
+                           who has never opened a question — and most people
+                           have not. It names the reason and the way out, and
+                           says nothing about how many markets they have,
+                           because a zero there would be a verdict. */
+                        emptyText={
+                          insiderScope === "mine"
+                            ? "Nothing in your markets yet. Open a question and every move in it lands here."
+                            : "Nothing yet."
+                        }
+                        /* THE FILTER SITS ON THE UPDATE ROW, not above it. That
+                           line already exists, already reserves its height and
+                           already holds the "↑ new" pill at its right end — so
+                           the control costs the column nothing and moves no row.
+                           Owned here rather than by the tape: LiveTape renders
+                           what happened and should not own a choice it does not
+                           make. */
+                        /* NO WALLET, NO "MY". A signed-out visitor cannot have
+                           opened a question, so the control would offer one
+                           destination that is empty by definition. It appears
+                           when there is a self for it to be about. */
+                        leading={
+                          !wallet ? undefined : (
+                            <DotFilter
+                              value={insiderScope}
+                              onChange={setInsiderScope}
+                              ariaLabel="Insider scope"
+                              align="left"
+                              options={INSIDER_SCOPES}
+                            />
+                          )
+                        }
                         initial={loaderData?.tape ?? null}
                         onPending={setInsiderPending}
                       />
                     </div>
                   }
                 />
-
               )}
             </>
           )}

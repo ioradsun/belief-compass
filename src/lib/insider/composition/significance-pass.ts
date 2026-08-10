@@ -122,11 +122,29 @@ export function runSignificancePass<R extends LiveRow>({
   momentumById,
   pricePaths,
   nowMs = Date.now(),
+  admitEverything = false,
 }: {
   scored: Array<Candidate<R>>;
   momentumById: Map<number, Momentum>;
   pricePaths: Map<number, PriceSample[]>;
   nowMs?: number;
+  /**
+   * SKIP THE BAR ENTIRELY — the My Markets scope, and nothing else.
+   *
+   * The floor exists because the network tape is a CURATED pulse: a $25 buy in
+   * a stranger's market is not news, and admitting it would drown the day's
+   * real story. In the market you opened, that same $25 buy is the entire
+   * point — somebody you have never met just backed your question — and a
+   * floor tuned for a whole network is the wrong instrument for a column
+   * scoped to five of your own questions.
+   *
+   * IT IS A FLAG HERE RATHER THAN A SECOND PASS somewhere else, because
+   * everything after admission must stay identical: the same derived scores,
+   * the same tiers, the same narration, the same editorial subtraction. A
+   * parallel path would have been a second feed wearing this one's clothes,
+   * and it would have diverged the first time either learned a new row kind.
+   */
+  admitEverything?: boolean;
 }): SignificancePassResult<R> {
   // ADAPTIVE DENSITY. The absolute gate asks "is this big?" and on a quiet chain
   // the honest answer is no for everything, which is how a live market renders
@@ -253,7 +271,11 @@ export function runSignificancePass<R extends LiveRow>({
     .filter(({ r, candidate }) => {
       const a = admissionOf(candidate, { floor, silenceFloor: pulseBar });
       if (a === "pulse") pulseIds.add(r.id);
-      return a !== null;
+      // Admitted for real, or admitted because this scope has no bar. Note the
+      // `pulse` marking still runs: a row that only cleared the silence floor is
+      // held by the client either way, which is a decision about the READER's
+      // attention rather than about the row's size.
+      return admitEverything || a !== null;
     })
     .map(({ r, candidate, fullExit, daysHeld }) => {
       const v = signalById.get(r.id);

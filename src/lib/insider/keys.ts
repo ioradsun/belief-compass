@@ -35,6 +35,18 @@ export const insiderNowKey = (opts: {
   limit?: number | null;
   /** A multi-market scope that is not a single market (e.g. your positions). */
   marketIds?: number[] | null;
+  /**
+   * WHICH MARKETS THIS TAPE IS ABOUT — the whole network, or the ones I opened.
+   *
+   * PART OF THE KEY BECAUSE IT IS PART OF THE REQUEST. "mine" resolves to a
+   * different set of markets server-side and skips the significance floor, so
+   * the two scopes are genuinely different questions and must never share a
+   * cached answer. It also makes the client's `resetKey` change on a switch,
+   * which is what tells the arrival gate that this is A NEW LIST rather than a
+   * burst of new activity — without it, switching scope would light up "↑ 40
+   * new" for rows that had simply always been there.
+   */
+  scope?: "all" | "mine" | null;
 }) =>
   [
     INSIDER_KEY_ROOT,
@@ -43,6 +55,9 @@ export const insiderNowKey = (opts: {
     opts.marketIds ?? null,
     opts.side ?? null,
     opts.limit ?? null,
+    // Absent rather than "all" when unset, so every existing key is unchanged
+    // and no cached tape is orphaned by shipping this.
+    ...(opts.scope && opts.scope !== "all" ? ([opts.scope] as const) : ([] as const)),
   ] as const;
 
 /**
