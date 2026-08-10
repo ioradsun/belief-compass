@@ -103,26 +103,8 @@ export function ChallengeRail({
   };
 
 
-  /**
-   * Which side is showing. Seeded from the cache so "See yours", pressed in the
-   * panel ABOVE this one, lands here — the two are siblings with no prop path
-   * between them, and the cache is the seam this file already uses for handoffs.
-   */
-  const { data: wanted } = useQuery<Side>({
-    queryKey: railSideKey,
-    // Pure cache seam, no request behind it — but React Query still warns
-    // ("No queryFn was passed") on every render without one, which spammed the
-    // console dozens of times per load. An identity fn keeps it silent.
-    queryFn: () => qc.getQueryData<Side>(railSideKey) ?? "challenged",
-    enabled: false,
-    initialData: "challenged",
-  });
-  const [side, setSide] = useState<Side>("challenged");
   /** How many of the open calls are on screen. A railful, then a railful more. */
   const [shown, setShown] = useState<number>(CHALLENGE.maxOpen);
-  useEffect(() => {
-    if (wanted) setSide(wanted);
-  }, [wanted]);
   const { ensureSession } = useWalletSession();
 
   /**
