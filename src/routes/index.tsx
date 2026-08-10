@@ -1224,12 +1224,58 @@ function Feed() {
 
   // "The House has an idea" — the SERVER decided whether an idea belongs in
   // this sequence and at which slot. The hook only owns the funnel calls.
+  //
+  // LATCHED, because a feed poll is not a decision. The sequence is rebuilt
+  // every 60s (and on every key change — a lens, a filter, an origin market
+  // opened from search), and any of those rebuilds can legitimately come back
+  // without an idea in it. Reading the idea straight off the latest response
+  // meant the card vanished from under the reader mid-read. It is held until
+  // the reader acts on it: create, edit or pass.
   const ideaItem = items.find((it) => it.kind === "market_idea") ?? null;
-  const houseIdea = useHouseIdea(
-    ideaItem ? ((stableFeed?.idea as ReadySuggestion | null) ?? null) : null,
-  );
-  // The idea takes its own slot: it shows once the viewer has advanced to it.
-  const ideaDue = !!ideaItem && currentIdx >= ideaItem.position;
+  const heldIdeaRef = useRef<{ suggestion: ReadySuggestion; position: number } | null>(null);
+  if (ideaItem && stableFeed?.idea) {
+    heldIdeaRef.current = {
+      suggestion: stableFeed.idea as ReadySuggestion,
+      position: ideaItem.position,
+    };
+  }
+  const houseIdea = useHouseIdea(heldIdeaRef.current?.suggestion ?? null);
+  // Dismissed / published: the hook drops it, so the latch must drop it too or
+  // the playlist would keep a row for a card that can no longer open.
+  if (heldIdeaRef.current && !houseIdea.suggestion) heldIdeaRef.current = null;
+  const ideaPos = heldIdeaRef.current?.position ?? null;
+
+  /**
+   * WHERE THE IDEA IS, as a state rather than a derived comparison.
+   *
+   *   idle    not reached yet.
+   *   open    on the centre stage.
+   *   parked  the reader moved to a market instead. It keeps its row in the
+   *           playlist and can be opened again — it just stops taking the
+   *           centre, which is what made it feel like it "disappeared".
+   */
+  const [ideaView, setIdeaView] = useState<"idle" | "open" | "parked">("idle");
+  useEffect(() => {
+    if (!houseIdea.suggestion) {
+      setIdeaView("idle");
+      return;
+    }
+    if (ideaView === "idle" && ideaPos != null && currentIdx >= ideaPos) setIdeaView("open");
+  }, [houseIdea.suggestion, ideaPos, currentIdx, ideaView]);
+  // Choosing a market is choosing not to be on the idea right now.
+  const ideaMarketRef = useRef<number | null>(activeMarket);
+  useEffect(() => {
+    if (ideaView !== "open") {
+      ideaMarketRef.current = activeMarket;
+      return;
+    }
+    if (ideaMarketRef.current !== activeMarket) {
+      ideaMarketRef.current = activeMarket;
+      setIdeaView("parked");
+    }
+  }, [activeMarket, ideaView]);
+  const ideaDue = !!houseIdea.suggestion && ideaView === "open";
+
 
   const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
   useEffect(() => {
