@@ -67,6 +67,7 @@ export function ChallengeRail({
   wallet,
   onSelect,
   insider,
+  insiderCount,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
@@ -77,6 +78,8 @@ export function ChallengeRail({
    * decide.
    */
   insider: ReactNode;
+  /** Stories the tape is holding back — the only number the Insider tab may say. */
+  insiderCount?: number;
 }) {
   /**
    * NO CHALLENGES MEANS INSIDER. An empty Challenge tab is a dead first screen,
@@ -172,13 +175,21 @@ export function ChallengeRail({
             {t === "challenge" && lock.unlocked && challengeCount > 0 && (
               <span className="num text-[11px] opacity-70">{challengeCount}</span>
             )}
+            {/* WHAT IS WAITING, NOT WHAT EXISTS. The tape holds new stories back
+                until they are asked for, so this is the same number the "↑ new"
+                pill would show — never a total, which would just be noise. */}
+            {t === "insider" && tab !== "insider" && (insiderCount ?? 0) > 0 && (
+              <span className="num text-[11px] opacity-70">{insiderCount}</span>
+            )}
           </button>
         ))}
       </div>
 
-      {tab === "insider" ? (
-        insider
-      ) : !wallet ? (
+      {/* THE TAPE STAYS MOUNTED WHILE YOU ARE ON THE OTHER TAB. That is what
+          makes the Insider number mean anything: arrivals have to keep queueing
+          while nobody is looking, or the badge would only ever say zero. */}
+      <div className={tab === "insider" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>{insider}</div>
+      {tab === "insider" ? null : !wallet ? (
         <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
           Connect a wallet to see who wants you at the table.
         </p>

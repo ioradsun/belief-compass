@@ -1217,6 +1217,12 @@ function Feed() {
   // three columns are always shown side by side.
   const show = (t: MobileTab) => (tab === t ? "flex" : "hidden");
 
+  // Stories the Insider tape is holding back, lifted only so the tab can repeat
+  // the number while the reader is looking at Challenge.
+  const [insiderPending, setInsiderPending] = useState(0);
+
+
+
   // Case File mode only applies to the single-market view. When on, the side
   // columns become the YES/NO case for the current market (existing intelligence,
   // reorganized). On mobile the Mine/Room tabs relabel to YES Case / NO Case.
@@ -1623,6 +1629,7 @@ function Feed() {
                 <ChallengeRail
                   wallet={wallet}
                   onSelect={selectMarket}
+                  insiderCount={insiderPending}
 
                   insider={
                     <div className="min-h-0 flex-1 overflow-hidden">
@@ -1633,10 +1640,12 @@ function Feed() {
                         holdUpdates
                         label="Insider"
                         initial={loaderData?.tape ?? null}
+                        onPending={setInsiderPending}
                       />
                     </div>
                   }
                 />
+
               )}
             </>
           )}

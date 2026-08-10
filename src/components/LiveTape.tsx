@@ -95,6 +95,7 @@ export function LiveTape({
   holdUpdates = false,
   label,
   initial,
+  onPending,
 }: {
   wallet?: string;
   /**
@@ -138,6 +139,12 @@ export function LiveTape({
    * seed can never become the tape.
    */
   initial?: LiveResult | null;
+  /**
+   * HOW MANY STORIES ARE WAITING — reported up so a tab the reader is not
+   * looking at can carry the same number the pill carries. The tape stays the
+   * only thing that knows; the tab just repeats it.
+   */
+  onPending?: (n: number) => void;
 }) {
   const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
   const qc = useQueryClient();
@@ -342,6 +349,13 @@ export function LiveTape({
     if (waiting && !wasWaiting.current) setPulseKey((n) => n + 1);
     wasWaiting.current = waiting;
   }, [gate.pending]);
+
+  // Same number, said out loud once per change.
+  useEffect(() => {
+    onPending?.(gate.pending);
+  }, [gate.pending, onPending]);
+
+
 
   // The rows the last tap admitted — kept in the window and shown at the top,
   // so "Update" always visibly changes the feed.
