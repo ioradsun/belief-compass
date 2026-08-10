@@ -458,6 +458,9 @@ async function verifyBetTransaction(
   const tx = await client.getTransaction({ hash }).catch(() => null);
   if (!tx?.to || tx.to.toLowerCase() !== PROXY_ADDRESS.toLowerCase())
     throw new Error("That transaction isn't a belief-market trade.");
+  if (!tx.from || tx.from.toLowerCase() !== wallet.toLowerCase())
+    throw new Error("That buy was sent from a different wallet.");
+
 
   let decoded: { functionName: string; args?: readonly unknown[] };
   try {
