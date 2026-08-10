@@ -14,8 +14,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { CallReach, Challenge, NamedPerson } from "@/domain/challenge";
-import type { PairCalls } from "@/lib/challenge.server";
-import type { Tally } from "@/domain/dependability";
+import type { ChallengeHistory, PairCalls, PairSummary } from "@/lib/challenge.server";
 
 const WALLET = z.string().min(3).max(80);
 
@@ -49,15 +48,37 @@ export const getCallsWithPerson = createServerFn({ method: "GET" })
     return callsWithPerson(data.viewer, data.person);
   });
 
-/** The same counts for a screenful of people — one round trip, not one each. */
+/**
+ * The same counts for a screenful of people — one round trip, not one each.
+ *
+ * It also carries the reciprocity run now, from the SAME two reads. A second
+ * endpoint for "do we go back and forth" would have been a second place where the
+ * question is answered, and the two would eventually disagree in front of the same
+ * reader on two surfaces.
+ */
 export const getDependability = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) =>
     z.object({ viewer: WALLET.nullish(), wallets: z.array(WALLET).max(120) }).parse(raw),
   )
-  .handler(async ({ data }): Promise<Record<string, { theirs: Tally; yours: Tally }>> => {
+  .handler(async ({ data }): Promise<Record<string, PairSummary>> => {
     if (!data.viewer || data.wallets.length === 0) return {};
     const { dependabilityFor } = await import("@/lib/challenge.server");
     return Object.fromEntries(await dependabilityFor(data.viewer, data.wallets));
+  });
+
+/**
+ * EVERY CHALLENGE EITHER OF US EVER MADE — what "See all" opens.
+ *
+ * Unsigned for the same reason `getChallenges` is: it is the reader's own history,
+ * assembled from rows that already name them, and it grants nothing. The one thing
+ * it deliberately cannot return is somebody else's pass — see `challengeHistory`.
+ */
+export const getChallengeHistory = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) => z.object({ wallet: WALLET.nullish() }).parse(raw ?? {}))
+  .handler(async ({ data }): Promise<ChallengeHistory> => {
+    if (!data.wallet) return { entries: [], people: {}, truncated: false };
+    const { challengeHistory } = await import("@/lib/challenge.server");
+    return challengeHistory(data.wallet);
   });
 
 /**

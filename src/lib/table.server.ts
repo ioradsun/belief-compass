@@ -123,26 +123,88 @@ export async function putOnTable(wallet: string, marketId: number): Promise<PutR
   }
   if (id == null) return { ok: false, reason: "full" };
 
-  // THE FREEZE. One row per qualified person, `relation_at_call` stamped as it is
-  // right now and never recomputed. 23505 is swallowed for the same reason it
-  // always was: a repeat must never rewrite the relationship a call was made under.
-  const { error: callsErr } = await sb.from("market_calls").insert(
-    audience.map(([responder, caller]) => ({
-      market_id: marketId,
-      caller_wallet: me,
-      responder_wallet: responder,
-      relation_at_call: caller.relation,
-      challenge_id: id,
-    })),
-  );
-  if (callsErr && callsErr.code !== CONFLICT) {
-    console.error("[table] challenge is up but its audience was not recorded", {
-      code: callsErr.code,
-      message: callsErr.message,
+  /**
+   * STILL WAITING FROM LAST TIME? THEY MOVE WITH THE QUESTION.
+   *
+   * `market_calls`'s primary key is (market_id, caller_wallet, responder_wallet)
+   * with no `closed_at` predicate — it is unique FOREVER, not per Challenge. So
+   * the second time somebody puts the same market up, every recipient row they
+   * need already exists, and the insert below can only add the people who are
+   * genuinely new.
+   *
+   * Which leaves the people who never answered the first run. They are still
+   * being asked — the question is back on the table and they can still weigh in —
+   * so their row is re-pointed at the Challenge that is now doing the asking.
+   * Without this, a re-issued Challenge would reach an audience of nobody:
+   * `tableProgress` would report `reached: 0`, `progressLine` would say nothing at
+   * all, `allResponded` is false by design at zero, so `shouldAutoClose` could
+   * never fire — and one of three editorial slots would be occupied permanently
+   * by a card with no sentence on it.
+   *
+   * A TERMINATED ROW NEVER MOVES. `responded_at`/`passed_at` are filtered out, so
+   * somebody who showed up for the first run stays attached to the run they
+   * showed up for. History belongs to the Challenge it actually happened under,
+   * and `relation_at_call` is not in the update — the relationship a call was
+   * made under is still written once and never rewritten.
+   */
+  const carried = await sb
+    .from("market_calls")
+    .update({ challenge_id: id })
+    .eq("market_id", marketId)
+    .eq("caller_wallet", me)
+    .is("responded_at", null)
+    .is("passed_at", null)
+    .select("responder_wallet");
+  if (carried.error) {
+    console.error("[table] could not carry unanswered calls onto the new challenge", {
+      code: carried.error.code,
+      message: carried.error.message,
       challengeId: id,
     });
   }
-  return { ok: true, id, reached: audience.length };
+
+  /**
+   * THE FREEZE. One row per qualified person, `relation_at_call` stamped as it is
+   * right now and never recomputed.
+   *
+   * UPSERT, NOT INSERT, AND THE DIFFERENCE IS THE WHOLE BUG. A multi-row INSERT is
+   * ATOMIC: one duplicate and Postgres rolls back the entire statement. The old
+   * code swallowed 23505 believing it was skipping the odd repeat — it was in fact
+   * dropping the WHOLE audience, silently, every time any single recipient already
+   * had a row. `ignoreDuplicates` is what the swallow always meant: keep every
+   * existing row exactly as it is, write the ones that are new.
+   */
+  const inserted = await sb
+    .from("market_calls")
+    .upsert(
+      audience.map(([responder, caller]) => ({
+        market_id: marketId,
+        caller_wallet: me,
+        responder_wallet: responder,
+        relation_at_call: caller.relation,
+        challenge_id: id,
+      })),
+      { onConflict: "market_id,caller_wallet,responder_wallet", ignoreDuplicates: true },
+    )
+    .select("responder_wallet");
+  if (inserted.error && inserted.error.code !== CONFLICT) {
+    console.error("[table] challenge is up but its audience was not recorded", {
+      code: inserted.error.code,
+      message: inserted.error.message,
+      challengeId: id,
+    });
+  }
+
+  // WHAT IT ACTUALLY REACHED, not what it hoped to. This used to return
+  // `audience.length` regardless of whether a single row was written, which is
+  // how the failure above stayed invisible for as long as it did.
+  const reached = new Set<string>();
+  for (const r of [...(carried.data ?? []), ...(inserted.data ?? [])] as {
+    responder_wallet: string;
+  }[]) {
+    reached.add(String(r.responder_wallet).toLowerCase());
+  }
+  return { ok: true, id, reached: reached.size };
 }
 
 /**
@@ -376,7 +438,10 @@ export async function tableCandidates(wallet: string, limit = 3): Promise<TableC
   const picked = ids.slice(0, limit);
   if (picked.length === 0) return [];
 
-  const { data: titles } = await sb.from("markets").select("onchain_id, title").in("onchain_id", picked);
+  const { data: titles } = await sb
+    .from("markets")
+    .select("onchain_id, title")
+    .in("onchain_id", picked);
   const titleOf = new Map(
     ((titles ?? []) as Array<{ onchain_id: number; title: string | null }>).map((m) => [
       Number(m.onchain_id),

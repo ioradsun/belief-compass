@@ -45,9 +45,47 @@ describe("the audience is frozen when the Challenge goes up", () => {
     // Recomputing the audience later would silently rewrite history every time
     // somebody's DNA moved.
     const c = code("src/lib/table.server.ts");
-    expect(c).toMatch(/from\("market_calls"\)\.insert\(/);
     expect(c).toMatch(/challenge_id: id/);
     expect(c).toMatch(/relation_at_call: caller\.relation/);
+  });
+
+  /**
+   * THE ATOMIC-INSERT BUG, ASSERTED CLOSED.
+   *
+   * This used to be a plain multi-row `.insert()` whose 23505 was swallowed, on
+   * the belief that it was skipping the odd repeat. A multi-row INSERT is ATOMIC:
+   * one duplicate rolls back the WHOLE statement. Because `market_calls`'s primary
+   * key has no `closed_at` predicate, re-issuing a market that had been on the
+   * table before collided on every row — so the Challenge went up having reached
+   * NOBODY, printed no sentence, and could never auto-close, holding one of three
+   * slots forever.
+   */
+  it("adds the new recipients instead of rolling the whole audience back", () => {
+    const c = code("src/lib/table.server.ts");
+    expect(c).toMatch(/from\("market_calls"\)\s*\.upsert\(/);
+    expect(c).toMatch(/ignoreDuplicates: true/);
+    expect(c).toMatch(/onConflict: "market_id,caller_wallet,responder_wallet"/);
+  });
+
+  it("carries unanswered calls onto the new Challenge, and only unanswered ones", () => {
+    // Somebody who never answered the first run is still being asked. Somebody who
+    // showed up stays attached to the run they showed up for — history belongs to
+    // the Challenge it actually happened under.
+    const c = code("src/lib/table.server.ts");
+    const carry = c.slice(c.indexOf("const carried = await sb"), c.indexOf("const inserted"));
+    expect(carry).toMatch(/update\(\{ challenge_id: id \}\)/);
+    expect(carry).toMatch(/\.is\("responded_at", null\)/);
+    expect(carry).toMatch(/\.is\("passed_at", null\)/);
+    // The relationship a call was made under is written once and never rewritten.
+    expect(carry).not.toMatch(/relation_at_call/);
+  });
+
+  it("reports what it actually reached, not what it hoped to", () => {
+    // `reached: audience.length` was returned whether or not a single row landed,
+    // which is how the rollback above stayed invisible for as long as it did.
+    const c = code("src/lib/table.server.ts");
+    expect(c).toMatch(/reached: reached\.size/);
+    expect(c).not.toMatch(/reached: audience\.length/);
   });
 
   it("does not spend a slot on a Challenge nobody can receive", () => {

@@ -33,6 +33,13 @@
  * ZERO IO, pure, fully testable.
  */
 import type { RelationshipLabel } from "@/domain/dna/config";
+/**
+ * TYPE-ONLY, AND IT HAS TO BE. `dependability` imports `CHALLENGE.windowDays` as a
+ * VALUE from this file, so a value import back would be a runtime cycle. A type
+ * import is erased entirely, which is why the run can travel on a Challenge row
+ * without either module having to move.
+ */
+import type { Reciprocity } from "@/domain/dependability";
 import { callLine } from "@/domain/call-line";
 import {
   dnaStage,
@@ -87,6 +94,12 @@ export interface CallEvidence {
   act: CallAct;
   /** The side they took. Null for a creation, and null is not a failure. */
   callerSide: "YES" | "NO" | null;
+  /** Waiting unless the ledger says otherwise. Absent reads as waiting. */
+  state?: ChallengeState;
+  /** When that state was reached. Defaults to the call itself. */
+  stateAtMs?: number;
+  /** The run with this person, when the batch read produced one. */
+  reciprocity?: Reciprocity | null;
   /**
    * The pair's shared record — same-side count and shared total.
    *
@@ -101,6 +114,20 @@ export interface CallEvidence {
   atMs: number;
 }
 
+/**
+ * WHAT BECAME OF THIS CALL, FROM THE READER'S OWN SIDE.
+ *
+ * The names are `domain/table`'s `RecipientState`, minus the states that cannot
+ * happen here, because it is literally the same fact seen from the other end: the
+ * creator's "3 of 8 showed up" and the reader's "you showed up" are one row.
+ *
+ * THERE IS NO `accepted`, AND THERE IS NO STEP BEFORE `took_side`. Being asked and
+ * answering are the only two things that happen, and passing is the third thing
+ * somebody can choose instead of answering. A card never waits on a click that
+ * means "yes I will consider this".
+ */
+export type ChallengeState = "waiting" | "showed_up" | "passed";
+
 export interface Challenge {
   marketId: number;
   title: string;
@@ -113,6 +140,25 @@ export interface Challenge {
   /** Why THIS person. Never empty — a row without one does not exist. */
   reason: string;
   atMs: number;
+  /**
+   * WAITING, OR WHAT THE READER DID ABOUT IT.
+   *
+   * A row used to leave the payload the instant it was answered, on the grounds
+   * that "a queue with completed items in it is a to-do list". The grounds were
+   * right and the conclusion was too strong: an answered call is not an item to
+   * tick off, it is the ONE thing this whole system exists to produce — somebody
+   * revealed where they stand because somebody else asked. Deleting it at the
+   * moment it became true meant the product never once said so on this surface.
+   *
+   * So the row survives its own answer, goes quiet, and ages out on its own after
+   * `FINISHED_WINDOW_MS` — the same week the creator's side already keeps, so the
+   * two ends of one interaction disappear together.
+   */
+  state: ChallengeState;
+  /** When the state was reached: responded_at, passed_at, or the call itself. */
+  stateAtMs: number;
+  /** The run with this person. Null when there is nothing to say about it. */
+  reciprocity: Reciprocity | null;
 }
 
 export const CHALLENGE = {
@@ -128,13 +174,28 @@ export const CHALLENGE = {
   /** The stage at which the social system unlocks. */
   unlockAt: "recognizable" as DnaStage,
   /**
-   * How far back a caller's act can be and still be a live call — and therefore
-   * how long a call stays reachable at all.
+   * HOW LONG AN UNANSWERED CALL IS COUNTED. Not how long it is shown.
    *
-   * IT LIVES HERE BECAUSE THREE THINGS MUST AGREE ON IT: what the rail derives,
-   * which calls are still waiting rather than out of reach, and what the
-   * showing-up denominator counts. It was a server-only constant, which meant a
-   * profile could show someone waiting on a call their caller can no longer see.
+   * THIS COMMENT USED TO CLAIM SOMETHING THE CODE DOES NOT DO, and the claim was
+   * worse than the drift it described. It said three things must agree on this
+   * number — "what the rail derives, which calls are still waiting rather than out
+   * of reach, and what the showing-up denominator counts" — and `buildChallenges`
+   * has never applied it. Somebody reading the constant would have gone looking
+   * for a filter that was not there.
+   *
+   * THE RAIL IS RIGHT NOT TO APPLY IT, which is why the comment moved rather than
+   * the code. The number is inherited from a version of Challenge that INFERRED
+   * calls from recent trades, where "how far back a caller's act can be" was the
+   * whole definition of a live call. Post-V2 a call exists because somebody chose
+   * to put a question up, and it stays up until they take it down — so windowing
+   * the rail would silently delete deliberate requests at thirty days, the exact
+   * loss `composeChallenges` refuses to accept when it declines to truncate.
+   *
+   * What it still governs, in `dependability`, is NEGATIVE EVIDENCE: past this
+   * age an unanswered call leaves the denominator entirely rather than counting
+   * against somebody. So the two surfaces disagree on purpose and both are honest
+   * — the rail says Sarah is still waiting, because she is, and the relationship
+   * declines to hold it against you.
    */
   windowDays: 30,
 } as const;
@@ -222,6 +283,9 @@ export function composeChallenges(
       shared: e.shared,
       reason,
       atMs: e.atMs,
+      state: e.state ?? "waiting",
+      stateAtMs: e.stateAtMs ?? e.atMs,
+      reciprocity: e.reciprocity ?? null,
     };
     const prev = best.get(e.marketId);
     if (
@@ -235,12 +299,30 @@ export function composeChallenges(
 
   return (
     [...best.values()]
-      .sort(
-        (a, b) =>
+      /**
+       * WHAT STILL NEEDS SOMETHING FROM YOU COMES FIRST, and everything else is
+       * unchanged beneath it.
+       *
+       * An outcome is worth keeping on the surface — it is the payoff — but it is
+       * not a request, and a row nobody is waiting on must never sit above a
+       * person who is. Below that dividing line the original order survives
+       * exactly: relation, then recency, then id, so the panel still cannot
+       * reshuffle between two loads.
+       */
+      .sort((a, b) => {
+        const aDone = Number(a.state !== "waiting");
+        const bDone = Number(b.state !== "waiting");
+        if (aDone !== bDone) return aDone - bDone;
+        // An outcome is news, so it is ordered by WHEN IT HAPPENED. Relation has
+        // already done its job here — it decided who was allowed to ask, and the
+        // asking is over.
+        if (aDone === 1) return b.stateAtMs - a.stateAtMs || a.marketId - b.marketId;
+        return (
           RELATION_RANK[b.relation] - RELATION_RANK[a.relation] ||
           b.atMs - a.atMs ||
-          a.marketId - b.marketId,
-      )
+          a.marketId - b.marketId
+        );
+      })
       // NO SILENT TRUNCATION. This used to cut at a railful and throw the rest
       // away, which was defensible when calls were inferred and roughly
       // interchangeable. Now every one is somebody's deliberate act, and dropping

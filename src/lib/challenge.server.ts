@@ -28,13 +28,22 @@ import {
   type CallEvidence,
   type CallerRelation,
   type Challenge,
+  type ChallengeState,
   type CallReach,
 } from "@/domain/challenge";
+// The SAME week the creator's finished Challenge stays on their own table, so both
+// ends of one interaction go quiet together rather than at two different times.
+import { FINISHED_WINDOW_MS } from "@/domain/table";
 import {
   EMPTY_TALLY,
+  NO_RECIPROCITY,
+  reciprocity,
   tally,
+  type CallDirection,
   type CallFact,
   type HistoryEntry,
+  type PairCall,
+  type Reciprocity,
   type Tally,
 } from "@/domain/dependability";
 import type { NamedPerson } from "@/domain/challenge";
@@ -53,6 +62,15 @@ const READ = {
   openCalls: 200,
   /** Calls read for one pair's history. */
   pairCalls: 200,
+  /**
+   * Calls read for the COMPLETE history, per direction.
+   *
+   * Higher than a pair's, because this spans everybody — and still bounded, like
+   * every read in this file. When it is hit the payload says so rather than
+   * quietly presenting a truncated list as the whole story, which on a surface
+   * whose entire promise is completeness would be the worst possible lie.
+   */
+  history: 500,
 } as const;
 
 /**
@@ -142,15 +160,31 @@ export async function buildChallenges(viewer: string): Promise<Challenge[]> {
   const me = viewer.toLowerCase();
   const sb = serviceClient();
 
-  // Open calls addressed to this reader, newest first. Answered and passed rows
-  // are already terminal and belong to nobody's action queue.
+  /**
+   * WHAT IS WAITING, PLUS WHAT RECENTLY BECAME OF WHAT WAS.
+   *
+   * This read used to be `responded_at IS NULL AND passed_at IS NULL` — the queue
+   * and nothing else. The reasoning was that a queue with completed items in it is
+   * a to-do list, and that is true of a to-do list. It is not true of this: the
+   * single thing this whole system exists to produce is somebody revealing where
+   * they stand because somebody else asked, and the row was being deleted at the
+   * exact instant that became true. The reader learned it from a panel that
+   * flashed once after their own trade, or not at all.
+   *
+   * So a terminal row survives for the SAME week the creator's side already keeps
+   * (`FINISHED_WINDOW_MS`), and the two ends of one interaction go quiet together.
+   * It is still not a to-do list, because an outcome asks for nothing: no button,
+   * no dismiss, no badge — `challengeCount` counts only what is waiting.
+   */
+  const since = new Date(Date.now() - FINISHED_WINDOW_MS).toISOString();
   const { data: rows, error } = await sb
     .from("market_calls")
-    .select("market_id, caller_wallet, relation_at_call, called_at")
+    .select("market_id, caller_wallet, relation_at_call, called_at, responded_at, passed_at")
     .eq("responder_wallet", me)
     .not("challenge_id", "is", null)
-    .is("responded_at", null)
-    .is("passed_at", null)
+    .or(
+      `and(responded_at.is.null,passed_at.is.null),responded_at.gte.${since},passed_at.gte.${since}`,
+    )
     .order("called_at", { ascending: false })
     .limit(READ.openCalls);
   // Loudly, then degrade. A blocked read must never render as an empty room.
@@ -166,6 +200,8 @@ export async function buildChallenges(viewer: string): Promise<Challenge[]> {
     caller_wallet: string;
     relation_at_call: string;
     called_at: string;
+    responded_at: string | null;
+    passed_at: string | null;
   }[];
   if (calls.length === 0) return [];
 
@@ -173,7 +209,7 @@ export async function buildChallenges(viewer: string): Promise<Challenge[]> {
   const wallets = [...new Set(calls.map((c) => String(c.caller_wallet).toLowerCase()))];
 
   const { resolveProfiles } = await import("@/lib/profiles.server");
-  const [{ data: markets }, { data: sides }, profiles, callers] = await Promise.all([
+  const [{ data: markets }, { data: sides }, profiles, callers, pairs] = await Promise.all([
     sb.from("markets").select("onchain_id, title").in("onchain_id", marketIds),
     // WHAT THE CALLER CURRENTLY HOLDS, not whichever event produced them. A
     // caller who has since exited or flipped must not be quoted as believing
@@ -186,6 +222,15 @@ export async function buildChallenges(viewer: string): Promise<Challenge[]> {
       .in("stance_side", ["YES", "NO"]),
     resolveProfiles(wallets, 0),
     qualifiedCallers(sb, me),
+    /**
+     * THE RUN WITH EACH CALLER, from the one function that already computes it.
+     *
+     * Two queries for the whole railful, not one per card — and, more importantly,
+     * the SAME two queries the People cards and the profile read, so "6 back &
+     * forth" cannot mean one thing here and another there. Nothing new is stored
+     * and nothing is recomputed locally.
+     */
+    dependabilityFor(me, wallets),
   ]);
 
   const titleOf = new Map(
@@ -219,6 +264,14 @@ export async function buildChallenges(viewer: string): Promise<Challenge[]> {
     // the one that needs no side, rather than the row silently disappearing and
     // taking somebody's deliberate request with it.
     const side = stanceOf.get(`${wallet}|${marketId}`) ?? null;
+    // TAKING A SIDE OUTRANKS A PASS, exactly as `recipientState` decides it for the
+    // creator's side of the same row: waving a card off and then finding the market
+    // anyway is a real path, and the side taken is the larger fact.
+    const respondedAt = c.responded_at ? Date.parse(c.responded_at) : null;
+    const passedAt = c.passed_at ? Date.parse(c.passed_at) : null;
+    const calledAt = Date.parse(c.called_at);
+    const state: ChallengeState =
+      respondedAt != null ? "showed_up" : passedAt != null ? "passed" : "waiting";
     evidence.push({
       marketId,
       title,
@@ -231,7 +284,10 @@ export async function buildChallenges(viewer: string): Promise<Challenge[]> {
       callerSide: side,
       together: pair?.together ?? null,
       shared: pair?.shared ?? null,
-      atMs: Date.parse(c.called_at),
+      atMs: calledAt,
+      state,
+      stateAtMs: respondedAt ?? passedAt ?? calledAt,
+      reciprocity: pairs.get(wallet)?.reciprocity ?? null,
     });
   }
   return composeChallenges(evidence);
@@ -407,12 +463,15 @@ export interface PairCalls {
   yours: Tally;
   /** The merged timeline, unlabelled — the domain names each row. */
   history: HistoryEntry[];
+  /** The run between the two of you. Derived, never stored — see the domain. */
+  reciprocity: Reciprocity;
 }
 
 const EMPTY_PAIR: PairCalls = {
   theirs: { ...EMPTY_TALLY },
   yours: { ...EMPTY_TALLY },
   history: [],
+  reciprocity: { ...NO_RECIPROCITY },
 };
 
 interface CallRow {
@@ -421,13 +480,31 @@ interface CallRow {
   responder_wallet: string;
   called_at: string;
   responded_at: string | null;
+  passed_at: string | null;
 }
 
-const CALL_COLUMNS = "market_id, caller_wallet, responder_wallet, called_at, responded_at";
+/**
+ * `passed_at` joined the read when the reciprocity run did.
+ *
+ * IT CHANGES NOTHING ABOUT THE TALLY, and that is deliberate: `factOf` still
+ * produces a `CallFact` of two timestamps, so a pass remains invisible to
+ * Showing Up, to Conviction Match and to every rung on the ladder. It is read
+ * for exactly one purpose — a run ends when somebody chooses to end it — and
+ * `pairCallOf` is the only thing that can see it.
+ */
+const CALL_COLUMNS =
+  "market_id, caller_wallet, responder_wallet, called_at, responded_at, passed_at";
 
 const factOf = (r: CallRow): CallFact => ({
   calledAtMs: Date.parse(r.called_at),
   respondedAtMs: r.responded_at ? Date.parse(r.responded_at) : null,
+});
+
+/** The same row, plus the two things a run needs and a tally must never see. */
+const pairCallOf = (r: CallRow, fromViewer: boolean): PairCall => ({
+  ...factOf(r),
+  fromViewer,
+  passedAtMs: r.passed_at ? Date.parse(r.passed_at) : null,
 });
 
 export async function callsWithPerson(viewer: string, person: string): Promise<PairCalls> {
@@ -504,7 +581,18 @@ export async function callsWithPerson(viewer: string, person: string): Promise<P
     });
   }
 
-  return { theirs, yours, history };
+  return {
+    theirs,
+    yours,
+    history,
+    // ONE MERGED SEQUENCE, BOTH DIRECTIONS. A run is a property of the pair, not
+    // of either person's record of the other, so the two reads are interleaved by
+    // `called_at` inside the domain rather than counted separately here.
+    reciprocity: reciprocity([
+      ...mineRows.map((r) => pairCallOf(r, true)),
+      ...hersRows.map((r) => pairCallOf(r, false)),
+    ]),
+  };
 }
 
 /**
@@ -513,13 +601,26 @@ export async function callsWithPerson(viewer: string, person: string): Promise<P
  * Two queries total regardless of how many people are on screen, because a
  * per-person round trip would put the rail's render cost on the network.
  */
+export interface PairSummary {
+  theirs: Tally;
+  yours: Tally;
+  /**
+   * The run, computed from the SAME two reads the tallies come from.
+   *
+   * A separate per-pair query would have been a round trip each for a railful of
+   * cards, and — worse — a second place where "do we go back and forth" is
+   * decided. One read, one answer, however many people are on screen.
+   */
+  reciprocity: Reciprocity;
+}
+
 export async function dependabilityFor(
   viewer: string,
   wallets: readonly string[],
-): Promise<Map<string, { theirs: Tally; yours: Tally }>> {
+): Promise<Map<string, PairSummary>> {
   const me = viewer.toLowerCase();
   const them = [...new Set(wallets.map((w) => w.toLowerCase()).filter((w) => w && w !== me))];
-  const out = new Map<string, { theirs: Tally; yours: Tally }>();
+  const out = new Map<string, PairSummary>();
   if (!me || them.length === 0) return out;
   const sb = serviceClient();
 
@@ -547,25 +648,40 @@ export async function dependabilityFor(
   const ensure = (w: string) => {
     let e = out.get(w);
     if (!e) {
-      e = { theirs: { ...EMPTY_TALLY }, yours: { ...EMPTY_TALLY } };
+      e = { theirs: { ...EMPTY_TALLY }, yours: { ...EMPTY_TALLY }, reciprocity: NO_RECIPROCITY };
       out.set(w, e);
     }
     return e;
   };
+  // Both directions collected per person first, because a run is a property of
+  // the merged sequence and cannot be accumulated one row at a time the way a
+  // tally can.
+  const sequences = new Map<string, PairCall[]>();
+  const push = (w: string, c: PairCall) => {
+    const list = sequences.get(w);
+    if (list) list.push(c);
+    else sequences.set(w, [c]);
+  };
+
   for (const r of (mine.data ?? []) as CallRow[]) {
-    const e = ensure(String(r.responder_wallet).toLowerCase());
+    const w = String(r.responder_wallet).toLowerCase();
+    const e = ensure(w);
     const t = tally([factOf(r)], now);
     e.theirs.answered += t.answered;
     e.theirs.waiting += t.waiting;
     e.theirs.outOfReach += t.outOfReach;
+    push(w, pairCallOf(r, true));
   }
   for (const r of (hers.data ?? []) as CallRow[]) {
-    const e = ensure(String(r.caller_wallet).toLowerCase());
+    const w = String(r.caller_wallet).toLowerCase();
+    const e = ensure(w);
     const t = tally([factOf(r)], now);
     e.yours.answered += t.answered;
     e.yours.waiting += t.waiting;
     e.yours.outOfReach += t.outOfReach;
+    push(w, pairCallOf(r, false));
   }
+  for (const [w, calls] of sequences) ensure(w).reciprocity = reciprocity(calls);
   return out;
 }
 
@@ -652,6 +768,123 @@ export async function showedUpForMe(viewer: string, sinceMs: number): Promise<Sh
     });
   }
   return out.sort((a, b) => b.atMs - a.atMs || a.marketId - b.marketId);
+}
+
+/* ── The complete history ─────────────────────────────────────────────────── */
+
+/**
+ * EVERY CHALLENGE, BOTH DIRECTIONS, WITH NO SEVEN-DAY WINDOW.
+ *
+ * WHAT THIS IS NOT, AND THE DISTINCTION IS THE WHOLE DESIGN. The rail answers
+ * "who is waiting on me, and what just happened" — it is short on purpose and it
+ * goes quiet on purpose. This answers "what have the two of us actually done",
+ * for every one of us, forever, and it is reached only by pressing "See all".
+ * `FINISHED_WINDOW_MS` is right for a rail and wrong for a history: a week is how
+ * long an outcome deserves to be IN THE WAY, not how long it is worth keeping.
+ *
+ * IT IS NOT A FEED, EITHER. No scoring, no ranking, no admission rule, no
+ * significance — chronological, and that is the whole ordering. Anything that
+ * decided what was interesting here would be the Insider tape with a different
+ * name on it, and Insider already exists one tab across.
+ *
+ * IT REUSES THE ONE LEDGER. Two reads of `market_calls` along the two indexes that
+ * already exist (`market_calls_caller_idx`, `market_calls_responder_idx`), the same
+ * `titlesFor` and `resolveProfiles` every other path here uses, and the same
+ * `historyRows` vocabulary the profile's "Between you" section renders. No new
+ * table, no new query shape, no second history.
+ */
+export interface ChallengeHistory {
+  entries: HistoryEntry[];
+  /** Wallet by display name, so a row can open the person it names. */
+  people: Record<string, string>;
+  /** True when the read hit its bound and older rows exist behind it. */
+  truncated: boolean;
+}
+
+const EMPTY_HISTORY: ChallengeHistory = { entries: [], people: {}, truncated: false };
+
+export async function challengeHistory(viewer: string): Promise<ChallengeHistory> {
+  const me = viewer.toLowerCase();
+  if (!me) return EMPTY_HISTORY;
+  const sb = serviceClient();
+
+  const [mine, theirs] = await Promise.all([
+    sb
+      .from("market_calls")
+      .select(CALL_COLUMNS)
+      .eq("caller_wallet", me)
+      .order("called_at", { ascending: false })
+      .limit(READ.history),
+    sb
+      .from("market_calls")
+      .select(CALL_COLUMNS)
+      .eq("responder_wallet", me)
+      .order("called_at", { ascending: false })
+      .limit(READ.history),
+  ]);
+
+  // Loudly, then degrade — and NEVER as an empty history, which would tell
+  // somebody with a year of relationships that they have never challenged anybody.
+  for (const [label, res] of [["issued", mine] as const, ["received", theirs] as const]) {
+    if (res.error) {
+      console.error(`[challenge] history unreadable (${label})`, {
+        code: res.error.code,
+        message: res.error.message,
+      });
+      throw new Error(res.error.message);
+    }
+  }
+
+  const mineRows = (mine.data ?? []) as CallRow[];
+  const theirRows = (theirs.data ?? []) as CallRow[];
+  if (mineRows.length === 0 && theirRows.length === 0) return EMPTY_HISTORY;
+
+  const ids = [...new Set([...mineRows, ...theirRows].map((r) => Number(r.market_id)))];
+  const wallets = [
+    ...new Set([
+      ...mineRows.map((r) => String(r.responder_wallet).toLowerCase()),
+      ...theirRows.map((r) => String(r.caller_wallet).toLowerCase()),
+    ]),
+  ];
+  const { resolveProfiles } = await import("@/lib/profiles.server");
+  const [titleOf, profiles] = await Promise.all([titlesFor(sb, ids), resolveProfiles(wallets, 0)]);
+  const nameOf = (w: string) => profiles.get(w)?.displayName?.trim() || aliasFor(w);
+
+  const entries: HistoryEntry[] = [];
+  const people: Record<string, string> = {};
+  const add = (r: CallRow, other: string, direction: CallDirection, atMs: number) => {
+    const title = titleOf.get(Number(r.market_id));
+    if (!title) return;
+    const who = nameOf(other);
+    people[who] = other;
+    entries.push({ marketId: Number(r.market_id), title, direction, atMs, who });
+  };
+
+  for (const r of mineRows) {
+    const other = String(r.responder_wallet).toLowerCase();
+    // A PASS BY SOMEBODY ELSE IS NOT IN MY HISTORY. The creator of a Challenge is
+    // told a count and never a name, and a chronological row saying "Alex passed
+    // on you" is that rule quietly reversed. The row is skipped, not softened.
+    if (r.passed_at && !r.responded_at) continue;
+    if (r.responded_at) add(r, other, "they_answered", Date.parse(r.responded_at));
+    else add(r, other, "waiting_on_them", Date.parse(r.called_at));
+  }
+  for (const r of theirRows) {
+    const other = String(r.caller_wallet).toLowerCase();
+    // Taking a side outranks a pass, exactly as it does everywhere else.
+    if (r.responded_at) add(r, other, "you_answered", Date.parse(r.responded_at));
+    else if (r.passed_at) add(r, other, "you_passed", Date.parse(r.passed_at));
+    else add(r, other, "waiting_on_you", Date.parse(r.called_at));
+  }
+
+  return {
+    entries,
+    people,
+    // SAID OUT LOUD RATHER THAN PRETENDED AWAY. Every read in this file is bounded;
+    // a history that silently stopped at the bound would be claiming completeness
+    // it does not have, on the one surface whose entire promise is completeness.
+    truncated: mineRows.length >= READ.history || theirRows.length >= READ.history,
+  };
 }
 
 /** Titles for a set of markets, dropping the ones that do not resolve. */

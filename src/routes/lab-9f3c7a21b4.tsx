@@ -54,6 +54,7 @@ import { RELATIONSHIP_MIN_SHARED } from "@/domain/dna/config";
 import { convictionMatch } from "@/domain/relationship";
 import { ChallengeRail } from "@/components/ChallengeRail";
 import { railSideKey, tableKey } from "@/components/YourTable";
+import { historyKey } from "@/components/ChallengeHistory";
 import { networkQO } from "@/lib/network-query";
 import type { NetworkResponse } from "@/lib/dna.functions";
 
@@ -129,11 +130,23 @@ function seed(world: World, side: "challenged" | "yours"): QueryClient {
   qc.setQueryData(["challenges", ME], challengesFor(world, now));
   qc.setQueryData(networkQO(ME).queryKey, UNLOCKED);
   qc.setQueryData(railSideKey, side);
+  /**
+   * "SEE ALL" OPENS ON NOTHING HERE, ON PURPOSE.
+   *
+   * A `World` is ONE question between one challenger and their audience. It holds
+   * no prior interactions between any pair, so it cannot prove a single historical
+   * row — and a fixture that invented forty would be exactly the thing this page
+   * exists to catch everywhere else. Seeded empty rather than left unseeded so the
+   * sheet renders its real empty state instead of the lab's "no fixture" error,
+   * which would read as a bug in the sheet rather than a fact about the scenario.
+   */
+  qc.setQueryData(historyKey(ME), { entries: [], people: {}, truncated: false });
 
   // The fourth person. Unlocked, connected, and reached by none of it.
   qc.setQueryData(tableKey(BYSTANDER), []);
   qc.setQueryData(["challenges", BYSTANDER], []);
   qc.setQueryData(networkQO(BYSTANDER).queryKey, UNLOCKED);
+  qc.setQueryData(historyKey(BYSTANDER), { entries: [], people: {}, truncated: false });
 
   return qc;
 }
@@ -164,12 +177,10 @@ function TestingScene() {
   const subject = world.audience.find((p) => p.name === who) ?? world.audience[0] ?? null;
 
   // Dev: always on. Production: only when the build was published with the flag.
-  const labEnabled =
-    import.meta.env.DEV || import.meta.env['VITE_ENABLE_SCENE_LAB'] === "true";
+  const labEnabled = import.meta.env.DEV || import.meta.env["VITE_ENABLE_SCENE_LAB"] === "true";
   if (!labEnabled) {
     return <div className="p-8 text-sm text-[var(--text-muted)]">Not found.</div>;
   }
-
 
   const set = (next: Partial<{ scene: string; role: Role; who: string }>) =>
     void navigate({

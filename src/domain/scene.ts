@@ -29,7 +29,7 @@ import { convictionMatch } from "@/domain/relationship";
 import { recipientState, tableProgress, progressLine, tableLine } from "@/domain/table";
 import type { RecipientFact, RecipientState } from "@/domain/table";
 import { callLine } from "@/domain/call-line";
-import type { CallerRelation, Challenge } from "@/domain/challenge";
+import type { CallerRelation, Challenge, ChallengeState } from "@/domain/challenge";
 import type { TableRow } from "@/lib/table.server";
 
 /** Whose eyes the page is looking through. */
@@ -105,8 +105,18 @@ export interface ChallengedView {
   match: number | null;
   together: number;
   shared: number;
-  /** Whether the card is still in their queue at all. */
+  /** Whether anybody is still waiting on this person. */
   inQueue: boolean;
+  /**
+   * WHAT THE CARD SAYS NOW.
+   *
+   * `inQueue` used to be the whole answer, because an answered card was deleted.
+   * It is not deleted any more — it transforms and goes quiet — so the lab needs
+   * both facts: whether this person still owes an answer, and what their card
+   * currently reads as. A world where those two disagree is a world where the
+   * queue is counting outcomes, which is the failure `checkWorld` looks for.
+   */
+  state: ChallengeState;
 }
 
 /**
@@ -137,9 +147,13 @@ export function challengedView(w: World, who: Participant): ChallengedView {
     match: convictionMatch(who.together, who.shared),
     together: who.together,
     shared: who.shared,
-    // ANSWERED AND PASSED ARE BOTH TERMINAL. A queue holding finished items is a
-    // to-do list, and the closed Challenge takes everything with it.
+    // ANSWERED AND PASSED ARE BOTH TERMINAL — nobody is waiting on this person any
+    // more, and the closed Challenge takes everyone with it.
     inQueue: w.closed == null && who.state !== "showed_up" && who.state !== "passed",
+    // The recipient's own three states. `viewed` collapses into `waiting`, which
+    // is the whole point of it: a glance is not an answer, so the card still reads
+    // as a question.
+    state: who.state === "showed_up" ? "showed_up" : who.state === "passed" ? "passed" : "waiting",
   };
 }
 
@@ -195,7 +209,19 @@ export function challengesFor(w: World, now = 0): Challenge[] {
   const out: Challenge[] = [];
   for (const p of w.audience) {
     const v = challengedView(w, p);
-    if (!v.inQueue || v.line == null) continue;
+    if (v.line == null) continue;
+    /**
+     * A CARD THE READER HAS ANSWERED IS STILL THEIR CARD.
+     *
+     * This used to require `inQueue` and drop everything else, which modelled the
+     * old behaviour exactly: an answer deleted the row. The row now survives its
+     * own ending — quieter, with no × and no prompt — so the fixture emits it, and
+     * the lab can show both halves of one interaction on one screen.
+     *
+     * A CLOSED Challenge still takes its cards with it: the creator took the
+     * question down, so there is nothing on anyone's rail to be quiet about.
+     */
+    if (w.closed != null) continue;
     out.push({
       marketId: 100 + out.length,
       title: w.question,
@@ -206,6 +232,16 @@ export function challengesFor(w: World, now = 0): Challenge[] {
       shared: p.shared,
       reason: v.line,
       atMs: now,
+      state: v.state,
+      stateAtMs: now,
+      /**
+       * NO RUN IN THE FIXTURE, AND THAT IS A STATEMENT. A `World` describes ONE
+       * question between one challenger and their audience — it holds no prior
+       * history between any pair, so it cannot prove a back & forth. Inventing one
+       * to make the card look richer is the exact thing the lab exists to catch
+       * everywhere else, and it would be strange to do it here.
+       */
+      reciprocity: null,
     });
   }
   return out;
@@ -239,14 +275,21 @@ export function checkWorld(w: World): Check[] {
     detail: `creator is told ${mine.showedUp}; ${reallyShowed} actually took a side`,
   });
 
-  // 2 · Nobody who showed up still has the card waiting for them.
+  // 2 · Nobody who showed up is still being waited on — and their card is still
+  //     there, saying so. Both halves matter: the first was the original bug (an
+  //     answered card that keeps asking), the second is the one that replaced it
+  //     (an answered card deleted at the moment it became worth showing).
   const stuck = views.filter(({ p, v }) => p.state === "showed_up" && v.inQueue);
+  const answered = w.audience.filter((p) => p.state === "showed_up").length;
+  const kept = challengesFor(w).filter((c) => c.state === "showed_up").length;
   out.push({
-    name: "Nobody who answered still sees an open card",
-    ok: stuck.length === 0,
+    name: "An answered card stops asking, and stays",
+    ok: stuck.length === 0 && (w.closed != null || kept === answered),
     detail: stuck.length
-      ? `${stuck.map(({ p }) => p.name).join(", ")} answered but the card is still in their queue`
-      : "every answered card has left its queue",
+      ? `${stuck.map(({ p }) => p.name).join(", ")} answered but the card is still asking`
+      : w.closed != null
+        ? "the Challenge is closed, so nobody's rail is still holding it"
+        : `${kept} of ${answered} answered cards survive as outcomes rather than vanishing`,
   });
 
   // 3 · A pass is terminal for the recipient AND counted for the creator.

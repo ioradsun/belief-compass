@@ -1778,6 +1778,7 @@ function Feed() {
                 <ChallengeRail
                   wallet={wallet}
                   onSelect={selectMarket}
+                  onSelectPerson={selectPerson}
                   insiderCount={insiderPending}
 
                   insider={

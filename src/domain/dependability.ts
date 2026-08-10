@@ -278,10 +278,60 @@ export function showedUpInMarket(names: readonly string[]): string | null {
   return `${clean.length} people showed up for you.`;
 }
 
+/**
+ * WHAT BECAME OF A CALL ADDRESSED TO ME — the sentence on my own rail.
+ *
+ * WHOSE RAIL IT IS DECIDES THE SUBJECT, and getting that backwards is the easiest
+ * mistake here. Maya challenged me and I took a side: on MY rail the true sentence
+ * is "You showed up for Maya", because I am the one who turned up. "Maya showed up"
+ * is the same row seen from HER side, and it is already said there by the outbound
+ * card's own progress line. One fact, two rails, two subjects, no duplication.
+ *
+ * SIDE-BLIND, AND THIS IS THE SURFACE WHERE THAT MATTERS MOST. Answering NO to a
+ * caller's YES produces this identical sentence. There is no branch on agreement to
+ * write, because the input cannot carry one — which is the whole reason a Rival who
+ * turns up reads as somebody who turned up.
+ *
+ * A PASS IS STATED BY THE PERSON WHO CHOSE IT, in the first person, and it names
+ * nobody else. "You passed" is a reader describing their own decision on their own
+ * screen; the caller is only ever told a count.
+ */
+export function outcomeLine(
+  state: "waiting" | "showed_up" | "passed",
+  callerName: string,
+): string | null {
+  const who = callerName.trim();
+  if (state === "showed_up") return showedUpFor([who]);
+  if (state === "passed") return "You passed.";
+  return null;
+}
+
 /* ── Your history ────────────────────────────────────────────────────────── */
 
-/** Who answered whom. Both directions, because a relationship is not a record. */
-export type CallDirection = "they_answered" | "you_answered" | "waiting_on_them";
+/**
+ * Who answered whom. Both directions, because a relationship is not a record.
+ *
+ * TWO WERE ADDED FOR THE COMPLETE HISTORY, and what is NOT here is the decision.
+ * `you_passed` exists: a reader looking at their own history is entitled to see a
+ * choice they made, stated in the first person. There is deliberately no
+ * `they_passed` — the creator of a Challenge is only ever told a COUNT of passes,
+ * never a name, because a pass is a choice about a question rather than a verdict
+ * on a person, and a timeline reading "Alex passed on you" is the ledger of
+ * rejection this product decided not to keep. A row that cannot be shown without
+ * naming a passer is simply not in the history.
+ *
+ * `waiting_on_you` is the honest counterpart to `waiting_on_them`. The pair view
+ * on a profile withholds it on purpose — that page is about the relationship, not
+ * a list of the reader's own obligations — but a history somebody opened by
+ * pressing "See all" is asked to be complete, and silence there would hide the
+ * one kind of row the reader can still do something about.
+ */
+export type CallDirection =
+  | "they_answered"
+  | "you_answered"
+  | "waiting_on_them"
+  | "waiting_on_you"
+  | "you_passed";
 
 export interface HistoryEntry {
   marketId: number;
@@ -289,6 +339,14 @@ export interface HistoryEntry {
   direction: CallDirection;
   /** Sorted on this: responded_at where it exists, else called_at. */
   atMs: number;
+  /**
+   * The other person, when the timeline spans more than one of them.
+   *
+   * A pair timeline passes the name once to `historyRows` and leaves this unset;
+   * the complete history is about everybody, so each row carries its own. One
+   * function, one label vocabulary, two shapes of caller.
+   */
+  who?: string;
 }
 
 export interface HistoryRow extends HistoryEntry {
@@ -304,21 +362,207 @@ export interface HistoryRow extends HistoryEntry {
  * derivation window they should never have to know exists. The counting keeps it;
  * the story does not.
  */
-export function historyRows(entries: readonly HistoryEntry[], who: string): HistoryRow[] {
-  const name = who.trim();
-  if (!name) return [];
+export function historyRows(entries: readonly HistoryEntry[], who = ""): HistoryRow[] {
+  const fallback = who.trim();
   return entries
-    .filter((e) => e.title.trim() && Number.isFinite(e.atMs))
-    .map((e) => ({
-      ...e,
-      label:
-        e.direction === "they_answered"
-          ? `${name} showed up`
-          : e.direction === "you_answered"
-            ? "You showed up"
-            : `Waiting on ${name}`,
-    }))
+    .filter((e) => e.title.trim() && Number.isFinite(e.atMs) && (e.who?.trim() || fallback))
+    .map((e) => {
+      const name = e.who?.trim() || fallback;
+      return {
+        ...e,
+        label:
+          e.direction === "they_answered"
+            ? `${name} showed up`
+            : e.direction === "you_answered"
+              ? "You showed up"
+              : e.direction === "you_passed"
+                ? "You passed"
+                : e.direction === "waiting_on_you"
+                  ? `${name} is waiting`
+                  : `Waiting on ${name}`,
+      };
+    })
     .sort((a, b) => b.atMs - a.atMs || a.marketId - b.marketId);
+}
+
+/* ── Back & forth ────────────────────────────────────────────────────────── */
+
+/**
+ * WHEN THIS PERSON ASKS WHERE I STAND, I SHOW UP — counted.
+ *
+ * THIS FILE PREVIOUSLY SAID "no streaks", AND THAT DECISION SURVIVES. What it
+ * refused was a DAILY streak: a calendar counter that rewards opening the app,
+ * gets loudest for the person with the most free time, and is broken by a
+ * holiday. Nothing about that is a relationship.
+ *
+ * What this counts is different in every respect that made the other one bad.
+ * It belongs to a PAIR rather than to a person. It advances only when somebody
+ * who was asked actually took a side — a fact the server proved before stamping
+ * it. It cannot be advanced by asking, by trading, or by turning up. It has no
+ * relationship to dates at all: two challenges answered a year apart are two.
+ *
+ * AND IT IS STILL NOT CALLED A STREAK. `TABLE_BANNED` and `BANNED_UI_WORDS` both
+ * reject the word, and they should keep rejecting it — "5 back & forth" describes
+ * what happened between two people; "5 streak" describes a score. The fact is
+ * worth having; the vocabulary that would turn it into points is not.
+ *
+ * SIDE-BLIND, LIKE EVERYTHING ELSE HERE. `PairCall` extends `CallFact`, which has
+ * no side and cannot acquire one. A Rival who answers every time runs the longest
+ * back & forth on the platform, which is exactly the right outcome.
+ */
+export interface PairCall extends CallFact {
+  /** True when the VIEWER did the asking. The only thing `CallFact` cannot say. */
+  fromViewer: boolean;
+  /** They waved it off. Ends a run; never negative evidence anywhere else. */
+  passedAtMs: number | null;
+}
+
+export interface Reciprocity {
+  /**
+   * The current unbroken run of answered challenges between these two, in either
+   * direction. Zero once somebody passes, and zero before anybody answers.
+   */
+  run: number;
+  /**
+   * Both people have answered the other at least once. Below this a run is a
+   * one-way pattern, which already has its own sentence on the ladder — calling
+   * it "back & forth" would be the software flattering the relationship.
+   *
+   * Agrees with `rungFor(...) === "each_other"` by construction, and a test
+   * holds the two together so they cannot drift into two answers.
+   */
+  bothWays: boolean;
+  /**
+   * The length of the run the most recent pass ended, or 0 when the last thing
+   * that happened was not a pass. Exists so an ending can be stated once, quietly,
+   * instead of a number silently becoming smaller.
+   */
+  endedRun: number;
+}
+
+export const NO_RECIPROCITY: Reciprocity = { run: 0, bothWays: false, endedRun: 0 };
+
+export const RECIPROCITY = {
+  /**
+   * Below this there is nothing to describe. One answered challenge is somebody
+   * showing up — the ladder already says so, better — and "1 back & forth" would
+   * dress a single act as a pattern.
+   */
+  minRun: 2,
+} as const;
+
+/**
+ * The run between two people, from their merged call history.
+ *
+ * A WAITING CALL PAUSES; IT DOES NOT BREAK. An unanswered question is not a
+ * refusal — it may be answered tomorrow — and ending a run on silence would be
+ * the negative evidence this module refuses to produce everywhere else. Only a
+ * pass, which is somebody actually choosing, ends anything.
+ */
+export function reciprocity(calls: readonly PairCall[]): Reciprocity {
+  const ordered = [...calls].sort((a, b) => a.calledAtMs - b.calledAtMs);
+  let run = 0;
+  let endedRun = 0;
+  let theyAnswered = false;
+  let youAnswered = false;
+  for (const c of ordered) {
+    if (c.respondedAtMs != null) {
+      run += 1;
+      endedRun = 0;
+      // Who showed up is decided by who did the ASKING: a call I made that was
+      // answered is them showing up for me, and the reverse is me for them.
+      if (c.fromViewer) theyAnswered = true;
+      else youAnswered = true;
+    } else if (c.passedAtMs != null) {
+      endedRun = run;
+      run = 0;
+    }
+  }
+  return { run, bothWays: theyAnswered && youAnswered, endedRun };
+}
+
+/**
+ * THE SAME RUN, ONE PASS LATER — what the reader's own tap just did to it.
+ *
+ * It exists so the optimistic render and the eventual server truth are the same
+ * sentence rather than two. Appending a passed call to the sequence and running
+ * `reciprocity` again produces this exactly, and a test holds the two together so
+ * the shortcut can never drift from the calculation it stands in for.
+ *
+ * `bothWays` survives, because it is a statement about history: passing today does
+ * not un-answer the times either of you turned up.
+ */
+export function passedNow(r: Reciprocity): Reciprocity {
+  return { run: 0, bothWays: r.bothWays, endedRun: r.run };
+}
+
+/**
+ * "5 back & forth", or nothing.
+ *
+ * NO STREAK WORD, NO FLAME, NO BEST-EVER. A personal record beside a live number
+ * turns a relationship into a high score to defend, and the moment the current
+ * run is the smaller of the two the line is telling somebody they are losing at
+ * friendship. One number, describing what has actually happened.
+ */
+export function backAndForthLine(r: Reciprocity): string | null {
+  if (!r.bothWays || r.run < RECIPROCITY.minRun) return null;
+  return `${r.run} back & forth`;
+}
+
+/**
+ * The ending, said once and quietly — §10's whole point.
+ *
+ * Never "streak lost", never a broken heart, never an exclamation mark. A pass is
+ * a choice about a question, and the run stopping is a consequence of that choice
+ * rather than a punishment for it. Absent entirely when there was no run worth
+ * mentioning, because inventing a loss is worse than saying nothing.
+ */
+export function runEndedLine(r: Reciprocity): string | null {
+  if (r.endedRun < RECIPROCITY.minRun) return null;
+  return `Your run of ${r.endedRun} ends here.`;
+}
+
+/**
+ * THE COMPLETE HISTORY, IN THREE PILES.
+ *
+ * A HEADING IS ONLY WORTH ITS SPACE IF IT ANSWERS A QUESTION THE READER HAS. On a
+ * chronological list the question is "how long ago was this", and a date on every
+ * row answers it worse than three words answer it once — sixty rows of "14 Aug"
+ * are sixty things to read and compare. Three piles are read once.
+ *
+ * AND AN EMPTY PILE IS NEVER SHOWN. A "Today" heading over nothing is the software
+ * pointing at a day on which the reader did not matter to anybody, which is both
+ * useless and unkind. Groups that have no rows do not exist.
+ *
+ * The boundaries are calendar-free on purpose: 24 hours and 7 days from now,
+ * rather than "since midnight", so a row does not change pile because the clock
+ * passed twelve.
+ */
+export type HistoryGroupKey = "today" | "week" | "earlier";
+
+export interface HistoryGroup {
+  key: HistoryGroupKey;
+  label: string;
+  rows: HistoryRow[];
+}
+
+const GROUP_LABEL: Record<HistoryGroupKey, string> = {
+  today: "Today",
+  week: "This week",
+  earlier: "Earlier",
+};
+
+export function groupHistory(rows: readonly HistoryRow[], nowMs: number): HistoryGroup[] {
+  const buckets: Record<HistoryGroupKey, HistoryRow[]> = { today: [], week: [], earlier: [] };
+  for (const r of rows) {
+    const age = nowMs - r.atMs;
+    // A row stamped slightly in the future — clock skew between a browser and the
+    // database — belongs in the newest pile, not in "Earlier" via a negative age.
+    buckets[age < 86_400_000 ? "today" : age < 7 * 86_400_000 ? "week" : "earlier"].push(r);
+  }
+  return (["today", "week", "earlier"] as const)
+    .filter((k) => buckets[k].length > 0)
+    .map((k) => ({ key: k, label: GROUP_LABEL[k], rows: buckets[k] }));
 }
 
 /**
@@ -365,4 +609,15 @@ export const BANNED_UI_WORDS: readonly string[] = [
   "notified",
   "invitation",
   "obligation",
+  /**
+   * THE RECIPROCITY RUN IS A FACT; "STREAK" IS A SCORE.
+   *
+   * Added alongside `backAndForthLine`, and it is the reason that function can
+   * exist without reopening the argument this file settled at the top. The thing
+   * being counted is real — two people, answered challenges, no calendar — and
+   * the word would import everything that made a daily streak worth refusing:
+   * points, a flame, a thing to protect. `TABLE_BANNED` rejects it on the other
+   * side of the same feature.
+   */
+  "streak",
 ];
