@@ -139,6 +139,25 @@ export interface StandingStoryRow {
   strength: number;
   /** Semantic identity for the mixer's window-wide variety caps. */
   motif: string;
+  /**
+   * THE STRUCTURED EVIDENCE THIS ROW STANDS ON.
+   *
+   * The pattern composer (src/domain/insider/pattern) accumulates several
+   * observations about one market into a single dossier, and it must never do
+   * that by reading the sentence above — "rose 15%" and "fell 40%" are the same
+   * string shape and opposite facts. So every standing row carries the numbers
+   * it was built from.
+   */
+  evidence?: {
+    /** Signed proven 24h move for this side (+0.15 = up 15%); null = not price-based. */
+    priceMove: number | null;
+    /** Believers on the OPPOSITE side. 0 is meaningful; null is unknown. */
+    oppositeBelievers: number | null;
+    /** Long-held positions behind the row. */
+    holderCount: number;
+    /** The longest tenure among them, in days. */
+    maxDaysHeld: number;
+  };
 }
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -408,6 +427,17 @@ export function buildStandingStories(ev: StandingEvidence): StandingStoryRow[] {
     marketAgeDays: ev.marketAgeDays ?? null,
   }).map(toReceipt);
   const better = intel.length > 0 || observation.length > 0;
-  return [...intel, ...observation, ...receipts.filter((r) => !better || !isPlainTenure(r))];
+  const held = longHeld(ev.holders);
+  /* Attached once, here, so every row leaves this module carrying the numbers
+     it was reasoned from — the composer never has to parse a headline. */
+  const evidence = {
+    priceMove: num(ev.sidePriceChange24h),
+    oppositeBelievers: num(ev.oppositeBelievers),
+    holderCount: held.length,
+    maxDaysHeld: held[0]?.daysHeld ?? 0,
+  };
+  return [...intel, ...observation, ...receipts.filter((r) => !better || !isPlainTenure(r))].map(
+    (r) => ({ ...r, evidence }),
+  );
 }
 
