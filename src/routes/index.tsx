@@ -1767,7 +1767,9 @@ function Feed() {
                 <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
                   <AlternatesRail />
                   <IdeasRail
-                    suggestion={houseIdea.suggestion}
+                    /* Never twice: while the idea itself is on stage the rail
+                       has nothing left to offer. */
+                    suggestion={ideaDue ? null : houseIdea.suggestion}
                     onUse={() => acceptIdea(false)}
                     onDismiss={houseIdea.onDismiss}
                   />
