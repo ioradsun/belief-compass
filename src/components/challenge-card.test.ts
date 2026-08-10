@@ -274,21 +274,8 @@ describe("an answered card stops asking and stays", () => {
     // took a side stays where it is and changes what it says. Two lists would
     // have re-created the bug: a card vanishing here and reappearing there.
     const c = rail();
-    expect(c).toMatch(
-      /\[\.\.\.open\.slice\(0, shown\), \.\.\.recent\.slice\(0, CHALLENGE\.maxRecent\)\]/,
-    );
+    expect(c).toMatch(/\[\.\.\.open\.slice\(0, shown\), \.\.\.recent\]/);
     expect(c).toMatch(/key=\{c\.marketId\}/);
-  });
-
-  it("never lets outcomes crowd out the people still waiting", () => {
-    // FOUND BY RENDERING IT. Against a real scenario the rail showed three
-    // outcomes above two people still waiting, and the column stopped reading as
-    // "who needs something from me" — the payoff had displaced the request. The
-    // rest are one tap away under "See all", which is where a history belongs.
-    expect(rail()).toMatch(/recent\.slice\(0, CHALLENGE\.maxRecent\)/);
-    // The QUEUE is never capped by the same number: a person waiting on you is
-    // not surplus, and `shown` pages through every one of them.
-    expect(rail()).toMatch(/open\.slice\(0, shown\)/);
   });
 });
 

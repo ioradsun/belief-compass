@@ -171,20 +171,6 @@ export const CHALLENGE = {
    *  for you and starts reading as a feed — so the rest are one tap away rather
    *  than discarded. */
   maxOpen: 6,
-  /**
-   * OUTCOMES SHOWN BENEATH THE QUEUE. Found by looking, not by reasoning.
-   *
-   * An answered card survives for a week, which is right — but rendered against a
-   * real scenario the rail showed THREE outcomes above TWO people still waiting,
-   * and the column stopped reading as "who needs something from me". The payoff
-   * had crowded out the request, which is the failure mode this rail was built to
-   * avoid in the first place.
-   *
-   * Three is a coda rather than a feed. Nothing is lost: everything older is one
-   * tap away under "See all", where a complete history belongs and where nobody
-   * is competing with it for the reader's attention.
-   */
-  maxRecent: 3,
   /** The stage at which the social system unlocks. */
   unlockAt: "recognizable" as DnaStage,
   /**

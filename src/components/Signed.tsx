@@ -5,7 +5,8 @@
  *
  *   PERCENTAGES are a verdict. A rate has no unit to anchor it, so its whole
  *   job is direction and size. The entire figure carries the colour — green up,
- *   red down — and leads with an arrow (▲ ▼) instead of a redundant +/−.
+ *   red down — and takes a trailing arrow (12% ▲) instead of a redundant +/−.
+
  *
  *   EVERYTHING ELSE is a fact. A count or an amount is a quantity first, so it
  *   stays fully neutral: "+$1.07" and "−3 believers" keep their sign for
@@ -55,21 +56,24 @@ export function Signed({
     const tone = signTone(sign);
     // "0%" with no sign is genuinely flat: muted, no arrow.
     const arrow = !sign ? "" : NEGATIVE.has(sign) ? "▼" : "▲";
+    // The arrow TRAILS the rate. The number is what's being read; the arrow is
+    // the confirmation that follows it, not a prefix to step over.
     return (
       <span className={className} style={{ color: tone, ...style }}>
+        {rest}
         {arrow && (
           <>
+            <span>{"\u2009"}</span>
             <span className="text-[0.7em]" aria-hidden="true">
               {arrow}
             </span>
-            <span>{"\u2009"}</span>
           </>
         )}
-        {rest}
         {children}
       </span>
     );
   }
+
 
   return (
     <span className={className} style={{ color: numberColor, ...style }}>
