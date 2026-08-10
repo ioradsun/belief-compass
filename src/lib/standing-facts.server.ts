@@ -23,6 +23,7 @@ import { serviceClientOrNull } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { firstBackedIsFloor } from "@/domain/tenure";
 import { positionValueUsd } from "@/domain/position-value";
+import { rotateForWindow } from "@/domain/standing-rotation";
 import { loadConvictionWhales } from "@/lib/conviction-whale.server";
 import { STANDING, type StandingHolder } from "@/domain/standing-fact";
 import {
@@ -85,13 +86,9 @@ export interface StandingFactsInput {
 /** How many stories one market may contribute to a single build. */
 const MAX_FACTS_PER_MARKET = 2;
 
-export async function buildStandingStories(
-  input: StandingFactsInput,
-): Promise<StandingStoryRow[]> {
+export async function buildStandingStories(input: StandingFactsInput): Promise<StandingStoryRow[]> {
   const ids = input.marketIds.slice(0, MAX_MARKETS);
   if (ids.length === 0) return [];
-
-
 
   const svc = serviceClientOrNull();
   if (!svc) return [];
@@ -206,20 +203,31 @@ export async function buildStandingStories(
         exits: input.exitsByKey?.get(`${marketId}:${side}`) ?? 0,
         capitalDelta24h: fin(side === "YES" ? ev?.yesCapitalDelta24h : ev?.noCapitalDelta24h),
         oppositeBelievers: fin(side === "YES" ? ev?.believersNo : ev?.believersYes),
-        whale: whale
-          ? { wallet: whale.wallet, side: whale.side, daysHeld: whale.daysHeld }
-          : null,
+        whale: whale ? { wallet: whale.wallet, side: whale.side, daysHeld: whale.daysHeld } : null,
       }),
     );
   }
   if (all.length === 0) return [];
 
-  // Strongest first, and capped PER MARKET so one crowded market cannot own the
-  // window. The per-reader cooldown lives on the client, where the knowledge of
-  // what this reader has already been told actually is.
+  // Strongest first — and then ROTATE the window through the pool over time.
+  //
+  // Returning the same strongest N on every fetch is what made a quiet feed go
+  // silent: once the reader had seen those N, the per-reader cooldown filtered
+  // every later fetch to nothing, even with hundreds of true standing stories in
+  // the pool. Sliding the window one `limit` further each ~90s heartbeat returns
+  // a FRESH slice instead, and because those rows are new to the client the
+  // update gate counts them behind "↑ N New" — the control the reader taps to
+  // pull them in. A pool no larger than the window does not rotate, so a market
+  // with little continuity behaves exactly as before. See standing-rotation.
+  //
+  // Still capped PER MARKET so one crowded market cannot own the window; the
+  // per-reader cooldown lives on the client, where the knowledge of what this
+  // reader has already been told actually is.
+  const ranked = all.sort((a, b) => b.strength - a.strength || a.key.localeCompare(b.key));
+  const ring = rotateForWindow(ranked, input.now, input.limit);
   const chosen: StandingStoryRow[] = [];
   const perMarket = new Map<number, number>();
-  for (const f of all.sort((a, b) => b.strength - a.strength || a.key.localeCompare(b.key))) {
+  for (const f of ring) {
     const used = perMarket.get(f.marketId) ?? 0;
     if (used >= MAX_FACTS_PER_MARKET) continue;
     perMarket.set(f.marketId, used + 1);
@@ -228,4 +236,3 @@ export async function buildStandingStories(
   }
   return chosen;
 }
-
