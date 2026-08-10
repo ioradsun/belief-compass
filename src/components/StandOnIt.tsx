@@ -10,6 +10,7 @@
  * immediate copy + a subtle confirmation on desktop. No custom sharing modal, no
  * platform icons, no clutter.
  */
+import { useState } from "react";
 import { useShare } from "@/lib/use-share";
 import { marketShareUrl, shareMessage, type ShareSide } from "@/domain/share";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
@@ -33,11 +34,23 @@ function LinkIcon({ className }: { className?: string }) {
   );
 }
 
+/** Three dots — the overflow used when a market carries media. */
+function MoreIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <circle cx="5" cy="12" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="19" cy="12" r="1.8" />
+    </svg>
+  );
+}
+
 export function StandOnIt({
   marketId,
   title,
   side = null,
   hasMedia = false,
+  mediaUrl = null,
   refCode,
   variant = "primary",
   className = "",
@@ -48,6 +61,8 @@ export function StandOnIt({
   /** The viewer's backed side, so the share message can lead with it. */
   side?: ShareSide;
   hasMedia?: boolean;
+  /** The attached media's own URL. Present = the control becomes an overflow. */
+  mediaUrl?: string | null;
   /** Lightweight attribution code carried on the link (?r=). */
   refCode?: string | null;
   variant?: Variant;
@@ -55,6 +70,7 @@ export function StandOnIt({
   onShared?: () => void;
 }) {
   const { standOnIt, copied } = useShare();
+  const [menu, setMenu] = useState(false);
   // Attribution: stamp the link with the sharer's ?r= code so their tribe's
   // arrivals count. An explicit refCode prop wins; otherwise the connected
   // wallet's own code (null when signed out — the link still works, unattributed).
