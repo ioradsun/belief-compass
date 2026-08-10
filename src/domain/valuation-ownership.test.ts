@@ -71,10 +71,12 @@ describe("every consumer of a belief's value goes through the shared module", ()
   });
 
   it("the writer never writes a valuation it does not have", () => {
-    // An unpriced market must leave the last known value alone. Writing zero
-    // would re-create the original bug from the other direction.
+    // A market with no observed price on EITHER side must leave the last known
+    // value alone. Writing zero would re-create the original bug from the other
+    // direction. One priced side is enough: a side nobody has bought holds no
+    // shares for anyone, so its missing price understates nothing.
     const src = read("src/routes/api/public/jobs/belief-rollup.ts");
-    expect(src).toMatch(/canMark\s*=\s*p\.yesPriceUsd\s*>\s*0\s*&&\s*p\.noPriceUsd\s*>\s*0/);
+    expect(src).toMatch(/canMark\s*=\s*p\.yesPriceUsd\s*>\s*0\s*\|\|\s*p\.noPriceUsd\s*>\s*0/);
     expect(src).toMatch(/\.\.\.\(canMark/);
   });
 });
