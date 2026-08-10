@@ -1631,7 +1631,7 @@ function Feed() {
                         onSelect={selectMarket}
                         excludeMarketId={shownId ?? undefined}
                         holdUpdates
-                        label="Insider"
+                        label={undefined}
                         initial={loaderData?.tape ?? null}
                         onPending={setInsiderPending}
                       />

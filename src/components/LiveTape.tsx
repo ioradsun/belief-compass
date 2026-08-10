@@ -432,7 +432,8 @@ export function LiveTape({
   };
 
   const header =
-    label == null ? null : (
+    (
+
       /**
        * THE HEADING AND THE UPDATE CONTROL SHARE ONE LINE, AND THAT LINE NEVER
        * CHANGES HEIGHT.
@@ -448,9 +449,12 @@ export function LiveTape({
        * and the row reserves its height whether or not it is there.
        */
       <div className="mb-4 flex h-[26px] shrink-0 items-center gap-2 overflow-visible">
-        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-          {label}
-        </span>
+        {label != null && (
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            {label}
+          </span>
+        )}
+
         <button
           type="button"
           onClick={admit}
