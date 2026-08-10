@@ -170,40 +170,12 @@ export function ChallengeRail({
             {t === "challenge" && !lock.unlocked && !lockUnknown && (
               <span aria-label="locked">🔒</span>
             )}
-            {t === "challenge" && lock.unlocked && open.length > 0 && (
-              <span className="num text-[11px] opacity-70">{open.length}</span>
+            {t === "challenge" && lock.unlocked && challengeCount > 0 && (
+              <span className="num text-[11px] opacity-70">{challengeCount}</span>
             )}
           </button>
         ))}
       </div>
-
-      {/* WHOSE TABLE. Only once there is a second side to show — a person with
-          nothing up has no choice to make, and a control offering one is a
-          question the surface is asking for its own benefit. */}
-      {tab === "challenge" && wallet && lock.unlocked && (table?.length ?? 0) > 0 && (
-        <div className="mb-2 flex shrink-0 gap-3 text-[11px]" role="tablist" aria-label="Whose">
-          {(["challenged", "yours"] as Side[]).map((sd) => (
-            <button
-              key={sd}
-              role="tab"
-              aria-selected={side === sd}
-              type="button"
-              onClick={() => {
-                qc.setQueryData(railSideKey, sd);
-                setSide(sd);
-              }}
-              className={`font-medium uppercase tracking-wide transition-colors ${
-                side === sd ? "text-[var(--text)]" : "text-[var(--text-muted)]"
-              }`}
-            >
-              {sd === "yours" ? "Yours" : "Challenged"}
-              <span className="num ml-1 opacity-70">
-                {sd === "yours" ? (table?.length ?? 0) : open.length}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
 
       {tab === "insider" ? (
         insider
@@ -225,10 +197,13 @@ export function ChallengeRail({
       ) : !lock.unlocked ? (
         <LockedPanel lock={lock} />
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {side === "yours" ? (
-            <YourTable wallet={wallet} onSelect={onSelect} />
-          ) : failed ? (
+        /* ONE LIST, NOT TWO SIDES. "Challenged" and "Yours" were a filter over a
+           handful of cards, and the card already says which it is: an incoming
+           call names the person asking, one of yours carries its own progress,
+           and a free slot is an invitation. Tabs over that were a control asking
+           the reader to sort a stack of three. */
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+          {failed ? (
             /* A FAILED READ IS NOT AN EMPTY GRAPH.
                `buildChallenges` opens with an unguarded `serviceClient()`, and
                `createClient` throws SYNCHRONOUSLY without a key — so a
@@ -256,6 +231,10 @@ export function ChallengeRail({
               ))}
             </ul>
           )}
+
+          {/* YOUR OWN TABLE, IN THE SAME COLUMN — what you put up, what became of
+              it, and an invitation for every slot still open. */}
+          <YourTable wallet={wallet} onSelect={onSelect} />
 
           {/* MORE, SAID OUT LOUD. A railful is what reads as a set of things
               waiting for you; past that it becomes a feed, and the feed already
