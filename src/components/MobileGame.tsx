@@ -466,11 +466,19 @@ export function MobileGame({
         <>
           <div className="shrink-0 pt-1">{questionBlock}</div>
           <MediaStage media={stageMedia} className="mt-2 flex min-h-0 flex-1 flex-col gap-3 pb-1">
-            {tallMedia && stageTab === "media" ? (
-              <MediaEvidence media={stageMedia} />
+            {tallMedia ? (
+              <>
+                <StagePane active={stageTab === "media"}>
+                  <MediaEvidence media={stageMedia} />
+                </StagePane>
+                <StagePane active={stageTab !== "media"} className="gap-3">
+                  {marketBody}
+                </StagePane>
+              </>
             ) : (
               marketBody
             )}
+
           </MediaStage>
         </>
       ) : (
