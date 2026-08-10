@@ -566,12 +566,15 @@ export function MyConvictions({
       {/* Summary — one financial story: the value leads, the % is the big right-hand
           figure (same rhythm as the market instrument), the exact move sits beneath. */}
       {(() => {
-        const lifetimeMove = trueGain != null && Math.abs(trueGain) >= 0.005;
-        const periodMove = !lifetimeMove && Math.abs(periodUsd) >= 0.01;
-        const move = lifetimeMove ? (trueGain as number) : periodMove ? periodUsd : 0;
-        const basis = total - move;
-        const pct =
-          move !== 0 && basis > 0 ? formatPct((move / basis) * 100, { precise: true }) : null;
+        // The cards' own arithmetic, summed. A percentage exists whenever a cost
+        // basis does — a sub-cent dollar move must never blank the return, which
+        // is exactly the "—" the reader was seeing above priced positions.
+        const move = hasBasis ? markedGain : periodUsd;
+        const basis = hasBasis ? markedBasis : total - move;
+        const pct = basis > 0 && (hasBasis || move !== 0)
+          ? formatPct((move / basis) * 100, { precise: true })
+          : null;
+        const shownMove = Math.abs(move) >= 0.005 ? move : 0;
         const tone = move > 0 ? "var(--gain)" : move < 0 ? "var(--loss)" : "var(--text-muted)";
         const arrow = move > 0 ? "▲" : move < 0 ? "▼" : "";
         return (
