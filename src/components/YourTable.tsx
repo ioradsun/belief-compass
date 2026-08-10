@@ -76,17 +76,16 @@ export const candidatesKey = (wallet?: string, limit = 0) =>
 export function YourTable({
   wallet,
   onSelect,
-  currentMarketId,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
-  /** What the centre column is showing — the "use this one" shortcut. */
-  currentMarketId?: number;
 }) {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
   const { data: rows, isError } = useTable(wallet);
-  const [adding, setAdding] = useState<null | "menu" | "search">(null);
+  const [adding, setAdding] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
 
   const close = useMutation({
     mutationFn: async (challengeId: number) =>
