@@ -365,18 +365,13 @@ export function ConvictionDashboard({
               Net Profit
             </div>
             <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span
+              <Signed
+                value={fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
                 className="text-[56px] font-semibold leading-none tracking-[-0.035em] tabular-nums"
-                style={{ color: journey.netProfitUsd >= 0 ? "var(--gain)" : "var(--loss)" }}
-              >
-                {fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
-              </span>
+              />
               {journey.roiPct != null && (
-                <span
-                  className="text-[18px] font-semibold tabular-nums"
-                  style={{ color: journey.netProfitUsd >= 0 ? "var(--gain)" : "var(--loss)" }}
-                >
-                  ({fmtPct(journey.roiPct)})
+                <span className="text-[18px] font-semibold tabular-nums text-[var(--text)]">
+                  (<Signed value={fmtPct(journey.roiPct)} />)
                 </span>
               )}
             </div>
@@ -385,13 +380,14 @@ export function ConvictionDashboard({
             </p>
             {/* The living pulse — did my conviction grow today? */}
             {netToday !== 0 && (
-              <div
-                className="mt-3 text-[13px] font-medium tabular-nums"
-                style={{ color: netToday >= 0 ? "var(--gain)" : "var(--loss)" }}
-              >
-                {netToday >= 0 ? "↑" : "↓"} Today {fmtUsd(netToday, true)}
+              <div className="mt-3 text-[13px] font-medium tabular-nums text-[var(--text)]">
+                <span style={{ color: netToday >= 0 ? "var(--gain)" : "var(--loss)" }}>
+                  {netToday >= 0 ? "↑" : "↓"}
+                </span>{" "}
+                Today <Signed value={fmtUsd(netToday, true)} />
               </div>
             )}
+
           </section>
 
           {/* Ready to Claim — the one thing you can DO. Premium placement, right
