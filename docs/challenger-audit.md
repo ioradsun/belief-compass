@@ -947,7 +947,39 @@ blocked by the code above:
 1. **`SUPABASE_SERVICE_ROLE_KEY`.** Sections D, E, F and the §15 threshold stay
    blank without it, and the first thing it answers is whether `market_calls` has
    rows at all. If it is empty, everything above has no fuel and the work is upstream.
+   **They are now one command away rather than a research task — see N.8.**
 2. **§7 market-wide impact** — the audience-scoped version shipped; the market-wide
    version needs a snapshot-cadence decision and reverses a documented rule.
 3. **§14 / §15 same-side memory and surprise** — needs `responded_side` (I.2) _and_
    the corpus distribution. Not built, and not buildable honestly today.
+
+### N.8 The blocked sections, answered by one command
+
+`scripts/check-challenge-integrity.ts` gained three sections that answer exactly
+what §0 could not read. It still refuses to run without the service key, for the
+reason it already gave: `market_calls` returns **200 with an empty array** to the
+publishable key, and a report that accepted that would print a clean bill of health
+for a ledger it never saw.
+
+```
+npm run check:challenge-integrity          # add --json to track over time
+```
+
+| New section          | Answers                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **8 · The corpus**   | Audit **D** and the **§15** threshold. Calls, answered / passed / waiting, how many waiting rows have aged past 30 days, pre-V2 rows with no `challenge_id`, challenges put up and how they ended, and the person-pair interaction distribution bucketed 1 / 2 / 3–4 / 5–9 / 10+.                                                                                                 |
+| **9 · Back & forth** | Audit **E**. How many pairs go both ways, how many would actually show a line, the longest run, and up to five **real sequences** rendered as `·→←→←`. It **imports the shipped `reciprocity()`** rather than reimplementing it — a copy would make the report confirm itself instead of the code that renders the card.                                                          |
+| **10 · Slot damage** | Audit **F**, plus the fallout of the atomic-insert bug. Challenges that reached nobody and are still holding a slot, named with their market and date; cap breaches; the same market up twice. It **reports and does not repair** — the fix prevents new damage and heals none of the old, and closing somebody's Challenge for them is not a decision a diagnostic gets to make. |
+
+Two things also changed in what the report already claimed. `passed_at` and
+`challenge_id` are now read — they were in the table and unselected, so the footer
+went on describing dismissal as invisible long after it became durable. And the
+"not measurable" footer gained the honest version: what nobody can recover is the
+side each person held **at the time**, which is the single fact blocking §14/§15.
+
+**Verified end-to-end.** The three sections were run against a stub PostgREST
+seeded with a four-answer alternating pair, a one-way pair, a run ended by a pass,
+a call aged past the window, and one Challenge deliberately left reaching nobody.
+Every section produced the right answer, including finding the seeded slot damage
+and correctly refusing to call the one-way pair a back & forth. Both text and
+`--json` output are clean.

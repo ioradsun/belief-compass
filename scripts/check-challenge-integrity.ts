@@ -25,6 +25,16 @@
  * Run:  npx tsx scripts/check-challenge-integrity.ts   (npm run check:challenge-integrity)
  *       --json   machine-readable, for tracking the numbers over time
  */
+/**
+ * THE ONE IMPORT, AND WHY THERE IS ONE AT ALL IN A FILE OF RAW FETCHES.
+ *
+ * Section 9 checks the reciprocity run against production, and a copy of the
+ * algorithm here would be a second answer to "do these two go back and forth" —
+ * this report would then be confirming its own copy rather than the code that
+ * renders the number on the card. Importing the shipped function is the only
+ * version of this check worth running.
+ */
+import { reciprocity, RECIPROCITY, type PairCall } from "@/domain/dependability";
 const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !key) {
@@ -83,6 +93,27 @@ interface Call {
   relation_at_call: string;
   called_at: string;
   responded_at: string | null;
+  /**
+   * BOTH OF THESE WERE IN THE TABLE AND UNREAD HERE.
+   *
+   * `passed_at` became durable when a creator started being shown "1 passed", and
+   * this report went on describing dismissal as invisible for as long as it was
+   * not selected. `challenge_id` is what makes a recipient row belong to a
+   * deliberate act, and section 10 exists because nothing was checking that the
+   * two tables agree about who a Challenge actually reached.
+   */
+  passed_at: string | null;
+  challenge_id: number | null;
+}
+/** The market-level act. One row per (challenger, market) that went up. */
+interface ChallengeRow {
+  id: number;
+  challenger_wallet: string;
+  market_id: number;
+  slot_no: number;
+  created_at: string;
+  closed_at: string | null;
+  close_reason: string | null;
 }
 interface Event {
   wallet: string;
@@ -143,10 +174,10 @@ async function main() {
   const sinceMs = Date.now() - WINDOW_DAYS * 86_400_000;
   const since = new Date(sinceMs).toISOString();
 
-  const [calls, events, beliefs, dna, markets] = await Promise.all([
+  const [calls, events, beliefs, dna, markets, challenges] = await Promise.all([
     page<Call>(
       "market_calls",
-      "market_id,caller_wallet,responder_wallet,relation_at_call,called_at,responded_at",
+      "market_id,caller_wallet,responder_wallet,relation_at_call,called_at,responded_at,passed_at,challenge_id",
     ),
     page<Event>(
       "events",
@@ -161,6 +192,10 @@ async function main() {
     // Section 0 needs titles: `buildChallenges` drops a candidate whose market
     // has no title, so a supply count that ignored them would overstate.
     page<Market>("markets", "onchain_id,title"),
+    page<ChallengeRow>(
+      "challenges",
+      "id,challenger_wallet,market_id,slot_no,created_at,closed_at,close_reason",
+    ),
   ]);
 
   const unreadable: string[] = [];
@@ -169,6 +204,7 @@ async function main() {
   if (beliefs.blocked) unreadable.push(`wallet_beliefs — ${beliefs.why}`);
   if (dna.blocked) unreadable.push(`viewer_dna_cache — ${dna.why}`);
   if (markets.blocked) unreadable.push(`markets — ${markets.why}`);
+  if (challenges.blocked) unreadable.push(`challenges — ${challenges.why}`);
   if (unreadable.length > 0) {
     console.error("Could not read:\n  " + unreadable.join("\n  "));
     process.exit(1);
@@ -179,6 +215,7 @@ async function main() {
   const BELIEFS = beliefs.rows as Belief[];
   const DNA = dna.rows as DnaRow[];
   const MARKETS = markets.rows as Market[];
+  const CHALLENGES = challenges.rows as ChallengeRow[];
 
   /** Every canonical directional trade, keyed wallet|market, earliest first. */
   const tradesBy = new Map<string, Event[]>();
@@ -739,12 +776,279 @@ async function main() {
   }
   line();
 
+  // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * SECTION 8 — THE CORPUS. What is actually in the ledger.
+   *
+   * Every other section falsifies a sentence. This one just counts, because the
+   * audit that produced sections 9 and 10 could not: `challenges` and
+   * `market_calls` return 200 WITH AN EMPTY ARRAY to the publishable key, so
+   * every question about scale was unanswerable outside a service-role run. It
+   * is here so that "how big is this" costs one command rather than an argument.
+   */
+  line("8 · THE CORPUS");
+  line("   What the ledger contains. Counts, not claims.");
+  line();
+  if (ledgerEmpty) noLedger();
+  else {
+    const answered = CALLS.filter((c) => c.responded_at).length;
+    const passed = CALLS.filter((c) => !c.responded_at && c.passed_at).length;
+    const waiting = CALLS.length - answered - passed;
+    const stale = CALLS.filter(
+      (c) => !c.responded_at && !c.passed_at && Date.parse(c.called_at) < sinceMs,
+    ).length;
+    const orphan = CALLS.filter((c) => c.challenge_id == null).length;
+
+    line(`   calls                    ${CALLS.length}`);
+    line(`   answered                 ${answered}  (${fmtPct(pct(answered, CALLS.length))})`);
+    line(`   passed                   ${passed}  (${fmtPct(pct(passed, CALLS.length))})`);
+    line(`   waiting                  ${waiting}  (${fmtPct(pct(waiting, CALLS.length))})`);
+    line(
+      `     of those, past ${WINDOW_DAYS}d    ${stale}  — still on the rail, counted in nothing`,
+    );
+    line(`   pre-V2 (no challenge_id) ${orphan}  — derived rows, belong to no Challenge`);
+    line();
+    line(`   challenges put up        ${CHALLENGES.length}`);
+    line(`     open                   ${CHALLENGES.filter((c) => !c.closed_at).length}`);
+    line(
+      `     everyone answered      ${CHALLENGES.filter((c) => c.close_reason === "all_responded").length}`,
+    );
+    line(
+      `     taken down             ${CHALLENGES.filter((c) => c.close_reason === "creator").length}`,
+    );
+    line();
+
+    /**
+     * PAIRS, AND THE DISTRIBUTION THAT DECIDES §15.
+     *
+     * "Alex has taken the same side as you in 4 previous challenges" needs a
+     * baseline, and a threshold picked without this table would be a guess. The
+     * precedent is `DEPENDABILITY.minForScore = 5`, chosen because the median
+     * caller→responder pair shares ONE market. If the shape below looks the same,
+     * any expectation copy gated at one or two prior interactions would be the
+     * most common sentence on the platform and would mean nothing.
+     */
+    const perPair = new Map<string, number>();
+    for (const c of CALLS) {
+      const a = lc(c.caller_wallet);
+      const b = lc(c.responder_wallet);
+      const k = a < b ? `${a}|${b}` : `${b}|${a}`;
+      perPair.set(k, (perPair.get(k) ?? 0) + 1);
+    }
+    const bucket = (lo: number, hi: number) =>
+      [...perPair.values()].filter((n) => n >= lo && n <= hi).length;
+    line(`   person-pairs             ${perPair.size}`);
+    line(`     1 interaction          ${bucket(1, 1)}`);
+    line(`     2                      ${bucket(2, 2)}`);
+    line(`     3–4                    ${bucket(3, 4)}`);
+    line(`     5–9                    ${bucket(5, 9)}`);
+    line(`     10+                    ${bucket(10, Number.MAX_SAFE_INTEGER)}`);
+    line();
+    line("   REPEAT market × pair is structurally ZERO and needs no count: the");
+    line("   primary key is (market_id, caller_wallet, responder_wallet), so one");
+    line("   person cannot call another into the same market twice, ever.");
+    line();
+
+    /**
+     * SAME SIDE / OPPOSITE — PRINTED HERE AND NOWHERE ELSE, ON PURPOSE.
+     *
+     * This is the number §14 and §15 want, and the reason they are not built. It
+     * is computed from `wallet_beliefs.stance_side`, which is each person's stance
+     * TODAY — not the stance they held when they answered. Nothing freezes a side:
+     * `market_calls` has no side column, deliberately, because its absence is what
+     * guarantees that showing up is never confused with agreeing.
+     *
+     * So every row below silently rewrites itself whenever anybody flips. It is
+     * fine as a one-off measurement in a report somebody is reading knowingly. It
+     * would be a lie on a card that said "same side again".
+     */
+    let same = 0;
+    let opposite = 0;
+    let unknown = 0;
+    for (const c of CALLS) {
+      if (!c.responded_at) continue;
+      const mine = stanceBy.get(pairKey(c.caller_wallet, String(c.market_id)));
+      const theirs = stanceBy.get(pairKey(c.responder_wallet, String(c.market_id)));
+      const directional = (s?: string) => s === "yes" || s === "no";
+      if (!directional(mine) || !directional(theirs)) unknown += 1;
+      else if (mine === theirs) same += 1;
+      else opposite += 1;
+    }
+    line(`   answered calls, same side TODAY      ${same}`);
+    line(`   answered calls, opposite TODAY       ${opposite}`);
+    line(`   one side not directional today       ${unknown}`);
+    line();
+    line("   MEASUREMENT ONLY. These read today's stance, not the stance held when");
+    line("   the call was answered, so they rewrite themselves whenever anybody");
+    line("   flips or exits. No surface may state them — that is why §14/§15 copy");
+    line("   is not built, and it stays unbuildable until a side is frozen at");
+    line("   answer time the way `relation_at_call` freezes the relationship.");
+  }
+  line();
+
+  // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * SECTION 9 — BACK & FORTH, against the shipped function.
+   *
+   * IT IMPORTS `reciprocity` RATHER THAN REIMPLEMENTING IT. A copy of the
+   * algorithm here would be a second answer to "do these two go back and forth",
+   * and the two would drift — at which point this report would be confirming its
+   * own copy rather than the code that renders the number. What runs below is
+   * exactly what produces the line on the card.
+   */
+  line("9 · BACK & FORTH");
+  line("   The run between two people, computed by the function the rail renders.");
+  line();
+  if (ledgerEmpty) noLedger();
+  else {
+    /** Every call between one unordered pair, with a stable choice of "viewer". */
+    const seqs = new Map<string, PairCall[]>();
+    for (const c of CALLS) {
+      const a = lc(c.caller_wallet);
+      const b = lc(c.responder_wallet);
+      // The smaller wallet is the viewer, consistently — `bothWays` is symmetric,
+      // so which one is arbitrary, but it must not vary within a pair.
+      const [x, y] = a < b ? [a, b] : [b, a];
+      const k = `${x}|${y}`;
+      const list = seqs.get(k) ?? seqs.set(k, []).get(k)!;
+      list.push({
+        calledAtMs: Date.parse(c.called_at),
+        respondedAtMs: c.responded_at ? Date.parse(c.responded_at) : null,
+        passedAtMs: c.passed_at ? Date.parse(c.passed_at) : null,
+        // "From the viewer" means the smaller wallet did the asking.
+        fromViewer: a === x,
+      });
+    }
+
+    const runs = [...seqs.entries()].map(([k, calls]) => ({ k, r: reciprocity(calls), calls }));
+    const bothWays = runs.filter((x) => x.r.bothWays);
+    const printable = bothWays.filter((x) => x.r.run >= RECIPROCITY.minRun);
+    line(`   pairs with any call      ${runs.length}`);
+    line(`   pairs that go BOTH ways  ${bothWays.length}  (each has answered the other)`);
+    line(
+      `   pairs a line would show  ${printable.length}  (both ways AND run ≥ ${RECIPROCITY.minRun})`,
+    );
+    line(`   longest run              ${Math.max(0, ...runs.map((x) => x.r.run))}`);
+    line();
+    if (printable.length === 0) {
+      line("   NOBODY WOULD SEE THE LINE TODAY, and that is a finding rather than a");
+      line("   bug: a run needs two people who have each answered the other. The");
+      line("   card simply says nothing, which is the designed behaviour at zero.");
+    } else {
+      line("   REAL SEQUENCES — → is an answer, ✕ a pass, · still waiting:");
+      for (const x of printable.sort((p, q) => q.r.run - p.r.run).slice(0, 5)) {
+        const [a, b] = x.k.split("|");
+        const shape = [...x.calls]
+          .sort((p, q) => p.calledAtMs - q.calledAtMs)
+          .map((c) =>
+            c.respondedAtMs != null ? (c.fromViewer ? "→" : "←") : c.passedAtMs != null ? "✕" : "·",
+          )
+          .join("");
+        line(
+          `   ${shortWallet(a)} ${shortWallet(b)}  ${shape}  run ${x.r.run}${
+            x.r.endedRun > 0 ? ` (last run of ${x.r.endedRun} ended on a pass)` : ""
+          }`,
+        );
+      }
+    }
+    line();
+    line("   NOTHING HERE READS A SIDE. `PairCall` has no field for one, so a pair");
+    line("   who disagree every single time runs exactly as long as a pair who");
+    line("   never do — which is the whole point of counting this at all.");
+  }
+  line();
+
+  // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * SECTION 10 — SLOT DAMAGE, and it is looking for the fallout of a real bug.
+   *
+   * `putOnTable` used to write its audience with a multi-row INSERT and swallow
+   * 23505. A multi-row INSERT is ATOMIC, and `market_calls`'s primary key has no
+   * `closed_at` predicate — so re-issuing a market that had been on the table
+   * before collided on every row and rolled the WHOLE audience back. The result
+   * is a Challenge that reached nobody: no progress line (`reached: 0` makes it
+   * null), never auto-closes (`allResponded` is false at zero by design), and
+   * holds one of three editorial slots until its author gives up on it.
+   *
+   * The write is fixed. THIS COUNTS WHAT THE OLD ONE LEFT BEHIND, because the fix
+   * prevents new ones and repairs none of the existing. It deliberately does not
+   * clean anything up: closing somebody's Challenge for them is not a decision a
+   * diagnostic gets to make.
+   */
+  line("10 · SLOT DAMAGE");
+  line("   Challenges that reached nobody — the fallout of the atomic-insert bug.");
+  line();
+  if (CHALLENGES.length === 0) {
+    line("   NO DATA — nothing has ever been put on the table. Not a pass.");
+  } else {
+    const reached = new Map<number, number>();
+    for (const c of CALLS) {
+      if (c.challenge_id == null) continue;
+      reached.set(Number(c.challenge_id), (reached.get(Number(c.challenge_id)) ?? 0) + 1);
+    }
+    const empty = CHALLENGES.filter((c) => (reached.get(Number(c.id)) ?? 0) === 0);
+    const emptyOpen = empty.filter((c) => !c.closed_at);
+    line(`   challenges that reached nobody   ${empty.length}`);
+    line(`     still occupying a slot         ${emptyOpen.length}`);
+    for (const c of emptyOpen.slice(0, 8)) {
+      line(
+        `       ${shortWallet(lc(c.challenger_wallet))} · market ${c.market_id} · up since ${c.created_at.slice(0, 10)}`,
+      );
+    }
+    if (emptyOpen.length > 0) {
+      line();
+      line("   Each of these is a silent card its author cannot interpret. They are");
+      line("   safe to close (`closed_at`, reason `creator`) — every recipient row");
+      line("   survives a close, and there are none here to survive. Not done");
+      line("   automatically: it is their table.");
+    }
+    line();
+
+    /** The cap is a partial unique index, so a breach would mean the DB failed. */
+    const openPer = new Map<string, number>();
+    for (const c of CHALLENGES) {
+      if (c.closed_at) continue;
+      const w = lc(c.challenger_wallet);
+      openPer.set(w, (openPer.get(w) ?? 0) + 1);
+    }
+    const overCap = [...openPer.entries()].filter(([, n]) => n > 3);
+    line(`   anybody over the cap of 3        ${overCap.length}`);
+    if (overCap.length > 0) {
+      line("   THIS SHOULD BE IMPOSSIBLE. `challenges_active_slot_idx` is a partial");
+      line("   unique index on (challenger_wallet, slot_no) WHERE closed_at IS NULL.");
+      line("   A breach means the index is missing, not that the cap logic is wrong.");
+      for (const [w, n] of overCap.slice(0, 5)) line(`       ${shortWallet(w)} · ${n} open`);
+    }
+
+    const openTwice = new Map<string, number>();
+    for (const c of CHALLENGES) {
+      if (c.closed_at) continue;
+      const k = `${lc(c.challenger_wallet)}|${c.market_id}`;
+      openTwice.set(k, (openTwice.get(k) ?? 0) + 1);
+    }
+    const dupes = [...openTwice.values()].filter((n) => n > 1).length;
+    line(`   same market up twice at once     ${dupes}`);
+    if (dupes > 0) {
+      line("   Also index-enforced (`challenges_active_market_idx`). Same conclusion.");
+    }
+    line();
+    line("   RE-ISSUING AFTER A CLOSE IS LEGITIMATE and is not counted as a duplicate:");
+    line("   the question genuinely went back up. What the fix changed is that it now");
+    line("   reaches the people who never answered plus anybody newly qualified,");
+    line("   instead of reaching nobody at all.");
+  }
+  line();
+
   line("─".repeat(72));
   line("NOT MEASURABLE FROM THE LEDGER, and saying so rather than implying a pass:");
   line();
-  line("  · Whether a dismissed (×) call was later answered elsewhere. Dismissal is");
-  line("    localStorage-only, so the server has no record to join against. The");
-  line("    divergence is real but its size is invisible until it is persisted.");
+  line("  · Whether a card waved off with × was later answered anyway. The pass is");
+  line("    durable now (`passed_at`, counted in section 8), but the LOCAL hide is");
+  line("    still localStorage-only — so a reader who dismissed a card and never");
+  line("    reached the market leaves no trace to distinguish from one who did.");
+  line("  · What side anybody held AT THE TIME. Nothing freezes it; section 8's");
+  line("    same/opposite counts read today's stance and rewrite themselves on every");
+  line("    flip. This is the single fact blocking §14/§15, and no query fixes it.");
   line("  · SHOWED UP latency in Now. The synthesis is skipped on delta fetches");
   line("    (live.functions.ts, `data?.since == null`), which is a client-path bug");
   line("    no database query can see. It needs a session trace, not a count.");
