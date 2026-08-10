@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { insiderPulseKey } from "@/lib/insider/keys";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { lazyRetry } from "@/lib/lazy-retry";
 
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
