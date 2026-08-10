@@ -329,10 +329,21 @@ export const Route = createFileRoute("/")({
       // rule — warm read only, never a build, and in parallel so it can never
       // add to the shell's budget.
       const [feed, tape] = await Promise.all([getWarmFeed(), getWarmTape()]);
-      return { feed, tape, fetchedAt: Date.now() };
+      // AND THE CENTRE PANEL'S NUMBERS. The seeded feed gives the shell a real
+      // market TITLE; its deck core (the trade tape every number on the card is
+      // rebuilt from) was still a client round trip, so the market appeared and
+      // then filled in. Same rule as the tape: warm/seed read only, never a
+      // build — on a miss it is simply null and the client fetches as before.
+      const ids = (feed?.items ?? [])
+        .filter((i) => i.kind === "market")
+        .slice(0, 3)
+        .map((i) => (i as { onchainId: number }).onchainId);
+      const deck = ids.length ? await getWarmDeckCore({ data: { ids } }).catch(() => null) : null;
+      return { feed, tape, deck, fetchedAt: Date.now() };
     } catch {
-      return { feed: null, tape: null, fetchedAt: Date.now() };
+      return { feed: null, tape: null, deck: null, fetchedAt: Date.now() };
     }
+
   },
 
   staleTime: 10_000,
