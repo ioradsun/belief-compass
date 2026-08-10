@@ -189,12 +189,17 @@ function ConvictionCard({
         {p.title}
       </div>
 
-      {/* 2 — One concise sentence explaining what changed. */}
-      <div className="mt-1.5 text-[12px] leading-snug text-[var(--text-muted)]">
-        {story.headline}
-      </div>
+      {/* 2 — The platform's own material fact about this market, in the owner's
+        voice. Absent when nothing material is on file: a position card does not
+        require commentary. */}
+      {story && (
+        <div className="mt-1.5 text-[12px] leading-snug text-[var(--text-muted)]">
+          {story.headline}
+        </div>
+      )}
 
-      {/* 3 — Side, current value, and the return, each under its own label. */}
+      {/* 3 — Side, current value, and the return %. Two figures, one weight:
+        neither is subordinate to the other at a glance. */}
       <div className="mt-3 flex items-end gap-6">
         <div>
           <div className="text-[10px] font-semibold tracking-wide" style={{ color: sideColor }}>
@@ -203,24 +208,21 @@ function ConvictionCard({
           <div className="num mt-0.5 text-[18px] font-semibold leading-none text-[var(--text)]">
             {money(p.value)}
           </div>
-          <div className="mt-1 text-[10px] text-[var(--text-muted)]">Current value</div>
+          <div className="mt-1 text-[10px] text-[var(--text-muted)]">Value</div>
         </div>
 
-        {ret || windowMove != null ? (
+        {ret?.pct || windowMove != null ? (
           <div className="ml-auto text-right">
             <div
-              className="num text-[14px] font-semibold leading-none"
+              className="num text-[18px] font-semibold leading-none"
               style={{ color: outcomeTone }}
             >
-              {/* A sub-cent dollar move drops its dollar line and lets the
-                percentage take the slot — never a misleading "+$0.00". */}
-              {ret ? (ret.pnl ?? ret.pct) : signedMoney(windowMove as number)}
-              {ret?.pnl && ret.pct && <span className="ml-3">{ret.pct}</span>}
+              {/* The return %, whenever a cost basis exists. Without one there is
+                no percentage to state, so the window's dollar move stands in —
+                the only honest measure left. */}
+              {ret?.pct ?? signedMoney(windowMove as number)}
             </div>
-            <div className="mt-1 text-[10px] text-[var(--text-muted)]">
-              {ret && !ret.pnl ? "Return %" : "Return"}
-              {ret?.pnl && ret.pct && <span className="ml-3">Return %</span>}
-            </div>
+            <div className="mt-1 text-[10px] text-[var(--text-muted)]">Return</div>
           </div>
         ) : (
           // NOT PRICED IS NOT FLAT. Saying so plainly beats a dash the holder
@@ -232,6 +234,7 @@ function ConvictionCard({
           )
         )}
       </div>
+
 
       {/* The only other fact worth a line: you hold the other side of this same
         question, so two cards under one belief read as deliberate. */}
