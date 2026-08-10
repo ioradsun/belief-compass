@@ -24,15 +24,24 @@
  * Passing is a choice about a question, not a verdict on a person, and a surface
  * that said "Mike passed on you" would be building the ledger of rejection this
  * product decided not to keep.
+ *
+ * ONE HEADER, ONE CONTROL. Capacity is now a plain 1/3 beside a single + — the
+ * whole "what can I put up" question collapses into one affordance with two
+ * answers: this market, or find one. Everything else that used to be spoken in
+ * sentences (spots open, invitations, take-it-down links) is either implied by the
+ * fraction or tucked behind a chevron on the card it belongs to.
  */
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, Plus, Search, X } from "lucide-react";
 import { getTable, getTableCandidates, putOnTable, takeOffTable } from "@/lib/table.functions";
+import { searchMarkets } from "@/lib/markets.functions";
 import {
   tableProgress,
   progressLine,
-  tableLine,
   finishedLine,
   spotsOpen,
+  TABLE_SLOTS,
   type RecipientFact,
   type CloseReason,
 } from "@/domain/table";
@@ -67,13 +76,17 @@ export const candidatesKey = (wallet?: string, limit = 0) =>
 export function YourTable({
   wallet,
   onSelect,
+  currentMarketId,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
+  /** What the centre column is showing — the "use this one" shortcut. */
+  currentMarketId?: number;
 }) {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
   const { data: rows, isError } = useTable(wallet);
+  const [adding, setAdding] = useState<null | "menu" | "search">(null);
 
   const close = useMutation({
     mutationFn: async (challengeId: number) =>
@@ -101,6 +114,7 @@ export function YourTable({
         }),
       ),
     onSuccess: () => {
+      setAdding(null);
       void qc.invalidateQueries({ queryKey: tableKey(wallet) });
       void qc.invalidateQueries({ queryKey: ["table-candidates", wallet ?? null] });
     },
@@ -112,9 +126,8 @@ export function YourTable({
    * cards would be scaffolding around a thing small enough not to need it, and the
    * dashed border already says which is which.
    *
-   * THE CAPACITY LINE COUNTS ONLY THE LIVE ONES. A week of finished Challenges
-   * reading as "3 on the table" would be the opposite of the truth: closing is
-   * precisely what gave the slot back.
+   * THE FRACTION COUNTS ONLY THE LIVE ONES. A week of finished Challenges reading
+   * as 3/3 would be the opposite of the truth: closing is what gave the slot back.
    */
   const live = table.filter((r) => r.closedAtMs == null);
   const ended = table.filter((r) => r.closedAtMs != null);
@@ -122,19 +135,19 @@ export function YourTable({
   const open = spotsOpen(live.length);
 
   /**
-   * AN EMPTY SLOT IS AN OFFER, NOT A GAP. Every free space becomes an invitation
-   * card for a market this person is actually in, so the only thing a table ever
-   * shows is something to read or something to do.
+   * SUGGESTIONS LIVE BEHIND THE +, NOT IN THE LIST. Empty-slot cards were three
+   * rectangles asking to be read; the same offer as the first thing inside one
+   * control is the same offer without the furniture.
    */
   const { data: candidates } = useQuery({
     queryKey: candidatesKey(wallet, open),
     queryFn: () => getTableCandidates({ data: { wallet: wallet ?? null, limit: open } }),
-    enabled: !!wallet && open > 0 && !isError,
+    enabled: !!wallet && open > 0 && !isError && adding === "menu",
     staleTime: 60_000,
   });
-  const invites = (candidates ?? []).filter(
-    (c) => !live.some((r) => r.marketId === c.marketId),
-  ).slice(0, open);
+  const suggestions = (candidates ?? [])
+    .filter((c) => !live.some((r) => r.marketId === c.marketId))
+    .slice(0, open);
 
   if (isError) {
     // A failed read is not an empty table. Same rule the incoming side follows:
@@ -146,22 +159,67 @@ export function YourTable({
     );
   }
 
-  if (table.length === 0 && invites.length === 0) {
-    return (
-      <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
-        Nothing on the table. When you back something worth asking about, put it up and your people
-        get the chance to weigh in.
-      </p>
-    );
-  }
+  const canUseCurrent =
+    currentMarketId != null && !live.some((r) => r.marketId === currentMarketId) && open > 0;
 
   return (
     <div className="space-y-2">
-      {/* CAPACITY, NOT CURRENCY. "2 on the table · 1 spot open" rather than
-          "2 / 3 USED" — a fraction with a denominator reads as a balance being
-          spent, and turns an editorial choice into an allowance. */}
-      {tableLine(live.length) && (
-        <p className="num text-[11px] text-[var(--text-muted)]">{tableLine(live.length)}</p>
+      {/* CAPACITY AS A FRACTION, AND ONE WAY TO SPEND IT. */}
+      <div className="flex items-center justify-between">
+        <span className="num text-[11px] tabular-nums text-[var(--text-muted)]">
+          {live.length}/{TABLE_SLOTS} on the table
+        </span>
+        <button
+          type="button"
+          aria-label={adding ? "Close" : "Put something on the table"}
+          aria-expanded={adding != null}
+          disabled={open === 0 || !wallet}
+          onClick={() => setAdding((a) => (a ? null : "menu"))}
+          className="grid h-6 w-6 place-items-center rounded-full border border-[var(--border)] text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] disabled:opacity-30"
+        >
+          {adding ? <X size={13} /> : <Plus size={14} />}
+        </button>
+      </div>
+
+      {adding === "menu" && (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1">
+          {canUseCurrent && (
+            <button
+              type="button"
+              disabled={put.isPending}
+              onClick={() => put.mutate(currentMarketId)}
+              className="block w-full rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text)] transition-colors hover:bg-[var(--bg)] disabled:opacity-50"
+            >
+              Use this market
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setAdding("search")}
+            className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text)] transition-colors hover:bg-[var(--bg)]"
+          >
+            <Search size={12} /> Search
+          </button>
+          {suggestions.length > 0 && (
+            <div className="mt-1 border-t border-[var(--border)] pt-1">
+              {suggestions.map((c) => (
+                <button
+                  key={c.marketId}
+                  type="button"
+                  disabled={put.isPending}
+                  onClick={() => put.mutate(c.marketId)}
+                  className="block w-full truncate rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg)] hover:text-[var(--text)] disabled:opacity-50"
+                >
+                  {c.title ?? "This question"}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {adding === "search" && (
+        <TablePicker onPick={(id) => put.mutate(id)} pending={put.isPending} />
       )}
 
       <ul className="space-y-2">
@@ -177,56 +235,64 @@ export function YourTable({
             closing={close.isPending}
           />
         ))}
-
-        {invites.map((c) => (
-          <InviteCard
-            key={`invite-${c.marketId}`}
-            title={c.title}
-            onOpen={() => onSelect(c.marketId)}
-            onPut={() => put.mutate(c.marketId)}
-            pending={put.isPending}
-          />
-        ))}
       </ul>
     </div>
   );
 }
 
 /**
- * A FREE SLOT, SPOKEN AS AN INVITATION. It names a market this person is already
- * in and offers the one act that matters — putting it in front of their people.
- * Never a placeholder, never an empty rectangle counting down to three.
+ * FIND ONE — the same market search the header runs, sized for a rail.
+ *
+ * It reuses `searchMarkets` rather than a second index, so a question found here
+ * and a question found in the header are ranked identically. No empty state, no
+ * result count: an empty list already says nothing matched.
  */
-function InviteCard({
-  title,
-  onOpen,
-  onPut,
-  pending,
-}: {
-  title: string | null;
-  onOpen: () => void;
-  onPut: () => void;
-  pending: boolean;
-}) {
+function TablePicker({ onPick, pending }: { onPick: (id: number) => void; pending: boolean }) {
+  const [q, setQ] = useState("");
+  const [term, setTerm] = useState("");
+  const box = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    box.current?.focus();
+  }, []);
+  useEffect(() => {
+    const t = setTimeout(() => setTerm(q.trim()), 180);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const { data: hits } = useQuery({
+    queryKey: ["table-search", term],
+    queryFn: () => searchMarkets({ data: { query: term, limit: 6 } }),
+    enabled: term.length >= 2,
+    staleTime: 30_000,
+  });
+
   return (
-    <li className="rounded-xl border border-dashed border-[var(--border)] p-3">
-      <button type="button" onClick={onOpen} className="w-full text-left">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-          Spot open
-        </p>
-        <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-[var(--text)]">
-          {title ?? "This question"}
-        </p>
-      </button>
-      <button
-        type="button"
-        onClick={onPut}
-        disabled={pending}
-        className="mt-1.5 text-[12px] font-medium text-[var(--text)] underline transition-opacity disabled:opacity-50"
-      >
-        Put it on the table
-      </button>
-    </li>
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2">
+      <input
+        ref={box}
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search markets"
+        aria-label="Search markets to put on the table"
+        className="w-full rounded-lg bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
+      />
+      {(hits ?? []).length > 0 && (
+        <div className="mt-1 space-y-0.5">
+          {(hits ?? []).map((h) => (
+            <button
+              key={h.onchain_id}
+              type="button"
+              disabled={pending}
+              onClick={() => onPick(h.onchain_id)}
+              className="block w-full truncate rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg)] hover:text-[var(--text)] disabled:opacity-50"
+            >
+              {h.title}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -251,13 +317,14 @@ function TableRowCard({
   const progress = tableProgress(recipients);
   const finished = closeReason != null;
   const line = finished ? finishedLine(progress, closeReason) : progressLine(progress);
+  const [more, setMore] = useState(false);
 
   return (
     <li className="relative" data-challenge={id}>
       <button
         type="button"
         onClick={onOpen}
-        className={`w-full rounded-xl border p-3 text-left transition-colors ${
+        className={`w-full rounded-xl border p-3 pr-8 text-left transition-colors ${
           finished
             ? // QUIETER, NOT GREYED OUT. A finished Challenge is the best thing
               // that happens here; disabling its appearance would say the opposite.
@@ -266,6 +333,19 @@ function TableRowCard({
             : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-strong)]"
         }`}
       >
+        {/* IT IS LIVE — a dot, not a word. The one thing a creator wants to know at
+            a glance is whether this is still out there collecting answers, and a
+            breathing dot says it without spending a line of copy. */}
+        {!finished && (
+          <span className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            <span className="relative grid h-1.5 w-1.5 place-items-center">
+              <span className="absolute inline-flex h-1.5 w-1.5 animate-ping rounded-full bg-[var(--yes)] opacity-70" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--yes)]" />
+            </span>
+            Live
+          </span>
+        )}
+
         <p
           className={`line-clamp-2 text-[13px] leading-snug ${finished ? "text-[var(--text-secondary)]" : "text-[var(--text)]"}`}
         >
@@ -298,18 +378,32 @@ function TableRowCard({
           row survives with its stamps, and who showed up stays part of the
           relationship forever.
 
-          GONE ONCE IT HAS ENDED, and no control replaces it. A finished card needs
-          no dismissing: it ages out by itself, and an outcome you have to file away
-          is an inbox. The only thing left to do with it is read it. */}
+          BEHIND A CHEVRON, because it is the rarest thing anybody does here and it
+          was sitting under every card as a permanent line of text. Gone entirely
+          once the Challenge has ended: a finished card needs no dismissing — it
+          ages out by itself, and an outcome you have to file away is an inbox. */}
       {!finished && (
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={closing}
-          className="mt-1 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-50"
-        >
-          Take off the table
-        </button>
+        <>
+          <button
+            type="button"
+            aria-label="Options"
+            aria-expanded={more}
+            onClick={() => setMore((m) => !m)}
+            className="absolute right-1.5 top-2.5 grid h-6 w-6 place-items-center rounded-full text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+          >
+            <ChevronDown size={13} className={more ? "rotate-180 transition-transform" : "transition-transform"} />
+          </button>
+          {more && (
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={closing}
+              className="mt-1 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-50"
+            >
+              Take off the table
+            </button>
+          )}
+        </>
       )}
     </li>
   );

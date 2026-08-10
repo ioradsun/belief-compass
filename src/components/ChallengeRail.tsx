@@ -25,7 +25,6 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { YourTable, useTable } from "@/components/YourTable";
-import { useQueryClient } from "@tanstack/react-query";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
 import { passOnCall } from "@/lib/table.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
@@ -68,9 +67,12 @@ export function ChallengeRail({
   wallet,
   onSelect,
   insider,
+  currentMarketId,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
+  /** What the centre column is showing — offered as "Use this market". */
+  currentMarketId?: number;
   /**
    * The Insider feed (live tape), rendered by the route. Passed as a node rather
    * than as five more props: this component is about YOUR calls, and threading
@@ -79,7 +81,6 @@ export function ChallengeRail({
    */
   insider: ReactNode;
 }) {
-  const qc = useQueryClient();
   /**
    * NO CHALLENGES MEANS INSIDER. An empty Challenge tab is a dead first screen,
    * so the rail always opens on Insider — the one thing that is true for
@@ -216,16 +217,8 @@ export function ChallengeRail({
               Could not load who is waiting on you. This is a fault on our side, not an empty room —
               try again in a moment.
             </p>
-          ) : open.length === 0 ? (
-            <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
-              {/* Honest, and deliberately not "no challenges yet!" — the reason
-                  is that nobody has qualified, which is a fact about the graph
-                  rather than about the reader. Quiet, not broken — the sentence
-                  promises the room rather than apologising for it. */}
-              Your people are quiet. For now. When your Tribe or Rivals want your take, their open
-              questions land here.
-            </p>
-          ) : (
+          ) : open.length === 0 ? null : (
+
             <ul className="space-y-2">
               {open.slice(0, shown).map((c) => (
                 <ChallengeRow key={c.marketId} challenge={c} onSelect={onSelect} onDismiss={pass} />
@@ -234,8 +227,8 @@ export function ChallengeRail({
           )}
 
           {/* YOUR OWN TABLE, IN THE SAME COLUMN — what you put up, what became of
-              it, and an invitation for every slot still open. */}
-          <YourTable wallet={wallet} onSelect={onSelect} />
+              it, and one + for filling a free slot. */}
+          <YourTable wallet={wallet} onSelect={onSelect} currentMarketId={currentMarketId} />
 
           {/* MORE, SAID OUT LOUD. A railful is what reads as a set of things
               waiting for you; past that it becomes a feed, and the feed already
@@ -252,15 +245,6 @@ export function ChallengeRail({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => {
-              void qc.invalidateQueries({ queryKey: ["challenges", wallet] });
-            }}
-            className="mt-2 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-          >
-            Refresh
-          </button>
         </div>
       )}
     </div>
