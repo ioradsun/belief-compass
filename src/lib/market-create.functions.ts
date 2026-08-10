@@ -304,6 +304,7 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
     // The chain indexer creates a bare `markets` row with no title — POV owns
     // titles, and this market was never born on POV. Publish ours, or the feed
     // and every deck render it untitled (which reads as "missing").
+    const openedAt = new Date().toISOString();
     await db
       .from("markets")
       .upsert(
@@ -314,11 +315,34 @@ export const finalizeMarketCreate = createServerFn({ method: "POST" })
           category_source: row?.category_source ?? "conviction",
           author_wallet: wallet,
           source: "conviction",
-          created_at: new Date().toISOString(),
+          created_at: openedAt,
         },
         { onConflict: "onchain_id" },
       )
       .then(() => undefined);
+
+    // THE OPENING EVENT. Markets born on POV get exactly one `market_created`
+    // event from the poller; markets born here got none, so every Insider
+    // surface that reads the canonical event stream (the tape, "ON THE TABLE",
+    // the fresh-market stories) never saw them open. Same deterministic
+    // source_key, so this can never double up with a later POV sighting.
+    const { marketCreatedSourceKey } = await import("@/lib/events");
+    await db
+      .from("events")
+      .upsert(
+        {
+          source_key: marketCreatedSourceKey(data.marketId),
+          source: "conviction",
+          kind: "market_created",
+          market_id: String(data.marketId),
+          wallet,
+          occurred_at: openedAt,
+          payload: { created_at_source: "conviction" },
+        },
+        { onConflict: "source_key", ignoreDuplicates: true },
+      )
+      .then(() => undefined);
+
 
     // Build the read-model row now rather than waiting behind the refresh
     // queue: the creator is about to land on this market.
