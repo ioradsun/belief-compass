@@ -67,6 +67,7 @@ export function ChallengeRail({
   wallet,
   onSelect,
   insider,
+  insiderCount,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
@@ -77,6 +78,8 @@ export function ChallengeRail({
    * decide.
    */
   insider: ReactNode;
+  /** Stories the tape is holding back — the only number the Insider tab may say. */
+  insiderCount?: number;
 }) {
   /**
    * NO CHALLENGES MEANS INSIDER. An empty Challenge tab is a dead first screen,
