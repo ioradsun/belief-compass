@@ -29,7 +29,14 @@ export const getHouseRead = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }) => loadHouseRead(data.wallet ?? null, data.marketId));
 
-/** Reveal the House pick by finalizing a verified on-chain buy. */
+/**
+ * Reveal the House pick by finalizing a verified on-chain buy.
+ *
+ * NO SIGNATURE. The buy itself is the proof: `finalizeHouseBet` requires a mined
+ * transaction sent FROM this wallet, so asking the wallet to sign a message right
+ * after it already signed and paid would be a second prompt proving less. A
+ * cached session is still honoured when one happens to exist.
+ */
 export const finalizeBet = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
     z
@@ -38,13 +45,16 @@ export const finalizeBet = createServerFn({ method: "POST" })
         marketId: z.number().int().nonnegative(),
         side: z.enum(["YES", "NO"]),
         txHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/, "invalid tx hash"),
-        session: z.string().min(16).max(2000),
+        session: z.string().min(16).max(2000).optional(),
       })
       .parse(raw),
   )
   .handler(async ({ data }) => {
-    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
-    const wallet = await assertWalletOwnership(data.wallet, data.session);
+    let wallet = data.wallet;
+    if (data.session) {
+      const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+      wallet = await assertWalletOwnership(data.wallet, data.session);
+    }
     return finalizeHouseBet(wallet, data.marketId, data.side, data.txHash);
   });
 

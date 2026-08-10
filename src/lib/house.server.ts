@@ -433,6 +433,14 @@ async function verifyBetTransaction(
   marketId: number,
   side: BeliefAction,
   txHash: string,
+  /**
+   * THE TRANSACTION IS THE SIGNATURE.
+   *
+   * A mined buy sent FROM this address is stronger proof of ownership than any
+   * off-chain message could be — so the reveal never asks the wallet to sign a
+   * second time after the purchase it just paid for.
+   */
+  wallet: string,
 ): Promise<void> {
   if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new Error("That transaction isn't valid.");
   const [{ getBaseClient }, { PROXY_ADDRESS }] = await Promise.all([
@@ -450,6 +458,9 @@ async function verifyBetTransaction(
   const tx = await client.getTransaction({ hash }).catch(() => null);
   if (!tx?.to || tx.to.toLowerCase() !== PROXY_ADDRESS.toLowerCase())
     throw new Error("That transaction isn't a belief-market trade.");
+  if (!tx.from || tx.from.toLowerCase() !== wallet.toLowerCase())
+    throw new Error("That buy was sent from a different wallet.");
+
 
   let decoded: { functionName: string; args?: readonly unknown[] };
   try {
@@ -484,7 +495,7 @@ export async function finalizeHouseBet(
   // transaction on Base server-side (receipt succeeded, it touched the pinned
   // belief-market proxy, and it decodes to a buy of this market on this side)
   // before revealing anything. The hash is uniquely indexed so one tx reveals once.
-  await verifyBetTransaction(marketId, side, txHash);
+  await verifyBetTransaction(marketId, side, txHash, wallet);
   const { data: existing } = await sb
     .from("house_predictions")
     .select("predicted_action, actual_action")
