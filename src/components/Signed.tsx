@@ -1,9 +1,17 @@
 /**
  * Signed — one rule for every positive/negative figure in the product.
  *
- * The NUMBER is always neutral: a value is a fact, not a verdict. Only the
- * SIGN carries colour — "+" green, "−" (or "-") red, everything else muted.
- * Arrows (▲ ▼ ↑ ↓) count as signs too, so arrow-led figures read the same way.
+ * There are exactly two kinds of figure, and they are read differently:
+ *
+ *   PERCENTAGES are a verdict. A rate has no unit to anchor it, so its whole
+ *   job is direction and size. The entire figure carries the colour — green up,
+ *   red down — and leads with an arrow (▲ ▼) instead of a redundant +/−.
+ *
+ *   EVERYTHING ELSE is a fact. A count or an amount is a quantity first, so it
+ *   stays fully neutral: "+$1.07" and "−3 believers" keep their sign for
+ *   direction but never take colour, sign included.
+ *
+ * Flat is flat: no arrow, no colour, muted.
  *
  * Pure presentation: it never parses, rounds, or reformats — it splits an
  * already-formatted string into its leading sign and the rest.
@@ -29,9 +37,9 @@ export function Signed({
   value: string;
   className?: string;
   style?: CSSProperties;
-  /** Colour of the numeric part. Neutral by default — never green or red. */
+  /** Colour of the numeric part. Neutral by default — percentages override it. */
   numberColor?: string;
-  /** Trailing content (arrow, unit chip) rendered after the number. */
+  /** Trailing content (unit chip, suffix) rendered after the number. */
   children?: ReactNode;
 }) {
   const first = value.charAt(0);
@@ -41,13 +49,31 @@ export function Signed({
   // "▲ 12%" — keep the space with the number, not the sign.
   if (hasSign && rest.startsWith(" ")) rest = rest.slice(1);
 
+  const isPct = value.includes("%");
+
+  if (isPct) {
+    const tone = signTone(sign);
+    // "0%" with no sign is genuinely flat: muted, no arrow.
+    const arrow = !sign ? "" : NEGATIVE.has(sign) ? "▼" : "▲";
+    return (
+      <span className={className} style={{ color: tone, ...style }}>
+        {arrow && (
+          <>
+            <span className="text-[0.7em]" aria-hidden="true">
+              {arrow}
+            </span>
+            <span>{"\u2009"}</span>
+          </>
+        )}
+        {rest}
+        {children}
+      </span>
+    );
+  }
+
   return (
     <span className={className} style={{ color: numberColor, ...style }}>
-      {sign && (
-        <span style={{ color: signTone(sign) }} aria-hidden="false">
-          {sign}
-        </span>
-      )}
+      {sign}
       {sign && <span>{"\u2009"}</span>}
       {rest}
       {children}
