@@ -134,19 +134,21 @@ export function YourTable({
   const open = spotsOpen(live.length);
 
   /**
-   * SUGGESTIONS LIVE BEHIND THE +, NOT IN THE LIST. Empty-slot cards were three
-   * rectangles asking to be read; the same offer as the first thing inside one
-   * control is the same offer without the furniture.
+   * SUGGESTIONS AND SEARCH ARE ONE SURFACE. Opening "Add" shows the markets you
+   * are already in; typing replaces them in place with matches. Two lists in two
+   * modes was a menu about a menu — the suggestions were the answer most of the
+   * time, and searching used to throw them away.
    */
   const { data: candidates } = useQuery({
     queryKey: candidatesKey(wallet, open),
     queryFn: () => getTableCandidates({ data: { wallet: wallet ?? null, limit: open } }),
-    enabled: !!wallet && open > 0 && !isError && adding === "menu",
+    enabled: !!wallet && open > 0 && !isError && adding,
     staleTime: 60_000,
   });
   const suggestions = (candidates ?? [])
     .filter((c) => !live.some((r) => r.marketId === c.marketId))
-    .slice(0, open);
+    .slice(0, open)
+    .map((c) => ({ id: c.marketId, title: c.title ?? "This question" }));
 
   if (isError) {
     // A failed read is not an empty table. Same rule the incoming side follows:
@@ -158,76 +160,56 @@ export function YourTable({
     );
   }
 
-  const canUseCurrent =
-    currentMarketId != null && !live.some((r) => r.marketId === currentMarketId) && open > 0;
-
   return (
     <div className="space-y-2">
       {/* WHOSE MOVE IT IS, IN TWO WORDS AND A COLOUR. Blue is this product's own
           side-of-the-question colour for the reader; amber is the other side. So
           the rail reads without a legend: blue is what you asked, amber is what
           was asked of you. The fraction sits beside the heading because capacity
-          is a fact about this section, not a sentence of its own. */}
+          is a fact about this section, not a sentence of its own.
+
+          THE HEADING IS THE CONTROL. Pressing it folds the section away — the dot
+          and the fraction still report the state while it is closed, which is why
+          the cards no longer repeat the blue dot one per row. */}
       <div className="flex items-center justify-between gap-2">
-        <h3 className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-expanded={!collapsed}
+          className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
+        >
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--yes)]" aria-hidden />
           You Challenged
           <span className="num tabular-nums font-normal">
             {live.length}/{TABLE_SLOTS}
           </span>
-        </h3>
-        <button
-          type="button"
-          aria-label={adding ? "Close" : "Put something on the table"}
-          aria-expanded={adding != null}
-          disabled={open === 0 || !wallet}
-          onClick={() => setAdding((a) => (a ? null : "menu"))}
-          className="grid h-6 w-6 place-items-center rounded-full border border-[var(--border)] text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] disabled:opacity-30"
-        >
-          {adding ? <X size={13} /> : <Plus size={14} />}
+          <ChevronDown
+            size={12}
+            className={`transition-transform ${collapsed ? "-rotate-90" : ""}`}
+            aria-hidden
+          />
         </button>
-      </div>
-
-      {adding === "menu" && (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1">
-          {canUseCurrent && (
-            <button
-              type="button"
-              disabled={put.isPending}
-              onClick={() => put.mutate(currentMarketId)}
-              className="block w-full rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text)] transition-colors hover:bg-[var(--bg)] disabled:opacity-50"
-            >
-              Use this market
-            </button>
-          )}
+        {!collapsed && (
           <button
             type="button"
-            onClick={() => setAdding("search")}
-            className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text)] transition-colors hover:bg-[var(--bg)]"
+            aria-expanded={adding}
+            disabled={open === 0 || !wallet}
+            onClick={() => setAdding((a) => !a)}
+            className="text-[11px] font-medium uppercase tracking-wide text-[var(--text-secondary)] transition-colors hover:text-[var(--text)] disabled:opacity-30"
           >
-            <Search size={12} /> Search
+            {adding ? "Close" : "Add"}
           </button>
-          {suggestions.length > 0 && (
-            <div className="mt-1 border-t border-[var(--border)] pt-1">
-              {suggestions.map((c) => (
-                <button
-                  key={c.marketId}
-                  type="button"
-                  disabled={put.isPending}
-                  onClick={() => put.mutate(c.marketId)}
-                  className="block w-full truncate rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg)] hover:text-[var(--text)] disabled:opacity-50"
-                >
-                  {c.title ?? "This question"}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
+      </div>
+
+      {!collapsed && adding && (
+        <TablePicker
+          suggestions={suggestions}
+          onPick={(id) => put.mutate(id)}
+          pending={put.isPending}
+        />
       )}
 
-      {adding === "search" && (
-        <TablePicker onPick={(id) => put.mutate(id)} pending={put.isPending} />
-      )}
 
       <ul className="space-y-2">
         {ordered.map((row) => (
