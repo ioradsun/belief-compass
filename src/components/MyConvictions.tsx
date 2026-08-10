@@ -108,24 +108,24 @@ type Built = {
   /** The window's short name, e.g. "24H" / "1W" — what newInWindow is measured over. */
   windowLabel: string;
   chg: number | null;
-  signal: PositionSignal;
+  /** The persisted canonical fact, in the owner's voice — or null: stay quiet. */
+  story: PositionStory | null;
 };
 
 /**
- * ONE CONVICTION, ONE STORY.
+ * ONE CONVICTION, FOUR ANSWERS.
  *
- * The card answers, in order: what do I believe (the question) → what is
- * happening to my side (one plain sentence) → where do I stand (side, what it is
- * worth, what it has done). Nothing else earns space:
+ * What am I backing → which side → what is it worth → how is it doing. A fifth
+ * line appears only when the platform already knows something material about the
+ * market. Nothing else earns space:
  *
- *  • Pulse label — removed. "Accelerating / Capital-led" is a classification the
- *    reader has to decode, and the story sentence already says it in words.
- *  • Believers row — removed. The story sentence carries the count when it is the
- *    news; a standing number with no movement is not a reason to look.
- *  • Shares and entry → now — removed. Neither changes a decision; the worth and
- *    the return already state the outcome, and this is a belief, not a brokerage.
- *  • Dividers — removed. Spacing separates; lines only add noise.
+ *  • Absolute P&L — removed from the scan surface. Value and return % answer
+ *    "how is it doing" in one read; the dollar gain is one tap away on Full P&L.
+ *    The number is still computed, still exact, just not printed twice here.
+ *  • Pulse label, believers row, shares/entry, dividers — removed earlier, for
+ *    the same reason: they do not change a decision at a glance.
  */
+
 function ConvictionCard({
   p,
   onSelect,
