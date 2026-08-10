@@ -74,175 +74,34 @@ export function stageMediaFrom(
   };
 }
 
-/** How far a horizontal drag must travel (px) before the page flips. */
-const FLIP = 56;
-
 export function MediaStage({
   media,
   children,
   className = "",
 }: {
   /**
-   * Null when this market carries no evidence. The stage still renders — as a
-   * plain single-page scroller — so that moving between a market WITH media and
-   * one WITHOUT never changes the element at this position in the tree. React
-   * would otherwise unmount the whole market body and rebuild it, which is
-   * visible as the panel blinking on exactly those transitions.
+   * Null when this market carries no evidence. Evidence is no longer a second
+   * page: it renders inline, directly under the question, so a market with
+   * media has exactly the same layout as every other market.
    */
   media: StageMedia | null;
-  /** The existing market panel — rendered untouched as page 1. */
+  /** The market panel — unchanged. */
   children: ReactNode;
   className?: string;
 }) {
-  // Media is the point of these markets: open on the evidence, with the market
-  // one drag (or one hint tap) to the left.
-  const [page, setPage] = useState<0 | 1>(1);
-  const [dx, setDx] = useState(0);
-  /**
-   * ANIMATE ONLY WHAT THE READER DID.
-   *
-   * A market's media is not known at first paint — it arrives with the creator
-   * lookup, a beat after the body is already on screen. Until then this stage
-   * has one page and sits at offset 0; the moment the lookup lands it becomes a
-   * two-page stage sitting at −100%, and with a transition on that property the
-   * reader sees the whole market slide sideways on its own. That slide is the
-   * "jumping" between markets: nobody asked for it, and it says nothing.
-   *
-   * So travel is animated for exactly one cause — a drag or a hint tap. Every
-   * other change of page (media arriving, a new market) is a cut.
-   */
-  const [gliding, setGliding] = useState(false);
-  const turn = (p: 0 | 1) => {
-    setGliding(true);
-    setPage(p);
-  };
-  // A new market's evidence is a new stage: open on it again. Keyed on the URL
-  // so switching markets can't strand you on the previous one's page.
-  const mediaKey = media?.url ?? null;
-  const lastMedia = useRef<string | null>(mediaKey);
-  if (lastMedia.current !== mediaKey) {
-    lastMedia.current = mediaKey;
-    if (gliding) setGliding(false);
-    if (page !== 1) setPage(1);
-    if (dx !== 0) setDx(0);
-  }
-
-  const drag = useRef<{ x: number; y: number; axis: "" | "x" | "y" } | null>(null);
-  const width = useRef(1);
-
-  const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType === "mouse") return; // mouse users click the hint
-    width.current = e.currentTarget.clientWidth || 1;
-    drag.current = { x: e.clientX, y: e.clientY, axis: "" };
-  };
-  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    if (!d) return;
-    const mx = e.clientX - d.x;
-    const my = e.clientY - d.y;
-    if (!d.axis) {
-      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
-      d.axis = Math.abs(mx) > Math.abs(my) ? "x" : "y";
-    }
-    if (d.axis !== "x") return;
-    // Resist dragging past the ends — the stage has exactly two states.
-    const bounded = page === 0 ? Math.min(0, mx) : Math.max(0, mx);
-    setDx(bounded);
-  };
-  const onUp = () => {
-    const d = drag.current;
-    drag.current = null;
-    if (d?.axis === "x" && Math.abs(dx) > FLIP) turn(dx < 0 ? 1 : 0);
-    setDx(0);
-  };
-
-  const label = !media
-    ? null
-    : media.embed
-      ? PLATFORM_LABEL[media.embed.platform]
-      : KIND_LABEL[media.kind];
-  // With no evidence there is only one page, and it must not be offset.
-  const offset = media ? page * -100 : 0;
-
   return (
-    <div
-      className={`relative min-h-0 overflow-hidden ${className}`}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
-      onPointerUp={onUp}
-      onPointerCancel={onUp}
-    >
+    <div className={`relative min-h-0 overflow-hidden ${className}`}>
       <div
-        className="flex h-full min-h-0 touch-pan-y"
-        style={{
-          transform: `translate3d(calc(${offset}% + ${dx}px), 0, 0)`,
-          transition:
-            gliding && !drag.current && media
-              ? "transform 260ms cubic-bezier(.22,.61,.36,1)"
-              : "none",
-        }}
+        className="flex h-full w-full min-w-full shrink-0 flex-col overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]"
+        style={{ gap: "var(--deck-gap, 12px)" }}
       >
-        {/* Page 1 — the market, exactly as it was. `overflow-y-scroll` (not auto)
-          keeps the scrollbar gutter reserved, so a market whose body happens to
-          fit cannot widen the column relative to one that doesn't. The row gap
-          rides the deck's height-driven scale, so a short window tightens the
-          body instead of pushing it past the bottom of the column. */}
-        <div
-          className="flex h-full w-full min-w-full shrink-0 flex-col overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]"
-          style={{ gap: "var(--deck-gap, 12px)", justifyContent: "safe center" }}
-        >
-          {/* The hint's row is reserved whether or not this market has evidence,
-            so the body below it starts at the same y on every market. */}
-          <div className="min-h-[17px] shrink-0">
-            {media && (
-              <Hint side="right" onClick={() => turn(1)}>
-                {label} →
-              </Hint>
-            )}
-          </div>
-          {children}
-        </div>
-
-        {/* Page 2 — the evidence. Only exists when there is evidence. */}
-        {media && (
-          <div
-            className="flex h-full w-full min-w-full shrink-0 flex-col overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]"
-            style={{ gap: "var(--deck-gap, 12px)" }}
-          >
-            <div className="min-h-[17px] shrink-0">
-              <Hint side="left" onClick={() => turn(0)}>
-                ← Market
-              </Hint>
-            </div>
-            <Evidence media={media} />
-          </div>
-        )}
+        {media && <Evidence media={media} />}
+        {children}
       </div>
     </div>
   );
 }
 
-function Hint({
-  side,
-  onClick,
-  children,
-}: {
-  side: "left" | "right";
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <div className={`shrink-0 ${side === "right" ? "text-right" : "text-left"}`}>
-      <button
-        type="button"
-        onClick={onClick}
-        className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
-      >
-        {children}
-      </button>
-    </div>
-  );
-}
 
 function Evidence({ media }: { media: StageMedia }) {
   if (media.kind === "embed" && media.embed) return <MediaEmbed media={media.embed} />;
