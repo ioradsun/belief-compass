@@ -104,6 +104,10 @@ interface Call {
    */
   passed_at: string | null;
   challenge_id: number | null;
+  /** The surrogate handle a child Challenge points at. Null before the migration. */
+  id: number | null;
+  /** Immutable presentation context. Null on every row stamped before it existed. */
+  responded_side: string | null;
 }
 /** The market-level act. One row per (challenger, market) that went up. */
 interface ChallengeRow {
@@ -114,6 +118,8 @@ interface ChallengeRow {
   created_at: string;
   closed_at: string | null;
   close_reason: string | null;
+  /** Who brought this Challenge's author in. Null is a root. */
+  parent_call: number | null;
 }
 interface Event {
   wallet: string;
@@ -177,7 +183,7 @@ async function main() {
   const [calls, events, beliefs, dna, markets, challenges] = await Promise.all([
     page<Call>(
       "market_calls",
-      "market_id,caller_wallet,responder_wallet,relation_at_call,called_at,responded_at,passed_at,challenge_id",
+      "id,market_id,caller_wallet,responder_wallet,relation_at_call,called_at,responded_at,passed_at,challenge_id,responded_side",
     ),
     page<Event>(
       "events",
@@ -194,7 +200,7 @@ async function main() {
     page<Market>("markets", "onchain_id,title"),
     page<ChallengeRow>(
       "challenges",
-      "id,challenger_wallet,market_id,slot_no,created_at,closed_at,close_reason",
+      "id,challenger_wallet,market_id,slot_no,created_at,closed_at,close_reason,parent_call",
     ),
   ]);
 
@@ -1036,6 +1042,81 @@ async function main() {
     line("   the question genuinely went back up. What the fix changed is that it now");
     line("   reaches the people who never answered plus anybody newly qualified,");
     line("   instead of reaching nobody at all.");
+  }
+  line();
+
+  // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * SECTION 11 — THE CHAIN'S SCHEMA, AND WHETHER ITS POINTERS MEAN ANYTHING.
+   *
+   * The application tolerates all three chain columns being absent: the answer
+   * path catches 42703 and stamps without a side, the relay path retries without
+   * lineage. That tolerance is right and it is exactly what makes an unapplied
+   * migration invisible — nothing crashes, nothing is recorded, and every screen
+   * looks healthy. So the columns are proved here rather than inferred from the
+   * app not falling over.
+   *
+   * Then the pointers themselves. A parent that does not exist, points at another
+   * market, or names somebody who is not the child's author is not a chain — it
+   * is a number in a column, and every "Maya → Sundeep → You" drawn from it would
+   * be fiction.
+   */
+  line("11 · CHAIN INTEGRITY");
+  line("   Are the three columns really there, and do the pointers hold up?");
+  line();
+  {
+    const hasId = CALLS.some((c) => c.id != null);
+    const sideColumn = CALLS.length > 0 && "responded_side" in (CALLS[0] as object);
+    const parentColumn = CHALLENGES.length > 0 && "parent_call" in (CHALLENGES[0] as object);
+    line(`   market_calls.id present        ${CALLS.length === 0 ? "NO DATA" : hasId ? "yes" : "NO — migration not applied"}`);
+    line(`   market_calls.responded_side    ${CALLS.length === 0 ? "NO DATA" : sideColumn ? "yes" : "NO — migration not applied"}`);
+    line(`   challenges.parent_call         ${CHALLENGES.length === 0 ? "NO DATA" : parentColumn ? "yes" : "NO — migration not applied"}`);
+    line();
+
+    const answered = CALLS.filter((c) => c.responded_at);
+    const answeredNoId = answered.filter((c) => c.id == null).length;
+    const badSide = CALLS.filter(
+      (c) => c.responded_side != null && c.responded_side !== "YES" && c.responded_side !== "NO",
+    ).length;
+    const answeredNoSide = answered.filter((c) => c.responded_side == null).length;
+    line(`   answered rows                  ${answered.length}`);
+    line(`     without an id                ${answeredNoId}  ${answeredNoId ? "← cannot be a lineage parent" : ""}`);
+    line(`     with no recorded side        ${answeredNoSide}  (expected on rows stamped before the migration)`);
+    line(`   responded_side outside YES/NO  ${badSide}  ${badSide ? "← the CHECK constraint is missing" : ""}`);
+    line();
+
+    const callById = new Map<number, Call>();
+    for (const c of CALLS) if (c.id != null) callById.set(Number(c.id), c);
+    const challengeById = new Map<number, ChallengeRow>();
+    for (const c of CHALLENGES) challengeById.set(Number(c.id), c);
+
+    const relayed = CHALLENGES.filter((c) => c.parent_call != null);
+    const problems: string[] = [];
+    for (const child of relayed) {
+      const parent = callById.get(Number(child.parent_call));
+      if (!parent) {
+        problems.push(`challenge ${child.id} → call ${child.parent_call} does not exist`);
+        continue;
+      }
+      if (Number(parent.market_id) !== Number(child.market_id))
+        problems.push(`challenge ${child.id} points at a call in a DIFFERENT market`);
+      // The person who answered the parent call must be the person who then put
+      // the question up. Anything else is a forged lineage.
+      if (lc(parent.responder_wallet) !== lc(child.challenger_wallet))
+        problems.push(`challenge ${child.id}'s parent was answered by somebody else`);
+      if (!parent.responded_at)
+        problems.push(`challenge ${child.id} relays a call nobody answered`);
+      if (lc(parent.caller_wallet) === lc(child.challenger_wallet))
+        problems.push(`challenge ${child.id} is its own parent's caller — a self-cycle`);
+    }
+    line(`   challenges with a parent       ${relayed.length}`);
+    line(`   lineage problems               ${problems.length}`);
+    for (const p of problems.slice(0, 8)) line(`       ${p}`);
+    if (relayed.length === 0) {
+      line();
+      line("   NOBODY HAS RELAYED YET, so the pointer checks proved nothing today.");
+      line("   That is a finding about the product's stage, not a clean bill of health.");
+    }
   }
   line();
 
