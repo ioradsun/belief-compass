@@ -14,6 +14,7 @@
  * simulation. A failed send leaves a resumable draft, never a half-created market.
  */
 import { useEffect, useRef, useState } from "react";
+import { Lightbulb } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import { useWalletSession } from "@/hooks/useWalletSession";
@@ -481,7 +482,7 @@ export function CreateMarket({
             className="shrink-0 rounded-[14px] border px-4 text-[13px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-50"
             style={{ borderColor: "var(--border)" }}
           >
-            Cancel
+            {cancelLabel}
           </button>
           <div className="min-w-0 flex-1">
             <PrimaryAction
