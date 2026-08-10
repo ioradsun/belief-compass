@@ -44,6 +44,7 @@ import { CurrentMarketActivity } from "@/components/CurrentMarketActivity";
 import { SimilarMarkets } from "@/components/SimilarMarkets";
 import { ChallengeRail } from "@/components/ChallengeRail";
 import { IdeasRail } from "@/components/IdeasRail";
+import { AlternatesRail } from "@/components/AlternatesRail";
 import { useOpenCalls } from "@/lib/open-calls";
 import { LaunchRail } from "@/components/LaunchRail";
 import { MarketDeck } from "@/components/MarketDeck";
@@ -257,8 +258,6 @@ type Search = {
 const flag = (v: unknown): true | undefined =>
   v === true || v === 1 || v === "1" || v === "true" || v === "" ? true : undefined;
 
-
-
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>): Search => ({
     wallet:
@@ -348,7 +347,6 @@ export const Route = createFileRoute("/")({
     } catch {
       return { feed: null, tape: null, deck: null, fetchedAt: Date.now() };
     }
-
   },
 
   staleTime: 10_000,
@@ -668,14 +666,13 @@ function Feed() {
   // same is true of any deep link to a center destination: a link to a market, a
   // person, or the create form must also SELECT the column that renders it —
   // otherwise the phone sits on "Crowd" and the destination is invisible.
-  const deepCenter = !!selectedMarket || !!selectedPerson || !!createOpen || !!dashOpen || !!dnaOpen;
+  const deepCenter =
+    !!selectedMarket || !!selectedPerson || !!createOpen || !!dashOpen || !!dnaOpen;
   useEffect(() => {
     if (!tabParam && !deepCenter) return;
     setTab(tabParam ?? "belief");
     landing.collapse();
   }, [tabParam, deepCenter]); // eslint-disable-line react-hooks/exhaustive-deps
-
-
 
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -772,7 +769,6 @@ function Feed() {
     }
     return null;
   });
-
 
   // First principle: once a valid contract-backed market snapshot reaches the
   // browser, it is durable for this page lifetime. Query retries, wallet
@@ -1258,7 +1254,6 @@ function Feed() {
                   <span aria-hidden="true">{createOpen ? "✕" : "+"}</span>{" "}
                   {createOpen ? "Close" : "Conviction"}
                 </button>
-
               ) : (
                 <button
                   type="button"
@@ -1440,12 +1435,10 @@ function Feed() {
                       ethUsd={stableFeed?.ethUsd ?? 0}
                       onCreated={(marketId) => marketCreated(marketId)}
                       onCancel={closeCreate}
-                      onOpenTerms={openTerms}
                     />
                   </Suspense>
                 </PanelBoundary>
               </div>
-
             ) : selectedPerson ? (
               /* The exit lives here rather than inside the panel: both of these
                  components have several early returns (loading, no wallet, not
@@ -1613,11 +1606,19 @@ function Feed() {
                 those apart belongs in the tape, which is why the tape is passed
                 in rather than owned here. */}
               {createOpen ? (
-                <IdeasRail
-                  suggestion={houseIdea.suggestion}
-                  onUse={() => acceptIdea(false)}
-                  onDismiss={houseIdea.onDismiss}
-                />
+                /* THE RIGHT RAIL WHILE WRITING — rewrites of your own question
+                   first, then a House spark. Alternates take their natural height
+                   on top; the spark fills what's left and self-hides when there is
+                   nothing to suggest, so an untouched form shows an empty column
+                   rather than a padded one. */
+                <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+                  <AlternatesRail />
+                  <IdeasRail
+                    suggestion={houseIdea.suggestion}
+                    onUse={() => acceptIdea(false)}
+                    onDismiss={houseIdea.onDismiss}
+                  />
+                </div>
               ) : (
                 <ChallengeRail
                   wallet={wallet}

@@ -35,7 +35,7 @@ import {
   recordCreateFailure,
   reviewMarketQuestion,
 } from "@/lib/market-create.functions";
-import { clearDraft, getDraft, setDraft, setProbe } from "@/lib/create-draft";
+import { clearDraft, getDraft, setDraft, setProbe, useAdoptedQuestion } from "@/lib/create-draft";
 import {
   CATEGORY_LABEL,
   CREATOR_CATEGORIES,
@@ -67,12 +67,10 @@ export function CreateMarket({
   ethUsd,
   onCreated,
   onCancel: _onCancel,
-  onOpenTerms,
 }: {
   ethUsd: number;
   onCreated: (marketId: number) => void;
   onCancel: () => void;
-  onOpenTerms?: () => void;
 }) {
   const { isConnected } = useAccount();
   const { ensureSession, address } = useWalletSession();
@@ -98,6 +96,20 @@ export function CreateMarket({
   /** Chips hidden until asked for. A creator who already chose stays expanded, so
    *  a deliberate choice is never buried behind a tap they already made. */
   const [catOpen, setCatOpen] = useState(saved.category != null);
+
+  // AN ALTERNATE ADOPTED FROM THE RIGHT RAIL replaces the question in place —
+  // this is where the AI's help lands now that it has left the form. The ref
+  // guards against re-applying on remount: only a nonce newer than the one this
+  // mount started with is a real request (see create-draft#adoptQuestion), so
+  // reopening the form never overwrites an edit made after adopting.
+  const adopted = useAdoptedQuestion();
+  const adoptedNonce = adopted?.nonce ?? 0;
+  const seenAdopt = useRef(adoptedNonce);
+  useEffect(() => {
+    if (adoptedNonce === seenAdopt.current) return;
+    seenAdopt.current = adoptedNonce;
+    if (adopted) setQuestion(adopted.text);
+  }, [adoptedNonce, adopted]);
 
   const minSeedEth = econ.minSeedWei == null ? null : weiToEth(econ.minSeedWei);
   const minUsd = minSeedEth != null && ethUsd > 0 ? minSeedEth * ethUsd : null;
@@ -286,7 +298,6 @@ export function CreateMarket({
 
         {/* 2 · The conviction statement. */}
         <div>
-          
           <div
             className="rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
             style={{ borderColor: "var(--border)" }}
@@ -332,29 +343,13 @@ export function CreateMarket({
             />
           )}
 
-          {/* AI check / polish — subtle, advisory. */}
-          {/* "✓ AI-checked" is gone. It was a badge congratulating the system for
-              having run, on a surface where the reader has no decision to make
-              about it — and it sat in the green earn/gain colour, spending the
-              loudest tone in the palette on housekeeping. What survives is the
-              only part with an action behind it: one tap to a better sentence,
-              and the plain reason when the question will not work. */}
-          {review && (
-            <div className="mt-1 flex items-center gap-1.5 text-[11.5px]">
-              {review.review.suggestion && (
-                <button
-                  type="button"
-                  onClick={() => setQuestion(review.review.suggestion!)}
-                  className="text-[var(--text)] underline"
-                >
-                  Polish
-                </button>
-              )}
-              {!review.review.ok && !review.review.suggestion && review.review.reason && (
-                <span className="text-[var(--text-muted)]">{review.review.reason}</span>
-              )}
-            </div>
-          )}
+          {/* NO AI FEEDBACK RENDERS IN THE FORM. The old inline "Polish" rewrite
+              and the rejection reason both appeared a beat after typing paused and
+              pushed every field below them down — the AI's opinion arriving as a
+              layout shift. That help now lives entirely in the right rail
+              (AlternatesRail), which offers 2–3 rewrites to adopt without ever
+              moving a field here. The `review` query stays only to pre-fill the
+              category guess below, in a height-reserved slot that cannot jump. */}
         </div>
 
         {/* 2b · WHERE THIS BELONGS — collapsed, because the creator does not care.
@@ -371,7 +366,11 @@ export function CreateMarket({
             permanently loses its ground truth — so this is demoted, not removed.
             One line at rest, the full set one tap away, and the guess is already
             correct almost always. */}
-        <div>
+        {/* HEIGHT-RESERVED so the AI's category guess can fill this slot without
+            shifting the fields below it. At rest the slot is one line tall whether
+            or not a guess has arrived yet; expanding to the full chip set is a
+            deliberate tap, so growing then is fine. */}
+        <div className="min-h-[20px]">
           {catOpen ? (
             <>
               <StepLabel>
@@ -491,20 +490,10 @@ export function CreateMarket({
             </PrimaryAction>
           </div>
         </div>
-
-        {/* 6 · Disclosure — the legal line, and only the legal line.
-            "Conviction Company Exclusive. Not available on pov.co yet." was
-            positioning copy standing directly under the primary action, which is
-            the one place a reader is committing rather than being persuaded. */}
-        <p className="text-center text-[11px] text-[var(--text-muted)]">
-          <button
-            type="button"
-            onClick={() => (onOpenTerms ? onOpenTerms() : window.open("/terms", "_blank"))}
-            className="underline"
-          >
-            Terms
-          </button>
-        </p>
+        {/* The Terms link that used to sit under the primary action is gone: it
+            put a legal detour directly beneath the one control a reader is
+            committing on. Terms remain reachable from the app menu; the act of
+            creating no longer asks the writer to step out of it. */}
       </div>
 
       {/* Direct uploads are intentionally disabled in this version — a market's
@@ -630,7 +619,6 @@ function EmbedPicker({
             }
             setRaw(value);
           }}
-
           placeholder="Paste a link or embed code — YouTube, X or Spotify"
           className="min-w-0 flex-1 rounded-[10px] bg-[var(--surface)] px-3 py-2 text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
           style={{ border: "1px solid var(--border)" }}
