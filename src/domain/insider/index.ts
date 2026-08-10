@@ -52,6 +52,12 @@ export {
   type NowQuery,
   type InsiderNowFeed,
 } from "./projections/now";
+export {
+  accumulatePatterns,
+  type PatternObservation,
+  type PatternDossier,
+  type PatternKind,
+} from "./pattern";
 
 
 /**
