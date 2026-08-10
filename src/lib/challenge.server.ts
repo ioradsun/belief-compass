@@ -47,6 +47,7 @@ import {
   type Tally,
 } from "@/domain/dependability";
 import type { NamedPerson } from "@/domain/challenge";
+import type { AudienceFailure } from "@/domain/audience";
 
 /** Bounds. A panel of six open questions is not a feed builder. */
 const READ = {
@@ -481,49 +482,52 @@ export async function markCallsAnswered(
 /**
  * WHO CAN ACTUALLY BE ASKED ABOUT THIS MARKET — the one definition, used twice.
  *
- * MEASURED AGAINST PRODUCTION, THIS WAS WRONG BY 32 PEOPLE across 26 of 284
- * positions. `callReachFor` excluded only people holding a CURRENT directional
- * stance, so the preview counted somebody who bought in March and sold in April
- * as reachable — and `putOnTable` excluded nobody market-scoped at all, so the
- * number the reader was shown and the audience actually written were two
- * different sets. A preview that overstates is not a cosmetic bug: it is the
- * denominator of "3 of 8 showed up" being decided by a different rule than the
- * one that chose the 8.
+ * MEASURED AGAINST PRODUCTION, THE OLD ONE WAS WRONG BY 32 PEOPLE across 26 of
+ * 284 positions: the preview excluded only CURRENT directional holders while the
+ * write excluded nobody market-scoped, so the count shown and the audience
+ * recorded were two different sets. Preview and send now call this, and there is
+ * no second definition to drift from.
  *
- * So preview and send now call THIS, and there is no second definition to drift
- * from. Four exclusions, each because asking that person would be nonsense:
+ * IT FAILS CLOSED, AND THE FIRST VERSION DID NOT. It kept everybody eligible when
+ * an exclusion query errored, reasoning that overstating by one is recoverable.
+ * That was wrong in a way the foundation's own rule already names. "Unknown is
+ * not zero" cuts BOTH ways:
  *
- *   THE AUTHOR        they asked the question; being asked back is a loop.
- *   ANY PARTICIPANT   a `wallet_beliefs` row means the position engine has
- *                     processed trades for them here. It survives a full exit,
- *                     which is exactly why it is the right test — somebody who
- *                     bought and sold has already answered, and their stance
- *                     going non-directional does not un-answer it.
- *   ALREADY ASKED     an existing `market_calls` row from this caller, in ANY
- *                     state. Open means they are already holding the question;
- *                     answered and passed mean they have already replied.
- *   THE VIEWER        `qualifiedCallers` already drops self.
+ *   an INCLUSION read that fails must not become "nobody qualifies";
+ *   an EXCLUSION read that fails must not become "everybody is fair game".
  *
- * A FAILED READ NARROWS NOTHING. If an exclusion query fails the person stays
- * eligible and the failure is logged — overstating reach by one is recoverable,
- * while silently dropping somebody's whole audience because one read blipped is
- * the confident-zero failure in a costlier place.
+ * A failed participant query does not lose one exclusion — it loses ALL of them,
+ * and the write would then put a Challenge in front of every person who had
+ * already answered the market. So a failed exclusion is a failed AUDIENCE: the
+ * preview hides the module, the write refuses, no slot is spent, and nobody
+ * receives a call the server could not verify they were owed.
+ *
+ * THE FOUR EXCLUSIONS, each because asking that person would be nonsense:
+ *
+ *   THE AUTHOR       they asked the question; being asked back is a loop.
+ *   ANY PARTICIPANT  a `wallet_beliefs` row means the position engine has
+ *                    processed trades for them here. It survives a full exit,
+ *                    which is why row existence is the test rather than a
+ *                    directional stance — selling out does not un-answer.
+ *   ALREADY ASKED    an existing `market_calls` row from this caller in ANY
+ *                    state: open means they hold it, answered and passed mean
+ *                    they replied.
+ *   THE VIEWER       dropped when the buckets are read.
  */
 export async function eligibleAudience(
   sb: Sb,
   viewer: string,
   marketId: number,
-): Promise<Map<string, Caller>> {
+): Promise<
+  { status: "ok"; members: Map<string, Caller> } | { status: "failed"; reason: AudienceFailure }
+> {
   const me = viewer.toLowerCase();
   const callers = await qualifiedCallers(sb, me);
-  if (callers.size === 0) return callers;
+  if (callers.size === 0) return { status: "ok", members: callers };
   const wallets = [...callers.keys()];
 
   const [participants, asked, market] = await Promise.all([
-    // ANY row, not just a directional one. See the header: a full exit leaves
-    // the row behind, and that row is the proof they already took part.
     sb.from("wallet_beliefs").select("wallet").eq("onchain_id", marketId).in("wallet", wallets),
-    // ANY state. Already asked is already asked.
     sb
       .from("market_calls")
       .select("responder_wallet")
@@ -533,34 +537,27 @@ export async function eligibleAudience(
     sb.from("markets").select("author_wallet").eq("onchain_id", marketId).maybeSingle(),
   ]);
 
+  const refuse = (reason: AudienceFailure, e: { code?: string; message?: string }) => {
+    console.error(`[challenge] audience refused — ${reason}`, {
+      code: e.code,
+      message: e.message,
+      marketId,
+    });
+    return { status: "failed" as const, reason };
+  };
+  if (participants.error) return refuse("participants_unavailable", participants.error);
+  if (asked.error) return refuse("calls_unavailable", asked.error);
+  if (market.error) return refuse("market_unavailable", market.error);
+
   const out = new Map(callers);
   const drop = (w: unknown) => {
     const k = String(w ?? "").toLowerCase();
     if (k) out.delete(k);
   };
-  if (participants.error)
-    console.error("[challenge] could not exclude existing participants", {
-      code: participants.error.code,
-      message: participants.error.message,
-    });
-  else for (const r of (participants.data ?? []) as { wallet: string }[]) drop(r.wallet);
-
-  if (asked.error)
-    console.error("[challenge] could not exclude people already asked", {
-      code: asked.error.code,
-      message: asked.error.message,
-    });
-  else
-    for (const r of (asked.data ?? []) as { responder_wallet: string }[]) drop(r.responder_wallet);
-
-  if (market.error)
-    console.error("[challenge] could not exclude the market author", {
-      code: market.error.code,
-      message: market.error.message,
-    });
-  else drop((market.data as { author_wallet?: string } | null)?.author_wallet);
-
-  return out;
+  for (const r of (participants.data ?? []) as { wallet: string }[]) drop(r.wallet);
+  for (const r of (asked.data ?? []) as { responder_wallet: string }[]) drop(r.responder_wallet);
+  drop((market.data as { author_wallet?: string } | null)?.author_wallet);
+  return { status: "ok", members: out };
 }
 
 export async function callReachFor(wallet: string, marketId?: number): Promise<CallReach> {
@@ -572,10 +569,17 @@ export async function callReachFor(wallet: string, marketId?: number): Promise<C
    * — and there is nothing to exclude against. Scoped, it must agree with what
    * `putOnTable` will actually write, which is what `eligibleAudience` is for.
    */
-  const callers =
-    typeof marketId === "number" && Number.isFinite(marketId)
-      ? await eligibleAudience(sb, me, marketId)
-      : await qualifiedCallers(sb, me);
+  let callers: Map<string, Caller>;
+  if (typeof marketId === "number" && Number.isFinite(marketId)) {
+    const res = await eligibleAudience(sb, me, marketId);
+    // A refused audience is not a reach of zero. Zero would render "nobody
+    // qualifies" — a confident claim about somebody's network made from a read
+    // that never completed.
+    if (res.status === "failed") return { tribe: 0, rivals: 0, failed: true };
+    callers = res.members;
+  } else {
+    callers = await qualifiedCallers(sb, me);
+  }
 
   let tribe = 0;
   let rivals = 0;

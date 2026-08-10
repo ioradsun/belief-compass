@@ -255,20 +255,49 @@ describe("who can be asked is decided once", () => {
     expect(asked).not.toMatch(/responded_at|passed_at/);
   });
 
-  it("keeps somebody eligible when an exclusion read FAILS", () => {
-    // Overstating by one is recoverable; silently emptying an audience because a
-    // read blipped is the confident-zero failure in a costlier place.
+  it("FAILS CLOSED — a failed exclusion is a failed audience", () => {
+    /**
+     * THIS ASSERTION IS THE REVERSE OF THE ONE IT REPLACED, and the reversal is
+     * the point. The first version kept everybody eligible on a failed read,
+     * reasoning that overstating by one is recoverable. It is not one: a failed
+     * participant query loses EVERY exclusion, so the write would Challenge
+     * every person who had already answered the market.
+     *
+     * "Unknown is not zero" cuts both ways. An inclusion read that fails must
+     * not become "nobody qualifies"; an exclusion read that fails must not
+     * become permission.
+     */
     const fn = server().slice(server().indexOf("export async function eligibleAudience"));
-    for (const guard of ["participants.error", "asked.error", "market.error"])
-      expect(fn).toContain(guard);
-    expect(fn).toMatch(/else for \(const r of/);
+    for (const [guard, reason] of [
+      ["participants.error", "participants_unavailable"],
+      ["asked.error", "calls_unavailable"],
+      ["market.error", "market_unavailable"],
+    ])
+      expect(fn).toContain(`if (${guard}) return refuse("${reason}"`);
+    // And nothing may proceed past a refusal into the dropping loops.
+    expect(fn.indexOf("const out = new Map(callers)")).toBeGreaterThan(fn.indexOf("market.error"));
+  });
+
+  it("spends no slot and writes no row when the audience is refused", () => {
+    const c = code("src/lib/table.server.ts");
+    expect(c).toMatch(
+      /if \(resolved\.status === "failed"\) return \{ ok: false, reason: "audience_unavailable" \}/,
+    );
+    // The refusal happens BEFORE the slot allocator runs.
+    expect(c.indexOf("audience_unavailable")).toBeLessThan(c.indexOf("for (let slot = 1"));
+  });
+
+  it("reports a refused reach as unknown rather than as nobody", () => {
+    // Zero would render "nobody qualifies yet" — a confident claim about
+    // somebody's network, made from a read that never completed.
+    expect(server()).toMatch(/return \{ tribe: 0, rivals: 0, failed: true \}/);
   });
 
   it("leaves the unscoped reach question alone", () => {
     // With no market there is nothing to exclude against — "how many people could
     // my conviction reach at all" is a different question and keeps its answer.
     const fn = server().slice(server().indexOf("export async function callReachFor"));
-    expect(fn).toMatch(/: await qualifiedCallers\(sb, me\)/);
+    expect(fn).toMatch(/callers = await qualifiedCallers\(sb, me\)/);
     expect(fn).toMatch(/eligibleAudience\(sb, me, marketId\)/);
   });
 });

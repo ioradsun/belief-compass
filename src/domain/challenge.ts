@@ -423,6 +423,14 @@ export function challengeLock(decisions: number, hasTwinCandidate = false): Chal
 export interface CallReach {
   tribe: number;
   rivals: number;
+  /**
+   * THE AUDIENCE COULD NOT BE ESTABLISHED — which is not a reach of zero.
+   *
+   * Zero renders "nobody qualifies yet", a confident claim about somebody's
+   * network. This says the read did not complete, so the caller hides the offer
+   * instead of describing a network it never saw.
+   */
+  failed?: boolean;
 }
 
 /**

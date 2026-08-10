@@ -84,7 +84,11 @@ const CONFLICT = "23505";
 
 export type PutResult =
   | { ok: true; id: number; reached: number }
-  | { ok: false; reason: "full" | "already_up" | "no_audience" | "failed" };
+  | {
+      ok: false;
+      /** `audience_unavailable` is a refusal, never an empty room. */
+      reason: "full" | "already_up" | "no_audience" | "audience_unavailable" | "failed";
+    };
 
 /**
  * PUT IT ON THE TABLE.
@@ -124,8 +128,18 @@ export async function putOnTable(
    * measured the gap at 32 people across 26 positions. One definition means the
    * "8" in "3 of 8 showed up" is the same 8 the reader was promised.
    */
-  const callers = await eligibleAudience(sb, me, marketId);
-  const audience = [...callers.entries()].filter(([w]) => w !== me);
+  const resolved = await eligibleAudience(sb, me, marketId);
+  /**
+   * A REFUSED AUDIENCE IS NOT AN EMPTY ONE, AND IT IS NOT PERMISSION.
+   *
+   * The exclusions are what keep a Challenge away from people who already
+   * answered this market. If one of those reads fails we do not know who to
+   * leave out — so nothing is written, no slot is spent, and the caller is told
+   * the audience was unavailable rather than being handed a Challenge that
+   * reached the wrong people.
+   */
+  if (resolved.status === "failed") return { ok: false, reason: "audience_unavailable" };
+  const audience = [...resolved.members.entries()].filter(([w]) => w !== me);
   if (audience.length === 0) return { ok: false, reason: "no_audience" };
 
   let id: number | null = null;
