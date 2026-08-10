@@ -210,21 +210,23 @@ export function YourTable({
         />
       )}
 
+      {!collapsed && (
+        <ul className="space-y-2">
+          {ordered.map((row) => (
+            <TableRowCard
+              key={row.id}
+              id={row.id}
+              title={row.title}
+              recipients={row.recipients}
+              closeReason={row.closeReason}
+              onOpen={() => onSelect(row.marketId)}
+              onClose={() => close.mutate(row.id)}
+              closing={close.isPending}
+            />
+          ))}
+        </ul>
+      )}
 
-      <ul className="space-y-2">
-        {ordered.map((row) => (
-          <TableRowCard
-            key={row.id}
-            id={row.id}
-            title={row.title}
-            recipients={row.recipients}
-            closeReason={row.closeReason}
-            onOpen={() => onSelect(row.marketId)}
-            onClose={() => close.mutate(row.id)}
-            closing={close.isPending}
-          />
-        ))}
-      </ul>
     </div>
   );
 }
