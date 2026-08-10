@@ -218,13 +218,28 @@ export function ChallengeRail({
               try again in a moment.
             </p>
           ) : open.length === 0 ? null : (
-
-            <ul className="space-y-2">
-              {open.slice(0, shown).map((c) => (
-                <ChallengeRow key={c.marketId} challenge={c} onSelect={onSelect} onDismiss={pass} />
-              ))}
-            </ul>
+            <section className="space-y-2">
+              {/* WHO IS OWED AN ANSWER, SAID IN TWO WORDS. Amber is the same colour
+                  this product uses for the other side of a question, so the eye
+                  learns the mapping once: amber means somebody is waiting on you,
+                  blue means you are waiting on them. */}
+              <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--no)]" aria-hidden />
+                Challenged You
+              </h3>
+              <ul className="space-y-2">
+                {open.slice(0, shown).map((c) => (
+                  <ChallengeRow
+                    key={c.marketId}
+                    challenge={c}
+                    onSelect={onSelect}
+                    onDismiss={pass}
+                  />
+                ))}
+              </ul>
+            </section>
           )}
+
 
           {/* YOUR OWN TABLE, IN THE SAME COLUMN — what you put up, what became of
               it, and one + for filling a free slot. */}
