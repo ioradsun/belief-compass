@@ -155,12 +155,9 @@ const feedQO = (
   sensitivity: Sensitivity = DEFAULT_SENSITIVITY,
   lens: Lens = "for_you",
   /**
-   * Has this session watched enough cards for the server to be ALLOWED to place
-   * a House idea? It is in the key because it changes the response: before the
-   * gate opens the server returns markets only, and nothing else in the key
-   * changes when the reader crosses the threshold — so without this the idea
-   * could only appear on the next 60s poll, and a key change (new lens, new
-   * filter) would re-send a request that still said "no idea yet".
+   * Is this session eligible for a ready House idea? Ready ideas are admitted
+   * immediately; keeping eligibility in the key preserves correct cache
+   * separation if product cadence changes later.
    */
   ideaGate = false,
 ) =>
@@ -756,9 +753,8 @@ function Feed() {
       ? (loaderData?.feed ?? undefined)
       : undefined;
   /**
-   * The session's idea gate, as a rendered value. `useSyncExternalStore` because
-   * the counter lives outside React (the feed session module) and crossing the
-   * threshold has to re-key the feed query rather than wait for the slow poll.
+   * Session idea eligibility as a rendered value. `useSyncExternalStore` keeps
+   * the external cadence state hydration-safe and query-cache aware.
    */
   const ideaGate = useSyncExternalStore(
     subscribeFeedSession,

@@ -21,8 +21,11 @@ export const SUGGESTION = {
   /** How much recent history shapes the profile. */
   HISTORY_WINDOW: 30,
 
-  // ── Session gate (client-side, this browsing session) ──
-  MIN_SESSION_CARDS_VIEWED: 5,
+  // ── Session cadence (client-side, this browsing session) ──
+  // A ready, personalized idea belongs in Explore immediately. Requiring five
+  // centre-stage views made eligibility depend on one navigation path and hid
+  // the idea from readers who browsed the queue, search, or Insider instead.
+  MIN_SESSION_CARDS_VIEWED: 0,
   MIN_CARDS_BETWEEN_SUGGESTIONS: 12,
   MAX_PER_SESSION: 1,
 
