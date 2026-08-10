@@ -40,12 +40,16 @@ export function MediaEmbed({
   media,
   className = "",
   caption = true,
+  fitContainer = false,
 }: {
   media: EmbedMedia;
   className?: string;
   /** The title + "View on <Platform>" row. Off inside a market: the overflow
    * menu beside the question carries the media link instead. */
   caption?: boolean;
+  /** Fill an already-sized market stage instead of imposing the embed's own
+   * aspect-ratio height. This keeps Media and Market on identical geometry. */
+  fitContainer?: boolean;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -66,17 +70,19 @@ export function MediaEmbed({
   const label = PLATFORM_LABEL[media.platform];
 
   return (
-    <figure className={`w-full ${className}`}>
+    <figure className={`${fitContainer ? "h-full min-h-0" : ""} w-full ${className}`}>
       <div
-        className="relative w-full overflow-hidden rounded-[16px] bg-[var(--surface)]"
+        className={`relative w-full overflow-hidden rounded-[16px] bg-[var(--surface)] ${fitContainer ? "h-full" : ""}`}
         style={{
-          ...(fixedHeight
-            ? { height: fixedHeight }
-            : { aspectRatio: String(ratio ?? 16 / 9), maxHeight }),
+          ...(fitContainer
+            ? {}
+            : fixedHeight
+              ? { height: fixedHeight }
+              : { aspectRatio: String(ratio ?? 16 / 9), maxHeight }),
           // Cap the width to the ratio so a height-capped frame never
           // letterboxes the embed inside an oversized box.
-          marginInline: ratio != null ? "auto" : undefined,
-          maxWidth: ratio != null ? maxHeight * ratio : undefined,
+          marginInline: !fitContainer && ratio != null ? "auto" : undefined,
+          maxWidth: !fitContainer && ratio != null ? maxHeight * ratio : undefined,
         }}
       >
         {state !== "failed" ? (

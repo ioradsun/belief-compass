@@ -469,7 +469,7 @@ export function MobileGame({
             {tallMedia ? (
               <>
                 <StagePane active={stageTab === "media"}>
-                  <MediaEvidence media={stageMedia} />
+                  <MediaEvidence media={stageMedia} fitContainer />
                 </StagePane>
                 <StagePane active={stageTab !== "media"} className="gap-3">
                   {marketBody}
