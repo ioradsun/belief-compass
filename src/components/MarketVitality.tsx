@@ -424,6 +424,7 @@ export function MarketMomentum({
         total={b.current.toLocaleString("en-US")}
         label="Total participants"
         copy={believerCopy(b, book.window)}
+        pct={windowPct(b.current, b.base)}
         faces={faces}
         facesTotal={Math.max(faces?.length ?? 0, Math.round(b.current))}
       />
@@ -433,7 +434,9 @@ export function MarketMomentum({
         total={money(c.current)}
         label="Total capital"
         copy={capitalCopy(c, book.window, usd, money)}
+        pct={windowPct(c.current, c.base)}
       />
+
 
       {footer && (
         <>
