@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { insiderPulseKey } from "@/lib/insider/keys";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { lazyRetry } from "@/lib/lazy-retry";
 
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,7 +13,13 @@ import {
 } from "@/lib/markets.functions";
 import { marketChangeQO } from "@/lib/market-queries";
 import { getOpportunityFeed, getWarmFeed } from "@/lib/opportunity-feed.functions";
-import { feedSession, resetFeedSession } from "@/lib/feed-session";
+import {
+  feedSession,
+  feedSessionVersion,
+  ideaGateOpen,
+  resetFeedSession,
+  subscribeFeedSession,
+} from "@/lib/feed-session";
 import { readSessionToken } from "@/lib/wallet-session";
 
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
@@ -143,6 +149,15 @@ const feedQO = (
   originMarketId: number | null = null,
   sensitivity: Sensitivity = DEFAULT_SENSITIVITY,
   lens: Lens = "for_you",
+  /**
+   * Has this session watched enough cards for the server to be ALLOWED to place
+   * a House idea? It is in the key because it changes the response: before the
+   * gate opens the server returns markets only, and nothing else in the key
+   * changes when the reader crosses the threshold — so without this the idea
+   * could only appear on the next 60s poll, and a key change (new lens, new
+   * filter) would re-send a request that still said "no idea yet".
+   */
+  ideaGate = false,
 ) =>
   queryOptions({
     // The reader's floor is part of the key: it changes what the server admits,
@@ -158,6 +173,7 @@ const feedQO = (
       originMarketId,
       sensitivity,
       lens,
+      ideaGate,
     ],
     queryFn: async () => {
       const request = getOpportunityFeed({
@@ -734,8 +750,20 @@ function Feed() {
     lens === "for_you"
       ? (loaderData?.feed ?? undefined)
       : undefined;
+  /**
+   * The session's idea gate, as a rendered value. `useSyncExternalStore` because
+   * the counter lives outside React (the feed session module) and crossing the
+   * threshold has to re-key the feed query rather than wait for the slow poll.
+   */
+  const ideaGate = useSyncExternalStore(
+    subscribeFeedSession,
+    () => ideaGateOpen(),
+    () => false,
+  );
+  // Keep the version subscription honest for future readers of the store.
+  void feedSessionVersion;
   const { data, isError: isFeedError } = useQuery({
-    ...feedQO(wallet, win, filters, originMarket, sensitivity, lens),
+    ...feedQO(wallet, win, filters, originMarket, sensitivity, lens, ideaGate),
     // initialDataUpdatedAt dates the snapshot to when the SERVER fetched it, so
     // React Query ages it against staleTime instead of refetching on hydration.
     //
@@ -744,8 +772,12 @@ function Feed() {
     // initial data would date it as fresh and the real feed would never be
     // fetched, leaving the reader on three cards. As placeholder it paints and
     // is replaced the moment the full feed lands.
+    //
+    // Once the gate is open the loader snapshot is, by construction, a feed
+    // built when an idea was not allowed — adopt it only as a placeholder so
+    // the gated request actually runs.
     ...(initialFeed
-      ? wallet || initialFeed.partial
+      ? wallet || initialFeed.partial || ideaGate
         ? { placeholderData: initialFeed }
         : { initialData: initialFeed, initialDataUpdatedAt: loaderData?.fetchedAt ?? Date.now() }
       : {}),
