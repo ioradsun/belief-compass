@@ -40,7 +40,15 @@ export function useHouseFinalize(marketId: number, viewerWallet?: string) {
   const bet = useMutation({
     mutationFn: async (vars: { side: "YES" | "NO"; txHash: string }) => {
       if (!wallet) return null;
-      const session = await ensureSession();
+      // NEVER a second prompt. The wallet just signed and paid for this buy; the
+      // server proves ownership from the transaction's sender. A cached session
+      // is passed along when one already exists, but none is requested.
+      let session: string | undefined;
+      try {
+        session = await ensureSession({ interactive: false });
+      } catch {
+        session = undefined;
+      }
       return finalizeBet({
         data: { wallet, marketId, side: vars.side, txHash: vars.txHash, session },
       });
