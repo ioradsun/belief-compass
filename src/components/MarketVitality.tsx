@@ -57,6 +57,23 @@ function fromChange(
 const dirTone = (d: "up" | "down" | "flat"): string =>
   d === "up" ? "var(--gain)" : d === "down" ? "var(--loss)" : "var(--text-muted)";
 
+/**
+ * THE TILE ALWAYS QUOTES A RATE.
+ *
+ * metric-display decides when a percentage may *lead the story*; this slot is a
+ * fixed instrument reading beside a total, so it always states the proportion
+ * for the window. The exact change still sits underneath it, which is what keeps
+ * a small-base ratio honest: "+100%" never appears without "+1 participant".
+ * With no base at all there is no proportion to state — that reads "New".
+ */
+function windowPct(current: number, base: number): string {
+  const delta = current - base;
+  if (!Number.isFinite(delta) || Math.abs(delta) < 1e-9) return "0%";
+  if (!(base > 0)) return "New";
+  return formatPct((delta / base) * 100);
+}
+
+
 /** Formats an ETH-native capital amount in the viewer's chosen unit. */
 type CapFmt = (eth: number, signed?: boolean) => string;
 
