@@ -83,7 +83,7 @@ export function MediaStage({
   return (
     <div className={`relative min-h-0 overflow-hidden ${className}`}>
       <div
-        className="flex h-full w-full min-w-full shrink-0 flex-col overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]"
+        className="relative flex min-h-0 flex-1 w-full min-w-full shrink-0 flex-col overflow-y-scroll overscroll-contain pr-0.5 [-webkit-overflow-scrolling:touch]"
         style={{ gap: "var(--deck-gap, 12px)" }}
       >
         {children}
