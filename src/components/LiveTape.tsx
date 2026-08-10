@@ -139,6 +139,12 @@ export function LiveTape({
    * seed can never become the tape.
    */
   initial?: LiveResult | null;
+  /**
+   * HOW MANY STORIES ARE WAITING — reported up so a tab the reader is not
+   * looking at can carry the same number the pill carries. The tape stays the
+   * only thing that knows; the tab just repeats it.
+   */
+  onPending?: (n: number) => void;
 }) {
   const scopeKey = marketIds && marketIds.length > 0 ? [...marketIds].sort((a, b) => a - b) : null;
   const qc = useQueryClient();
