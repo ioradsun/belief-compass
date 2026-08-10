@@ -413,45 +413,12 @@ export function MyConvictions({
     believerDelta: number | null;
   }[];
 
-  // Per-market network signal: pass the wallet so the tape tags Twin/Tribe/Opp
-  // and milestones. These lift a card to the top when your people arrive.
-  // One tape per MARKET — holding both sides must not fetch it twice.
-  const tapeIds = Array.from(new Set(facts.slice(0, 80).map((f) => f.id))).slice(0, 40);
-  const { data: tape } = useQuery({
-    queryKey: ["positions-tape", wallet ?? null, [...tapeIds].sort((a, b) => a - b)],
-    queryFn: () => listLiveEvents({ data: { wallet, marketIds: tapeIds, limit: 120 } }),
-    enabled: tapeIds.length > 0,
-    // NO INTERVAL — same reason as the pulses. `affectedPositionsTapeKeys` matches
-    // this key's id array against the markets that just traded and invalidates it
-    // precisely, so the tape is refreshed by the trade rather than by the clock.
-    staleTime: 60_000,
-    placeholderData: (prev) => prev,
-  });
-  const netByMarket = new Map<
-    number,
-    {
-      twin?: "YES" | "NO" | true;
-      tribe?: "YES" | "NO" | true;
-      opp?: "YES" | "NO" | true;
-      milestone?: number | null;
-    }
-  >();
-  for (const r of tape?.rows ?? []) {
-    const id = Number(r.marketId);
-    const cur = netByMarket.get(id) ?? {};
-    const cat = r.story?.category;
-    // The side when the row carries one, `true` when it only says they moved.
-    // A grouped or non-trade row has no side, and the story still works without.
-    const which = r.side ?? true;
-    if (cat === "twin") cur.twin = which;
-    else if (cat === "tribe") cur.tribe = which;
-    else if (cat === "opp") cur.opp = which;
-    if (r.kind === "believer_milestone") {
-      const th = Number((r.payload as { threshold?: unknown } | null)?.threshold ?? 0);
-      if (th > 0) cur.milestone = th;
-    }
-    netByMarket.set(id, cur);
-  }
+  // THE TAPE SCAN IS GONE. This used to fetch `listLiveEvents` for up to 40 held
+  // markets and reconstruct Twin / Tribe / Opp / milestone signals from raw rows —
+  // Positions reading the feed to decide what a market meant, in parallel with
+  // (and weaker than) the Insider pipeline that owns that judgement. Network
+  // intelligence belongs to Insider; a portfolio does not re-derive it.
+
 
   // The delta always answers "over the period you selected". For a finite window
   // that's the mark-to-mark move (value now − value at the start of the window,
