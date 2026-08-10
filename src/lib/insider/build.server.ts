@@ -460,6 +460,9 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
 
     const standingRows = await buildStandingStories({
       marketIds,
+      // The reader's own holdings widen the standing scope so a receipt about a
+      // question they personally back is available even on a quiet day.
+      viewer,
       labelByWallet,
       crossingsByWallet: new Map([...relByWallet].map(([w, r]) => [w, r.sharedBeliefs ?? 0])),
       titleById,

@@ -24,6 +24,7 @@ import { aliasFor } from "@/lib/wallet-identity";
 import { firstBackedIsFloor } from "@/domain/tenure";
 import { positionValueUsd } from "@/domain/position-value";
 import { rotateForWindow } from "@/domain/standing-rotation";
+import { fetchMarketNames } from "@/lib/market-titles.server";
 import { loadConvictionWhales } from "@/lib/conviction-whale.server";
 import { STANDING, type StandingHolder } from "@/domain/standing-fact";
 import {
@@ -40,12 +41,68 @@ const fin = (v: number | null | undefined): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
 
 /**
- * How many markets one pass will look at. Every extra market is belief rows
- * read on a request path a reader is waiting on.
+ * How many markets one pass will look at, once the pool has been broadened.
+ * Every extra market is belief rows read on a request path a reader is waiting
+ * on — but they are bounded overall by MAX_BELIEFS, so a wider net costs little.
  */
-const MAX_MARKETS = 24;
-/** Belief rows per pass. Generous for 24 markets, bounded against a whale market. */
+const MAX_MARKETS = 40;
+/** Belief rows per pass. Generous for the market cap, bounded against a whale market. */
 const MAX_BELIEFS = 1500;
+
+/**
+ * How many of the LARGEST markets to fold into the standing scope.
+ *
+ * Standing stories were only built for markets that TRADED in the last ~72h, so
+ * on a quiet chain the scope was nearly empty and the "tons" of long-held
+ * positions in untraded markets were never read — the feed had nothing to keep
+ * surfacing. The biggest markets (most believers) are where long holds pile up,
+ * so pulling them in gives rotation a deep pool to cycle through even when
+ * nothing is trading.
+ */
+const BIGGEST_MARKETS = 40;
+
+/**
+ * The markets with the most believers — a cheap proxy for "where the standing
+ * stories are", since a big crowd means many long-held positions to report.
+ *
+ * Ordered on a single column because Supabase cannot sort on a sum; this leans
+ * to the YES-side crowd, and the events markets plus the viewer's own holdings
+ * cover the rest. Fails soft: on any error the scope is simply not widened.
+ */
+async function biggestMarketIds(
+  svc: NonNullable<ReturnType<typeof serviceClientOrNull>>,
+  limit: number,
+): Promise<number[]> {
+  const { data } = await svc
+    .from("market_state")
+    .select("onchain_id")
+    .order("believers_yes", { ascending: false })
+    .limit(limit);
+  const out = new Set<number>();
+  for (const r of (data ?? []) as Row[]) {
+    const id = Number(r.onchain_id);
+    if (Number.isFinite(id)) out.add(id);
+  }
+  return [...out];
+}
+
+/** The markets this reader personally holds a live position in — always worth a receipt. */
+async function heldMarketIds(
+  svc: NonNullable<ReturnType<typeof serviceClientOrNull>>,
+  viewer: string,
+): Promise<number[]> {
+  const { data } = await svc
+    .from("wallet_beliefs")
+    .select("onchain_id, yes_shares, no_shares")
+    .eq("wallet", viewer.toLowerCase());
+  const out = new Set<number>();
+  for (const b of (data ?? []) as Row[]) {
+    if (!(Number(b.yes_shares ?? 0) > 0 || Number(b.no_shares ?? 0) > 0)) continue;
+    const id = Number(b.onchain_id);
+    if (Number.isFinite(id)) out.add(id);
+  }
+  return [...out];
+}
 
 /** The proven market change each side may be contrasted against. */
 export interface StandingMarketEvidence {
@@ -76,6 +133,11 @@ export interface StandingFactsInput {
   now: number;
   /** How many stories to return. Ranking downstream decides which are shown. */
   limit: number;
+  /**
+   * The reader, if signed in. Their held markets join the scope so a receipt
+   * about a question they personally back is available even when it is quiet.
+   */
+  viewer?: string | null;
 }
 
 /**
@@ -87,11 +149,37 @@ export interface StandingFactsInput {
 const MAX_FACTS_PER_MARKET = 2;
 
 export async function buildStandingStories(input: StandingFactsInput): Promise<StandingStoryRow[]> {
-  const ids = input.marketIds.slice(0, MAX_MARKETS);
-  if (ids.length === 0) return [];
-
   const svc = serviceClientOrNull();
   if (!svc) return [];
+
+  // BROADEN THE POOL beyond recently-traded markets. Standing stories used to be
+  // built only for markets with events in the last ~72h, so on a quiet chain the
+  // scope was nearly empty and the "tons" of long-held positions in untraded
+  // markets were never read — rotation had nothing to cycle. Fold in the biggest
+  // markets (where long holds accumulate) and the reader's own holdings. Both
+  // fail soft to []: a broken scope query degrades to the events pool, never a
+  // crash. Events markets lead so their richer contrast stories are never
+  // crowded out; the added markets ride as receipts, which is exactly the
+  // continuity a silent feed is missing.
+  const [big, held] = await Promise.all([
+    biggestMarketIds(svc, BIGGEST_MARKETS).catch(() => [] as number[]),
+    input.viewer
+      ? heldMarketIds(svc, input.viewer).catch(() => [] as number[])
+      : Promise.resolve([] as number[]),
+  ]);
+  const ids = [...new Set([...input.marketIds, ...held, ...big])].slice(0, MAX_MARKETS);
+  if (ids.length === 0) return [];
+
+  // Titles for the added markets the caller never resolved. Their evidence stays
+  // absent, so they compose as RECEIPTS ("still holding YES for 43 days") — all a
+  // receipt needs is a name, and the contrast stories still come from the events
+  // markets, which arrive with their evidence.
+  const titleById = new Map(input.titleById);
+  const untitled = ids.filter((id) => !titleById.has(id));
+  if (untitled.length > 0) {
+    const names = await fetchMarketNames(svc, untitled).catch(() => null);
+    if (names) for (const [id, m] of names) if (m.title) titleById.set(id, m.title);
+  }
 
   const { data: rate } = await svc
     .from("calc_cache")
@@ -193,7 +281,7 @@ export async function buildStandingStories(input: StandingFactsInput): Promise<S
     all.push(
       ...composeStandingStories({
         marketId,
-        marketTitle: input.titleById.get(marketId) ?? "",
+        marketTitle: titleById.get(marketId) ?? "",
         side: side as Side,
         holders,
         marketAgeDays: fin(ev?.marketAgeDays),
