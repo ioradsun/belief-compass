@@ -67,10 +67,13 @@ export function CreateMarket({
   ethUsd,
   onCreated,
   onCancel: _onCancel,
+  cancelLabel = "Cancel",
 }: {
   ethUsd: number;
   onCreated: (marketId: number) => void;
   onCancel: () => void;
+  /** "Pass" when this same screen is reached from a Market Idea in the feed. */
+  cancelLabel?: string;
 }) {
   const { isConnected } = useAccount();
   const { ensureSession, address } = useWalletSession();
