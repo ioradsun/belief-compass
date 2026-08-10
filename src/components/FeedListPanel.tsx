@@ -33,11 +33,24 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+/**
+ * The synthetic id a House idea occupies in the running order.
+ *
+ * An idea is a first-class card in the sequence, so it must hold a PLACE in the
+ * playlist exactly like a market does — otherwise it can only ever be seen in
+ * the centre, and the moment the reader moves on it is gone with nothing on
+ * screen admitting it existed. Negative because no onchain market can collide
+ * with it, and the route routes this id to the idea rather than to `?m=`.
+ */
+export const IDEA_ROW_ID = -1;
+
 /** One entry in the running order, as the panel needs it. */
 export interface FeedListEntry {
   onchainId: number;
   /** The sentence from `reasonFor`. Null when nothing true could be said. */
   reason: string | null;
+  /** Present only on the House idea row — it has no market row to read. */
+  idea?: { question: string } | null;
 }
 
 /**
@@ -188,7 +201,43 @@ export function FeedListPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
+  /**
+   * THE HOUSE IDEA, AS A ROW. Same geometry as a market row so it reads as part
+   * of the queue rather than an advert wedged into it — its own eyebrow is the
+   * only thing that marks it out.
+   */
+  const renderIdeaRow = (
+    e: FeedListEntry,
+    idea: { question: string },
+    opts: { first: boolean; leaving?: boolean },
+  ) => (
+    <li
+      key={opts.leaving ? "leaving-idea" : "idea"}
+      aria-hidden={opts.leaving || undefined}
+      className={`relative ${opts.leaving ? "queue-depart" : ""} ${
+        opts.first && !opts.leaving ? "queue-promote queue-rail pl-1" : ""
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onSelect(e.onchainId)}
+        className="w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--surface)]"
+      >
+        <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--rel,#9b87f5)]">
+          The House has an idea
+        </span>
+        <span className="block text-[13px] font-medium leading-snug text-[var(--text)]">
+          {idea.question}
+        </span>
+        <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">
+          Yours to create, or pass.
+        </span>
+      </button>
+    </li>
+  );
+
   const renderRow = (e: FeedListEntry, opts: { first: boolean; leaving?: boolean }) => {
+    if (e.idea) return renderIdeaRow(e, e.idea, opts);
     const f = factsOf(rows[e.onchainId], nowMs);
     /**
      * THREE LINES, IN ONE HIERARCHY: the question, why it is here, and
@@ -282,13 +331,19 @@ export function FeedListPanel({
           Couldn&rsquo;t load markets. Retry from the centre.
         </p>
       ) : upcoming.length === 0 && !lensExhausted ? (
-        <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
-          {/* An empty result under a filter is a TRUE answer, and saying it
-              plainly beats a loading state that will never resolve. */}
-          {entries.length === 0
-            ? "Nothing matches this feed yet. Try widening it."
-            : "You're at the end of this feed."}
-        </p>
+        entries.length === 0 ? (
+          <p className="text-[12px] leading-relaxed text-[var(--text-muted)]">
+            {/* An empty result under a filter is a TRUE answer, and saying it
+                plainly beats a loading state that will never resolve. */}
+            Nothing matches this feed yet. Try widening it.
+          </p>
+        ) : (
+          /* THE QUEUE DRAINED, BUT THE POOL HAS NOT. The server only says
+             `exhausted` when it has nothing left; short of that, a top-up is
+             already in flight (see the route's low-water refill) and telling the
+             reader they are "at the end" would be a claim nobody made. */
+          <PlaylistSkeleton />
+        )
       ) : (
         <ol className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
           {departing && renderRow(departing, { first: false, leaving: true })}

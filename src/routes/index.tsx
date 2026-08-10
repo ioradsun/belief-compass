@@ -23,7 +23,12 @@ import {
 import { readSessionToken } from "@/lib/wallet-session";
 
 import { MarketCard, type MarketRow } from "@/components/MarketCard";
-import { FeedListPanel, type FeedListEntry } from "@/components/FeedListPanel";
+import { FeedListPanel, IDEA_ROW_ID, type FeedListEntry } from "@/components/FeedListPanel";
+
+/** Markets left ahead of the reader before the queue asks for more. */
+const FEED_LOW_WATER = 4;
+/** Floor between two refill requests, so a drained queue cannot loop. */
+const FEED_REFILL_MS = 10_000;
 import { toLens, type Lens } from "@/domain/feed/lens";
 import { DEFAULT_SENSITIVITY, type Sensitivity } from "@/domain/market-change";
 import { useFeedSensitivity } from "@/lib/feed-sensitivity";
@@ -1224,12 +1229,105 @@ function Feed() {
 
   // "The House has an idea" — the SERVER decided whether an idea belongs in
   // this sequence and at which slot. The hook only owns the funnel calls.
+  //
+  // LATCHED, because a feed poll is not a decision. The sequence is rebuilt
+  // every 60s (and on every key change — a lens, a filter, an origin market
+  // opened from search), and any of those rebuilds can legitimately come back
+  // without an idea in it. Reading the idea straight off the latest response
+  // meant the card vanished from under the reader mid-read. It is held until
+  // the reader acts on it: create, edit or pass.
   const ideaItem = items.find((it) => it.kind === "market_idea") ?? null;
-  const houseIdea = useHouseIdea(
-    ideaItem ? ((stableFeed?.idea as ReadySuggestion | null) ?? null) : null,
-  );
-  // The idea takes its own slot: it shows once the viewer has advanced to it.
-  const ideaDue = !!ideaItem && currentIdx >= ideaItem.position;
+  const heldIdeaRef = useRef<{ suggestion: ReadySuggestion; position: number } | null>(null);
+  if (ideaItem && stableFeed?.idea) {
+    heldIdeaRef.current = {
+      suggestion: stableFeed.idea as ReadySuggestion,
+      position: ideaItem.position,
+    };
+  }
+  const houseIdea = useHouseIdea(heldIdeaRef.current?.suggestion ?? null);
+  // Dismissed / published: the hook drops it, so the latch must drop it too or
+  // the playlist would keep a row for a card that can no longer open.
+  if (heldIdeaRef.current && !houseIdea.suggestion) heldIdeaRef.current = null;
+  const ideaPos = heldIdeaRef.current?.position ?? null;
+
+  /**
+   * WHERE THE IDEA IS, as a state rather than a derived comparison.
+   *
+   *   idle    not reached yet.
+   *   open    on the centre stage.
+   *   parked  the reader moved to a market instead. It keeps its row in the
+   *           playlist and can be opened again — it just stops taking the
+   *           centre, which is what made it feel like it "disappeared".
+   */
+  const [ideaView, setIdeaView] = useState<"idle" | "open" | "parked">("idle");
+  useEffect(() => {
+    if (!houseIdea.suggestion) {
+      setIdeaView("idle");
+      return;
+    }
+    if (ideaView === "idle" && ideaPos != null && currentIdx >= ideaPos) setIdeaView("open");
+  }, [houseIdea.suggestion, ideaPos, currentIdx, ideaView]);
+  // Choosing a market is choosing not to be on the idea right now.
+  const ideaMarketRef = useRef<number | null>(activeMarket);
+  useEffect(() => {
+    if (ideaView !== "open") {
+      ideaMarketRef.current = activeMarket;
+      return;
+    }
+    if (ideaMarketRef.current !== activeMarket) {
+      ideaMarketRef.current = activeMarket;
+      setIdeaView("parked");
+    }
+  }, [activeMarket, ideaView]);
+  const ideaDue = !!houseIdea.suggestion && ideaView === "open";
+
+  /**
+   * THE PLAYLIST THE READER SEES, including the idea. It holds the slot the
+   * server gave it, so the queue and the centre agree about what comes next.
+   */
+  const playlistEntries: FeedListEntry[] = (() => {
+    if (!houseIdea.suggestion) return feedEntries;
+    const at = Math.min(Math.max(0, ideaPos ?? 0), feedEntries.length);
+    const withIdea = [...feedEntries];
+    withIdea.splice(at, 0, {
+      onchainId: IDEA_ROW_ID,
+      reason: null,
+      idea: { question: houseIdea.suggestion.question },
+    });
+    return withIdea;
+  })();
+
+  /**
+   * THE QUEUE REFILLS ITSELF BEFORE IT RUNS DRY.
+   *
+   * The feed pages implicitly — a request carries this session's seen ids, so
+   * asking again returns what the last answer could not. Nothing was ever
+   * asking, though: the only trigger was the 60s structural poll, so a reader
+   * moving faster than that (or one who jumped in from search, which re-keys
+   * the query) could walk off the end of a pool that still had plenty in it.
+   *
+   * So: when fewer than LOW_WATER markets remain ahead, adopt anything already
+   * waiting and otherwise ask for more, throttled so a drained queue cannot
+   * become a request loop. `exhausted` is the one honest stop.
+   */
+  const refillAtRef = useRef(0);
+  const remainingAhead = (() => {
+    const idx = activeMarket == null ? -1 : queue.order.indexOf(activeMarket);
+    return idx >= 0 ? queue.order.length - idx - 1 : queue.order.length;
+  })();
+  useEffect(() => {
+    if (stableFeed?.exhausted) return;
+    if (remainingAhead > FEED_LOW_WATER) return;
+    if (arrivalCount(queue) > 0) {
+      setQueue((q) => commit(q));
+      return;
+    }
+    const now = Date.now();
+    if (now - refillAtRef.current < FEED_REFILL_MS) return;
+    refillAtRef.current = now;
+    void qc.invalidateQueries({ queryKey: ["opp-feed"] });
+  }, [remainingAhead, queue, stableFeed?.exhausted, qc]);
+
 
   const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
   useEffect(() => {
@@ -1394,10 +1492,12 @@ function Feed() {
                       lensExhausted={lensExhausted}
                       loading={feedLoading}
                       failed={feedFailed}
-                      entries={feedEntries}
+                      entries={playlistEntries}
                       rows={knownRowsRef.current}
-                      activeId={activeMarket}
-                      onSelect={selectMarket}
+                      activeId={ideaDue ? IDEA_ROW_ID : activeMarket}
+                      onSelect={(id) =>
+                        id === IDEA_ROW_ID ? setIdeaView("open") : selectMarket(id)
+                      }
                       filters={filters}
                       onFilters={selectFilters}
                       availableNetworks={availableNetworks}
@@ -1511,8 +1611,11 @@ function Feed() {
                   onCreate={() => acceptIdea(false)}
                   onEdit={() => acceptIdea(true)}
                   onDismiss={() => {
+                    // Passing on the idea returns the reader to the market
+                    // whose slot the card was borrowing — it does not spend a
+                    // market. The latch releases, so the centre falls through.
                     houseIdea.onDismiss();
-                    nextMarket();
+                    setIdeaView("idle");
                   }}
                 />
               </div>
