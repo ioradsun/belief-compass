@@ -9,9 +9,9 @@
  *
  * Pure presentation: the media record comes straight from getConvictionMarket.
  */
-import { useRef, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { MediaEmbed } from "@/components/MediaEmbed";
-import { embedFromRecord, PLATFORM_LABEL, type EmbedMedia } from "@/lib/embed";
+import { embedFromRecord, type EmbedMedia } from "@/lib/embed";
 
 export interface StageMedia {
   kind: "image" | "video" | "audio" | "link" | "embed";
@@ -26,15 +26,6 @@ export interface StageMedia {
   /** Third-party embeds only. */
   embed?: EmbedMedia | null;
 }
-
-/** The word the hint uses for each kind of evidence. */
-const KIND_LABEL: Record<StageMedia["kind"], string> = {
-  image: "Photo",
-  video: "Video",
-  audio: "Audio",
-  link: "Article",
-  embed: "Media",
-};
 
 /** Reads the stage's media out of a getConvictionMarket response. Null = no media. */
 export function stageMediaFrom(
