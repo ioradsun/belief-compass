@@ -201,6 +201,41 @@ export function FeedListPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
+  /**
+   * THE HOUSE IDEA, AS A ROW. Same geometry as a market row so it reads as part
+   * of the queue rather than an advert wedged into it — its own eyebrow is the
+   * only thing that marks it out.
+   */
+  const renderIdeaRow = (
+    e: FeedListEntry,
+    idea: { question: string },
+    opts: { first: boolean; leaving?: boolean },
+  ) => (
+    <li
+      key={opts.leaving ? "leaving-idea" : "idea"}
+      aria-hidden={opts.leaving || undefined}
+      className={`relative ${opts.leaving ? "queue-depart" : ""} ${
+        opts.first && !opts.leaving ? "queue-promote queue-rail pl-1" : ""
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onSelect(e.onchainId)}
+        className="w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--surface)]"
+      >
+        <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--rel,#9b87f5)]">
+          The House has an idea
+        </span>
+        <span className="block text-[13px] font-medium leading-snug text-[var(--text)]">
+          {idea.question}
+        </span>
+        <span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">
+          Yours to create, or pass.
+        </span>
+      </button>
+    </li>
+  );
+
   const renderRow = (e: FeedListEntry, opts: { first: boolean; leaving?: boolean }) => {
     if (e.idea) return renderIdeaRow(e, e.idea, opts);
     const f = factsOf(rows[e.onchainId], nowMs);
