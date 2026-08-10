@@ -293,9 +293,8 @@ export function CreateMarket({
       {/* Scrolls only on short (mobile) viewports; on desktop the whole form fits. */}
       <div className="flex min-h-0 flex-initial flex-col gap-4 overflow-y-auto pt-3">
         {source && (
-          <p className="text-[11px] text-[var(--text-muted)]">
-            <span aria-hidden>🏠</span> The House found this question — edit anything before it goes
-            live.
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--rel,#9b87f5)]">
+            <Lightbulb size={12} aria-hidden /> Market Idea
           </p>
         )}
 
