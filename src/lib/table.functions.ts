@@ -15,7 +15,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import type { PutResult, TableRow } from "@/lib/table.server";
+import type { PutResult, TableCandidate, TableRow } from "@/lib/table.server";
 
 const WALLET = z.string().min(3).max(80);
 const SESSION = z.string().min(8).max(4000);
