@@ -1238,6 +1238,27 @@ export type Database = {
         }
         Relationships: []
       }
+      price_path_hourly: {
+        Row: {
+          captured_at: string
+          hour_start: string
+          onchain_id: number
+          yes_price_usd: number
+        }
+        Insert: {
+          captured_at: string
+          hour_start: string
+          onchain_id: number
+          yes_price_usd: number
+        }
+        Update: {
+          captured_at?: string
+          hour_start?: string
+          onchain_id?: number
+          yes_price_usd?: number
+        }
+        Relationships: []
+      }
       price_snapshots: {
         Row: {
           captured_at: string
@@ -1873,6 +1894,7 @@ export type Database = {
         Args: { p_window?: string }
         Returns: number
       }
+      refresh_price_path_hourly: { Args: { p_hours?: number }; Returns: number }
       request_viewer_match_refresh: {
         Args: { p_wallet: string }
         Returns: undefined
