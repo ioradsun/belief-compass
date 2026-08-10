@@ -243,7 +243,7 @@ export function ChallengeRail({
 
           {/* YOUR OWN TABLE, IN THE SAME COLUMN — what you put up, what became of
               it, and one + for filling a free slot. */}
-          <YourTable wallet={wallet} onSelect={onSelect} currentMarketId={currentMarketId} />
+          <YourTable wallet={wallet} onSelect={onSelect} />
 
           {/* MORE, SAID OUT LOUD. A railful is what reads as a set of things
               waiting for you; past that it becomes a feed, and the feed already
