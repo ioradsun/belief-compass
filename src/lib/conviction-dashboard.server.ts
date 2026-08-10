@@ -147,6 +147,8 @@ export async function buildConvictionDashboard(
   const heldIds = Array.from(new Set(beliefs.map((b) => Number(b.onchain_id))));
   const chgById = new Map<number, { yes: number; no: number }>();
   const heldTitle = new Map<number, string>();
+  /** The live per-share mark, exactly the one the Positions rail reads. */
+  const priceById = new Map<number, { yes: number | null; no: number | null }>();
   if (heldIds.length) {
     const [stRes, { data: mk }] = await Promise.all([
       sb
@@ -165,13 +167,20 @@ export async function buildConvictionDashboard(
     // state read must not become a flat 0%. `mk` below stays tolerant on purpose:
     // it only supplies titles, and a missing one already degrades honestly to
     // "Untitled market" without misstating anything.
-    const changes = await loadWindowChanges(
-      sb,
-      rowsOf(stRes, "market state for this wallet's positions") as unknown as Array<
-        Record<string, unknown>
-      >,
-      "24h",
-    );
+    const stateRows = rowsOf(stRes, "market state for this wallet's positions") as unknown as Array<
+      Record<string, unknown>
+    >;
+    const px = (v: unknown): number | null => {
+      const n = Number(v);
+      // Missing is missing. A zero price would mark every holding worthless.
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+    for (const s of stateRows)
+      priceById.set(Number(s.onchain_id), {
+        yes: px(s.yes_price_usd),
+        no: px(s.no_price_usd),
+      });
+    const changes = await loadWindowChanges(sb, stateRows, "24h");
     for (const id of heldIds) {
       const c = changes.byId.get(id);
       const y = pricePct(c, "YES");
