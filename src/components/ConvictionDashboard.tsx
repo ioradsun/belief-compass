@@ -14,6 +14,8 @@ import { useAccount, useReadContracts } from "wagmi";
 import { formatEther } from "viem";
 import { getConvictionDashboard } from "@/lib/conviction-dashboard.functions";
 import { useMoney } from "@/lib/display-unit";
+import { Signed } from "@/components/Signed";
+
 import { FEES_ABI, useFeeBalances, useClaimFees } from "@/lib/creator-fees";
 import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
 import {
