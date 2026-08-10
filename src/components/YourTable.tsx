@@ -33,7 +33,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MoreHorizontal, Plus, Search, X } from "lucide-react";
+import { ChevronDown, MoreHorizontal, Search } from "lucide-react";
 import { getTable, getTableCandidates, putOnTable, takeOffTable } from "@/lib/table.functions";
 import { searchMarkets } from "@/lib/markets.functions";
 import {
