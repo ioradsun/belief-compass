@@ -440,7 +440,11 @@ export async function buildConvictionDashboard(
     holdings: {
       worthUsd,
       costUsd: holdCostUsd,
-      gainUsd: worthUsd - holdCostUsd,
+      // Gain is worth minus cost OVER THE POSITIONS WE COULD MARK. Including the
+      // cost-fallback holdings dragged a guaranteed zero into the numerator and
+      // their full cost into the denominator, which is the same "unknown read as
+      // fact" mistake the valuation module exists to prevent.
+      gainUsd: markedWorthUsd - markedCostUsd,
       count: heldCount,
     },
     trading: { realizedUsd, realizedTodayUsd },
