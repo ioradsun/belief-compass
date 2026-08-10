@@ -87,7 +87,7 @@ export const LENS_QUESTIONS: Record<Lens, string> = {
   for_you: "What should I look at?",
   moving: "What is changing?",
   capital: "Where is the money?",
-  participants: "Where are the people?",
+  participants: "Where is the crowd?",
   fresh: "Where can I be early?",
 };
 
