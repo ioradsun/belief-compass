@@ -95,6 +95,7 @@ export function LiveTape({
   holdUpdates = false,
   label,
   initial,
+  onPending,
 }: {
   wallet?: string;
   /**
