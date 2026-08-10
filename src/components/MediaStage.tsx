@@ -94,7 +94,8 @@ export function MediaStage({
 
 
 export function MediaEvidence({ media }: { media: StageMedia }) {
-  if (media.kind === "embed" && media.embed) return <MediaEmbed media={media.embed} />;
+  if (media.kind === "embed" && media.embed)
+    return <MediaEmbed media={media.embed} caption={false} />;
   const url = media.url as string;
   if (media.kind === "image") {
     return (
