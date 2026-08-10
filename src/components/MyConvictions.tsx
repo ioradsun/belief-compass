@@ -593,9 +593,6 @@ export function MyConvictions({
             )}
           </div>
         );
-
-          </div>
-        );
       })()}
 
       <div style={{ borderTop: "1px solid var(--hairline)" }} />
