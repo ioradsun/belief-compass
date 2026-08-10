@@ -370,13 +370,10 @@ function TableRowCard({
           </p>
         )}
 
-        {!finished && progress.waiting > 0 && progress.showedUp === 0 && progress.passed === 0 && (
-          /* Nobody has answered yet, and saying so plainly beats a row of noughts.
-             It is early, not empty. */
-          <p className="mt-1.5 text-[11.5px] leading-snug text-[var(--text-muted)]">
-            {progress.reached} of your people can weigh in. No smoke yet.
-          </p>
-        )}
+        {/* NO SECOND LINE. "0 of 7 showed up" plus "7 of your people can weigh
+            in. No smoke yet." was one fact told three times. The early state now
+            lives inside `progressLine` as a single sentence. */}
+
       </button>
 
       {/* TAKE IT OFF THE TABLE — casual, because it is. Not "Delete", not "Cancel":

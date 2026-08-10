@@ -176,6 +176,13 @@ export function tableLine(activeCount: number): string | null {
  */
 export function progressLine(p: TableProgress): string | null {
   if (p.reached === 0) return null;
+  /**
+   * ONE LINE, ALWAYS. The card used to print "0 of 7 showed up" AND, underneath,
+   * "7 of your people can weigh in. No smoke yet." — the same fact three times,
+   * one of them a row of noughts. Before anybody has answered there is exactly
+   * one thing to say, so say it and stop.
+   */
+  if (p.showedUp === 0 && p.passed === 0) return `Waiting on ${p.reached}`;
   const showed = `${p.showedUp} of ${p.reached} showed up`;
   return p.passed > 0 ? `${showed} · ${p.passed} passed` : showed;
 }
