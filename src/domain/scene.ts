@@ -117,7 +117,7 @@ export function challengerView(w: World): ChallengerView {
 /** What one recipient is told — or null when the card is no longer theirs to see. */
 export interface ChallengedView {
   name: string;
-  badge: "Tribe" | "Rival";
+  badge: "Tribe" | "Rival" | "Still Forming";
   question: string;
   /** The real sentence, from the real composer. */
   line: string | null;
@@ -142,11 +142,19 @@ export interface ChallengedView {
  * BADGE, not label. Twin renders Tribe and Opp renders Rival, because those two
  * words are withheld from every surface while the evidence for them is this thin.
  */
-const BADGE: Record<CallerRelation, "Tribe" | "Rival"> = {
+const BADGE: Record<CallerRelation, "Tribe" | "Rival" | "Still Forming"> = {
   twin: "Tribe",
   tribe: "Tribe",
   opp: "Rival",
   inverse: "Rival",
+  /**
+   * The third badge says what it is rather than reaching for a fourth word.
+   * "Still Forming" is already the heading these people appear under when
+   * somebody CHOOSES an audience; using the same two words on the receiving card
+   * means a reader meets one vocabulary, not two names for one relationship.
+   */
+  neutral: "Still Forming",
+  insufficient: "Still Forming",
 };
 
 export function challengedView(w: World, who: Participant): ChallengedView {

@@ -14,7 +14,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { CallReach, Challenge, NamedPerson } from "@/domain/challenge";
-import type { ChainContext, ChallengeHistory, PairCalls, PairSummary } from "@/lib/challenge.server";
+import type { AudienceResult } from "@/domain/audience";
+import type {
+  ChainContext,
+  ChallengeHistory,
+  PairCalls,
+  PairSummary,
+} from "@/lib/challenge.server";
 
 const WALLET = z.string().min(3).max(80);
 
@@ -93,9 +99,34 @@ export const getCallReach = createServerFn({ method: "GET" })
       .parse(raw ?? {}),
   )
   .handler(async ({ data }): Promise<CallReach> => {
-    if (!data.wallet) return { tribe: 0, rivals: 0 };
+    if (!data.wallet) return { tribe: 0, rivals: 0, forming: 0 };
     const { callReachFor } = await import("@/lib/challenge.server");
     return callReachFor(data.wallet, data.marketId ?? undefined);
+  });
+
+/**
+ * WHO A CHALLENGE WOULD REACH — the faces, before anybody commits.
+ *
+ * The same `eligibleAudience` the write path calls, which is the entire reason
+ * this exists rather than the component assembling a set of its own. Two
+ * definitions of who can be asked is how the preview and the write came to
+ * disagree by 32 people; a preview that shows faces the write would not contact
+ * is that bug with pictures on it.
+ *
+ * NO SIGNED SESSION. It reads only what the viewer could already see about their
+ * own network, writes nothing, and takes no slot — and requiring a signature
+ * would put a wallet prompt in front of merely LOOKING at who is around.
+ */
+export const getAudience = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({ wallet: WALLET.nullish(), marketId: z.number().int().nonnegative().nullish() })
+      .parse(raw ?? {}),
+  )
+  .handler(async ({ data }): Promise<AudienceResult> => {
+    if (!data.wallet || data.marketId == null) return { status: "none" };
+    const { audienceFor } = await import("@/lib/challenge.server");
+    return audienceFor(data.wallet, data.marketId);
   });
 
 /**
@@ -112,13 +143,13 @@ export const answerCalls = createServerFn({ method: "POST" })
     async ({
       data,
     }): Promise<{ closed: NamedPerson[]; pending: boolean; parentCall: number | null }> => {
-    const { markCallsAnswered } = await import("@/lib/challenge.server");
-    // WHO this trade just answered, not merely that it succeeded. It is the one
-    // moment the product can tell somebody they were counted on, and a bare
-    // `{ ok: true }` threw that away at the exact instant it was true.
-    // `pending` travels with the result rather than being flattened away: the
-    // caller needs to tell "nobody was waiting" from "we could not prove it yet",
-    // and those are the same empty array otherwise.
+      const { markCallsAnswered } = await import("@/lib/challenge.server");
+      // WHO this trade just answered, not merely that it succeeded. It is the one
+      // moment the product can tell somebody they were counted on, and a bare
+      // `{ ok: true }` threw that away at the exact instant it was true.
+      // `pending` travels with the result rather than being flattened away: the
+      // caller needs to tell "nobody was waiting" from "we could not prove it yet",
+      // and those are the same empty array otherwise.
       return markCallsAnswered(data.wallet, data.marketId);
     },
   );

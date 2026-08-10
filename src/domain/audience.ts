@@ -44,6 +44,29 @@
  */
 export type CallRelationAtTime = "twin" | "tribe" | "neutral" | "opp" | "inverse" | "insufficient";
 
+/**
+ * The six, in the order the DNA buckets are read — strongest claim first.
+ *
+ * Exported because the READ side needs it too. `relation_at_call` comes back
+ * from Postgres as a bare string, and the recipient's rail decides whether to
+ * render a row by whether that string parses. When the write side learned two
+ * new labels and this list did not, every Still Forming call would have been
+ * silently dropped on the screen it was written for.
+ */
+export const CALL_RELATIONS: readonly CallRelationAtTime[] = [
+  "twin",
+  "tribe",
+  "inverse",
+  "opp",
+  "neutral",
+  "insufficient",
+] as const;
+
+/** A stored `relation_at_call`, or null when the column holds something else. */
+export function callRelationAtTime(value: unknown): CallRelationAtTime | null {
+  return CALL_RELATIONS.find((r) => r === value) ?? null;
+}
+
 /** What a reader sees. Three headings, derived — never stored. */
 export type AudienceGroup = "tribe" | "rivals" | "forming";
 
@@ -72,13 +95,26 @@ export function audienceGroupFor(relation: CallRelationAtTime): AudienceGroup {
   }
 }
 
-export interface AudienceMember {
+/**
+ * WHO QUALIFIES, DECIDED BEFORE ANYBODY HAS A NAME.
+ *
+ * Membership is a fact about wallets and the canonical graph. A display name is
+ * a fact about a `profiles` row that may be missing, stale, or served by a
+ * lookup that just timed out — and NONE of that may change who is in the
+ * audience. Splitting the shape is what makes the wrong order unwriteable:
+ * there is nothing to resolve profiles into until membership already exists.
+ */
+export interface AudienceCandidate {
   wallet: string;
   relationAtCall: CallRelationAtTime;
-  group: AudienceGroup;
   provenance: AudienceProvenance;
   sharedBeliefs: number | null;
   sameSideBeliefs: number | null;
+}
+
+/** A candidate once it has a face. Presentation only — never a filter. */
+export interface AudienceMember extends AudienceCandidate {
+  group: AudienceGroup;
   displayName: string;
   avatarUrl: string | null;
 }
@@ -121,8 +157,8 @@ const PROVENANCE_RANK: Record<AudienceProvenance, number> = {
  * which is exactly the kind of thing that is correct until somebody
  * parallelises the reads.
  */
-export function dedupeAudience(members: readonly AudienceMember[]): AudienceMember[] {
-  const best = new Map<string, AudienceMember>();
+export function dedupeAudience<T extends AudienceCandidate>(members: readonly T[]): T[] {
+  const best = new Map<string, T>();
   for (const m of members) {
     const key = m.wallet.toLowerCase();
     const prev = best.get(key);
@@ -136,6 +172,26 @@ export function dedupeAudience(members: readonly AudienceMember[]): AudienceMemb
     }
   }
   return [...best.values()];
+}
+
+/**
+ * Give the settled membership its faces. The LAST step, and it cannot filter.
+ *
+ * `profile` returns a name for every wallet it is handed — the alias fallback
+ * guarantees it — so there is no branch here that could drop somebody for
+ * having no profile. A missing `profiles` row is a missing picture, not a
+ * revoked invitation, and the ordering of these two steps is the only thing
+ * that keeps it that way.
+ */
+export function toMembers(
+  candidates: readonly AudienceCandidate[],
+  profile: (wallet: string) => { displayName: string; avatarUrl: string | null },
+): AudienceMember[] {
+  return candidates.map((c) => ({
+    ...c,
+    group: audienceGroupFor(c.relationAtCall),
+    ...profile(c.wallet),
+  }));
 }
 
 /** How many faces a group shows before it starts counting. */

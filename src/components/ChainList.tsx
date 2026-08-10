@@ -27,13 +27,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { getTableCandidates, putOnTable, takeOffTable } from "@/lib/table.functions";
 import { getChainContext } from "@/lib/challenge.functions";
-import {
-  SideWord,
-  TablePicker,
-  candidatesKey,
-  tableKey,
-  useTable,
-} from "@/components/YourTable";
+import { SideWord, TablePicker, candidatesKey, tableKey, useTable } from "@/components/YourTable";
 import {
   tableProgress,
   progressLine,
@@ -64,6 +58,10 @@ const BADGE: Record<CallerRelation, string> = {
   tribe: "Tribe",
   opp: "Rival",
   inverse: "Rival",
+  // Same two words as the audience heading and the lab badge — one vocabulary
+  // for one relationship, wherever the reader meets it.
+  neutral: "Still Forming",
+  insufficient: "Still Forming",
 };
 
 export function ChainList({

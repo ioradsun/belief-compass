@@ -983,3 +983,98 @@ a call aged past the window, and one Challenge deliberately left reaching nobody
 Every section produced the right answer, including finding the seeded slot damage
 and correctly refusing to call the one-way pair a back & forth. Both text and
 `--json` output are clean.
+
+---
+
+## O. §4 — Who a Challenge may reach
+
+### O.1 Two concepts that were one
+
+`relation_at_call` is what the DNA engine believed at the moment somebody was
+asked. It is frozen forever and it is relationship **truth**. "Still Forming" is
+a **heading on a screen**. Storing the heading would make presentation copy
+permanent, and the day the grouping was renamed every historical row would be
+lying about what the engine actually knew.
+
+So `src/domain/audience.ts` names them separately and `"forming"` is never
+written:
+
+| Type                 | Values                                                  | Where it lives |
+| -------------------- | ------------------------------------------------------- | -------------- |
+| `CallRelationAtTime` | `twin` `tribe` `neutral` `opp` `inverse` `insufficient` | the database   |
+| `AudienceGroup`      | `tribe` `rivals` `forming`                              | a render       |
+
+`audienceGroupFor()` derives the second from the first, exhaustively, every time.
+
+### O.2 Still Forming means evidence, never a shortfall of recipients
+
+Exactly three provenances qualify, each a fact the canonical graph can already
+explain:
+
+| Provenance           | The fact behind it                                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `neutral_dna`        | the engine cleared the evidence bar for this pair and found no strong alignment. It **looked**, and it has an answer.                    |
+| `closest_match`      | at least one shared directional belief. Zero shared beliefs is not a thin relationship, it is no relationship.                           |
+| `answered_challenge` | one asked and the other answered. The case DNA is structurally incapable of seeing — a Market Maker holds no directional beliefs at all. |
+
+**Follows are not one of them.** `setFollow` accepts the claimed follower wallet
+without proving control of it. That is survivable for a lightweight public
+preference and is not survivable when a row places a social obligation on
+somebody else's screen: a forged follow would manufacture an audience seat.
+
+Cold start is answered with an honest empty state, not a lowered bar.
+
+### O.3 The read side had to learn the same six words
+
+The write path began freezing `neutral` and `insufficient`. `buildChallenges`
+validated a stored `relation_at_call` against a **four**-value list and skipped
+anything that did not parse — so every Still Forming call would have been written
+correctly and then rendered to nobody. `CALL_RELATIONS` is now one exported list,
+imported by both sides, and `callRelationAtTime()` is the only parser.
+
+The same widening reached `CallerRelation`, `RELATION_RANK`, the three `BADGE`
+maps and `ChallengedView.badge`, which gained the third word: **Still Forming**,
+the same two words the audience heading uses.
+
+### O.4 The preview and the write still agree
+
+`CallReach` gained `forming`. Without it, the reach line and `relayButtonLabel`
+would have counted two groups out of three — the 32-person gap of §4 arriving
+from the other direction, and an offer to relay hidden entirely from somebody
+whose whole audience is Still Forming. `reachTotal()` is the one place the groups
+are added up, and it returns `null` for a refused read, because a refusal is not
+a total of zero.
+
+### O.5 Profiles come last, and cannot filter
+
+`AudienceCandidate` (membership) and `AudienceMember` (membership + a face) are
+different types, so the wrong order is unwriteable: there is nothing to resolve
+profiles into until membership already exists. `resolveProfiles` falls back to the
+deterministic alias, so a missing `profiles` row is a missing picture and never a
+revoked invitation.
+
+### O.6 Rendered, and one flaw found only by looking
+
+`AudiencePreview` fetches; `AudienceGroups` renders. The split exists so
+`/lab-9f3c7a21b4` can show a full audience — a Twin beside two Tribe members, a
+Rivals row that overflows the face cap, and three Still Forming people arriving
+through all three provenances — with no DNA cache, wallet or network.
+
+Rendered, the three labels started at three different x positions, because each
+face stack was a different width and the rows stopped reading as one list. Fixed
+with a `min-w-[102px]` gutter sized to a full stack. Nothing in the types or the
+tests could have caught it.
+
+### O.7 The migration that is not 42703-tolerant
+
+`20260907000000_call_relation_forming.sql` widens the `market_calls_relation`
+CHECK to the six values. **It is a harder blocker than the chain columns.** Those
+were tolerated — the code caught 42703 and retried without them. A CHECK is not:
+Postgres _rejects_ a row carrying `neutral` or `insufficient`, and because the
+audience is written as one upsert, a single rejected row rolls the whole statement
+back and **the Challenge reaches nobody while still holding a slot**.
+
+Section 12 of `check:challenge-integrity` reports on it and deliberately refuses
+to conclude from row counts alone — zero Still Forming rows is what an unapplied
+migration looks like _and_ what an applied one looks like before anybody has a
+neutral person in range. It prints the `pg_constraint` query that settles it.
