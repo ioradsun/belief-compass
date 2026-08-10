@@ -14,6 +14,8 @@ import { useAccount, useReadContracts } from "wagmi";
 import { formatEther } from "viem";
 import { getConvictionDashboard } from "@/lib/conviction-dashboard.functions";
 import { useMoney } from "@/lib/display-unit";
+import { Signed } from "@/components/Signed";
+
 import { FEES_ABI, useFeeBalances, useClaimFees } from "@/lib/creator-fees";
 import { PROXY_ADDRESS, CHAIN_ID } from "@/chain/decoder";
 import {
@@ -365,18 +367,13 @@ export function ConvictionDashboard({
               Net Profit
             </div>
             <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span
+              <Signed
+                value={fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
                 className="text-[56px] font-semibold leading-none tracking-[-0.035em] tabular-nums"
-                style={{ color: journey.netProfitUsd >= 0 ? "var(--gain)" : "var(--loss)" }}
-              >
-                {fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
-              </span>
+              />
               {journey.roiPct != null && (
-                <span
-                  className="text-[18px] font-semibold tabular-nums"
-                  style={{ color: journey.netProfitUsd >= 0 ? "var(--gain)" : "var(--loss)" }}
-                >
-                  ({fmtPct(journey.roiPct)})
+                <span className="text-[18px] font-semibold tabular-nums text-[var(--text)]">
+                  (<Signed value={fmtPct(journey.roiPct)} />)
                 </span>
               )}
             </div>
@@ -385,13 +382,14 @@ export function ConvictionDashboard({
             </p>
             {/* The living pulse — did my conviction grow today? */}
             {netToday !== 0 && (
-              <div
-                className="mt-3 text-[13px] font-medium tabular-nums"
-                style={{ color: netToday >= 0 ? "var(--gain)" : "var(--loss)" }}
-              >
-                {netToday >= 0 ? "↑" : "↓"} Today {fmtUsd(netToday, true)}
+              <div className="mt-3 text-[13px] font-medium tabular-nums text-[var(--text)]">
+                <span style={{ color: netToday >= 0 ? "var(--gain)" : "var(--loss)" }}>
+                  {netToday >= 0 ? "↑" : "↓"}
+                </span>{" "}
+                Today <Signed value={fmtUsd(netToday, true)} />
               </div>
             )}
+
           </section>
 
           {/* Ready to Claim — the one thing you can DO. Premium placement, right
@@ -499,12 +497,11 @@ export function ConvictionDashboard({
                   />
                   <div className="flex items-center justify-between border-t border-[var(--hairline)] bg-[var(--bg)]/40 px-4 py-3.5">
                     <span className="text-[13px] font-medium text-[var(--text)]">Net Profit</span>
-                    <span
+                    <Signed
+                      value={fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
                       className="text-[18px] font-semibold tabular-nums"
-                      style={{ color: journey.netProfitUsd >= 0 ? "var(--gain)" : "var(--loss)" }}
-                    >
-                      {fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
-                    </span>
+                    />
+
                   </div>
                 </div>
                 <p className="mt-2.5 px-1 text-[11.5px] leading-relaxed tabular-nums text-[var(--text-muted)]">
@@ -559,12 +556,11 @@ export function ConvictionDashboard({
                   >
                     <div className="flex items-center">
                       <span className="text-[14px] font-medium text-[var(--text)]">{s.label}</span>
-                      <span
+                      <Signed
+                        value={fmtUsd(s.usd, true)}
                         className="ml-auto text-[15px] font-semibold tabular-nums"
-                        style={{ color: s.usd >= 0 ? "var(--gain)" : "var(--loss)" }}
-                      >
-                        {fmtUsd(s.usd, true)}
-                      </span>
+                      />
+
                     </div>
                     <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
                       {edgeCopy(s.key, s.usd)}
@@ -584,12 +580,11 @@ export function ConvictionDashboard({
                       <span className="text-[14px] font-medium text-[var(--text)]">
                         Trading Fees
                       </span>
-                      <span
+                      <Signed
+                        value={fmtUsd(-tradingFees, true)}
                         className="ml-auto text-[15px] font-semibold tabular-nums"
-                        style={{ color: "var(--loss)" }}
-                      >
-                        {fmtUsd(-tradingFees, true)}
-                      </span>
+                      />
+
                     </div>
                     <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
                       Paid to the protocol on every buy. Already counted in your Net Profit.
@@ -599,14 +594,11 @@ export function ConvictionDashboard({
                 <div className="border-t border-[var(--hairline)] px-4 py-3.5">
                   <div className="flex items-center">
                     <span className="text-[14px] font-semibold text-[var(--text)]">Net Profit</span>
-                    <span
+                    <Signed
+                      value={fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
                       className="ml-auto text-[15px] font-semibold tabular-nums"
-                      style={{
-                        color: journey.netProfitUsd >= 0 ? "var(--gain)" : "var(--loss)",
-                      }}
-                    >
-                      {fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
-                    </span>
+                    />
+
                   </div>
                 </div>
               </div>
@@ -634,12 +626,11 @@ export function ConvictionDashboard({
                     <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[var(--text)]">
                       {m.title}
                     </span>
-                    <span
+                    <Signed
+                      value={fmtUsd(m.amountUsd, true)}
                       className="shrink-0 text-[14px] font-semibold tabular-nums"
-                      style={{ color: "var(--gain)" }}
-                    >
-                      {fmtUsd(m.amountUsd, true)}
-                    </span>
+                    />
+
                     <Badge kind={m.kind} />
                   </button>
                 ))}

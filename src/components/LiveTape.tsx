@@ -22,6 +22,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWarmMarket } from "@/lib/realtime/warm-market";
+import { Signed } from "@/components/Signed";
+
 
 import { PersonStack } from "@/components/PersonStack";
 import { showsAmountFooter } from "@/domain/amount-footer";
@@ -729,17 +731,15 @@ function SideText({ text, tone }: { text?: string | null; tone?: BeatTone }) {
         }
         if (/^[+−-]?\d+(?:\.\d+)?%$/.test(p)) {
           return (
-            <span
+            <Signed
               key={i}
+              value={p}
               className="num font-semibold"
-              style={{
-                color: p.startsWith("−") || p.startsWith("-") ? "var(--loss)" : "var(--gain)",
-              }}
-            >
-              {p}
-            </span>
+              numberColor={toneColor ?? "var(--text)"}
+            />
           );
         }
+
         return (
           <span key={i} style={toneColor ? { color: toneColor } : undefined}>
             {p}

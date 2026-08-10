@@ -22,6 +22,8 @@ import { positionPnl } from "@/domain/position";
 import { positionReturn, formatPct } from "@/domain/metric-display";
 import { formatMoney } from "@/domain/money";
 import { StandOnIt } from "@/components/StandOnIt";
+import { Signed } from "@/components/Signed";
+
 import { useDisplayUnit } from "@/lib/display-unit";
 import {
   positionStory,
@@ -149,25 +151,9 @@ function ConvictionCard({
   // Without a cost basis the honest outcome is the selected window's move.
   const windowMove =
     !ret && p.deltaUsd != null && Math.abs(p.deltaUsd) >= 0.005 ? p.deltaUsd : null;
-  // One rule everywhere: up is gain, down is loss, flat is neutral — never a
-  // coloured zero.
-  const outcomeDir: "up" | "down" | "flat" = ret
-    ? ret.direction === "up"
-      ? "up"
-      : ret.direction === "down"
-        ? "down"
-        : "flat"
-    : windowMove != null
-      ? windowMove > 0
-        ? "up"
-        : "down"
-      : "flat";
-  const outcomeTone =
-    outcomeDir === "up"
-      ? "var(--gain)"
-      : outcomeDir === "down"
-        ? "var(--loss)"
-        : "var(--text-muted)";
+  // Colour lives on the sign only (see @/components/Signed) — the figure itself
+  // stays neutral, and a flat outcome is never coloured at all.
+
 
   return (
     <div
@@ -213,15 +199,14 @@ function ConvictionCard({
 
         {ret?.pct || windowMove != null ? (
           <div className="ml-auto text-right">
-            <div
-              className="num text-[18px] font-semibold leading-none"
-              style={{ color: outcomeTone }}
-            >
-              {/* The return %, whenever a cost basis exists. Without one there is
-                no percentage to state, so the window's dollar move stands in —
-                the only honest measure left. */}
-              {ret?.pct ?? signedMoney(windowMove as number)}
-            </div>
+            {/* The return %, whenever a cost basis exists. Without one there is
+              no percentage to state, so the window's dollar move stands in —
+              the only honest measure left. Only the sign is coloured. */}
+            <Signed
+              value={ret?.pct ?? signedMoney(windowMove as number)}
+              className="num block text-[18px] font-semibold leading-none"
+            />
+
             <div className="mt-1 text-[10px] text-[var(--text-muted)]">Return</div>
           </div>
         ) : (
@@ -561,15 +546,17 @@ export function MyConvictions({
               <span className="num min-w-0 truncate text-[24px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
                 {money(total)}
               </span>
-              <span
+              <Signed
+                value={pct ?? "—"}
                 className="num shrink-0 text-[24px] font-semibold leading-none tabular-nums"
-                style={{ color: tone }}
               >
-                {pct ?? "—"}
                 {arrow && pct ? (
-                  <span className="ml-1.5 align-middle text-[0.6em]">{arrow}</span>
+                  <span className="ml-1.5 align-middle text-[0.6em]" style={{ color: tone }}>
+                    {arrow}
+                  </span>
                 ) : null}
-              </span>
+              </Signed>
+
             </div>
             <div className="mt-1.5 flex items-baseline justify-between gap-3">
               <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
