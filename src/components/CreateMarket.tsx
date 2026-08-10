@@ -619,8 +619,19 @@ function EmbedPicker({
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          onChange={(e) => setRaw(e.target.value)}
-          placeholder="Paste a YouTube, Instagram, TikTok, X or Spotify link"
+          onChange={(e) => {
+            const value = e.target.value;
+            // Pasted embed code collapses to the media URL in place, so the
+            // field never shows a wall of markup.
+            if (/<[a-z]/i.test(value)) {
+              const stripped = parseEmbed(value);
+              setRaw(stripped ? stripped.url : value);
+              return;
+            }
+            setRaw(value);
+          }}
+
+          placeholder="Paste a link or embed code — YouTube, Instagram, TikTok, X, Spotify"
           className="min-w-0 flex-1 rounded-[10px] bg-[var(--surface)] px-3 py-2 text-[14px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
           style={{ border: "1px solid var(--border)" }}
         />

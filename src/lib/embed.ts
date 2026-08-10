@@ -87,12 +87,52 @@ function safeUrl(raw: string): URL | null {
 const host = (u: URL) => u.hostname.replace(/^www\./, "").toLowerCase();
 
 /**
+ * Pasted embed code is a courtesy, not a second format. We pull every URL a
+ * platform's snippet can carry (iframe src, blockquote cite/permalink, the
+ * anchor fallback) and hand them back in order; the gate below still decides.
+ */
+export function embedUrlCandidates(raw: string): string[] {
+  const out: string[] = [];
+  const push = (v: string | undefined | null) => {
+    const t = v?.trim();
+    if (t && !out.includes(t)) out.push(t);
+  };
+  const attr = (name: string) => {
+    const re = new RegExp(`${name}\\s*=\\s*("([^"]*)"|'([^']*)')`, "gi");
+    for (const m of raw.matchAll(re)) push(m[2] ?? m[3]);
+  };
+  attr("src");
+  attr("cite");
+  attr("data-instgrm-permalink");
+  attr("data-video-id");
+  attr("href");
+  // Bare URLs inside the snippet (TikTok/X blockquotes end with one).
+  for (const m of raw.matchAll(/https?:\/\/[^\s"'<>\\]+/gi)) push(m[0]);
+  return out;
+}
+
+const looksLikeHtml = (raw: string) => /<[a-z]/i.test(raw);
+
+/**
  * The single gate. Returns null for anything that is not a supported public
- * post on one of the five platforms — no HTML, no iframe code, no other hosts.
+ * post on one of the five platforms. Full embed code is accepted by reducing
+ * it to the media URL first — everything else in the snippet is discarded.
  */
 export function parseEmbed(raw: string): ParsedEmbed | null {
+  if (looksLikeHtml(raw)) {
+    for (const candidate of embedUrlCandidates(raw)) {
+      const hit = parseEmbedUrl(candidate);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  return parseEmbedUrl(raw);
+}
+
+function parseEmbedUrl(raw: string): ParsedEmbed | null {
   const u = safeUrl(raw);
   if (!u) return null;
+
   const h = host(u);
   const path = u.pathname.replace(/\/+$/, "");
 
@@ -210,4 +250,4 @@ export function embedFromRecord(raw: unknown): EmbedMedia | null {
   };
 }
 
-export const EMBED_HINT = "Paste a YouTube, Instagram, TikTok, X or Spotify link.";
+export const EMBED_HINT = "Paste a link or embed code — YouTube, Instagram, TikTok, X or Spotify.";
