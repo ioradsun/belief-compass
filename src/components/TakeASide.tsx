@@ -96,7 +96,7 @@ export function TakeASide({
       </div>
 
 
-      <p className="mt-2.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
+      <p className="relative mt-2.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
         Start with 10.
         <br />
         Don&rsquo;t chase people or money.
