@@ -110,11 +110,13 @@ export function feedSessionVersion(): number {
 
 /** Has this session watched enough cards for the House to be allowed an idea? */
 export function ideaGateOpen(): boolean {
+  hydrate();
   return state.cardsViewed >= MIN_CARDS_FOR_IDEA;
 }
 
 /** Count one market card as actually viewed. Idempotent per market. */
 export function noteCardViewed(marketId: number): void {
+  hydrate();
   if (state.seen.has(marketId)) return;
   state.seen.add(marketId);
   if (state.seen.size > MAX_SEEN) {
