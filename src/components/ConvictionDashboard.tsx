@@ -571,7 +571,46 @@ export function ConvictionDashboard({
                     </p>
                   </div>
                 ))}
+                {/*
+                 * RECONCILE TO THE HEADLINE. The three sources sum to gains
+                 * BEFORE fees, so the section quietly ended on a number that
+                 * was not the Net Profit at the top of the page. Fees are a
+                 * real cost of the same story; showing them here closes the
+                 * gap instead of leaving the reader to find it.
+                 */}
+                {tradingFees > 0 && (
+                  <div className="border-t border-[var(--hairline)] px-4 py-3.5">
+                    <div className="flex items-center">
+                      <span className="text-[14px] font-medium text-[var(--text)]">
+                        Trading Fees
+                      </span>
+                      <span
+                        className="ml-auto text-[15px] font-semibold tabular-nums"
+                        style={{ color: "var(--loss)" }}
+                      >
+                        {fmtUsd(-tradingFees, true)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[12px] leading-snug text-[var(--text-muted)]">
+                      Paid to the protocol on every buy. Already counted in your Net Profit.
+                    </p>
+                  </div>
+                )}
+                <div className="border-t border-[var(--hairline)] px-4 py-3.5">
+                  <div className="flex items-center">
+                    <span className="text-[14px] font-semibold text-[var(--text)]">Net Profit</span>
+                    <span
+                      className="ml-auto text-[15px] font-semibold tabular-nums"
+                      style={{
+                        color: journey.netProfitUsd >= 0 ? "var(--gain)" : "var(--loss)",
+                      }}
+                    >
+                      {fmtUsd(journey.netProfitUsd, journey.netProfitUsd !== 0)}
+                    </span>
+                  </div>
+                </div>
               </div>
+
             </Section>
           )}
 
