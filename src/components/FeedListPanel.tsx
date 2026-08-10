@@ -19,6 +19,7 @@
  * compete with it.
  */
 import { useEffect, useRef, useState } from "react";
+import { Lightbulb } from "lucide-react";
 import { composeDiscoveryRow } from "@/domain/market-discovery";
 import type { FeedFilters, FeedNetwork } from "@/domain/feed/filters";
 import type { MarketRow } from "@/components/MarketCard";
