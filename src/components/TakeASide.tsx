@@ -43,14 +43,31 @@ export function TakeASide({
 
   return (
     <div
-      className="mb-3 rounded-[10px] p-3"
-      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+      className="relative mb-3 overflow-hidden rounded-[10px] p-3"
+      style={{
+        background:
+          "linear-gradient(180deg, color-mix(in oklab, var(--notice) 12%, var(--surface)) 0%, var(--surface) 70%)",
+        border: "1px solid color-mix(in oklab, var(--notice) 32%, var(--border))",
+        boxShadow: "0 0 0 1px color-mix(in oklab, var(--notice) 8%, transparent) inset",
+      }}
     >
-      <div className="text-[11px] font-semibold tracking-[0.08em] text-[var(--text)] uppercase">
-        Take a side
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-10 -right-8 h-24 w-24 rounded-full blur-2xl"
+        style={{ background: "color-mix(in oklab, var(--notice) 30%, transparent)" }}
+      />
+
+      <div className="relative flex items-center gap-1.5">
+        <span
+          className="h-1.5 w-1.5 rounded-full"
+          style={{ background: "var(--notice)" }}
+        />
+        <div className="text-[11px] font-semibold tracking-[0.08em] uppercase text-[var(--notice)]">
+          Take a side
+        </div>
       </div>
 
-      <div className="mt-2 flex items-baseline gap-1.5">
+      <div className="relative mt-2 flex items-baseline gap-1.5">
         <span className="text-[20px] leading-none font-semibold tabular-nums text-[var(--text)]">
           {count}
         </span>
@@ -60,8 +77,8 @@ export function TakeASide({
       </div>
 
       <div
-        className="mt-2 h-[3px] w-full overflow-hidden rounded-full"
-        style={{ background: "var(--border)" }}
+        className="relative mt-2 h-[3px] w-full overflow-hidden rounded-full"
+        style={{ background: "color-mix(in oklab, var(--notice) 18%, var(--border))" }}
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={CONVICTION_GOAL}
@@ -70,11 +87,16 @@ export function TakeASide({
       >
         <div
           className="h-full rounded-full transition-[width] duration-500"
-          style={{ width: `${pct}%`, background: "var(--yes, var(--text))" }}
+          style={{
+            width: `${pct}%`,
+            background:
+              "linear-gradient(90deg, color-mix(in oklab, var(--notice) 60%, transparent), var(--notice))",
+          }}
         />
       </div>
 
-      <p className="mt-2.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
+
+      <p className="relative mt-2.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
         Start with 10.
         <br />
         Don&rsquo;t chase people or money.
