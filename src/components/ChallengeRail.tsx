@@ -25,7 +25,6 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { YourTable, useTable } from "@/components/YourTable";
-import { useQueryClient } from "@tanstack/react-query";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
 import { passOnCall } from "@/lib/table.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
@@ -68,9 +67,12 @@ export function ChallengeRail({
   wallet,
   onSelect,
   insider,
+  currentMarketId,
 }: {
   wallet?: string;
   onSelect: (marketId: number) => void;
+  /** What the centre column is showing — offered as "Use this market". */
+  currentMarketId?: number;
   /**
    * The Insider feed (live tape), rendered by the route. Passed as a node rather
    * than as five more props: this component is about YOUR calls, and threading
@@ -79,7 +81,6 @@ export function ChallengeRail({
    */
   insider: ReactNode;
 }) {
-  const qc = useQueryClient();
   /**
    * NO CHALLENGES MEANS INSIDER. An empty Challenge tab is a dead first screen,
    * so the rail always opens on Insider — the one thing that is true for
