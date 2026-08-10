@@ -104,7 +104,7 @@ export const LENS_QUESTIONS: Record<Lens, string> = {
  * (see `EXPLORE_LABEL`), because choosing a ranking is not going somewhere else.
  */
 export const LENS_LABELS: Record<Lens, string> = {
-  for_you: "Up Next",
+  for_you: "For You",
   moving: "Moving",
   capital: "Most Capital",
   participants: "Most People",
