@@ -297,13 +297,23 @@ function MomentumMetric({
         </span>
         <span className="shrink-0 text-right">
           {/* One rule decides the treatment (see @/components/Signed): a rate is
-          a verdict — coloured, arrow-trailing; a count or an amount is a fact —
-          signed but neutral, whatever fills this slot. */}
-          <Signed
-            value={headlinePct}
-            className="num block font-semibold leading-none tabular-nums"
-            style={{ fontSize: "var(--mom-pct, 16px)" }}
-          />
+          a verdict — coloured, arrow-trailing. "New" is not a rate, so it stays
+          a quiet word. */}
+          {headlinePct ? (
+            <Signed
+              value={headlinePct}
+              className="num block font-semibold leading-none tabular-nums"
+              style={{ fontSize: "var(--mom-pct, 16px)" }}
+            />
+          ) : (
+            <span
+              className="block font-semibold uppercase leading-none tracking-[0.08em] text-[var(--text-muted)]"
+              style={{ fontSize: "var(--mom-pct, 16px)" }}
+            >
+              New
+            </span>
+          )}
+
           {/* The exact move sits directly under its percentage — one column,
           one story, for both participants and capital. */}
           <span
