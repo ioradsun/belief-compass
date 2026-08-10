@@ -113,7 +113,7 @@ export function YourTable({
         }),
       ),
     onSuccess: () => {
-      setAdding(null);
+      setAdding(false);
       void qc.invalidateQueries({ queryKey: tableKey(wallet) });
       void qc.invalidateQueries({ queryKey: ["table-candidates", wallet ?? null] });
     },
