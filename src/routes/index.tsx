@@ -1562,7 +1562,9 @@ function Feed() {
               />
             </>
           )}
-          <div aria-hidden className={railMask} />
+          {/* Focus Mode dims the rail, but never the open case: the YES/NO
+              columns are part of the investigation the user is focused on. */}
+          {!(caseActive && currentRow) && <div aria-hidden className={railMask} />}
         </aside>
 
         {/* CENTER — Belief. Fluid column, but the reading measure is capped at
@@ -1827,7 +1829,7 @@ function Feed() {
               )}
             </>
           )}
-          <div aria-hidden className={railMask} />
+          {!(caseActive && currentRow) && <div aria-hidden className={railMask} />}
         </aside>
 
         {/* ONE MENU, EVERY PAGE — the same drawer the standing pages open. */}
