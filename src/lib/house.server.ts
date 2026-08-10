@@ -495,7 +495,7 @@ export async function finalizeHouseBet(
   // transaction on Base server-side (receipt succeeded, it touched the pinned
   // belief-market proxy, and it decodes to a buy of this market on this side)
   // before revealing anything. The hash is uniquely indexed so one tx reveals once.
-  await verifyBetTransaction(marketId, side, txHash);
+  await verifyBetTransaction(marketId, side, txHash, wallet);
   const { data: existing } = await sb
     .from("house_predictions")
     .select("predicted_action, actual_action")
