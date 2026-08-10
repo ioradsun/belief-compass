@@ -604,11 +604,7 @@ export function MyConvictions({
                   <>
                     {signedMoney(shownMove)}{" "}
                     <span className="font-normal text-[var(--text-muted)]">
-                      {hasBasis
-                        ? partial
-                          ? `since start · ${marked.length}/${built.length}`
-                          : "since start"
-                        : winLabel.toLowerCase()}
+                      {hasBasis ? "since start" : winLabel.toLowerCase()}
                     </span>
                   </>
                 )}
