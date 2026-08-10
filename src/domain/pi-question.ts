@@ -181,6 +181,7 @@ export const STATE_LED_QUESTION: ReadonlySet<string> = new Set([
   "side_emptied",
   "back_from_dead",
   "side_got_company",
+  "first_money_absolute",
 ]);
 
 

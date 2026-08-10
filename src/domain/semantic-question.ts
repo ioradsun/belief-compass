@@ -53,6 +53,8 @@ export type SemanticState =
   | "one_sided_persistence"
   | "lopsided_book"
   | "side_got_company"
+  /** First money on a side of a proposition that claims there is no alternative. */
+  | "first_money_absolute"
   | "back_from_dead";
 
 export interface SemanticInput {
@@ -213,6 +215,17 @@ export const REAWAKEN_MIN_QUIET_DAYS = 5;
 export const LOPSIDED_RATIO = 0.05;
 export const LOPSIDED_MIN_LEAD_USD = 25;
 
+/**
+ * AN ABSOLUTE CLAIM IS THE ONE PROPOSITION SHAPE THAT INVITES A DIRECT
+ * CHALLENGE. "X is the only way" / "nobody will ever" is a question that has
+ * already excluded the alternative, so the first money on the other side is not
+ * a participation receipt — it is somebody saying the exclusion is wrong.
+ */
+const ABSOLUTE_CLAIM =
+  /\b(the only way|only option|no other way|nobody will ever|no one will ever|never|always|impossible|guaranteed|cannot be)\b/i;
+
+export const isAbsoluteClaim = (title: string): boolean => ABSOLUTE_CLAIM.test(title);
+
 function variantsFor(i: SemanticInput, title: string, short: string | null): string[] {
   const stake = stakeInTitle(title);
   /* THE PROPOSITION IS QUOTED, NOT PARAPHRASED, AND ONLY WHEN IT IS SHORT.
@@ -286,6 +299,19 @@ function variantsFor(i: SemanticInput, title: string, short: string | null): str
 
 
 
+    /* SOMEBODY IS ARGUING WITH THE PROPOSITION ITSELF. The title says there is
+       no alternative; money just landed on the side that says there is. The
+       question names that contradiction and nothing else — and it references
+       the proposition the row already prints rather than injecting a raw
+       fragment ("tipping be mandatory") into the middle of a sentence. */
+    case "first_money_absolute": {
+      const s2 = i.side ?? "that side";
+      return [
+        `Someone finally put money behind ${s2}. Who's betting there is another way?`,
+        `First money on ${s2}, against a question that says there isn't another way. Who disagrees?`,
+      ];
+    }
+
     /* QUESTION WHETHER ATTENTION CHANGED — attention, never outcome.
        AND WITHOUT QUOTING THE PROPOSITION BACK. The row already prints the
        question the market asks, immediately above this line; repeating it
@@ -339,7 +365,11 @@ export function semanticQuestion(i: SemanticInput): string | null {
      above. Requiring either to quote the title is how the question layer ends
      up repeating the headline. Every other shape still has to earn it. */
   const grounded =
-    i.state === "back_from_dead" || i.state === "one_sided_persistence";
+    i.state === "back_from_dead" ||
+    i.state === "one_sided_persistence" ||
+    /* The proposition is the row's own headline, printed directly above; the
+       question refers to it by position, never by quoting a fragment. */
+    i.state === "first_money_absolute";
 
   const variants = variantsFor(i, title, shortTopic(frag)).filter(
     (v) =>

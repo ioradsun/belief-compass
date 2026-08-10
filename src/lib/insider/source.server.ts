@@ -136,7 +136,7 @@ export async function loadTapeSource(
       // selected too — without them the row reached the renderer with no
       // kind, no rung and no people, and read "undefined — 0 believers
       // reached NaN months."
-      "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index, milestone_threshold:payload->>threshold, transition_headline:payload->>headline, transition_detail:payload->>detail, transition_type:payload->>type, transition_significance:payload->>significance, cohort_kind:payload->>kind, cohort_rung:payload->>rung, cohort_crossed_on:payload->>crossedOn, cohort_people:payload->people",
+      "source_key, kind, market_id, side, action, amount_eth, wallet, occurred_at, block_number, log_index, milestone_threshold:payload->>threshold, transition_type:payload->>type, transition_metric:payload->>metric, transition_direction:payload->>direction, transition_significance:payload->>significance, cohort_kind:payload->>kind, cohort_rung:payload->>rung, cohort_crossed_on:payload->>crossedOn, cohort_people:payload->people",
     )
     .eq("is_canonical", true)
     .in("kind", LIVE_KINDS);

@@ -32,6 +32,12 @@
 import { pickVariant } from "./pi-voice";
 import type { QuestionKind } from "./pi-question";
 
+/**
+ * The summed capital that makes "moving around" worth a headline. Below it the
+ * behaviour is true and small, and stays a receipt.
+ */
+export const MATERIAL_REPOSITION_USD = 25;
+
 export interface ClueRow {
   id: string;
   marketId: string;
@@ -182,6 +188,19 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
        than a count of "changes". Anything busier than that is repositioning. */
     const cleanSwap = acts.length === 2 && cut.length === 1 && put.length === 1 && markets.size > 1;
 
+    /* MATERIALITY DECIDES WHO GETS THE HEADLINE.
+       Three $0.90 moves genuinely prove "moving around", and saying it at full
+       volume is still wrong: the loudest line in the feed would be spent on
+       $2.70. The behaviour stays a quiet receipt (lead: null) unless the
+       repositioning is PROVEN meaningful — a side flip, real summed capital, or
+       the same directional behaviour repeated across questions. */
+    const summedUsd = acts.reduce((t, r) => t + Math.abs(Number(r.amountUsd ?? 0)), 0);
+    const directional =
+      markets.size >= 3 ||
+      (cut.length >= 2 && put.length === 0) ||
+      (put.length >= 2 && cut.length === 0);
+    const meaningful = flips.length > 0 || summedUsd >= MATERIAL_REPOSITION_USD || directional;
+
     // REPOSITIONING — money leaving one belief while joining another, or a
     // string of changes too varied to call a retreat.
     if (!cleanSwap && ((cut.length > 0 && (put.length > 0 || flips.length > 0)) || acts.length >= 3)) {
@@ -209,10 +228,10 @@ function personClues(rows: ClueRow[]): ComposedClue[] {
             : pickVariant(`${key}:reposition`, [
                 `${n} changes in a few hours. Backing away, or moving conviction somewhere else?`,
                 `Out of one, into another. Changing the read, or just moving capital?`,
-                `Several positions changed at once. One decision, or one exit?`,
               ]),
         /* THE BEHAVIOUR IS THE STORY; THE RECEIPT IS THE EVIDENCE. */
-        lead: named
+        lead:
+          named && meaningful
           ? {
               headline: `${NAME} is moving around`,
               body: [

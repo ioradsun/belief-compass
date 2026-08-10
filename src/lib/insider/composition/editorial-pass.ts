@@ -37,6 +37,7 @@ import {
   ONE_SIDED_MIN_DAYS,
   LOPSIDED_MIN_LEAD_USD,
   LOPSIDED_RATIO,
+  isAbsoluteClaim,
   type SemanticInput,
 } from "@/domain/semantic-question";
 import type { SignalVector } from "@/domain/signal-vector";
@@ -269,7 +270,19 @@ export function runEditorialPass<R extends LiveRow>({
       const side = r.side === "YES" || r.side === "NO" ? r.side : null;
       const ageDays = m?.marketAgeDays ?? null;
 
-      if (/emptied out|nothing behind it now|no one left/i.test(head))
+      const byNow = m?.believersYes ?? null;
+      const bnNow = m?.believersNo ?? null;
+      const sideBelievers = side === "YES" ? byNow : side === "NO" ? bnNow : null;
+      const oppBelievers = side === "YES" ? bnNow : side === "NO" ? byNow : null;
+
+      /* READ THE BOOK, NOT THE SENTENCE. This used to key on the printed
+         kicker, which meant a copy change silently switched the best question
+         in the product off. An empty side with people opposite is a STATE, and
+         it is the state the question is about. */
+      if (
+        /emptied out|nothing behind it now|no one left/i.test(head) ||
+        (side != null && sideBelievers === 0 && (oppBelievers ?? 0) > 0)
+      )
         return { title, state: "side_emptied", side };
 
       if (/back from the dead|woke this up|this one's back|^a pulse$/i.test(head))
@@ -283,8 +296,14 @@ export function runEditorialPass<R extends LiveRow>({
       if (
         /got company|first capital|stepped into an empty|empty no more/i.test(head) &&
         ageDays != null
-      )
+      ) {
+        /* FIRST MONEY AGAINST AN ABSOLUTE CLAIM is a different question: the
+           proposition already ruled the other answer out, so the arrival is a
+           disagreement, not a participation receipt. */
+        if (side != null && isAbsoluteClaim(title))
+          return { title, state: "first_money_absolute", side, facts: { days: ageDays } };
         return { title, state: "side_got_company", side, facts: { days: ageDays } };
+      }
 
       /* PERSISTENT ONE-SIDEDNESS. "Still nobody will take NO" is only factual
          when NO is empty RIGHT NOW and the market is old enough for "still" to
