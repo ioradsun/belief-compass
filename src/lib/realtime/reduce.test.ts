@@ -4,7 +4,6 @@ import {
   applyMarketStateRow,
   applyMarketStateBatch,
   affectedPulseKeys,
-  affectedPositionsTapeKeys,
   affectedMarketKeys,
   affectedInsiderActivityKeys,
   affectedViewerValuationKeys,
@@ -186,21 +185,6 @@ describe("affectedInsiderActivityKeys", () => {
     qc.setQueryData(["insider", 7, "activity", null, 200], { rows: [] });
     expect(affectedInsiderActivityKeys(qc, new Set([42]))).toEqual([]);
     expect(affectedInsiderActivityKeys(qc, new Set())).toEqual([]);
-  });
-});
-
-describe("affectedPositionsTapeKeys", () => {
-  it("selects only tapes whose id-array scope holds a traded market", () => {
-    qc.setQueryData(["positions-tape", "0xabc", [12, 45]], { rows: [] });
-    qc.setQueryData(["positions-tape", "0xabc", [7, 9]], { rows: [] });
-    const keys = affectedPositionsTapeKeys(qc, new Set([45]));
-    expect(keys.length).toBe(1);
-    expect(keys[0][2]).toEqual([12, 45]);
-  });
-  it("returns nothing on no intersection / empty set", () => {
-    qc.setQueryData(["positions-tape", "0xabc", [7, 9]], { rows: [] });
-    expect(affectedPositionsTapeKeys(qc, new Set([1]))).toEqual([]);
-    expect(affectedPositionsTapeKeys(qc, new Set())).toEqual([]);
   });
 });
 

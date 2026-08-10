@@ -28,7 +28,6 @@ import {
   applyMarketStateBatch,
   affectedPulseKeys,
   affectedInsiderActivityKeys,
-  affectedPositionsTapeKeys,
   affectedMarketKeys,
   affectedViewerValuationKeys,
   type MarketStateRow,
@@ -99,12 +98,8 @@ export function startRealtime(qc: QueryClient): () => void {
     if (disposed || affected.size === 0) return;
     const ids = new Set(affected);
     affected.clear();
-    // Per-card pulses + the position network tape: only caches that actually
-    // hold a traded market.
+    // Per-card pulses: only caches that actually hold a traded market.
     for (const key of affectedPulseKeys(qc, ids)) {
-      void qc.invalidateQueries({ queryKey: key, exact: true });
-    }
-    for (const key of affectedPositionsTapeKeys(qc, ids)) {
       void qc.invalidateQueries({ queryKey: key, exact: true });
     }
     // The traded market's own two expensive reads — the tape replay behind the

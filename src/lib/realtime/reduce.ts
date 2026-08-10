@@ -210,23 +210,12 @@ export function affectedPulseKeys(qc: QueryClient, affected: Set<number>): unkno
   return out;
 }
 
-/**
- * Which `["positions-tape", wallet, ids[]]` caches hold a market that just
- * traded. The scope is an id ARRAY at key[2] (vs pulses' comma-string at [1]),
- * so any wallet's trade on one of the viewer's position markets refreshes this
- * left-column network tape — precisely, never on unrelated trades.
+/*
+ * `affectedPositionsTapeKeys` was removed with the left rail's tape scan. The
+ * Positions panel no longer fetches raw events to build its own per-market
+ * network signal, so there is no `["positions-tape", …]` cache left to
+ * invalidate. Insider owns that intelligence and its own invalidation.
  */
-export function affectedPositionsTapeKeys(qc: QueryClient, affected: Set<number>): unknown[][] {
-  if (affected.size === 0) return [];
-  const out: unknown[][] = [];
-  for (const q of qc.getQueryCache().findAll({ queryKey: ["positions-tape"] })) {
-    const ids = q.queryKey[2];
-    if (Array.isArray(ids) && ids.some((id) => affected.has(Number(id)))) {
-      out.push(q.queryKey as unknown[]);
-    }
-  }
-  return out;
-}
 
 /**
  * Which PER-MARKET INSIDER ACTIVITY caches a trade touches.
