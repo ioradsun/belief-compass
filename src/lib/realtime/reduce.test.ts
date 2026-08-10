@@ -189,10 +189,9 @@ describe("affectedInsiderActivityKeys", () => {
 });
 
 describe("viewerPositionKeys", () => {
-  it("returns the three viewer position families, lowercased", () => {
+  it("returns the viewer position families, lowercased, with no tape family", () => {
     expect(viewerPositionKeys("0xABC")).toEqual([
       ["my-convictions", "0xabc"],
-      ["positions-tape", "0xabc"],
       ["position-summary", "0xabc"],
     ]);
   });

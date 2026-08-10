@@ -314,7 +314,6 @@ export function viewerPositionKeys(wallet: string): unknown[][] {
   const w = wallet.toLowerCase();
   return [
     ["my-convictions", w],
-    ["positions-tape", w],
     ["position-summary", w],
   ];
 }
