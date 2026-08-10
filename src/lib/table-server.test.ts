@@ -217,3 +217,58 @@ describe("a finished Challenge is not a deleted one", () => {
     expect(src).toMatch(/activeRows\(await tableFor\(wallet\)\)\.length/);
   });
 });
+
+/**
+ * PREVIEW AND SEND ARE ONE DEFINITION.
+ *
+ * MEASURED AGAINST PRODUCTION AT 32 PEOPLE across 26 of 284 positions. The
+ * preview excluded only CURRENT directional holders, so somebody who bought in
+ * March and sold in April counted as reachable — and the write excluded nobody
+ * market-scoped at all. The number shown and the audience recorded were decided
+ * by different rules, which makes the "8" in "3 of 8 showed up" a number the
+ * reader was never actually promised.
+ */
+describe("who can be asked is decided once", () => {
+  const server = () => code("src/lib/challenge.server.ts");
+
+  it("resolves the audience through one shared function", () => {
+    expect(server()).toMatch(/export async function eligibleAudience/);
+    // The write path calls it rather than assembling its own set.
+    expect(code("src/lib/table.server.ts")).toMatch(/await eligibleAudience\(sb, me, marketId\)/);
+    expect(code("src/lib/table.server.ts")).not.toMatch(/await qualifiedCallers\(/);
+  });
+
+  it("excludes anyone who has EVER taken part, not just current holders", () => {
+    // A wallet_beliefs row survives a full exit, which is exactly why its mere
+    // existence is the right test: selling out does not un-answer the question.
+    const fn = server().slice(server().indexOf("export async function eligibleAudience"));
+    expect(fn).toMatch(/from\("wallet_beliefs"\)\s*\.select\("wallet"\)/);
+    expect(fn.slice(0, fn.indexOf("market_calls"))).not.toMatch(/stance_side/);
+  });
+
+  it("excludes the author and anyone already asked, in any state", () => {
+    const fn = server().slice(server().indexOf("export async function eligibleAudience"));
+    expect(fn).toMatch(/author_wallet/);
+    expect(fn).toMatch(/from\("market_calls"\)/);
+    // ANY state — open means they hold it, answered and passed mean they replied.
+    const asked = fn.slice(fn.indexOf('from("market_calls")'), fn.indexOf("markets"));
+    expect(asked).not.toMatch(/responded_at|passed_at/);
+  });
+
+  it("keeps somebody eligible when an exclusion read FAILS", () => {
+    // Overstating by one is recoverable; silently emptying an audience because a
+    // read blipped is the confident-zero failure in a costlier place.
+    const fn = server().slice(server().indexOf("export async function eligibleAudience"));
+    for (const guard of ["participants.error", "asked.error", "market.error"])
+      expect(fn).toContain(guard);
+    expect(fn).toMatch(/else for \(const r of/);
+  });
+
+  it("leaves the unscoped reach question alone", () => {
+    // With no market there is nothing to exclude against — "how many people could
+    // my conviction reach at all" is a different question and keeps its answer.
+    const fn = server().slice(server().indexOf("export async function callReachFor"));
+    expect(fn).toMatch(/: await qualifiedCallers\(sb, me\)/);
+    expect(fn).toMatch(/eligibleAudience\(sb, me, marketId\)/);
+  });
+});

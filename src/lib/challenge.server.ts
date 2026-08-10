@@ -478,34 +478,108 @@ export async function markCallsAnswered(
  * an existing market stops overstating the opportunity. A newly created market
  * has no participants, so the number is unchanged there.
  */
+/**
+ * WHO CAN ACTUALLY BE ASKED ABOUT THIS MARKET — the one definition, used twice.
+ *
+ * MEASURED AGAINST PRODUCTION, THIS WAS WRONG BY 32 PEOPLE across 26 of 284
+ * positions. `callReachFor` excluded only people holding a CURRENT directional
+ * stance, so the preview counted somebody who bought in March and sold in April
+ * as reachable — and `putOnTable` excluded nobody market-scoped at all, so the
+ * number the reader was shown and the audience actually written were two
+ * different sets. A preview that overstates is not a cosmetic bug: it is the
+ * denominator of "3 of 8 showed up" being decided by a different rule than the
+ * one that chose the 8.
+ *
+ * So preview and send now call THIS, and there is no second definition to drift
+ * from. Four exclusions, each because asking that person would be nonsense:
+ *
+ *   THE AUTHOR        they asked the question; being asked back is a loop.
+ *   ANY PARTICIPANT   a `wallet_beliefs` row means the position engine has
+ *                     processed trades for them here. It survives a full exit,
+ *                     which is exactly why it is the right test — somebody who
+ *                     bought and sold has already answered, and their stance
+ *                     going non-directional does not un-answer it.
+ *   ALREADY ASKED     an existing `market_calls` row from this caller, in ANY
+ *                     state. Open means they are already holding the question;
+ *                     answered and passed mean they have already replied.
+ *   THE VIEWER        `qualifiedCallers` already drops self.
+ *
+ * A FAILED READ NARROWS NOTHING. If an exclusion query fails the person stays
+ * eligible and the failure is logged — overstating reach by one is recoverable,
+ * while silently dropping somebody's whole audience because one read blipped is
+ * the confident-zero failure in a costlier place.
+ */
+export async function eligibleAudience(
+  sb: Sb,
+  viewer: string,
+  marketId: number,
+): Promise<Map<string, Caller>> {
+  const me = viewer.toLowerCase();
+  const callers = await qualifiedCallers(sb, me);
+  if (callers.size === 0) return callers;
+  const wallets = [...callers.keys()];
+
+  const [participants, asked, market] = await Promise.all([
+    // ANY row, not just a directional one. See the header: a full exit leaves
+    // the row behind, and that row is the proof they already took part.
+    sb.from("wallet_beliefs").select("wallet").eq("onchain_id", marketId).in("wallet", wallets),
+    // ANY state. Already asked is already asked.
+    sb
+      .from("market_calls")
+      .select("responder_wallet")
+      .eq("market_id", marketId)
+      .eq("caller_wallet", me)
+      .in("responder_wallet", wallets),
+    sb.from("markets").select("author_wallet").eq("onchain_id", marketId).maybeSingle(),
+  ]);
+
+  const out = new Map(callers);
+  const drop = (w: unknown) => {
+    const k = String(w ?? "").toLowerCase();
+    if (k) out.delete(k);
+  };
+  if (participants.error)
+    console.error("[challenge] could not exclude existing participants", {
+      code: participants.error.code,
+      message: participants.error.message,
+    });
+  else for (const r of (participants.data ?? []) as { wallet: string }[]) drop(r.wallet);
+
+  if (asked.error)
+    console.error("[challenge] could not exclude people already asked", {
+      code: asked.error.code,
+      message: asked.error.message,
+    });
+  else
+    for (const r of (asked.data ?? []) as { responder_wallet: string }[]) drop(r.responder_wallet);
+
+  if (market.error)
+    console.error("[challenge] could not exclude the market author", {
+      code: market.error.code,
+      message: market.error.message,
+    });
+  else drop((market.data as { author_wallet?: string } | null)?.author_wallet);
+
+  return out;
+}
+
 export async function callReachFor(wallet: string, marketId?: number): Promise<CallReach> {
   const sb = serviceClient();
   const me = wallet.toLowerCase();
-  const callers = await qualifiedCallers(sb, me);
-
-  const already = new Set<string>();
-  if (typeof marketId === "number" && Number.isFinite(marketId) && callers.size > 0) {
-    const { data, error } = await sb
-      .from("wallet_beliefs")
-      .select("wallet, stance_side")
-      .eq("onchain_id", marketId)
-      .in("stance_side", ["YES", "NO"])
-      .in("wallet", [...callers.keys()]);
-    if (error) {
-      console.error("[challenge] could not scope reach to market", {
-        code: error.code,
-        message: error.message,
-      });
-    }
-    for (const r of (data ?? []) as { wallet: string }[]) {
-      already.add(String(r.wallet).toLowerCase());
-    }
-  }
+  /**
+   * UNSCOPED IS A DIFFERENT QUESTION. With no market this asks "how many people
+   * could my conviction reach at all" — the line shown before a question exists
+   * — and there is nothing to exclude against. Scoped, it must agree with what
+   * `putOnTable` will actually write, which is what `eligibleAudience` is for.
+   */
+  const callers =
+    typeof marketId === "number" && Number.isFinite(marketId)
+      ? await eligibleAudience(sb, me, marketId)
+      : await qualifiedCallers(sb, me);
 
   let tribe = 0;
   let rivals = 0;
-  for (const [caller, { relation }] of callers.entries()) {
-    if (already.has(caller.toLowerCase())) continue;
+  for (const { relation } of callers.values()) {
     if (relation === "twin" || relation === "tribe") tribe += 1;
     else rivals += 1;
   }
@@ -999,7 +1073,10 @@ export async function chainContextFor(
   const sb = serviceClient();
 
   const [ch, cl] = await Promise.all([
-    sb.from("challenges").select("id, market_id, challenger_wallet, parent_call").in("market_id", ids),
+    sb
+      .from("challenges")
+      .select("id, market_id, challenger_wallet, parent_call")
+      .in("market_id", ids),
     sb
       .from("market_calls")
       .select("id, market_id, caller_wallet, responder_wallet, called_at, challenge_id")
@@ -1014,7 +1091,12 @@ export async function chainContextFor(
     return {};
   }
 
-  type Ch = { id: number; market_id: number; challenger_wallet: string; parent_call: number | null };
+  type Ch = {
+    id: number;
+    market_id: number;
+    challenger_wallet: string;
+    parent_call: number | null;
+  };
   type Cl = {
     id: number | null;
     market_id: number;

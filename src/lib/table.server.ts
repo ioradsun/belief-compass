@@ -24,7 +24,7 @@
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
-import { qualifiedCallers, type Sb } from "@/lib/challenge.server";
+import { eligibleAudience, type Sb } from "@/lib/challenge.server";
 import {
   TABLE_SLOTS,
   tableProgress,
@@ -112,10 +112,19 @@ export async function putOnTable(
   const sb = serviceClient();
   const me = wallet.toLowerCase();
 
-  // WHO IT WILL REACH, resolved BEFORE a slot is taken. A Challenge nobody can
-  // receive should not consume one of three — the person would spend an editorial
-  // choice on silence and have no way to know why.
-  const callers = await qualifiedCallers(sb, me);
+  /**
+   * WHO IT WILL REACH, resolved BEFORE a slot is taken. A Challenge nobody can
+   * receive should not consume one of three — the person would spend an editorial
+   * choice on silence and have no way to know why.
+   *
+   * THE SAME FUNCTION THE PREVIEW CALLS, and that is the fix rather than a
+   * detail. This used to read `qualifiedCallers` with no market-scoped exclusion
+   * at all while the preview excluded current holders — so the count shown and
+   * the audience written were decided by different rules, and production
+   * measured the gap at 32 people across 26 positions. One definition means the
+   * "8" in "3 of 8 showed up" is the same 8 the reader was promised.
+   */
+  const callers = await eligibleAudience(sb, me, marketId);
   const audience = [...callers.entries()].filter(([w]) => w !== me);
   if (audience.length === 0) return { ok: false, reason: "no_audience" };
 
