@@ -18,14 +18,20 @@ export const listLiveEvents = createServerFn({ method: "GET" })
   .inputValidator((d: z.input<typeof tapeInput>) => tapeInput.parse(d ?? {}))
   .handler(async ({ data }) => {
     if (!isSharedTape(data)) return buildTape(data);
-    return swrCache(tapeCacheKey(data?.limit), { ttlMs: TAPE_TTL_MS }, async () => {
-      const built = await buildTape(data);
-      // The seed is what a COLD isolate paints from; only the shared answer
-      // qualifies, and only a successful one. Awaited, because work belonging
-      // to a responded request is cancelled on this runtime.
-      await writeTapeSeed(built as TapeResult);
-      return built;
-    });
+    const built = await swrCache(tapeCacheKey(data?.limit), { ttlMs: TAPE_TTL_MS }, () =>
+      buildTape(data),
+    );
+    // THE SEED IS A SIDE EFFECT OF THE ANSWER, NEVER PART OF IT. It used to be
+    // awaited INSIDE the factory, which meant the cached value existed only
+    // once the write returned — and on this runtime a write belonging to an
+    // already-responded request can be cancelled without ever settling, so the
+    // factory never resolved, the entry was never stored and every request
+    // cold-rebuilt the tape. That is the "slow, and then it stops updating"
+    // report. The cache now stores `buildTape`'s result directly; the seed
+    // write happens after, bounded (see SEED_WRITE_MS) and unable to fail or
+    // delay the response beyond that bound.
+    await writeTapeSeed(built as TapeResult);
+    return built;
   });
 
 /**

@@ -145,7 +145,31 @@ const SHOWED_UP_MAX = 4;
  */
 export type TapeInput = z.output<typeof input>;
 
+/**
+ * BUILD TIMING, ON BY DEFAULT ON THE SERVER. The tape is the slowest thing the
+ * app builds and it is built from seven or eight distinguishable phases; when
+ * it is slow, "the tape is slow" is not a diagnosis. Each phase is measured and
+ * the whole line is logged once, so a single request says which phase owns the
+ * time. Cheap enough (a Date.now per phase) to leave in.
+ */
+function timer() {
+  const t0 = Date.now();
+  let last = t0;
+  const marks: string[] = [];
+  return {
+    mark(label: string) {
+      const now = Date.now();
+      marks.push(`${label} ${now - last}ms`);
+      last = now;
+    },
+    line(prefix: string) {
+      return `${prefix} total ${Date.now() - t0}ms | ${marks.join(" | ")}`;
+    },
+  };
+}
+
 export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = REAL_DEPS) {
+  const T = timer();
   const sb = deps.client();
   const limit = data?.limit ?? 120;
   const viewer = data?.wallet?.toLowerCase() ?? null;
@@ -155,6 +179,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   // shows the question and the side. Unscoped == the app-wide tape, which does not.
   const scoped = scope != null;
   const source = await deps.loadTapeSource(sb, data);
+  T.mark("source");
   if (source.error)
     return {
       rows: [] as LiveRow[],
@@ -340,6 +365,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     scoped,
     viewerBoost,
   });
+  T.mark("narration");
 
   // Materiality: the feed reports changes in conviction, not dust — "volume earns
   // attention only when it changes the meaning of the market". The importance
@@ -375,7 +401,9 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
      vector can only ever say `new`, which is the correct silence rather than a
      guess. It sits between the two halves of the significance pass because the
      markets to read are only known once the candidates exist. */
+  T.mark("candidates");
   const pricePaths = await loadPricePaths(sb, candidateMarkets(scored));
+  T.mark("pricePaths");
   /* One clock for the whole pass, shared with the standing rows composed below
      so both halves of the feed measure age against the same instant. */
   const signalNowMs = Date.now();
@@ -392,6 +420,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     material,
     unadmitted,
   } = runSignificancePass({ scored, momentumById, pricePaths, nowMs: signalNowMs });
+  T.mark("significance");
 
   /* ── STANDING IS A STORY TYPE, NOT A LANE ──────────────────────────────────
      Persistence enters the SAME pool as change, at the SAME point, and earns
@@ -647,6 +676,7 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
     beliefByKey,
     profiles,
   });
+  T.mark("discovery");
   for (const row of momentRows) material.unshift(row as (typeof material)[number]);
 
 
@@ -940,6 +970,9 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
   /* THE BUILD THAT WROTE THESE SENTENCES. The client refuses to merge a cached
      tail composed by a different build, so a copy fix can never be left on
      screen by the sticky tape. See src/domain/copy-version. */
+  T.mark("editorial");
+  console.log(T.line(`[insider] buildTape rows=${material.length} viewer=${viewer ? "y" : "n"}`));
+
   return {
     rows: material,
     copyVersion: COPY_VERSION,

@@ -36,12 +36,28 @@ export function trimTapeSeed(result: TapeResult): TapeResult {
   return { ...result, rows: result.rows.slice(0, SEED_ROWS) };
 }
 
+/**
+ * A SEED WRITE MAY NEVER GATE THE TAPE.
+ *
+ * This used to be awaited inside the shared-cache factory, so the cached value
+ * was only produced once the write came back. On this runtime a write belonging
+ * to an already-responded request can be CANCELLED without ever settling — and
+ * an await that never resumes inside the single-flight factory means the cache
+ * entry is never written, so the next reader cold-rebuilds, forever. The tape
+ * felt slow and stopped updating for exactly that reason.
+ *
+ * The write is now bounded: it is best-effort persistence of a snapshot, and a
+ * snapshot that takes longer than this is simply skipped until next time.
+ */
+export const SEED_WRITE_MS = 800;
+
 export async function writeTapeSeed(result: TapeResult): Promise<void> {
+  const t0 = Date.now();
   try {
     if (result.error || !result.rows?.length) return;
     const sb = serviceClientOrNull();
     if (!sb) return;
-    await sb.from("feed_snapshot").upsert(
+    const write = sb.from("feed_snapshot").upsert(
       {
         key: SEED_KEY,
         payload: trimTapeSeed(result) as unknown as never,
@@ -49,6 +65,11 @@ export async function writeTapeSeed(result: TapeResult): Promise<void> {
       },
       { onConflict: "key" },
     );
+    const done = await Promise.race([
+      Promise.resolve(write).then(() => true),
+      new Promise<false>((r) => setTimeout(() => r(false), SEED_WRITE_MS)),
+    ]);
+    console.log(`[insider] writeTapeSeed ${done ? "ok" : "timeout"} ${Date.now() - t0}ms`);
   } catch {
     // A cache that fails to write must never fail the tape.
   }
