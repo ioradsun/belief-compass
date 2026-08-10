@@ -433,6 +433,14 @@ async function verifyBetTransaction(
   marketId: number,
   side: BeliefAction,
   txHash: string,
+  /**
+   * THE TRANSACTION IS THE SIGNATURE.
+   *
+   * A mined buy sent FROM this address is stronger proof of ownership than any
+   * off-chain message could be — so the reveal never asks the wallet to sign a
+   * second time after the purchase it just paid for.
+   */
+  wallet: string,
 ): Promise<void> {
   if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new Error("That transaction isn't valid.");
   const [{ getBaseClient }, { PROXY_ADDRESS }] = await Promise.all([
