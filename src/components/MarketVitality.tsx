@@ -25,7 +25,7 @@ import type { TapeTrade } from "@/domain/conviction-series";
 import type { FlowWindow } from "@/domain/market-flow";
 import { formatMoney, convertMoney } from "@/domain/money";
 import { useDisplayUnit } from "@/lib/display-unit";
-import { believerMove, capitalMove, type MetricMove } from "@/domain/metric-display";
+import { believerMove, capitalMove, formatPct, type MetricMove } from "@/domain/metric-display";
 import type { MarketChange, MetricChange } from "@/domain/market-change";
 import { participantSocial, type ParticipantRelation } from "@/domain/participant-social";
 import {
