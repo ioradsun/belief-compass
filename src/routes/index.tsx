@@ -66,7 +66,6 @@ import { MarketScene } from "@/components/MarketScene";
 import { DeckSkeleton } from "@/components/DeckSkeleton";
 import { PanelBoundary } from "@/components/PanelBoundary";
 
-import { SuggestedMarketCard } from "@/components/SuggestedMarketCard";
 
 const CaseColumn = lazyRetry(() =>
   import("@/components/CaseFile").then((m) => ({ default: m.CaseColumn })),
@@ -1344,6 +1343,22 @@ function Feed() {
     openCreate();
   };
 
+  /**
+   * A Market Idea reaching the stage IS the create screen, pre-filled. The
+   * draft is seeded once per suggestion so re-renders never overwrite an edit
+   * the reader has already made to the question.
+   */
+  const seededIdeaRef = useRef<string | null>(null);
+  useEffect(() => {
+    const s = houseIdea.suggestion;
+    if (!ideaDue || !s) return;
+    if (seededIdeaRef.current === s.id) return;
+    seededIdeaRef.current = s.id;
+    startDraftFromSuggestion(s.question, { suggestionId: s.id, originalQuestion: s.question });
+    houseIdea.onShown();
+  }, [ideaDue, houseIdea]);
+
+
   // On mobile only the active tab's column is mounted-visible; from lg up all
   // three columns are always shown side by side.
   const show = (t: MobileTab) => (tab === t ? "flex" : "hidden");
@@ -1603,22 +1618,26 @@ function Feed() {
                 onCreate={openCreate}
               />
             ) : ideaDue && houseIdea.suggestion ? (
-              /* A first-class feed card, in the exact slot a market would take. */
+              /* ONE CREATE SURFACE. A Market Idea is the same screen as
+                 "+ Conviction" — only the entry route differs — so the reader
+                 can back it and move on without a second, near-identical card
+                 to maintain. Cancel reads "Pass" here. */
               <div className="flex min-h-0 flex-1 flex-col">
-                <SuggestedMarketCard
-                  suggestion={houseIdea.suggestion}
-                  onShown={houseIdea.onShown}
-                  onCreate={() => acceptIdea(false)}
-                  onEdit={() => acceptIdea(true)}
-                  onDismiss={() => {
-                    // Passing on the idea returns the reader to the market
-                    // whose slot the card was borrowing — it does not spend a
-                    // market. The latch releases, so the centre falls through.
-                    houseIdea.onDismiss();
-                    setIdeaView("idle");
-                  }}
-                />
+                <Suspense fallback={<DeckSkeleton />}>
+                  <CreateMarket
+                    ethUsd={stableFeed?.ethUsd ?? 0}
+                    onCreated={(marketId) => marketCreated(marketId)}
+                    cancelLabel="Pass"
+                    onCancel={() => {
+                      // Passing returns the reader to the market whose slot the
+                      // idea was borrowing — it does not spend a market.
+                      houseIdea.onDismiss();
+                      setIdeaView("idle");
+                    }}
+                  />
+                </Suspense>
               </div>
+
             ) : currentRow ? (
               /* A MARKET ON SCREEN OUTRANKS EVERY EMPTY STATE.
                 This branch used to sit BELOW the `rows.length === 0` check, so
@@ -1739,7 +1758,7 @@ function Feed() {
                 "what is happening across Conviction". Anything that cannot tell
                 those apart belongs in the tape, which is why the tape is passed
                 in rather than owned here. */}
-              {createOpen ? (
+              {createOpen || ideaDue ? (
                 /* THE RIGHT RAIL WHILE WRITING — rewrites of your own question
                    first, then a House spark. Alternates take their natural height
                    on top; the spark fills what's left and self-hides when there is
@@ -1748,7 +1767,9 @@ function Feed() {
                 <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
                   <AlternatesRail />
                   <IdeasRail
-                    suggestion={houseIdea.suggestion}
+                    /* Never twice: while the idea itself is on stage the rail
+                       has nothing left to offer. */
+                    suggestion={ideaDue ? null : houseIdea.suggestion}
                     onUse={() => acceptIdea(false)}
                     onDismiss={houseIdea.onDismiss}
                   />

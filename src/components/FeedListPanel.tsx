@@ -19,6 +19,7 @@
  * compete with it.
  */
 import { useEffect, useRef, useState } from "react";
+import { Lightbulb } from "lucide-react";
 import { composeDiscoveryRow } from "@/domain/market-discovery";
 import type { FeedFilters, FeedNetwork } from "@/domain/feed/filters";
 import type { MarketRow } from "@/components/MarketCard";
@@ -223,8 +224,8 @@ export function FeedListPanel({
         onClick={() => onSelect(e.onchainId)}
         className="w-full rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--surface)]"
       >
-        <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--rel,#9b87f5)]">
-          The House has an idea
+        <span className="mb-0.5 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--rel,#9b87f5)]">
+          <Lightbulb size={10} aria-hidden /> Market Idea
         </span>
         <span className="block text-[13px] font-medium leading-snug text-[var(--text)]">
           {idea.question}

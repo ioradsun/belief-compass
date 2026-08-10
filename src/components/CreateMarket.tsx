@@ -14,6 +14,7 @@
  * simulation. A failed send leaves a resumable draft, never a half-created market.
  */
 import { useEffect, useRef, useState } from "react";
+import { Lightbulb } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import { useWalletSession } from "@/hooks/useWalletSession";
@@ -67,10 +68,13 @@ export function CreateMarket({
   ethUsd,
   onCreated,
   onCancel: _onCancel,
+  cancelLabel = "Cancel",
 }: {
   ethUsd: number;
   onCreated: (marketId: number) => void;
   onCancel: () => void;
+  /** "Pass" when this same screen is reached from a Market Idea in the feed. */
+  cancelLabel?: string;
 }) {
   const { isConnected } = useAccount();
   const { ensureSession, address } = useWalletSession();
@@ -290,9 +294,8 @@ export function CreateMarket({
       {/* Scrolls only on short (mobile) viewports; on desktop the whole form fits. */}
       <div className="flex min-h-0 flex-initial flex-col gap-4 overflow-y-auto pt-3">
         {source && (
-          <p className="text-[11px] text-[var(--text-muted)]">
-            <span aria-hidden>🏠</span> The House found this question — edit anything before it goes
-            live.
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--rel,#9b87f5)]">
+            <Lightbulb size={12} aria-hidden /> Market Idea
           </p>
         )}
 
@@ -479,7 +482,7 @@ export function CreateMarket({
             className="shrink-0 rounded-[14px] border px-4 text-[13px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-50"
             style={{ borderColor: "var(--border)" }}
           >
-            Cancel
+            {cancelLabel}
           </button>
           <div className="min-w-0 flex-1">
             <PrimaryAction
