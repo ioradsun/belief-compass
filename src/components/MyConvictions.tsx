@@ -522,10 +522,16 @@ export function MyConvictions({
   const periodUsd = built.reduce((s, p) => s + (windowDelta(p.value, p.chg) ?? 0), 0);
   
 
-  const count = built.length;
+  // ONE COUNT, ONE MEANING. The tab strip used to receive `built.length` — a
+  // count of POSITIONS — while the rail printed "Backing N beliefs" from the same
+  // number, so a market held on both sides silently counted as two beliefs. The
+  // tab now receives the number of distinct markets, which is what "Positions N"
+  // reads as, and the rail no longer prints a second count beside it.
+  const marketCount = sidesPerMarket.size;
   useEffect(() => {
-    onCount?.(count);
-  }, [count, onCount]);
+    onCount?.(marketCount);
+  }, [marketCount, onCount]);
+
 
   if (!wallet || built.length === 0) {
     return <EmptyState onExplore={onExplore} />;
