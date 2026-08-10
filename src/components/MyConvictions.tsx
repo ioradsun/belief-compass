@@ -527,11 +527,30 @@ export function MyConvictions({
 
   const total = built.reduce((s, p) => s + p.value, 0);
 
-  // Summary mirrors the cards: the selected period's move, or — on "All" — the
-  // authoritative unrealized gain when every position has a real cost basis.
-  const fullBasis = built.length > 0 && built.every((p) => p.gainUsd != null);
-  const trueGain = lifetime && fullBasis ? built.reduce((s, p) => s + (p.gainUsd ?? 0), 0) : null;
+  /**
+   * ONE SOURCE OF TRUTH FOR THE HEADLINE.
+   *
+   * The summary used to be computed from a different input than the cards it sits
+   * above: the cards read cost-basis P&L (`gainUsd`/`gainPct`), while the summary
+   * read the MARKET's window price change (`windowDelta`) and only fell back to
+   * P&L on the "All" window — and then only when EVERY position had a basis. One
+   * unpriced holding, or a market with no window change on file, and the reader
+   * saw a blank "—" above a column of real returns.
+   *
+   * The headline is now the same arithmetic the cards perform, summed:
+   *   gain  = Σ gainUsd over positions we can actually mark
+   *   basis = Σ (value − gainUsd) over those same positions   [= Σ invested]
+   *   pct   = gain / basis
+   * Positions with no trusted basis contribute to the total VALUE and to nothing
+   * else, which is exactly how their own card behaves.
+   */
+  const marked = built.filter((p) => p.gainUsd != null);
+  const markedGain = marked.reduce((s, p) => s + (p.gainUsd ?? 0), 0);
+  const markedBasis = marked.reduce((s, p) => s + (p.value - (p.gainUsd ?? 0)), 0);
+  const hasBasis = marked.length > 0 && markedBasis > 0;
+  // Only when nothing at all can be marked does the window move stand in.
   const periodUsd = built.reduce((s, p) => s + (windowDelta(p.value, p.chg) ?? 0), 0);
+  const partial = marked.length > 0 && marked.length < built.length;
 
   const count = built.length;
   useEffect(() => {
@@ -547,12 +566,15 @@ export function MyConvictions({
       {/* Summary — one financial story: the value leads, the % is the big right-hand
           figure (same rhythm as the market instrument), the exact move sits beneath. */}
       {(() => {
-        const lifetimeMove = trueGain != null && Math.abs(trueGain) >= 0.005;
-        const periodMove = !lifetimeMove && Math.abs(periodUsd) >= 0.01;
-        const move = lifetimeMove ? (trueGain as number) : periodMove ? periodUsd : 0;
-        const basis = total - move;
-        const pct =
-          move !== 0 && basis > 0 ? formatPct((move / basis) * 100, { precise: true }) : null;
+        // The cards' own arithmetic, summed. A percentage exists whenever a cost
+        // basis does — a sub-cent dollar move must never blank the return, which
+        // is exactly the "—" the reader was seeing above priced positions.
+        const move = hasBasis ? markedGain : periodUsd;
+        const basis = hasBasis ? markedBasis : total - move;
+        const pct = basis > 0 && (hasBasis || move !== 0)
+          ? formatPct((move / basis) * 100, { precise: true })
+          : null;
+        const shownMove = Math.abs(move) >= 0.005 ? move : 0;
         const tone = move > 0 ? "var(--gain)" : move < 0 ? "var(--loss)" : "var(--text-muted)";
         const arrow = move > 0 ? "▲" : move < 0 ? "▼" : "";
         return (
@@ -576,13 +598,17 @@ export function MyConvictions({
             </div>
             <div className="mt-0.5 flex items-baseline justify-between gap-3">
               <div className="num text-[12px]" style={{ color: tone }}>
-                {move === 0 ? (
+                {shownMove === 0 ? (
                   <span className="text-[var(--text-muted)]">—</span>
                 ) : (
                   <>
-                    {signedMoney(move)}{" "}
+                    {signedMoney(shownMove)}{" "}
                     <span className="font-normal text-[var(--text-muted)]">
-                      {lifetimeMove ? "since you started" : winLabel.toLowerCase()}
+                      {hasBasis
+                        ? partial
+                          ? `since you started · ${marked.length} of ${built.length} priced`
+                          : "since you started"
+                        : winLabel.toLowerCase()}
                     </span>
                   </>
                 )}

@@ -10,7 +10,7 @@
 import { serviceClient } from "@/lib/supabase-clients";
 import { rowsOf } from "@/lib/supabase-read";
 import { loadWindowChanges, pricePct } from "@/lib/window-change.server";
-import { positionValueUsd } from "@/domain/position-value";
+import { positionValueUsd, isMeasured } from "@/domain/position-value";
 import { readWalletTradesAscending } from "@/lib/conviction-dashboard.trades.server";
 import { decodeBuyCreatorFeeWei, decodeBuyTotalFeeWei } from "@/chain/decoder";
 import { readEthUsd } from "@/lib/eth-usd.server";
@@ -122,16 +122,24 @@ export async function buildConvictionDashboard(
   const beliefs = rowsOf(
     await sb
       .from("wallet_beliefs")
-      .select("onchain_id, yes_cost, no_cost, yes_value_usd, no_value_usd, first_backed_at")
+      .select(
+        // ONE SOURCE OF TRUTH WITH THE POSITIONS RAIL. This used to omit shares,
+        // the live price and `value_updated_at`, so `positionValueUsd` could only
+        // reach its LAST rank — cost basis — while the rail marked the very same
+        // holding live at shares x price. Two screens, two answers, same wallet.
+        "onchain_id, yes_shares, no_shares, yes_cost, no_cost, yes_value_usd, no_value_usd, value_updated_at, first_backed_at",
+      )
       .eq("wallet", wallet)
       .limit(500),
     "this wallet's positions",
   ) as Array<{
     onchain_id: number | string;
+    yes_shares: unknown;
+    no_shares: unknown;
     yes_cost: unknown;
     no_cost: unknown;
     yes_value_usd: unknown;
-    value_updated_at: unknown;
+    value_updated_at: string | null;
     no_value_usd: unknown;
     first_backed_at: string | null;
   }>;
@@ -139,6 +147,8 @@ export async function buildConvictionDashboard(
   const heldIds = Array.from(new Set(beliefs.map((b) => Number(b.onchain_id))));
   const chgById = new Map<number, { yes: number; no: number }>();
   const heldTitle = new Map<number, string>();
+  /** The live per-share mark, exactly the one the Positions rail reads. */
+  const priceById = new Map<number, { yes: number | null; no: number | null }>();
   if (heldIds.length) {
     const [stRes, { data: mk }] = await Promise.all([
       sb
@@ -157,13 +167,20 @@ export async function buildConvictionDashboard(
     // state read must not become a flat 0%. `mk` below stays tolerant on purpose:
     // it only supplies titles, and a missing one already degrades honestly to
     // "Untitled market" without misstating anything.
-    const changes = await loadWindowChanges(
-      sb,
-      rowsOf(stRes, "market state for this wallet's positions") as unknown as Array<
-        Record<string, unknown>
-      >,
-      "24h",
-    );
+    const stateRows = rowsOf(stRes, "market state for this wallet's positions") as unknown as Array<
+      Record<string, unknown>
+    >;
+    const px = (v: unknown): number | null => {
+      const n = Number(v);
+      // Missing is missing. A zero price would mark every holding worthless.
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+    for (const s of stateRows)
+      priceById.set(Number(s.onchain_id), {
+        yes: px(s.yes_price_usd),
+        no: px(s.no_price_usd),
+      });
+    const changes = await loadWindowChanges(sb, stateRows, "24h");
     for (const id of heldIds) {
       const c = changes.byId.get(id);
       const y = pricePct(c, "YES");
@@ -176,6 +193,9 @@ export async function buildConvictionDashboard(
 
   let worthUsd = 0;
   let holdCostUsd = 0;
+  /** Worth and cost restricted to positions we can actually mark — the gain pair. */
+  let markedWorthUsd = 0;
+  let markedCostUsd = 0;
   let portfolioTodayUsd = 0;
   let heldCount = 0;
   let longestHeldDays = 0;
@@ -186,17 +206,23 @@ export async function buildConvictionDashboard(
     const id = Number(b.onchain_id);
     // `*_value_usd` is a column nothing writes. Reading it alone made `w` zero
     // for everyone, so `heldCount` never incremented and the dashboard told
-    // every reader they held nothing. Fall back to what they committed.
+    // every reader they held nothing. Shares x the live price is rank 2 and is
+    // what the Positions rail uses, so both screens now mark the same way.
     const at = b.value_updated_at as string | null;
+    const price = priceById.get(id);
     const yes = positionValueUsd({
       valueUsd: b.yes_value_usd,
       valueUpdatedAt: at,
+      shares: b.yes_shares,
+      priceUsd: price?.yes ?? null,
       costEth: b.yes_cost,
       ethUsd,
     });
     const no = positionValueUsd({
       valueUsd: b.no_value_usd,
       valueUpdatedAt: at,
+      shares: b.no_shares,
+      priceUsd: price?.no ?? null,
       costEth: b.no_cost,
       ethUsd,
     });
@@ -205,13 +231,17 @@ export async function buildConvictionDashboard(
     // A GAIN needs a real valuation on both sides of the subtraction. Where the
     // worth fell back to the cost basis, "worth − cost" is a guaranteed zero
     // wearing the costume of a measurement, so no gain is claimed at all.
-    const marked = yes.source === "marked" || no.source === "marked";
+    // `isMeasured` is the shared test — a live mark counts exactly as a written
+    // one does, which the old `source === "marked"` check silently denied.
+    const measured = isMeasured(yes) || isMeasured(no);
     if (w > 0) heldCount++;
     worthUsd += w;
     holdCostUsd += c;
     // Per-position gain (only when a real cost basis exists — never invented).
-    if (marked && w > 0 && c > 0) {
+    if (measured && w > 0 && c > 0) {
       const gain = w - c;
+      markedWorthUsd += w;
+      markedCostUsd += c;
       if (gain > 0) anyHeldProfit = true;
       heldGains.push({
         onchainId: id,
@@ -410,7 +440,11 @@ export async function buildConvictionDashboard(
     holdings: {
       worthUsd,
       costUsd: holdCostUsd,
-      gainUsd: worthUsd - holdCostUsd,
+      // Gain is worth minus cost OVER THE POSITIONS WE COULD MARK. Including the
+      // cost-fallback holdings dragged a guaranteed zero into the numerator and
+      // their full cost into the denominator, which is the same "unknown read as
+      // fact" mistake the valuation module exists to prevent.
+      gainUsd: markedWorthUsd - markedCostUsd,
       count: heldCount,
     },
     trading: { realizedUsd, realizedTodayUsd },
