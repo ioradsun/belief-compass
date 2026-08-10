@@ -92,6 +92,73 @@ export function MediaStage({
   );
 }
 
+/**
+ * TALL MEDIA TAKES THE COLUMN. A YouTube player or an X post is a 16:9-or-taller
+ * block: printed inline it pushes the market body off the panel. Those markets
+ * get one switch — Media / Market — instead of a scroll. Short media (a Spotify
+ * bar, a link card, an audio row) stays inline where it never cost anything.
+ */
+export function isTallMedia(media: StageMedia | null | undefined): boolean {
+  if (!media) return false;
+  if (media.kind === "embed")
+    return media.embed?.platform === "youtube" || media.embed?.platform === "x";
+  return media.kind === "image" || media.kind === "video";
+}
+
+export function MediaSwitch({
+  value,
+  onChange,
+  label = "Media",
+  className = "",
+}: {
+  value: "market" | "media";
+  onChange: (v: "market" | "media") => void;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Market or media"
+      className={`flex items-center gap-1 rounded-full bg-[var(--surface)] p-0.5 text-[12px] font-semibold ${className}`}
+    >
+      {(
+        [
+          ["market", "Market"],
+          ["media", label],
+        ] as const
+      ).map(([key, text]) => (
+        <button
+          key={key}
+          type="button"
+          role="tab"
+          aria-selected={value === key}
+          onClick={() => onChange(key)}
+          className={`rounded-full px-3 py-1 transition-colors ${
+            value === key
+              ? "bg-[var(--surface-2,rgba(255,255,255,0.08))] text-[var(--text)]"
+              : "text-[var(--text-muted)]"
+          }`}
+        >
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The label the switch prints for this media. */
+export function mediaSwitchLabel(media: StageMedia): string {
+  if (media.kind === "embed") {
+    if (media.embed?.platform === "youtube") return "Video";
+    if (media.embed?.platform === "x") return "Post";
+  }
+  if (media.kind === "video") return "Video";
+  if (media.kind === "image") return "Photo";
+  return "Media";
+}
+
+
 
 export function MediaEvidence({ media }: { media: StageMedia }) {
   if (media.kind === "embed" && media.embed)
