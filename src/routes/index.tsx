@@ -1434,7 +1434,6 @@ function Feed() {
                  its `onCancel`, so on mobile — where the header's create button
                  is the only other exit — this was a dead end. */
               <div className="flex min-h-0 flex-1 flex-col">
-                <BackLink onClick={closeCreate} />
                 <PanelBoundary label="Create market" onDismiss={closeCreate}>
                   <Suspense fallback={<DeckSkeleton />}>
                     <CreateMarket

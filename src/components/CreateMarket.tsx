@@ -271,7 +271,7 @@ export function CreateMarket({
           a reward for something done rather than an inducement to do it. */}
       <div className="flex shrink-0 items-start gap-2">
         <h2 className="flex-1 text-[15px] font-semibold leading-snug text-[var(--text)]">
-          Create a Market
+          New Market
         </h2>
       </div>
 
@@ -286,7 +286,7 @@ export function CreateMarket({
 
         {/* 2 · The conviction statement. */}
         <div>
-          <StepLabel>State your conviction</StepLabel>
+          
           <div
             className="rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
             style={{ borderColor: "var(--border)" }}
@@ -472,12 +472,25 @@ export function CreateMarket({
 
       {/* 5 · Primary action + disclosure — pinned; stays put while the form scrolls. */}
       <div className="shrink-0 space-y-2 pt-3">
-        <PrimaryAction
-          disabled={busy || (isConnected && !failed && !inputsOk)}
-          onClick={() => (isConnected ? submit.mutate() : requestConnect())}
-        >
-          {ctaLabel}
-        </PrimaryAction>
+        <div className="flex items-stretch gap-2">
+          <button
+            type="button"
+            onClick={_onCancel}
+            disabled={busy}
+            className="shrink-0 rounded-[14px] border px-4 text-[13px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-50"
+            style={{ borderColor: "var(--border)" }}
+          >
+            Cancel
+          </button>
+          <div className="min-w-0 flex-1">
+            <PrimaryAction
+              disabled={busy || (isConnected && !failed && !inputsOk)}
+              onClick={() => (isConnected ? submit.mutate() : requestConnect())}
+            >
+              {ctaLabel}
+            </PrimaryAction>
+          </div>
+        </div>
 
         {/* 6 · Disclosure — the legal line, and only the legal line.
             "Conviction Company Exclusive. Not available on pov.co yet." was
