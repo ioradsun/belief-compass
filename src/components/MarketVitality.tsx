@@ -55,9 +55,6 @@ function fromChange(
   return { current, base: m.base == null ? current : m.base / divisor };
 }
 
-const dirTone = (d: "up" | "down" | "flat"): string =>
-  d === "up" ? "var(--gain)" : d === "down" ? "var(--loss)" : "var(--text-muted)";
-
 /** Formats an ETH-native capital amount in the viewer's chosen unit. */
 type CapFmt = (eth: number, signed?: boolean) => string;
 
