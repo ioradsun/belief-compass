@@ -20,12 +20,63 @@ const MAX_SEEN = 200;
 /** The session gate the server applies (SUGGESTION.MIN_SESSION_CARDS_VIEWED). */
 const MIN_CARDS_FOR_IDEA = SUGGESTION.MIN_SESSION_CARDS_VIEWED;
 
+/**
+ * A BROWSING SESSION SURVIVES A PAGE LOAD.
+ *
+ * The counters below are what the server's idea gate reads: it will not offer
+ * "The House has an idea" until this session has actually watched a few cards.
+ * Held only in module memory, every full document load — opening a market from
+ * search, a preview reload, a return from an info page — reset the count to
+ * zero, so in practice the gate almost never opened and the idea never arrived.
+ * sessionStorage is exactly the right lifetime: one tab, one visit.
+ */
+const KEY = "feed-session:v1";
+
 const state = {
   seen: new Set<number>(),
   cardsViewed: 0,
   cardsSinceIdea: Number.MAX_SAFE_INTEGER,
   ideasShown: 0,
 };
+
+let hydrated = false;
+
+function hydrate(): void {
+  if (hydrated || typeof window === "undefined") return;
+  hydrated = true;
+  try {
+    const raw = window.sessionStorage.getItem(KEY);
+    if (!raw) return;
+    const p = JSON.parse(raw) as Partial<FeedSessionSnapshot>;
+    state.seen = new Set(Array.isArray(p.seenIds) ? p.seenIds : []);
+    state.cardsViewed = Number(p.cardsViewed) || 0;
+    state.cardsSinceIdea =
+      p.cardsSinceIdea == null || p.cardsSinceIdea >= 10_000
+        ? Number.MAX_SAFE_INTEGER
+        : Number(p.cardsSinceIdea);
+    state.ideasShown = Number(p.ideasShownThisSession) || 0;
+  } catch {
+    // A corrupt entry must never cost the reader their feed.
+  }
+}
+
+function persist(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      KEY,
+      JSON.stringify({
+        seenIds: [...state.seen],
+        cardsViewed: state.cardsViewed,
+        cardsSinceIdea:
+          state.cardsSinceIdea === Number.MAX_SAFE_INTEGER ? 10_000 : state.cardsSinceIdea,
+        ideasShownThisSession: state.ideasShown,
+      }),
+    );
+  } catch {
+    /* storage full or blocked — the counters simply stay in memory */
+  }
+}
 
 /**
  * Anyone who needs to REACT to the session changing, not just read it.
