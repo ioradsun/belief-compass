@@ -26,12 +26,13 @@
  * product decided not to keep.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getTable, takeOffTable } from "@/lib/table.functions";
+import { getTable, getTableCandidates, putOnTable, takeOffTable } from "@/lib/table.functions";
 import {
   tableProgress,
   progressLine,
   tableLine,
   finishedLine,
+  spotsOpen,
   type RecipientFact,
   type CloseReason,
 } from "@/domain/table";
