@@ -47,6 +47,16 @@ export interface Participant {
   shared: number;
   /** What they did. `open` means they have not answered. */
   state: RecipientState;
+  /**
+   * PRIOR ANSWERED CHALLENGES BETWEEN THIS PAIR — the reciprocity run.
+   *
+   * A declared fact of the scenario, exactly like `together`/`shared` beside it,
+   * and it belongs to the pair rather than to this one question. **0 means the
+   * card says nothing**, which is the common case and the default: a run is the
+   * rarest thing on this surface and inventing one everywhere would make the lab
+   * flatter every relationship in it.
+   */
+  run: number;
 }
 
 /**
@@ -235,13 +245,20 @@ export function challengesFor(w: World, now = 0): Challenge[] {
       state: v.state,
       stateAtMs: now,
       /**
-       * NO RUN IN THE FIXTURE, AND THAT IS A STATEMENT. A `World` describes ONE
-       * question between one challenger and their audience — it holds no prior
-       * history between any pair, so it cannot prove a back & forth. Inventing one
-       * to make the card look richer is the exact thing the lab exists to catch
-       * everywhere else, and it would be strange to do it here.
+       * THE RUN IS A DECLARED FACT, LIKE THE SHARED RECORD BESIDE IT.
+       *
+       * This briefly said a `World` could not carry one, on the grounds that it
+       * describes a single question and holds no prior history. That was wrong on
+       * its own terms: `together` and `shared` ARE prior history between the same
+       * pair, declared by the same fixture, and rendered on the same card as
+       * Conviction Match. A run is no more invented than they are.
+       *
+       * It matters because it was the one shipped element with no visual coverage
+       * anywhere — a line nobody had ever seen render. `checkWorld` now holds the
+       * rule that made the earlier instinct right: a card may not show a run the
+       * scenario did not declare.
        */
-      reciprocity: null,
+      reciprocity: p.run > 0 ? { run: p.run, bothWays: true, endedRun: 0 } : null,
     });
   }
   return out;
@@ -335,6 +352,26 @@ export function checkWorld(w: World): Check[] {
       : "every pair reads the same % on every surface",
   });
 
+  // 6b · A card may not show a run the scenario did not declare.
+  //
+  // The rule the brief calls "never say again, usually or first time without
+  // evidence", enforced where it can actually be checked. A run is prior history
+  // between two people; if the card can produce one the World never stated, the
+  // number is coming from somewhere other than the facts — which is precisely how
+  // a relationship surface starts flattering people.
+  const invented = challengesFor(w).filter((c, i) => {
+    const declared = w.audience[i]?.run ?? 0;
+    return (c.reciprocity?.run ?? 0) !== declared;
+  });
+  out.push({
+    name: "No card invents a run the scenario did not declare",
+    ok: invented.length === 0,
+    detail:
+      invented.length > 0
+        ? `${invented.length} card(s) show a back & forth the World never stated`
+        : "every run on screen is a fact the scenario declared",
+  });
+
   // 7 · The cap is never exceeded, whatever the fixture says.
   out.push({
     name: "Never more than three on the table",
@@ -367,6 +404,8 @@ const person = (
   together: number,
   shared: number,
   state: RecipientState,
+  /** Prior answered challenges between this pair. 0 — the default — is silence. */
+  run = 0,
 ): Participant => ({
   name,
   wallet: `0x${name.toLowerCase().padEnd(8, "0")}`,
@@ -374,6 +413,7 @@ const person = (
   together,
   shared,
   state,
+  run,
 });
 
 /**
@@ -412,11 +452,11 @@ export const SCENES: Record<string, { label: string; world: World }> = {
       question: "Will AI replace most entry-level coding jobs by 2030?",
       challenger: { name: "Sarah", wallet: "0xsarah", side: "NO" },
       audience: [
-        person("Mike", "opp", 2, 9, "showed_up"),
+        person("Mike", "opp", 2, 9, "showed_up", 5),
         person("Priya", "tribe", 23, 25, "showed_up"),
         person("Rasoul", "tribe", 9, 11, "viewed"),
         person("John", "inverse", 1, 8, "passed"),
-        person("Dana", "tribe", 7, 12, "open"),
+        person("Dana", "tribe", 7, 12, "open", 3),
       ],
       activeChallenges: 2,
       closed: null,
@@ -441,7 +481,7 @@ export const SCENES: Record<string, { label: string; world: World }> = {
     world: {
       question: "Will ETH outperform BTC this year?",
       challenger: { name: "Sarah", wallet: "0xsarah", side: "NO" },
-      audience: [person("Mike", "opp", 2, 9, "showed_up")],
+      audience: [person("Mike", "opp", 2, 9, "showed_up", 7)],
       activeChallenges: 1,
       closed: null,
     },
