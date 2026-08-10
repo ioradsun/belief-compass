@@ -632,3 +632,85 @@
     display: flex !important;
   }
 }
+
+/* ── THE PLAYLIST QUEUE ────────────────────────────────────────────────────
+   A row does not disappear when the reader opens it — it LEAVES, upward and
+   out of the column, the direction the centre panel is in. The height collapses
+   in the same beat so the rest of the queue rises to meet the gap rather than
+   snapping into it.
+
+   The row that inherits the front then announces itself once, quietly: a short
+   lift with the accent rail sweeping in. Both stop entirely under
+   prefers-reduced-motion — this is decoration on a navigation list. */
+@keyframes queue-depart {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    max-height: var(--queue-h, 120px);
+  }
+  45% {
+    opacity: 0.55;
+    transform: translateY(-6px) scale(0.985);
+    max-height: var(--queue-h, 120px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.96);
+    max-height: 0;
+    margin-bottom: 0;
+  }
+}
+
+@keyframes queue-promote {
+  0% {
+    opacity: 0.65;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes queue-rail {
+  0% {
+    transform: scaleY(0);
+  }
+  100% {
+    transform: scaleY(1);
+  }
+}
+
+.queue-depart {
+  overflow: hidden;
+  pointer-events: none;
+  animation: queue-depart 460ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+.queue-promote {
+  animation: queue-promote 320ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.queue-rail::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--rel, #9b87f5);
+  transform-origin: top;
+  animation: queue-rail 380ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue-depart,
+  .queue-promote,
+  .queue-rail::before {
+    animation: none;
+  }
+  .queue-depart {
+    display: none;
+  }
+}
