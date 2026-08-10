@@ -139,7 +139,7 @@ export async function putOnTable(
    * reached the wrong people.
    */
   if (resolved.status === "failed") return { ok: false, reason: "audience_unavailable" };
-  const audience = [...resolved.members.entries()].filter(([w]) => w !== me);
+  const audience = resolved.members.filter((m) => m.wallet !== me);
   if (audience.length === 0) return { ok: false, reason: "no_audience" };
 
   let id: number | null = null;
@@ -242,11 +242,18 @@ export async function putOnTable(
   const inserted = await sb
     .from("market_calls")
     .upsert(
-      audience.map(([responder, caller]) => ({
+      audience.map((member) => ({
         market_id: marketId,
         caller_wallet: me,
-        responder_wallet: responder,
-        relation_at_call: caller.relation,
+        responder_wallet: member.wallet,
+        /**
+         * THE RELATION, NEVER THE GROUP. `member.group` is not written and does
+         * not exist on a candidate — "Still Forming" is a heading, and a row
+         * that stored it would make presentation copy permanent. The frozen
+         * value is what the engine actually believed: `neutral`, or
+         * `insufficient` with the provenance that let them in.
+         */
+        relation_at_call: member.relationAtCall,
         challenge_id: id,
       })),
       { onConflict: "market_id,caller_wallet,responder_wallet", ignoreDuplicates: true },

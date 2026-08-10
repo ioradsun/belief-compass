@@ -32,7 +32,16 @@
  *
  * ZERO IO, pure, fully testable.
  */
-import type { RelationshipLabel } from "@/domain/dna/config";
+/**
+ * FROZEN, NOT LIVE. `CallRelationAtTime` and `RelationshipLabel` currently carry
+ * the same six strings, and they are still not the same type. One is what the
+ * DNA engine believes about a pair right now; the other is what it believed at
+ * the instant of a call and will keep saying forever. When the engine grows a
+ * seventh band, every historical `market_calls` row must go on parsing without
+ * it — so this file reads the stored vocabulary from the module that owns
+ * stored calls, not from the live engine's config.
+ */
+import { CALL_RELATIONS, type CallRelationAtTime } from "@/domain/audience";
 /**
  * TYPE-ONLY, AND IT HAS TO BE. `dependability` imports `CHALLENGE.windowDays` as a
  * VALUE from this file, so a value import back would be a runtime cycle. A type
@@ -53,24 +62,44 @@ import {
  * `opp` reads as "Rival" and `inverse` as the earned "Opp", and that mapping
  * lives once in RELATIONSHIP_TEXT.
  *
- * `neutral` and `insufficient` are deliberately absent. A relationship the
- * engine could not establish cannot create an obligation.
+ * THIS USED TO BE FOUR, AND THE FIFTH AND SIXTH ARE NOT A RELAXATION. The old
+ * comment here read: "`neutral` and `insufficient` are deliberately absent. A
+ * relationship the engine could not establish cannot create an obligation." The
+ * principle survives intact — what changed is the discovery that the engine had
+ * in fact established something for these two, and this file was throwing it
+ * away. `neutral` means the engine LOOKED at the pair and found no strong
+ * alignment; `insufficient` here is only ever reached through a bounded
+ * provenance (a shared directional belief, or an answered Challenge between the
+ * two of them). Neither is "we needed more recipients, so we found some
+ * wallets" — see @/domain/audience, which owns that argument.
+ *
+ * IT IS ALSO A READ-SIDE FIX. The write side began freezing six labels; this
+ * list is what `buildChallenges` validates a stored `relation_at_call` against,
+ * and a row whose label did not parse was skipped. Left at four, every Still
+ * Forming call would have been written correctly and then rendered to nobody.
  */
-export type CallerRelation = Extract<RelationshipLabel, "twin" | "tribe" | "opp" | "inverse">;
+export type CallerRelation = CallRelationAtTime;
 
-export const CALLER_RELATIONS: readonly CallerRelation[] = [
-  "twin",
-  "tribe",
-  "inverse",
-  "opp",
-] as const;
+export const CALLER_RELATIONS: readonly CallerRelation[] = CALL_RELATIONS;
 
-/** How loudly a relation speaks. A Twin and an Opp are the two sharp ends. */
+/**
+ * How loudly a relation speaks — which caller wins the ONE card a market gets.
+ *
+ * NOT the same ordering as the audience module's `PRECEDENCE`, and the
+ * difference is real rather than an oversight. `PRECEDENCE` answers "which
+ * canonical fact is the most specific description of this person", where Tribe
+ * outranks Opp because it is the stronger statement. This answers "whose
+ * question is the most interesting to open", where an Opp outranks a Tribe
+ * member because disagreement is the more arresting invitation. Two questions,
+ * two orders, both deliberate.
+ */
 const RELATION_RANK: Record<CallerRelation, number> = {
-  twin: 4,
-  inverse: 3,
-  opp: 2,
-  tribe: 1,
+  twin: 6,
+  inverse: 5,
+  opp: 4,
+  tribe: 3,
+  neutral: 2,
+  insufficient: 1,
 };
 
 /** A person named in a call. Anonymous people are counted, never named. */
@@ -424,6 +453,17 @@ export interface CallReach {
   tribe: number;
   rivals: number;
   /**
+   * THE THIRD GROUP, COUNTED BECAUSE IT IS NOW WRITTEN.
+   *
+   * Not optional and not cosmetic. The moment `putOnTable` began writing calls
+   * to Still Forming people, a reach line that counted only Tribe and Rivals
+   * would understate its own audience — the exact shape of the 32-person gap
+   * this file's audience comment already describes, reintroduced from the other
+   * direction. Old cached payloads without the field read as 0, which is the
+   * right default for a reach computed before the group existed.
+   */
+  forming?: number;
+  /**
    * THE AUDIENCE COULD NOT BE ESTABLISHED — which is not a reach of zero.
    *
    * Zero renders "nobody qualifies yet", a confident claim about somebody's
@@ -444,10 +484,35 @@ export interface CallReach {
  * same sentence for creation and for participation, which is why neither needs
  * its own recruitment system.
  */
+/**
+ * HOW MANY PEOPLE, ACROSS EVERY GROUP — the one place that adds them up.
+ *
+ * `tribe + rivals` was written by hand at the call site, which was correct while
+ * there were two groups and became a silent undercount the moment there were
+ * three: the offer to relay would be hidden from somebody whose whole audience
+ * was Still Forming. A REFUSED read is not a total of zero and has no total at
+ * all, so it answers null and the caller shows nothing rather than describing a
+ * network it never saw.
+ */
+export function reachTotal(reach: CallReach | null | undefined): number | null {
+  if (!reach || reach.failed) return null;
+  return reach.tribe + reach.rivals + (reach.forming ?? 0);
+}
+
 export function callReachLine(reach: CallReach): string | null {
   const parts: string[] = [];
   if (reach.tribe > 0) parts.push(`${reach.tribe} Tribe`);
   if (reach.rivals > 0) parts.push(`${reach.rivals} ${reach.rivals === 1 ? "Rival" : "Rivals"}`);
+  /**
+   * "STILL FORMING" IS THE WHOLE PHRASE, and it does not decline into a plural.
+   *
+   * "4 Still Formings" is not English, and "4 forming" describes a process
+   * rather than people. The count leads and the group name follows unchanged,
+   * exactly as the heading reads on the audience itself — one vocabulary, so a
+   * reader who sees "3 Still Forming" here and a "Still Forming" row there knows
+   * they are looking at the same three people.
+   */
+  if ((reach.forming ?? 0) > 0) parts.push(`${reach.forming} Still Forming`);
   // Nobody qualifies yet. Silence beats "0 Tribe · 0 Rivals", which reads as a
   // scoreboard the reader is losing rather than a network still forming.
   return parts.length > 0 ? parts.join(" · ") : null;

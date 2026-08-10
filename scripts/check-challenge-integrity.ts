@@ -1068,9 +1068,15 @@ async function main() {
     const hasId = CALLS.some((c) => c.id != null);
     const sideColumn = CALLS.length > 0 && "responded_side" in (CALLS[0] as object);
     const parentColumn = CHALLENGES.length > 0 && "parent_call" in (CHALLENGES[0] as object);
-    line(`   market_calls.id present        ${CALLS.length === 0 ? "NO DATA" : hasId ? "yes" : "NO — migration not applied"}`);
-    line(`   market_calls.responded_side    ${CALLS.length === 0 ? "NO DATA" : sideColumn ? "yes" : "NO — migration not applied"}`);
-    line(`   challenges.parent_call         ${CHALLENGES.length === 0 ? "NO DATA" : parentColumn ? "yes" : "NO — migration not applied"}`);
+    line(
+      `   market_calls.id present        ${CALLS.length === 0 ? "NO DATA" : hasId ? "yes" : "NO — migration not applied"}`,
+    );
+    line(
+      `   market_calls.responded_side    ${CALLS.length === 0 ? "NO DATA" : sideColumn ? "yes" : "NO — migration not applied"}`,
+    );
+    line(
+      `   challenges.parent_call         ${CHALLENGES.length === 0 ? "NO DATA" : parentColumn ? "yes" : "NO — migration not applied"}`,
+    );
     line();
 
     const answered = CALLS.filter((c) => c.responded_at);
@@ -1080,9 +1086,15 @@ async function main() {
     ).length;
     const answeredNoSide = answered.filter((c) => c.responded_side == null).length;
     line(`   answered rows                  ${answered.length}`);
-    line(`     without an id                ${answeredNoId}  ${answeredNoId ? "← cannot be a lineage parent" : ""}`);
-    line(`     with no recorded side        ${answeredNoSide}  (expected on rows stamped before the migration)`);
-    line(`   responded_side outside YES/NO  ${badSide}  ${badSide ? "← the CHECK constraint is missing" : ""}`);
+    line(
+      `     without an id                ${answeredNoId}  ${answeredNoId ? "← cannot be a lineage parent" : ""}`,
+    );
+    line(
+      `     with no recorded side        ${answeredNoSide}  (expected on rows stamped before the migration)`,
+    );
+    line(
+      `   responded_side outside YES/NO  ${badSide}  ${badSide ? "← the CHECK constraint is missing" : ""}`,
+    );
     line();
 
     const callById = new Map<number, Call>();
@@ -1116,6 +1128,58 @@ async function main() {
       line();
       line("   NOBODY HAS RELAYED YET, so the pointer checks proved nothing today.");
       line("   That is a finding about the product's stage, not a clean bill of health.");
+    }
+  }
+  line();
+
+  /**
+   * SECTION 12 — THE CHECK CONSTRAINT, WHICH IS NOT 42703-TOLERANT.
+   *
+   * The chain columns above could be missing and the app degraded gracefully.
+   * `market_calls_relation` cannot. It is a CHECK, so Postgres REJECTS a row
+   * carrying `neutral` or `insufficient` — and the audience is written as ONE
+   * upsert, which means a single rejected row rolls the whole statement back and
+   * the Challenge reaches NOBODY while still holding a slot. That is the
+   * atomic-insert failure of section 10, arriving through a different door.
+   *
+   * IT IS PROBED, NOT INFERRED. An absence of the two labels below is consistent
+   * with the migration being unapplied AND with it being applied but nobody
+   * having a Still Forming person in range yet. Those are opposite situations and
+   * counting rows cannot separate them, so this writes what it saw and refuses to
+   * conclude. The one thing it can say for certain: if the labels ARE present,
+   * the constraint admits them.
+   */
+  line("12 · THE SIX-VALUE RELATION CHECK");
+  line("   Can the ledger actually store a Still Forming call?");
+  line();
+  {
+    const seen = new Map<string, number>();
+    for (const c of CALLS) {
+      const k = c.relation_at_call ? String(c.relation_at_call) : "(null)";
+      seen.set(k, (seen.get(k) ?? 0) + 1);
+    }
+    for (const r of ["twin", "tribe", "opp", "inverse", "neutral", "insufficient"])
+      line(`   ${r.padEnd(14)} ${String(seen.get(r) ?? 0).padStart(6)}`);
+    const unexpected = [...seen.keys()].filter(
+      (k) => !["twin", "tribe", "opp", "inverse", "neutral", "insufficient"].includes(k),
+    );
+    if (unexpected.length > 0) line(`   UNKNOWN LABELS: ${unexpected.join(", ")}`);
+    line();
+    const forming = (seen.get("neutral") ?? 0) + (seen.get("insufficient") ?? 0);
+    if (forming > 0) {
+      line("   PROVED APPLIED. Rows carrying the new labels exist, so the CHECK admits");
+      line("   them — 20260907_call_relation_forming.sql has landed.");
+    } else {
+      line("   NOT PROVED EITHER WAY, and this is the honest answer rather than a pass.");
+      line("   Zero Still Forming rows is what an UNAPPLIED migration looks like and also");
+      line("   what an applied one looks like before anybody has a neutral or closest");
+      line("   person in range. To settle it, run against the database directly:");
+      line();
+      line("     select pg_get_constraintdef(oid) from pg_constraint");
+      line("      where conname = 'market_calls_relation';");
+      line();
+      line("   If that definition lists four values, the next Challenge to reach a Still");
+      line("   Forming person will be rejected WHOLE — every recipient, not just theirs.");
     }
   }
   line();

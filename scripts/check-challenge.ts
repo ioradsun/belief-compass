@@ -112,8 +112,16 @@ interface Call {
   called_at: string;
   responded_at: string | null;
 }
-/** The only values `relation_at_call` may hold. Mirrors the migration's CHECK. */
-const RELATIONS = new Set(["twin", "tribe", "opp", "inverse"]);
+/**
+ * The only values `relation_at_call` may hold. Mirrors the migration's CHECK.
+ *
+ * SIX SINCE 20260907. `neutral` and `insufficient` are the Still Forming
+ * provenances — see @/domain/audience. Until that migration is applied the
+ * database will REJECT the two new labels, which is worth knowing precisely
+ * because the audience is written as one statement: a single rejected row rolls
+ * the whole insert back and the Challenge reaches nobody.
+ */
+const RELATIONS = new Set(["twin", "tribe", "opp", "inverse", "neutral", "insufficient"]);
 interface UserEvent {
   onchain_id: number | null;
   type: string;

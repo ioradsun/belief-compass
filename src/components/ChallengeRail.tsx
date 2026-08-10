@@ -293,6 +293,10 @@ const BADGE: Record<CallerRelation, string> = {
   tribe: "Tribe",
   opp: "Rival",
   inverse: "Rival",
+  // Same two words as the audience heading and the lab badge — one vocabulary
+  // for one relationship, wherever the reader meets it.
+  neutral: "Still Forming",
+  insufficient: "Still Forming",
 };
 
 /**

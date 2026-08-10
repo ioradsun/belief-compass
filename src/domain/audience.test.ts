@@ -1,12 +1,19 @@
 import { describe, it, expect } from "vitest";
 import {
   FACES_PER_GROUP,
+  CALL_RELATIONS,
+  COLD_START_HEADLINE,
+  COLD_START_SUPPORT,
   audienceGroupFor,
+  callRelationAtTime,
   dedupeAudience,
   groupAudience,
   presentAudience,
   singleRecipientName,
+  toMembers,
+  type AudienceFailure,
   type AudienceMember,
+  type AudienceResult,
   type AudienceProvenance,
   type CallRelationAtTime,
 } from "./audience";
@@ -171,5 +178,133 @@ describe("the assembled payload", () => {
     const r = presentAudience([m("0xa", "opp", "strong_dna", { displayName: "Casey" })]);
     if (r.status !== "available") throw new Error("expected available");
     expect(r.singleRecipientName).toBe("Casey");
+  });
+});
+
+describe("the stored vocabulary, parsed on the way back in", () => {
+  it("accepts every relation the write side can freeze", () => {
+    // The read side and the write side are one list. When the write learned two
+    // new labels and a four-value validator did not, every Still Forming call
+    // was written correctly and then rendered to nobody.
+    for (const r of CALL_RELATIONS) expect(callRelationAtTime(r)).toBe(r);
+    expect(CALL_RELATIONS).toHaveLength(6);
+  });
+
+  it("refuses a group name, a stray string, and nothing at all", () => {
+    expect(callRelationAtTime("forming")).toBeNull();
+    expect(callRelationAtTime("rivals")).toBeNull();
+    expect(callRelationAtTime("")).toBeNull();
+    expect(callRelationAtTime(null)).toBeNull();
+    expect(callRelationAtTime(undefined)).toBeNull();
+  });
+});
+
+describe("faces arrive after membership, and cannot change it", () => {
+  const candidates = [
+    {
+      wallet: "0xa",
+      relationAtCall: "twin",
+      provenance: "strong_dna",
+      sharedBeliefs: 9,
+      sameSideBeliefs: 8,
+    },
+    {
+      wallet: "0xb",
+      relationAtCall: "neutral",
+      provenance: "neutral_dna",
+      sharedBeliefs: 4,
+      sameSideBeliefs: 2,
+    },
+    {
+      wallet: "0xc",
+      relationAtCall: "insufficient",
+      provenance: "answered_challenge",
+      sharedBeliefs: null,
+      sameSideBeliefs: null,
+    },
+  ] as const;
+
+  it("keeps everybody when not one profile resolves", () => {
+    // A missing `profiles` row is a missing picture, not a revoked invitation.
+    const out = toMembers(candidates, (w) => ({ displayName: w, avatarUrl: null }));
+    expect(out.map((x) => x.wallet)).toEqual(["0xa", "0xb", "0xc"]);
+    expect(out.every((x) => x.avatarUrl === null)).toBe(true);
+  });
+
+  it("derives the group rather than trusting one to be handed in", () => {
+    const out = toMembers(candidates, (w) => ({ displayName: w, avatarUrl: null }));
+    expect(out.map((x) => x.group)).toEqual(["tribe", "forming", "forming"]);
+  });
+
+  it("preserves the frozen relation and its provenance untouched", () => {
+    const out = toMembers(candidates, (w) => ({ displayName: w, avatarUrl: null }));
+    expect(out.map((x) => x.relationAtCall)).toEqual(["twin", "neutral", "insufficient"]);
+    expect(out.map((x) => x.provenance)).toEqual([
+      "strong_dna",
+      "neutral_dna",
+      "answered_challenge",
+    ]);
+    // An answered Challenge measures no belief overlap at all. Null says that;
+    // zero would claim a measurement was taken and came back empty.
+    expect(out[2].sharedBeliefs).toBeNull();
+  });
+});
+
+describe("Still Forming is evidence of a connection, never a shortfall of recipients", () => {
+  it("renders the three provenances under one honest heading", () => {
+    const groups = groupAudience([
+      m("0xa", "neutral", "neutral_dna"),
+      m("0xb", "insufficient", "closest_match", { sharedBeliefs: 1 }),
+      m("0xc", "insufficient", "answered_challenge"),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].label).toBe("Still Forming");
+    expect(groups[0].count).toBe(3);
+  });
+
+  it("keeps a strong relationship out of Still Forming even when it arrives through the closest pool", () => {
+    // Every closest row is tagged `insufficient` by SOURCE, because the pool
+    // contains everybody with any overlap. Precedence is what stops a Twin being
+    // frozen as an unbanded stranger.
+    const deduped = dedupeAudience([
+      m("0xa", "insufficient", "closest_match", { sharedBeliefs: 9 }),
+      m("0xa", "twin", "strong_dna", { sharedBeliefs: 9 }),
+    ]);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0].relationAtCall).toBe("twin");
+    expect(audienceGroupFor(deduped[0].relationAtCall)).toBe("tribe");
+  });
+
+  it("says nothing about where the relationship will land", () => {
+    const note = groupAudience([m("0xa", "neutral", "neutral_dna")])[0].note;
+    for (const counterfactual of ["close to", "away from", "almost", "nearly", "on track"])
+      expect(note.toLowerCase()).not.toContain(counterfactual);
+  });
+
+  it("has an honest empty state rather than a lowered bar", () => {
+    expect(presentAudience([])).toEqual({ status: "none" });
+    // The cold-start copy names the map, not a crowd it does not have.
+    expect(COLD_START_HEADLINE).toBe("The map is still forming");
+    expect(COLD_START_SUPPORT).not.toMatch(/active|popular|trending|suggested/i);
+  });
+});
+
+describe("a refused audience is neither empty nor permission", () => {
+  it("distinguishes every read that can fail", () => {
+    const reasons: AudienceFailure[] = [
+      "dna_unavailable",
+      "participants_unavailable",
+      "calls_unavailable",
+      "market_unavailable",
+    ];
+    // Four reads, four reasons: a log that says only "audience failed" cannot
+    // tell an inclusion outage from an exclusion one, and they are opposite bugs.
+    expect(new Set(reasons).size).toBe(4);
+  });
+
+  it("is a different state from having nobody to ask", () => {
+    const failed: AudienceResult = { status: "failed", reason: "participants_unavailable" };
+    const none: AudienceResult = { status: "none" };
+    expect(failed.status).not.toBe(none.status);
   });
 });

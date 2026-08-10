@@ -52,7 +52,11 @@ describe("the audience is frozen when the Challenge goes up", () => {
     // somebody's DNA moved.
     const c = code("src/lib/table.server.ts");
     expect(c).toMatch(/challenge_id: id/);
-    expect(c).toMatch(/relation_at_call: caller\.relation/);
+    expect(c).toMatch(/relation_at_call: member\.relationAtCall/);
+    // THE RELATION, NEVER THE GROUP. A row storing "forming" would make a screen
+    // heading permanent, and the day the heading was renamed every historical row
+    // would be lying about what the engine actually knew.
+    expect(c).not.toMatch(/relation_at_call: member\.group/);
   });
 
   /**
@@ -275,7 +279,74 @@ describe("who can be asked is decided once", () => {
     ])
       expect(fn).toContain(`if (${guard}) return refuse("${reason}"`);
     // And nothing may proceed past a refusal into the dropping loops.
-    expect(fn.indexOf("const out = new Map(callers)")).toBeGreaterThan(fn.indexOf("market.error"));
+    expect(fn.indexOf("const excluded = new Set<string>()")).toBeGreaterThan(
+      fn.indexOf("market.error"),
+    );
+  });
+
+  /**
+   * THE INCLUSION SIDE FAILS CLOSED TOO, and it did not used to.
+   *
+   * `qualifiedCallers` destructures `{ data }` and throws the error away, so an
+   * unreadable DNA cache came back as a viewer with no network — indistinguishable
+   * from a genuine cold start, and the caller would then report "nobody qualifies
+   * yet" about somebody with a full Tribe. Same rule, other direction.
+   */
+  it("refuses rather than reporting an empty network when the DNA read fails", () => {
+    const fn = server().slice(server().indexOf("async function dnaCandidates"));
+    expect(fn.slice(0, fn.indexOf("const rows"))).toMatch(
+      /if \(error\)[\s\S]*return \{ status: "failed" \}/,
+    );
+    const audience = server().slice(server().indexOf("export async function eligibleAudience"));
+    expect(audience).toContain('return { status: "failed", reason: "dna_unavailable" }');
+    expect(audience).toContain('return { status: "failed", reason: "calls_unavailable" }');
+  });
+
+  /**
+   * STILL FORMING IS BOUNDED BY PROVENANCE, NOT BY A NEED FOR RECIPIENTS.
+   *
+   * Three doors, each a fact the canonical graph can already explain. The
+   * assertions that matter most are the ABSENCES: no follow read, and no
+   * participant/active-wallet sweep. Either one would let a stranger appear
+   * socially connected, which is the one thing an audience must never do.
+   */
+  it("admits exactly three provenances, and follows are not one of them", () => {
+    const s = server();
+    const dna = s.slice(
+      s.indexOf("async function dnaCandidates"),
+      s.indexOf("async function answeredCandidates"),
+    );
+    expect(dna).toMatch(/take\(data\?\.neutral_matches, "neutral", "neutral_dna"\)/);
+    expect(dna).toMatch(
+      /take\(data\?\.closest_matches, "insufficient", "closest_match", CLOSEST_MIN_SHARED\)/,
+    );
+
+    const answered = s.slice(s.indexOf("async function answeredCandidates"));
+    const body = answered.slice(0, answered.indexOf("export async function"));
+    // An ANSWER in either direction, and only an answer.
+    expect(body).toMatch(/\.eq\("caller_wallet", viewer\)/);
+    expect(body).toMatch(/\.eq\("responder_wallet", viewer\)/);
+    expect((body.match(/\.not\("responded_at", "is", null\)/g) ?? []).length).toBe(2);
+    // A pass is a decline and an unanswered call is one person's hope. Neither
+    // may become a seat, so neither column is read at all.
+    expect(body).not.toMatch(/passed_at/);
+
+    // NO FOLLOWS. `setFollow` accepts the claimed follower wallet without proving
+    // control of it, so a forged follow would manufacture an audience seat.
+    expect(s).not.toMatch(/from\("follows"\)/);
+  });
+
+  it("decides membership before it resolves a single profile", () => {
+    // A missing `profiles` row is a missing picture, not a revoked invitation.
+    const fn = server().slice(server().indexOf("export async function audienceFor"));
+    const body = fn.slice(0, fn.indexOf("\n}\n"));
+    expect(body.indexOf("eligibleAudience")).toBeLessThan(body.indexOf("resolveProfiles"));
+    // And the read that decides membership never mentions profiles at all.
+    const membership = server().slice(
+      server().indexOf("export async function eligibleAudience"),
+      server().indexOf("export async function audienceFor"),
+    );
+    expect(membership).not.toMatch(/resolveProfiles|displayName/);
   });
 
   it("spends no slot and writes no row when the audience is refused", () => {
@@ -290,14 +361,28 @@ describe("who can be asked is decided once", () => {
   it("reports a refused reach as unknown rather than as nobody", () => {
     // Zero would render "nobody qualifies yet" — a confident claim about
     // somebody's network, made from a read that never completed.
-    expect(server()).toMatch(/return \{ tribe: 0, rivals: 0, failed: true \}/);
+    expect(server()).toMatch(/return \{ tribe: 0, rivals: 0, forming: 0, failed: true \}/);
   });
 
-  it("leaves the unscoped reach question alone", () => {
-    // With no market there is nothing to exclude against — "how many people could
-    // my conviction reach at all" is a different question and keeps its answer.
+  it("asks the unscoped question the same way, minus the exclusions", () => {
+    /**
+     * With no market there is nothing to exclude against — but the POOL must be
+     * the same three doors. Reading only the strong buckets here would make the
+     * unscoped line SMALLER than the scoped one for the same viewer, which reads
+     * as "asking about one market reaches more people than asking in general".
+     */
     const fn = server().slice(server().indexOf("export async function callReachFor"));
-    expect(fn).toMatch(/callers = await qualifiedCallers\(sb, me\)/);
+    expect(fn).toMatch(/dnaCandidates\(sb, me\)/);
+    expect(fn).toMatch(/answeredCandidates\(sb, me\)/);
     expect(fn).toMatch(/eligibleAudience\(sb, me, marketId\)/);
+  });
+
+  it("counts the reach with the function that renders the headings", () => {
+    // Two places deciding what "Tribe" means is how preview and write came to
+    // disagree by 32 people. `audienceGroupFor` is exhaustive over the six.
+    const fn = server().slice(server().indexOf("export async function callReachFor"));
+    expect(fn).toMatch(/audienceGroupFor\(relation\)/);
+    // The third group is counted, because the write now reaches it.
+    expect(fn).toMatch(/return \{ tribe, rivals, forming \}/);
   });
 });

@@ -22,9 +22,9 @@
  */
 import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
+import { CLOSEST_MIN_SHARED } from "@/domain/dna/config";
 import {
   composeChallenges,
-  CALLER_RELATIONS,
   type CallEvidence,
   type CallerRelation,
   type Challenge,
@@ -47,7 +47,17 @@ import {
   type Tally,
 } from "@/domain/dependability";
 import type { NamedPerson } from "@/domain/challenge";
-import type { AudienceFailure } from "@/domain/audience";
+import {
+  audienceGroupFor,
+  callRelationAtTime,
+  dedupeAudience,
+  presentAudience,
+  toMembers,
+  type AudienceCandidate,
+  type AudienceFailure,
+  type AudienceResult,
+  type CallRelationAtTime,
+} from "@/domain/audience";
 
 /** Bounds. A panel of six open questions is not a feed builder. */
 const READ = {
@@ -63,6 +73,14 @@ const READ = {
   openCalls: 200,
   /** Calls read for one pair's history. */
   pairCalls: 200,
+  /**
+   * Answered calls read per direction when establishing provenance.
+   *
+   * Generous, because this one is looking for DISTINCT PEOPLE rather than rows:
+   * a pair who go back and forth constantly occupy a great many rows between
+   * them and are still one member of an audience.
+   */
+  answeredPairs: 400,
   /**
    * Calls read for the COMPLETE history, per direction.
    *
@@ -111,8 +129,6 @@ export async function qualifiedCallers(sb: Sb, viewer: string): Promise<Map<stri
     .maybeSingle();
 
   const out = new Map<string, Caller>();
-  const num = (v: unknown): number | null =>
-    typeof v === "number" && Number.isFinite(v) ? v : null;
   const take = (rows: unknown, relation: CallerRelation) => {
     for (const r of ((rows as CachedRelationship[] | null) ?? []).slice(0, READ.peoplePerBucket)) {
       const w = r?.wallet ? String(r.wallet).toLowerCase() : null;
@@ -129,6 +145,166 @@ export async function qualifiedCallers(sb: Sb, viewer: string): Promise<Map<stri
   take(data?.opp_matches, "opp");
   take(data?.tribe_matches, "tribe");
   return out;
+}
+
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/**
+ * THE STRONG BUCKETS PLUS THE TWO THAT MAKE STILL FORMING POSSIBLE.
+ *
+ * `neutral_matches` and `closest_matches` have been written by the DNA worker
+ * since the cache shipped and read by nothing on this path. They are the whole
+ * difference between an audience that exists on a cold-start network and one
+ * that does not — and reading them is cheaper than the alternative everyone
+ * reaches for, which is lowering the bar for what counts as knowing somebody.
+ *
+ * NEUTRAL AND CLOSEST ARE NOT THE SAME CLAIM, which is why they arrive with
+ * different provenance:
+ *
+ *   NEUTRAL   made the evidence bar (`minSharedOverall`) and landed in no strong
+ *             band. The engine LOOKED at this pair and has an answer: no strong
+ *             alignment either way. That is a finding, not an absence.
+ *   CLOSEST   cleared only `CLOSEST_MIN_SHARED` — at least one shared
+ *             directional belief. Real, thin, and honestly labelled
+ *             `insufficient`, because the engine did not have enough to band
+ *             them and the frozen row must say so.
+ *
+ * Every closest row is tagged `insufficient` even when it describes a Twin. The
+ * pool contains everybody with any overlap, so the strong buckets and this one
+ * overlap heavily — and `dedupeAudience` keeps the strongest canonical fact per
+ * wallet regardless of which read produced it. Tagging by SOURCE rather than by
+ * the row's own `relationship` field is deliberate: a person who reads
+ * "neutral" in the closest pool but never made the neutral bucket did not clear
+ * the evidence bar, and calling them neutral would claim an answer the engine
+ * never reached.
+ *
+ * FAILS CLOSED. An unreadable cache is not a viewer with no network.
+ */
+async function dnaCandidates(
+  sb: Sb,
+  viewer: string,
+): Promise<{ status: "ok"; rows: AudienceCandidate[] } | { status: "failed" }> {
+  const { data, error } = await sb
+    .from("viewer_dna_cache")
+    .select(
+      "twin_matches, tribe_matches, opp_matches, inverse_matches, neutral_matches, closest_matches",
+    )
+    .eq("viewer_wallet", viewer)
+    .maybeSingle();
+  if (error) {
+    console.error("[challenge] dna cache unreadable", { code: error.code, message: error.message });
+    return { status: "failed" };
+  }
+
+  const rows: AudienceCandidate[] = [];
+  const take = (
+    source: unknown,
+    relationAtCall: CallRelationAtTime,
+    provenance: AudienceCandidate["provenance"],
+    /** Only `closest` applies one: the shared-belief floor below. */
+    minShared = 0,
+  ) => {
+    for (const r of ((source as CachedRelationship[] | null) ?? []).slice(
+      0,
+      READ.peoplePerBucket,
+    )) {
+      const w = r?.wallet ? String(r.wallet).toLowerCase() : null;
+      if (!w || w === viewer) continue;
+      const shared = num(r?.sharedBeliefs);
+      /**
+       * ZERO SHARED BELIEFS IS NOT A THIN RELATIONSHIP, IT IS NO RELATIONSHIP.
+       *
+       * The worker already applies `CLOSEST_MIN_SHARED`, so in practice nothing
+       * is rejected here. The floor is restated at the point of USE because
+       * that is where it would be lost: a cache written by an older engine, a
+       * threshold relaxed for some unrelated Network-list reason, and a wallet
+       * with no overlap at all quietly becomes a person somebody is told they
+       * are connected to.
+       */
+      if ((shared ?? 0) < minShared) continue;
+      rows.push({
+        wallet: w,
+        relationAtCall,
+        provenance,
+        sharedBeliefs: shared,
+        sameSideBeliefs: num(r?.sameSideBeliefs),
+      });
+    }
+  };
+  take(data?.twin_matches, "twin", "strong_dna");
+  take(data?.tribe_matches, "tribe", "strong_dna");
+  take(data?.inverse_matches, "inverse", "strong_dna");
+  take(data?.opp_matches, "opp", "strong_dna");
+  take(data?.neutral_matches, "neutral", "neutral_dna");
+  take(data?.closest_matches, "insufficient", "closest_match", CLOSEST_MIN_SHARED);
+  return { status: "ok", rows };
+}
+
+/**
+ * PEOPLE THE GRAPH CANNOT SEE, WHO UNMISTAKABLY SHOWED UP FOR EACH OTHER.
+ *
+ * A Market Maker is the case this exists for. Somebody who puts questions up and
+ * never takes a side holds no directional beliefs, so they share none with
+ * anybody — every DNA bucket is empty for them forever, in both directions. And
+ * yet people have answered their Challenges. Something happened between those
+ * two humans that the belief graph is structurally incapable of representing,
+ * and refusing to see it would mean the person doing the most to start
+ * conversations has the smallest audience on the platform.
+ *
+ * AN ANSWER IN EITHER DIRECTION COUNTS, and only an answer. `responded_at IS NOT
+ * NULL` is the entire test: an unanswered call is one person's hope, a pass is a
+ * decline, and a call that was merely surfaced is not a relationship. Somebody
+ * who passed does not enter this set — which also means Still Forming can never
+ * be populated by asking the same uninterested person again and again.
+ *
+ * Two indexed reads along `market_calls_caller_idx` and
+ * `market_calls_responder_idx`, the same pair every other path in this file
+ * uses. `sharedBeliefs` is NULL rather than 0: there is no belief overlap
+ * measurement here at all, and writing zero would state one.
+ */
+async function answeredCandidates(
+  sb: Sb,
+  viewer: string,
+): Promise<{ status: "ok"; rows: AudienceCandidate[] } | { status: "failed" }> {
+  const [mine, theirs] = await Promise.all([
+    sb
+      .from("market_calls")
+      .select("responder_wallet")
+      .eq("caller_wallet", viewer)
+      .not("responded_at", "is", null)
+      .limit(READ.answeredPairs),
+    sb
+      .from("market_calls")
+      .select("caller_wallet")
+      .eq("responder_wallet", viewer)
+      .not("responded_at", "is", null)
+      .limit(READ.answeredPairs),
+  ]);
+  if (mine.error || theirs.error) {
+    console.error("[challenge] answered-call provenance unreadable", {
+      code: mine.error?.code ?? theirs.error?.code,
+      message: mine.error?.message ?? theirs.error?.message,
+    });
+    return { status: "failed" };
+  }
+
+  const wallets = new Set<string>();
+  for (const r of (mine.data ?? []) as { responder_wallet: string }[])
+    wallets.add(String(r.responder_wallet).toLowerCase());
+  for (const r of (theirs.data ?? []) as { caller_wallet: string }[])
+    wallets.add(String(r.caller_wallet).toLowerCase());
+  wallets.delete(viewer);
+
+  return {
+    status: "ok",
+    rows: [...wallets].map((wallet) => ({
+      wallet,
+      relationAtCall: "insufficient" as const,
+      provenance: "answered_challenge" as const,
+      sharedBeliefs: null,
+      sameSideBeliefs: null,
+    })),
+  };
 }
 
 /**
@@ -252,7 +428,16 @@ export async function buildChallenges(viewer: string): Promise<Challenge[]> {
     const wallet = String(c.caller_wallet).toLowerCase();
     const title = titleOf.get(marketId);
     if (!title) continue;
-    const relation = CALLER_RELATIONS.find((r: CallerRelation) => r === c.relation_at_call);
+    /**
+     * PARSED BY THE MODULE THAT OWNS THE STORED VOCABULARY.
+     *
+     * A row whose label does not parse is skipped, which is right for a value
+     * this file cannot interpret — and was catastrophic while the list was four
+     * long and the write side had learned six. Every Still Forming call would
+     * have been frozen correctly and then dropped on the one screen it was
+     * written for. One list, imported, so the two sides cannot drift again.
+     */
+    const relation = callRelationAtTime(c.relation_at_call);
     if (!relation) continue;
     // The pair's record comes from the LIVE cache, not the frozen row: the
     // relationship AT CALL decides who may call, and today's numbers are what a
@@ -519,12 +704,24 @@ export async function eligibleAudience(
   viewer: string,
   marketId: number,
 ): Promise<
-  { status: "ok"; members: Map<string, Caller> } | { status: "failed"; reason: AudienceFailure }
+  { status: "ok"; members: AudienceCandidate[] } | { status: "failed"; reason: AudienceFailure }
 > {
   const me = viewer.toLowerCase();
-  const callers = await qualifiedCallers(sb, me);
-  if (callers.size === 0) return { status: "ok", members: callers };
-  const wallets = [...callers.keys()];
+  /**
+   * THE THREE DOORS, READ TOGETHER AND DEDUPED ONCE.
+   *
+   * Both reads run before either is inspected, because a person can arrive
+   * through several of them and the order they come back in must not decide
+   * what `relation_at_call` freezes. `dedupeAudience` settles that by
+   * precedence, not by arrival.
+   */
+  const [dna, answered] = await Promise.all([dnaCandidates(sb, me), answeredCandidates(sb, me)]);
+  if (dna.status === "failed") return { status: "failed", reason: "dna_unavailable" };
+  if (answered.status === "failed") return { status: "failed", reason: "calls_unavailable" };
+
+  const candidates = dedupeAudience([...dna.rows, ...answered.rows]);
+  if (candidates.length === 0) return { status: "ok", members: [] };
+  const wallets = candidates.map((c) => c.wallet);
 
   const [participants, asked, market] = await Promise.all([
     sb.from("wallet_beliefs").select("wallet").eq("onchain_id", marketId).in("wallet", wallets),
@@ -549,15 +746,50 @@ export async function eligibleAudience(
   if (asked.error) return refuse("calls_unavailable", asked.error);
   if (market.error) return refuse("market_unavailable", market.error);
 
-  const out = new Map(callers);
+  const excluded = new Set<string>();
   const drop = (w: unknown) => {
     const k = String(w ?? "").toLowerCase();
-    if (k) out.delete(k);
+    if (k) excluded.add(k);
   };
   for (const r of (participants.data ?? []) as { wallet: string }[]) drop(r.wallet);
   for (const r of (asked.data ?? []) as { responder_wallet: string }[]) drop(r.responder_wallet);
   drop((market.data as { author_wallet?: string } | null)?.author_wallet);
-  return { status: "ok", members: out };
+  drop(me);
+  return { status: "ok", members: candidates.filter((c) => !excluded.has(c.wallet)) };
+}
+
+/**
+ * THE AUDIENCE WITH FACES ON IT — what a preview renders before anybody commits.
+ *
+ * The ONLY place profiles enter this path, and deliberately the last step. By
+ * the time `resolveProfiles` is called the membership is already decided and
+ * immutable, so a slow lookup, a missing row or a wallet that has never set a
+ * name changes what the reader SEES and never who gets asked. `resolveProfiles`
+ * falls back to the deterministic alias, so every member has a name.
+ *
+ * `lazyCap` is 0: this runs on a preview, and a preview must not spend twenty
+ * outbound pov.co lookups. Whatever is already cached is what shows.
+ */
+export async function audienceFor(wallet: string, marketId: number): Promise<AudienceResult> {
+  const me = wallet.toLowerCase();
+  if (!me || !Number.isFinite(marketId)) return { status: "none" };
+  const sb = serviceClient();
+
+  const resolved = await eligibleAudience(sb, me, marketId);
+  if (resolved.status === "failed") return { status: "failed", reason: resolved.reason };
+  if (resolved.members.length === 0) return { status: "none" };
+
+  const { resolveProfiles } = await import("@/lib/profiles.server");
+  const profiles = await resolveProfiles(
+    resolved.members.map((m) => m.wallet),
+    0,
+  );
+  return presentAudience(
+    toMembers(resolved.members, (w) => ({
+      displayName: profiles.get(w)?.displayName?.trim() || aliasFor(w),
+      avatarUrl: profiles.get(w)?.pfpUrl ?? null,
+    })),
+  );
 }
 
 export async function callReachFor(wallet: string, marketId?: number): Promise<CallReach> {
@@ -569,25 +801,48 @@ export async function callReachFor(wallet: string, marketId?: number): Promise<C
    * — and there is nothing to exclude against. Scoped, it must agree with what
    * `putOnTable` will actually write, which is what `eligibleAudience` is for.
    */
-  let callers: Map<string, Caller>;
+  let relations: CallRelationAtTime[];
   if (typeof marketId === "number" && Number.isFinite(marketId)) {
     const res = await eligibleAudience(sb, me, marketId);
     // A refused audience is not a reach of zero. Zero would render "nobody
     // qualifies" — a confident claim about somebody's network made from a read
     // that never completed.
-    if (res.status === "failed") return { tribe: 0, rivals: 0, failed: true };
-    callers = res.members;
+    if (res.status === "failed") return { tribe: 0, rivals: 0, forming: 0, failed: true };
+    relations = res.members.map((m) => m.relationAtCall);
   } else {
-    callers = await qualifiedCallers(sb, me);
+    /**
+     * THE SAME THREE DOORS, MINUS THE EXCLUSIONS THERE IS NOTHING TO APPLY YET.
+     *
+     * It would have been less code to leave this reading the strong buckets
+     * alone — and it would have made the unscoped line quietly SMALLER than the
+     * scoped one for the same viewer, which reads as "asking about a specific
+     * market reaches more people than asking in general". That is nonsense, and
+     * it is the same class of drift as the 32-person gap: two definitions of who
+     * can be reached.
+     */
+    const [dna, answered] = await Promise.all([dnaCandidates(sb, me), answeredCandidates(sb, me)]);
+    if (dna.status === "failed" || answered.status === "failed")
+      return { tribe: 0, rivals: 0, forming: 0, failed: true };
+    relations = dedupeAudience([...dna.rows, ...answered.rows]).map((c) => c.relationAtCall);
   }
 
+  /**
+   * COUNTED BY THE SAME FUNCTION THAT RENDERS THE HEADINGS.
+   *
+   * Two places deciding what "Tribe" means is how the preview and the write came
+   * to disagree by 32 people the first time. `audienceGroupFor` is exhaustive
+   * over the six relations, so a seventh cannot be silently miscounted here.
+   */
   let tribe = 0;
   let rivals = 0;
-  for (const { relation } of callers.values()) {
-    if (relation === "twin" || relation === "tribe") tribe += 1;
-    else rivals += 1;
+  let forming = 0;
+  for (const relation of relations) {
+    const group = audienceGroupFor(relation);
+    if (group === "tribe") tribe += 1;
+    else if (group === "rivals") rivals += 1;
+    else forming += 1;
   }
-  return { tribe, rivals };
+  return { tribe, rivals, forming };
 }
 
 /**

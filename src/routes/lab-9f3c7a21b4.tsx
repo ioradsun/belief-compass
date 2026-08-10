@@ -53,6 +53,14 @@ import {
 import { RELATIONSHIP_MIN_SHARED } from "@/domain/dna/config";
 import { convictionMatch } from "@/domain/relationship";
 import { ChallengeRail } from "@/components/ChallengeRail";
+import { AudienceGroups } from "@/components/AudiencePreview";
+import {
+  audienceGroupFor,
+  groupAudience,
+  type AudienceMember,
+  type AudienceProvenance,
+  type CallRelationAtTime,
+} from "@/domain/audience";
 import { railSideKey, tableKey } from "@/components/YourTable";
 import { historyKey } from "@/components/ChallengeHistory";
 import { networkQO } from "@/lib/network-query";
@@ -79,6 +87,41 @@ export const Route = createFileRoute("/lab-9f3c7a21b4")({
  * three people must be invisible to the fourth, and the only way to see that is
  * to mount the same rail for somebody it never touched.
  */
+/**
+ * A SYNTHETIC AUDIENCE THAT EXERCISES EVERY BRANCH AT ONCE.
+ *
+ * One Twin beside two Tribe members (so the heading has to say "Your Twin +
+ * Tribe"), enough Rivals to overflow the face cap, and three Still Forming
+ * people arriving through all three provenances. Nothing here touches the
+ * server; it is the presentation under load.
+ */
+const labPerson = (
+  name: string,
+  relationAtCall: CallRelationAtTime,
+  provenance: AudienceProvenance,
+): AudienceMember => ({
+  wallet: `0x${name.toLowerCase().padEnd(8, "0")}`,
+  relationAtCall,
+  group: audienceGroupFor(relationAtCall),
+  provenance,
+  sharedBeliefs: null,
+  sameSideBeliefs: null,
+  displayName: name,
+  avatarUrl: null,
+});
+
+const LAB_AUDIENCE: AudienceMember[] = [
+  labPerson("Sarah", "twin", "strong_dna"),
+  labPerson("Mike", "tribe", "strong_dna"),
+  labPerson("Dana", "tribe", "strong_dna"),
+  ...["Alex", "Rae", "Kim", "Jo", "Sam", "Tess", "Ben"].map((n) =>
+    labPerson(n, "opp", "strong_dna"),
+  ),
+  labPerson("Nia", "neutral", "neutral_dna"),
+  labPerson("Owen", "insufficient", "closest_match"),
+  labPerson("Priya", "insufficient", "answered_challenge"),
+];
+
 const ME = "0xscene000000000000000000000000000000000001";
 const BYSTANDER = "0xscene000000000000000000000000000000000002";
 
@@ -208,6 +251,16 @@ function TestingScene() {
             ["auto-closes?", String(mine.shouldClose)],
           ]}
         />
+        {/* WHO IT WOULD REACH, BEFORE IT IS SENT. Rendered from a synthetic
+            audience rather than a DNA cache, because the thing worth looking at
+            is the layout under pressure: a lone Twin, a crowd that overflows the
+            face cap, and a Still Forming row that must never read as filler. */}
+        <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+          Audience preview
+        </p>
+        <Stage>
+          <AudienceGroups groups={groupAudience(LAB_AUDIENCE)} />
+        </Stage>
       </Panel>
     ),
     challenged: (

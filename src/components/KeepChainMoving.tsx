@@ -25,7 +25,7 @@ import { tableKey, useTable } from "@/components/YourTable";
 import { branchLiveLine, canPutOnTable, keepMovingLine } from "@/domain/table";
 import { RELAY_COST, RELAY_TITLE, relayButtonLabel } from "@/domain/chain";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
-import type { NamedPerson } from "@/domain/challenge";
+import { reachTotal, type NamedPerson } from "@/domain/challenge";
 import type { PutResult } from "@/lib/table.server";
 
 export function KeepChainMoving({ wallet, marketId }: { wallet?: string; marketId?: number }) {
@@ -92,7 +92,15 @@ export function KeepChainMoving({ wallet, marketId }: { wallet?: string; marketI
   if (!canPutOnTable(live.length)) return null;
   if (result && !result.ok) return null;
 
-  const reachable = (reach?.tribe ?? 0) + (reach?.rivals ?? 0);
+  /**
+   * ADDED UP BY THE DOMAIN, NOT HERE. This used to read `tribe + rivals`, which
+   * was right for two groups and became an undercount the moment there were
+   * three — hiding the offer entirely from somebody whose whole audience is
+   * Still Forming. Null means the read was refused, and a refusal is not zero:
+   * the offer is withheld rather than made against a network nobody saw.
+   */
+  const reachable = reachTotal(reach);
+  if (reachable == null) return null;
   const label = relayButtonLabel(reachable);
   if (!label) return null;
 

@@ -22,6 +22,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { putOnTable } from "@/lib/table.functions";
 import { railSideKey, tableKey, useTable } from "@/components/YourTable";
 import { canPutOnTable } from "@/domain/table";
+import { AudiencePreview } from "@/components/AudiencePreview";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import type { PutResult } from "@/lib/table.server";
 
@@ -74,6 +75,23 @@ export function PutOnTable({
     return <p className="mt-2 text-[11.5px] text-[var(--text-secondary)]">On the table.</p>;
   }
 
+  /**
+   * THE AUDIENCE COULD NOT BE ESTABLISHED — which is not nobody, and not a
+   * reason to blame the reader's network. The exclusions are what keep a
+   * Challenge away from people who already answered this market; if one of those
+   * reads failed, the server refused, no slot was spent, and the honest thing to
+   * say is that it did not go through. "Nobody qualifies" here would be a
+   * permanent-sounding claim about somebody's network made from an outage.
+   */
+  if (result && !result.ok && result.reason === "audience_unavailable") {
+    return (
+      <p className="mt-2 text-[11.5px] leading-snug text-[var(--text-muted)]">
+        Couldn&rsquo;t work out who this would reach. Nothing was put up &mdash; try again in a
+        moment.
+      </p>
+    );
+  }
+
   // NOBODY QUALIFIES. Silence rather than an offer that leads nowhere.
   if (result && !result.ok && result.reason === "no_audience") {
     return (
@@ -108,6 +126,12 @@ export function PutOnTable({
       <p className="text-[11.5px] leading-snug text-[var(--text-secondary)]">
         Want your people&rsquo;s take?
       </p>
+      {/* WHO, BEFORE THE BUTTON. "Your people" was an abstraction the reader had
+          to take on trust — and the surface that reveals where everybody stands
+          asking somebody to publish into an unnamed crowd was the one place it
+          kept its own cards face down. Self-hides on a refused or empty read, so
+          the offer never sits under a heading with nothing beneath it. */}
+      <AudiencePreview wallet={wallet} marketId={marketId} />
       <button
         type="button"
         disabled={put.isPending}
