@@ -122,7 +122,6 @@
   --case-row-state: 58px;
   --case-believer-row: 36px;
   --case-row-believers: calc(3 * var(--case-believer-row) + 2 * 2px);
-  --case-row-activity: 148px;
 
 
 

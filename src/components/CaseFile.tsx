@@ -403,9 +403,10 @@ export function CaseColumn({
           variant={compactRoster ? "compact" : "list"}
         />
 
-        {/* 4 — RECENT ACTIVITY: the same tape the app-wide feed runs, scoped to
+        {/* 4 — INSIDER MOVES: the same tape the app-wide feed runs, scoped to
           this side. The column already says YES, so sentences don't repeat it.
-          Fixed slot, no inner scroll — "See all" opens the full-height sheet. */}
+          Rendered inline in the panel (no fixed slot, no popup), so a wrapped row
+          is never clipped. */}
         <CaseActivity marketId={marketId} side={side} viewerWallet={viewerWallet} />
       </div>
     </div>
@@ -863,11 +864,14 @@ function RosterSheet({
 }
 
 /**
- * RECENT ACTIVITY — a fixed slot, never an inner scroller.
+ * INSIDER MOVES — the side's recent activity, rendered inline in the panel.
  *
- * The rail shows a constant number of row heights so YES and NO end at the same
- * y; anything past that is not squeezed into a cramped scroll area but opened
- * in the same full-height column sheet the roster uses.
+ * It used to sit in a fixed 148px slot with the overflow behind a "See all
+ * activity" sheet, which clipped wrapped rows and hid the rest behind a popup.
+ * It is the LAST section in the column, so it can simply grow: the moves render
+ * at their natural height and a busier side runs a little longer than a quiet
+ * one. The sections above it (metrics, roster) keep their aligned fixed slots,
+ * so YES and NO still line up where it matters.
  */
 function CaseActivity({
   marketId,
@@ -878,8 +882,6 @@ function CaseActivity({
   side: Side;
   viewerWallet?: string;
 }) {
-  const [openAll, setOpenAll] = useState(false);
-
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
@@ -887,96 +889,22 @@ function CaseActivity({
           Insider Moves
         </span>
       </div>
-      <div className="overflow-hidden" style={{ height: "var(--case-row-activity)" }}>
-        <LiveTape
-          marketIds={[marketId]}
-          side={side}
-          wallet={viewerWallet}
-          scroll={false}
-          showTitles={false}
-          limit={3}
-          skeletonRows={3}
-          emptyText="No moves on this side yet."
-        />
-      </div>
-      <div className="h-[18px]">
-        <button
-          type="button"
-          onClick={() => setOpenAll(true)}
-          className="px-1 text-[12px] leading-[18px] text-[var(--text-secondary)] underline-offset-2 hover:underline"
-        >
-          See all activity →
-        </button>
-      </div>
-      {openAll && (
-        <SideSheet title={`${side} activity`} onClose={() => setOpenAll(false)}>
-          <LiveTape
-            marketIds={[marketId]}
-            side={side}
-            wallet={viewerWallet}
-            scroll={false}
-            showTitles={false}
-            limit={100}
-            skeletonRows={3}
-            emptyText="No moves on this side yet."
-          />
-        </SideSheet>
-      )}
+      {/* IN THE PANEL, NOT BEHIND A POPUP. This is the last section in the column,
+        so the moves render inline at their natural height — there is no fixed slot
+        to clip a wrapped row, and no "See all" sheet to open. A side with more
+        moves simply runs a little longer than the quieter one, which is honest;
+        the sections above (metrics, roster) keep their aligned fixed slots. */}
+      <LiveTape
+        marketIds={[marketId]}
+        side={side}
+        wallet={viewerWallet}
+        scroll={false}
+        showTitles={false}
+        limit={8}
+        skeletonRows={3}
+        emptyText="No moves on this side yet."
+      />
     </div>
   );
 }
 
-/** The full-height column sheet: one pinned header over one scroll area. */
-function SideSheet({
-  title,
-  onClose,
-  children,
-}: {
-  title: React.ReactNode;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  // An ancestor rail can create a containing block (transform/contain), which
-  // would trap a `fixed` sheet inside one column. The panel is portalled to the
-  // body so "full width" really is the viewport.
-  if (typeof document === "undefined") return null;
-  return createPortal(
-    <div
-      className="fixed inset-x-0 bottom-0 top-0 z-[80] flex flex-col"
-      role="dialog"
-      aria-modal="true"
-    >
-      <button
-        type="button"
-        aria-label="Close"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/50"
-      />
-      <div className="relative mt-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-t-[16px] border-t border-[var(--border)] bg-[var(--bg)] pt-3">
-        <div className="mx-auto mb-2 flex w-full max-w-[720px] shrink-0 items-center justify-between px-4">
-          <span className="text-[12px] font-semibold text-[var(--text)]">{title}</span>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="-mr-1 rounded-full px-2 py-1 text-[14px] text-[var(--text-muted)] hover:text-[var(--text)]"
-          >
-            ×
-          </button>
-        </div>
-        <div className="mx-auto min-h-0 w-full max-w-[720px] flex-1 overflow-y-auto px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
-          {children}
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
