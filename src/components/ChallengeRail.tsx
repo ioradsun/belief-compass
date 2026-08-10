@@ -143,6 +143,16 @@ export function ChallengeRail({
     else setTab("insider");
   }, [wallet, lock.unlocked, open.length]);
 
+  /**
+   * WHAT THE NUMBER ON THE TAB COUNTS: everything in the column that is still
+   * live — people waiting on you, plus what you have up. Finished rows are
+   * history, not a queue, so they are not counted.
+   */
+  const challengeCount =
+    open.length + (table ?? []).filter((r) => r.closedAtMs == null).length;
+
+
+
 
 
   return (
