@@ -33,9 +33,7 @@
  * qualifies yet → no reach line. Neither is ever rendered as a zero.
  */
 import { useQuery } from "@tanstack/react-query";
-import { getCallReach } from "@/lib/challenge.functions";
-import { callReachLine, type NamedPerson } from "@/domain/challenge";
-import { PutOnTable } from "@/components/PutOnTable";
+import type { NamedPerson } from "@/domain/challenge";
 import { showedUpFor } from "@/domain/dependability";
 import { closedCallsKey } from "@/hooks/useAnswerCalls";
 
@@ -43,25 +41,15 @@ export function LaunchRail({
   wallet,
   kind = "created",
   marketId,
-  onSeeTable,
   onDone,
 }: {
   wallet?: string;
   kind?: "created" | "backed";
   /** Which market just happened — how the backward line finds who was answered. */
   marketId?: number;
-  /** Take me to Yours — the only place a Challenge can actually be managed. */
-  onSeeTable?: () => void;
   /** Dismiss the moment — the market is just a market now. */
   onDone: () => void;
 }) {
-  const { data: reach } = useQuery({
-    queryKey: ["call-reach", wallet ?? null, marketId ?? null],
-    queryFn: () => getCallReach({ data: { wallet: wallet ?? null, marketId: marketId ?? null } }),
-    enabled: !!wallet,
-    staleTime: 60_000,
-  });
-
   // Written by useAnswerCalls when the trade settled. No queryFn: this is a
   // handoff, not a fetch — there is nothing to go and ask for, and a request
   // here would race the write it is waiting on.
@@ -73,7 +61,6 @@ export function LaunchRail({
 
   if (!wallet) return null;
 
-  const line = reach ? callReachLine(reach) : null;
   // Creating a market answers nobody — a creator was not called into their own
   // question — so the backward line belongs to a taken side only.
   const answered = kind === "backed" ? showedUpFor((closed ?? []).map((p) => p.name ?? "")) : null;
@@ -97,39 +84,11 @@ export function LaunchRail({
         </p>
       )}
 
-      {line ? (
-        <>
-          <p className="mt-1 text-[11.5px] leading-snug text-[var(--text-secondary)]">
-            Now your people can show up for you.
-          </p>
-          <p className="num mt-1 text-[12px] text-[var(--text)]">{line}</p>
-        </>
-      ) : (
-        /* Nobody qualifies yet, and saying so plainly beats a zero. The market
-           still stands; it simply has no relationships pointing at it. */
-        <p className="mt-1 text-[11.5px] leading-snug text-[var(--text-secondary)]">
-          As your Tribe and Rivals form, questions like this one reach them automatically.
-        </p>
-      )}
-
-      {/* WHAT THE CREATOR NOW EARNS — moved here from the create form's title,
-          which read "Create a Market. Earn 4.5% on Every Trade." over an empty
-          question. As a heading it was a pitch to somebody who had already
-          decided; here it is a fact about a market that exists, arriving at the
-          moment it becomes true. Creators only, because only a creator earns the
-          fee — a backer taking a side is told nothing about revenue. */}
-      {kind === "created" && (
-        <p className="mt-1.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
-          You earn 4.5% of every trade in it, for as long as it runs.
-        </p>
-      )}
-
-      {/* ONE ACTION, BOTH PATHS. Creating a market and backing an existing one are
-          different acts producing the same opportunity — a conviction worth asking
-          your people about. Two Challenge architectures for those two moments
-          would be two lifecycles, two caps and two sets of copy drifting apart. */}
-      <PutOnTable wallet={wallet} marketId={marketId} onSeeTable={onSeeTable} />
-
+      {/* NOTHING ELSE. The reach line, the fee line and the put-it-up prompt all
+          used to stack here, which made the moment a briefing. Everything they
+          said now lives where it can be acted on: the Challenge tab below counts
+          what is waiting, and every free slot there is an invitation carrying its
+          own market. This says the one fact, and gets out of the way. */}
       <button
         type="button"
         onClick={onDone}

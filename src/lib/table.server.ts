@@ -318,3 +318,70 @@ export async function activeCount(wallet: string): Promise<number> {
 
 /** Re-exported so callers never reach past this module for the shape. */
 export { tableProgress };
+
+/**
+ * WHAT COULD GO UP — the invitation behind an empty slot.
+ *
+ * An empty slot is not a state anybody needs described; it is an offer. These are
+ * the markets this wallet is actually IN — one they authored, or one they hold a
+ * position in — that are not already on the table. Nothing else qualifies: asking
+ * your people about a question you have not answered yourself is not a challenge,
+ * it is a forward.
+ */
+export interface TableCandidate {
+  marketId: number;
+  title: string | null;
+}
+
+export async function tableCandidates(wallet: string, limit = 3): Promise<TableCandidate[]> {
+  if (limit <= 0) return [];
+  const sb = serviceClient();
+  const me = wallet.toLowerCase();
+
+  const [{ data: beliefs }, { data: authored }, { data: up }] = await Promise.all([
+    sb
+      .from("wallet_beliefs")
+      .select("onchain_id, last_trade_at, yes_shares, no_shares")
+      .eq("wallet", me)
+      .order("last_trade_at", { ascending: false, nullsFirst: false })
+      .limit(40),
+    sb
+      .from("markets")
+      .select("onchain_id, title, first_seen")
+      .eq("author_wallet", me)
+      .order("first_seen", { ascending: false })
+      .limit(20),
+    sb.from("challenges").select("market_id").eq("challenger_wallet", me).is("closed_at", null),
+  ]);
+
+  // Already up, in any slot. A second card offering what is already on the table
+  // would be an invitation to collide with the unique index.
+  const taken = new Set((up ?? []).map((r) => Number((r as { market_id: number }).market_id)));
+
+  const ids: number[] = [];
+  for (const b of (beliefs ?? []) as Array<{
+    onchain_id: number;
+    yes_shares: number;
+    no_shares: number;
+  }>) {
+    const held = Number(b.yes_shares ?? 0) + Number(b.no_shares ?? 0);
+    if (held <= 0) continue;
+    const id = Number(b.onchain_id);
+    if (!taken.has(id) && !ids.includes(id)) ids.push(id);
+  }
+  for (const m of (authored ?? []) as Array<{ onchain_id: number }>) {
+    const id = Number(m.onchain_id);
+    if (id != null && !taken.has(id) && !ids.includes(id)) ids.push(id);
+  }
+  const picked = ids.slice(0, limit);
+  if (picked.length === 0) return [];
+
+  const { data: titles } = await sb.from("markets").select("onchain_id, title").in("onchain_id", picked);
+  const titleOf = new Map(
+    ((titles ?? []) as Array<{ onchain_id: number; title: string | null }>).map((m) => [
+      Number(m.onchain_id),
+      m.title,
+    ]),
+  );
+  return picked.map((id) => ({ marketId: id, title: titleOf.get(id) ?? null }));
+}

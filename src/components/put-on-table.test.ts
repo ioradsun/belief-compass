@@ -11,17 +11,13 @@ const cta = () => code("src/components/PutOnTable.tsx");
 const launch = () => code("src/components/LaunchRail.tsx");
 
 describe("one action, both paths", () => {
-  it("is the same component after creating and after backing", () => {
-    // Two Challenge architectures for those two moments would be two lifecycles,
-    // two caps and two sets of copy drifting apart. LaunchRail already renders
-    // after both, and it renders this once — not once per kind.
+  it("keeps the launch moment to one fact", () => {
+    // The put-it-up prompt used to live here, which turned a confirmation into a
+    // briefing. It moved into the Challenge column, where a free slot is an
+    // invitation carrying its own market and can actually be acted on.
     const c = launch();
-    expect(c).toMatch(/<PutOnTable/);
-    expect(c.match(/<PutOnTable/g)?.length).toBe(1);
-    // Not gated on kind: backing an existing market is as valid a thing to put
-    // up as creating one.
-    const at = c.indexOf("<PutOnTable");
-    expect(c.slice(at, at + 200)).not.toMatch(/kind ===/);
+    expect(c).not.toMatch(/<PutOnTable/);
+    expect(c).toMatch(/Your market is live\./);
   });
 
   it("keeps the confirmation a confirmation", () => {

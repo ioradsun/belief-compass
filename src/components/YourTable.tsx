@@ -26,12 +26,13 @@
  * product decided not to keep.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getTable, takeOffTable } from "@/lib/table.functions";
+import { getTable, getTableCandidates, putOnTable, takeOffTable } from "@/lib/table.functions";
 import {
   tableProgress,
   progressLine,
   tableLine,
   finishedLine,
+  spotsOpen,
   type RecipientFact,
   type CloseReason,
 } from "@/domain/table";
@@ -59,6 +60,10 @@ export function useTable(wallet?: string) {
   });
 }
 
+/** Markets this wallet is in that could still take a free slot. */
+export const candidatesKey = (wallet?: string, limit = 0) =>
+  ["table-candidates", wallet ?? null, limit] as const;
+
 export function YourTable({
   wallet,
   onSelect,
@@ -84,15 +89,22 @@ export function YourTable({
     onSuccess: () => void qc.invalidateQueries({ queryKey: tableKey(wallet) }),
   });
 
-  if (isError) {
-    // A failed read is not an empty table. Same rule the incoming side follows:
-    // silence has to be earned by an answer.
-    return (
-      <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
-        Could not load your table. This is a fault on our side — try again in a moment.
-      </p>
-    );
-  }
+  const put = useMutation({
+    mutationFn: async (marketId: number) =>
+      bestEffort(async () =>
+        putOnTable({
+          data: {
+            wallet: wallet as string,
+            session: await ensureSession({ interactive: true }),
+            marketId,
+          },
+        }),
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: tableKey(wallet) });
+      void qc.invalidateQueries({ queryKey: ["table-candidates", wallet ?? null] });
+    },
+  });
 
   const table = rows ?? [];
   /**
@@ -107,8 +119,34 @@ export function YourTable({
   const live = table.filter((r) => r.closedAtMs == null);
   const ended = table.filter((r) => r.closedAtMs != null);
   const ordered = [...live, ...ended];
+  const open = spotsOpen(live.length);
 
-  if (table.length === 0) {
+  /**
+   * AN EMPTY SLOT IS AN OFFER, NOT A GAP. Every free space becomes an invitation
+   * card for a market this person is actually in, so the only thing a table ever
+   * shows is something to read or something to do.
+   */
+  const { data: candidates } = useQuery({
+    queryKey: candidatesKey(wallet, open),
+    queryFn: () => getTableCandidates({ data: { wallet: wallet ?? null, limit: open } }),
+    enabled: !!wallet && open > 0 && !isError,
+    staleTime: 60_000,
+  });
+  const invites = (candidates ?? []).filter(
+    (c) => !live.some((r) => r.marketId === c.marketId),
+  ).slice(0, open);
+
+  if (isError) {
+    // A failed read is not an empty table. Same rule the incoming side follows:
+    // silence has to be earned by an answer.
+    return (
+      <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+        Could not load your table. This is a fault on our side — try again in a moment.
+      </p>
+    );
+  }
+
+  if (table.length === 0 && invites.length === 0) {
     return (
       <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
         Nothing on the table. When you back something worth asking about, put it up and your people
@@ -122,7 +160,9 @@ export function YourTable({
       {/* CAPACITY, NOT CURRENCY. "2 on the table · 1 spot open" rather than
           "2 / 3 USED" — a fraction with a denominator reads as a balance being
           spent, and turns an editorial choice into an allowance. */}
-      <p className="num text-[11px] text-[var(--text-muted)]">{tableLine(live.length)}</p>
+      {tableLine(live.length) && (
+        <p className="num text-[11px] text-[var(--text-muted)]">{tableLine(live.length)}</p>
+      )}
 
       <ul className="space-y-2">
         {ordered.map((row) => (
@@ -137,8 +177,56 @@ export function YourTable({
             closing={close.isPending}
           />
         ))}
+
+        {invites.map((c) => (
+          <InviteCard
+            key={`invite-${c.marketId}`}
+            title={c.title}
+            onOpen={() => onSelect(c.marketId)}
+            onPut={() => put.mutate(c.marketId)}
+            pending={put.isPending}
+          />
+        ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * A FREE SLOT, SPOKEN AS AN INVITATION. It names a market this person is already
+ * in and offers the one act that matters — putting it in front of their people.
+ * Never a placeholder, never an empty rectangle counting down to three.
+ */
+function InviteCard({
+  title,
+  onOpen,
+  onPut,
+  pending,
+}: {
+  title: string | null;
+  onOpen: () => void;
+  onPut: () => void;
+  pending: boolean;
+}) {
+  return (
+    <li className="rounded-xl border border-dashed border-[var(--border)] p-3">
+      <button type="button" onClick={onOpen} className="w-full text-left">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          Spot open
+        </p>
+        <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-[var(--text)]">
+          {title ?? "This question"}
+        </p>
+      </button>
+      <button
+        type="button"
+        onClick={onPut}
+        disabled={pending}
+        className="mt-1.5 text-[12px] font-medium text-[var(--text)] underline transition-opacity disabled:opacity-50"
+      >
+        Put it on the table
+      </button>
+    </li>
   );
 }
 
