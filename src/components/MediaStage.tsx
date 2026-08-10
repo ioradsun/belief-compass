@@ -124,8 +124,8 @@ export function MediaSwitch({
     >
       {(
         [
-          ["market", "Market"],
           ["media", label],
+          ["market", "Market"],
         ] as const
       ).map(([key, text]) => (
         <button
@@ -134,7 +134,9 @@ export function MediaSwitch({
           role="tab"
           aria-selected={value === key}
           onClick={() => onChange(key)}
-          className={`rounded-full px-3 py-1 transition-colors ${
+          // Fixed width per tab: the label never re-measures the row when the
+          // selected tab changes, so nothing beside or below it shifts.
+          className={`w-[68px] rounded-full py-1 text-center transition-colors ${
             value === key
               ? "bg-[var(--surface-2,rgba(255,255,255,0.08))] text-[var(--text)]"
               : "text-[var(--text-muted)]"
@@ -147,16 +149,36 @@ export function MediaSwitch({
   );
 }
 
-/** The label the switch prints for this media. */
-export function mediaSwitchLabel(media: StageMedia): string {
-  if (media.kind === "embed") {
-    if (media.embed?.platform === "youtube") return "Video";
-    if (media.embed?.platform === "x") return "Post";
-  }
-  if (media.kind === "video") return "Video";
-  if (media.kind === "image") return "Photo";
+/** The label the switch prints for this media. One word, always "Media". */
+export function mediaSwitchLabel(_media: StageMedia): string {
   return "Media";
 }
+
+/**
+ * A constant-size box for the swapped pane. Both tabs render into the same
+ * `flex-1 min-h-0` slot, so switching never changes the stage's height and the
+ * dock below it never moves.
+ */
+export function StagePane({
+  active,
+  children,
+  className = "",
+}: {
+  active: boolean;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`min-h-0 flex-1 flex-col overflow-hidden ${active ? "flex" : "hidden"} ${className}`}
+      inert={!active ? true : undefined}
+      aria-hidden={!active || undefined}
+    >
+      {children}
+    </div>
+  );
+}
+
 
 
 

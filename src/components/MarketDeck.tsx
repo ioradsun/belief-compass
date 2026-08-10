@@ -67,9 +67,11 @@ import {
   MediaEvidence,
   MediaStage,
   MediaSwitch,
+  StagePane,
   isTallMedia,
   mediaSwitchLabel,
   stageMediaFrom,
+
 } from "@/components/MediaStage";
 import { marketTitle } from "@/domain/market-title";
 
@@ -553,11 +555,24 @@ export function MarketDeck({
           media={stageMedia}
           className="deck-stage flex min-h-0 flex-1 touch-pan-y flex-col"
         >
-          {stageMedia && tallMedia && stageTab === "media" ? (
-            <MediaEvidence media={stageMedia} />
+          {stageMedia && tallMedia ? (
+            <>
+              {/* Both panes stay mounted in the SAME flex-1 slot: switching
+                changes which one is visible, never the stage's height. */}
+              <StagePane active={stageTab === "media"} className="items-stretch justify-start">
+                <MediaEvidence media={stageMedia} />
+              </StagePane>
+              <StagePane
+                active={stageTab !== "media"}
+                className="gap-[var(--deck-gap,12px)] overflow-y-auto"
+              >
+                {marketInner}
+              </StagePane>
+            </>
           ) : (
             marketInner
           )}
+
         </MediaStage>
       )}
 
