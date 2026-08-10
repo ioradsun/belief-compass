@@ -232,13 +232,21 @@ export function YourTable({
 }
 
 /**
- * FIND ONE — the same market search the header runs, sized for a rail.
- *
- * It reuses `searchMarkets` rather than a second index, so a question found here
- * and a question found in the header are ranked identically. No empty state, no
- * result count: an empty list already says nothing matched.
+ * ONE LIST THAT CHANGES ITS MIND. Before you type it offers the markets you are
+ * already in — including whatever the centre column is showing, which is why
+ * there is no separate "use this market" line any more. Type two characters and
+ * the same rows are replaced by matches from the same index the header searches.
+ * No empty state, no result count: an empty list already says nothing matched.
  */
-function TablePicker({ onPick, pending }: { onPick: (id: number) => void; pending: boolean }) {
+function TablePicker({
+  suggestions,
+  onPick,
+  pending,
+}: {
+  suggestions: { id: number; title: string }[];
+  onPick: (id: number) => void;
+  pending: boolean;
+}) {
   const [q, setQ] = useState("");
   const [term, setTerm] = useState("");
   const box = useRef<HTMLInputElement>(null);
@@ -251,34 +259,42 @@ function TablePicker({ onPick, pending }: { onPick: (id: number) => void; pendin
     return () => clearTimeout(t);
   }, [q]);
 
+  const searching = term.length >= 2;
   const { data: hits } = useQuery({
     queryKey: ["table-search", term],
     queryFn: () => searchMarkets({ data: { query: term, limit: 6 } }),
-    enabled: term.length >= 2,
+    enabled: searching,
     staleTime: 30_000,
   });
 
+  const rows = searching
+    ? (hits ?? []).map((h) => ({ id: h.onchain_id, title: h.title as string }))
+    : suggestions;
+
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2">
-      <input
-        ref={box}
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Search markets"
-        aria-label="Search markets to put on the table"
-        className="w-full rounded-lg bg-[var(--bg)] px-2 py-1.5 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
-      />
-      {(hits ?? []).length > 0 && (
+      <div className="flex items-center gap-1.5 rounded-lg bg-[var(--bg)] px-2">
+        <Search size={12} className="shrink-0 text-[var(--text-muted)]" aria-hidden />
+        <input
+          ref={box}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search markets"
+          aria-label="Search markets to put on the table"
+          className="w-full bg-transparent py-1.5 text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
+        />
+      </div>
+      {rows.length > 0 && (
         <div className="mt-1 space-y-0.5">
-          {(hits ?? []).map((h) => (
+          {rows.map((r) => (
             <button
-              key={h.onchain_id}
+              key={r.id}
               type="button"
               disabled={pending}
-              onClick={() => onPick(h.onchain_id)}
+              onClick={() => onPick(r.id)}
               className="block w-full truncate rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg)] hover:text-[var(--text)] disabled:opacity-50"
             >
-              {h.title}
+              {r.title}
             </button>
           ))}
         </div>
@@ -286,6 +302,7 @@ function TablePicker({ onPick, pending }: { onPick: (id: number) => void; pendin
     </div>
   );
 }
+
 
 function TableRowCard({
   id,
