@@ -527,11 +527,30 @@ export function MyConvictions({
 
   const total = built.reduce((s, p) => s + p.value, 0);
 
-  // Summary mirrors the cards: the selected period's move, or — on "All" — the
-  // authoritative unrealized gain when every position has a real cost basis.
-  const fullBasis = built.length > 0 && built.every((p) => p.gainUsd != null);
-  const trueGain = lifetime && fullBasis ? built.reduce((s, p) => s + (p.gainUsd ?? 0), 0) : null;
+  /**
+   * ONE SOURCE OF TRUTH FOR THE HEADLINE.
+   *
+   * The summary used to be computed from a different input than the cards it sits
+   * above: the cards read cost-basis P&L (`gainUsd`/`gainPct`), while the summary
+   * read the MARKET's window price change (`windowDelta`) and only fell back to
+   * P&L on the "All" window — and then only when EVERY position had a basis. One
+   * unpriced holding, or a market with no window change on file, and the reader
+   * saw a blank "—" above a column of real returns.
+   *
+   * The headline is now the same arithmetic the cards perform, summed:
+   *   gain  = Σ gainUsd over positions we can actually mark
+   *   basis = Σ (value − gainUsd) over those same positions   [= Σ invested]
+   *   pct   = gain / basis
+   * Positions with no trusted basis contribute to the total VALUE and to nothing
+   * else, which is exactly how their own card behaves.
+   */
+  const marked = built.filter((p) => p.gainUsd != null);
+  const markedGain = marked.reduce((s, p) => s + (p.gainUsd ?? 0), 0);
+  const markedBasis = marked.reduce((s, p) => s + (p.value - (p.gainUsd ?? 0)), 0);
+  const hasBasis = marked.length > 0 && markedBasis > 0;
+  // Only when nothing at all can be marked does the window move stand in.
   const periodUsd = built.reduce((s, p) => s + (windowDelta(p.value, p.chg) ?? 0), 0);
+  const partial = marked.length > 0 && marked.length < built.length;
 
   const count = built.length;
   useEffect(() => {
