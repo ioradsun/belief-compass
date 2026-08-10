@@ -120,7 +120,7 @@ export function MediaSwitch({
     <div
       role="tablist"
       aria-label="Market or media"
-      className={`flex items-center gap-1 rounded-full bg-[var(--surface)] p-0.5 text-[12px] font-semibold ${className}`}
+      className={`inline-flex w-fit max-w-fit shrink-0 grow-0 items-center gap-1 self-start rounded-full bg-[var(--surface)] p-0.5 text-[12px] font-semibold ${className}`}
     >
       {(
         [
