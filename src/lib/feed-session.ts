@@ -54,8 +54,10 @@ function hydrate(): void {
       p.cardsSinceIdea == null || p.cardsSinceIdea >= 10_000
         ? Number.MAX_SAFE_INTEGER
         : Number(p.cardsSinceIdea);
-    state.ideasShown = Number(p.ideasShownThisSession) || 0;
-  } catch {
+    // `ideasShown` is deliberately NOT restored: an idea that was shown but
+    // never acted on is still unanswered, and the cap exists to stop repeats
+    // inside one continuous read, not to hide it forever.
+
     // A corrupt entry must never cost the reader their feed.
   }
 }
