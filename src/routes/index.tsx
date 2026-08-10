@@ -143,6 +143,15 @@ const feedQO = (
   originMarketId: number | null = null,
   sensitivity: Sensitivity = DEFAULT_SENSITIVITY,
   lens: Lens = "for_you",
+  /**
+   * Has this session watched enough cards for the server to be ALLOWED to place
+   * a House idea? It is in the key because it changes the response: before the
+   * gate opens the server returns markets only, and nothing else in the key
+   * changes when the reader crosses the threshold — so without this the idea
+   * could only appear on the next 60s poll, and a key change (new lens, new
+   * filter) would re-send a request that still said "no idea yet".
+   */
+  ideaGate = false,
 ) =>
   queryOptions({
     // The reader's floor is part of the key: it changes what the server admits,
@@ -158,6 +167,7 @@ const feedQO = (
       originMarketId,
       sensitivity,
       lens,
+      ideaGate,
     ],
     queryFn: async () => {
       const request = getOpportunityFeed({
