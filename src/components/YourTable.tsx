@@ -1,35 +1,11 @@
 /**
- * YOURS — the things you put in front of your people, and what became of them.
+ * THE TABLE — the shared parts of the outbound side.
  *
- * THE SAME CARD GRAMMAR AS AN INCOMING CHALLENGE, seen from the other side. A
- * Position card answers "where do I stand and what happened"; this answers "what
- * did I put in front of my people and what happened". Both are persistent and
- * stateful — they live and update until closed, which is what separates them from
- * feed events and notifications. The market is the shared object; the relationship
- * decides the perspective.
- *
- * WHAT THE CARD IS ALLOWED TO CLAIM, and the omissions are the design:
- *
- *     Will Bitcoin hit $200K before 2027?
- *     3 of 8 showed up · 1 passed
- *
- * No viewed count — the only view signal this product has is client-reported and
- * unverifiable, and "5 viewed" is precisely the claim a creator would believe and
- * the system cannot prove. No capital, no believer totals: those are facts about a
- * market, not effects of a Challenge, and "+$42" next to one implies a causal link
- * the data does not establish. Four numbers would make this an ad-tech panel; the
- * one that matters is that people moved because somebody asked.
- *
- * NOBODY IS NAMED AS HAVING PASSED. The count is aggregate and stays aggregate.
- * Passing is a choice about a question, not a verdict on a person, and a surface
- * that said "Mike passed on you" would be building the ledger of rejection this
- * product decided not to keep.
- *
- * ONE HEADER, ONE CONTROL. Capacity is now a plain 1/3 beside a single + — the
- * whole "what can I put up" question collapses into one affordance with two
- * answers: this market, or find one. Everything else that used to be spoken in
- * sentences (spots open, invitations, take-it-down links) is either implied by the
- * fraction or tucked behind a chevron on the card it belongs to.
+ * The card itself moved to `ChainList`, where an outbound Challenge and the
+ * incoming call that produced it are ONE card rather than two entries in two
+ * lists. What stays here is what more than one surface needs: the query and its
+ * keys, the handoff key the post-buy panel writes, the market picker, and the
+ * rule that only the words YES and NO carry a side colour.
  */
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";

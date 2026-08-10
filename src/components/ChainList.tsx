@@ -25,9 +25,8 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, MoreHorizontal } from "lucide-react";
-import { putOnTable, takeOffTable } from "@/lib/table.functions";
+import { getTableCandidates, putOnTable, takeOffTable } from "@/lib/table.functions";
 import { getChainContext } from "@/lib/challenge.functions";
-import { getTableCandidates } from "@/lib/table.functions";
 import {
   SideWord,
   TablePicker,
@@ -272,11 +271,12 @@ function ChainCardRow({
     : null;
 
   const progress = mine ? tableProgress(mine.recipients) : null;
-  const finishedMine = mine?.closeReason != null;
+  const closeReason = mine?.closeReason ?? null;
+  const finishedMine = closeReason != null;
   const progressText =
     mine && progress
-      ? finishedMine
-        ? finishedLine(progress, mine.closeReason)
+      ? closeReason
+        ? finishedLine(progress, closeReason)
         : progressLine(progress)
       : null;
   const headline = mine ? showedUpHeadline(mine.responders) : null;
