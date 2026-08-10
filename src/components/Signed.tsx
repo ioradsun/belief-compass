@@ -5,7 +5,8 @@
  *
  *   PERCENTAGES are a verdict. A rate has no unit to anchor it, so its whole
  *   job is direction and size. The entire figure carries the colour — green up,
- *   red down — and leads with an arrow (▲ ▼) instead of a redundant +/−.
+ *   red down — and takes a trailing arrow (12% ▲) instead of a redundant +/−.
+
  *
  *   EVERYTHING ELSE is a fact. A count or an amount is a quantity first, so it
  *   stays fully neutral: "+$1.07" and "−3 believers" keep their sign for
