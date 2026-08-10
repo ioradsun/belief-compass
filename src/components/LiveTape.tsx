@@ -171,6 +171,13 @@ export function LiveTape({
   const { data, isLoading } = useQuery({
     queryKey: key,
     queryFn: async (): Promise<LiveResult> => {
+      /* WHEN THE TAPE STOPS MOVING, the two ways it can happen silently are a
+         rejected fetch and a delta that hands back the PREVIOUS rows because
+         the server errored. Both look identical on screen — an unchanging
+         column — so both say so here. */
+      const t0 = Date.now();
+      const trace = (what: string, extra = "") =>
+        console.log(`[insider] tape ${what} ${Date.now() - t0}ms ${extra}`.trim());
       // Delta sync (global tape only): re-fetch just the overlap window since our
       // newest cached event and merge onto the immutable tail — moving a few rows
       // instead of the whole list every 6s. Falls back to a full fetch for the
@@ -197,8 +204,10 @@ export function LiveTape({
         const res = (await listLiveEvents({
           data: { wallet, limit, since: sinceIso },
         })) as LiveResult;
-        if (res.error)
+        if (res.error) {
+          trace("delta-error", `keeping ${prev.length} prev rows: ${res.error}`);
           return { rows: prev, copyVersion: COPY_VERSION, error: res.error };
+        }
         // The server may have redeployed mid-session: never merge across builds.
         if (!sameCopyVersion(res.copyVersion))
           return (await listLiveEvents({ data: { wallet, limit } })) as LiveResult;
@@ -217,6 +226,7 @@ export function LiveTape({
       // Only a SUCCESSFUL full build resets the clock — an errored one did not
       // refresh the families, so the next heartbeat should try again, not wait.
       if (!full.error) lastFullAt.current = Date.now();
+      trace("full", `rows=${full.rows?.length ?? 0}${full.error ? ` error=${full.error}` : ""}`);
       return full;
     },
     /**
