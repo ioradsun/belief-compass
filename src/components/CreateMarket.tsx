@@ -271,7 +271,7 @@ export function CreateMarket({
           a reward for something done rather than an inducement to do it. */}
       <div className="flex shrink-0 items-start gap-2">
         <h2 className="flex-1 text-[15px] font-semibold leading-snug text-[var(--text)]">
-          New Market
+          New Market — Earn 4.5% on all the trading activity
         </h2>
       </div>
 
