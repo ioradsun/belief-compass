@@ -308,3 +308,70 @@ export function secondSentenceAdds(headline: string, detail: string): boolean {
 export function editFeed<T extends EditorialRow>(rows: readonly T[]): T[] {
   return capFamilies(pruneRepeats(collapseCausal(rows.filter(earnsSlot))));
 }
+
+/** A row as the no-duplicate-cards rule needs it: its loud copy and its rank. */
+export interface VerbatimRow {
+  id: string;
+  /** The kicker, as printed. */
+  headline: string;
+  /** The one sentence under it, as printed. */
+  body: string;
+  /** Higher wins the single surviving slot. */
+  significance?: number | null;
+  /** A telling that also asks a question is the more informative survivor. */
+  informative?: boolean | null;
+}
+
+/** Strictly more deserving of the one slot a group of identical cards may keep. */
+function outranks(a: VerbatimRow, b: VerbatimRow): boolean {
+  const sa = num(a.significance);
+  const sb = num(b.significance);
+  if (sa !== sb) return sa > sb;
+  if (!!a.informative !== !!b.informative) return !!a.informative;
+  return false; // a full tie keeps the earlier row
+}
+
+/**
+ * NO TWO IDENTICAL CARDS.
+ *
+ * Everything above chooses rows on significance and rations how many of a KIND
+ * may appear; none of it can see that two survivors print the EXACT same loud
+ * copy. A market waking up and another waking up both say "IT WOKE UP / This
+ * market had gone quiet for a week…", word for word, because the sentence
+ * carries no market-specific detail — the title sits below it, muted. Two
+ * markets that have each gone sixteen days with no one opposite read
+ * "16 DAYS. STILL NO ONE ON NO." twice. One such card is a fact; two side by
+ * side read as a bug.
+ *
+ * So the last editorial act collapses rows whose headline AND body are
+ * byte-identical (case- and whitespace-normalised) to their single strongest
+ * telling — tie-broken toward the one that also asks a question — and returns
+ * the ids to drop. Only the LOUD copy counts: a differing question or a
+ * differing muted title still reads as the same card, and two rows with
+ * different bodies (two different people who "STEPPED IN") are genuinely
+ * different news and both stay. Nothing is lost for good — the standing window
+ * rotates, so a dropped market takes the slot on a later build.
+ */
+export function dropVerbatimDuplicates<T extends VerbatimRow>(rows: readonly T[]): Set<string> {
+  const norm = (x: string) => (x ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  const best = new Map<string, T>();
+  const drop = new Set<string>();
+  for (const r of rows) {
+    const key = `${norm(r.headline)} ${norm(r.body)}`;
+    // A row with no loud copy at all is not a card this rule can compare.
+    if (key === " ") continue;
+    const held = best.get(key);
+    if (!held) {
+      best.set(key, r);
+      continue;
+    }
+    // Keep the stronger of the two; the other is a duplicate card.
+    if (outranks(r, held)) {
+      drop.add(held.id);
+      best.set(key, r);
+    } else {
+      drop.add(r.id);
+    }
+  }
+  return drop;
+}

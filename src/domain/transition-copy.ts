@@ -106,7 +106,12 @@ export function composeTransition(f: TransitionFacts): ComposedTransition {
   const type = (f.type ?? "").trim();
   if (!type) return NOTHING;
   const side = f.side === "YES" || f.side === "NO" ? f.side : null;
-  const it = side ?? "THIS SIDE";
+  /* No side to name → speak at the MARKET level, never leak the template. A
+     capital or price transition that reached here without a side is still a true
+     thing that happened to the market ("money went on this market today"); the
+     kicker renders uppercase, the sentence stays sentence-case — either way the
+     reader never sees the raw "THIS SIDE" placeholder. */
+  const it = side ?? "this market";
   const move = num(f.pricePct);
 
   switch (type) {

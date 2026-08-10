@@ -103,7 +103,9 @@ export function retellTransition(
   const move = readPct(raw);
   const usd = Number.isFinite(ctx.usd as number) && (ctx.usd as number) > 0 ? (ctx.usd as number) : null;
   const side = (ctx.side ?? "").toUpperCase() === "NO" ? "NO" : ctx.side ? "YES" : null;
-  const it = side ?? "this side";
+  // No side to name → speak at the market level rather than print "this side",
+  // which reads as a placeholder the reader was never meant to see.
+  const it = side ?? "this market";
 
   // NO PERCENTAGE, NO NUMBER AT ALL — "First believers just stepped in." is a
   // true structural fact with nothing else to contribute. It stays a receipt:

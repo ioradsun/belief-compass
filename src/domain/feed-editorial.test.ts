@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   capFamilies,
   collapseCausal,
+  dropVerbatimDuplicates,
   earnsSlot,
   editFeed,
   pruneRepeats,
   secondSentenceAdds,
   type EditorialRow,
+  type VerbatimRow,
 } from "./feed-editorial";
 
 const row = (o: Partial<EditorialRow>): EditorialRow => ({
@@ -226,5 +228,67 @@ describe("if the second sentence doesn't change the first, it isn't intelligence
     expect(
       secondSentenceAdds("THE PRICE MOVED. THE CROWD DIDN'T.", "YES re-rated with no new believers behind it."),
     ).toBe(true);
+  });
+});
+
+describe("no two identical cards", () => {
+  const v = (o: Partial<VerbatimRow> & { id: string }): VerbatimRow => ({
+    headline: "",
+    body: "",
+    ...o,
+  });
+  const woke = (id: string, significance?: number): VerbatimRow =>
+    v({
+      id,
+      headline: "IT WOKE UP",
+      body: "This market had gone quiet for a week. It's trading again.",
+      significance,
+    });
+
+  it("collapses two markets that print the exact same loud copy", () => {
+    const drop = dropVerbatimDuplicates([woke("a", 0.5), woke("b", 0.5)]);
+    expect([...drop]).toEqual(["b"]); // full tie keeps the earlier row
+  });
+
+  it("keeps the strongest telling, whatever order it arrives in", () => {
+    expect([...dropVerbatimDuplicates([woke("weak", 0.5), woke("strong", 0.9)])]).toEqual(["weak"]);
+    expect([...dropVerbatimDuplicates([woke("strong", 0.9), woke("weak", 0.5)])]).toEqual(["weak"]);
+  });
+
+  it("collapses the same standing sentence across markets, ignoring case and spacing", () => {
+    const a = v({
+      id: "a",
+      headline: "16 DAYS. STILL NO ONE ON NO.",
+      body: "1 long-held position on YES, and NO still has nobody.",
+    });
+    const b = v({
+      id: "b",
+      headline: "16 days.  Still no one on NO.",
+      body: "1 long-held position on YES, and NO still has nobody.  ",
+    });
+    expect([...dropVerbatimDuplicates([a, b])]).toEqual(["b"]);
+  });
+
+  it("leaves genuinely different news alone — same kicker, different body", () => {
+    const a = v({ id: "a", headline: "STEPPED IN", body: "Ada opened NO with $40." });
+    const b = v({ id: "b", headline: "STEPPED IN", body: "Bo opened NO with $12." });
+    expect(dropVerbatimDuplicates([a, b]).size).toBe(0);
+  });
+
+  it("does not treat a differing question as a differing card", () => {
+    // Same loud copy; only the (unseen-here) question differs. Still one card.
+    const drop = dropVerbatimDuplicates([woke("a", 0.5), { ...woke("b", 0.5), informative: true }]);
+    expect([...drop]).toEqual(["a"]); // the informative telling wins the tie
+  });
+
+  it("never compares a row with no loud copy at all", () => {
+    const blank = [v({ id: "a" }), v({ id: "b" })];
+    expect(dropVerbatimDuplicates(blank).size).toBe(0);
+  });
+
+  it("keeps one of three identical rows", () => {
+    const drop = dropVerbatimDuplicates([woke("a", 0.6), woke("b", 0.9), woke("c", 0.7)]);
+    expect(drop.has("b")).toBe(false);
+    expect(drop.size).toBe(2);
   });
 });
