@@ -538,24 +538,17 @@ export function MyConvictions({
         const pct = basis > 0 && (hasBasis || move !== 0)
           ? formatPct((move / basis) * 100, { precise: true })
           : null;
-        const tone = move > 0 ? "var(--gain)" : move < 0 ? "var(--loss)" : "var(--text-muted)";
-        const arrow = move > 0 ? "▲" : move < 0 ? "▼" : "";
         return (
           <div className="pb-4">
             <div className="flex items-baseline justify-between gap-3">
               <span className="num min-w-0 truncate text-[24px] font-semibold leading-none tracking-[-0.02em] text-[var(--text)]">
                 {money(total)}
               </span>
+              {/* Signed owns the arrow and the colour — see @/components/Signed. */}
               <Signed
                 value={pct ?? "—"}
                 className="num shrink-0 text-[24px] font-semibold leading-none tabular-nums"
-              >
-                {arrow && pct ? (
-                  <span className="ml-1.5 align-middle text-[0.6em]" style={{ color: tone }}>
-                    {arrow}
-                  </span>
-                ) : null}
-              </Signed>
+              />
 
             </div>
             <div className="mt-1.5 flex items-baseline justify-between gap-3">

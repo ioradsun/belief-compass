@@ -7,6 +7,7 @@
  * people and capital joined that side, the early position became worth more,
  * and it can be sold at any time.
  */
+import { Signed } from "@/components/Signed";
 export type LandingExample = {
   question: string;
   yesPeople: number;
@@ -112,9 +113,13 @@ export function LandingExampleCard({
               <div className="num text-[26px] font-semibold leading-none text-[var(--text)]">
                 {example.current}
               </div>
-              <div className="num mt-1 text-[13px] font-semibold leading-none text-[var(--gain)]">
-                {example.gain} <span className="text-[0.95em]">({example.gainPct})</span>
-                <span className="ml-1 text-[0.7em] align-middle">▲</span>
+              {/* The amount is a fact (neutral); the rate is the verdict
+                  (coloured, arrow-trailing) — see @/components/Signed. */}
+              <div className="num mt-1 text-[13px] font-semibold leading-none text-[var(--text)]">
+                {example.gain}{" "}
+                <span className="text-[0.95em]">
+                  (<Signed value={example.gainPct} />)
+                </span>
               </div>
             </div>
           </div>

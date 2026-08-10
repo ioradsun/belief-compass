@@ -15,6 +15,7 @@ import { relationshipTone } from "@/lib/dna-labels";
 import { marketVitals, marketBadge, type PulseLevel } from "@/lib/market-vitals";
 import { StoryStrip } from "@/components/StoryStrip";
 import { PersonAvatar } from "@/components/PersonAvatar";
+import { Signed } from "@/components/Signed";
 
 import type { MarketStory } from "@/domain/story";
 import { formatMoney, type DisplayUnit } from "@/domain/money";
@@ -183,14 +184,15 @@ function SideBlock({
       </div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-lg font-semibold tabular-nums">{fmtShare(price)}</span>
-        <span
+        {/* One rule for a rate everywhere: coloured, arrow-trailing (see Signed). */}
+        <Signed
           className="text-xs font-medium tabular-nums"
-          style={{ color: chg == null ? undefined : up ? "#059669" : "#dc2626" }}
-        >
-          {chg == null
-            ? "—"
-            : `${up ? "▲+" : "▼−"}${Math.abs(chg) < 1 ? Math.abs(chg).toFixed(1) : Math.round(Math.abs(chg))}%`}
-        </span>
+          value={
+            chg == null
+              ? "—"
+              : `${up ? "+" : "−"}${Math.abs(chg) < 1 ? Math.abs(chg).toFixed(1) : Math.round(Math.abs(chg))}%`
+          }
+        />
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
           {winLabel}
         </span>
