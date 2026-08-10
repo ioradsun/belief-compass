@@ -197,6 +197,13 @@ export function MarketDeck({
   });
   // Evidence, when the creator attached any. Null keeps the layout untouched.
   const stageMedia = useMemo(() => stageMediaFrom(cm), [cm]);
+  // Tall evidence (a video player, an X post) can't sit inline without pushing
+  // the market off the panel, so those markets get a Market / Media switch.
+  const tallMedia = isTallMedia(stageMedia);
+  const [stageTab, setStageTab] = useState<"market" | "media">("market");
+  useEffect(() => {
+    setStageTab("market");
+  }, [marketId]);
 
   const connected = useEffectiveWallet();
   const viewer = viewerWallet ?? connected;
