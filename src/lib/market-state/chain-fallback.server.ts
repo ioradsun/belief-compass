@@ -31,6 +31,16 @@ export async function applyChainMarketStateFallback(
   staleMs = POV_STALE_MS,
 ): Promise<ChainFallbackResult> {
   const cutoff = new Date(Date.now() - staleMs).toISOString();
+  /**
+   * `capital_held_*` is ETH cost basis. Writing it straight into a column named
+   * `_usd` reported a $1.92 position as $0.00 — the unit, not the number, was
+   * wrong. Convert exactly once, here, and substitute nothing when we have no
+   * rate to convert with.
+   */
+  const { data: eth } = await sb.rpc("eth_usd_calibration");
+  const ethUsd = Number(eth ?? 0);
+  if (!(ethUsd > 0)) return { candidates: 0, updated: 0, error: "no eth/usd calibration" };
+
   const { data, error } = await sb
     .from("market_state")
     .select(
@@ -45,8 +55,8 @@ export async function applyChainMarketStateFallback(
   const rows = data ?? [];
   const updates: Record<string, unknown>[] = [];
   for (const r of rows) {
-    const yes = Number(r.capital_held_yes ?? 0);
-    const no = Number(r.capital_held_no ?? 0);
+    const yes = Number(r.capital_held_yes ?? 0) * ethUsd;
+    const no = Number(r.capital_held_no ?? 0) * ethUsd;
     const total = yes + no;
     if (!(total > 0)) continue; // no chain capital → nothing honest to show
     const pct = (yes / total) * 100;

@@ -112,10 +112,12 @@ export const Route = createFileRoute("/api/public/jobs/belief-rollup")({
             .select("*")
             .eq("onchain_id", mid);
 
-          // Both sides need a real price before any valuation is written. The
-          // column set has to be uniform across the batch (an upsert nulls what
-          // it omits), and prices are per-market, so this decides once here.
-          const canMark = p.yesPriceUsd > 0 && p.noPriceUsd > 0;
+          // A real price on AT LEAST ONE side is enough to value the market.
+          // Requiring both was silently fatal for young markets — and for every
+          // market created inside this app, where only the traded side has an
+          // observed price. A side nobody has bought holds no shares for anyone,
+          // so its missing price cannot understate a single position.
+          const canMark = p.yesPriceUsd > 0 || p.noPriceUsd > 0;
           const updates: Record<string, unknown>[] = [];
           let by = 0,
             bn = 0,
