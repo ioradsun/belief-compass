@@ -209,9 +209,10 @@ export function MarketDeck({
   // Tall evidence (a video player, an X post) can't sit inline without pushing
   // the market off the panel, so those markets get a Market / Media switch.
   const tallMedia = isTallMedia(stageMedia);
-  const [stageTab, setStageTab] = useState<"market" | "media">("market");
+  const [stageTab, setStageTab] = useState<"market" | "media">("media");
   useEffect(() => {
-    setStageTab("market");
+    // A market that leads with evidence opens on that evidence.
+    setStageTab("media");
   }, [marketId]);
 
   const connected = useEffectiveWallet();
