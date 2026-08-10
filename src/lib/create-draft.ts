@@ -143,6 +143,33 @@ export function useSuggestionProbe(): Probe | null {
   return dismissed ? null : p;
 }
 
+/**
+ * ADOPTING AN ALTERNATE FROM THE RIGHT RAIL.
+ *
+ * The alternates rail lives in a different subtree from the form, so it cannot
+ * setState the question directly. It publishes an adoption here and the mounted
+ * form applies it. `nonce` is what makes re-adopting the SAME text work and, more
+ * importantly, what lets the form tell a fresh request from a stale one: it
+ * records the nonce it has seen and applies only newer ones, so remounting the
+ * form (opening a duplicate and coming back) never re-overwrites an edit the
+ * writer made after adopting. The value is never cleared, so the nonce only ever
+ * climbs — a monotonic signal, not a piece of shared mutable draft state.
+ */
+let adopted: { text: string; nonce: number } | null = null;
+
+export function adoptQuestion(text: string) {
+  adopted = { text, nonce: (adopted?.nonce ?? 0) + 1 };
+  emit();
+}
+
+const adoptedSnapshot = () => adopted;
+const adoptedServerSnapshot = () => null;
+
+/** Form subscription: the latest adoption request, or null if none yet. */
+export function useAdoptedQuestion(): { text: string; nonce: number } | null {
+  return useSyncExternalStore(subscribe, adoptedSnapshot, adoptedServerSnapshot);
+}
+
 /** SHA-256 of a file, hex. Used to catch the same upload under new wording. */
 export async function hashFile(file: File): Promise<string | null> {
   try {

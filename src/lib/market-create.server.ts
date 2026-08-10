@@ -110,6 +110,55 @@ export async function reviewQuestion(question: string): Promise<QuestionReview> 
 }
 
 /**
+ * A FEW ALTERNATE PHRASINGS — the right rail's job, and never the form's.
+ *
+ * The form used to carry a single "Polish" rewrite inline, which appeared a
+ * beat after the writer paused typing and shoved every field below it down. That
+ * is two problems in one: the help arrived as a layout shift, and one rewrite is
+ * not a choice. Both move here. This returns 2–3 genuinely different angles the
+ * rail offers beside the question, so nothing the AI does can move a field, and
+ * the writer picks a direction rather than accepting a single edit.
+ *
+ * DISTINCT, AND NEVER THE ORIGINAL. Alternates are normalised and de-duplicated
+ * against the draft and each other (the same `normalizeQuestion` the discovery
+ * layer uses), so a rewrite that only changed the punctuation never fills a slot.
+ * Unavailable AI simply yields none — the rail then renders nothing, exactly as
+ * it does when the House has no spark. Silence is honest; a padded rail is not.
+ */
+export async function alternateQuestions(question: string): Promise<string[]> {
+  const q = question.trim();
+  if (q.length < 8) return [];
+  const raw = await askAI(
+    [
+      "You rewrite opinion-market questions for a permissionless prediction app.",
+      "Given a draft, return 2-3 ALTERNATE versions of it — each a single, sharply-worded claim people can back YES or NO on today.",
+      "They do NOT need a real-world resolution date — these are opinion markets.",
+      "Make each a genuinely different angle (for example: sharper, broader, or more provocative), never a trivial rewording of the draft or of each other.",
+      "Each must be under 160 characters, and none may repeat the original.",
+      'Reply ONLY as JSON: {"alternates":[string, string, ...]}',
+    ].join(" "),
+    q,
+  );
+  const parsed = parseJson<{ alternates?: unknown }>(raw);
+  const list = Array.isArray(parsed?.alternates) ? parsed.alternates : [];
+  // Guard against the model echoing the draft or itself: normalise once and
+  // keep only the first appearance of each distinct claim.
+  const seen = new Set<string>([normalizeQuestion(q)]);
+  const out: string[] = [];
+  for (const item of list) {
+    if (typeof item !== "string") continue;
+    const t = item.trim();
+    if (t.length < 8 || t.length > 200) continue;
+    const key = normalizeQuestion(t);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+/**
  * WHAT WAS HERE. A private stopword list, a private `tokens()`, a Jaccard
  * `similarity()`, and `findSimilarMarkets()` — a blind 4,000-row scan of
  * `markets` + `conviction_markets` on every debounced keystroke, whose result

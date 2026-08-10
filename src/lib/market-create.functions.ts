@@ -50,6 +50,23 @@ export const reviewMarketQuestion = createServerFn({ method: "POST" })
   });
 
 /**
+ * Alternate phrasings for the right rail — 2–3 distinct rewrites of the draft.
+ *
+ * Separate from the review so the form can drop AI feedback entirely (no inline
+ * "Polish", no jump): this is asked for by the rail, on the same debounced probe
+ * the neighbour search already runs on, and the writer adopts one with a tap.
+ */
+export const suggestAlternateQuestions = createServerFn({ method: "POST" })
+  .inputValidator((data: { question: string }) => ({
+    question: clean(data.question, QUESTION_MAX),
+  }))
+  .handler(async ({ data }) => {
+    if (data.question.length < 8) return { alternates: [] as string[] };
+    const { alternateQuestions } = await import("@/lib/market-create.server");
+    return { alternates: await alternateQuestions(data.question) };
+  });
+
+/**
  * Ranked "you might rather back this" suggestions for the right rail.
  * Advisory only — creation stays permissionless, so this never gates anything.
  */
