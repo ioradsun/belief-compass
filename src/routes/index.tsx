@@ -1276,6 +1276,53 @@ function Feed() {
   }, [activeMarket, ideaView]);
   const ideaDue = !!houseIdea.suggestion && ideaView === "open";
 
+  /**
+   * THE PLAYLIST THE READER SEES, including the idea. It holds the slot the
+   * server gave it, so the queue and the centre agree about what comes next.
+   */
+  const playlistEntries: FeedListEntry[] = (() => {
+    if (!houseIdea.suggestion) return feedEntries;
+    const at = Math.min(Math.max(0, ideaPos ?? 0), feedEntries.length);
+    const withIdea = [...feedEntries];
+    withIdea.splice(at, 0, {
+      onchainId: IDEA_ROW_ID,
+      reason: null,
+      idea: { question: houseIdea.suggestion.question },
+    });
+    return withIdea;
+  })();
+
+  /**
+   * THE QUEUE REFILLS ITSELF BEFORE IT RUNS DRY.
+   *
+   * The feed pages implicitly — a request carries this session's seen ids, so
+   * asking again returns what the last answer could not. Nothing was ever
+   * asking, though: the only trigger was the 60s structural poll, so a reader
+   * moving faster than that (or one who jumped in from search, which re-keys
+   * the query) could walk off the end of a pool that still had plenty in it.
+   *
+   * So: when fewer than LOW_WATER markets remain ahead, adopt anything already
+   * waiting and otherwise ask for more, throttled so a drained queue cannot
+   * become a request loop. `exhausted` is the one honest stop.
+   */
+  const refillAtRef = useRef(0);
+  const remainingAhead = (() => {
+    const idx = activeMarket == null ? -1 : queue.order.indexOf(activeMarket);
+    return idx >= 0 ? queue.order.length - idx - 1 : queue.order.length;
+  })();
+  useEffect(() => {
+    if (stableFeed?.exhausted) return;
+    if (remainingAhead > FEED_LOW_WATER) return;
+    if (arrivalCount(queue) > 0) {
+      setQueue((q) => commit(q));
+      return;
+    }
+    const now = Date.now();
+    if (now - refillAtRef.current < FEED_REFILL_MS) return;
+    refillAtRef.current = now;
+    void qc.invalidateQueries({ queryKey: ["opp-feed"] });
+  }, [remainingAhead, queue, stableFeed?.exhausted, qc]);
+
 
   const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
   useEffect(() => {
