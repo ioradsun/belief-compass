@@ -1603,22 +1603,26 @@ function Feed() {
                 onCreate={openCreate}
               />
             ) : ideaDue && houseIdea.suggestion ? (
-              /* A first-class feed card, in the exact slot a market would take. */
+              /* ONE CREATE SURFACE. A Market Idea is the same screen as
+                 "+ Conviction" — only the entry route differs — so the reader
+                 can back it and move on without a second, near-identical card
+                 to maintain. Cancel reads "Pass" here. */
               <div className="flex min-h-0 flex-1 flex-col">
-                <SuggestedMarketCard
-                  suggestion={houseIdea.suggestion}
-                  onShown={houseIdea.onShown}
-                  onCreate={() => acceptIdea(false)}
-                  onEdit={() => acceptIdea(true)}
-                  onDismiss={() => {
-                    // Passing on the idea returns the reader to the market
-                    // whose slot the card was borrowing — it does not spend a
-                    // market. The latch releases, so the centre falls through.
-                    houseIdea.onDismiss();
-                    setIdeaView("idle");
-                  }}
-                />
+                <Suspense fallback={<DeckSkeleton />}>
+                  <CreateMarket
+                    ethUsd={stableFeed?.ethUsd ?? 0}
+                    onCreated={(marketId) => marketCreated(marketId)}
+                    cancelLabel="Pass"
+                    onCancel={() => {
+                      // Passing returns the reader to the market whose slot the
+                      // idea was borrowing — it does not spend a market.
+                      houseIdea.onDismiss();
+                      setIdeaView("idle");
+                    }}
+                  />
+                </Suspense>
               </div>
+
             ) : currentRow ? (
               /* A MARKET ON SCREEN OUTRANKS EVERY EMPTY STATE.
                 This branch used to sit BELOW the `rows.length === 0` check, so
