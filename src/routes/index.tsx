@@ -1623,6 +1623,8 @@ function Feed() {
                 <ChallengeRail
                   wallet={wallet}
                   onSelect={selectMarket}
+                  currentMarketId={shownId ?? undefined}
+
                   insider={
                     <div className="min-h-0 flex-1 overflow-hidden">
                       <LiveTape
