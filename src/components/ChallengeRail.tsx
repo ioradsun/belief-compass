@@ -176,9 +176,11 @@ export function ChallengeRail({
         ))}
       </div>
 
-      {tab === "insider" ? (
-        insider
-      ) : !wallet ? (
+      {/* THE TAPE STAYS MOUNTED WHILE YOU ARE ON THE OTHER TAB. That is what
+          makes the Insider number mean anything: arrivals have to keep queueing
+          while nobody is looking, or the badge would only ever say zero. */}
+      <div className={tab === "insider" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>{insider}</div>
+      {tab === "insider" ? null : !wallet ? (
         <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
           Connect a wallet to see who wants you at the table.
         </p>
