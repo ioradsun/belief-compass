@@ -51,14 +51,20 @@ export const getTableCandidates = createServerFn({ method: "GET" })
 export const putOnTable = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
     z
-      .object({ wallet: WALLET, session: SESSION, marketId: z.number().int().nonnegative() })
+      .object({
+        wallet: WALLET,
+        session: SESSION,
+        marketId: z.number().int().nonnegative(),
+        /** The call this relay continues, when it continues one. */
+        parentCall: z.number().int().positive().nullish(),
+      })
       .parse(raw),
   )
   .handler(async ({ data }): Promise<PutResult> => {
     const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
     const actor = await assertWalletOwnership(data.wallet, data.session);
     const { putOnTable: put } = await import("@/lib/table.server");
-    return put(actor, data.marketId);
+    return put(actor, data.marketId, data.parentCall ?? null);
   });
 
 /** Take it off the table. Frees a slot; erases nothing. */

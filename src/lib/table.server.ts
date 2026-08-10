@@ -96,7 +96,19 @@ export type PutResult =
  * allocator. Falling out of it means all three are genuinely occupied, decided by
  * Postgres rather than by arithmetic that was true a moment ago.
  */
-export async function putOnTable(wallet: string, marketId: number): Promise<PutResult> {
+export async function putOnTable(
+  wallet: string,
+  marketId: number,
+  /**
+   * THE CALL THIS RELAY ANSWERS — how a chain keeps its lineage.
+   *
+   * When somebody relays a question straight after showing up for it, the new
+   * Challenge points back at the call that brought them in, and provenance is a
+   * walk up that pointer rather than a guess from timestamps. Null for a market
+   * somebody put up on their own initiative, which is most of them.
+   */
+  parentCall?: number | null,
+): Promise<PutResult> {
   const sb = serviceClient();
   const me = wallet.toLowerCase();
 
@@ -109,11 +121,25 @@ export async function putOnTable(wallet: string, marketId: number): Promise<PutR
 
   let id: number | null = null;
   for (let slot = 1; slot <= TABLE_SLOTS; slot++) {
-    const { data, error } = await sb
-      .from("challenges")
-      .insert({ challenger_wallet: me, market_id: marketId, slot_no: slot })
-      .select("id")
-      .maybeSingle();
+    const row: Record<string, unknown> = {
+      challenger_wallet: me,
+      market_id: marketId,
+      slot_no: slot,
+    };
+    if (typeof parentCall === "number") row["parent_call"] = parentCall;
+    let { data, error } = await sb.from("challenges").insert(row).select("id").maybeSingle();
+    /**
+     * LINEAGE IS DECORATION; THE CHALLENGE IS NOT.
+     *
+     * `42703` is "column does not exist" — code can ship ahead of its migration,
+     * and losing somebody's deliberate act to a missing provenance column would
+     * be the wrong trade. Retry without it once; the relay still happens.
+     */
+    if (error?.code === "42703" && typeof parentCall === "number") {
+      console.warn("[table] parent_call not present yet — relaying without lineage");
+      delete row["parent_call"];
+      ({ data, error } = await sb.from("challenges").insert(row).select("id").maybeSingle());
+    }
     if (!error && data) {
       id = Number((data as { id: number }).id);
       break;
