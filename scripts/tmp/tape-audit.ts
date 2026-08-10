@@ -1,4 +1,4 @@
-import { buildTape } from "../src/lib/insider/build.server";
+import { buildTape } from "../../src/lib/insider/build.server";
 const ids = [2776,58,2701,2813,2815,2696,680,2743,2077,60,2794,2814];
 async function main(){ const r: any = await buildTape({ limit: 120 } as any);
 const rows = r.rows ?? [];
