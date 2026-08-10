@@ -15,6 +15,10 @@ export interface FeedSessionSnapshot {
 
 const MAX_SEEN = 200;
 
+/** The session gate the server applies (SUGGESTION.MIN_SESSION_CARDS_VIEWED). */
+import { SUGGESTION } from "@/domain/market-suggestion";
+const MIN_CARDS_FOR_IDEA = SUGGESTION.MIN_SESSION_CARDS_VIEWED;
+
 const state = {
   seen: new Set<number>(),
   cardsViewed: 0,
