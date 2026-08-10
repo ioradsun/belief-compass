@@ -1405,6 +1405,22 @@ function Feed() {
             onSelectMarket={selectMarket}
             onSelectPerson={selectPerson}
             onOpenMenu={() => setMenuOpen(true)}
+            focus={
+              <button
+                type="button"
+                onClick={() => setFocusMode((v) => !v)}
+                aria-pressed={focusMode}
+                aria-label="Focus mode"
+                title="Focus mode"
+                className={`hidden h-9 w-9 shrink-0 place-items-center rounded-full border transition-colors lg:grid ${
+                  focusMode
+                    ? "border-[var(--text)] text-[var(--text)]"
+                    : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text-secondary)] hover:text-[var(--text-secondary)]"
+                }`}
+              >
+                <Crosshair className="h-4 w-4" aria-hidden />
+              </button>
+            }
             center={
               wallet ? (
                 <button
