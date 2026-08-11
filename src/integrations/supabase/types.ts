@@ -1889,6 +1889,15 @@ export type Database = {
           pct: number
         }[]
       }
+      put_on_table: {
+        Args: {
+          p_audience: Json
+          p_challenger: string
+          p_market_id: number
+          p_parent_call: number
+        }
+        Returns: Json
+      }
       rebuild_position: {
         Args: {
           p_applied_count: number
