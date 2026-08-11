@@ -62,6 +62,8 @@ export type ExclusionReason =
 export interface ViewerMarketState {
   /** Holds YES or NO right now. */
   activePosition?: boolean;
+  /** When that position was last traded — which pass it belongs to. */
+  positionAt?: string | null;
   /** ISO timestamps of the viewer's last interaction of each kind. */
   passedAt?: string | null;
   passCount?: number;
@@ -72,35 +74,17 @@ export interface ViewerMarketState {
 }
 
 /**
- * Which pool a (viewer, market) pair belongs in. See the module doc: the split
- * between `resurfaced` and `blocked` is the difference between "we showed you
- * this" and "you told us something".
- */
-export type FeedTier = "fresh" | "resurfaced" | "blocked";
-
-/**
- * The reasons that mean "shown, not decided" — the resurfaceable set.
+ * Which pool a (viewer, market) pair belongs in.
  *
- * `recently_opened` is here and it is the borderline one, so the reasoning is
- * written down: opening a market is engagement, not a verdict. Someone who read
- * a case file and neither backed nor passed has told us they were interested and
- * nothing else. It ranks LAST within the tier (its 24h cooldown is the longest
- * of the three, and the tier orders on exactly that), so it is only ever reached
- * when the alternative is an empty feed.
- *
- * `queued_this_session` is deliberately NOT here: it is not a history signal at
- * all but a de-duplication constraint, and resurfacing a market that is already
- * sitting further down the same queue would put it on screen twice.
+ * `resurfaced` is retained as a value the sequencer still understands, but the
+ * gate no longer produces it: under the pass rule a market is either untouched
+ * in this pass or it is out of it, and repeats arrive by ROLLING THE PASS
+ * rather than by a second tier inside one.
  */
-const RESURFACEABLE: ReadonlySet<ExclusionReason> = new Set<ExclusionReason>([
-  "seen_this_session",
-  "recently_viewed",
-  "recently_opened",
-]);
+export type FeedTier = "fresh" | "blocked" | "resurfaced";
 
 export function tierFor(reason: ExclusionReason | null): FeedTier {
-  if (reason == null) return "fresh";
-  return RESURFACEABLE.has(reason) ? "resurfaced" : "blocked";
+  return reason == null ? "fresh" : "blocked";
 }
 
 export interface EligibilityInput {
@@ -111,40 +95,27 @@ export interface EligibilityInput {
   /** Market ids already queued later in this session. */
   sessionQueued: ReadonlySet<number>;
   /**
-   * Where each session-seen market sits in the order it was seen — 0 is the one
-   * shown LONGEST ago. Optional, and its absence costs only ordering: the
-   * resurface tier still works, it just cannot tell two session-seen markets
-   * apart and falls back to score.
-   *
-   * WHY A RANK AND NOT A TIMESTAMP. `seen_this_session` is the client's own
-   * record and carries no clock — the wire format is an array of ids. The array
-   * is already in the order they were seen, so its INDEX is the only recency
-   * signal that exists, and it is enough to answer the one question the tier
-   * asks: which of these did we show them furthest back.
+   * WHEN THE CURRENT PASS BEGAN, in epoch ms. Contact older than this belongs
+   * to a spent pass and stops excluding anything. Absent means "the pass has
+   * always been running", i.e. every recorded contact still counts.
    */
-  sessionSeenRank?: ReadonlyMap<number, number>;
+  cycleStartedAt?: number;
   now: number;
 }
 
 export interface Eligibility {
-  /** `tier === "fresh"` — may this enter the fresh pool. */
+  /** `tier === "fresh"` — may this enter the pool for the current pass. */
   eligible: boolean;
   /** Which pool this belongs in. See `FeedTier`. */
   tier: FeedTier;
   reason: ExclusionReason | null;
-  /** When the cooldown lifts (null = eligible now, or never). */
-  availableAt: number | null;
   /**
-   * THE RESURFACE ORDERING KEY — lower is shown sooner. Null outside the
-   * `resurfaced` tier.
-   *
-   * Deliberately a separate field from `availableAt`, which answers a different
-   * question ("when does this become FRESH again") and must keep answering it
-   * honestly. For a cooldown the two happen to coincide, because a cooldown that
-   * lifts sooner is a market seen longer ago. For `seen_this_session` there is no
-   * cooldown to lift at all, so this is synthesised from the seen rank —
-   * comparable within the tier, and never mistaken for a real expiry.
+   * When this becomes available again. Always null now: the answer is "when the
+   * pass rolls", which is an event rather than a time, and inventing a clock for
+   * it would be the cooldown model coming back through the side door.
    */
+  availableAt: number | null;
+  /** Legacy resurface ordering key. Always null — see `FeedTier`. */
   resurfaceAt: number | null;
 }
 
@@ -154,42 +125,11 @@ const ago = (iso: string | null | undefined, now: number): number | null => {
   return Number.isFinite(t) ? now - t : null;
 };
 
-/** Is a timestamped interaction still inside its cooldown? */
-function cooling(
-  iso: string | null | undefined,
-  windowMs: number | null,
-  now: number,
-): { active: boolean; until: number | null } {
-  if (!iso) return { active: false, until: null };
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return { active: false, until: null };
-  if (windowMs == null) return { active: true, until: null };
-  const until = t + windowMs;
-  return { active: until > now, until };
+/** Build the answer for one reason. Every exclusion is a blocked one. */
+function verdict(reason: ExclusionReason): Eligibility {
+  return { eligible: false, tier: "blocked", reason, availableAt: null, resurfaceAt: null };
 }
 
-/**
- * Build the answer for one reason, deriving the tier from the reason itself.
- *
- * The tier is NEVER passed in at a call site. `RESURFACEABLE` is the single
- * place the "shown vs decided" line is drawn, so adding an exclusion reason
- * later cannot accidentally create a fourth policy — it lands in `blocked`
- * unless someone deliberately says otherwise.
- */
-function verdict(
-  reason: ExclusionReason,
-  availableAt: number | null,
-  resurfaceAt: number | null,
-): Eligibility {
-  const tier = tierFor(reason);
-  return {
-    eligible: false,
-    tier,
-    reason,
-    availableAt,
-    resurfaceAt: tier === "resurfaced" ? resurfaceAt : null,
-  };
-}
 
 /**
  * THE ONE ELIGIBILITY DECISION — one rule, applied to every kind of contact.
