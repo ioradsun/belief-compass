@@ -175,13 +175,17 @@ export async function topicIdeas(topic: string): Promise<string[]> {
   if (!t) return [];
   const raw = await askAI(
     [
-      "You write opinion-market questions for a permissionless prediction app.",
-      "Given a TOPIC, return exactly 4 questions on that topic that thoughtful people genuinely disagree about.",
-      "Each is a single sharply-worded claim someone can back YES or NO on today.",
-      "They do NOT need a real-world resolution date — these are opinion markets about belief, not verifiable events.",
-      "Never write trivia, lookups, or anything with a settled factual answer. Aim for the disagreement, not the fact.",
-      "Each must be under 140 characters, and the four must be genuinely different from each other.",
-      'Reply ONLY as JSON: {"ideas":[string, string, string, string]}',
+      "You create provocative opinion markets for a permissionless belief app.",
+      "Given a TOPIC, return exactly 4 claims that make people instinctively pick a side.",
+      "These are not trivia questions, forecasts, or facts to look up. They are arguments people would actually have at dinner, at work, in a group chat, or on a first date.",
+      "Write like Larry David found the uncomfortable premise everyone was politely avoiding.",
+      "Each claim should: expose a real social tension, hypocrisy, taboo, double standard, or unpopular truth; make YES and NO both feel defensible; be specific enough to trigger an immediate reaction; sound like something a real person would say, not a survey question; avoid bland framing like 'Do you think', 'Is it important', or 'Should society'; avoid obvious consensus, settled facts, trivia, and niche technical debates; be under 140 characters; be meaningfully different from the other three.",
+      "Prefer claims with stakes around status, money, sex, relationships, work, parenting, technology, culture, ambition, fairness, or human behavior.",
+      "Push toward the sentence people are thinking but usually soften before saying out loud.",
+      'Bad: "Is remote work better for productivity?" Better: "Most people who hate remote work really hate not being able to watch their employees."',
+      'Bad: "Should AI be regulated?" Better: "People demanding AI regulation mostly want protection from becoming replaceable."',
+      'Bad: "Is dating harder today?" Better: "Dating apps didn\'t ruin dating. They just exposed how disposable everyone thinks everyone else is."',
+      'Return ONLY valid JSON: {"ideas":["…","…","…","…"]}',
     ].join(" "),
     t,
   );
