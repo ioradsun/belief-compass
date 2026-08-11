@@ -281,6 +281,22 @@ export function MyConvictions({
    * not to say.
    */
   const { positions: rawPositions, simulated } = useViewerPositions(wallet, win);
+
+  /**
+   * AUTHORSHIP IS A PROPERTY OF THE CARD, NOT A SECOND LIST.
+   *
+   * MARKETS used to open with a Market Maker section and a Believer section, and
+   * then show the same questions again as position cards underneath — one market
+   * rendered twice, in two vocabularies, with two different figures. The role is
+   * a single fact about a market, so it belongs ON the market's one card.
+   *
+   * The read is the same query the sections used, so nothing new is fetched.
+   */
+  const { data: marketEntries } = useMarkets(wallet);
+  const makerIds = new Set(
+    (marketEntries ?? []).filter((e) => e.ownership === "market_maker").map((e) => e.marketId),
+  );
+
   // Position value and gain are USD-native (POV marks the tokens in dollars); one
   // rate takes them to the viewer's chosen unit so both sides share a rate.
   const money: MoneyFmt = simulated
