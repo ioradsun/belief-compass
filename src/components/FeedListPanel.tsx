@@ -493,27 +493,29 @@ function PlaylistSkeleton() {
 }
 
 /**
- * THE BOTTOM OF A LIST THAT HAS NOT ENDED.
+ * THE BOTTOM OF A LIST THAT HAS NOT ENDED — AND ASKS.
  *
- * A scrollable column that simply stops is a claim, and it was the wrong one:
- * the reader who flicked to the last row saw the same thing they would see if
- * the platform had run out. `Continuation` says "you're caught up" when that is
- * TRUE; this is the other case, and it had nothing at all.
+ * The queue tops up on reading position, so a reader who SCROLLS to the end
+ * used to arrive somewhere nothing had been requested: tapping the last row
+ * emptied the playlist and left the column shimmering at a request that was
+ * never made. Reaching this marker is the request. One shot per mount, and the
+ * route throttles the rest.
  *
- * IT MAKES NO SENTENCE, on purpose. "Loading more" would be a claim about a
- * request that may not be in flight — the queue tops up on READING POSITION, not
- * on scroll, so reaching the bottom of the list triggers nothing and should not
- * pretend otherwise. Two placeholder rows say the only thing that is actually
- * known: the list continues past here. It is the same row shape the pre-feed
- * skeleton uses, so the column reads as one thing in both states.
- *
- * `aria-hidden` for the same reason the skeleton is: a screen reader following
- * the list should hear markets, not an ornament about there being more.
+ * Zero height and aria-hidden: it is a tripwire, not a row.
  */
-function MoreBelow() {
-  return (
-    <li className="px-3 py-2 opacity-50" aria-hidden>
-      <SkeletonRow lines={2} />
-    </li>
-  );
+function LoadMoreSentinel({ onLoadMore }: { onLoadMore?: () => void }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !onLoadMore || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) onLoadMore();
+      },
+      { rootMargin: "200px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [onLoadMore]);
+  return <span ref={ref} aria-hidden className="block h-0" />;
 }
