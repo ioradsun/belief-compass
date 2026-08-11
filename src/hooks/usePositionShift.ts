@@ -41,8 +41,12 @@ export interface PositionShift {
  * @param active true once the action has confirmed — the edge that freezes
  *               `before` and triggers the re-read.
  */
-export function usePositionShift(marketId: number | null, active: boolean): PositionShift {
-  const bal = useUserBalance(marketId);
+export function usePositionShift(
+  marketId: number | null,
+  active: boolean,
+  viewerWallet?: string | null,
+): PositionShift {
+  const bal = useUserBalance(marketId, viewerWallet);
   const before = useRef<Holdings | null>(null);
   const [settled, setSettled] = useState(false);
 
