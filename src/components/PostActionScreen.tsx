@@ -72,8 +72,29 @@ export function PostActionScreen({
     x.consequence === "branch_live" || x.consequence === "challenge_live";
 
   return (
-    <section className="flex min-h-0 w-full flex-col gap-3 p-4" data-post-action={x.copyCategory}>
-      {/* MARKET MAKER FIRST. A creator who also backed their question is both,
+    /**
+     * HEIGHT IS A CONSTRAINT, NOT AN ASSUMPTION.
+     *
+     * This screen used to be one column that grew as tall as its content and
+     * trusted the viewport to be tall enough. On a short window — a laptop with
+     * browser chrome, a phone in landscape, a split screen — the story ran past
+     * the bottom and took the ONE thing the screen exists for with it: the way
+     * out. A confirmation whose button is below the fold is a dead end.
+     *
+     * So the moment is split into two jobs. The story SCROLLS in whatever room
+     * there is (`min-h-0` is what actually lets a flex child shrink below its
+     * content), and the actions are PINNED to the bottom of the panel where they
+     * are reachable at any height. Nothing is hidden, nothing is truncated, and
+     * the exit is always one press away.
+     */
+    <section
+      className="flex h-full min-h-0 w-full flex-col"
+      data-post-action={x.copyCategory}
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain p-4">
+        {/* MARKET MAKER FIRST. A creator who also backed their question is both,
+          and the authorship is the larger fact — this badge is the one place the
+          screen refuses to reduce them to a believer. */}
           and the authorship is the larger fact — this badge is the one place the
           screen refuses to reduce them to a believer. */}
       {x.identity && (
