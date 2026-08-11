@@ -224,11 +224,14 @@ export function ProfileMenu({
               }}
             />
           )}
-          <Item label="Edit Profile" onClick={() => setPanel("edit")} />
-          <Item label="Creator Earnings" onClick={() => setPanel("earnings")} />
-          <Item label="Import POV Wallet" onClick={() => setPanel("import")} />
+          {/* Opening a panel closes the dropdown — otherwise the menu stayed
+              live under the dialog and kept competing for the same clicks. */}
+          <Item label="Edit Profile" onClick={() => (setPanel("edit"), setOpen(false))} />
+          <Item label="Creator Earnings" onClick={() => (setPanel("earnings"), setOpen(false))} />
+          <Item label="Import POV Wallet" onClick={() => (setPanel("import"), setOpen(false))} />
           <Divider />
-          <Item label="Settings" onClick={() => setPanel("settings")} />
+          <Item label="Settings" onClick={() => (setPanel("settings"), setOpen(false))} />
+
           <Item
             label="Switch Wallet"
             onClick={() => {
