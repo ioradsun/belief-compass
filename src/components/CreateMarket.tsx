@@ -224,11 +224,35 @@ export function CreateMarket({
       });
 
       try {
-        if (attachment) {
+        if (attachment?.kind === "embed") {
           await attachMarketEmbed({
             data: { wallet: address, token, questionId, url: attachment.media.url },
           });
+        } else if (attachment?.kind === "file") {
+          // The draft now exists and owns the bytes: sign, PUT, verify, attach.
+          const file = attachment.file;
+          const ext = (file.name.split(".").pop() ?? "").slice(0, 5) || "bin";
+          const up = await signMarketUpload({ data: { wallet: address, token, questionId, ext } });
+          const put = await fetch(up.signedUrl, {
+            method: "PUT",
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+            body: file,
+          });
+          if (!put.ok) throw new Error("That image didn't upload — try again.");
+          const dims = await imageDimensions(attachment.previewUrl);
+          await attachMarketMedia({
+            data: {
+              wallet: address,
+              token,
+              questionId,
+              path: up.path,
+              width: dims?.width ?? null,
+              height: dims?.height ?? null,
+              sha256: attachment.sha256 ?? null,
+            },
+          });
         }
+
 
         const result = await create({ questionId, yes: side === "YES", seedWei });
         await finalizeMarketCreate({
