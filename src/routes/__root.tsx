@@ -19,6 +19,7 @@ import { WalletProviders } from "../components/WalletConnect";
 import { DisplayUnitProvider } from "../lib/display-unit";
 import { SimulationModeProvider } from "../lib/simulation-mode";
 import { VersionWatcher } from "../components/VersionWatcher";
+import { Toasts } from "../components/Toasts";
 import { restoreQueryCache, startQueryPersist } from "../lib/query-persist";
 import { startRealtime } from "../lib/realtime/coordinator";
 import { THEME_INIT_SCRIPT } from "../lib/theme";
