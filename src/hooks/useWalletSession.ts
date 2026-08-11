@@ -70,7 +70,7 @@ export function useWalletSession() {
 
 
 
-  return { ensureSession, withSession, address };
+  return { ensureSession, withSession, mintSigned, address };
 }
 
 function isStaleSession(err: unknown): boolean {
