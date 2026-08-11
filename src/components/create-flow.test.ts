@@ -18,12 +18,9 @@ const code = (p: string) =>
  * CMS instead of a conviction.
  */
 describe("the create surface tells one story, and the rails follow it", () => {
-  it("shows ideas in the left rail while writing, not a recruiting desk", () => {
-    // The composer took the rails over: LEFT is the spark, RIGHT is other ways
-    // to ask plus the debates that already exist.
+  it("shows a spark in the right rail while writing, not a recruiting desk", () => {
     const route = code("src/routes/index.tsx");
-    expect(route).toMatch(/createOpen \? \([\s\S]{0,400}?<IdeasRail/);
-    expect(route).toMatch(/<AlternatesRail \/>/);
+    expect(route).toMatch(/createOpen \|\| ideaDue \? \([\s\S]{0,400}?<IdeasRail/);
   });
 
   it("keeps Challenge out of the composer entirely", () => {
@@ -57,15 +54,14 @@ describe("the idea rail never costs the writer a sentence", () => {
     expect(action.indexOf("onUse")).toBeGreaterThan(action.indexOf("Keep your own question"));
   });
 
-  it("always gives a blank composer somewhere to start", () => {
-    // The old rule was "no House spark, no column". Most sessions never earn a
-    // spark, so the hardest screen in the product got the emptiest rail. Topics
-    // are always offered; only the generation waits for a press.
+  it("always states what the column is for, and never pads it with filler", () => {
+    // The heading is permanent — a writer with no personalised spark still
+    // learns the column exists — but every stage below it is narrated rather
+    // than invented: invitation, thinking, or an honest empty answer.
     const c = code("src/components/IdeasRail.tsx");
-    expect(c).toMatch(/TOPICS/);
-    expect(c).not.toMatch(/if \(!suggestion\) return null;/);
-    // Topic ideas adopt in place — they never reset a draft mid-sentence.
-    expect(c).toMatch(/adoptQuestion\(idea\)/);
+    expect(c).toMatch(/Market ideas/);
+    expect(c).toMatch(/Tap a topic above to see ideas\./);
+    expect(c).toMatch(/questions…/);
   });
 
 });
@@ -114,7 +110,7 @@ describe("the centre stops selling and asks one thing", () => {
   it("states the earn once, in the title, and nowhere after", () => {
     // The fee is what the act is worth, so it sits with the act. The post-publish
     // moment says one fact — the market is live — and stops.
-    expect(code("src/components/CreateMarket.tsx")).toMatch(/Earn 1% on all trading/);
+    expect(code("src/components/CreateMarket.tsx")).toMatch(/4\.5%/);
     // The post-publish moment is `resolvePostAction`'s create branch now, and it
     // says one fact — the market is live — with no fee repeated after the act.
     expect(code("src/domain/post-action.ts")).not.toMatch(/4\.5%/);
@@ -126,8 +122,7 @@ describe("the centre stops selling and asks one thing", () => {
     // housekeeping. The one affordance with an action behind it survives.
     const c = code("src/components/CreateMarket.tsx");
     expect(c).not.toMatch(/AI-checked/);
-    // "Polish" left the form entirely — rewrites are the right rail's job now.
-    expect(code("src/components/AlternatesRail.tsx")).toMatch(/Other ways to ask/);
+    expect(c).toMatch(/Polish/);
   });
 
   it("leaves only the legal line under the primary action", () => {
@@ -135,6 +130,7 @@ describe("the centre stops selling and asks one thing", () => {
     // reader is deciding rather than being persuaded.
     const c = code("src/components/CreateMarket.tsx");
     expect(c).not.toMatch(/pov\.co|Exclusive/);
+    expect(c).toMatch(/Terms/);
   });
 
   it("keeps the link secondary, inside the field", () => {

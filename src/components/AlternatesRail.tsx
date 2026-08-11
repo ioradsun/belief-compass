@@ -46,11 +46,10 @@ export function AlternatesRail() {
     .filter((a) => a.length > 0 && a.toLowerCase() !== q.toLowerCase())
     .slice(0, 3);
 
-  // THE HEADING IS PERMANENT; THE BODY REPORTS THE STAGE. Hiding the panel
-  // until it had rewrites meant a column that appeared and disappeared under a
-  // reader's hand, and left them unable to learn what lives there. It now always
-  // says which of the three states it is in: waiting on words, thinking, or done.
-  if (!enabled)
+  // EVERY STAGE IS NARRATED. The heading is permanent so the writer learns the
+  // column exists before it has anything to say, and the line beneath it says
+  // exactly which stage we are in: waiting on words, thinking, or empty-handed.
+  if (!enabled) {
     return (
       <div>
         <RailHeading />
@@ -59,22 +58,22 @@ export function AlternatesRail() {
         </p>
       </div>
     );
-  if (alternates.length === 0)
+  }
+  if (alternates.length === 0) {
     return (
       <div>
         <RailHeading />
         <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
-          {isFetching ? "Finding other angles…" : "Nothing better than your own wording."}
+          {isFetching ? "Finding other angles…" : "Your wording is already the sharpest we have."}
         </p>
       </div>
     );
+  }
+
 
   return (
     <div>
       <RailHeading />
-      <p className="mb-2 text-[11.5px] leading-snug text-[var(--text-muted)]">
-        Tap one to swap it into your question.
-      </p>
       <div className="space-y-2">
         {alternates.map((alt) => (
           <button

@@ -208,14 +208,10 @@ describe("the update control never moves the feed", () => {
     expect(c).toMatch(/aria-hidden=\{gate\.pending === 0/);
   });
 
-  it("the rail owns the Insider heading, so the tape renders none", () => {
-    // The count lives on the rail's tab; the tape is handed no label of its own,
-    // which is what keeps a second heading from appearing above the rows.
+  it("the rail hands the heading to the tape rather than rendering its own", () => {
     const idx = code("src/routes/index.tsx");
-    expect(idx).toMatch(/insiderCount=\{insiderPending\}/);
-    expect(idx).toMatch(/label=\{undefined\}/);
+    expect(idx).toMatch(/label="Insider"/);
   });
-
 
   it("still holds every update until the reader asks", () => {
     // holdUpdates → useTapeGate(holdAlways), which admits only on first paint.

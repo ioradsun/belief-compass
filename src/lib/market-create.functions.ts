@@ -66,7 +66,10 @@ export const suggestAlternateQuestions = createServerFn({ method: "POST" })
     return { alternates: await alternateQuestions(data.question) };
   });
 
-/** Four fresh question sparks inside a topic the reader picked. */
+/**
+ * Four contested questions on a topic — the left rail's spark for writers with
+ * no personalised House idea yet. Read-only and advisory; nothing is reserved.
+ */
 export const suggestTopicIdeas = createServerFn({ method: "POST" })
   .inputValidator((data: { topic: string }) => ({ topic: clean(data.topic, 60) }))
   .handler(async ({ data }) => {
@@ -74,6 +77,7 @@ export const suggestTopicIdeas = createServerFn({ method: "POST" })
     const { topicIdeas } = await import("@/lib/market-create.server");
     return { ideas: await topicIdeas(data.topic) };
   });
+
 
 /**
  * Ranked "you might rather back this" suggestions for the right rail.

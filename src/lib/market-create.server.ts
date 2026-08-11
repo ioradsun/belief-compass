@@ -159,28 +159,28 @@ export async function alternateQuestions(question: string): Promise<string[]> {
 }
 
 /**
- * TOPIC SPARKS — the left rail's idea generator while nothing is written yet.
+ * FOUR CONTESTED QUESTIONS ON A TOPIC — the left rail's spark generator.
  *
- * A blank composer is the hardest screen in the product: the reader has already
- * decided to create something and has no subject. Rather than wait for a
- * personalized House idea that most sessions never earn, this asks for a small
- * set of genuinely arguable questions inside a topic the reader picked, so the
- * rail always has an answer to "give me somewhere to start".
+ * The personalised House idea only exists once somebody has a history worth
+ * reading. A first-time writer staring at an empty form got an empty column,
+ * which is honest but useless. A topic is the smallest input that makes a
+ * genuinely interesting question possible without pretending to know the
+ * person, so the rail asks for one and this answers it.
  *
- * Opinion markets, not forecasts: the questions are about what people believe,
- * so a topic like Religion or Self-Help is fair game as long as the question is
- * a claim someone can honestly take the other side of.
+ * CONTESTED, NOT TRIVIA. The whole product fails if the answer is lookup-able:
+ * every question must be one where informed people actually split.
  */
 export async function topicIdeas(topic: string): Promise<string[]> {
   const t = topic.trim().slice(0, 60);
   if (!t) return [];
   const raw = await askAI(
     [
-      "You invent opinion-market questions for a permissionless prediction app.",
-      `Return 4 questions about: ${t}.`,
-      "Each is a single, sharply-worded claim people can back YES or NO on today — a belief, not a forecast with a resolution date.",
-      "They must be genuinely contested: a thoughtful person could take either side. Never rhetorical, never bigoted, never about harming a real identifiable person.",
-      "Vary the angle across the four. Each under 120 characters and ending in a question mark.",
+      "You write opinion-market questions for a permissionless prediction app.",
+      "Given a TOPIC, return exactly 4 questions on that topic that thoughtful people genuinely disagree about.",
+      "Each is a single sharply-worded claim someone can back YES or NO on today.",
+      "They do NOT need a real-world resolution date — these are opinion markets about belief, not verifiable events.",
+      "Never write trivia, lookups, or anything with a settled factual answer. Aim for the disagreement, not the fact.",
+      "Each must be under 140 characters, and the four must be genuinely different from each other.",
       'Reply ONLY as JSON: {"ideas":[string, string, string, string]}',
     ].join(" "),
     t,
@@ -191,16 +191,17 @@ export async function topicIdeas(topic: string): Promise<string[]> {
   const out: string[] = [];
   for (const item of list) {
     if (typeof item !== "string") continue;
-    const q = item.trim();
-    if (q.length < 12 || q.length > 160) continue;
-    const key = normalizeQuestion(q);
+    const s = item.trim();
+    if (s.length < 8 || s.length > 200) continue;
+    const key = normalizeQuestion(s);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    out.push(q);
+    out.push(s);
     if (out.length >= 4) break;
   }
   return out;
 }
+
 
 /**
  * WHAT WAS HERE. A private stopword list, a private `tokens()`, a Jaccard
