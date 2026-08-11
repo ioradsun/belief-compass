@@ -1579,10 +1579,9 @@ function Feed() {
                 launchPanel={null}
                 feedList={
                   <div className="flex min-h-0 flex-1 flex-col">
-                    {/* FIRST TEN CONVICTIONS — the brief owns this slot until
-                      the reader has taken ten sides, then the rail simply
-                      leads with the feed. */}
-                    <TakeASide wallet={wallet} />
+                    {/* The brief now sits at the top of the whole rail, above
+                      the tabs, so it is not tied to this list. */}
+
 
                     <FeedListPanel
                       lens={lens}
