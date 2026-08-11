@@ -1451,3 +1451,129 @@ deciding, from the audience, that a Tribe or a Rival context is _meaningful_ —
 and `Audience` carries only `formingOnly` today. Per the brief's own rule, that
 belongs in a domain projection first, not in a component or in a copy module
 guessing from group counts.
+
+## T. Wiring the Insider semantics into the tape
+
+§303 landed `semanticEvents` and said plainly that nothing called it. That is
+the shape this codebase keeps having to fix — a correct module production never
+reaches — so it is closed here.
+
+### What the tape could actually say about a Challenge
+
+One thing: somebody answered. `showedUpForMe` → a `showed_up` row, aggregated
+one per market. So a branch that travelled two links and then finished produced
+**one row on the day it started and silence afterwards**, which reads as a
+question nobody picked up — the precise opposite of what happened.
+
+Two families were missing, both named in the brief:
+
+```
+JOHN KEPT IT MOVING              YOUR CHALLENGE IS COMPLETE
+The question is now on 8         8 of 11 showed up.
+more tables.
+```
+
+### `showed_up` stays aggregated, and that is not a compromise
+
+The brief's per-person examples (`CASEY BACKED NO / Answered John's Challenge.`)
+and the existing aggregation ("three rows would be a notification inbox getting
+loudest on your best day") look like a conflict and are not. They are about
+different readers: the aggregated family is **the reader's own market**, where
+three answers is one thing that happened to them. Relays and completions are
+already one per person and one per Challenge, so there is nothing to collapse
+and no rule to break.
+
+`first_believer`, `new_believer` and the position changes stay unwired
+deliberately — the tape's existing trade families already own those sentences,
+and wiring them would create the second owner in the other direction.
+
+### Two facts the projection could not carry
+
+`Outgoing.relayers` was `CardPerson[]`: a name and nothing else. A tape row
+needs two more, and neither can be reconstructed downstream.
+
+**When.** A feed is chronological, and a relay dated by anything other than when
+it happened is dated by a guess. An undated relay is now DROPPED rather than
+stamped with `now` — losing one entry costs one entry; dating it `now` corrupts
+the order of every entry around it.
+
+**Whose reach.** `relayReach` is the sum across every relayer on the branch.
+Spending the whole total on one person's row credits them with tables two other
+people opened. `CardRelayer.reach` is that act's own.
+
+### The wallet-keyed version was wrong, and the schema says why
+
+The first cut of this merged child Challenges BY WALLET — latest timestamp, summed
+reach. That is only safe if a person can relay a market once. Review asked for
+that assumption to be proved or removed. It does not hold:
+
+```sql
+CREATE UNIQUE INDEX challenges_active_market_idx
+  ON challenges (challenger_wallet, market_id)
+  WHERE closed_at IS NULL;          -- ← only while OPEN
+```
+
+Three independent confirmations. The index constrains SIMULTANEOUS Challenges
+only. `put_on_table` refuses just `already_up`, which is itself scoped to
+`closed_at IS NULL`. And the children read in `challengeCardsFor` selects every
+challenge whose `parent_call` is one of my calls, with no closed filter — while
+`put_on_table` never checks whether a `parent_call` has already been relayed
+from. So John can put the question up, take it down, and put it up again.
+
+Merged by wallet, that produces:
+
+> JOHN KEPT IT MOVING
+> The question is now on 11 more tables.
+
+dated this morning, when eight of those tables opened last week. **Two human
+actions folded into one event carrying cumulative reach at the wrong moment** —
+the small, checkable-looking sentence that is not checkable.
+
+So `CardRelayer` is an ACT: its own `challengeId`, its own time, its own reach.
+
+### The same bug had a second home downstream
+
+Splitting the projection is not enough, because `collapseEvents` keys by
+`(marketId, actor.wallet)` and would have re-merged the two acts one layer
+later — taking `Math.max` of the timestamps and the first non-null reach, which
+silently DROPS one act's tables rather than summing them. Worse than the
+original.
+
+`ChallengeEventInput.actKey` fixes it at the source. Unset, the key is exactly
+what it was and a trade still collapses into the answer stamp it produced —
+which is what the collapse exists for. Set, two decisions by one person stay two
+events. Relays carry `relay:<childChallengeId>`.
+
+### Counting people is now a decision with one home
+
+The card counts PEOPLE: "3 people kept it moving", a face row. Counting acts
+there would tell a creator two people carried their question when one person
+carried it twice. `relayPeople()` dedupes by wallet, and `keptItMovingHeadline`
+and `keptItMovingLine` call it INTERNALLY rather than trusting the call site —
+so the dedupe cannot be forgotten by the next surface that needs a count.
+
+### The selection is a domain module, not a loop in the loader
+
+`lifecycleEvents(cards, ctx)` is pure and takes the canonical
+`ChallengeCardProjection` — the same object the durable card renders. It decides
+WHICH moments deserve a row and WHEN each happened. It counts nothing and writes
+no sentence; `semanticEvent` still owns every word, and a source-grep test fails
+if the loader ever starts composing one again.
+
+### Completion is dated, and a closed market is not evidence of one
+
+`closed_at` when the creator took it down; otherwise the last answer, because a
+Challenge that completed BECAUSE everybody answered has no closure stamp of its
+own — the lifecycle ended, nobody ended it. Zero when nothing proves an ending,
+and zero means do not print.
+
+`marketClosed` is refused outright as a completion signal. It is hardcoded false
+until an indexer supplies it, and:
+
+> **Conviction observes closure; it does not declare it.** A row announcing a
+> completed Challenge on the strength of an unproven closure is that inference
+> wearing a headline.
+
+One consequence worth naming: `EVERYONE SHOWED UP` now has a live path to the
+tape. It was unreachable copy twice over — once because of the card state
+ordering fixed in §302, and once because nothing built a completion row at all.

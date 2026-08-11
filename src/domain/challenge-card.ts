@@ -55,6 +55,53 @@ export interface CardPerson {
   avatarUrl: string | null;
 }
 
+/**
+ * ONE ACT OF KEEPING IT MOVING — not one person who did.
+ *
+ * THE DISTINCTION IS LOAD-BEARING AND THE SCHEMA IS THE REASON.
+ * `challenges_active_market_idx` is unique on `(challenger_wallet, market_id)
+ * WHERE closed_at IS NULL`: it stops two SIMULTANEOUS Challenges, and nothing
+ * stops John putting the question up, taking it down, and putting it up again.
+ * `put_on_table` refuses only `already_up`, the children read carries no closed
+ * filter, and a `parent_call` may be relayed from more than once. So one person
+ * really can have several relay acts on one market.
+ *
+ * KEYED BY WALLET, THOSE ACTS COLLAPSE INTO A LIE. Sum the reach and take the
+ * latest timestamp and the tape says "John kept it moving — the question is now
+ * on 11 more tables", dated this morning, when eight of those tables were opened
+ * last week. Two human actions become one event carrying cumulative reach at the
+ * wrong moment — a sentence that looks checkable and is not.
+ *
+ * So this is an ACT: its own challenge, its own time, its own reach. Surfaces
+ * that mean PEOPLE — "3 people kept it moving", a face row — call `relayPeople`
+ * and dedupe explicitly, which is the one place that decision now lives.
+ */
+export interface CardRelayer extends CardPerson {
+  /** The child Challenge this act created. The act's identity. */
+  challengeId: number;
+  atMs: number;
+  /** Recipient opportunities THIS act created. Tables, not people. */
+  reach: number;
+}
+
+/**
+ * THE PEOPLE BEHIND THE ACTS, first appearance kept.
+ *
+ * "3 people kept it moving" is a claim about three humans, and counting acts
+ * there would inflate it every time one of them re-issued.
+ */
+export function relayPeople(acts: readonly CardRelayer[]): CardPerson[] {
+  const seen = new Set<string>();
+  const out: CardPerson[] = [];
+  for (const a of acts) {
+    const w = a.wallet.toLowerCase();
+    if (seen.has(w)) continue;
+    seen.add(w);
+    out.push({ wallet: a.wallet, name: a.name, avatarUrl: a.avatarUrl });
+  }
+  return out;
+}
+
 /** A person who answered, and which way they went at that moment. */
 export interface CardResponder extends CardPerson {
   /** Null on rows stamped before the side was kept. The card prints none. */
@@ -94,7 +141,7 @@ export interface Outgoing {
   /** Newest first. Passers can never appear here — not anonymised, absent. */
   responders: CardResponder[];
   /** Unique people who put this question in front of their OWN people. */
-  relayers: CardPerson[];
+  relayers: CardRelayer[];
   /** Opportunities created by those relays. Tables, not people. */
   relayReach: number;
   closedAtMs: number | null;
@@ -274,20 +321,31 @@ export function tablesLine(reached: number): string | null {
   return `The question is now on ${reached} more table${reached === 1 ? "" : "s"}.`;
 }
 
-/** "Casey kept it moving" / "3 people kept it moving." */
-export function keptItMovingHeadline(relayers: readonly CardPerson[]): string | null {
-  const names = relayers.map((r) => r.name.trim()).filter(Boolean);
+/**
+ * "Casey kept it moving" / "3 people kept it moving."
+ *
+ * BOTH OF THESE COUNT PEOPLE, so both dedupe HERE rather than trusting whatever
+ * the caller happened to hold. `relayers` is a list of ACTS, and one person who
+ * re-issued twice must never read as two — the dedupe living inside these two
+ * functions is what makes that impossible to forget at a call site.
+ */
+export function keptItMovingHeadline(relayers: readonly CardRelayer[]): string | null {
+  const names = relayPeople(relayers)
+    .map((r) => r.name.trim())
+    .filter(Boolean);
   if (names.length === 0) return null;
   return names.length === 1 ? `${names[0]} kept it moving` : "Your Challenge is traveling";
 }
 
 export function keptItMovingLine(
-  relayers: readonly CardPerson[],
+  relayers: readonly CardRelayer[],
   relayReach: number,
 ): string | null {
-  if (relayers.length === 0) return null;
-  if (relayers.length === 1) return tablesLine(relayReach);
-  return `${relayers.length} people kept it moving.`;
+  const people = relayPeople(relayers);
+  if (people.length === 0) return null;
+  // One PERSON, so the branch total is theirs — however many times they issued.
+  if (people.length === 1) return tablesLine(relayReach);
+  return `${people.length} people kept it moving.`;
 }
 
 /**

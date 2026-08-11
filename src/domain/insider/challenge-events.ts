@@ -84,11 +84,32 @@ export interface ChallengeEventInput {
    * somebody who fully exited is the kind of small lie this tape must not tell.
    */
   stillIn?: boolean | null;
+  /**
+   * WHICH ACT THIS IS, when one person can do this thing more than once.
+   *
+   * THE COLLAPSE KEY IS (MARKET, ACTOR) AND THAT IS RIGHT FOR A TRADE. Buying
+   * and the `responded_at` stamp it produced are two rows and one human act, so
+   * merging them is the whole point of `collapseEvents`.
+   *
+   * IT IS WRONG FOR A RELAY. Nothing stops somebody putting a question up,
+   * taking it down and putting it up again — `challenges_active_market_idx` is
+   * unique only `WHERE closed_at IS NULL`. Those are two decisions on two days,
+   * and merged by wallet they would become one event carrying both reaches at
+   * the later timestamp: "the question is now on 11 more tables", this morning,
+   * when eight of them opened last week.
+   *
+   * Set it to the identity of the ACT and those events stop merging with each
+   * other — and with a trade in the same market, which is a different act too.
+   * Left unset, the collapse behaves exactly as it always has.
+   */
+  actKey?: string;
 }
 
 export interface SemanticEvent {
   kind: ChallengeEventKind;
   marketId: number;
+  /** Carried through so a consumer can key a row by the ACT. See the input. */
+  actKey: string | null;
   headline: string;
   support: string | null;
   atMs: number;
@@ -134,7 +155,13 @@ function assertNever(x: never): never {
  */
 export function semanticEvent(i: ChallengeEventInput): SemanticEvent {
   const who = i.actor.name.trim();
-  const base = { kind: i.kind, marketId: i.marketId, atMs: i.atMs, actorWallet: i.actor.wallet };
+  const base = {
+    kind: i.kind,
+    marketId: i.marketId,
+    atMs: i.atMs,
+    actorWallet: i.actor.wallet,
+    actKey: i.actKey ?? null,
+  };
 
   switch (i.kind) {
     /**
@@ -244,7 +271,12 @@ export function semanticEvent(i: ChallengeEventInput): SemanticEvent {
 export function collapseEvents(inputs: readonly ChallengeEventInput[]): ChallengeEventInput[] {
   const best = new Map<string, ChallengeEventInput>();
   for (const i of inputs) {
-    const key = `${i.marketId}|${i.actor.wallet.toLowerCase()}`;
+    /**
+     * THE ACT, WHEN THE CALLER NAMED ONE. Without `actKey` this is the original
+     * (market, actor) key and a trade still merges with the answer it produced.
+     * With one, two separate decisions by the same person stay two events.
+     */
+    const key = `${i.marketId}|${i.actor.wallet.toLowerCase()}|${i.actKey ?? ""}`;
     const held = best.get(key);
     if (!held) {
       best.set(key, i);
@@ -265,6 +297,7 @@ export function collapseEvents(inputs: readonly ChallengeEventInput[]): Challeng
       relayReach: winner.relayReach ?? other.relayReach ?? null,
       completion: winner.completion ?? other.completion ?? null,
       stillIn: winner.stillIn ?? other.stillIn ?? null,
+      actKey: winner.actKey ?? other.actKey ?? undefined,
       atMs: Math.max(winner.atMs, other.atMs),
     });
   }

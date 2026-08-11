@@ -119,6 +119,12 @@ const STANDING_CANDIDATES = 18;
 const SHOWED_UP_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 /** Rows per fetch. Already one per market, so this is a second, gentler cap. */
 const SHOWED_UP_MAX = 4;
+/**
+ * Relays and completions age the same way an answer does, so they share the
+ * window. The cap is separate because they are counted per Challenge rather
+ * than per market and a busy branch could otherwise crowd the tape on its own.
+ */
+const CHALLENGE_LIFECYCLE_MAX = 4;
 
 /**
  * THE SHARED TAPE IS ONE ANSWER, NOT ONE PER READER.
@@ -1043,6 +1049,81 @@ export async function buildTape(data: z.output<typeof input>, deps: TapeDeps = R
         text: `Showed up — ${body}`,
         // Newsworthy but not urgent: it stays true all day, and it should
         // never preempt a market that is actually moving right now.
+        pace: { perishability: "soon", weight: 1 },
+        payload: { significance: 0.9 },
+      });
+    }
+  }
+
+  // ── THE REST OF THE CHALLENGE LIFECYCLE ──────────────────────────────────
+  //
+  // A RELAY AND A COMPLETION ARE THINGS THAT HAPPENED, and until now the tape
+  // could not say either one. `showed_up` above covered exactly one moment of a
+  // Challenge's life — somebody answered — so a branch that travelled two links
+  // and then finished produced one row on the day it started and silence
+  // afterwards, which reads as a question nobody picked up.
+  //
+  // IT COMPOSES NOTHING. `semanticEvents` owns every sentence here, the same
+  // module the brief's Insider spec was written against, and the facts come off
+  // the SAME `ChallengeCardProjection` the durable card renders. A relay that
+  // says "8 more tables" here says it because the projection counted eight, not
+  // because this file counted anything.
+  //
+  // WHY `showed_up` IS STILL SEPARATE AND STILL AGGREGATED. Three people
+  // answering in one market is one thing that happened to the reader, and a row
+  // each would make the tape loudest on their best day. Relays and completions
+  // are already one per person and one per Challenge, so there is nothing to
+  // collapse and no conflict with that rule.
+  //
+  // Unscoped full fetches only, exactly like `showed_up`: inside a market panel
+  // the reader is looking at the question already, and a delta poll merges into
+  // a tail that carries these rows.
+  if (!scoped && viewer && data?.since == null) {
+    const { challengeCardsFor } = await import("@/lib/challenge-card.server");
+    const { semanticEvents } = await import("@/domain/insider/challenge-events");
+    const { lifecycleEvents } = await import("@/domain/insider/challenge-lifecycle");
+    const cards = await challengeCardsFor(viewer).catch(() => []);
+
+    const inputs = lifecycleEvents(cards, {
+      viewerWallet: viewer,
+      freshAfterMs: Date.now() - SHOWED_UP_WINDOW_MS,
+    });
+    const titleOf = new Map(cards.map((c) => [c.marketId, c.question] as const));
+
+    for (const e of semanticEvents(inputs).slice(0, CHALLENGE_LIFECYCLE_MAX)) {
+      const title = titleOf.get(e.marketId);
+      const when = new Date(e.atMs).toISOString();
+      if (!title) continue;
+      material.push({
+        // KEYED BY THE ACT. Two relays by one person on one market are two
+        // rows, so a key of (kind, market, wallet) would silently drop one.
+        id: `challenge:${e.actKey ?? `${e.kind}:${e.marketId}:${e.actorWallet}`}:${e.atMs}`,
+        kind: e.kind === "relay" ? "challenge_relay" : "challenge_complete",
+        marketId: String(e.marketId),
+        marketTitle: title,
+        occurredAt: when,
+        startedAt: when,
+        // Neither a relay nor a completion has a side, and tinting one would say
+        // it counted because of which way somebody went.
+        side: null,
+        walletCount: null,
+        tradeCount: null,
+        amountEth: null,
+        amountUsd: null,
+        wallet: e.kind === "relay" ? e.actorWallet : null,
+        story: {
+          category: "tribe",
+          headline: e.headline,
+          // The support is the whole second line. Empty rather than invented
+          // when the projection could not prove a number — "EVERYONE SHOWED UP"
+          // needs nothing under it.
+          body: e.support ?? "",
+          attribution: null,
+          tone: "neutral",
+          // It happened BECAUSE of something the reader did.
+          personal: true,
+        },
+        text: [e.headline, e.support].filter(Boolean).join(" — "),
         pace: { perishability: "soon", weight: 1 },
         payload: { significance: 0.9 },
       });

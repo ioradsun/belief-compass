@@ -20,6 +20,7 @@ import { recipientState, TABLE_SLOTS } from "@/domain/table";
 import {
   cardStateFor,
   type CardPerson,
+  type CardRelayer,
   type CardResponder,
   type ChallengeCardProjection,
   type Incoming,
@@ -324,13 +325,35 @@ function outgoingFor(
    * UNIQUE PEOPLE, not child rows. One person who relays two of my calls in the
    * same market is one person who kept it moving.
    */
-  const relayerWallets = new Set<string>();
+  /**
+   * ONE ENTRY PER RELAY ACT, NOT PER PERSON — see `CardRelayer`.
+   *
+   * Merging by wallet is only safe if a person can relay a market once, and the
+   * schema does not say that: `challenges_active_market_idx` is unique only
+   * `WHERE closed_at IS NULL`, so putting it up, taking it down and putting it
+   * up again is two child rows. Summed reach on the latest timestamp would date
+   * last week's tables as this morning's.
+   *
+   * `relayReach` stays the branch total, because that is what it has always
+   * meant and what "the question is now on N more tables" says about a BRANCH.
+   */
+  const relayActs: CardRelayer[] = [];
   let relayReach = 0;
   for (const c of children) {
     if (Number(c.market_id) !== marketId) continue;
-    relayerWallets.add(String(c.challenger_wallet).toLowerCase());
-    relayReach += childReach.get(Number(c.id)) ?? 0;
+    const reach = childReach.get(Number(c.id)) ?? 0;
+    relayReach += reach;
+    const at = Date.parse(c.created_at);
+    relayActs.push({
+      ...personOf(String(c.challenger_wallet).toLowerCase()),
+      challengeId: Number(c.id),
+      // Zero rather than `now`: an act with no readable time is one a
+      // chronological surface must drop, not one it may place by guessing.
+      atMs: Number.isFinite(at) ? at : 0,
+      reach,
+    });
   }
+  relayActs.sort((a, b) => b.atMs - a.atMs || b.challengeId - a.challengeId);
 
   return {
     challengeId: Number(ch.id),
@@ -339,7 +362,7 @@ function outgoingFor(
     passed,
     waiting,
     responders: responders.sort((a, b) => b.atMs - a.atMs),
-    relayers: [...relayerWallets].map(personOf),
+    relayers: relayActs,
     relayReach,
     closedAtMs: ch.closed_at ? Date.parse(ch.closed_at) : null,
   };

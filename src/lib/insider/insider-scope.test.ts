@@ -60,12 +60,70 @@ describe("Insider names actors and nobody else", () => {
       expect(input, forbidden).not.toContain(forbidden);
   });
 
+  /**
+   * ONE PERSON'S ONE ACT IS ONE EVENT — and the key has to say "act", not
+   * "person". Keyed by (market, actor) alone, two relays by the same person
+   * merge into one row carrying both reaches at the later timestamp, which the
+   * schema permits: `challenges_active_market_idx` is unique only
+   * `WHERE closed_at IS NULL`.
+   */
   it("collapses mechanical writes rather than reporting each one", () => {
     const events = code("src/domain/insider/challenge-events.ts");
     expect(events).toMatch(/export function collapseEvents/);
-    // Keyed by market AND actor: one person's one act in one market is one event.
     expect(events).toMatch(
-      /const key = `\$\{i\.marketId\}\|\$\{i\.actor\.wallet\.toLowerCase\(\)\}`/,
+      /const key = `\$\{i\.marketId\}\|\$\{i\.actor\.wallet\.toLowerCase\(\)\}\|\$\{i\.actKey \?\? ""\}`/,
     );
+  });
+});
+
+/**
+ * THE SEMANTIC LAYER IS THE ONE THAT SPEAKS.
+ *
+ * `challenge-events` landed as a domain module with no live caller, which is
+ * the exact shape of a correct architecture production never reaches. These
+ * assertions are structural on purpose: they fail if the tape ever starts
+ * composing a Challenge sentence of its own again.
+ */
+describe("the tape consumes the Challenge lifecycle rather than restating it", () => {
+  const build = () => code("src/lib/insider/build.server.ts");
+
+  it("builds its Challenge rows from semanticEvents", () => {
+    const b = build();
+    expect(b).toMatch(/import\("@\/domain\/insider\/challenge-events"\)/);
+    expect(b).toMatch(/for \(const e of semanticEvents\(inputs\)/);
+    // The sentence is taken whole. A row that reformatted it would be a second
+    // voice for the same fact.
+    expect(b).toMatch(/headline: e\.headline/);
+    expect(b).toMatch(/body: e\.support \?\? ""/);
+  });
+
+  it("selects the moments in a domain module, not inline in the loader", () => {
+    const b = build();
+    expect(b).toMatch(/import\("@\/domain\/insider\/challenge-lifecycle"\)/);
+    expect(b).toMatch(/lifecycleEvents\(cards, \{/);
+  });
+
+  /**
+   * NO SECOND ARITHMETIC. Every count in a Challenge row is lifted off the
+   * projection; a template literal building one here would be the loader
+   * deciding what is true about somebody's branch.
+   */
+  it("writes no Challenge sentence and counts nothing itself", () => {
+    // `code()` strips comments, so these anchors are code — the prose above the
+    // block would otherwise be what the assertion was reading.
+    const b = build();
+    const from = b.indexOf("lifecycleEvents(cards");
+    const to = b.lastIndexOf("copyVersion: COPY_VERSION");
+    expect(from, "the lifecycle block must exist to be checked").toBeGreaterThan(-1);
+    expect(to).toBeGreaterThan(from);
+    const lifecycle = b.slice(from, to);
+    for (const forbidden of ["more table", "showed up", "kept it moving", "believer"])
+      expect(lifecycle.toLowerCase(), forbidden).not.toContain(forbidden);
+  });
+
+  it("keeps the aggregated answer family separate from the new rows", () => {
+    // `showedUpInMarket` still owns "3 people showed up for you" — one row per
+    // market, so a good day cannot turn the tape into a notification inbox.
+    expect(build()).toMatch(/showedUpInMarket\(/);
   });
 });
