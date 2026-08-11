@@ -184,6 +184,8 @@ export function ConvictionReveal({
                 }
               >
                 {story.subheadline}
+              </p>
+
 
             )}
           </div>
