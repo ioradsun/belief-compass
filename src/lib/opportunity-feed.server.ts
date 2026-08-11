@@ -116,21 +116,15 @@ export interface OpportunityFeedInput extends FeedSessionState {
    */
   poolPage?: number;
   /**
-   * MAY THIS BUILD OFFER MARKETS THE READER HAS ALREADY SEEN? Default NO.
+   * WHEN THE READER'S CURRENT PASS BEGAN, epoch ms.
    *
-   * The catalogue has to be spent before anything is repeated. A pool page is a
-   * window of 240 on some 2,800 markets, so "this page has nothing fresh" and
-   * "this platform has nothing fresh" are wildly different statements, and the
-   * server can only ever observe the first. Answering the first with repeats is
-   * how a reader saw the same markets again with thousands untouched behind
-   * them.
-   *
-   * So the default is the honest one: return nothing rather than a repeat, which
-   * the client reads as "dig one page deeper". Only when it has reached a depth
-   * with no markets at all — the real bottom — does it come back asking for
-   * this, and only then is a repeat the best thing left.
+   * One rule replaces every per-reason cooldown: a market the reader touched
+   * during this pass is out of it, and nothing else is. The client owns the
+   * boundary because the client is the only party that knows when the pass ran
+   * out of material — see `exhausted`, which is its cue to roll.
    */
-  allowResurface?: boolean;
+  cycleStartedAt?: number;
+
   limit?: number;
 }
 
