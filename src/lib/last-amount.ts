@@ -16,21 +16,22 @@ import { DEFAULT_ORDER_CC } from "@/domain/simulation";
 
 const KEY = (sim: boolean) => (sim ? "conviction.lastAmount.sim" : "conviction.lastAmount.real");
 
-/** The floor the ticket already enforces; a remembered value must respect it. */
-const MIN_REAL = 1;
+/** What an empty memory opens at in Real Mode. Not a floor on what's remembered. */
+const DEFAULT_REAL = 1;
 
 export function defaultAmount(sim: boolean): number {
-  const fallback = sim ? DEFAULT_ORDER_CC : MIN_REAL;
+  const fallback = sim ? DEFAULT_ORDER_CC : DEFAULT_REAL;
   if (typeof window === "undefined") return fallback;
   try {
     const raw = window.localStorage.getItem(KEY(sim));
     const n = raw == null ? NaN : Number(raw);
     if (!Number.isFinite(n) || n <= 0) return fallback;
-    return sim ? n : Math.max(MIN_REAL, n);
+    return n;
   } catch {
     return fallback;
   }
 }
+
 
 export function rememberAmount(sim: boolean, amount: number) {
   if (typeof window === "undefined") return;
