@@ -467,8 +467,10 @@ describe("who can be asked is decided once", () => {
      */
     const fn = server().slice(server().indexOf("export async function callReachFor"));
     expect(fn).toMatch(/dnaCandidates\(sb, me\)/);
-    expect(fn).toMatch(/answeredCandidates\(sb, me\)/);
-    expect(fn).toMatch(/eligibleAudience\(sb, me, marketId\)/);
+    // The mode argument narrows WHICH ledger's answered history qualifies
+    // somebody; it does not add a second definition of who can be reached.
+    expect(fn).toMatch(/answeredCandidates\(sb, me(, mode)?\)/);
+    expect(fn).toMatch(/eligibleAudience\(sb, me, marketId(, mode)?\)/);
   });
 
   it("counts the reach with the function that renders the headings", () => {

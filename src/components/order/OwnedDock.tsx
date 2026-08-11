@@ -21,6 +21,7 @@ import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { positionSummaryQO } from "@/lib/positions-query";
 import { simulationPositionQO } from "@/lib/simulation-query";
+import { useSimulationMode } from "@/lib/simulation-mode";
 import { useSellQuote, type useTradeReady } from "@/lib/chain-trade";
 import { fmtShares, sharesForPct, type OrderSide } from "@/domain/order";
 import {
@@ -98,8 +99,9 @@ export function useOwnedDock({
    * and a simulated one on the same market can never occupy the same cache entry
    * — and only one of them is ever read into the dock.
    */
+  const { session } = useSimulationMode();
   const { data: simPos } = useQuery({
-    ...simulationPositionQO(viewerWallet, marketId),
+    ...simulationPositionQO(viewerWallet, marketId, session),
     enabled: !!viewerWallet && !!sim,
   });
 

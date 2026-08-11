@@ -104,12 +104,25 @@ export const availableCC = (balance: number): string => `Available ${formatCC(ba
 
 /* ── Lifecycle ───────────────────────────────────────────────────────────── */
 
+/**
+ * WHERE A WALLET IS IN THE LIFECYCLE — persisted, not derived.
+ *
+ * `GRADUATING` was originally computed on the client from "account active AND
+ * progress complete". That worked for rendering and failed for everything the
+ * SERVER has to decide: the Simulation audience query cannot see a client
+ * derivation, so somebody who had finished their tenth conviction was still
+ * selectable as the recipient of a new Simulation Challenge they were already
+ * forbidden from answering. The state is written in the same transaction as the
+ * conviction that causes it, so there is no window between the two.
+ */
+export type SimulationLifecycle = "ACTIVE" | "GRADUATING" | "EXITED" | "GRADUATED";
+
 /** The stored account, as every surface reads it. */
 export interface SimulationAccount {
   wallet: string;
   startingBalanceCc: number;
   balanceCc: number;
-  active: boolean;
+  state: SimulationLifecycle;
   activatedAt: string | null;
   exitedAt: string | null;
   graduatedAt: string | null;
@@ -127,9 +140,9 @@ export interface SimulationAccount {
  */
 export function simulationEligible(input: {
   progress: Pick<ProfileProgress, "complete">;
-  graduatedAt: string | null;
+  state: SimulationLifecycle | null;
 }): boolean {
-  return !input.progress.complete && input.graduatedAt == null;
+  return !input.progress.complete && input.state !== "GRADUATED";
 }
 
 /**
@@ -138,14 +151,22 @@ export function simulationEligible(input: {
  * The tenth conviction does not switch the screen to REAL. It switches to
  * GRADUATING, which keeps the Simulation receipt on screen and the Simulation
  * position readable while refusing to open an eleventh order. REAL arrives when
- * the viewer presses Continue (which writes `graduated_at`) or exits.
+ * the viewer presses Continue (which writes GRADUATED) or exits.
+ *
+ * THE PROGRESS CHECK IS A BACKSTOP, NOT THE MECHANISM. The order transaction
+ * writes GRADUATING itself, so the state alone is normally sufficient. But the
+ * tenth conviction can also arrive from outside Simulation — a real position
+ * indexed while somebody is simulating — and no Simulation transaction runs for
+ * that. The screen must not offer an eleventh Simulation order in the seconds
+ * before anything notices.
  */
 export function modeFor(
   account: SimulationAccount | null,
   progress: ProfileProgress,
 ): SimulationMode {
-  if (!account || !account.active) return "REAL";
-  if (account.graduatedAt != null) return "REAL";
+  if (!account) return "REAL";
+  if (account.state === "EXITED" || account.state === "GRADUATED") return "REAL";
+  if (account.state === "GRADUATING") return "GRADUATING";
   return progress.complete ? "GRADUATING" : "SIMULATION";
 }
 

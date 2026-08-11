@@ -1,17 +1,20 @@
 /**
  * with-pg — bring up a throwaway Postgres, run the transactional suite, tear it down.
  *
- * `put-on-table.pg.test.ts` proves the one claim in this codebase that a mock
- * cannot: that a failed Challenge leaves NOTHING behind. It skips itself without
- * a cluster, which is right for CI and wrong as a habit — a suite that quietly
- * skips reads as a suite that passed. This makes running it one command.
+ * `put-on-table.pg.test.ts` and `simulation.pg.test.ts` prove the claims in this
+ * codebase that a mock cannot: that a failed Challenge leaves NOTHING behind,
+ * that a duplicate Simulation order replays rather than spending CC twice, and
+ * that the real and Simulation call ledgers cannot consume each other. They skip
+ * themselves without a cluster, which is right for CI and wrong as a habit — a
+ * suite that quietly skips reads as a suite that passed. This makes running them
+ * one command.
  *
  *   npm run test:pg
  *
  * The cluster is trust-auth, loopback-only, on a non-default port, in a
  * directory it deletes on the way out. Nothing here is intended to survive the
- * process, and nothing here should ever point at a real database — the suite
- * TRUNCATES the two tables it uses.
+ * process, and nothing here should ever point at a real database — the suites
+ * TRUNCATE every table they touch.
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
@@ -69,7 +72,20 @@ try {
 
   const test = spawnSync(
     "npx",
-    ["vitest", "run", "src/lib/put-on-table.pg.test.ts", "--reporter=verbose"],
+    [
+      "vitest",
+      "run",
+      "src/lib/put-on-table.pg.test.ts",
+      // The Simulation ledger's claims are transactional too — idempotency under
+      // a race, a refused order leaving nothing, the two call ledgers not
+      // consuming each other. None of them can be proved without a cluster.
+      "src/lib/simulation.pg.test.ts",
+      // ONE CLUSTER, ONE SUITE AT A TIME. Both suites own the same two Challenge
+      // tables and each drops and recreates them in its own setup; run in
+      // parallel they tear the ground out from under each other.
+      "--no-file-parallelism",
+      "--reporter=verbose",
+    ],
     { stdio: "inherit", env: { ...process.env, PGURL: URL } },
   );
   stop();

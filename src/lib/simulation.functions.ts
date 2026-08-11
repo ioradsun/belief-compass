@@ -1,16 +1,31 @@
 /**
  * SIMULATION — public server functions.
  *
- * WHICH OF THESE ARE SIGNED, and why it is not uniform. Reading your own
- * Simulation state grants nothing, names nobody and reveals nothing that is not
- * already yours — the same reasoning that leaves `getViewerReadiness` and the
- * Challenge reads unsigned.
+ * WHICH OF THESE ARE SIGNED, AND WHERE THE LINE ACTUALLY FALLS.
  *
- * Every WRITE proves the wallet. Activation does because it creates an account
- * and grants a balance under that address; ordering does because it spends from
- * it. That verification is the existing off-chain wallet session — a message
- * signature, never a transaction. Nothing in this file sends anything to a
- * chain, asks for gas, or switches a network.
+ * It is not "reads are free, writes are proved". That rule is right for the
+ * Challenge surfaces — reading your own rail grants nothing and names nobody who
+ * was not already computed for you — and it is WRONG here, because a wallet
+ * address is public. Anyone who knows an address could otherwise ask this
+ * server for that person's CC balance, their simulated positions and their
+ * account state, none of which they can see anywhere in the product. Simulation
+ * positions are private to their owner in V1, and "private" has to mean the
+ * server refuses, not that no screen happens to render them.
+ *
+ * So the line is PRIVATE LEDGER versus PUBLIC AGGREGATE:
+ *
+ *   SIGNED    the account (balance, lifecycle), the positions, every write.
+ *   UNSIGNED  how many convictions somebody has — an aggregate over belief data
+ *             the product already treats as viewer-readable, and the number the
+ *             entry card has to print before anybody has signed anything.
+ *
+ * That split is also what keeps the entry card honest. It shows a real progress
+ * count to a wallet that has never minted a session, and asks for the signature
+ * at the moment it starts saving something against that address.
+ *
+ * Every write proves the wallet through the existing off-chain session — a
+ * message signature, never a transaction. Nothing in this file sends anything to
+ * a chain, asks for gas, or switches a network.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -19,17 +34,25 @@ import type {
   SimulationOrderResult,
   SimulationState,
 } from "@/lib/simulation.server";
+import type { SimulationAccount } from "@/domain/simulation";
 
 const WALLET = z.string().min(3).max(80);
 const SESSION = z.string().min(16).max(2000);
 
-/** Where this wallet stands: the account, the progress, the mode, eligibility. */
-export const getSimulationState = createServerFn({ method: "GET" })
-  .inputValidator((raw: unknown) => z.object({ wallet: WALLET.nullish() }).parse(raw ?? {}))
-  .handler(async ({ data }): Promise<SimulationState> => {
-    const { loadSimulationState, emptyState } = await import("@/lib/simulation.server");
-    if (!data.wallet) return emptyState();
-    return loadSimulationState(data.wallet);
+/**
+ * THE PRIVATE LEDGER'S ACCOUNT — balance and lifecycle, proved.
+ *
+ * The session is REQUIRED. `assertWalletOwnership` returns the wallet it
+ * verified, and that is what is read from — so a request naming one address and
+ * carrying another's session reads the session's, never the claim's.
+ */
+export const getSimulationAccount = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) => z.object({ wallet: WALLET, session: SESSION }).parse(raw))
+  .handler(async ({ data }): Promise<SimulationAccount | null> => {
+    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+    const wallet = await assertWalletOwnership(data.wallet, data.session);
+    const { loadSimulationAccount } = await import("@/lib/simulation.server");
+    return loadSimulationAccount(wallet);
   });
 
 /**
@@ -53,8 +76,9 @@ export const activateSimulation = createServerFn({ method: "POST" })
  *
  * `graduate` is not a cosmetic flag: an exit is reversible while a graduation is
  * a one-way door, and the same call does both because the cleanup they share
- * (closing unresolved Simulation Challenges without recording a pass) is the
- * part that must never be skipped by either.
+ * (closing unresolved Simulation Challenges without recording a pass, and
+ * reconciling the Challenges those removals empty) is the part that must never
+ * be skipped by either.
  */
 export const exitSimulation = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
@@ -69,22 +93,26 @@ export const exitSimulation = createServerFn({ method: "POST" })
 
 /** Everything this wallet holds in Simulation, marked against the live market. */
 export const getSimulationPositions = createServerFn({ method: "GET" })
-  .inputValidator((raw: unknown) => z.object({ wallet: WALLET.nullish() }).parse(raw ?? {}))
+  .inputValidator((raw: unknown) => z.object({ wallet: WALLET, session: SESSION }).parse(raw))
   .handler(async ({ data }): Promise<SimulationHolding[]> => {
-    if (!data.wallet) return [];
+    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+    const wallet = await assertWalletOwnership(data.wallet, data.session);
     const { loadSimulationPositions } = await import("@/lib/simulation.server");
-    return loadSimulationPositions(data.wallet);
+    return loadSimulationPositions(wallet);
   });
 
 /** One market's Simulation holding — what the dock and the sell form size against. */
 export const getSimulationPosition = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) =>
-    z.object({ wallet: WALLET.nullish(), marketId: z.number().int().nonnegative() }).parse(raw),
+    z
+      .object({ wallet: WALLET, session: SESSION, marketId: z.number().int().nonnegative() })
+      .parse(raw),
   )
   .handler(async ({ data }): Promise<SimulationHolding | null> => {
-    if (!data.wallet) return null;
+    const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
+    const wallet = await assertWalletOwnership(data.wallet, data.session);
     const { loadSimulationPosition } = await import("@/lib/simulation.server");
-    return loadSimulationPosition(data.wallet, data.marketId);
+    return loadSimulationPosition(wallet, data.marketId);
   });
 
 /**

@@ -65,6 +65,12 @@ export interface SimulationTicket {
   balanceCc: number | null;
   /** Blocks a new order once the tenth conviction has landed. */
   canOrder: boolean;
+  /**
+   * The wallet is open for a SIGNATURE — an expired session being renewed, not a
+   * transaction. Surfaced so the ticket says which of the two is happening
+   * rather than leaving a wallet popup unexplained on a CC order.
+   */
+  verifying: boolean;
 }
 
 export interface ExecutionApi {
@@ -113,16 +119,25 @@ function useIdempotencyKey() {
 /**
  * The Simulation execution adapter.
  *
- * NEVER calls `writeContractAsync`. Never requests a signature for the order
- * itself (the wallet already signed once, at activation, and that session is
- * reused). Never asks for gas, never switches networks, never debits a real
- * wallet, and never moves the real market.
+ * NEVER calls `writeContractAsync`. Never asks for gas, never switches networks,
+ * never debits a real wallet, and never moves the real market.
+ *
+ * WHAT IT CAN ASK FOR, AND THE COPY HAS TO MATCH. The order reuses the session
+ * minted at activation, so in practice no prompt appears. But a session EXPIRES,
+ * and a write keyed by a wallet cannot be accepted without proof of that wallet —
+ * so on an aged-out session it re-authenticates, which opens the wallet for a
+ * SIGNATURE. That is not a transaction and nothing is sent, but it is a wallet
+ * appearing on a Confirm press, and a comment claiming it never happens would be
+ * the kind of small untruth this mode cannot afford. `verifying` is surfaced so
+ * the ticket can say which of the two is happening.
  */
 function useSimulationTrade(
   wallet: string | undefined,
   ethUsd: number,
 ): TradeLike & {
   lastOrder: SimulationOrderResult | null;
+  /** Waiting on a wallet SIGNATURE — never a transaction. */
+  verifying: boolean;
 } {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
@@ -131,6 +146,7 @@ function useSimulationTrade(
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [lastOrder, setLastOrder] = useState<SimulationOrderResult | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const idem = useIdempotencyKey();
   /**
    * The same synchronous re-entry latch the real executor uses, for the same
@@ -148,7 +164,23 @@ function useSimulationTrade(
       setError(null);
       setSubmitting(true);
       try {
-        const session = await ensureSession({ interactive: true });
+        /**
+         * The cached session first, and only then a prompt. Split so the ticket
+         * can tell the reader WHICH is happening: a silent reuse needs no copy,
+         * and a re-authentication deserves the line that says no transaction is
+         * being sent.
+         */
+        let session: string;
+        try {
+          session = await ensureSession({ interactive: false });
+        } catch {
+          setVerifying(true);
+          try {
+            session = await ensureSession({ interactive: true });
+          } finally {
+            setVerifying(false);
+          }
+        }
         const result = await placeSimulationOrder({
           data: {
             wallet,
@@ -218,9 +250,10 @@ function useSimulationTrade(
         idem.release();
       },
       lastOrder,
+      verifying,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [run, submitting, success, error, lastOrder, ethUsd],
+    [run, submitting, success, error, lastOrder, verifying, ethUsd],
   );
 }
 
@@ -247,7 +280,7 @@ export function useMarketExecution(input: {
       mode,
       simulated,
       trade: simulated ? simTrade : realTrade,
-      sim: simulated ? { balanceCc, canOrder } : null,
+      sim: simulated ? { balanceCc, canOrder, verifying: simTrade.verifying } : null,
       ready: simulated
         ? { connected: !!input.viewerWallet, onBase: true }
         : { connected: realReady.connected, onBase: realReady.onBase },

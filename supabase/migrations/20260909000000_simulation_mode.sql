@@ -23,8 +23,8 @@
 -- ── The account ─────────────────────────────────────────────────────────────
 --
 -- One row per wallet, forever. It is created on first activation and never
--- deleted: exiting flips `active`, it does not erase somebody's progress, and
--- re-entering must not re-grant the starting balance.
+-- deleted: exiting moves the lifecycle state, it does not erase somebody's
+-- progress, and re-entering must not re-grant the starting balance.
 CREATE TABLE IF NOT EXISTS public.simulation_accounts (
   wallet               text        PRIMARY KEY,
   -- Granted ONCE, at creation. Immutable afterwards (see the trigger below) —
@@ -32,10 +32,27 @@ CREATE TABLE IF NOT EXISTS public.simulation_accounts (
   -- refill in V1.
   starting_balance_cc  numeric     NOT NULL DEFAULT 1000,
   available_balance_cc numeric     NOT NULL DEFAULT 1000,
-  -- Is Simulation the active mode for this wallet RIGHT NOW. Persisted here
-  -- rather than only in the browser so the mode survives a refresh and follows
-  -- the wallet rather than the device.
-  active               boolean     NOT NULL DEFAULT true,
+  /**
+   * WHERE THIS WALLET IS IN THE LIFECYCLE — one column, four states, persisted.
+   *
+   * A boolean `active` could not express GRADUATING, and GRADUATING is a real
+   * product state rather than a rendering detail: between the tenth conviction
+   * settling and the reader pressing Continue they can still READ their receipt
+   * and their position, but they may not place another order — and, critically,
+   * they may not be put into somebody else's Simulation audience, because they
+   * can no longer answer. Derived from a boolean plus a progress count, that
+   * last rule lived only on the client and the audience query could not see it.
+   *
+   *   ACTIVE      simulating, orderable, answerable, reachable by a Challenge
+   *   GRADUATING  the tenth has landed; readable, but no new order and no new call
+   *   EXITED      left below ten; everything preserved, re-entry allowed
+   *   GRADUATED   finished at ten; a one-way door, never offered again
+   *
+   * Set atomically: `simulation_execute_order` writes GRADUATING in the same
+   * transaction as the tenth conviction, so there is no window in which somebody
+   * is done but still reachable.
+   */
+  state                text        NOT NULL DEFAULT 'ACTIVE',
   activated_at         timestamptz NOT NULL DEFAULT now(),
   exited_at            timestamptz,
   -- Set once, at ten convictions. A one-way door.
@@ -46,11 +63,20 @@ CREATE TABLE IF NOT EXISTS public.simulation_accounts (
   -- A negative CC balance is not a state this product has. Overdraft is a money
   -- concept and CC is not money.
   CONSTRAINT simulation_accounts_balance_nonneg CHECK (available_balance_cc >= 0),
+  CONSTRAINT simulation_accounts_state
+    CHECK (state IN ('ACTIVE', 'GRADUATING', 'EXITED', 'GRADUATED')),
   -- GRADUATED MEANS OVER. The constraint is what makes "do not offer Simulation
   -- again" a property of the data rather than a rule three components remember.
-  CONSTRAINT simulation_accounts_graduated_inactive
-    CHECK (graduated_at IS NULL OR active = false)
+  CONSTRAINT simulation_accounts_graduated_final
+    CHECK ((graduated_at IS NULL) = (state <> 'GRADUATED'))
 );
+
+-- THE AUDIENCE INTERSECTION'S ONE ACCESS PATTERN: who can actually answer a
+-- Simulation Challenge right now. GRADUATING and EXITED are both excluded by the
+-- predicate rather than by a caller remembering to.
+CREATE INDEX IF NOT EXISTS simulation_accounts_reachable_idx
+  ON public.simulation_accounts (wallet)
+  WHERE state = 'ACTIVE';
 
 ALTER TABLE public.simulation_accounts ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON public.simulation_accounts TO service_role;
@@ -70,9 +96,9 @@ BEGIN
     NEW.starting_balance_cc := OLD.starting_balance_cc;
     -- A graduated account can never come back. Checked here as well as in the
     -- activate path, because this is the one place every writer passes through.
-    IF OLD.graduated_at IS NOT NULL THEN
+    IF OLD.state = 'GRADUATED' THEN
+      NEW.state := 'GRADUATED';
       NEW.graduated_at := OLD.graduated_at;
-      NEW.active := false;
     END IF;
     NEW.updated_at := now();
   END IF;
@@ -93,10 +119,22 @@ CREATE TRIGGER simulation_accounts_normalize_trg
 -- one up.
 CREATE TABLE IF NOT EXISTS public.simulation_orders (
   id                bigserial   PRIMARY KEY,
-  -- Two taps inside one frame are ONE order. The client mints this key from the
-  -- order's own identity, so a retry after a dropped response returns the
-  -- original settled result instead of spending CC twice.
-  idempotency_key   text        NOT NULL UNIQUE,
+  /**
+   * TWO TAPS INSIDE ONE FRAME ARE ONE ORDER.
+   *
+   * SCOPED TO THE WALLET, not global. A globally unique key means one person's
+   * key can collide with another's — the second wallet's genuine order is
+   * refused by a constraint it has no way to know about, and a key is a CLIENT
+   * value, so nothing stops two clients minting the same one.
+   *
+   * THE FINGERPRINT IS WHAT MAKES A REPLAY HONEST. A key alone can only answer
+   * "have I seen this key"; reusing it for a different order would then return
+   * somebody a receipt for an order they did not place. The fingerprint is the
+   * order's own identity — market, side, action, size — so the same key with a
+   * different payload is REJECTED rather than silently replayed.
+   */
+  idempotency_key   text        NOT NULL,
+  request_fingerprint text      NOT NULL DEFAULT '',
   wallet            text        NOT NULL,
   onchain_id        bigint      NOT NULL,
   side              text        NOT NULL CHECK (side IN ('YES','NO')),
@@ -116,6 +154,12 @@ CREATE TABLE IF NOT EXISTS public.simulation_orders (
 ALTER TABLE public.simulation_orders ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON public.simulation_orders TO service_role;
 GRANT USAGE, SELECT ON SEQUENCE public.simulation_orders_id_seq TO service_role;
+
+-- One key per WALLET. Two people may independently mint the same value — a key
+-- is a client value, and nothing stops them — and neither one's order may be
+-- refused because of the other's.
+CREATE UNIQUE INDEX IF NOT EXISTS simulation_orders_idempotency_idx
+  ON public.simulation_orders (wallet, idempotency_key);
 
 CREATE INDEX IF NOT EXISTS simulation_orders_wallet_idx
   ON public.simulation_orders (wallet, created_at DESC);
@@ -230,6 +274,30 @@ BEGIN
 END;
 $$;
 
+/**
+ * THE KEY HAS TO CARRY THE MODE, OR THE COLUMN IS ONLY A LABEL.
+ *
+ * `market_calls` is keyed (market_id, caller_wallet, responder_wallet), which was
+ * exactly right while there was one ledger: there is no such thing as a second
+ * call from the same person to the same person about the same market.
+ *
+ * With a mode column and that key unchanged, the two ledgers CONSUME EACH OTHER.
+ * A real call between two people on a market makes the Simulation call between
+ * the same two people impossible; a Simulation call blocks the later real one.
+ * The `ON CONFLICT … DO NOTHING` in `put_on_table` turns that into silence
+ * rather than an error — the audience write simply drops the person, and the
+ * Challenge reaches one fewer than it says it did. The mode column would be a
+ * label on whichever row happened to be written first.
+ *
+ * So the KEY moves. The uniqueness that mattered is preserved exactly — one call
+ * per (market, caller, responder) PER LEDGER — and every conflict target below
+ * names all four columns.
+ */
+ALTER TABLE public.market_calls DROP CONSTRAINT IF EXISTS market_calls_pkey;
+ALTER TABLE public.market_calls
+  ADD CONSTRAINT market_calls_pkey
+  PRIMARY KEY (market_id, caller_wallet, responder_wallet, mode);
+
 -- LEAVING SIMULATION IS NOT A PASS, and the close reason has to be able to say
 -- so. An unresolved Simulation Challenge closed at exit must never be recorded
 -- against anybody's dependability, in either direction.
@@ -316,7 +384,7 @@ BEGIN
   END IF;
 
   SELECT * INTO v_row FROM simulation_accounts WHERE wallet = v_me;
-  IF FOUND AND v_row.graduated_at IS NOT NULL THEN
+  IF FOUND AND v_row.state = 'GRADUATED' THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'graduated');
   END IF;
 
@@ -325,10 +393,10 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'reason', 'not_eligible', 'convictions', v_count);
   END IF;
 
-  INSERT INTO simulation_accounts (wallet, starting_balance_cc, available_balance_cc, active)
-  VALUES (v_me, p_start, p_start, true)
+  INSERT INTO simulation_accounts (wallet, starting_balance_cc, available_balance_cc, state)
+  VALUES (v_me, p_start, p_start, 'ACTIVE')
   ON CONFLICT (wallet) DO UPDATE
-    SET active = true, activated_at = now(), exited_at = NULL
+    SET state = 'ACTIVE', activated_at = now(), exited_at = NULL
   RETURNING * INTO v_row;
 
   RETURN jsonb_build_object(
@@ -370,26 +438,60 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'reason', 'no_wallet');
   END IF;
 
-  -- OUTGOING: questions this person put up in Simulation and nobody has finished
-  -- answering. Closed, and the slot released.
+  /**
+   * OUTGOING, IN BOTH TABLES — and the second half is the one that was missing.
+   *
+   * Closing the `challenges` row frees the slot, but `buildChallenges` reads
+   * `market_calls` DIRECTLY: it filters on mode and on the call being unresolved,
+   * and never joins back to its parent. So a closed Challenge whose recipient
+   * rows survive keeps asking. Other Simulation users would go on seeing
+   * somebody "waiting" on a question that person has walked away from and can no
+   * longer answer.
+   *
+   * The rows are DELETED rather than stamped, for the same reason the incoming
+   * ones are: `responded_at` would claim they answered and `passed_at` would
+   * claim a choice they never made — and `passed_at` reaches Challenge
+   * lifecycle, which this must never touch.
+   */
   UPDATE challenges
      SET closed_at = now(), close_reason = 'simulation_exit'
    WHERE challenger_wallet = v_me
      AND mode = 'SIMULATION'
      AND closed_at IS NULL;
 
+  DELETE FROM market_calls
+   WHERE caller_wallet = v_me
+     AND mode = 'SIMULATION'
+     AND responded_at IS NULL
+     AND passed_at IS NULL;
+
   -- INCOMING: Simulation calls addressed to this person that they have not
-  -- answered. Deleted rather than stamped, because a stamp would either claim
-  -- they answered (false) or that they passed (a durable claim about a choice
-  -- they never made). The caller's own Challenge simply reached one fewer person.
+  -- answered. Deleted for the same reason, and it is the same neutrality: the
+  -- caller's own Challenge simply reached one fewer person.
   DELETE FROM market_calls
    WHERE responder_wallet = v_me
      AND mode = 'SIMULATION'
      AND responded_at IS NULL
      AND passed_at IS NULL;
 
+  /**
+   * THE ORPHANS THE DELETE ABOVE JUST CREATED.
+   *
+   * Removing this person's incoming rows can empty somebody ELSE's Challenge.
+   * A Challenge that reaches nobody is exactly the corpse `put_on_table` refuses
+   * to create — it occupies one of three editorial slots, asks no one, prints no
+   * progress, and can never auto-close because `allResponded` is false at zero.
+   * Leaving one behind through a side door would be the same bug arriving by a
+   * different route, so every affected Challenge is reconciled here.
+   */
+  UPDATE challenges c
+     SET closed_at = now(), close_reason = 'simulation_exit'
+   WHERE c.mode = 'SIMULATION'
+     AND c.closed_at IS NULL
+     AND NOT EXISTS (SELECT 1 FROM market_calls mc WHERE mc.challenge_id = c.id);
+
   UPDATE simulation_accounts
-     SET active = false,
+     SET state = CASE WHEN p_graduate THEN 'GRADUATED' ELSE 'EXITED' END,
          exited_at = now(),
          graduated_at = CASE WHEN p_graduate THEN coalesce(graduated_at, now()) ELSE graduated_at END
    WHERE wallet = v_me
@@ -416,6 +518,69 @@ GRANT EXECUTE ON FUNCTION public.simulation_exit(text, boolean) TO service_role;
 -- trusting the browser). What this function owns is everything that must not be
 -- decided outside a lock: whether there is enough CC, whether there are enough
 -- shares, and whether this person is still allowed to be here.
+/**
+ * A SETTLED ORDER, RETURNED WITHOUT REDOING ANY OF IT.
+ *
+ * Split out so the SERVER can answer a retry before it reads an ETH/USD rate or
+ * a contract quote. Without this, a resend of an order that already settled
+ * could fail because pricing happened to be unavailable — the caller would be
+ * told their order did not go through, about an order that did. A replay must
+ * depend on nothing but the row.
+ *
+ * Returns the same shape as `simulation_execute_order`, or `ok:false` /
+ * `not_found` when there is nothing to replay.
+ */
+CREATE OR REPLACE FUNCTION public.simulation_replay_order(
+  p_wallet          text,
+  p_idempotency_key text,
+  p_fingerprint     text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_me    text := lower(p_wallet);
+  v_order simulation_orders%ROWTYPE;
+  v_acct  simulation_accounts%ROWTYPE;
+  v_pos   simulation_positions%ROWTYPE;
+BEGIN
+  SELECT * INTO v_order FROM simulation_orders
+   WHERE wallet = v_me AND idempotency_key = p_idempotency_key;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'not_found');
+  END IF;
+
+  -- THE SAME KEY FOR A DIFFERENT ORDER IS A MISTAKE, NOT A RETRY. Replaying it
+  -- would hand somebody a receipt for an order they did not place.
+  IF p_fingerprint IS NOT NULL
+     AND p_fingerprint <> ''
+     AND v_order.request_fingerprint <> ''
+     AND v_order.request_fingerprint <> p_fingerprint THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'idempotency_conflict');
+  END IF;
+
+  SELECT * INTO v_acct FROM simulation_accounts WHERE wallet = v_me;
+  SELECT * INTO v_pos FROM simulation_positions
+   WHERE wallet = v_me AND onchain_id = v_order.onchain_id;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'replayed', true,
+    'order', to_jsonb(v_order),
+    'account', to_jsonb(v_acct),
+    'position', to_jsonb(v_pos),
+    'convictions', simulation_conviction_count(v_me),
+    'answered', '[]'::jsonb
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.simulation_replay_order(text, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.simulation_replay_order(text, text, text) TO service_role;
+
 CREATE OR REPLACE FUNCTION public.simulation_execute_order(
   p_wallet          text,
   p_market_id       bigint,
@@ -427,7 +592,9 @@ CREATE OR REPLACE FUNCTION public.simulation_execute_order(
   p_fee_cc          numeric,
   p_idempotency_key text,
   p_weight          numeric,
-  p_target          integer
+  p_target          integer,
+  /** The order's own identity, so a reused key with a different payload fails. */
+  p_fingerprint     text DEFAULT ''
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -438,8 +605,8 @@ DECLARE
   v_me        text := lower(p_wallet);
   v_acct      simulation_accounts%ROWTYPE;
   v_pos       simulation_positions%ROWTYPE;
-  v_existing  simulation_orders%ROWTYPE;
   v_order     simulation_orders%ROWTYPE;
+  v_replay    jsonb;
   v_count     integer;
   v_side_yes  boolean := (p_side = 'YES');
   v_shares    numeric;
@@ -458,31 +625,35 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'reason', 'failed');
   END IF;
 
-  -- THE SAME KEY IS THE SAME ORDER. Answered before anything is locked, so a
-  -- double tap costs a read rather than a queue behind the first one's lock.
-  SELECT * INTO v_existing FROM simulation_orders WHERE idempotency_key = p_idempotency_key;
-  IF FOUND THEN
-    SELECT * INTO v_acct FROM simulation_accounts WHERE wallet = v_me;
-    SELECT * INTO v_pos FROM simulation_positions
-      WHERE wallet = v_me AND onchain_id = p_market_id;
-    RETURN jsonb_build_object(
-      'ok', true,
-      'replayed', true,
-      'order', to_jsonb(v_existing),
-      'account', to_jsonb(v_acct),
-      'position', to_jsonb(v_pos),
-      'convictions', simulation_conviction_count(v_me),
-      'answered', '[]'::jsonb
-    );
-  END IF;
+  -- THE SAME KEY IS THE SAME ORDER, and this is the CHEAP answer: a double tap
+  -- costs a read rather than a queue behind the first one's lock.
+  v_replay := simulation_replay_order(v_me, p_idempotency_key, p_fingerprint);
+  IF (v_replay->>'ok')::boolean THEN RETURN v_replay; END IF;
+  IF v_replay->>'reason' = 'idempotency_conflict' THEN RETURN v_replay; END IF;
 
   -- THE LOCK. Everything below reads state that another tab could be changing.
   SELECT * INTO v_acct FROM simulation_accounts WHERE wallet = v_me FOR UPDATE;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'no_account');
   END IF;
-  IF NOT v_acct.active OR v_acct.graduated_at IS NOT NULL THEN
-    RETURN jsonb_build_object('ok', false, 'reason', 'inactive');
+
+  /**
+   * AND AGAIN, NOW THAT WE HOLD THE LOCK.
+   *
+   * The check above happened BEFORE the lock, which is what makes it cheap — and
+   * also what makes it insufficient on its own. Two concurrent submissions of the
+   * same order both miss it, the first settles and releases, and the second then
+   * acquires the lock in a world where its order already exists. Without this
+   * second look it would carry on and collide with the unique index, and a
+   * DUPLICATE SUBMISSION WOULD FAIL rather than replay — the precise case the
+   * whole mechanism exists for.
+   */
+  v_replay := simulation_replay_order(v_me, p_idempotency_key, p_fingerprint);
+  IF (v_replay->>'ok')::boolean THEN RETURN v_replay; END IF;
+  IF v_replay->>'reason' = 'idempotency_conflict' THEN RETURN v_replay; END IF;
+
+  IF v_acct.state <> 'ACTIVE' THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'inactive', 'state', v_acct.state);
   END IF;
 
   -- STILL ELIGIBLE? Re-read inside the lock. This is what makes the tenth
@@ -563,11 +734,11 @@ BEGIN
   END IF;
 
   INSERT INTO simulation_orders (
-    idempotency_key, wallet, onchain_id, side, action,
+    idempotency_key, request_fingerprint, wallet, onchain_id, side, action,
     amount_cc, share_delta, market_price_usd, simulated_fee_cc
   )
   VALUES (
-    p_idempotency_key, v_me, p_market_id, p_side, p_action,
+    p_idempotency_key, coalesce(p_fingerprint, ''), v_me, p_market_id, p_side, p_action,
     v_cost, v_shares, p_price_usd, coalesce(p_fee_cc, 0)
   )
   RETURNING * INTO v_order;
@@ -626,23 +797,43 @@ BEGIN
   )
   SELECT coalesce(jsonb_agg(caller_wallet), '[]'::jsonb) INTO v_answered FROM answered;
 
+  /**
+   * THE TENTH CONVICTION ENDS SIMULATION HERE, IN THIS TRANSACTION.
+   *
+   * It used to be a client-side derivation — "account active AND progress
+   * complete" — which meant the DATABASE still read this person as fully ACTIVE
+   * until they got round to pressing Continue. The audience query cannot see a
+   * client derivation, so somebody who had finished could still be put into a
+   * new Simulation Challenge they were already forbidden from answering.
+   *
+   * Writing GRADUATING in the same transaction as the conviction that caused it
+   * closes that window entirely: there is no instant at which somebody is done
+   * and still reachable. The state moves to GRADUATED only when they press
+   * Continue, because an unread receipt is not a finished experience.
+   */
+  v_count := simulation_conviction_count(v_me);
+  IF v_count >= p_target AND v_acct.state = 'ACTIVE' THEN
+    UPDATE simulation_accounts SET state = 'GRADUATING' WHERE wallet = v_me
+    RETURNING * INTO v_acct;
+  END IF;
+
   RETURN jsonb_build_object(
     'ok', true,
     'replayed', false,
     'order', to_jsonb(v_order),
     'account', to_jsonb(v_acct),
     'position', to_jsonb(v_pos),
-    'convictions', simulation_conviction_count(v_me),
+    'convictions', v_count,
     'answered', v_answered
   );
 END;
 $$;
 
 REVOKE ALL ON FUNCTION public.simulation_execute_order(
-  text, bigint, text, text, numeric, numeric, numeric, numeric, text, numeric, integer
+  text, bigint, text, text, numeric, numeric, numeric, numeric, text, numeric, integer, text
 ) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.simulation_execute_order(
-  text, bigint, text, text, numeric, numeric, numeric, numeric, text, numeric, integer
+  text, bigint, text, text, numeric, numeric, numeric, numeric, text, numeric, integer, text
 ) TO service_role;
 
 -- ── put_on_table learns the mode ───────────────────────────────────────────
@@ -756,7 +947,9 @@ BEGIN
     FROM jsonb_array_elements(p_audience) AS a
     WHERE coalesce(a->>'wallet', '') <> ''
       AND lower(a->>'wallet') <> v_me
-    ON CONFLICT (market_id, caller_wallet, responder_wallet) DO NOTHING;
+    -- All FOUR key columns. Naming three would make a real call swallow the
+    -- Simulation one silently, which is the whole reason the key moved.
+    ON CONFLICT (market_id, caller_wallet, responder_wallet, mode) DO NOTHING;
 
     SELECT count(*) INTO v_reached FROM market_calls WHERE challenge_id = v_id;
 

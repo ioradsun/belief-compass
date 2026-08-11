@@ -104,11 +104,143 @@ describe("the ledger is separate, not a flag on the real one", () => {
   });
 });
 
+/**
+ * A WALLET ADDRESS IS PUBLIC. Anything keyed by one and not proved is readable by
+ * anyone who knows it — and a CC balance, a set of simulated positions and a
+ * lifecycle state are none of them things the product shows about other people.
+ * "Private in V1" has to mean the server refuses, not that no screen renders it.
+ */
+describe("the private ledger cannot be read without proving the wallet", () => {
+  const fns = code(SIM_FNS);
+
+  /** Each private endpoint, and the handler body that answers it. */
+  const handler = (name: string) => {
+    const at = fns.indexOf(`export const ${name} =`);
+    expect(at).toBeGreaterThan(-1);
+    const rest = fns.slice(at + 1);
+    const next = rest.indexOf("\nexport const ");
+    return next === -1 ? rest : rest.slice(0, next);
+  };
+
+  const PRIVATE = ["getSimulationAccount", "getSimulationPositions", "getSimulationPosition"];
+
+  it("requires a session on every private read", () => {
+    for (const name of PRIVATE) {
+      const h = handler(name);
+      expect(h).toMatch(/session: SESSION/);
+      // Not `.nullish()` or `.optional()` — a proof that may be omitted is not one.
+      expect(h).not.toMatch(/session: SESSION\.(nullish|optional)/);
+      expect(h).toMatch(/assertWalletOwnership/);
+    }
+  });
+
+  it("reads the PROVED wallet, never the claimed one", () => {
+    // `assertWalletOwnership` returns the address it verified. Passing
+    // `data.wallet` on instead would make the check decorative: the request
+    // could name one wallet and carry another's session.
+    for (const name of PRIVATE) {
+      const h = handler(name);
+      expect(h).toMatch(/const wallet = await assertWalletOwnership/);
+      expect(h).not.toMatch(/load\w+\(\s*data\.wallet/);
+    }
+  });
+
+  it("takes a required wallet rather than a nullable one on the private reads", () => {
+    // A nullish wallet forced a signed-out branch that returned data without
+    // ever reaching the ownership check.
+    for (const name of PRIVATE) {
+      expect(handler(name)).toMatch(/wallet: WALLET,/);
+    }
+  });
+
+  it("keeps the conviction count public, because it is an aggregate", () => {
+    // The entry card must print a real count to a wallet that has never minted a
+    // session. Requiring proof here would tell somebody with eight convictions
+    // that they have none.
+    const beliefs = code("src/lib/beliefs.functions.ts");
+    const at = beliefs.indexOf("export const getProfileProgress");
+    expect(at).toBeGreaterThan(-1);
+    expect(beliefs.slice(at, at + 600)).not.toMatch(/assertWalletOwnership/);
+  });
+
+  it("never lets a read open a wallet", () => {
+    // A signature prompt triggered by looking at a screen is not a read.
+    const q = code("src/lib/simulation-query.ts");
+    expect(q).not.toMatch(/interactive:\s*true/);
+    expect(q).toMatch(/signedRead/);
+  });
+
+  it("only the order transaction may claim Simulation provenance", () => {
+    // The public belief endpoint accepted `source: "simulation"`, so any caller
+    // could stamp a free tap as a completed Simulation conviction.
+    const beliefs = code("src/lib/beliefs.functions.ts");
+    expect(beliefs).toMatch(/source: z\.enum\(\["tap", "calibration"\]\)/);
+    expect(beliefs).not.toMatch(/z\.enum\(\[[^\]]*"simulation"[^\]]*\]\)/);
+  });
+});
+
+describe("one definition of which markets are already answered", () => {
+  it("the calibration queue excludes the same set the count is built from", () => {
+    // Two definitions meant a market somebody had backed and exited was offered
+    // as unanswered — and answering it left their progress unchanged, because
+    // the canonical count already included it.
+    const c = code("src/lib/beliefs.functions.ts");
+    expect(c).toMatch(/export async function answeredMarkets/);
+    const queue = c.slice(c.indexOf("export const getCalibrationQueue"));
+    expect(queue).toMatch(/answeredMarkets\(sb, wallet\)/);
+    expect(queue).not.toMatch(/\.in\("stance_side", \["YES", "NO"\]\)/);
+  });
+});
+
 describe("the order transaction is atomic and idempotent", () => {
   it("settles or writes nothing — there is no pending order state", () => {
     const sql = readFileSync(join(process.cwd(), MIGRATION), "utf8");
     expect(sql).toMatch(/status\s+text\s+NOT NULL DEFAULT 'SETTLED' CHECK \(status = 'SETTLED'\)/);
-    expect(sql).toMatch(/idempotency_key\s+text\s+NOT NULL UNIQUE/);
+  });
+
+  it("scopes the idempotency key to the wallet, not the whole table", () => {
+    // A key is a CLIENT value. Global uniqueness means one person's key can
+    // refuse another person's genuine order.
+    const sql = readFileSync(join(process.cwd(), MIGRATION), "utf8");
+    expect(sql).toMatch(
+      /simulation_orders_idempotency_idx[\s\S]{0,120}\(wallet, idempotency_key\)/,
+    );
+    expect(sql).not.toMatch(/idempotency_key\s+text\s+NOT NULL UNIQUE/);
+  });
+
+  it("rejects the same key carrying a different order", () => {
+    const sql = readFileSync(join(process.cwd(), MIGRATION), "utf8");
+    expect(sql).toMatch(/request_fingerprint/);
+    expect(sql).toMatch(/'idempotency_conflict'/);
+  });
+
+  it("rechecks idempotency AFTER taking the lock, not only before it", () => {
+    // Both concurrent submissions miss the pre-lock check; the second must find
+    // the settled row once it holds the lock, or it collides and FAILS instead
+    // of replaying — the exact case the mechanism exists for.
+    const sql = readFileSync(join(process.cwd(), MIGRATION), "utf8");
+    const fn = sql.slice(sql.indexOf("FUNCTION public.simulation_execute_order"));
+    const lockAt = fn.indexOf("FOR UPDATE");
+    const after = fn.slice(lockAt);
+    expect(after).toMatch(/simulation_replay_order\(v_me, p_idempotency_key/);
+  });
+
+  it("can replay a settled order without any pricing read", () => {
+    // A retry must not depend on an ETH/USD rate or a contract quote: an order
+    // that already settled cannot be reported as failed because pricing blinked.
+    const server = code(SIM_SERVER);
+    const body = server.slice(server.indexOf("export async function executeSimulationOrder"));
+    const replayAt = body.indexOf("simulation_replay_order");
+    const rateAt = body.indexOf("readEthUsd");
+    expect(replayAt).toBeGreaterThan(-1);
+    expect(rateAt).toBeGreaterThan(replayAt);
+    // And the replay RPC itself reads nothing but rows.
+    const sql = readFileSync(join(process.cwd(), MIGRATION), "utf8");
+    const fn = sql.slice(
+      sql.indexOf("FUNCTION public.simulation_replay_order"),
+      sql.indexOf("FUNCTION public.simulation_execute_order"),
+    );
+    expect(fn).toMatch(/STABLE/);
   });
 
   it("locks the account before checking the balance", () => {
@@ -136,9 +268,19 @@ describe("the order transaction is atomic and idempotent", () => {
 
   it("a graduated account can never reactivate", () => {
     const sql = readFileSync(join(process.cwd(), MIGRATION), "utf8");
-    expect(sql).toMatch(/CHECK \(graduated_at IS NULL OR active = false\)/);
-    expect(sql).toMatch(
-      /IF FOUND AND v_row\.graduated_at IS NOT NULL THEN[\s\S]{0,120}'graduated'/,
+    expect(sql).toMatch(/CHECK \(\(graduated_at IS NULL\) = \(state <> 'GRADUATED'\)\)/);
+    expect(sql).toMatch(/IF FOUND AND v_row\.state = 'GRADUATED' THEN[\s\S]{0,120}'graduated'/);
+    // And the trigger pins it, so no writer anywhere can move it back.
+    expect(sql).toMatch(/IF OLD\.state = 'GRADUATED' THEN[\s\S]{0,80}NEW\.state := 'GRADUATED'/);
+  });
+
+  it("writes GRADUATING in the same transaction as the tenth conviction", () => {
+    // Derived on the client, this rule was invisible to the audience query — so
+    // somebody who had finished could still be given a Challenge to answer.
+    const sql = readFileSync(join(process.cwd(), MIGRATION), "utf8");
+    const fn = sql.slice(sql.indexOf("FUNCTION public.simulation_execute_order"));
+    expect(fn).toMatch(
+      /IF v_count >= p_target AND v_acct\.state = 'ACTIVE' THEN[\s\S]{0,160}state = 'GRADUATING'/,
     );
   });
 });

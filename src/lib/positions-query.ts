@@ -113,10 +113,13 @@ export function useViewerPositions(
   wallet: string | undefined,
   win: VolumeWindow,
 ): ViewerPositions & { raw: unknown } {
-  const { active } = useSimulationMode();
+  const { active, session } = useSimulationMode();
 
   const real = useQuery({ ...myConvictionsQO(wallet, win), enabled: !!wallet && !active });
-  const sim = useQuery({ ...simulationPositionsQO(wallet), enabled: !!wallet && active });
+  const sim = useQuery({
+    ...simulationPositionsQO(wallet, session),
+    enabled: !!wallet && active,
+  });
 
   if (active) {
     const positions: ViewerPosition[] = (sim.data ?? []).map((h) => ({

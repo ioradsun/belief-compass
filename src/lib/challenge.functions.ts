@@ -108,13 +108,17 @@ export const getChallengeHistory = createServerFn({ method: "GET" })
 export const getCallReach = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) =>
     z
-      .object({ wallet: WALLET.nullish(), marketId: z.number().int().nonnegative().nullish() })
+      .object({
+        wallet: WALLET.nullish(),
+        marketId: z.number().int().nonnegative().nullish(),
+        mode: MODE,
+      })
       .parse(raw ?? {}),
   )
   .handler(async ({ data }): Promise<CallReach> => {
     if (!data.wallet) return { tribe: 0, rivals: 0, forming: 0 };
     const { callReachFor } = await import("@/lib/challenge.server");
-    return callReachFor(data.wallet, data.marketId ?? undefined);
+    return callReachFor(data.wallet, data.marketId ?? undefined, data.mode);
   });
 
 /**

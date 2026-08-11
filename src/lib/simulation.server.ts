@@ -29,6 +29,7 @@ import {
   sharesToWei,
   simulationEligible,
   type SimulationAccount,
+  type SimulationLifecycle,
   type SimulationMode,
   type SimulationPosition,
 } from "@/domain/simulation";
@@ -44,7 +45,7 @@ interface AccountRow {
   wallet: string;
   starting_balance_cc: number | string;
   available_balance_cc: number | string;
-  active: boolean;
+  state: string;
   activated_at: string | null;
   exited_at: string | null;
   graduated_at: string | null;
@@ -69,13 +70,17 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+/** An unrecognised state is treated as EXITED — the option that grants nothing. */
+const toState = (v: string | null | undefined): SimulationLifecycle =>
+  v === "ACTIVE" || v === "GRADUATING" || v === "GRADUATED" ? v : "EXITED";
+
 const toAccount = (r: AccountRow | null): SimulationAccount | null =>
   r
     ? {
         wallet: r.wallet,
         startingBalanceCc: num(r.starting_balance_cc),
         balanceCc: num(r.available_balance_cc),
-        active: !!r.active,
+        state: toState(r.state),
         activatedAt: r.activated_at,
         exitedAt: r.exited_at,
         graduatedAt: r.graduated_at,
@@ -123,6 +128,26 @@ async function convictionCount(sb: Sb, wallet: string): Promise<number> {
   return num(data);
 }
 
+/**
+ * THE PRIVATE ACCOUNT, and only it.
+ *
+ * Separate from `loadSimulationState` because the two have different audiences:
+ * this is the balance and the lifecycle, which nobody but the owner may read,
+ * while the conviction count in the state is an aggregate the entry card prints
+ * before anybody has signed anything. Splitting them is what let the read
+ * endpoints be signed without making a signature the price of seeing your own
+ * progress.
+ */
+export async function loadSimulationAccount(walletRaw: string): Promise<SimulationAccount | null> {
+  const sb = serviceClient();
+  const { data } = await sb
+    .from("simulation_accounts")
+    .select("*")
+    .eq("wallet", walletRaw.toLowerCase())
+    .maybeSingle();
+  return toAccount((data ?? null) as AccountRow | null);
+}
+
 export async function loadSimulationState(walletRaw: string | null): Promise<SimulationState> {
   if (!walletRaw) return emptyState();
   const sb = serviceClient();
@@ -139,7 +164,7 @@ export async function loadSimulationState(walletRaw: string | null): Promise<Sim
     account,
     progress,
     mode: modeFor(account, progress),
-    eligible: simulationEligible({ progress, graduatedAt: account?.graduatedAt ?? null }),
+    eligible: simulationEligible({ progress, state: account?.state ?? null }),
   };
 }
 
@@ -336,6 +361,19 @@ export class QuoteUnavailable extends Error {
   }
 }
 
+/**
+ * The same idempotency key, carrying a DIFFERENT order.
+ *
+ * Not a retry and not a duplicate — a mistake. Replaying it would hand somebody
+ * a receipt for an order they did not place, so it is refused loudly instead.
+ */
+export class IdempotencyConflict extends Error {
+  constructor() {
+    super("That order didn't match the one we already recorded. Try again.");
+    this.name = "IdempotencyConflict";
+  }
+}
+
 async function quoteBuy(marketId: number, yes: boolean, amountCc: number, ethUsd: number) {
   const ethWei = usdToWei(amountCc, ethUsd);
   if (ethWei <= 0n) throw new QuoteUnavailable();
@@ -403,6 +441,29 @@ export interface SimulationOrderResult {
  * answered calls — all in one transaction. Nothing here writes to a real table
  * and nothing here touches a wallet.
  */
+/**
+ * THE ORDER'S OWN IDENTITY, as one string.
+ *
+ * Paired with the idempotency key so a reused key carrying a DIFFERENT order is
+ * refused rather than replayed. The size is rounded to six places because a
+ * retry re-derives it from the same inputs and floating-point noise in the
+ * fifteenth digit is not somebody changing their mind.
+ */
+const fingerprint = (i: { marketId: number; side: string; action: string; size: number }): string =>
+  `${i.marketId}:${i.side}:${i.action}:${i.size.toFixed(6)}`;
+
+/** The server's own shape for whatever the two order RPCs return. */
+interface OrderRpcResult {
+  ok?: boolean;
+  reason?: string;
+  available?: number | string;
+  order?: Record<string, unknown>;
+  account?: AccountRow;
+  position?: PositionRow;
+  convictions?: number | string;
+  answered?: string[];
+}
+
 export async function executeSimulationOrder(input: {
   wallet: string;
   marketId: number;
@@ -415,6 +476,27 @@ export async function executeSimulationOrder(input: {
   const sb = serviceClient();
   const wallet = input.wallet.toLowerCase();
   const yes = input.side === "YES";
+  const print = fingerprint(input);
+
+  /**
+   * AN ALREADY-SETTLED ORDER IS ANSWERED BEFORE ANYTHING ELSE IS ATTEMPTED.
+   *
+   * The pricing reads below reach the ETH/USD cache and then the Base RPC, and
+   * both can be unavailable. Without this fast path a RETRY of an order that
+   * already settled could fail on a quote — telling somebody their order did not
+   * go through, about an order that did, and inviting them to place it again. A
+   * replay must depend on nothing but the row.
+   */
+  const replay = await sb.rpc("simulation_replay_order", {
+    p_wallet: wallet,
+    p_idempotency_key: input.idempotencyKey,
+    p_fingerprint: print,
+  });
+  if (!replay.error) {
+    const settled = (replay.data ?? {}) as OrderRpcResult;
+    if (settled.ok) return shapeOrderResult(settled, input.side, input.action);
+    if (settled.reason === "idempotency_conflict") throw new IdempotencyConflict();
+  }
 
   const ethUsd = await readEthUsd(sb);
   if (ethUsd == null || !(ethUsd > 0)) throw new QuoteUnavailable();
@@ -452,19 +534,11 @@ export async function executeSimulationOrder(input: {
     // small one — and neither may outrank a real position on the same market.
     p_weight: EXPRESSED_WEIGHT,
     p_target: PROFILE_TARGET,
+    p_fingerprint: print,
   });
   if (error) throw new Error(error.message);
 
-  const res = (data ?? {}) as {
-    ok?: boolean;
-    reason?: string;
-    available?: number | string;
-    order?: Record<string, unknown>;
-    account?: AccountRow;
-    position?: PositionRow;
-    convictions?: number | string;
-    answered?: string[];
-  };
+  const res = (data ?? {}) as OrderRpcResult;
 
   if (!res.ok) {
     const { insufficientCc } = await import("@/domain/simulation");
@@ -472,16 +546,32 @@ export async function executeSimulationOrder(input: {
     if (res.reason === "insufficient_shares") throw new Error("You don't hold that many shares.");
     if (res.reason === "complete") throw new Error("Your Conviction profile is already ready.");
     if (res.reason === "inactive") throw new Error("Simulation isn't active for this wallet.");
+    if (res.reason === "idempotency_conflict") throw new IdempotencyConflict();
     const { ORDER_FAILED } = await import("@/domain/simulation");
     throw new Error(ORDER_FAILED);
   }
 
+  return shapeOrderResult(res, input.side, input.action);
+}
+
+/**
+ * ONE SHAPE FOR BOTH DOORS. A replayed order and a freshly settled one must be
+ * indistinguishable to the caller — if they were not, a retry would render a
+ * different receipt from the original, which is exactly the confusion
+ * idempotency exists to prevent.
+ */
+function shapeOrderResult(
+  res: OrderRpcResult,
+  side: "YES" | "NO",
+  action: "BUY" | "SELL",
+): SimulationOrderResult {
   const account = toAccount((res.account ?? null) as AccountRow | null);
   const position = res.position ? toPosition(res.position) : null;
   if (!account || !position) throw new Error("That Simulation order did not settle cleanly.");
 
   const progress = profileProgressFor(num(res.convictions));
   const row = (res.order ?? {}) as Record<string, unknown>;
+  const price = row.market_price_usd == null ? null : num(row.market_price_usd);
   return {
     account,
     position,
@@ -489,12 +579,12 @@ export async function executeSimulationOrder(input: {
     mode: modeFor(account, progress),
     order: {
       id: Number(row.id ?? 0),
-      side: input.side,
-      action: input.action,
+      side,
+      action,
       amountCc: num(row.amount_cc),
       shares: Math.abs(num(row.share_delta)),
       feeCc: num(row.simulated_fee_cc),
-      priceUsd,
+      priceUsd: price != null && price > 0 ? price : null,
     },
     answered: Array.isArray(res.answered) ? res.answered.map(String) : [],
   };

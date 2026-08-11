@@ -40,7 +40,7 @@ type Sb = ReturnType<typeof serviceClient>;
  * through `expressed_beliefs`: a simulated conviction is counted because it is a
  * belief, not because a second branch remembers to add it.
  */
-async function beliefMarketCount(sb: Sb, wallet: string): Promise<number> {
+export async function answeredMarkets(sb: Sb, wallet: string): Promise<Set<number>> {
   const [onchain, expressed] = await Promise.all([
     sb
       .from("wallet_beliefs")
@@ -58,7 +58,12 @@ async function beliefMarketCount(sb: Sb, wallet: string): Promise<number> {
       ids.add(Number(r.onchain_id));
   }
   for (const r of (expressed.data ?? []) as { onchain_id: number }[]) ids.add(Number(r.onchain_id));
-  return ids.size;
+  return ids;
+}
+
+/** The count both thresholds fold, from the one answered-market set. */
+async function beliefMarketCount(sb: Sb, wallet: string): Promise<number> {
+  return (await answeredMarkets(sb, wallet)).size;
 }
 
 /** Record a free belief (or update the side) and return the fresh readiness. */
@@ -70,12 +75,16 @@ export const expressBelief = createServerFn({ method: "POST" })
         marketId: z.number().int().nonnegative(),
         side: z.enum(["YES", "NO"]),
         /**
-         * WHERE THE BELIEF CAME FROM. `simulation` is written by the Simulation
-         * order transaction rather than by this endpoint — it is listed because
-         * the source is a property of the belief and the enum is the place that
-         * says which sources exist, not because a client may claim it.
+         * WHERE THE BELIEF CAME FROM, AND WHAT A CLIENT MAY CLAIM.
+         *
+         * `simulation` is deliberately ABSENT. It is written only by the atomic
+         * Simulation order transaction, which is the one place that can prove a
+         * position actually settled — and provenance nobody can verify is
+         * provenance anybody can assert. Listing it here as documentation while
+         * the validator accepted it would have let any caller stamp a free tap as
+         * a completed Simulation conviction.
          */
-        source: z.enum(["tap", "calibration", "simulation"]).default("tap"),
+        source: z.enum(["tap", "calibration"]).default("tap"),
         /** Proof the caller controls `wallet` (see useWalletSession). */
         session: z.string().min(16).max(2000),
       })
@@ -154,22 +163,21 @@ export const getCalibrationQueue = createServerFn({ method: "GET" })
     const sb = serviceClient();
     const wallet = data.wallet.toLowerCase();
 
-    const [answeredOn, answeredEx, marketsRes, stateRes] = await Promise.all([
-      sb
-        .from("wallet_beliefs")
-        .select("onchain_id")
-        .eq("wallet", wallet)
-        .in("stance_side", ["YES", "NO"]),
-      sb.from("expressed_beliefs").select("onchain_id").eq("wallet", wallet),
+    /**
+     * EXCLUDED BY THE SAME SET THE COUNT IS BUILT FROM.
+     *
+     * This used to run its own narrower read — currently-directional positions
+     * only — which disagreed with the counter the moment the counter learned
+     * about remembered convictions. A market somebody had backed and since
+     * exited would be offered as unanswered, and answering it would leave their
+     * progress unchanged, because the canonical count already included it. One
+     * function, so "answered" cannot mean two things.
+     */
+    const [answered, marketsRes, stateRes] = await Promise.all([
+      answeredMarkets(sb, wallet),
       sb.from("markets").select("onchain_id, category, title").limit(600),
       sb.from("market_state").select("onchain_id, believers_yes, believers_no"),
     ]);
-
-    const answered = new Set<number>();
-    for (const r of (answeredOn.data ?? []) as { onchain_id: number }[])
-      answered.add(Number(r.onchain_id));
-    for (const r of (answeredEx.data ?? []) as { onchain_id: number }[])
-      answered.add(Number(r.onchain_id));
 
     const activity = new Map<number, number>();
     for (const s of (stateRes.data ?? []) as {

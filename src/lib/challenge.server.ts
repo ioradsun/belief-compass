@@ -266,18 +266,31 @@ async function dnaCandidates(
 async function answeredCandidates(
   sb: Sb,
   viewer: string,
+  /**
+   * WHICH LEDGER'S HISTORY QUALIFIES SOMEBODY.
+   *
+   * This is a DOOR INTO AN AUDIENCE — "we have answered each other before, so you
+   * can ask me" — and an audience decides who actually gets contacted. Reading
+   * both ledgers here would let a real answering relationship qualify somebody
+   * for a Simulation Challenge they cannot receive, and the reverse. See
+   * `docs/simulation-mode.md` for where the mode line falls and where it
+   * deliberately does not.
+   */
+  mode: RecordMode = "REAL",
 ): Promise<{ status: "ok"; rows: AudienceCandidate[] } | { status: "failed" }> {
   const [mine, theirs] = await Promise.all([
     sb
       .from("market_calls")
       .select("responder_wallet")
       .eq("caller_wallet", viewer)
+      .eq("mode", mode)
       .not("responded_at", "is", null)
       .limit(READ.answeredPairs),
     sb
       .from("market_calls")
       .select("caller_wallet")
       .eq("responder_wallet", viewer)
+      .eq("mode", mode)
       .not("responded_at", "is", null)
       .limit(READ.answeredPairs),
   ]);
@@ -738,7 +751,10 @@ export async function eligibleAudience(
    * what `relation_at_call` freezes. `dedupeAudience` settles that by
    * precedence, not by arrival.
    */
-  const [dna, answered] = await Promise.all([dnaCandidates(sb, me), answeredCandidates(sb, me)]);
+  const [dna, answered] = await Promise.all([
+    dnaCandidates(sb, me),
+    answeredCandidates(sb, me, mode),
+  ]);
   if (dna.status === "failed") return { status: "failed", reason: "dna_unavailable" };
   if (answered.status === "failed") return { status: "failed", reason: "calls_unavailable" };
 
@@ -843,7 +859,12 @@ export async function audienceFor(
   );
 }
 
-export async function callReachFor(wallet: string, marketId?: number): Promise<CallReach> {
+export async function callReachFor(
+  wallet: string,
+  marketId?: number,
+  /** The reach shown before committing must be the reach the write would have. */
+  mode: RecordMode = "REAL",
+): Promise<CallReach> {
   const sb = serviceClient();
   const me = wallet.toLowerCase();
   /**
@@ -854,7 +875,7 @@ export async function callReachFor(wallet: string, marketId?: number): Promise<C
    */
   let relations: CallRelationAtTime[];
   if (typeof marketId === "number" && Number.isFinite(marketId)) {
-    const res = await eligibleAudience(sb, me, marketId);
+    const res = await eligibleAudience(sb, me, marketId, mode);
     // A refused audience is not a reach of zero. Zero would render "nobody
     // qualifies" — a confident claim about somebody's network made from a read
     // that never completed.
@@ -871,7 +892,10 @@ export async function callReachFor(wallet: string, marketId?: number): Promise<C
      * it is the same class of drift as the 32-person gap: two definitions of who
      * can be reached.
      */
-    const [dna, answered] = await Promise.all([dnaCandidates(sb, me), answeredCandidates(sb, me)]);
+    const [dna, answered] = await Promise.all([
+      dnaCandidates(sb, me),
+      answeredCandidates(sb, me, mode),
+    ]);
     if (dna.status === "failed" || answered.status === "failed")
       return { tribe: 0, rivals: 0, forming: 0, failed: true };
     relations = dedupeAudience([...dna.rows, ...answered.rows]).map((c) => c.relationAtCall);

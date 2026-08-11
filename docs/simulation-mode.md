@@ -48,6 +48,36 @@ neutral reason `simulation_exit` and deletes unresolved incoming Simulation
 calls. Neither is recorded as a pass, and `passed_at` is never set: a pass
 reaches Challenge lifecycle and this must not.
 
+## Privacy
+
+A wallet address is public, so anything keyed by one and not proved is readable
+by anyone who knows it. The split:
+
+| | |
+| --- | --- |
+| **Private, signed** | the account (CC balance, lifecycle state), the positions, every write |
+| **Public, unsigned** | the conviction count — an aggregate, and the number the entry card must print before anybody has signed anything |
+
+Private reads take a **required** session and read the wallet
+`assertWalletOwnership` returns, never the one the request claimed. No read ever
+opens a wallet: the queries supply a session that already exists and resolve to
+the empty answer when there is none.
+
+## Idempotency
+
+The key is scoped `(wallet, idempotency_key)` — a key is a client value, so one
+person's cannot refuse another's order — and paired with a `request_fingerprint`
+so the same key carrying a *different* order is rejected rather than replayed.
+
+The check runs **twice**: once before the account lock (cheap, catches the double
+tap) and once after it (the case the mechanism exists for — two concurrent
+submissions both miss the first check, and without the second the loser collides
+with the unique index and fails instead of replaying).
+
+A settled order replays through `simulation_replay_order`, which reads rows and
+nothing else. The server calls it **before** any ETH/USD or contract read, so a
+retry can never be reported as failed because pricing was briefly unavailable.
+
 ## Where things live
 
 | Concern | Owner |
@@ -61,6 +91,7 @@ reaches Challenge lifecycle and this must not.
 | Real/Simulation execution facade | `src/lib/market-execution.ts` |
 | Tables, RPCs, mode columns | `supabase/migrations/20260909000000_simulation_mode.sql` |
 | The boundary, asserted closed | `src/lib/simulation-boundary.test.ts` |
+| The transactional claims, on a real cluster | `src/lib/simulation.pg.test.ts` (`npm run test:pg`) |
 
 ## Execution
 
@@ -114,6 +145,19 @@ amount is stored on the order for future behavioural analysis only.
 
 ## Data separation
 
+An account carries a persisted lifecycle state — `ACTIVE`, `GRADUATING`,
+`EXITED`, `GRADUATED` — rather than a boolean plus a client-side derivation. The
+order transaction writes `GRADUATING` in the same transaction as the tenth
+conviction, so there is no window in which somebody is finished but still
+reachable by a Challenge they cannot answer.
+
+Leaving (by either door) closes outgoing Simulation Challenges **and** deletes
+their unanswered recipient rows — `buildChallenges` reads `market_calls`
+directly and never joins back to the parent, so closing only the parent would
+leave other people still being asked. It then reconciles any Challenge those
+deletions emptied, because a Challenge reaching nobody holds an editorial slot
+forever.
+
 `simulation_accounts`, `simulation_orders` (immutable, idempotency-keyed),
 `simulation_positions` (a projection; value is **derived** from the live real
 price, never stored), and `simulation_house_rounds`.
@@ -126,7 +170,12 @@ count play balances as market capital. A separate table cannot be forgotten.
 `challenges` and `market_calls` are **social** records, not money records, so
 they keep one ledger with a `mode` column (`REAL` by default). Every read, write,
 audience calculation, capacity check and answer is scoped by it, including the
-active-slot indexes.
+active-slot indexes — and `market_calls`' **primary key carries the mode**. With
+the three-column key, a real call between two people on a market made the
+Simulation call between the same two people impossible, and `ON CONFLICT … DO
+NOTHING` turned that into silence: the audience write dropped the person and the
+Challenge reached one fewer than it reported. The mode column would have been a
+label on whichever row was written first.
 
 The whole order — eligibility, balance, ledger, position, belief, match refresh,
 answered calls — is one transaction (`simulation_execute_order`), with the
@@ -138,11 +187,41 @@ Challenge remains a **social call**, not a wager. It never spends, transfers or
 locks CC. The Simulation audience is:
 
 ```
-existing eligible audience  INTERSECT  active Simulation users
+existing eligible audience  INTERSECT  accounts in state = 'ACTIVE'
 ```
 
 An intersection, never a second matching algorithm. An empty audience omits the
-action rather than rendering it disabled.
+action rather than rendering it disabled. `ACTIVE` and not merely "has an
+account": a `GRADUATING` user can no longer answer, so putting them in an
+audience would ask somebody for something they are forbidden from giving.
+
+### Where the mode line falls — and where it deliberately does not
+
+This is an explicit decision, not an accident of which functions took a
+parameter.
+
+**Mode-scoped — anything that decides who gets contacted, or what is owed.**
+A wrong answer here reaches a real person: it puts a question on somebody's rail
+that they have no way to close, or contacts somebody in a ledger they are not in.
+
+- `buildChallenges` — the open queue
+- `eligibleAudience`, `audienceFor`, `callReachFor` — who can be asked, and the
+  count shown before asking
+- `answeredCandidates` — the "we have answered each other before" door **into**
+  an audience
+- `put_on_table`, `passCall`, `tableFor` — the writes and the capacity
+- `markCallsAnswered` — a real position never closes a Simulation call, and the
+  order transaction's `mode = 'SIMULATION'` predicate is the other half
+
+**Not mode-scoped — retrospective relationship history.**
+`callsWithPerson`, `dependabilityFor` and `challengeHistory` describe what two
+people have actually done. Splitting them would fragment one relationship into
+two half-histories on a profile that shows one person, and Simulation is a few
+weeks of somebody's first month — not a separate social identity. Dependability
+already excludes passes and never reads a side; it counts showing up, which is
+equally real in either ledger.
+
+The line, stated once: **audience reads are scoped, history reads are not.**
 
 ## House
 

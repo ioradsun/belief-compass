@@ -21,7 +21,7 @@ const account = (over: Partial<SimulationAccount> = {}): SimulationAccount => ({
   wallet: "0xabc",
   startingBalanceCc: SIMULATION_START_CC,
   balanceCc: SIMULATION_START_CC,
-  active: true,
+  state: "ACTIVE",
   activatedAt: "2026-08-11T00:00:00.000Z",
   exitedAt: null,
   graduatedAt: null,
@@ -87,32 +87,46 @@ describe("the two thresholds stay apart", () => {
 
 describe("eligibility", () => {
   it("is open below ten", () => {
-    expect(simulationEligible({ progress: profileProgressFor(9), graduatedAt: null })).toBe(true);
+    expect(simulationEligible({ progress: profileProgressFor(9), state: null })).toBe(true);
   });
   it("closes at ten", () => {
-    expect(simulationEligible({ progress: profileProgressFor(10), graduatedAt: null })).toBe(false);
+    expect(simulationEligible({ progress: profileProgressFor(10), state: "ACTIVE" })).toBe(false);
+  });
+  it("reopens after an exit below ten — leaving is reversible", () => {
+    expect(simulationEligible({ progress: profileProgressFor(4), state: "EXITED" })).toBe(true);
   });
   it("never reopens for a graduated account, whatever the count says later", () => {
-    expect(
-      simulationEligible({ progress: profileProgressFor(3), graduatedAt: "2026-08-01T00:00:00Z" }),
-    ).toBe(false);
+    // A real position closed after graduation can drop the count back below ten;
+    // that must not reopen a door the product closed permanently.
+    expect(simulationEligible({ progress: profileProgressFor(3), state: "GRADUATED" })).toBe(false);
   });
 });
 
 describe("modeFor", () => {
-  it("is REAL with no account, an inactive one, or a graduated one", () => {
+  it("is REAL with no account, an exited one, or a graduated one", () => {
     expect(modeFor(null, profileProgressFor(2))).toBe("REAL");
-    expect(modeFor(account({ active: false }), profileProgressFor(2))).toBe("REAL");
-    expect(modeFor(account({ graduatedAt: "2026-08-01T00:00:00Z" }), profileProgressFor(2))).toBe(
-      "REAL",
-    );
+    expect(modeFor(account({ state: "EXITED" }), profileProgressFor(2))).toBe("REAL");
+    expect(
+      modeFor(
+        account({ state: "GRADUATED", graduatedAt: "2026-08-01T00:00:00Z" }),
+        profileProgressFor(2),
+      ),
+    ).toBe("REAL");
   });
   it("simulates below ten", () => {
     expect(modeFor(account(), profileProgressFor(6))).toBe("SIMULATION");
   });
-  it("graduates at ten without dropping straight to REAL", () => {
-    // The tenth receipt is still on screen — it must stay readable.
-    expect(modeFor(account(), profileProgressFor(10))).toBe("GRADUATING");
+  it("reads the persisted GRADUATING state, whatever the count says", () => {
+    // The order transaction writes it; the screen does not re-derive it.
+    expect(modeFor(account({ state: "GRADUATING" }), profileProgressFor(10))).toBe("GRADUATING");
+  });
+
+  it("still graduates on the count alone, as a backstop", () => {
+    // The tenth conviction can arrive from OUTSIDE Simulation — a real position
+    // indexed mid-session — and no Simulation transaction runs for that. The
+    // screen must not offer an eleventh order in the seconds before anyone
+    // notices, and the tenth receipt must stay readable.
+    expect(modeFor(account({ state: "ACTIVE" }), profileProgressFor(10))).toBe("GRADUATING");
   });
   it("keeps Simulation data visible while graduating but opens no new order", () => {
     expect(isSimulating("GRADUATING")).toBe(true);

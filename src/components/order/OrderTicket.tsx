@@ -20,7 +20,7 @@ import { avgPriceUsd, fmtShares, fmtUsd, sharesForPct, type OrderSide } from "@/
 import { formatMoney, type DisplayUnit, weiToEth, convertMoney } from "@/domain/money";
 import { affordability, affordabilityCopy } from "@/domain/affordability";
 import { useDisplayUnit } from "@/lib/display-unit";
-import { checkSimulationBuy, formatCC, ORDER_FAILED } from "@/domain/simulation";
+import { checkSimulationBuy, formatCC, ORDER_FAILED, SIMULATION_COPY } from "@/domain/simulation";
 import type { SimulationTicket, TradeLike } from "@/lib/market-execution";
 
 /**
@@ -807,6 +807,16 @@ function BuyTicket({
         </p>
       )}
 
+      {/* THE ONE WALLET STATE SIMULATION CAN REACH, NAMED. A session expires and
+          a write keyed by a wallet needs proof of that wallet — so the wallet may
+          open for a SIGNATURE. Saying which of the two it is, in advance, is the
+          difference between a reassurance and a surprise. */}
+      {sim?.verifying && (
+        <p className="mt-2 text-[11px] leading-snug text-[var(--text-secondary)]" role="status">
+          {SIMULATION_COPY.verifyWallet}
+        </p>
+      )}
+
       <button
         type="button"
         disabled={disabled}
@@ -1059,6 +1069,12 @@ function SellTicket({
           </span>{" "}
           Your wallet has been debited. This usually takes a few seconds. You can safely leave this
           screen; the result will be here when you come back.
+        </p>
+      )}
+
+      {sim?.verifying && (
+        <p className="mt-2 text-[11px] leading-snug text-[var(--text-secondary)]" role="status">
+          {SIMULATION_COPY.verifyWallet}
         </p>
       )}
 

@@ -12,18 +12,37 @@
  * refresh, follows the wallet rather than the browser, and cannot be activated by
  * a link. Connecting a DIFFERENT wallet loads that wallet's own state — the query
  * key carries the address, so nothing carries across.
+ *
+ * IT COMPOSES TWO READS, AND THEY ARE DELIBERATELY DIFFERENT KINDS OF THING.
+ * The conviction count is a PUBLIC AGGREGATE: unsigned, available before anybody
+ * has minted a session, and the number the entry card has to print to a wallet
+ * that has never simulated. The account — balance, lifecycle — is the PRIVATE
+ * LEDGER: proved by a wallet session, because a wallet address is public and
+ * anyone could otherwise ask this server for somebody else's CC balance.
+ *
+ * Neither read may open a wallet. The account query supplies whatever session
+ * already exists and resolves to null when there is none, so an unsigned reader
+ * simply sees Real Mode and an entry card — never a signature prompt they did
+ * not ask for.
  */
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { useWalletSession } from "@/hooks/useWalletSession";
-import { simulationStateKey, simulationStateQO } from "@/lib/simulation-query";
+import {
+  profileProgressKey,
+  profileProgressQO,
+  simulationAccountKey,
+  simulationAccountQO,
+} from "@/lib/simulation-query";
 import { activateSimulation, exitSimulation } from "@/lib/simulation.functions";
 import type { SimulationState } from "@/lib/simulation.functions";
 import { profileProgressFor, type ProfileProgress } from "@/domain/beliefs";
 import {
   canOrder as canOrderIn,
   isSimulating,
+  modeFor,
+  simulationEligible,
   SIMULATION_COPY,
   type SimulationAccount,
   type SimulationMode,
@@ -55,6 +74,15 @@ export interface SimulationModeApi {
    * changed it.
    */
   adopt: (next: Pick<SimulationState, "account" | "progress" | "mode">) => void;
+  /**
+   * THE CACHED WALLET SESSION, for the private reads elsewhere in the app.
+   *
+   * Exposed so the dock and the portfolio can prove ownership without each one
+   * re-deriving how. Non-interactive by construction: it resolves an existing
+   * session or rejects, and never opens a wallet — a read must not be the thing
+   * that asks somebody to sign.
+   */
+  session: () => Promise<string>;
   /** A lifecycle write is in flight. */
   pending: boolean;
   /** The last activation/exit failure, in the reader's words. Null when fine. */
@@ -87,6 +115,7 @@ const REAL: SimulationModeApi = {
   continueAfterGraduation: () => {},
   refresh: () => {},
   adopt: () => {},
+  session: () => Promise.reject(new Error("No wallet session.")),
   pending: false,
   error: null,
   verifying: false,
@@ -104,16 +133,27 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
   const [verifying, setVerifying] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const { data } = useQuery(simulationStateQO(wallet));
+  /**
+   * WHATEVER SESSION ALREADY EXISTS, AND NEVER A NEW ONE.
+   *
+   * `interactive: false` is load-bearing: a READ must not be the thing that pops
+   * a wallet signature. Without a session the private queries resolve to their
+   * empty answer, the reader sees Real Mode and an entry card, and the card's
+   * own action mints the session when they choose to start.
+   */
+  const cachedSession = useCallback(() => ensureSession({ interactive: false }), [ensureSession]);
+
+  // PUBLIC: the count. Available with no session at all.
+  const { data: progressData } = useQuery(profileProgressQO(wallet));
+  // PRIVATE: the ledger. Proved, or null.
+  const { data: account } = useQuery(simulationAccountQO(wallet, cachedSession));
 
   const write = (next: SimulationState) => {
-    qc.setQueryData(simulationStateKey(wallet), next);
-    // Progress moved, so the entry card's count and the readiness signal are both
-    // stale. Invalidated rather than written: they are derived from the same rows
-    // but not from this payload, and inventing their new values here would be a
-    // second source of truth for a number this one does not actually carry.
+    qc.setQueryData(simulationAccountKey(wallet), next.account);
+    qc.setQueryData(profileProgressKey(wallet), next.progress);
+    // Readiness reads the same rows through the other threshold, and is not
+    // carried by this payload — invalidated rather than invented.
     void qc.invalidateQueries({ queryKey: ["readiness"] });
-    void qc.invalidateQueries({ queryKey: ["profile-progress"] });
   };
 
   /**
@@ -142,19 +182,38 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
   });
 
   /**
-   * LEAVING IS ONE TAP AND MUST NOT BE ABLE TO STRAND SOMEBODY.
+   * LEAVING IS ONE TAP, AND THE MODE GOES FIRST.
    *
-   * The signature is non-interactive: by the time anybody can press Exit they
-   * have already signed to activate, so a cached session exists. If it somehow
-   * does not, the wallet is asked once — because the alternative is an Exit
-   * button that silently does nothing, and being unable to leave a mode is worse
-   * than one prompt.
+   * The server cleanup is authenticated — closing somebody's Challenges is a
+   * write under their name — and a session can have expired, which would put a
+   * wallet prompt between a reader and the exit. Being unable to leave a mode is
+   * the worst failure this feature has, and "one tap, no confirmation" is the
+   * promise the banner makes.
+   *
+   * So the local mode is dropped IMMEDIATELY and the cleanup follows. The screen
+   * returns to Real Mode on the tap; the Challenges close when the write lands.
+   * If the session had aged out the wallet is asked once, but by then the reader
+   * is already out of Simulation rather than held inside it waiting to sign.
+   *
+   * A FAILED CLEANUP IS NOT SILENT. `settled` re-reads the account, so a write
+   * that never landed puts the banner back rather than leaving somebody looking
+   * at Real Mode while the server still has them simulating.
    */
   const departure = useMutation({
     mutationFn: async (graduate: boolean) => {
       if (!wallet) throw new Error("Connect a wallet first.");
+      // Out of the mode now, on the client, before anything can block.
+      qc.setQueryData(simulationAccountKey(wallet), (prev: SimulationAccount | null | undefined) =>
+        prev ? { ...prev, state: graduate ? "GRADUATED" : "EXITED" } : prev,
+      );
       const session = await ensureSession({ interactive: true });
       return await exitSimulation({ data: { wallet, session, graduate } });
+    },
+    onError: (e: Error) => {
+      setError(e.message || "We couldn't finish leaving Simulation.");
+      // The optimistic exit was not confirmed — go and look rather than leave the
+      // screen and the server disagreeing about which ledger this wallet is in.
+      void qc.invalidateQueries({ queryKey: simulationAccountKey(wallet) });
     },
     onSuccess: (next, graduate) => {
       // A graduation gets no "your progress is saved" line — the profile IS the
@@ -162,34 +221,36 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
       setNotice(graduate ? null : SIMULATION_COPY.exitConfirmation);
       write(next);
     },
-    onError: (e: Error) => setError(e.message || "We couldn't leave Simulation."),
   });
 
   const adopt = useCallback(
     (next: Pick<SimulationState, "account" | "progress" | "mode">) => {
-      qc.setQueryData(simulationStateKey(wallet), (prev: SimulationState | undefined) => ({
-        account: next.account,
-        progress: next.progress,
-        mode: next.mode,
-        // Eligibility is a lifecycle fact the order result does not carry, so the
-        // known one is kept rather than guessed from the new progress.
-        eligible: prev?.eligible ?? !next.progress.complete,
-      }));
+      // The order transaction computed both authoritatively — including the move
+      // to GRADUATING when the tenth conviction settled — so both are written
+      // rather than re-fetched. Nothing here derives a mode of its own.
+      qc.setQueryData(simulationAccountKey(wallet), next.account);
+      qc.setQueryData(profileProgressKey(wallet), next.progress);
       void qc.invalidateQueries({ queryKey: ["readiness"] });
-      void qc.invalidateQueries({ queryKey: ["profile-progress"] });
     },
     [qc, wallet],
   );
 
   const value = useMemo<SimulationModeApi>(() => {
-    const state = data ?? null;
-    const mode: SimulationMode = state?.mode ?? "REAL";
+    const progress = progressData ?? profileProgressFor(0);
+    const acct = account ?? null;
+    /**
+     * THE MODE IS DERIVED HERE, from the two reads, through the SAME pure
+     * function the server uses. Two implementations of "which ledger is this" —
+     * one for the screen and one for the write — is how a banner comes to say
+     * Simulation while an order settles somewhere else.
+     */
+    const mode: SimulationMode = modeFor(acct, progress);
     return {
       mode,
-      account: state?.account ?? null,
-      balanceCc: state?.account?.balanceCc ?? null,
-      profileProgress: state?.progress ?? profileProgressFor(0),
-      eligible: !!state?.eligible && !!wallet,
+      account: acct,
+      balanceCc: acct?.balanceCc ?? null,
+      profileProgress: progress,
+      eligible: !!wallet && simulationEligible({ progress, state: acct?.state ?? null }),
       active: isSimulating(mode),
       canOrder: canOrderIn(mode),
       activate: () => {
@@ -204,8 +265,12 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
         setError(null);
         departure.mutate(true);
       },
-      refresh: () => void qc.invalidateQueries({ queryKey: simulationStateKey(wallet) }),
+      refresh: () => {
+        void qc.invalidateQueries({ queryKey: simulationAccountKey(wallet) });
+        void qc.invalidateQueries({ queryKey: profileProgressKey(wallet) });
+      },
       adopt,
+      session: cachedSession,
       pending: activation.isPending || departure.isPending,
       error,
       verifying,
@@ -214,7 +279,8 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    data,
+    progressData,
+    account,
     wallet,
     activation.isPending,
     departure.isPending,
@@ -222,6 +288,7 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
     verifying,
     notice,
     adopt,
+    cachedSession,
     qc,
   ]);
 
