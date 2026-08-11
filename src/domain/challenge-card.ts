@@ -151,12 +151,30 @@ export function cardStateFor(p: Omit<ChallengeCardProjection, "state">): CardSta
 
   const out = p.outgoing;
   if (out) {
+    /**
+     * TERMINAL BEFORE NEWS, AND THIS ORDER WAS WRONG.
+     *
+     * The live states are ranked by what is newest — a relay outranks a
+     * response, a response outranks a quiet branch — and `finished` was ranked
+     * with them. It is not news; it is the end of the lifecycle, and putting it
+     * third meant `showedUp > 0` swallowed it.
+     *
+     * THE VISIBLE COST: "Everyone showed up" was unreachable. Reaching it needs
+     * `finished` AND `showedUp >= reached`, but any Challenge with a single
+     * responder took `people_showing_up` first — including one that auto-closed
+     * precisely BECAUSE everybody answered. The best outcome this system can
+     * produce had copy written for it that no state could arrive at, and a
+     * Challenge the creator took down went on reading as live.
+     *
+     * Found while summarising this projection for the Markets page: the summary
+     * asked for the completion sentence and the state machine could not produce
+     * one.
+     */
+    if (out.closedAtMs != null || (out.reached > 0 && out.waiting === 0)) return "finished";
     // Somebody carried it further. The largest thing that can happen to a
     // question you put up, so it outranks answers to it.
     if (out.relayers.length > 0) return "chain_moving";
     if (out.showedUp > 0) return "people_showing_up";
-    // Everybody terminal, or the creator took it down.
-    if (out.closedAtMs != null || (out.reached > 0 && out.waiting === 0)) return "finished";
     if (out.reached > 0) return "branch_live";
   }
 
