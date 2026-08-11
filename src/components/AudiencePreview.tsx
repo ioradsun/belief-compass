@@ -124,10 +124,9 @@ export function AudienceGroups({
               the rows stopped reading as one list. `min-w` rather than `w`, so a
               three-digit overflow grows instead of clipping. */}
           <div
-            className={cn(
-              "flex -space-x-1.5",
+            className={`flex -space-x-1.5 ${
               stacked ? "min-w-[140px]" : "min-w-[102px] shrink-0"
-            )}
+            }`}
           >
             {g.visiblePeople.map((p) => (
               <PersonAvatar
