@@ -63,7 +63,6 @@ import { CHAIN_ID } from "@/chain/decoder";
 import { useBuyQuote, useUserBalance } from "@/lib/chain-trade";
 import { useMarketExecution } from "@/lib/market-execution";
 import { useSimulationMode } from "@/lib/simulation-mode";
-import { DEFAULT_ORDER_CC } from "@/domain/simulation";
 import { usdToWei, type OrderSide } from "@/domain/order";
 import { useMoney } from "@/lib/display-unit";
 import { OrderTicket } from "@/components/order/OrderTicket";
@@ -73,6 +72,7 @@ import { marketBook } from "@/domain/market-book";
 
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { PostAction } from "@/components/PostAction";
+import { defaultAmount, rememberAmount } from "@/lib/last-amount";
 import { usePositionShift } from "@/hooks/usePositionShift";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
@@ -121,7 +121,7 @@ export function MobileGame({
     setPhase("question");
     setSide(null);
     setBacking(false);
-    setAmount(1);
+    setAmount(defaultAmount(simulating));
     setRevealed(false);
     dock.reset();
     trade.reset();
@@ -290,7 +290,7 @@ export function MobileGame({
    * Simulation opens at 100 CC; Real Mode keeps its existing default.
    */
   useEffect(() => {
-    setAmount(sim ? DEFAULT_ORDER_CC : 1);
+    setAmount(defaultAmount(!!sim));
     setSide(null);
     setBacking(false);
     dock.reset();
@@ -662,6 +662,7 @@ export function MobileGame({
                 if (quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
                   try {
                     await trade.buy(marketId, side === "YES", ethWei, quote.tokens);
+                    rememberAmount(!!sim, amount);
                   } catch {
                     /* surfaced via trade.error */
                   }
