@@ -46,8 +46,34 @@ export const WEIGHTS = {
 export type ScoreComponent = keyof typeof WEIGHTS;
 
 export const SEQUENCE = {
-  /** Forward queue length handed to the client. */
-  DEFAULT_LIMIT: 24,
+  /**
+   * Forward queue length handed to the client.
+   *
+   * RAISED FROM 24, because 24 was the bottom of the playlist and the playlist
+   * is scrollable. A reader who flicked the column down hit the last row and
+   * then nothing — no continuation, no placeholder, no signal — which reads as
+   * the end of the feed and is a statement about the platform made by a batch
+   * size. The refill still triggers on READING POSITION (the route's low-water
+   * mark), never on scroll depth: scrolling the list is looking ahead, and
+   * looking ahead is not consumption.
+   *
+   * NEARLY FREE, and this is why the number could move at all. The expensive
+   * part of the response is `rows` — the read-model row per market — and that
+   * ships the WHOLE candidate pool regardless of this limit, because the client
+   * renders markets the queue has not reached yet and markets that have left it.
+   * Raising the limit adds sequenced `items` (a score, a sentence, diagnostics),
+   * not rows, so the marginal cost is a few hundred bytes each against a payload
+   * already carrying 240 markets. No extra query, no extra cache: the pool,
+   * the scoring and the sequencing all ran over the same 240 either way — this
+   * only decides how many of the results are worth shipping.
+   *
+   * NOT `MAX_LIMIT`, deliberately. The rhythm and the diversity rules degrade as
+   * the pool thins beneath them — the tail of a long queue is where
+   * `soft_relaxed` starts appearing — and a queue is also a snapshot that ages
+   * until the next commit. 48 is twice the depth at the same quality; the last
+   * dozen before the ceiling would be neither.
+   */
+  DEFAULT_LIMIT: 48,
   MAX_LIMIT: 60,
   /** No more than this many consecutive cards from one category. */
   MAX_SAME_CATEGORY_RUN: 2,
