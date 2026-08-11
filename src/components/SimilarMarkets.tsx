@@ -92,11 +92,11 @@ export function SimilarMarkets({
     return (
       <section className="mb-4 shrink-0">
         <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-          Already being debated
+          Similar debates
         </div>
         <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
           {!enabled
-            ? "We'll check whether this debate already exists as you write."
+            ? "We'll show you what already exists."
             : isFetching
               ? "Searching existing markets…"
               : "No one is asking this yet — it's yours to start."}
@@ -111,7 +111,7 @@ export function SimilarMarkets({
       <div className="mb-1.5">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            Already being debated
+            Similar debates
           </span>
           {/* Kept from the right-rail version: consolidation is advice, and a
               creator who has decided must be able to make it stop. */}
