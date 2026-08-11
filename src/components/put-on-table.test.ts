@@ -33,7 +33,33 @@ describe("it refuses to ask when the answer is no", () => {
     // Inviting somebody to put a question in front of an audience that does not
     // exist is worse than silence.
     expect(cta()).toMatch(/no_audience/);
-    expect(cta()).toMatch(/Nobody qualifies to weigh in yet/);
+    expect(cta()).toMatch(/Nobody new to ask here yet/);
+    /**
+     * `no_reach` SHARES THE SENTENCE, because to the reader it is one fact: the
+     * write landed on nobody. They differ only in where it was discovered — one
+     * before the transaction opened, one inside it after everybody in the
+     * audience turned out to already have a row. Both rolled back, neither spent
+     * a slot, and a second wording for the same outcome would be two ways of
+     * saying nothing happened.
+     */
+    expect(cta()).toMatch(/no_reach/);
+    // NOT "as your Tribe and Rivals form". There are three groups now, and a
+    // sentence naming two of them tells somebody whose whole network is Still
+    // Forming that they do not have one.
+    expect(cta()).not.toMatch(/Tribe and Rivals form/);
+  });
+
+  it("distinguishes a refused audience from an empty one", () => {
+    /**
+     * A failed exclusion read is not "nobody qualifies". That sentence sounds
+     * permanent and blames the reader's network for an outage — and the server
+     * refused precisely so that nothing was written, so the honest thing to say
+     * is that it did not go through.
+     */
+    const c = cta();
+    expect(c).toMatch(/audience_unavailable/);
+    expect(c).toMatch(/Couldn&rsquo;t work out who this would reach/);
+    expect(c).toMatch(/Nothing was put up/);
   });
 
   it("points at the table at capacity instead of offering a failing button", () => {

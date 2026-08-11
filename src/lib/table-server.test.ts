@@ -45,18 +45,33 @@ describe("a Challenge cannot claim what the server did not see", () => {
   });
 });
 
+/**
+ * THE WRITE MOVED INTO SQL, AND SO DID THESE ASSERTIONS.
+ *
+ * The decisions below are unchanged — the freeze, the upsert, the carry, the
+ * collided-with cap. They are now enforced inside `put_on_table`, because doing
+ * them in four round trips could leave a Challenge that exists and asks nobody.
+ * The behaviour is proved end-to-end in `put-on-table.pg.test.ts` against a real
+ * cluster; these lock the decisions in the file that now makes them, so a future
+ * edit cannot quietly un-make one.
+ */
+const RPC = () => code("supabase/migrations/20260908000000_put_on_table_atomic.sql");
+
 describe("the audience is frozen when the Challenge goes up", () => {
   it("writes the recipients once, at creation", () => {
     // The denominator behind "3 of 8" is only worth printing if it cannot drift.
     // Recomputing the audience later would silently rewrite history every time
     // somebody's DNA moved.
-    const c = code("src/lib/table.server.ts");
-    expect(c).toMatch(/challenge_id: id/);
-    expect(c).toMatch(/relation_at_call: member\.relationAtCall/);
+    expect(RPC()).toMatch(
+      /INSERT INTO market_calls \(\s*market_id, caller_wallet, responder_wallet, relation_at_call, challenge_id/,
+    );
+    expect(RPC()).toMatch(/a->>'relation'/);
     // THE RELATION, NEVER THE GROUP. A row storing "forming" would make a screen
     // heading permanent, and the day the heading was renamed every historical row
     // would be lying about what the engine actually knew.
-    expect(c).not.toMatch(/relation_at_call: member\.group/);
+    expect(RPC()).not.toMatch(/'forming'/);
+    expect(code("src/lib/table.server.ts")).toMatch(/relation: m\.relationAtCall/);
+    expect(code("src/lib/table.server.ts")).not.toMatch(/m\.group/);
   });
 
   /**
@@ -71,45 +86,114 @@ describe("the audience is frozen when the Challenge goes up", () => {
    * slots forever.
    */
   it("adds the new recipients instead of rolling the whole audience back", () => {
-    const c = code("src/lib/table.server.ts");
-    expect(c).toMatch(/from\("market_calls"\)\s*\.upsert\(/);
-    expect(c).toMatch(/ignoreDuplicates: true/);
-    expect(c).toMatch(/onConflict: "market_id,caller_wallet,responder_wallet"/);
+    expect(RPC()).toMatch(/ON CONFLICT \(market_id, caller_wallet, responder_wallet\) DO NOTHING/);
   });
 
   it("carries unanswered calls onto the new Challenge, and only unanswered ones", () => {
     // Somebody who never answered the first run is still being asked. Somebody who
     // showed up stays attached to the run they showed up for — history belongs to
     // the Challenge it actually happened under.
-    const c = code("src/lib/table.server.ts");
-    const carry = c.slice(c.indexOf("const carried = await sb"), c.indexOf("const inserted"));
-    expect(carry).toMatch(/update\(\{ challenge_id: id \}\)/);
-    expect(carry).toMatch(/\.is\("responded_at", null\)/);
-    expect(carry).toMatch(/\.is\("passed_at", null\)/);
+    const c = RPC();
+    const carry = c.slice(c.indexOf("UPDATE market_calls"), c.indexOf("INSERT INTO market_calls"));
+    expect(carry).toMatch(/SET challenge_id = v_id/);
+    expect(carry).toMatch(/responded_at IS NULL/);
+    expect(carry).toMatch(/passed_at IS NULL/);
     // The relationship a call was made under is written once and never rewritten.
     expect(carry).not.toMatch(/relation_at_call/);
   });
 
   it("reports what it actually reached, not what it hoped to", () => {
-    // `reached: audience.length` was returned whether or not a single row landed,
-    // which is how the rollback above stayed invisible for as long as it did.
-    const c = code("src/lib/table.server.ts");
-    expect(c).toMatch(/reached: reached\.size/);
-    expect(c).not.toMatch(/reached: audience\.length/);
+    /**
+     * `reached: audience.length` was returned whether or not a single row landed,
+     * which is how the ghost stayed invisible for as long as it did. The count is
+     * now read back from the rows, inside the same transaction that wrote them.
+     */
+    expect(RPC()).toMatch(
+      /SELECT count\(\*\) INTO v_reached FROM market_calls WHERE challenge_id = v_id/,
+    );
+    expect(code("src/lib/table.server.ts")).not.toMatch(/reached: audience\.length/);
+    // And the caller re-checks it rather than trusting `ok` alone.
+    expect(code("src/lib/table.server.ts")).toMatch(/\(res\.reached \?\? 0\) > 0/);
+  });
+
+  /**
+   * THE INVARIANT, IN THE ONE PLACE THAT CAN ENFORCE IT.
+   *
+   * A Challenge asking nobody holds one of three editorial slots forever: it
+   * prints no progress sentence, and `allResponded` is false at zero so
+   * `shouldAutoClose` can never fire. The old code produced exactly that and
+   * returned ok:true.
+   */
+  it("rolls back rather than leaving a Challenge that reached nobody", () => {
+    const c = RPC();
+    expect(c).toMatch(/IF v_reached = 0 THEN[\s\S]*?RAISE EXCEPTION/);
+    // A raise, not a close. A compensating close cannot restore the carried calls
+    // this sequence has already repointed.
+    const body = c.slice(
+      c.indexOf("IF v_reached = 0"),
+      c.indexOf("RETURN jsonb_build_object('ok', true"),
+    );
+    expect(body).not.toMatch(/UPDATE challenges|closed_at/);
   });
 
   it("does not spend a slot on a Challenge nobody can receive", () => {
     // A person would spend one of three editorial choices on silence, with no way
-    // to know why. Resolved before the slot is taken.
+    // to know why. Refused before the transaction opens, and again inside it.
     const c = code("src/lib/table.server.ts");
-    expect(c.indexOf("no_audience")).toBeLessThan(c.indexOf('from("challenges")'));
+    expect(c.indexOf("no_audience")).toBeLessThan(c.indexOf('rpc("put_on_table"'));
+    expect(RPC().indexOf("'no_audience'")).toBeLessThan(RPC().indexOf("INSERT INTO challenges"));
   });
 
   it("reuses the one relationship ledger rather than inventing a second", () => {
     // Recipients ARE calls — the same rows People and Profile read, with the same
     // frozen relation. V2 only adds which deliberate act produced them.
+    expect(code("src/lib/table.server.ts")).not.toMatch(/challenge_recipients|challenge_calls/);
+    expect(RPC()).not.toMatch(/challenge_recipients|challenge_calls/);
+  });
+});
+
+describe("the whole write is one transaction, or none of it", () => {
+  it("does every write inside a block with an exception handler", () => {
+    /**
+     * A plpgsql block with an EXCEPTION handler is a subtransaction — reaching
+     * the handler undoes every row the block touched. That is the entire
+     * mechanism, so the slot allocation must be INSIDE it. Moving the INSERT
+     * above the block would commit the slot and restore the ghost.
+     */
+    const c = RPC();
+    const blockStart = c.indexOf("  BEGIN\n    -- THE CAP");
+    const handler = c.indexOf("EXCEPTION WHEN OTHERS THEN");
+    expect(blockStart).toBeGreaterThan(-1);
+    for (const write of [
+      "INSERT INTO challenges",
+      "UPDATE market_calls",
+      "INSERT INTO market_calls",
+    ]) {
+      expect(c.indexOf(write)).toBeGreaterThan(blockStart);
+      expect(c.indexOf(write)).toBeLessThan(handler);
+    }
+  });
+
+  it("never falls back to the multi-write path when the function is missing", () => {
+    /**
+     * PGRST202 is "no function matches" — the migration is not applied. Falling
+     * back would restore the exact defect this replaces, and a Challenge that
+     * never went up is recoverable in a way a ghost holding a slot is not.
+     */
     const c = code("src/lib/table.server.ts");
-    expect(c).not.toMatch(/challenge_recipients|challenge_calls/);
+    expect(c).toMatch(/PGRST202/);
+    expect(c).not.toMatch(/from\("challenges"\)\s*\.insert\(/);
+    expect(c).not.toMatch(/from\("market_calls"\)\s*\.upsert\(/);
+  });
+
+  it("validates the lineage pointer rather than trusting it", () => {
+    // The foreign key only proves the call EXISTS. A chain drawn from an
+    // unchecked pointer would say "Maya → Sundeep → You" on a number alone.
+    const c = RPC();
+    const check = c.slice(c.indexOf("IF p_parent_call IS NOT NULL"), c.indexOf("'bad_parent'"));
+    expect(check).toMatch(/c\.market_id = p_market_id/);
+    expect(check).toMatch(/c\.responder_wallet = v_me/);
+    expect(check).toMatch(/c\.responded_at IS NOT NULL/);
   });
 });
 
@@ -117,17 +201,21 @@ describe("the cap is collided with, never counted", () => {
   it("walks the slots and lets the index reject a taken one", () => {
     // Counting active rows then inserting is a read-then-write race two tabs win.
     // The loop is the allocator, not a retry.
-    const c = code("src/lib/table.server.ts");
-    expect(c).toMatch(/for \(let slot = 1; slot <= TABLE_SLOTS; slot\+\+\)/);
-    expect(c).toMatch(/error\?\.code !== CONFLICT/);
+    const c = RPC();
+    expect(c).toMatch(/FOR v_slot IN 1\.\.3 LOOP/);
+    expect(c).toMatch(/EXCEPTION WHEN unique_violation THEN/);
     // Falling out of the loop means Postgres said no three times.
-    expect(c).toMatch(/if \(id == null\) return \{ ok: false, reason: "full" \}/);
+    expect(c).toMatch(/'reason', 'full'/);
+    // And nothing counts rows to decide it.
+    expect(c).not.toMatch(/count\(\*\)[\s\S]{0,80}FROM challenges/);
   });
 
   it("tells a taken slot apart from a market already up", () => {
     // Both indexes raise 23505, and retrying into the next slot would be wrong
-    // for the second — it would put the same question up twice.
-    expect(code("src/lib/table.server.ts")).toMatch(/reason: "already_up"/);
+    // for the second — it would put the same question up twice. Asked before the
+    // walk, and again after it, so a tab that won the race is not called "full".
+    const c = RPC();
+    expect((c.match(/'reason', 'already_up'/g) ?? []).length).toBe(2);
   });
 });
 
@@ -354,8 +442,9 @@ describe("who can be asked is decided once", () => {
     expect(c).toMatch(
       /if \(resolved\.status === "failed"\) return \{ ok: false, reason: "audience_unavailable" \}/,
     );
-    // The refusal happens BEFORE the slot allocator runs.
-    expect(c.indexOf("audience_unavailable")).toBeLessThan(c.indexOf("for (let slot = 1"));
+    // The refusal happens BEFORE the transaction is even opened, so there is no
+    // slot to give back and nothing to compensate for.
+    expect(c.indexOf("audience_unavailable")).toBeLessThan(c.indexOf('rpc("put_on_table"'));
   });
 
   it("reports a refused reach as unknown rather than as nobody", () => {
