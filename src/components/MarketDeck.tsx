@@ -559,7 +559,7 @@ export function MarketDeck({
   return (
     /* `deck` supplies the height-proportional scale (see styles.css) — the gap
        between the three zones comes from it, not from a constant. */
-    <div className="deck flex h-full min-h-0 flex-col">
+    <div className="deck relative flex h-full min-h-0 flex-col" data-panel-surface>
       {/* Identity — pinned to the top of the column. In mobile Case mode the
         question moves into the carousel header, so this collapses. */}
       <div className={`shrink-0 ${mobileCaseOpen ? "hidden" : ""}`}>
