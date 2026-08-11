@@ -128,9 +128,7 @@ export function runEditorialPass<R extends LiveRow>({
              the cap can ration it. */
           family: /emptied out|nothing behind it now/i.test(r.story?.headline ?? "")
             ? "side_emptied"
-            : /got company|first believers?|first capital|stepped in/i.test(
-                  r.story?.headline ?? "",
-                )
+            : /got company|first believers?|first capital|stepped in/i.test(r.story?.headline ?? "")
               ? "side_opened"
               : r.kind === "market_transition"
                 ? ((r.payload as { type?: string } | null)?.type ?? null)
@@ -525,6 +523,30 @@ export function runEditorialPass<R extends LiveRow>({
   if (dup.size > 0)
     for (let i = material.length - 1; i >= 0; i--)
       if (dup.has(material[i]!.id)) material.splice(i, 1);
+
+  /**
+   * THE LEDGER IS RECONCILED AGAINST WHAT ACTUALLY SURVIVED.
+   *
+   * `kept` is stamped in stage 3, and stage 4 can still remove the row it was
+   * stamped on: a question-carrying card whose verbatim twin outranks it on
+   * significance loses the slot, and the question goes with it. The ledger then
+   * reported a question as kept that no reader would ever see — a count that
+   * disagrees with the screen, which is the one thing a ledger exists not to do.
+   *
+   * FOUND BY A TEST THAT HAD BEEN RED LONG ENOUGH TO BE CALLED BASELINE. It
+   * asserted there was no row removal below the question stage and named the
+   * exact consequence: "a rationed question can vanish." It was right. The
+   * structural rule it checked is no longer achievable — the question layer
+   * rewrites bodies, so de-duplication has to run after it — so the invariant
+   * is enforced here instead of being grepped for.
+   *
+   * WHAT THIS DOES NOT DO IS PUT THE QUESTION BACK. The budget was spent on a
+   * card that is now gone, so one fewer question renders than the budget
+   * allowed. Fixing THAT is an editorial decision about whether an identical
+   * pair should be broken by significance or by carrying a question, and it
+   * belongs to whoever owns the tape's voice.
+   */
+  if (dup.size > 0) for (const e of questionLedger) if (dup.has(e.id)) e.kept = false;
 
   return { consumedRows, questionLedger };
 }

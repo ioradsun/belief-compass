@@ -271,7 +271,16 @@ describe("the continuation state", () => {
   });
 
   it("requires the server's verdict, the right lens, and no error", () => {
-    const guard = idx.slice(idx.indexOf("const lensExhausted ="), idx.indexOf("const ids ="));
+    /**
+     * SLICED FORWARD FROM THE DECLARATION, not between two that were assumed to
+     * be in order. `const ids =` moved ABOVE `const lensExhausted =`, so the old
+     * two-index slice produced an EMPTY STRING — and an empty string matches no
+     * regex, so this test was failing while asserting nothing at all. A looser
+     * pattern would have turned it green and protected just as little.
+     */
+    const start = idx.indexOf("const lensExhausted =");
+    expect(start).toBeGreaterThan(-1);
+    const guard = idx.slice(start, start + 400);
     // Not For You — it is the destination, and its own end-state is untouched.
     expect(guard).toMatch(/lens !== "for_you"/);
     // A failed request tells us nothing about how much is left.
