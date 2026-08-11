@@ -9,6 +9,8 @@
  * account switcher, no multiple profiles, no advanced wallet management.
  */
 import { Suspense, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
 import { lazyRetry } from "@/lib/lazy-retry";
 import { useAccount } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
@@ -222,11 +224,14 @@ export function ProfileMenu({
               }}
             />
           )}
-          <Item label="Edit Profile" onClick={() => setPanel("edit")} />
-          <Item label="Creator Earnings" onClick={() => setPanel("earnings")} />
-          <Item label="Import POV Wallet" onClick={() => setPanel("import")} />
+          {/* Opening a panel closes the dropdown — otherwise the menu stayed
+              live under the dialog and kept competing for the same clicks. */}
+          <Item label="Edit Profile" onClick={() => (setPanel("edit"), setOpen(false))} />
+          <Item label="Creator Earnings" onClick={() => (setPanel("earnings"), setOpen(false))} />
+          <Item label="Import POV Wallet" onClick={() => (setPanel("import"), setOpen(false))} />
           <Divider />
-          <Item label="Settings" onClick={() => setPanel("settings")} />
+          <Item label="Settings" onClick={() => (setPanel("settings"), setOpen(false))} />
+
           <Item
             label="Switch Wallet"
             onClick={() => {
@@ -260,9 +265,12 @@ export function ProfileMenu({
         >
           <Suspense
             fallback={
-              <div className="py-6 text-center text-[12px] text-[var(--text-muted)]">…</div>
+              <div className="grid min-h-[180px] place-items-center text-[12px] text-[var(--text-muted)]">
+                …
+              </div>
             }
           >
+
             {panel === "edit" && <ProfileEditor wallet={me} fallbackName={name} />}
             {panel === "earnings" && <CreatorEarnings ethUsd={ethUsd} />}
             {panel === "import" && (
@@ -300,7 +308,16 @@ function Item({ label, onClick, muted }: { label: string; onClick: () => void; m
 
 const Divider = () => <div className="my-1" style={{ borderTop: "1px solid var(--hairline)" }} />;
 
-/** A quiet centered modal for the occasional deeper action. */
+/**
+ * A quiet centered modal for the occasional deeper action.
+ *
+ * It is PORTALLED to <body>. Rendered in place it lived inside the header's
+ * z-30 stacking context, so app surfaces painted over it and the lazy panels
+ * appeared to flash and jump as they resolved. At the body it has one stacking
+ * context, one position, and a reserved minimum height so a panel arriving from
+ * its lazy chunk grows into space that was already there instead of re-centering
+ * the dialog mid-open.
+ */
 function Modal({
   title,
   onClose,
@@ -310,8 +327,13 @@ function Modal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center p-4 sm:items-center">
+  // Portals need a DOM target, which SSR doesn't have — mount after hydration.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
       <button
         type="button"
         aria-label="Close"
@@ -319,11 +341,12 @@ function Modal({
         className="absolute inset-0 bg-black/60"
       />
       <div
-        className="relative z-10 max-h-[85vh] w-full max-w-[420px] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4 shadow-2xl"
+        className="relative z-10 flex max-h-[85vh] min-h-[260px] w-full max-w-[420px] flex-col overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4 shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label={title}
       >
+
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-[14px] font-semibold text-[var(--text)]">{title}</h2>
           <button
@@ -344,11 +367,13 @@ function Modal({
             </svg>
           </button>
         </div>
-        {children}
+        <div className="min-h-0 flex-1">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
+
 
 /** General preferences — kept short and honest: only what actually works today. */
 function SettingsPanel({
