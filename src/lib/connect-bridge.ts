@@ -49,13 +49,28 @@ export function takePendingConnect(): boolean {
   return p;
 }
 
-export function requestDisconnect() {
+/**
+ * SIGN OUT DOES NOT DEPEND ON THE WALLET LAYER BEING AWAKE.
+ *
+ * The RainbowKit layer only mounts once someone has asked to connect in this
+ * tab. A reader who arrived with a session already restored (URL wallet or a
+ * stored wallet session) has no listener at all, so dispatching the event and
+ * hoping was a no-op — Sign Out did nothing. We still fire the event, so a
+ * mounted wallet layer can drop the connector properly, and then perform the
+ * reset ourselves regardless. Whichever reload lands first wins; the second is
+ * discarded by the navigation.
+ */
+export function requestDisconnect(wallet?: string) {
   if (typeof window === "undefined") return;
   // Signing out withdraws the intent too, or the next connector swap would
   // silently restore the session the reader just ended.
   connectIntended = false;
   window.dispatchEvent(new Event(DISCONNECT_EVENT));
+  // A short beat for wagmi's async disconnect; the storage purge below removes
+  // its persisted state either way.
+  window.setTimeout(() => clearDisconnectedWalletFromUrl(wallet), 150);
 }
+
 
 /**
  * SIGN OUT IS A FULL RESET.
