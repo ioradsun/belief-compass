@@ -116,9 +116,18 @@ export function PostPositionBar({
 
   const counting = progress != null && progress < 1;
 
-
   return (
-    <div className="grid gap-2 px-3 py-3" data-post-position={x.copyCategory}>
+    <div className="relative grid gap-2 px-3 py-3" data-post-position={x.copyCategory}>
+      {/* 0 · THE ONLY SIGN THE MOVE IS COMING — a hairline that drains. It sits
+          on the bar's edge so it reads as time passing, not as a loading state. */}
+      {counting && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[2px] origin-left bg-[var(--text-muted)]/60"
+          style={{ transform: `scaleX(${1 - (progress ?? 0)})` }}
+        />
+      )}
+
       {/* 1 · THE RECEIPT — one small line. The transaction is not the payoff. */}
       <p className="text-[12px] font-semibold leading-snug text-[var(--text)]">
         <span className="text-[var(--yes)]">✓</span> {lockLine}
