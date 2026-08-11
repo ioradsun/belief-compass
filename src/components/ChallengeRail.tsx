@@ -25,6 +25,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChainList } from "@/components/ChainList";
+import { useChallengeSent } from "@/lib/challenge-signal";
 import { useTable } from "@/components/YourTable";
 import { useSimulationMode } from "@/lib/simulation-mode";
 import { hideCall, useOpenCalls, type OpenCalls } from "@/lib/open-calls";
@@ -148,6 +149,17 @@ export function ChallengeRail({
     if (wallet && lock.unlocked && open.length > 0) setTab("challenge");
     else setTab("insider");
   }, [wallet, lock.unlocked, open.length]);
+
+  /**
+   * A SENT CHALLENGE TURNS THIS RAIL TO IT — including for a reader who had
+   * chosen Insider. Putting a question up is the one action whose result lives
+   * here and nowhere else; leaving them on the other tab would make the thing
+   * they just did invisible at the exact moment they made it.
+   */
+  const sent = useChallengeSent();
+  useEffect(() => {
+    if (sent) setTab("challenge");
+  }, [sent?.at]);
 
   /**
    * WHAT THE NUMBER ON THE TAB COUNTS: everything in the column that is still
