@@ -101,7 +101,8 @@ function clearIdentityStorage() {
       if (
         k.startsWith("conviction:wallet-session:") ||
         k.startsWith("conviction:linked-wallet:") ||
-        k === "conviction:qcache:v1"
+        k === "conviction:qcache:v1" ||
+        k.startsWith("wagmi.")
       ) {
         doomed.push(k);
       }
