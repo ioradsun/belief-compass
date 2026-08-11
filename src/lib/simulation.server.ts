@@ -603,13 +603,13 @@ export async function executeSimulationOrder(input: {
   let priceUsd: number | null = null;
 
   if (input.action === "BUY") {
-    const q = await quoteBuy(input.marketId, yes, input.size, ethUsd);
+    const q = await quoteBuy(sb, input.marketId, yes, input.size, ethUsd);
     amountCc = input.size;
     shareDelta = q.shares;
     feeCc = q.feeCc;
     priceUsd = q.priceUsd;
   } else {
-    const q = await quoteSell(input.marketId, yes, input.size, ethUsd);
+    const q = await quoteSell(sb, input.marketId, yes, input.size, ethUsd);
     amountCc = q.proceedsCc;
     shareDelta = input.size;
     priceUsd = q.priceUsd;
