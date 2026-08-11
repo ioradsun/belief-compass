@@ -4,11 +4,21 @@
 # request description rather than something a reviewer could verify. Every check
 # below is one somebody was previously asked to take on trust.
 #
+# IT INSTALLS WITH BUN because `bun.lock` is the lockfile this repository
+# actually commits. The first version of this workflow used `setup-node`'s npm
+# cache and `npm ci`, and every job died before running a single check —
+# "Dependencies lock file is not found … package-lock.json, npm-shrinkwrap.json,
+# yarn.lock". Both of those need a lockfile this repo does not have. `npm
+# install` would have worked and resolved fresh versions on every run, which is
+# the one property CI must not have: a suite that can change underneath you is
+# not evidence.
+#
 # THE POSTGRES JOB IS THE POINT. `simulation.pg.test.ts` and
 # `put-on-table.pg.test.ts` skip themselves without a cluster — which is right
 # for a laptop and dangerous in CI, because a suite that quietly skips reads
-# exactly like a suite that passed. The service container makes them run, and
-# the guard step fails the job if they ever silently stop running.
+# exactly like a suite that passed. The service container makes them run, and the
+# guard step names a test from each suite and fails unless both actually
+# executed.
 name: checks
 
 on:
@@ -25,12 +35,11 @@ jobs:
     name: types · lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --no-audit --no-fund
+          bun-version: latest
+      - run: bun install --frozen-lockfile
       # THE APPLICATION TYPECHECKS, AND THIS GATES. Everything shipped to a
       # browser or a server function is covered here.
       - run: npx tsc --noEmit
@@ -45,19 +54,18 @@ jobs:
         continue-on-error: true
       # Same reasoning: a large pre-existing formatting backlog. Reported, not
       # gating, until it is cleared.
-      - run: npm run lint
+      - run: npx eslint .
         continue-on-error: true
 
   unit:
     name: unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --no-audit --no-fund
+          bun-version: latest
+      - run: bun install --frozen-lockfile
       - run: npx vitest run --reporter=dot
 
   postgres:
@@ -77,12 +85,11 @@ jobs:
     env:
       PGURL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --no-audit --no-fund
+          bun-version: latest
+      - run: bun install --frozen-lockfile
       - run: sudo apt-get update && sudo apt-get install -y postgresql-client
       # `--no-file-parallelism`: both suites own the Challenge tables and each
       # drops and recreates them in its own setup.
@@ -90,9 +97,14 @@ jobs:
         run: |
           npx vitest run src/lib/put-on-table.pg.test.ts src/lib/simulation.pg.test.ts \
             --no-file-parallelism --reporter=verbose 2>&1 | tee pg.log
-      - name: fail if they skipped themselves
+      # A NAMED TEST FROM EACH SUITE, ASSERTED TO HAVE PASSED. Counting skips is
+      # not enough: both suites skip WHOLESALE without a cluster, and a wholly
+      # skipped file is the failure mode that looks most like success.
+      - name: fail if either suite skipped itself
         run: |
-          if grep -qiE '↓|skipped' pg.log && ! grep -q 'ran against a real cluster' pg.log; then
-            echo "The transactional suites skipped — CI must never report that as a pass."
-            exit 1
-          fi
+          fail=0
+          grep -q "✓.*ran against a real cluster" pg.log || {
+            echo "put-on-table.pg.test.ts did not run against a cluster."; fail=1; }
+          grep -q "✓.*two-session race" pg.log || {
+            echo "simulation.pg.test.ts did not run against a cluster."; fail=1; }
+          exit $fail
