@@ -19,13 +19,21 @@
  * canonical audience already did, in the same definition the write uses.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { putOnTable } from "@/lib/table.functions";
 import { railSideKey, tableKey } from "@/components/YourTable";
 import { audienceKey, useAudience } from "@/components/AudiencePreview";
 import { PostActionScreen } from "@/components/PostActionScreen";
 import { usePostActionFacts, type ConfirmedAction } from "@/lib/post-action.adapter";
-import { resolvePostAction, type Cta } from "@/domain/post-action";
+import {
+  refusalIsCanonical,
+  resolvePostAction,
+  WRITE_FAILED_SUPPORT,
+  WRITE_FAILED_TITLE,
+  type ActionStatus,
+  type Cta,
+} from "@/domain/post-action";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import type { PutResult } from "@/lib/table.server";
 
@@ -60,6 +68,17 @@ export function PostAction({
   const { input, parentCall } = usePostActionFacts(kind, wallet, act);
   const { data: audience } = useAudience(wallet, act.marketId);
 
+  /**
+   * ONE PRESS'S OUTCOME, and deliberately not part of the experience.
+   *
+   * `put_on_table` rolls back whole, so a refusal changes nothing about this
+   * market or this person — no Challenge, no spent slot, no repointed call.
+   * Folding it into `resolvePostAction` would make a momentary network error
+   * look like a permanent property of somebody's position. It rides alongside
+   * instead, and disappears on retry.
+   */
+  const [status, setStatus] = useState<ActionStatus>({ state: "idle" });
+
   const relay = useMutation({
     mutationFn: async (): Promise<PutResult | null> =>
       bestEffort(async () =>
@@ -78,11 +97,33 @@ export function PostAction({
           },
         }),
       ),
-    onSuccess: () => {
+    onSettled: (res) => {
+      /**
+       * RE-READ ON EVERY OUTCOME, not only on success.
+       *
+       * A refusal usually means the world moved under the press — another tab
+       * put this market up, the table filled, the audience shrank. Those are
+       * not failures to report, they are the CANONICAL STATE arriving late, and
+       * the only way the screen can say the true thing is to go and look.
+       */
       void qc.invalidateQueries({ queryKey: tableKey(wallet) });
-      // The audience shrank by everybody just asked. Re-read rather than let a
-      // stale count sit under a button that would now reach fewer people.
       void qc.invalidateQueries({ queryKey: audienceKey(wallet, act.marketId) });
+      /**
+       * A NULL RESULT IS A NETWORK FAILURE. `bestEffort` swallows the throw, so
+       * the absence of a result is the only evidence the request never landed —
+       * and it must not read as a silent success.
+       */
+      if (res == null) {
+        setStatus({ state: "failed", message: WRITE_FAILED_SUPPORT });
+        return;
+      }
+      if (res.ok || refusalIsCanonical(res.reason)) {
+        // The refetched state explains itself: "your branch is already live",
+        // a Make room offer, or an honest "nobody new to ask".
+        setStatus({ state: "idle" });
+        return;
+      }
+      setStatus({ state: "failed", message: WRITE_FAILED_SUPPORT });
     },
   });
 
@@ -104,6 +145,9 @@ export function PostAction({
   const act_ = (cta: Cta) => {
     switch (cta.kind) {
       case "challenge":
+        // A retry clears the previous refusal before the next attempt, so the
+        // block cannot linger over a press that has since succeeded.
+        setStatus({ state: "pending" });
         relay.mutate();
         return;
       case "make_room":
@@ -137,6 +181,8 @@ export function PostAction({
       experience={experience}
       onAct={act_}
       pending={relay.isPending}
+      status={status}
+      onRetry={() => act_({ kind: "challenge", label: WRITE_FAILED_TITLE })}
       reveal={reveal}
       groups={audience?.status === "available" ? audience.groups : undefined}
     />

@@ -156,6 +156,40 @@ describe("the invariants the closing screen must never break", () => {
     expect(c).not.toMatch(/case "failed":\s*return \{ status: "none"/);
   });
 
+  it("proves a buy's role from the confirmed action, not from a balance", () => {
+    // A confirmed buy proves the position. The balance only says how much.
+    const c = code("src/lib/post-action.adapter.ts");
+    expect(c).toMatch(/function buyRole\(authored: boolean\)/);
+    expect(c).toMatch(/role: buyRole\(act\.authored\)/);
+  });
+
+  it("surfaces a refused Challenge write instead of restoring the same CTA", () => {
+    /**
+     * The press used to produce nothing: the button reappeared unchanged, at the
+     * emotional peak of the product, explaining nothing. A refusal now rides
+     * ALONGSIDE the experience rather than re-deciding it, because
+     * `put_on_table` rolls back whole and nothing about this market changed.
+     */
+    const c = code("src/components/PostAction.tsx");
+    expect(c).toMatch(/setStatus\(\{ state: "failed"/);
+    expect(c).toMatch(/refusalIsCanonical\(res\.reason\)/);
+    // A null result is a network failure, not a silent success.
+    expect(c).toMatch(/if \(res == null\)/);
+    // Re-read on EVERY outcome, so a lost race can explain itself canonically.
+    expect(c).toMatch(/onSettled/);
+    const screen = code("src/components/PostActionScreen.tsx");
+    expect(screen).toMatch(/status\.state === "failed"/);
+    expect(screen).toMatch(/WRITE_RETRY_LABEL/);
+    // The refusal is NOT a field on the experience — a momentary network error
+    // must never look like a permanent property of somebody's position.
+    const domain = code("src/domain/post-action.ts");
+    const shape = domain.slice(
+      domain.indexOf("interface PostActionExperience"),
+      domain.indexOf("function assertNever"),
+    );
+    for (const leak of ["status", "error", "refusal", "retry"]) expect(shape).not.toContain(leak);
+  });
+
   it("keeps the adapter gathering and the resolver deciding", () => {
     const c = code("src/lib/post-action.adapter.ts");
     // No copy, no CTA, no module choice. The moment the adapter picks a
@@ -164,7 +198,7 @@ describe("the invariants the closing screen must never break", () => {
       expect(c).not.toContain(decision);
   });
 
-  it("never defaults an unsettled balance to zero on a sell", () => {
+  it("never fabricates holdings on ANY action to satisfy a type", () => {
     /**
      * `{ yes: 0, no: 0 }` is the claim "they are out". Guessing it is how a
      * partial seller gets told they left, which is the single worst sentence

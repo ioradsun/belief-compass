@@ -71,10 +71,29 @@ export interface ConfirmedAction {
  * position is not, so somebody who wrote the question and then backed it is
  * `market_maker_and_believer` — never demoted to `believer` because they happen
  * to hold something.
+ *
+ * USED FOR SELLS ONLY. A sell is the one action whose ROLE genuinely depends on
+ * the resulting balance: a creator who just exited holds nothing and is a
+ * `market_maker` again. A buy and a create prove the believer relationship by
+ * happening — see `buyRole` below.
  */
 function roleFor(authored: boolean, holds: boolean): MarketRole {
   if (!authored) return "believer";
   return holds ? "market_maker_and_believer" : "market_maker";
+}
+
+/**
+ * A CONFIRMED BUY PROVES THE POSITION. No balance required.
+ *
+ * The old code derived this from `act.after`, which is null until the on-chain
+ * read refetches — so a Market Maker who had just bought their own YES was
+ * classified `market_maker` rather than `market_maker_and_believer` for the
+ * width of that gap, and the identity line said less than the transaction
+ * already proved. The transaction is the evidence; the balance only says how
+ * much.
+ */
+function buyRole(authored: boolean): MarketRole {
+  return authored ? "market_maker_and_believer" : "believer";
 }
 
 /**
@@ -226,24 +245,30 @@ export function usePostActionFacts(
   const { answered, parentCall } = useAnsweredFacts(act.marketId);
 
   const holds = !!act.after && (act.after.yes > 0 || act.after.no > 0);
-  const role = roleFor(act.authored, holds);
-  const common = { role, outgoing, outgoingProgress, capacity, audience } as const;
+  const common = { outgoing, outgoingProgress, capacity, audience } as const;
 
   if (kind === "create") {
     const input: CreateMarketInput = {
       ...common,
       action: "create_market",
-      // A creation is authored by definition; `believer` cannot occur.
-      role: role === "believer" ? "market_maker" : role,
+      /**
+       * A creation is authored by definition; `believer` cannot occur. And a
+       * creation that SEEDED a side proves the position the same way a buy
+       * does — the balance is not consulted for it.
+       */
+      role: act.side ? "market_maker_and_believer" : "market_maker",
       side: act.side,
     };
     return { input, parentCall };
   }
 
   if (kind === "sell") {
+    // The one action whose role really does depend on what is left.
+    const role = roleFor(act.authored, holds);
     const side = act.side ?? "YES";
     const shape = sellAction(side, act.after);
     const money = {
+      role,
       side,
       realizedGainUsd: act.realizedGainUsd ?? null,
       proceedsUsd: act.proceedsUsd ?? null,
@@ -268,12 +293,18 @@ export function usePostActionFacts(
     return { input, parentCall };
   }
 
-  const after: Holdings = act.after ?? { yes: 0, no: 0 };
+  /**
+   * UNKNOWN IS NOT ZERO, and this line used to be `act.after ?? { yes: 0, no: 0 }`
+   * — a fabricated holdings reading, invented purely so a required field could
+   * be filled. `BuyInput.after` is nullable now and the fabrication is gone.
+   */
+  const after = act.after;
   const side = act.side ?? "YES";
   const held = side === "YES" ? (act.before?.yes ?? 0) : (act.before?.no ?? 0);
   const heldOther = side === "YES" ? (act.before?.no ?? 0) : (act.before?.yes ?? 0);
   const input: BuyInput = {
     ...common,
+    role: buyRole(act.authored),
     action: held > 0 ? "buy_more" : heldOther > 0 ? "buy_opposite_side" : "first_buy",
     side,
     after,

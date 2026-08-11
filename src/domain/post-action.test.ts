@@ -3,7 +3,11 @@ import {
   POST_ACTION_BANNED,
   challengeLabel,
   realizedLine,
+  refusalIsCanonical,
   resolvePostAction,
+  WRITE_FAILED_SUPPORT,
+  WRITE_FAILED_TITLE,
+  WRITE_RETRY_LABEL,
   type Audience,
   type BuyInput,
   type CreateMarketInput,
@@ -619,17 +623,23 @@ describe("the approved copy matrix", () => {
     it("never leaves the market and never offers Next Question", () => {
       for (const action of ["partial_sell", "side_exit", "market_exit"] as const) {
         const r = resolvePostAction(
-          sell({ action, after: action === "market_exit" ? { yes: 0, no: 0 } : { yes: 3, no: 0 } } as Partial<SellInput>),
+          sell({
+            action,
+            after: action === "market_exit" ? { yes: 0, no: 0 } : { yes: 3, no: 0 },
+          } as Partial<SellInput>),
         );
         expect(r.stayOnMarket).toBe(true);
-        for (const cta of [r.primary, r.secondary])
-          expect(cta?.kind).not.toBe("next_question");
+        for (const cta of [r.primary, r.secondary]) expect(cta?.kind).not.toBe("next_question");
       }
     });
 
     it("says what is left after taking some off", () => {
       const r = resolvePostAction(
-        sell({ after: { yes: 4, no: 0 }, remainingValueUsd: 41.2, audience: aud({ total: 0, status: "none" }) }),
+        sell({
+          after: { yes: 4, no: 0 },
+          remainingValueUsd: 41.2,
+          audience: aud({ total: 0, status: "none" }),
+        }),
       );
       expect(r.headline).toBe("You took some off.");
       expect(r.support).toBe("Still backing YES with $41.20.");
@@ -653,7 +663,12 @@ describe("the approved copy matrix", () => {
 
     it("does NOT say 'you're out' to somebody who still holds the other side", () => {
       const r = resolvePostAction(
-        sell({ action: "side_exit", side: "YES", after: { yes: 0, no: 7 }, remainingValueUsd: 24.1 }),
+        sell({
+          action: "side_exit",
+          side: "YES",
+          after: { yes: 0, no: 7 },
+          remainingValueUsd: 24.1,
+        }),
       );
       expect(r.headline).toBe("You left YES.");
       expect(r.support).toBe("Still backing NO with $24.10.");
@@ -737,11 +752,79 @@ describe("the approved copy matrix", () => {
 
     it("never sends a creator to Next Question", () => {
       for (const audience of [aud(), aud({ status: "none", total: 0 }), aud({ status: "failed" })])
-        for (const capacity of [{ active: 0, total: 3 }, { active: 3, total: 3 }]) {
+        for (const capacity of [
+          { active: 0, total: 3 },
+          { active: 3, total: 3 },
+        ]) {
           const r = resolvePostAction(create({ audience, capacity }));
-          for (const cta of [r.primary, r.secondary])
-            expect(cta?.kind).not.toBe("next_question");
+          for (const cta of [r.primary, r.secondary]) expect(cta?.kind).not.toBe("next_question");
         }
     });
+  });
+});
+
+/**
+ * UNKNOWN IS NOT ZERO — the invariant, now applied to all three actions.
+ *
+ * A buy's `after` used to be a required `Holdings`, so the adapter filled it
+ * with `{ yes: 0, no: 0 }` purely to satisfy the type. That is a fabricated
+ * reading, and the type could not tell it from a real one.
+ */
+describe("a confirmed action proves the action; a balance proves the holdings", () => {
+  it("still says what a buy did when the balance has not landed", () => {
+    const r = resolvePostAction(buy({ after: null, side: "YES" }));
+    expect(r.headline).toBe("That's a real call.");
+    expect(r.support).toBe("You backed YES.");
+  });
+
+  it("claims neither both-sides nor a flip without a reading", () => {
+    const r = resolvePostAction(buy({ action: "buy_opposite_side", side: "NO", after: null }));
+    expect(r.headline).toBe("You added NO.");
+    // Both of these need a balance, and neither is guessed in either direction.
+    expect(r.support).toBeNull();
+    expect(r.headline).not.toMatch(/flip/i);
+  });
+
+  it("keeps a Market Maker who just bought their own question a Market Maker", () => {
+    /**
+     * THE BUG THIS CLOSES. Role was derived from `after`, so for the width of a
+     * refetch a creator who had just backed their own YES was classified
+     * `market_maker` — saying less than the confirmed transaction already proved.
+     */
+    const r = resolvePostAction(
+      buy({ role: "market_maker_and_believer", side: "YES", after: null }),
+    );
+    expect(r.headline).toBe("You made the question. Now you're in.");
+    expect(r.identity).toBe("Market Maker · Backing YES");
+  });
+});
+
+describe("a refused write is a transient fact, not a new post-action state", () => {
+  it("keeps refusals out of the experience entirely", () => {
+    // `put_on_table` rolls back whole, so nothing about this market or person
+    // changed. The experience is identical before and after a failed press.
+    const before = resolvePostAction(buy());
+    expect(before).not.toHaveProperty("status");
+    expect(before).not.toHaveProperty("error");
+  });
+
+  it("treats a lost race as the canonical state arriving late, not a failure", () => {
+    // Another tab put this market up, or filled the table, or the audience moved.
+    // Re-reading makes the screen say the true thing on its own.
+    for (const reason of ["already_up", "full", "no_audience", "no_reach"] as const)
+      expect(refusalIsCanonical(reason)).toBe(true);
+  });
+
+  it("treats a genuine write failure as a failure worth saying out loud", () => {
+    for (const reason of ["failed", "bad_parent", "audience_unavailable"] as const)
+      expect(refusalIsCanonical(reason)).toBe(false);
+  });
+
+  it("says nothing changed, and says it without a database in it", () => {
+    const said = `${WRITE_FAILED_TITLE} ${WRITE_FAILED_SUPPORT} ${WRITE_RETRY_LABEL}`;
+    expect(WRITE_FAILED_SUPPORT).toBe("Nothing changed.");
+    for (const jargon of ["rpc", "sql", "postgres", "constraint", "transaction", "error", "500"])
+      expect(said.toLowerCase()).not.toContain(jargon);
+    for (const banned of POST_ACTION_BANNED) expect(said.toLowerCase()).not.toContain(banned);
   });
 });

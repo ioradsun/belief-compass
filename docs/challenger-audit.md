@@ -1325,3 +1325,36 @@ Market Maker who put their question up and only now takes a side has a Challenge
 running that the screen would not have mentioned. It is one value now, computed
 once per buy, and `reveal` yields to it — both are consequence blocks, there is
 only one slot, and other people showing up is the bigger news.
+
+### R.7 Two holes found in review, before merge
+
+**A confirmed buy was turning an unknown balance into zero.** The sell path
+correctly kept `after: null` until the post-trade read landed; the buy path did
+`act.after ?? { yes: 0, no: 0 }` — a fabricated holdings reading, invented purely
+to satisfy a required field, and indistinguishable from a real one at the type
+level. The visible cost was a Market Maker who had just bought their own YES
+being classified `market_maker` rather than `market_maker_and_believer` for the
+width of a refetch, saying less than the confirmed transaction already proved.
+
+`BuyInput.after` is nullable now, and role comes from the action:
+
+> **A confirmed action proves the action. A balance proves the resulting
+> holdings.** Nothing fabricates the second to satisfy a type.
+
+`flipped` stays false without a reading, because a transition genuinely does need
+two.
+
+**A refused Challenge write said nothing at all.** The button reappeared,
+unchanged, at the emotional peak of the product. A refusal now rides ALONGSIDE
+the experience rather than re-deciding it — `put_on_table` rolls back whole, so
+nothing about the market or the person changed, and folding a network error into
+`resolvePostAction` would make it look like a permanent property of somebody's
+position.
+
+The split that matters: `already_up`, `full`, `no_audience` and `no_reach` are
+**not failures**. They mean the world moved under the press, and re-reading makes
+the screen say the true thing on its own — "your branch is already live", a Make
+room offer, an honest "nobody new to ask". Only `failed`, `bad_parent` and
+`audience_unavailable` produce the block, which says _"Couldn't put it on the
+table. Nothing changed."_ and offers a retry. No database language, and the
+second sentence is the one that matters.

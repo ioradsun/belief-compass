@@ -138,7 +138,23 @@ export interface BuyInput extends Common {
   action: "first_buy" | "buy_more" | "buy_opposite_side";
   /** A buy always has a side. There is no directionless purchase. */
   side: Side;
-  after: Holdings;
+  /**
+   * NULL UNTIL THE POST-TRADE BALANCE LANDS — the same rule a sell already had,
+   * and the same reason.
+   *
+   * This used to be a required `Holdings`, so the adapter defaulted it to
+   * `{ yes: 0, no: 0 }` to satisfy the type. That fabricated a holdings reading
+   * out of an unsettled read, and the type could not tell the difference. The
+   * visible cost was a Market Maker who had just bought their own YES being
+   * classified `market_maker` rather than `market_maker_and_believer` for as
+   * long as the refetch took — even though the confirmed transaction already
+   * proved the position.
+   *
+   * THE RULE, NOW CONSISTENT ACROSS ALL THREE ACTIONS: a confirmed action proves
+   * the ACTION. A balance proves the resulting HOLDINGS. Nothing fabricates the
+   * second to satisfy a type.
+   */
+  after: Holdings | null;
   /**
    * THE VERY FIRST BELIEVER ON THIS SIDE — the same fact `conviction-reveal`
    * already computes, passed in rather than recomputed. It earns its own
@@ -529,7 +545,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
        * BOTH SIDES HELD IS NOT A CHANGE OF MIND. Only a proven transition — the
        * original side gone — may be called a flip, and that is exit territory.
        */
-      if (i.action === "buy_opposite_side" && i.after.yes > 0 && i.after.no > 0) {
+      if (i.action === "buy_opposite_side" && i.after && i.after.yes > 0 && i.after.no > 0) {
         return {
           headline: `You added ${i.side}.`,
           support: "You now hold both sides.",
@@ -563,6 +579,29 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           consequenceLine: branchLine,
           challengeModule: module,
           identity: identityFor(i.role, i.side),
+          primary,
+          secondary,
+          stayOnMarket: false,
+          copyCategory: "general",
+        };
+      }
+
+      /**
+       * THE OTHER SIDE WAS BOUGHT AND THE BALANCE HAS NOT LANDED.
+       *
+       * Reached only when neither "you now hold both sides" nor a proven flip
+       * can be established — both need a reading. The purchase is certain and
+       * says so; what it produced is not, and stays unsaid rather than being
+       * guessed in either direction.
+       */
+      if (i.action === "buy_opposite_side") {
+        return {
+          headline: `You added ${i.side}.`,
+          support: null,
+          consequence: branchLive,
+          consequenceLine: branchLine,
+          challengeModule: module,
+          identity: identityFor(i.role, null),
           primary,
           secondary,
           stayOnMarket: false,
@@ -757,6 +796,69 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
       return assertNever(i);
   }
 }
+
+/* ── The Challenge write, and what to say when it refuses ─────────────────── */
+
+/** Every way the server can refuse to put a question on the table. */
+export type WriteRefusal =
+  | "full"
+  | "already_up"
+  | "no_audience"
+  | "audience_unavailable"
+  | "bad_parent"
+  | "no_reach"
+  | "failed";
+
+/**
+ * A TRANSIENT FACT ABOUT ONE PRESS — deliberately NOT part of the experience.
+ *
+ * `resolvePostAction` answers "what is true of this market and this person", and
+ * a failed write changes neither: `put_on_table` rolls back whole, so nothing
+ * was created, no slot was spent, and nothing was carried. Folding a refusal
+ * into the resolver would make a momentary network error look like a permanent
+ * property of somebody's position.
+ *
+ * So it rides alongside. The screen renders the same experience with one extra
+ * block on top, and the block disappears on retry.
+ */
+export type ActionStatus =
+  | { state: "idle" }
+  | { state: "pending" }
+  | { state: "failed"; message: string };
+
+/**
+ * SOME REFUSALS ARE NOT FAILURES — they are the canonical state, arriving late.
+ *
+ * `already_up` and `full` mean another tab won a race, and re-reading the table
+ * makes the screen say the true thing on its own: "your branch is already live",
+ * or a Make room offer. `no_audience` and `no_reach` mean the audience moved
+ * under the press, and a re-read produces the honest "nobody new to ask".
+ *
+ * Reporting any of those as "couldn't put it on the table" would be technically
+ * accurate and actively misleading — the reader would retry against a state that
+ * is going to refuse them again, for a reason the screen could simply have said.
+ */
+export function refusalIsCanonical(reason: WriteRefusal): boolean {
+  return (
+    reason === "already_up" ||
+    reason === "full" ||
+    reason === "no_audience" ||
+    reason === "no_reach"
+  );
+}
+
+/**
+ * WHAT A GENUINE FAILURE SAYS. Short, and with no database in it.
+ *
+ * "Nothing changed" is the important half and it is literally true — the write
+ * is one transaction, so a refusal leaves no Challenge, no spent slot and no
+ * repointed call. It is also the only thing the reader actually needs: they
+ * pressed a button at the emotional peak of the product and are owed the
+ * knowledge that their table is exactly as they left it.
+ */
+export const WRITE_FAILED_TITLE = "Couldn't put it on the table";
+export const WRITE_FAILED_SUPPORT = "Nothing changed.";
+export const WRITE_RETRY_LABEL = "Try again";
 
 /**
  * Words this screen must never use, whatever the branch.

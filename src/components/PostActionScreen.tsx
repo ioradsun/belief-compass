@@ -21,7 +21,13 @@
  * social module, with no CTA of its own.
  */
 import type { ReactNode } from "react";
-import type { Cta, PostActionExperience } from "@/domain/post-action";
+import {
+  WRITE_FAILED_TITLE,
+  WRITE_RETRY_LABEL,
+  type ActionStatus,
+  type Cta,
+  type PostActionExperience,
+} from "@/domain/post-action";
 import { AudienceGroups } from "@/components/AudiencePreview";
 import type { AudienceGroupView } from "@/domain/audience";
 import { RELAY_COST } from "@/domain/chain";
@@ -40,6 +46,16 @@ export interface PostActionScreenProps {
   reveal?: ReactNode;
   /** Faces for the Challenge module. Absent while the audience is still loading. */
   groups?: AudienceGroupView[];
+  /**
+   * THE OUTCOME OF ONE PRESS, separate from the experience on purpose.
+   *
+   * A refused write changes nothing about this market or this person —
+   * `put_on_table` rolls back whole. So it is rendered as a block ON TOP of an
+   * unchanged screen rather than by re-deciding the screen, and it disappears
+   * the moment the reader tries again.
+   */
+  status?: ActionStatus;
+  onRetry?: () => void;
 }
 
 export function PostActionScreen({
@@ -48,6 +64,8 @@ export function PostActionScreen({
   pending = false,
   reveal,
   groups,
+  status = { state: "idle" },
+  onRetry,
 }: PostActionScreenProps) {
   const showReveal = x.consequence === "reveal" && reveal != null;
   const showConsequenceBlock =
@@ -105,6 +123,38 @@ export function PostActionScreen({
               cannot reach yet, so it shows the sentence and the way out. */}
           {x.challengeModule.kind !== "make_room" && groups && groups.length > 0 && (
             <AudienceGroups groups={groups} />
+          )}
+        </div>
+      )}
+
+      {/* THE PRESS DID NOT LAND, AND THE TABLE IS EXACTLY AS THEY LEFT IT.
+          Short, and with no database in it. "Nothing changed" is the half that
+          matters: the write is one transaction, so a refusal leaves no
+          Challenge, no spent slot and no repointed call. Without this the
+          button simply reappeared, unchanged, explaining nothing — at the
+          emotional peak of the product. */}
+      {status.state === "failed" && (
+        <div
+          className="rounded-lg border p-2.5"
+          style={{
+            borderColor: "color-mix(in oklab, var(--no) 40%, var(--border))",
+            background: "color-mix(in oklab, var(--no) 8%, transparent)",
+          }}
+        >
+          <p className="text-[12px] font-semibold leading-snug text-[var(--text)]">
+            {WRITE_FAILED_TITLE}
+          </p>
+          <p className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
+            {status.message}
+          </p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-1.5 text-[12px] font-medium text-[var(--text)] underline"
+            >
+              {WRITE_RETRY_LABEL}
+            </button>
           )}
         </div>
       )}
