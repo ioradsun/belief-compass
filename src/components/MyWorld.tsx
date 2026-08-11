@@ -26,7 +26,7 @@
  * a fresh session — the running order is the product's main loop, and the other
  * three have nothing to say until you have used it.
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
 import { MyConvictions } from "@/components/MyConvictions";
