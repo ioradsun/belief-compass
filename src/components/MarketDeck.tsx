@@ -149,7 +149,7 @@ export function MarketDeck({
    * a refusing adapter rather than defaulting to the real one.
    */
   const resolving = !exec.resolved;
-  const bal = useUserBalance(marketId);
+  const bal = useUserBalance(marketId, viewerWallet);
   const house = useHouseFinalize(marketId, viewerWallet, sim ? "SIMULATION" : "REAL");
   // The owned-position flow — the SAME hook the phone game mounts, so the
   // ownership model, the sell path and the selector can never drift apart.
@@ -172,7 +172,7 @@ export function MarketDeck({
    * read is still pre-trade, so the closing screen must not treat it as "after"
    * — that is how a partial seller gets told they are out.
    */
-  const shift = usePositionShift(marketId, trade.isSuccess && !dock.isSelling);
+  const shift = usePositionShift(marketId, trade.isSuccess && !dock.isSelling, viewerWallet);
   /**
    * A COMPLETED SALE TAKES OVER THE CENTRE, exactly as a completed buy does.
    *
@@ -182,7 +182,7 @@ export function MarketDeck({
    * ("You're out" to somebody who sold half). The same resolver answers it.
    */
   const [soldSide, setSoldSide] = useState<"YES" | "NO" | null>(null);
-  const sellShift = usePositionShift(marketId, soldSide != null);
+  const sellShift = usePositionShift(marketId, soldSide != null, viewerWallet);
 
   // A belief tap records a FREE expressed belief (no money) that feeds DNA /
   // Network / House. Refreshes the viewer's readiness so calibration progresses.

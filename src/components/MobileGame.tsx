@@ -266,7 +266,7 @@ export function MobileGame({
    * a refusing adapter rather than defaulting to the real one.
    */
   const resolving = !exec.resolved;
-  const bal = useUserBalance(marketId);
+  const bal = useUserBalance(marketId, viewerWallet);
   // The SAME owned-position hook the desktop deck mounts — the phone previously
   // had no sell path at all, so owning shares here was a one-way door.
   const dock = useOwnedDock({
@@ -301,7 +301,7 @@ export function MobileGame({
    * BEFORE AND AFTER, kept apart — the on-chain read is still pre-trade at the
    * instant a trade confirms, so it must not be handed over as "after".
    */
-  const shift = usePositionShift(marketId, trade.isSuccess && !dock.isSelling);
+  const shift = usePositionShift(marketId, trade.isSuccess && !dock.isSelling, viewerWallet);
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(
     marketId,
