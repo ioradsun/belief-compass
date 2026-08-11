@@ -8,7 +8,13 @@
  */
 import { COPY_VERSION } from "@/domain/copy-version";
 import { eligibilityFor, reentryFor, type ViewerMarketState } from "@/domain/feed/eligibility";
-import { scoreMarket, type FeedAiAnalysis, type FeedMarketSignals } from "@/domain/feed/score";
+import {
+  scoreMarket,
+  type FeedAiAnalysis,
+  type FeedMarketSignals,
+  type ScoredMarket,
+} from "@/domain/feed/score";
+
 import { reasonFor } from "@/domain/feed/reasons";
 import {
   sequenceFeed,
