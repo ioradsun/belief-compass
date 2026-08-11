@@ -1820,13 +1820,22 @@ function Feed() {
                 those apart belongs in the tape, which is why the tape is passed
                 in rather than owned here. */}
               {createOpen || ideaDue ? (
-                /* THE RIGHT RAIL WHILE WRITING — other ways to ask the same
-                   question, then the debates that already exist. The House spark
-                   moved to the left rail, so nothing is offered twice. */
-                <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
-                  <AlternatesRail />
-                  <SimilarMarkets wallet={wallet} onJoin={selectMarket} />
+                /* THE RIGHT RAIL WHILE WRITING — a FIXED SPLIT, not a stack.
+                   Both panels fill and empty as the writer types; stacked, each
+                   arrival shoved the other one down the column. Two halves that
+                   never resize means a reader's eye can stay where it was: the
+                   top half is always "other ways to ask", the bottom half is
+                   always "already being debated", and each scrolls inside
+                   itself. */
+                <div className="grid min-h-0 flex-1 grid-rows-2 gap-3">
+                  <div className="min-h-0 overflow-y-auto pr-0.5">
+                    <AlternatesRail />
+                  </div>
+                  <div className="min-h-0 overflow-y-auto border-t border-[var(--border)] pt-3 pr-0.5">
+                    <SimilarMarkets wallet={wallet} onJoin={selectMarket} />
+                  </div>
                 </div>
+
               ) : (
                 <ChallengeRail
                   wallet={wallet}
