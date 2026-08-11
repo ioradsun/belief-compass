@@ -665,8 +665,30 @@ export function MyConvictions({
           </div>
         ))}
       </div>
+
+      {/* Yours, but with nothing at stake — so they are named, not measured. */}
+      {authoredOnly.length > 0 && (
+        <div className="pt-5">
+          <div className="text-[9.5px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            Market Maker · no position
+          </div>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {authoredOnly.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => onSelect(m.id)}
+                className="block w-full text-left text-[12.5px] font-medium leading-snug text-[var(--text-secondary)] underline-offset-2 hover:text-[var(--text)] hover:underline"
+              >
+                {m.question}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
+
 }
 
 /** No convictions yet — an invitation, not an empty portfolio. */
