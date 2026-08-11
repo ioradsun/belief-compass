@@ -1022,11 +1022,27 @@ function Feed() {
   /** Nothing to show and nothing on the way — say so, and offer the way back. */
   const feedFailed = stableFeed === undefined && (isFeedError || feedStalled);
 
-  const lensExhausted =
-    lens !== "for_you" &&
-    !isFeedError &&
-    stableFeed?.lens === lens &&
-    stableFeed.exhausted === true;
+  /**
+   * The three conditions above, evaluated ONCE — the lens question is the only
+   * thing layered on top. Two readers of this needed the same answer and the
+   * second must not be free to re-derive it slightly differently.
+   */
+  const feedEnded = !isFeedError && stableFeed?.lens === lens && stableFeed.exhausted === true;
+
+  const lensExhausted = lens !== "for_you" && feedEnded;
+
+  /**
+   * IS THERE MORE PAST THE LAST ROW? The bottom of a scrollable playlist is a
+   * statement whether or not anyone meant it to be, so the panel needs the
+   * answer rather than a count of what it happens to be holding.
+   *
+   * The negation of `feedEnded` is not sufficient on its own: a request that
+   * failed, or one that has not landed, also has not said the feed ended, and
+   * promising more below on the strength of a missing answer is the same
+   * mistake in the other direction. Loading and error have their own states in
+   * this panel and neither of them wants a tail.
+   */
+  const moreBelow = !feedEnded && !isFeedError && stableFeed !== undefined;
 
   const ids = rows.map((r) => Number(r.onchain_id));
   const { data: pulseData } = useQuery(pulsesQO(ids));
@@ -1624,6 +1640,7 @@ function Feed() {
                       lens={lens}
                       onLens={selectLens}
                       lensExhausted={lensExhausted}
+                      moreBelow={moreBelow}
                       loading={feedLoading}
                       failed={feedFailed}
                       entries={playlistEntries}

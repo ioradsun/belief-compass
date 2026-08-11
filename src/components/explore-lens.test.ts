@@ -277,17 +277,43 @@ describe("the continuation state", () => {
      * two-index slice produced an EMPTY STRING — and an empty string matches no
      * regex, so this test was failing while asserting nothing at all. A looser
      * pattern would have turned it green and protected just as little.
+     *
+     * ANCHORED ON `feedEnded`, which is where the three conditions now live: a
+     * second reader (the playlist's "more below" tail) needed the same answer,
+     * and two copies of a three-part verdict is two answers waiting to disagree.
+     * The assertions are unchanged — only the declaration holding them moved.
      */
-    const start = idx.indexOf("const lensExhausted =");
+    const start = idx.indexOf("const feedEnded =");
     expect(start).toBeGreaterThan(-1);
     const guard = idx.slice(start, start + 400);
-    // Not For You — it is the destination, and its own end-state is untouched.
-    expect(guard).toMatch(/lens !== "for_you"/);
     // A failed request tells us nothing about how much is left.
     expect(guard).toMatch(/!isFeedError/);
     // A response is only evidence about the lens it was built for.
     expect(guard).toMatch(/stableFeed\?\.lens === lens/);
     expect(guard).toMatch(/stableFeed\.exhausted === true/);
+    // Not For You — it is the destination, and its own end-state is untouched.
+    expect(idx).toMatch(/const lensExhausted = lens !== "for_you" && feedEnded;/);
+  });
+
+  /**
+   * THE OTHER END OF THE SAME QUESTION.
+   *
+   * The playlist scrolls, so its last row is a statement whether or not anyone
+   * meant it to be — a column that simply stops looks exactly like a platform
+   * that ran out. The tail must therefore come from the server's verdict too,
+   * and must NOT appear on a request that failed or has not landed, which have
+   * their own states in the panel.
+   */
+  it("marks a list that has not ended, from the same verdict", () => {
+    const start = idx.indexOf("const moreBelow =");
+    expect(start).toBeGreaterThan(-1);
+    const guard = idx.slice(start, start + 200);
+    expect(guard).toMatch(/!feedEnded/);
+    expect(guard).toMatch(/!isFeedError/);
+    expect(guard).toMatch(/stableFeed !== undefined/);
+    // And the panel renders it, never inferring one from `entries.length`.
+    expect(feed).toMatch(/moreBelow\?: boolean/);
+    expect(feed).toMatch(/\{moreBelow && !lensExhausted && <MoreBelow/);
   });
 
   it("keeps the market on screen when a chosen lens ends", () => {

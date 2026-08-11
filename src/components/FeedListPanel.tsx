@@ -109,6 +109,7 @@ export function FeedListPanel({
   lens,
   onLens,
   lensExhausted = false,
+  moreBelow = false,
   loading = false,
   failed = false,
   filters,
@@ -131,6 +132,14 @@ export function FeedListPanel({
    * this panel renders the verdict and never infers one from `entries.length`.
    */
   lensExhausted?: boolean;
+  /**
+   * There is more feed past the last row — the server has NOT said it is out.
+   *
+   * Computed in the route for the same reason `lensExhausted` is: this panel
+   * cannot tell "the batch ended" from "the feed ended" by counting `entries`,
+   * and that guess is exactly the mistake. It renders the verdict.
+   */
+  moreBelow?: boolean;
   /**
    * No feed for THIS lens has arrived yet.
    *
@@ -353,9 +362,12 @@ export function FeedListPanel({
             The reader chose this lens and finished it; the market they are on
             stays in the centre and this is simply what follows the final row. */}
           {lensExhausted && <Continuation onContinue={() => onLens("for_you")} />}
+          {/* The other end of the same question: the list has NOT ended, so the
+            bottom of the scroll must not look like it has. Mutually exclusive
+            with the row above by construction — see `moreBelow` in the route. */}
+          {moreBelow && !lensExhausted && <MoreBelow />}
         </ol>
       )}
-
     </div>
   );
 }
@@ -413,26 +425,61 @@ function Continuation({ onContinue }: { onContinue: () => void }) {
  */
 const SKELETON_LINES = [2, 1, 2, 3, 1, 2, 2, 1] as const;
 
+/** One placeholder row, at the real row's paddings and heights. */
+function SkeletonRow({ lines }: { lines: number }) {
+  return (
+    <>
+      {/* The question — one bar per line it would have taken, the last one
+        short, exactly as a wrapped sentence ends. */}
+      {Array.from({ length: lines }).map((_, l) => (
+        <div
+          key={l}
+          className="mb-1 h-[13px] animate-pulse rounded bg-[var(--border)]/40 motion-reduce:animate-none"
+          style={{ width: l === lines - 1 ? "62%" : "100%" }}
+        />
+      ))}
+      {/* The hero, then the quiet scale line — the same two rows every real
+        row carries, at the same sizes. */}
+      <div className="mt-1.5 h-[12px] w-[38%] animate-pulse rounded bg-[var(--border)]/40 motion-reduce:animate-none" />
+      <div className="mt-1.5 h-[11px] w-[52%] animate-pulse rounded bg-[var(--border)]/25 motion-reduce:animate-none" />
+    </>
+  );
+}
+
 function PlaylistSkeleton() {
   return (
     <ul className="min-h-0 flex-1 space-y-0.5 overflow-hidden" aria-hidden>
       {SKELETON_LINES.map((lines, i) => (
         <li key={i} className="px-3 py-2">
-          {/* The question — one bar per line it would have taken, the last one
-            short, exactly as a wrapped sentence ends. */}
-          {Array.from({ length: lines }).map((_, l) => (
-            <div
-              key={l}
-              className="mb-1 h-[13px] animate-pulse rounded bg-[var(--border)]/40 motion-reduce:animate-none"
-              style={{ width: l === lines - 1 ? "62%" : "100%" }}
-            />
-          ))}
-          {/* The hero, then the quiet scale line — the same two rows every real
-            row carries, at the same sizes. */}
-          <div className="mt-1.5 h-[12px] w-[38%] animate-pulse rounded bg-[var(--border)]/40 motion-reduce:animate-none" />
-          <div className="mt-1.5 h-[11px] w-[52%] animate-pulse rounded bg-[var(--border)]/25 motion-reduce:animate-none" />
+          <SkeletonRow lines={lines} />
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * THE BOTTOM OF A LIST THAT HAS NOT ENDED.
+ *
+ * A scrollable column that simply stops is a claim, and it was the wrong one:
+ * the reader who flicked to the last row saw the same thing they would see if
+ * the platform had run out. `Continuation` says "you're caught up" when that is
+ * TRUE; this is the other case, and it had nothing at all.
+ *
+ * IT MAKES NO SENTENCE, on purpose. "Loading more" would be a claim about a
+ * request that may not be in flight — the queue tops up on READING POSITION, not
+ * on scroll, so reaching the bottom of the list triggers nothing and should not
+ * pretend otherwise. Two placeholder rows say the only thing that is actually
+ * known: the list continues past here. It is the same row shape the pre-feed
+ * skeleton uses, so the column reads as one thing in both states.
+ *
+ * `aria-hidden` for the same reason the skeleton is: a screen reader following
+ * the list should hear markets, not an ornament about there being more.
+ */
+function MoreBelow() {
+  return (
+    <li className="px-3 py-2 opacity-50" aria-hidden>
+      <SkeletonRow lines={2} />
+    </li>
   );
 }
