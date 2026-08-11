@@ -152,8 +152,13 @@ const graduate = (wallet = ME, target = TARGET) =>
   JSON.parse(sql(`select simulation_graduate(${lit(wallet)}, ${target})`)) as {
     ok?: boolean;
     reason?: string;
+    convictions?: number;
     account?: { state: string };
   };
+
+/** `simulation_reconcile_state` — returns the state the account should be in. */
+const reconcile = (wallet = ME, target = TARGET) =>
+  sql(`select coalesce(simulation_reconcile_state(${lit(wallet)}, ${target}), '')`);
 
 /** Give a wallet N convictions, so eligibility can be steered. */
 const giveConvictions = (wallet: string, n: number) => {
@@ -181,6 +186,10 @@ describe.skipIf(!ready)("the Simulation ledger, on a real cluster", () => {
     // The migration under test lands on the pre-Simulation schema, exactly as it
     // will in production — including the market_calls primary-key ALTER.
     file("supabase/migrations/20260909000000_simulation_mode.sql");
+    // The first migration is already applied in production, so the lifecycle
+    // reconciliation ships as a second one and is tested in that same order —
+    // stacked on top of the shipped definitions, replacing them.
+    file("supabase/migrations/20260910000000_simulation_lifecycle_reconcile.sql");
   });
 
   beforeEach(() => {
@@ -458,11 +467,17 @@ describe.skipIf(!ready)("the Simulation ledger, on a real cluster", () => {
       expect(one("select state from simulation_accounts")).toBe("EXITED");
     });
 
-    it("refuses when the count has fallen back below the target", () => {
+    it("refuses when the count has fallen back below the target, and releases", () => {
       // GRADUATING is written once and persists; a conviction can disappear
       // afterwards. Closing an account permanently on the strength of a state
       // written earlier, about a count that is no longer true, is the same
       // mistake as trusting the client.
+      //
+      // But refusing and LEAVING it in GRADUATING was its own defect: nothing
+      // else moves that state, so the account could not graduate (the count is
+      // short), could not order (the client reads GRADUATING as finished), and
+      // the only control on screen was the graduation that had just refused.
+      // The refusal must hand the account back.
       activate();
       giveConvictions(ME, 9);
       order();
@@ -472,7 +487,29 @@ describe.skipIf(!ready)("the Simulation ledger, on a real cluster", () => {
       const res = graduate();
       expect(res.ok).toBe(false);
       expect(res.reason).toBe("not_complete");
-      expect(one("select state from simulation_accounts")).toBe("GRADUATING");
+      // The count it refused on is returned, so the reader is told 1 / 10
+      // rather than shown a bare failure.
+      expect(res.convictions).toBe(1);
+      expect(res.account?.state).toBe("ACTIVE");
+      expect(one("select state from simulation_accounts")).toBe("ACTIVE");
+      // Released, not closed: no graduation timestamp was written on the way past.
+      expect(one("select coalesce(graduated_at::text,'') from simulation_accounts")).toBe("");
+    });
+
+    it("lets the released account earn its way back to the door", () => {
+      // The whole point of releasing it. One more conviction, and the ordinary
+      // order path writes GRADUATING again — no special case, no repair step.
+      activate();
+      giveConvictions(ME, 9);
+      order();
+      sql("delete from expressed_beliefs where source = 'tap'");
+      expect(graduate().reason).toBe("not_complete");
+
+      giveConvictions(ME, 9);
+      expect(reconcile()).toBe("GRADUATING");
+      const res = graduate();
+      expect(res.ok).toBe(true);
+      expect(res.account?.state).toBe("GRADUATED");
     });
 
     it("graduates a GRADUATING account that is genuinely at the target", () => {
@@ -501,6 +538,59 @@ describe.skipIf(!ready)("the Simulation ledger, on a real cluster", () => {
       graduate();
       exit_();
       expect(one("select state from simulation_accounts")).toBe("GRADUATED");
+    });
+  });
+
+  /* ── Reconciliation ──────────────────────────────────────────────────────── */
+
+  describe("the lifecycle reconciles in both directions", () => {
+    it("raises ACTIVE to GRADUATING when the count reaches the target", () => {
+      // Convictions can arrive without a Simulation order — a real position, a
+      // belief recorded elsewhere. Nothing moved the stored state for those.
+      activate();
+      giveConvictions(ME, TARGET);
+      expect(one("select state from simulation_accounts")).toBe("ACTIVE");
+      expect(reconcile()).toBe("GRADUATING");
+      expect(one("select state from simulation_accounts")).toBe("GRADUATING");
+    });
+
+    it("returns GRADUATING to ACTIVE when the count falls back", () => {
+      activate();
+      giveConvictions(ME, 9);
+      order();
+      sql("delete from expressed_beliefs where source = 'tap'");
+      expect(reconcile()).toBe("ACTIVE");
+      expect(one("select state from simulation_accounts")).toBe("ACTIVE");
+    });
+
+    it("leaves a settled state alone and writes nothing", () => {
+      activate();
+      const before = one("select xmin::text from simulation_accounts");
+      expect(reconcile()).toBe("ACTIVE");
+      // Same row version: a read path that calls this pays a lookup, not a write.
+      expect(one("select xmin::text from simulation_accounts")).toBe(before);
+    });
+
+    it("never reopens a terminal state", () => {
+      // A graduated account is a one-way door, and an exited one is not
+      // mid-flight. A conviction count must move neither.
+      activate();
+      giveConvictions(ME, 9);
+      order();
+      graduate();
+      expect(reconcile()).toBe("GRADUATED");
+
+      activate(OTHER);
+      exit_(OTHER);
+      giveConvictions(OTHER, TARGET);
+      expect(reconcile(OTHER)).toBe("EXITED");
+      expect(one(`select state from simulation_accounts where wallet = ${lit(OTHER)}`)).toBe(
+        "EXITED",
+      );
+    });
+
+    it("is silent about a wallet with no account", () => {
+      expect(reconcile("0xnobody")).toBe("");
     });
   });
 
@@ -554,16 +644,14 @@ describe.skipIf(!ready)("the Simulation ledger, on a real cluster", () => {
 
   describe("the Simulation audience intersection, against the real schema", () => {
     /**
-     * THE APPLICATION'S OWN PREDICATE, run here so a column rename cannot pass
-     * a static test and then suppress every Simulation Challenge in production.
-     * `eligibleAudience` narrows its candidates with exactly this.
+     * THE APPLICATION'S OWN PREDICATE — literally. `eligibleAudience` calls this
+     * function, so a column rename or a changed rule cannot pass a static test
+     * and then suppress every Simulation Challenge in production.
      */
     const reachable = (wallets: string[]): string[] =>
       sql(
-        `select coalesce(string_agg(wallet, ',' order by wallet), '')
-           from simulation_accounts
-          where state = 'ACTIVE'
-            and wallet in (${wallets.map(lit).join(",")})`,
+        `select coalesce(string_agg(w, ',' order by w), '')
+           from simulation_reachable_wallets(array[${wallets.map(lit).join(",")}]::text[], ${TARGET}) as w`,
       )
         .split(",")
         .filter(Boolean);
@@ -597,6 +685,23 @@ describe.skipIf(!ready)("the Simulation ledger, on a real cluster", () => {
 
     it("excludes a wallet with no Simulation account at all", () => {
       expect(reachable([ME])).toEqual([]);
+    });
+
+    it("excludes an ACTIVE account already at the target", () => {
+      // The stored state only moves when a Simulation ORDER settles. Convictions
+      // arriving from outside — a real position, a belief recorded elsewhere —
+      // finish the profile without any Simulation transaction running, so the
+      // row still says ACTIVE while the person is done. Testing the stored state
+      // alone would keep asking them a question they can no longer answer.
+      activate();
+      giveConvictions(ME, TARGET);
+      expect(one("select state from simulation_accounts")).toBe("ACTIVE");
+      expect(reachable([ME])).toEqual([]);
+    });
+
+    it("matches on the lowercased wallet, as the caller supplies it", () => {
+      activate();
+      expect(reachable([ME.toUpperCase()])).toEqual([ME]);
     });
 
     it("counts a Simulation position as having answered the market", () => {

@@ -210,6 +210,46 @@ export function modeFor(
   return progress.complete ? "GRADUATING" : "SIMULATION";
 }
 
+/**
+ * THE MODE A LIVE SESSION PRESENTS — `modeFor` plus the two things a cache
+ * cannot express.
+ *
+ * NO WALLET IS REAL. There is no Simulation account behind an address that does
+ * not exist, and nothing to route either way.
+ *
+ * A DEPARTURE IN FLIGHT IS UNKNOWN. Pressing Exit is a REQUEST; it becomes a
+ * fact when the server says so. The screen may act on the request immediately —
+ * the banner can go — but execution may not, because the server still has this
+ * wallet in Simulation until it answers, and the signature it is waiting on may
+ * never be given. Writing the exit optimistically resolved the mode to REAL and
+ * handed out the real-money executor in that window. UNKNOWN says the true
+ * thing: we have asked, and we do not know yet.
+ */
+export function liveMode(input: {
+  connected: boolean;
+  departing: boolean;
+  routing: SimulationRouting | null | undefined;
+  progress: ProfileProgress;
+}): SimulationMode {
+  if (!input.connected) return "REAL";
+  if (input.departing) return "UNKNOWN";
+  return modeFor(input.routing, input.progress);
+}
+
+/**
+ * MAY A REAL ORDER BE SENT FOR A WALLET IN THIS STATE?
+ *
+ * Read at confirm time against a FRESH server answer, not the cache. Simulation
+ * is wallet-global on the server, so a second tab or another device can activate
+ * it while this one is still inside its fresh window.
+ *
+ * Only a confirmed absence, exit or graduation permits it. `undefined` — never
+ * asked, or the ask failed — is not permission.
+ */
+export function routingPermitsRealOrder(state: SimulationLifecycle | null | undefined): boolean {
+  return state === null || state === "EXITED" || state === "GRADUATED";
+}
+
 /* ── Order arithmetic ────────────────────────────────────────────────────── */
 
 /**
@@ -322,6 +362,19 @@ export const SIMULATION_COPY = {
   bannerSupport: "Build your profile without using real money.",
   graduatedSupport: "Conviction has enough signal to start finding your people.",
   exitConfirmation: "Simulation off. Your progress is saved.",
+  /**
+   * A GRADUATION THE SERVER REFUSED, said without alarm. A conviction fell away
+   * after the tenth landed, so the door is shut and the reader is simply not
+   * finished — which is a smaller fact than the word "failed" would suggest.
+   */
+  notReadyYet: "Not quite — one more conviction to finish your profile.",
+  /**
+   * A REAL ORDER STOPPED AT THE CONFIRM-TIME CHECK. It means another tab or
+   * device put this wallet into Simulation since this screen last looked — rare,
+   * and the only honest thing to do is say so and refuse, because the alternative
+   * is spending real money on a screen that believes it is playing.
+   */
+  realBlocked: "This wallet is in Simulation. Reload before placing a real order.",
   verifyWallet: "Verify your wallet to save your progress. No transaction will be sent.",
   entrySupport: `Start with ${formatCC(SIMULATION_START_CC)}. No real money at risk.`,
   entryBody: "Reach 10 so Conviction can start finding your people.",

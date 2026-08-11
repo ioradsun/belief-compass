@@ -46,10 +46,27 @@ export function SimulationBanner() {
   const graduated = sim.mode === "GRADUATING";
   const progress = `${sim.profileProgress.count} / ${sim.profileProgress.target} convictions`;
 
+  /**
+   * TWO ACTS, AND THEY MUST NOT SHARE A HANDLER.
+   *
+   * `finish` is the graduation — the primary thing to do at ten, and a one-way
+   * door the server can refuse. `leave` is the reversible exit, which the server
+   * never refuses.
+   *
+   * They were one function that branched on `graduated`, which meant the help
+   * sheet's "Exit Simulation" called the GRADUATION whenever the banner was in
+   * its graduated state. Combined with a refusal — a conviction lost after
+   * GRADUATING was written — that left somebody who could not finish, could not
+   * order, and could not leave either, because every control in front of them
+   * ran the call that was refusing. An exit that can be refused is not an exit.
+   */
+  const finish = () => {
+    setHelpOpen(false);
+    sim.continueAfterGraduation();
+  };
   const leave = () => {
     setHelpOpen(false);
-    if (graduated) sim.continueAfterGraduation();
-    else sim.exit();
+    sim.exit();
   };
 
   return (
@@ -78,7 +95,11 @@ export function SimulationBanner() {
 
             {/* The phone puts the action on the first row, opposite the label. */}
             <div className="ml-auto sm:hidden">
-              <ExitAction graduated={graduated} pending={sim.pending} onClick={leave} />
+              <ExitAction
+                graduated={graduated}
+                pending={sim.pending}
+                onClick={graduated ? finish : leave}
+              />
             </div>
           </div>
 
@@ -101,8 +122,25 @@ export function SimulationBanner() {
             </span>
           </div>
 
-          <div className="hidden shrink-0 sm:block">
-            <ExitAction graduated={graduated} pending={sim.pending} onClick={leave} />
+          <div className="flex shrink-0 items-center gap-2 max-sm:hidden">
+            {/* AT GRADUATION THE REVERSIBLE EXIT SURVIVES, quietly, beside the
+                primary action. Continue can be refused; this cannot, so it is
+                the control that guarantees nobody is ever stuck on this screen. */}
+            {graduated && (
+              <button
+                type="button"
+                onClick={leave}
+                disabled={sim.pending}
+                className="h-8 whitespace-nowrap rounded-full px-2 text-[12px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:opacity-50"
+              >
+                Exit
+              </button>
+            )}
+            <ExitAction
+              graduated={graduated}
+              pending={sim.pending}
+              onClick={graduated ? finish : leave}
+            />
           </div>
         </div>
 
@@ -117,6 +155,7 @@ export function SimulationBanner() {
         )}
       </div>
 
+      {/* The help sheet's Exit is ALWAYS the reversible one, in either state. */}
       {helpOpen && <SimulationHelpSheet onClose={() => setHelpOpen(false)} onExit={leave} />}
     </>
   );

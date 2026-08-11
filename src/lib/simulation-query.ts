@@ -102,7 +102,23 @@ export function simulationRoutingQO(wallet: string | undefined) {
     queryKey: simulationRoutingKey(wallet),
     queryFn: () => getSimulationRouting({ data: { wallet: wallet ?? null } }),
     enabled: !!wallet,
-    staleTime: SIMULATION_STALE_MS,
+    /**
+     * NO STALE WINDOW, AND STILL NOT THE REAL GUARANTEE.
+     *
+     * Simulation is wallet-global on the server, so a second tab can activate it
+     * while this one holds a cached "no account". Thirty seconds of that is
+     * thirty seconds of the real executor being available to somebody the server
+     * has in Simulation. `staleTime: 0` plus an always-on focus refetch shrinks
+     * the window to about as small as a cache can make it.
+     *
+     * It is NOT the protection. The load-bearing check is the server re-read the
+     * real adapter performs immediately before delegating a buy or a sell — see
+     * `useRealGuard` in `market-execution`. A cache setting cannot provide a
+     * guarantee about a fact that lives somewhere else; these two lines just stop
+     * it being wrong more often than it has to be.
+     */
+    staleTime: 0,
+    refetchOnWindowFocus: "always",
   });
 }
 

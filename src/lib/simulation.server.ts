@@ -224,10 +224,23 @@ export async function activateSimulation(walletRaw: string): Promise<SimulationS
  * unresolved Simulation Challenges with a neutral reason (see `simulation_exit`)
  * so nobody is left waiting on an answer that can no longer arrive.
  */
+/**
+ * WHAT LEAVING RETURNED, INCLUDING A GRADUATION THAT WAS REFUSED.
+ *
+ * A refused graduation is not an error — the server RECONCILED the account back
+ * to ACTIVE and the reader is simply not finished yet. Throwing would send the
+ * client down its failure path, which restores the state it captured before the
+ * call: GRADUATING, the very state the server has just corrected. The refusal
+ * travels as a field so the outcome and its explanation arrive together.
+ */
+export interface DepartureResult extends SimulationState {
+  refusal: "not_complete" | null;
+}
+
 export async function exitSimulation(
   walletRaw: string,
   graduate: boolean,
-): Promise<SimulationState> {
+): Promise<DepartureResult> {
   const sb = serviceClient();
   const wallet = walletRaw.toLowerCase();
 
@@ -247,19 +260,28 @@ export async function exitSimulation(
     if (error) throw new Error(error.message);
     const res = (data ?? {}) as { ok?: boolean; reason?: string };
     if (!res.ok) {
-      // A refusal here is not a failure to leave — it means this account was
-      // never at the door. Leaving is still available and still reversible, so
-      // the reader is not stranded by a graduation they were not entitled to.
-      if (res.reason === "not_graduating" || res.reason === "not_complete")
+      /**
+       * NOT COMPLETE IS AN OUTCOME, NOT A FAILURE. A conviction fell away after
+       * GRADUATING was written, so the door is shut — and `simulation_graduate`
+       * has already put the account back to ACTIVE rather than leaving it in a
+       * state with no order, no graduation and no exit. The reader carries on at
+       * 9 / 10. Reporting it as an error would make the client roll back to the
+       * state the server just corrected.
+       */
+      if (res.reason === "not_complete")
+        return { ...(await loadSimulationState(wallet)), refusal: "not_complete" };
+      // `not_graduating` means this account was never at the door — a stale tab
+      // pressing Continue. Leaving is still available and still reversible.
+      if (res.reason === "not_graduating")
         throw new Error("Your profile isn't ready to finish yet.");
       throw new Error("We couldn't finish Simulation. Try again.");
     }
-    return loadSimulationState(wallet);
+    return { ...(await loadSimulationState(wallet)), refusal: null };
   }
 
   const { error } = await sb.rpc("simulation_exit", { p_wallet: wallet });
   if (error) throw new Error(error.message);
-  return loadSimulationState(wallet);
+  return { ...(await loadSimulationState(wallet)), refusal: null };
 }
 
 /* ── Positions ───────────────────────────────────────────────────────────── */

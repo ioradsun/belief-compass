@@ -36,6 +36,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type {
+  DepartureResult,
   SimulationHolding,
   SimulationOrderResult,
   SimulationState,
@@ -103,17 +104,17 @@ export const activateSimulation = createServerFn({ method: "POST" })
 /**
  * Stop simulating — the banner's one-tap Exit, and the graduation Continue.
  *
- * `graduate` is not a cosmetic flag: an exit is reversible while a graduation is
- * a one-way door, and the same call does both because the cleanup they share
- * (closing unresolved Simulation Challenges without recording a pass, and
- * reconciling the Challenges those removals empty) is the part that must never
- * be skipped by either.
+ * `graduate` is a REQUEST, never a permission. Leaving is unconditional;
+ * graduating routes to `simulation_graduate`, which locks the account and
+ * re-reads both of its conditions itself. A refused graduation comes back as an
+ * OUTCOME rather than an error — the server has already reconciled the account
+ * to ACTIVE, and reporting a failure would make the client undo that.
  */
 export const exitSimulation = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
     z.object({ wallet: WALLET, session: SESSION, graduate: z.boolean().default(false) }).parse(raw),
   )
-  .handler(async ({ data }): Promise<SimulationState> => {
+  .handler(async ({ data }): Promise<DepartureResult> => {
     const { assertWalletOwnership } = await import("@/lib/wallet-session.server");
     const wallet = await assertWalletOwnership(data.wallet, data.session);
     const { exitSimulation: exit } = await import("@/lib/simulation.server");
@@ -182,4 +183,4 @@ export const placeSimulationOrder = createServerFn({ method: "POST" })
     });
   });
 
-export type { SimulationState, SimulationHolding, SimulationOrderResult };
+export type { SimulationState, SimulationHolding, SimulationOrderResult, DepartureResult };

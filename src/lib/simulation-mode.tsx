@@ -38,12 +38,12 @@ import {
   simulationRoutingQO,
 } from "@/lib/simulation-query";
 import { activateSimulation, exitSimulation } from "@/lib/simulation.functions";
-import type { SimulationState } from "@/lib/simulation.functions";
+import type { DepartureResult, SimulationState } from "@/lib/simulation.functions";
 import { profileProgressFor, type ProfileProgress } from "@/domain/beliefs";
 import {
   canOrder as canOrderIn,
   isSimulating,
-  modeFor,
+  liveMode,
   modeResolved,
   simulationEligible,
   SIMULATION_COPY,
@@ -153,6 +153,20 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  /**
+   * A DEPARTURE IS IN FLIGHT, AND THAT IS NOT THE SAME AS HAVING LEFT.
+   *
+   * The banner goes on the tap — that is the one-tap promise and it is right.
+   * EXECUTION must not follow it. Writing EXITED optimistically made the mode
+   * read as CONFIRMED REAL, so the facade offered the real-money executor while
+   * the authenticated cleanup was still in flight and might yet be rejected:
+   *
+   *     server: ACTIVE · client: EXITED · real executor available
+   *
+   * The honest state in that window is UNKNOWN. The visual exit is a decision;
+   * the execution transition is a FACT, and the server has not confirmed it yet.
+   */
+  const [departing, setDeparting] = useState(false);
 
   /**
    * WHATEVER SESSION ALREADY EXISTS, AND NEVER A NEW ONE.
@@ -175,7 +189,7 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
   // PRIVATE: the ledger's contents. Proved, or null.
   const { data: account } = useQuery(simulationAccountQO(wallet, cachedSession));
 
-  const write = (next: SimulationState) => {
+  const write = (next: Pick<SimulationState, "account" | "progress">) => {
     // The routing fact FIRST: it is what the mode is derived from, so a write
     // that updated only the account would move the balance and leave the banner.
     qc.setQueryData(simulationRoutingKey(wallet), { state: next.account?.state ?? null });
@@ -244,18 +258,19 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
      * thing it was supposed to undo. Only the captured value can restore the
      * truth.
      */
-    onMutate: (graduate: boolean) => {
+    onMutate: () => {
       const previousRouting = qc.getQueryData<SimulationRouting>(simulationRoutingKey(wallet));
       const previousAccount = qc.getQueryData<SimulationAccount | null>(
         simulationAccountKey(wallet),
       );
-      const state: SimulationLifecycle = graduate ? "GRADUATED" : "EXITED";
-      // The ROUTING fact is what the mode is derived from, so it is the one that
-      // has to move for the banner to go.
-      qc.setQueryData(simulationRoutingKey(wallet), { state });
-      qc.setQueryData(simulationAccountKey(wallet), (prev: SimulationAccount | null | undefined) =>
-        prev ? { ...prev, state } : prev,
-      );
+      /**
+       * UNKNOWN, NOT EXITED. `departing` forces the mode to UNKNOWN, which hides
+       * the banner (a wallet that is not simulating has none) AND withholds both
+       * executors — where writing EXITED would have hidden the banner and handed
+       * over the real one. The cached values are left untouched so the rollback
+       * below restores a world that actually existed.
+       */
+      setDeparting(true);
       return { previousRouting, previousAccount };
     },
     mutationFn: async (graduate: boolean) => {
@@ -273,11 +288,31 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
       }
     },
     onSuccess: (next, graduate) => {
+      /**
+       * A REFUSED GRADUATION IS AN OUTCOME. The server reconciled the account
+       * back to ACTIVE — a conviction fell away after GRADUATING was written —
+       * so `write` puts the reader back at 9 / 10 with the banner and the order
+       * form working, and the line says why the door did not open.
+       */
+      if (next.refusal === "not_complete") {
+        setNotice(SIMULATION_COPY.notReadyYet);
+        write(next);
+        return;
+      }
       // A graduation gets no "your progress is saved" line — the profile IS the
       // progress, and the screen behind it already says so.
       setNotice(graduate ? null : SIMULATION_COPY.exitConfirmation);
       write(next);
     },
+    /**
+     * THE FLAG CLEARS ONLY WHEN THE SERVER HAS ANSWERED — either way.
+     *
+     * On success the write above has already put the confirmed state in the
+     * cache, so dropping `departing` reveals a REAL mode the server agrees with.
+     * On failure the rollback has restored SIMULATION. Clearing it before the
+     * answer would be the original defect with an extra step.
+     */
+    onSettled: () => setDeparting(false),
   });
 
   const adopt = useCallback(
@@ -307,7 +342,12 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
      * behind an address that does not exist. An address that IS connected waits
      * for its answer rather than assuming one.
      */
-    const mode: SimulationMode = wallet ? modeFor(routing, progress) : "REAL";
+    const mode: SimulationMode = liveMode({
+      connected: !!wallet,
+      departing,
+      routing,
+      progress,
+    });
     return {
       mode,
       account: acct,
@@ -358,6 +398,7 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
     error,
     verifying,
     notice,
+    departing,
     adopt,
     cachedSession,
     qc,

@@ -29,6 +29,8 @@ const SIM_FNS = "src/lib/simulation.functions.ts";
 const EXECUTION = "src/lib/market-execution.ts";
 const CHAIN = "src/lib/chain-trade.ts";
 const MIGRATION = "supabase/migrations/20260909000000_simulation_mode.sql";
+/** The first migration is already applied, so the lifecycle fix is a second one. */
+const RECONCILE = "supabase/migrations/20260910000000_simulation_lifecycle_reconcile.sql";
 
 describe("no Simulation order can reach the chain", () => {
   it("never writes a contract from any Simulation path", () => {
@@ -76,7 +78,12 @@ describe("an unresolved mode never falls through to real money", () => {
     expect(c).toMatch(/const UNRESOLVED_TRADE: TradeLike = Object\.freeze/);
     // `resolved` is checked FIRST. A ternary that tested `simulated` first would
     // read an unresolved mode as "not simulated" — the original defect exactly.
-    expect(c).toMatch(/trade: !resolved \? UNRESOLVED_TRADE : simulated \? simTrade : realTrade/);
+    expect(c).toMatch(/if \(!input\.resolved\) return UNRESOLVED_TRADE;/);
+    // And the surfaces are handed the GUARDED real adapter, never the raw one.
+    expect(c).toMatch(
+      /executorFor\(\{ resolved, simulated, simulation: simTrade, real: guardedReal \}\)/,
+    );
+    expect(c).not.toMatch(/real: realTrade/);
     // And the refusing adapter cannot quietly succeed.
     expect(c).toMatch(/buy: \(\) => Promise\.reject/);
     expect(c).toMatch(/sell: \(\) => Promise\.reject/);
@@ -92,8 +99,8 @@ describe("an unresolved mode never falls through to real money", () => {
     // The account read needs a session and can legitimately return null. A mode
     // derived from it reports "could not prove ownership" as "Real Mode".
     const c = code("src/lib/simulation-mode.tsx");
-    expect(c).toMatch(/modeFor\(routing, progress\)/);
-    expect(c).not.toMatch(/modeFor\(acct/);
+    expect(c).toMatch(/liveMode\(\{[\s\S]{0,120}routing,/);
+    expect(c).not.toMatch(/modeFor\(acct|liveMode\([\s\S]{0,80}account/);
   });
 
   it("seeds the routing query with no default, because there is no safe one", () => {
@@ -107,7 +114,7 @@ describe("an unresolved mode never falls through to real money", () => {
     // that state has no session either, so it returns null, which reads as Real
     // Mode. The rollback would confirm the very thing it was undoing.
     const c = code("src/lib/simulation-mode.tsx");
-    expect(c).toMatch(/onMutate: \(graduate: boolean\)/);
+    expect(c).toMatch(/onMutate: \(\)/);
     expect(c).toMatch(/previousRouting/);
     expect(c).toMatch(
       /qc\.setQueryData\(simulationRoutingKey\(wallet\), context\.previousRouting\)/,
@@ -130,6 +137,77 @@ describe("an unresolved mode never falls through to real money", () => {
     const dock = code("src/components/order/OwnedDock.tsx");
     expect(dock).toMatch(/const activeYes = resolving \? 0n :/);
     expect(dock).toMatch(/const activeNo = resolving \? 0n :/);
+  });
+
+  /**
+   * LEAVING IS A REQUEST, NOT A FACT, UNTIL THE SERVER ANSWERS.
+   *
+   * The optimistic exit used to write EXITED into the routing cache on the way
+   * out. That hid the banner — correct — and ALSO flipped the mode to REAL,
+   * which handed the real-money executor to a wallet the server still had in
+   * Simulation, for as long as the round trip took (and permanently, if the
+   * signature was never given and the rollback path had a bug). The optimistic
+   * state has to be UNKNOWN: the same "we do not know yet" that a cold tab has.
+   */
+  it("holds departure at UNKNOWN rather than asserting EXITED", () => {
+    const c = code("src/lib/simulation-mode.tsx");
+    // A flag, not a cache write — the cached values stay put so the rollback
+    // restores a world that actually existed.
+    expect(c).toMatch(/setDeparting\(true\)/);
+    expect(c).toMatch(/liveMode\(\{\s*connected: !!wallet,\s*departing,/);
+    // The exact write that used to be here. Nothing may claim a terminal state
+    // before the server has confirmed one.
+    const onMutate = c.slice(c.indexOf("onMutate: ()"), c.indexOf("mutationFn: async"));
+    expect(onMutate).not.toMatch(/setQueryData/);
+    expect(onMutate).not.toMatch(/EXITED|GRADUATED/);
+  });
+
+  it("clears the departing flag only once the server has answered", () => {
+    // `onSettled`, not `onSuccess` — clearing it on the way out would be the
+    // original defect with an extra step, and clearing it only on success would
+    // strand a failed exit in UNKNOWN forever.
+    const c = code("src/lib/simulation-mode.tsx");
+    expect(c).toMatch(/onSettled: \(\) => setDeparting\(false\)/);
+  });
+
+  it("re-reads the routing fact from the server before any real write", () => {
+    /**
+     * The cache cannot be the last authority for real money: Simulation is
+     * wallet-global on the server, so another tab or device can activate it
+     * inside this one's fresh window. Both write methods are wrapped; the state
+     * fields are passed straight through.
+     */
+    const c = code(EXECUTION);
+    expect(c).toMatch(/function useRealGuard/);
+    expect(c).toMatch(/await getSimulationRouting\(\{ data: \{ wallet \} \}\)/);
+    // ACTIVE and GRADUATING both refuse. Only a confirmed null / EXITED /
+    // GRADUATED lets a real order through.
+    expect(c).toMatch(/if \(!routingPermitsRealOrder\(fresh\.state\)\)/);
+    const guard = c.slice(
+      c.indexOf("function useRealGuard"),
+      c.indexOf("export function useMarketExecution"),
+    );
+    expect(guard).toMatch(/throw new Error/);
+
+    const fromGuarded = c.slice(c.indexOf("const guardedReal"));
+    const guarded = fromGuarded.slice(0, fromGuarded.indexOf("return useMemo"));
+    expect(guarded).toMatch(/buy: async[\s\S]*?await assertRealAllowed\(\);[\s\S]*?realTrade\.buy/);
+    expect(guarded).toMatch(
+      /sell: async[\s\S]*?await assertRealAllowed\(\);[\s\S]*?realTrade\.sell/,
+    );
+  });
+
+  it("puts the preflight in the facade, leaving chain-trade real-only", () => {
+    // Stated twice on purpose: the guard is about Simulation, and the module
+    // that talks to the contract must go on knowing nothing about Simulation.
+    expect(code(CHAIN)).not.toMatch(/getSimulationRouting|simulat/i);
+  });
+
+  it("does not let a cached routing fact go stale behind a returning tab", () => {
+    const q = code("src/lib/simulation-query.ts");
+    const fn = q.slice(q.indexOf("export function simulationRoutingQO"));
+    expect(fn.slice(0, 600)).toMatch(/staleTime: 0/);
+    expect(fn.slice(0, 600)).toMatch(/refetchOnWindowFocus: "always"/);
   });
 
   it("keeps the routing payload to the routing fact and nothing else", () => {
@@ -413,11 +491,17 @@ describe("Challenge is mode-scoped end to end", () => {
 
   it("intersects the Simulation audience with ACCOUNTS IN THE ACTIVE STATE", () => {
     const c = code("src/lib/challenge.server.ts");
-    expect(c).toMatch(/from\("simulation_accounts"\)[\s\S]{0,160}\.eq\("state", "ACTIVE"\)/);
-    // The boolean is GONE from the schema. A query naming it does not narrow the
+    // Through the function, so the rule lives in ONE place and the count is
+    // applied — a stored ACTIVE that has since reached ten is not reachable.
+    expect(c).toMatch(
+      /rpc\("simulation_reachable_wallets", \{[\s\S]{0,120}p_target: PROFILE_TARGET/,
+    );
+    // The boolean is GONE from the schema, and so is the hand-rolled predicate
+    // that replaced it. A query naming a dropped column does not narrow the
     // audience — it errors, the audience fails closed, and every Simulation
     // Challenge silently disappears. Asserted absent, not merely un-asserted.
     expect(c).not.toMatch(/\.eq\("active", true\)/);
+    expect(c).not.toMatch(/from\("simulation_accounts"\)[\s\S]{0,160}\.eq\("state", "ACTIVE"\)/);
     expect(c).not.toMatch(/simulation_accounts[\s\S]{0,160}graduated_at/);
     // A narrowing, never a replacement — the relationships that qualify somebody
     // are identical in both modes.
@@ -507,5 +591,88 @@ describe("the House rounds cannot consume each other", () => {
     expect(server).toMatch(/Number\(row\.onchain_id\) === input\.marketId/);
     expect(server).toMatch(/row\.side === input\.side/);
     expect(server).toMatch(/row\.action === "BUY"/);
+  });
+});
+
+/**
+ * THE LIFECYCLE HAS NO DEAD END.
+ *
+ * GRADUATING was reachable and, in one case, unleavable: the server refused a
+ * graduation whose count had fallen back below the target — correctly, since a
+ * state written earlier must not close an account on a count that is no longer
+ * true — but left the account in GRADUATING. From there the reader could not
+ * graduate (the count is short), could not open a new Simulation order (the
+ * client reads GRADUATING as finished), and could not leave, because the only
+ * control on screen was the graduation that had just refused.
+ *
+ * The rule now runs in both directions, and the banner keeps a control that
+ * cannot be refused.
+ */
+describe("no lifecycle state is a trap", () => {
+  it("hands a refused graduation back to ACTIVE in the same statement", () => {
+    const sql = sqlOf(RECONCILE);
+    const fn = sql.slice(sql.indexOf("FUNCTION public.simulation_graduate"));
+    const branch = fn.slice(fn.indexOf("v_count < p_target"));
+    expect(branch).toMatch(/UPDATE simulation_accounts SET state = 'ACTIVE'/);
+    expect(branch).toMatch(/'reason', 'not_complete'/);
+    // The count it refused on travels with the refusal, so the reader is told
+    // 9 / 10 rather than shown a bare failure.
+    expect(branch).toMatch(/'convictions', v_count/);
+    // And nothing about a refusal may look like a graduation.
+    expect(branch.slice(0, branch.indexOf("RETURN"))).not.toMatch(/graduated_at/);
+  });
+
+  it("reconciles in both directions, and never out of a terminal state", () => {
+    const sql = sqlOf(RECONCILE);
+    const fn = sql.slice(
+      sql.indexOf("FUNCTION public.simulation_reconcile_state"),
+      sql.indexOf("FUNCTION public.simulation_graduate"),
+    );
+    expect(fn).toMatch(
+      /v_want := CASE WHEN v_count >= p_target THEN 'GRADUATING' ELSE 'ACTIVE' END/,
+    );
+    // EXITED and GRADUATED are one-way doors a conviction count must not reopen.
+    expect(fn).toMatch(/IF v_state NOT IN \('ACTIVE', 'GRADUATING'\) THEN RETURN v_state/);
+    // A read path may call this, so an unchanged state must cost no write.
+    expect(fn).toMatch(/IF v_want <> v_state THEN\s*\n\s*UPDATE simulation_accounts/);
+  });
+
+  it("asks the audience whether somebody can answer, not what their row says", () => {
+    // Convictions arriving from outside Simulation move no Simulation state, so
+    // a stored-state test alone keeps calling people who are already finished.
+    const sql = sqlOf(RECONCILE);
+    const fn = sql.slice(sql.indexOf("FUNCTION public.simulation_reachable_wallets"));
+    expect(fn).toMatch(/a\.state = 'ACTIVE'/);
+    expect(fn).toMatch(/simulation_conviction_count\(a\.wallet\) < p_target/);
+
+    // And the application calls it rather than reimplementing the predicate.
+    const c = code("src/lib/challenge.server.ts");
+    expect(c).toMatch(/rpc\("simulation_reachable_wallets"/);
+    expect(c).not.toMatch(/\.eq\("active", true\)/);
+  });
+
+  it("keeps a refusable action and an unrefusable one apart in the banner", () => {
+    const c = code("src/components/SimulationBanner.tsx");
+    // Two handlers, not one: `finish` is the one-way door the server can refuse,
+    // `leave` is the reversible exit it cannot.
+    expect(c).toMatch(/const finish = \(\) => \{[\s\S]*?sim\.continueAfterGraduation\(\);/);
+    expect(c).toMatch(/const leave = \(\) => \{[\s\S]*?sim\.exit\(\);/);
+    // At graduation the exit survives beside the primary action…
+    expect(c).toMatch(/graduated && \(\s*<button[\s\S]*?onClick=\{leave\}/);
+    // …and the help sheet's Exit is the reversible one in either state.
+    expect(c).toMatch(/<SimulationHelpSheet[\s\S]*?onExit=\{leave\}/);
+    expect(c).not.toMatch(/onExit=\{finish\}/);
+  });
+
+  it("reports a refused graduation as an outcome rather than an error", () => {
+    // Thrown, it would land in the red error line and say nothing about what to
+    // do. Returned, the provider can write the reconciled ACTIVE state back and
+    // put the reader at 9 / 10 with a working order form.
+    const server = code(SIM_SERVER);
+    expect(server).toMatch(/refusal: "not_complete"/);
+    expect(server).toMatch(/not_graduating/);
+    const provider = code("src/lib/simulation-mode.tsx");
+    expect(provider).toMatch(/next\.refusal === "not_complete"/);
+    expect(provider).toMatch(/SIMULATION_COPY\.notReadyYet/);
   });
 });
