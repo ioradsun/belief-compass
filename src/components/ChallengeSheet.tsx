@@ -65,7 +65,7 @@ export function ChallengeSheet({
           {pending ? "Sending…" : count === 1 ? "Send it" : `Send to all ${count}`}
         </button>
         <p className="mt-1.5 text-[11px] text-[var(--text-muted)]">
-          {RELAY_COST} · {remaining} left today
+          {RELAY_COST} · {remaining} of 3 slots free
         </p>
       </div>
     </Sheet>

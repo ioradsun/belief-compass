@@ -182,4 +182,4 @@ export function relayButtonLabel(reachable: number): string | null {
  * Three is an editorial cap, not a balance, so this states what the act consumes
  * rather than what remains — no fraction to watch run down, no allowance.
  */
-export const RELAY_COST = "Uses 1 of 3 live Challenges";
+export const RELAY_COST = "Holds 1 of your 3 Challenge slots";

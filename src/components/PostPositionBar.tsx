@@ -112,7 +112,7 @@ export function PostPositionBar({
               {challenge.label}
             </span>
             <span className="block text-[11px] leading-tight text-[var(--text-muted)]">
-              {remaining} left today
+              {remaining} of 3 slots free
             </span>
           </button>
         )}
