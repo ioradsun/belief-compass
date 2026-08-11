@@ -109,11 +109,12 @@ export function ChallengePanel({
                   : `${count} people get this question next. See who calls it the same way.`}
               </p>
               {groups && groups.length > 0 && (
-                <div className="mt-3 border-t border-[var(--border)] pt-3">
-                  <AudienceGroups
-                    groups={groups.map((g) => ({ ...g, label: plain(g.label) }))}
-                  />
-                </div>
+              <div className="mt-3 border-t border-[var(--border)] pt-3">
+                <AudienceGroups
+                  groups={groups.map((g) => ({ ...g, label: plain(g.label) }))}
+                  stacked
+                />
+              </div>
               )}
             </div>
 
