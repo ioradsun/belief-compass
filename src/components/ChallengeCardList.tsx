@@ -17,6 +17,7 @@ import { useState } from "react";
 import { getChallengeCards } from "@/lib/challenge.functions";
 import { putOnTable, takeOffTable } from "@/lib/table.functions";
 import { ChallengeCard } from "@/components/ChallengeCard";
+import { ChallengeChainSheet } from "@/components/ChallengeChainSheet";
 import { tableKey } from "@/components/YourTable";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import type { ChallengeCardProjection } from "@/domain/challenge-card";
@@ -43,6 +44,10 @@ export function ChallengeCardList({
   limit?: number;
   onSelect: (marketId: number) => void;
   onPass?: (marketId: number) => void;
+  /**
+   * Override where "See chain" goes. Omitted, the list opens the sheet itself —
+   * a chain is something you glance at and close, not a destination.
+   */
   onSeeChain?: (marketId: number) => void;
 }) {
   const qc = useQueryClient();
@@ -56,6 +61,7 @@ export function ChallengeCardList({
    * told about a removal they did not perform.
    */
   const [justRemoved, setJustRemoved] = useState<number | null>(null);
+  const [chainFor, setChainFor] = useState<number | null>(null);
 
   /** Both writes invalidate the same key, because both change every card. */
   const refresh = () => {
@@ -118,11 +124,22 @@ export function ChallengeCardList({
           onPass={onPass}
           onRelay={(x) => relay.mutate(x)}
           onRemove={(id) => remove.mutate({ challengeId: id, marketId: p.marketId })}
-          onSeeChain={onSeeChain}
+          onSeeChain={onSeeChain ?? setChainFor}
           relayPending={relay.isPending}
           justRemoved={justRemoved === p.marketId}
         />
       ))}
+      {chainFor != null && (
+        <ChallengeChainSheet
+          wallet={wallet}
+          marketId={chainFor}
+          onClose={() => setChainFor(null)}
+          onSelectMarket={(id) => {
+            setChainFor(null);
+            onSelect(id);
+          }}
+        />
+      )}
     </div>
   );
 }

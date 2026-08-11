@@ -55,6 +55,8 @@ import { convictionMatch } from "@/domain/relationship";
 import { ChallengeRail } from "@/components/ChallengeRail";
 import { AudienceGroups } from "@/components/AudiencePreview";
 import { PostActionScreen } from "@/components/PostActionScreen";
+import { ChallengeChainView } from "@/components/ChallengeChainView";
+import type { ChallengeChainProjection } from "@/domain/challenge-chain";
 import { resolvePostAction, type PostActionInput } from "@/domain/post-action";
 import {
   audienceGroupFor,
@@ -133,6 +135,125 @@ const LAB_AUDIENCE: AudienceMember[] = [
  * where there should be one, a headline that wraps into the buttons, a module
  * heading orphaned above no faces.
  */
+/**
+ * THE CHAIN, IN THE FOUR SHAPES THAT MATTER.
+ *
+ * A proved route, a truncated one, a viewer with no branch, and a cold chain
+ * that has not travelled. Pure props — the point is to see that a truncated
+ * chain reads as an ellipsis rather than a root, and that the opportunities line
+ * stays visually secondary to the two lines that are about humans.
+ */
+const chainPerson = (name: string) => ({
+  wallet: `0x${name.toLowerCase()}`,
+  name,
+  avatarUrl: null,
+});
+
+const LAB_CHAINS: { label: string; chain: ChallengeChainProjection }[] = [
+  {
+    label: "Proved route · full branch",
+    chain: {
+      marketId: 1,
+      question: "Will AI replace most software engineers?",
+      upstream: {
+        path: [
+          { person: chainPerson("Maya"), side: "YES" },
+          { person: chainPerson("Sundeep"), side: "NO" },
+        ],
+        depth: 3,
+        truncated: false,
+      },
+      viewerBranch: {
+        reached: 9,
+        showedUp: 2,
+        passed: 0,
+        waiting: 7,
+        responders: [
+          { ...chainPerson("Casey"), side: "NO" as const, atMs: 2 },
+          { ...chainPerson("Nia"), side: "YES" as const, atMs: 1 },
+        ],
+        relayers: [chainPerson("Casey")],
+      },
+      wholeChain: {
+        uniqueResponders: 18,
+        uniqueRelayers: 5,
+        recipientOpportunities: 42,
+        partial: false,
+      },
+    },
+  },
+  {
+    label: "TRUNCATED · earlier links unprovable",
+    chain: {
+      marketId: 2,
+      question: "Will Bitcoin hit $200K before 2027?",
+      upstream: {
+        path: [
+          { person: chainPerson("Maya"), side: null },
+          { person: chainPerson("Sundeep"), side: "YES" },
+        ],
+        depth: 3,
+        truncated: true,
+      },
+      viewerBranch: {
+        reached: 4,
+        showedUp: 1,
+        passed: 1,
+        waiting: 2,
+        responders: [{ ...chainPerson("Alex"), side: "YES" as const, atMs: 1 }],
+        relayers: [],
+      },
+      wholeChain: {
+        uniqueResponders: 6,
+        uniqueRelayers: 1,
+        recipientOpportunities: 17,
+        partial: true,
+      },
+    },
+  },
+  {
+    label: "Brought in, never relayed",
+    chain: {
+      marketId: 3,
+      question: "Will the Fed cut rates twice this year?",
+      upstream: {
+        path: [{ person: chainPerson("Maya"), side: "YES" }],
+        depth: 2,
+        truncated: false,
+      },
+      viewerBranch: null,
+      wholeChain: {
+        uniqueResponders: 3,
+        uniqueRelayers: 0,
+        recipientOpportunities: 11,
+        partial: false,
+      },
+    },
+  },
+  {
+    label: "A root of their own · nothing travelled yet",
+    chain: {
+      marketId: 4,
+      question: "Will fusion power a grid before 2035?",
+      upstream: { path: [], depth: 0, truncated: false },
+      viewerBranch: {
+        reached: 6,
+        showedUp: 0,
+        passed: 0,
+        waiting: 6,
+        responders: [],
+        relayers: [],
+      },
+      wholeChain: {
+        uniqueResponders: 0,
+        uniqueRelayers: 0,
+        recipientOpportunities: 6,
+        partial: false,
+      },
+    },
+  },
+];
+
 const LAB_AUDIENCE_FACTS = {
   status: "available" as const,
   total: 13,
@@ -470,6 +591,19 @@ function TestingScene() {
         {/* THE CLOSING SCREEN, every shape. Pure props, so the whole matrix is
             visible at once — which is the only way the two-blocks-at-once and
             orphaned-heading failures are ever going to be caught. */}
+        <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+          Challenge chain · four shapes
+        </p>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          {LAB_CHAINS.map((s) => (
+            <div key={s.label} className="rounded-xl border border-[var(--border)]">
+              <p className="border-b border-[var(--border)] px-3 py-1.5 text-[10.5px] uppercase tracking-wide text-[var(--text-muted)]">
+                {s.label}
+              </p>
+              <ChallengeChainView chain={s.chain} />
+            </div>
+          ))}
+        </div>
         <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
           Closing screen · every shape
         </p>
