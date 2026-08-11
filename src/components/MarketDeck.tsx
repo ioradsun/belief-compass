@@ -22,6 +22,7 @@ import type { MarketRow } from "@/components/MarketCard";
 import { useHouseFinalize, houseKey } from "@/lib/house-round";
 import { useAnswerCalls } from "@/hooks/useAnswerCalls";
 import { PostAction } from "@/components/PostAction";
+import { defaultAmount, rememberAmount } from "@/lib/last-amount";
 import { usePositionShift } from "@/hooks/usePositionShift";
 import { MobileCaseView } from "@/components/MobileCase";
 import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
@@ -128,6 +129,7 @@ export function MarketDeck({
     (rr.opportunity_reason as string | null) ?? null,
   );
 
+  /** Opens at whatever this reader last actually traded — see `last-amount`. */
   const [amount, setAmount] = useState(1);
   const [side, setSide] = useState<OrderSide | null>(null);
 
@@ -360,7 +362,7 @@ export function MarketDeck({
    */
   useEffect(() => {
     setSide(null);
-    setAmount(sim ? DEFAULT_ORDER_CC : 1);
+    setAmount(defaultAmount(!!sim));
     dock.reset();
     betRevealed.current = false;
     trade.reset();
@@ -746,6 +748,9 @@ export function MarketDeck({
                 if (side && quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
                   try {
                     await trade.buy(marketId, side === "YES", ethWei, quote.tokens);
+                    // Settled, so it was a real decision: it becomes the next
+                    // ticket's opening amount.
+                    rememberAmount(!!sim, amount);
                   } catch {
                     /* surfaced via trade.error */
                   }

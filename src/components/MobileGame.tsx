@@ -73,6 +73,7 @@ import { marketBook } from "@/domain/market-book";
 
 import { ConvictionReveal } from "@/components/ConvictionReveal";
 import { PostAction } from "@/components/PostAction";
+import { defaultAmount, rememberAmount } from "@/lib/last-amount";
 import { usePositionShift } from "@/hooks/usePositionShift";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
@@ -121,7 +122,7 @@ export function MobileGame({
     setPhase("question");
     setSide(null);
     setBacking(false);
-    setAmount(1);
+    setAmount(defaultAmount(simulating));
     setRevealed(false);
     dock.reset();
     trade.reset();
@@ -290,7 +291,7 @@ export function MobileGame({
    * Simulation opens at 100 CC; Real Mode keeps its existing default.
    */
   useEffect(() => {
-    setAmount(sim ? DEFAULT_ORDER_CC : 1);
+    setAmount(defaultAmount(!!sim));
     setSide(null);
     setBacking(false);
     dock.reset();
@@ -662,6 +663,7 @@ export function MobileGame({
                 if (quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {
                   try {
                     await trade.buy(marketId, side === "YES", ethWei, quote.tokens);
+                    rememberAmount(!!sim, amount);
                   } catch {
                     /* surfaced via trade.error */
                   }
