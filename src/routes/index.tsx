@@ -1498,7 +1498,20 @@ function Feed() {
           className={`${show("mine")} relative row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
           style={{ borderRight: "1px solid var(--hairline)" }}
         >
-          {caseActive && currentRow ? (
+          {createOpen ? (
+            /* WRITING A MARKET — the everyday rail steps aside so nothing under
+               the composer shifts while the AI thinks. Left is the spark. */
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              <div className="mb-3 shrink-0 text-[11px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+                Market Ideas
+              </div>
+              <IdeasRail
+                suggestion={ideaDue ? null : houseIdea.suggestion}
+                onUse={() => acceptIdea(false)}
+                onDismiss={houseIdea.onDismiss}
+              />
+            </div>
+          ) : caseActive && currentRow ? (
             // YES Case — the existing YES-supporting intelligence, reorganized.
             // Keyed on the market so switching resets the column scroll to top.
             <Suspense fallback={<DeckSkeleton />}>
