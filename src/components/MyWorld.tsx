@@ -31,7 +31,6 @@ import { useQuery } from "@tanstack/react-query";
 import { networkQO } from "@/lib/network-query";
 import { MyConvictions } from "@/components/MyConvictions";
 import { MARKETS_TAB } from "@/domain/markets";
-import { MarketsPanel } from "@/components/MarketsPanel";
 import { NetworkPanel } from "@/components/NetworkPanel";
 import { presentRelationship } from "@/domain/relationship";
 import { type MarketRow } from "@/components/MarketCard";
@@ -249,12 +248,12 @@ export function MyWorld({
         connectPrompt
       ) : tab === "positions" ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {/* THE TWO ROLES LEAD. Market Maker first, Believer second, one market
-              in exactly one section — the question you WROTE is the thing a
-              portfolio view had nowhere to put. The value/return cards keep
-              their place underneath: this section says what is HAPPENING around
-              your questions, and that one says what they are worth. */}
-          <MarketsPanel wallet={wallet} onSelectMarket={onSelectMarket} />
+          {/* ONE MARKET, ONE CARD. The Market Maker / Believer sections that
+              used to sit above this list re-stated the same questions the
+              position cards below already carried — the same market rendered
+              twice, in two vocabularies. The role is a property of a market, so
+              it now rides on that market's single card as an eyebrow label. */}
+
           <MyConvictions
             wallet={wallet}
             rows={rows}

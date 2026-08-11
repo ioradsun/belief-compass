@@ -24,6 +24,8 @@ import { formatMoney } from "@/domain/money";
 import { formatCC } from "@/domain/simulation";
 import { StandOnIt } from "@/components/StandOnIt";
 import { Signed } from "@/components/Signed";
+import { useMarkets } from "@/components/MarketsPanel";
+
 
 import { useDisplayUnit } from "@/lib/display-unit";
 import {
@@ -88,6 +90,9 @@ type Built = {
   side: Side;
   /** The other side of this market is held too — so two cards is not a duplicate. */
   paired: boolean;
+  /** You WROTE this question. A permanent fact about the market, not the holding. */
+  maker: boolean;
+
   value: number;
   /** The value is a real mark, not a cost-basis stand-in. False → no return yet. */
   priced: boolean;
@@ -177,9 +182,19 @@ function ConvictionCard({
         story, the side, the figures — is supporting evidence, so it borrows the
         Insider tape's scale (13/11px, secondary and muted) rather than
         competing at full strength. A card that shouts four times says nothing. */}
+      {/* 0 — THE ROLE, WHEN THERE IS ONE. An eyebrow above the question rather
+        than a section above the list: it is one word about THIS market, and it
+        only shows for the rarer, more consequential role. "Believer" is what
+        every other card already is, so printing it would be noise. */}
+      {p.maker && (
+        <div className="mb-1 pr-9 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
+          Market Maker
+        </div>
+      )}
       <div className="pr-9 text-[13px] font-semibold leading-snug text-[var(--text)]">
         {p.title}
       </div>
+
 
       {/* 2 — The platform's own material fact about this market, in the owner's
         voice. Absent when nothing material is on file: a position card does not
@@ -281,6 +296,22 @@ export function MyConvictions({
    * not to say.
    */
   const { positions: rawPositions, simulated } = useViewerPositions(wallet, win);
+
+  /**
+   * AUTHORSHIP IS A PROPERTY OF THE CARD, NOT A SECOND LIST.
+   *
+   * MARKETS used to open with a Market Maker section and a Believer section, and
+   * then show the same questions again as position cards underneath — one market
+   * rendered twice, in two vocabularies, with two different figures. The role is
+   * a single fact about a market, so it belongs ON the market's one card.
+   *
+   * The read is the same query the sections used, so nothing new is fetched.
+   */
+  const { data: marketEntries } = useMarkets(wallet);
+  const makerIds = new Set(
+    (marketEntries ?? []).filter((e) => e.ownership === "market_maker").map((e) => e.marketId),
+  );
+
   // Position value and gain are USD-native (POV marks the tokens in dollars); one
   // rate takes them to the viewer's chosen unit so both sides share a rate.
   const money: MoneyFmt = simulated
@@ -460,6 +491,8 @@ export function MyConvictions({
       id: f.id,
       side: f.side,
       paired: (sidesPerMarket.get(f.id) ?? 0) > 1,
+      maker: makerIds.has(f.id),
+
       value: f.value,
       priced: f.priced,
       gainUsd: f.gainUsd,
@@ -542,9 +575,22 @@ export function MyConvictions({
   }, [marketCount, onCount]);
 
 
-  if (!wallet || built.length === 0) {
+  /**
+   * THE QUESTIONS YOU WROTE AND NEVER BACKED.
+   *
+   * They have no value, no return and no side, so they cannot be position cards
+   * — but they are still yours, and removing the Market Maker section must not
+   * remove them from the rail. One line each, under the portfolio.
+   */
+  const heldIds = new Set(built.map((b) => b.id));
+  const authoredOnly = (marketEntries ?? [])
+    .filter((e) => e.ownership === "market_maker" && !heldIds.has(e.marketId))
+    .map((e) => ({ id: e.marketId, question: e.question }));
+
+  if (!wallet || (built.length === 0 && authoredOnly.length === 0)) {
     return <EmptyState onExplore={onExplore} />;
   }
+
 
   return (
     <div>
@@ -619,8 +665,30 @@ export function MyConvictions({
           </div>
         ))}
       </div>
+
+      {/* Yours, but with nothing at stake — so they are named, not measured. */}
+      {authoredOnly.length > 0 && (
+        <div className="pt-5">
+          <div className="text-[9.5px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            Market Maker · no position
+          </div>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {authoredOnly.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => onSelect(m.id)}
+                className="block w-full text-left text-[12.5px] font-medium leading-snug text-[var(--text-secondary)] underline-offset-2 hover:text-[var(--text)] hover:underline"
+              >
+                {m.question}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
+
 }
 
 /** No convictions yet — an invitation, not an empty portfolio. */
