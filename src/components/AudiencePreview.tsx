@@ -93,11 +93,30 @@ export function AudiencePreview({
  * network. Every other rendering bug in this system was found by looking at it,
  * and a component that can only be seen in production is one that will not be.
  */
-export function AudienceGroups({ groups }: { groups: AudienceGroupView[] }) {
+export function AudienceGroups({
+  groups,
+  stacked = false,
+}: {
+  groups: AudienceGroupView[];
+  stacked?: boolean;
+}) {
   return (
-    <div className="mt-2 flex flex-col gap-1.5">
+    <div className={stacked ? "flex flex-col gap-3" : "mt-2 flex flex-col gap-1.5"}>
       {groups.map((g) => (
-        <div key={g.key} className="flex items-center gap-2">
+        <div
+          key={g.key}
+          className={stacked ? "flex flex-col gap-1.5" : "flex items-center gap-2"}
+        >
+          {stacked ? (
+            <div className="min-w-0">
+              <p className="text-[12.5px] font-semibold leading-snug text-[var(--text)]">
+                {g.label}
+                <span className="ml-1 font-normal text-[var(--text-muted)]">{g.count}</span>
+              </p>
+              <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">{g.note}</p>
+            </div>
+          ) : null}
+
           {/* A FIXED GUTTER, FOUND BY LOOKING. Sized to a full stack — five faces
               at 22px overlapping by 6, plus the overflow chip — so the three
               labels start at the same x. Rendered without it, a Tribe of three
@@ -130,13 +149,16 @@ export function AudienceGroups({ groups }: { groups: AudienceGroupView[] }) {
               </span>
             )}
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-[11.5px] font-medium leading-snug text-[var(--text)]">
-              {g.label}
-              <span className="ml-1 font-normal text-[var(--text-muted)]">{g.count}</span>
-            </p>
-            <p className="truncate text-[11px] leading-snug text-[var(--text-muted)]">{g.note}</p>
-          </div>
+
+          {!stacked ? (
+            <div className="min-w-0">
+              <p className="truncate text-[11.5px] font-medium leading-snug text-[var(--text)]">
+                {g.label}
+                <span className="ml-1 font-normal text-[var(--text-muted)]">{g.count}</span>
+              </p>
+              <p className="truncate text-[11px] leading-snug text-[var(--text-muted)]">{g.note}</p>
+            </div>
+          ) : null}
         </div>
       ))}
     </div>
