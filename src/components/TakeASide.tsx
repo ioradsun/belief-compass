@@ -25,6 +25,7 @@
  * the reader who has not started. The action then begins wallet connection.
  */
 import type { ReactNode } from "react";
+import { useHydrated } from "@tanstack/react-router";
 import { useSimulationMode } from "@/lib/simulation-mode";
 import { requestConnect } from "@/lib/connect-bridge";
 import { walletIntent } from "@/lib/wagmi";
@@ -43,6 +44,10 @@ export function TakeASide({
   children?: ReactNode;
 }) {
   const sim = useSimulationMode();
+  // Simulation eligibility is resolved from browser-side state (wallet session,
+  // cached account), so the server cannot know it. Render the offer only after
+  // hydration or the server/client trees disagree.
+  const hydrated = useHydrated();
   const { count, target, progress } = sim.profileProgress;
 
   // Retired at the goal, and stood down while Simulation is running.
