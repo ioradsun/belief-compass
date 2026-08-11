@@ -221,6 +221,10 @@ export function PostAction({
           experience={experience}
           lockLine={lockLine(kind, act.side ?? null, mode)}
           remaining={remaining}
+          // Only a buy carries on by itself. A sell has nowhere to go, and the
+          // panel being open means the reader is mid-task on this market.
+          autoAdvance={kind === "buy" && !sheet && !!onNextQuestion}
+
           onAct={(cta) => {
             // Challenge never fires from the bar: it opens over the market so
             // the reader can see who it reaches before spending a slot.
