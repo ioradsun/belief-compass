@@ -23,7 +23,12 @@ import { useSwitchChain } from "wagmi";
 import type { MarketRow } from "@/components/MarketCard";
 import { pulseLine } from "@/components/MarketCard";
 import { MarketMomentum } from "@/components/MarketVitality";
-import { insiderPulse, insiderRead, marketStateFacts, pulseFactsFromMarket } from "@/domain/insider";
+import {
+  insiderPulse,
+  insiderRead,
+  marketStateFacts,
+  pulseFactsFromMarket,
+} from "@/domain/insider";
 import { relationFromGroup } from "@/domain/participant-social";
 import { presentRelationship } from "@/domain/relationship";
 import { WindowFilter } from "@/components/WindowFilter";
@@ -41,7 +46,6 @@ import {
   MediaStage,
   MediaSwitch,
   StagePane,
-
   isTallMedia,
   usesStageSwitch,
   mediaSwitchLabel,
@@ -65,6 +69,8 @@ import { ExamineCta } from "@/components/order/ExamineRail";
 import { marketBook } from "@/domain/market-book";
 
 import { ConvictionReveal } from "@/components/ConvictionReveal";
+import { PostAction } from "@/components/PostAction";
+import { usePositionShift } from "@/hooks/usePositionShift";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
 import { marketTitle } from "@/domain/market-title";
@@ -245,6 +251,11 @@ export function MobileGame({
     onRequestConnect: requestConnect,
     onRequestChain: () => switchChain({ chainId: CHAIN_ID }),
   });
+  /**
+   * BEFORE AND AFTER, kept apart — the on-chain read is still pre-trade at the
+   * instant a trade confirms, so it must not be handed over as "after".
+   */
+  const shift = usePositionShift(marketId, trade.isSuccess && !dock.isSelling);
   const ethWei = usdToWei(amount, ethUsd);
   const { quote, isLoading: quoting } = useBuyQuote(
     marketId,
@@ -333,16 +344,33 @@ export function MobileGame({
         creatorName: cm?.creator?.name ?? null,
       }),
     );
-    const tribeTarget = revealNet?.people?.find((p) => ["twin", "tribe"].includes(p.relationship));
+    /**
+     * THE SAME OWNER AS DESKTOP. Mobile used to render the reveal directly, so
+     * it chose its own navigation and offered no Challenge at all — a second
+     * closing screen for the same action, differing from desktop in ways nobody
+     * had decided. The reveal is now a slot here too, and whether it appears is
+     * the resolver's call rather than this file's.
+     */
     return (
       <Screen>
-        <ConvictionReveal
-          story={reveal}
-          side={side}
-          onNext={onNext}
-          onMeetTribe={
-            tribeTarget && onSelectPerson ? () => onSelectPerson(tribeTarget.wallet) : undefined
-          }
+        <PostAction
+          kind="buy"
+          wallet={viewerWallet}
+          act={{
+            marketId,
+            side,
+            authored:
+              !!cm?.creator?.wallet &&
+              !!viewerWallet &&
+              cm.creator.wallet.toLowerCase() === viewerWallet.toLowerCase(),
+            after: shift.after,
+            before: shift.before,
+            firstBeliever:
+              (side === "YES" ? revealEvidence?.believersYes : revealEvidence?.believersNo) === 1,
+          }}
+          onNextQuestion={onNext}
+          onStay={() => shift.refetch()}
+          reveal={<ConvictionReveal story={reveal} side={side} />}
         />
       </Screen>
     );
@@ -478,7 +506,6 @@ export function MobileGame({
             ) : (
               marketBody
             )}
-
           </MediaStage>
         </>
       ) : (
@@ -1022,7 +1049,6 @@ function Dock({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
 
 function Rule() {
   return <div className="border-t border-[var(--border)]" aria-hidden />;

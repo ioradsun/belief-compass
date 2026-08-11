@@ -9,11 +9,14 @@
  * and a state nobody thought about (sold out while a Challenge was live;
  * answered a call in a market already on your table) produces whatever falls out.
  *
- * THIS MODULE IS THE FOUNDATION FOR ENDING THAT, NOT THE END OF IT. Nothing in
- * production calls it yet. The four owners above still decide the live
- * experience independently, and they will until the wiring PR lands. Until then
- * this is a correct answer nobody is asking for, which is worth saying out loud
- * so the next reader does not assume the problem is solved.
+ * IT IS NOW THE OWNER. Every confirmed buy, sell and create builds a
+ * `PostActionInput` and renders what this returns — see `PostActionScreen`. The
+ * four components above still exist and still render beautifully; what they no
+ * longer do is DECIDE. `ConvictionReveal` draws the personal story it is handed,
+ * `KeepChainMoving` draws a Challenge module it is told to draw, and the route
+ * executes the CTA it is given. Deleting the `resolvePostAction` call breaks all
+ * three flows, which is the only real proof that a resolver is the owner rather
+ * than architecture nobody reaches.
  *
  * WHAT IT DOES NOT DO: write the personal story. `conviction-reveal` owns that
  * and is better at it. This decides whether the personal story should be shown
@@ -62,6 +65,15 @@ export interface Audience {
    * worse than no name is a confident wrong one.
    */
   singleRecipientName: string | null;
+  /**
+   * EVERY QUALIFYING PERSON IS IN THE STILL FORMING GROUP.
+   *
+   * A real audience, and a different sentence. "See who stands with you" assumes
+   * a Tribe; somebody whose whole reachable network is people the engine cannot
+   * yet name deserves the honest version rather than borrowed warmth. False when
+   * the audience is empty — there is no group to be "only".
+   */
+  formingOnly: boolean;
 }
 
 /** What the viewer already has on this market. */
@@ -88,6 +100,15 @@ export interface NoHoldings {
 interface Common {
   role: MarketRole;
   outgoing: OutgoingState;
+  /**
+   * HOW THE LIVE ONE IS DOING — read from the table, never inferred.
+   *
+   * "3 of 11 have shown up" is a claim about eleven real people. Null whenever
+   * `outgoing` is not `live`, and null also when the table read failed, in which
+   * case the consequence block says a Challenge is live and declines to quantify
+   * it. A fraction is the one part of that sentence worth withholding.
+   */
+  outgoingProgress: { shown: number; reached: number } | null;
   capacity: { active: number; total: number };
   audience: Audience;
 }
@@ -118,6 +139,22 @@ export interface BuyInput extends Common {
   /** A buy always has a side. There is no directionless purchase. */
   side: Side;
   after: Holdings;
+  /**
+   * THE VERY FIRST BELIEVER ON THIS SIDE — the same fact `conviction-reveal`
+   * already computes, passed in rather than recomputed. It earns its own
+   * headline because "You're first" is a stronger and more checkable statement
+   * than "That's a real call", and the reveal underneath can then spend its
+   * strongest card on something else.
+   */
+  firstBeliever: boolean;
+  /**
+   * A PROVEN DIRECTIONAL FLIP: the original side is GONE, not merely joined.
+   *
+   * Holding both sides is not a change of mind, and the difference is the whole
+   * reason this is a separate field rather than derived from `side`. Only the
+   * canonical post-trade balance can establish it, so it arrives as a fact.
+   */
+  flipped: boolean;
   /** Null when nobody had asked — an organic buy. */
   answered: AnsweredCalls | null;
   /** Somebody else still waiting, for the fallback after this screen. */
@@ -159,6 +196,7 @@ export type CtaKind =
   | "next_question"
   | "back_to_market"
   | "view_market"
+  | "see_chain"
   | "answer";
 
 export interface Cta {
@@ -170,7 +208,20 @@ export interface Cta {
 export type Consequence = "reveal" | "branch_live" | "challenge_live" | null;
 
 /** At most one social module, and `make_room` is one of its shapes. */
-export type ChallengeModule = "relay" | "organic" | "make_room" | null;
+export type ChallengeModuleKind = "relay" | "organic" | "still_forming" | "sell" | "make_room";
+
+/**
+ * THE MODULE'S OWN HEADING, WRITTEN HERE RATHER THAN IN THE COMPONENT.
+ *
+ * A screen that picked its own heading from the module kind would be a second
+ * copy owner, and the two would drift the first time one of them learned a new
+ * case. The resolver decides meaning AND the words for it; the screen renders.
+ */
+export interface ChallengeModule {
+  kind: ChallengeModuleKind;
+  title: string;
+  support: string;
+}
 
 export type CopyCategory =
   | "reciprocity"
@@ -186,7 +237,21 @@ export interface PostActionExperience {
   headline: string;
   support: string | null;
   consequence: Consequence;
-  challengeModule: ChallengeModule;
+  /**
+   * THE ONE LINE THE CONSEQUENCE BLOCK PRINTS, or null when it has no number to
+   * print. "Your branch is already live" with no fraction is still true; "3 of
+   * 11 have shown up" with a guessed denominator is not.
+   */
+  consequenceLine: string | null;
+  challengeModule: ChallengeModule | null;
+  /**
+   * WHO THIS PERSON IS IN THIS MARKET, when it is worth saying.
+   *
+   * "MARKET MAKER · BACKING YES" — never reduced to "BELIEVER · YES". Somebody
+   * who wrote the question and then backed it is both, and the authorship is the
+   * larger fact. Null for an ordinary believer, who needs no badge.
+   */
+  identity: string | null;
   primary: Cta;
   /** Null whenever it would repeat the primary. Never the same action twice. */
   secondary: Cta | null;
@@ -251,19 +316,91 @@ export function realizedLine(realizedGainUsd: number | null): string | null {
  * version of a promise that cannot be kept, so each branch returns the strongest
  * action that is actually available.
  */
-function nextForBuy(i: CreateMarketInput | BuyInput): { primary: Cta; module: ChallengeModule } {
+const MAKE_ROOM_MODULE: ChallengeModule = {
+  kind: "make_room",
+  title: "Your table is full",
+  support: "Three questions already have a place.",
+};
+
+/**
+ * THE MODULE'S HEADING, CHOSEN BY WHAT IS ACTUALLY TRUE OF THIS AUDIENCE.
+ *
+ * `still_forming` outranks the others when it applies, because the sentence it
+ * replaces would be a small lie: "see who stands with you" said to somebody
+ * whose entire reachable network is unnamed relationships promises a Tribe they
+ * do not have. The honest version is not a downgrade — an answer from a Still
+ * Forming person is the single most informative thing the graph can receive.
+ */
+function moduleFor(kind: ChallengeModuleKind, audience: Audience): ChallengeModule {
+  if (audience.formingOnly)
+    return {
+      kind: "still_forming",
+      title: "The map is still taking shape",
+      support: "Every honest answer makes it clearer.",
+    };
+  switch (kind) {
+    case "relay":
+      return {
+        kind,
+        title: "Keep the chain moving",
+        support: "Somebody asked you. The same is available to you, once.",
+      };
+    case "sell":
+      return {
+        kind,
+        title: "Still in this one",
+        support: "See where your people land.",
+      };
+    default:
+      return {
+        kind: "organic",
+        title: "Belief is easy when no one can answer back",
+        support: "Put this one in front of your people.",
+      };
+  }
+}
+
+function nextForBuy(i: CreateMarketInput | BuyInput): {
+  primary: Cta;
+  module: ChallengeModule | null;
+} {
   if (canOffer(i) && spotsOpen(i.capacity) > 0) {
+    const kind: ChallengeModuleKind =
+      i.action !== "create_market" && i.answered ? "relay" : "organic";
     return {
       primary: { kind: "challenge", label: challengeLabel(i.audience) },
-      module: i.action !== "create_market" && i.answered ? "relay" : "organic",
+      module: moduleFor(kind, i.audience),
     };
   }
   if (canOffer(i) && spotsOpen(i.capacity) === 0) {
-    return { primary: { kind: "make_room", label: "Make room" }, module: "make_room" };
+    return { primary: { kind: "make_room", label: "Make room" }, module: MAKE_ROOM_MODULE };
   }
   const waiting = i.action !== "create_market" ? i.nextIncoming?.name.trim() : null;
   if (waiting) return { primary: { kind: "answer", label: `Answer ${waiting}` }, module: null };
   return { primary: { kind: "next_question", label: "Next Question" }, module: null };
+}
+
+/**
+ * "3 of 11 have shown up." — and SILENCE rather than a guess.
+ *
+ * A denominator is a claim about that many real people. When the table read did
+ * not complete, the consequence block still says a Challenge is live (which is
+ * known from the ledger) and prints no fraction, because half of this sentence
+ * is checkable and the other half would be invented.
+ */
+function progressLine(p: { shown: number; reached: number } | null): string | null {
+  if (!p || p.reached <= 0) return null;
+  return `${p.shown} of ${p.reached} have shown up.`;
+}
+
+/**
+ * MARKET MAKER FIRST, ALWAYS. Somebody who wrote the question and then backed it
+ * is both, and authorship is the larger fact — being reduced to "BELIEVER · YES"
+ * on your own market is the identity error this line exists to prevent.
+ */
+function identityFor(role: MarketRole, side: Side | null): string | null {
+  if (role === "believer") return null;
+  return side ? `Market Maker · Backing ${side}` : "Market Maker";
 }
 
 /**
@@ -306,11 +443,25 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
       // A creation has nowhere else to send anybody: "Next Question" is a buy's
       // exit, not a creator's.
       const primary = chosen.kind === "next_question" ? viewMarket : chosen;
+      /**
+       * A SUCCESSFUL CREATION IS NEVER TURNED INTO AN EMPTY-NETWORK MESSAGE.
+       *
+       * With an audience the support line is an invitation — the question began
+       * with you, it does not have to end there. With NO audience it is still a
+       * completed act, so the sentence celebrates the act itself. What it must
+       * never do is answer "you made something" with "nobody qualifies", which
+       * is the reader's first market meeting their thinnest moment.
+       */
+      const support = module
+        ? "The question began with you. It doesn't have to end there."
+        : "You gave the question a place to live.";
       return {
         headline: "Your market is live.",
-        support: i.side ? `You're backing ${i.side}.` : null,
+        support,
         consequence: null,
+        consequenceLine: null,
         challengeModule: module,
+        identity: identityFor(i.role, i.side),
         primary,
         secondary: secondaryUnless(primary, viewMarket),
         stayOnMarket: true,
@@ -326,6 +477,21 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
         kind: "next_question",
         label: "Next Question",
       });
+
+      /**
+       * A LIVE BRANCH IS A LIVE BRANCH IN EVERY BUY, and this used to be decided
+       * per-branch — so it appeared for an answered call and for buying more,
+       * and vanished for a first buy or a creator backing their own question.
+       * Those are exactly the cases where it is most surprising to lose: a
+       * Market Maker who put their question up and only now takes a side has a
+       * Challenge running that this screen would not have mentioned.
+       *
+       * `reveal` yields to it. Both are consequence blocks and there is only one
+       * slot; "3 of 11 have shown up" is news about other people, and the
+       * personal reveal is available on every subsequent buy.
+       */
+      const branchLive: Consequence = i.outgoing === "live" ? "branch_live" : null;
+      const branchLine = branchLive ? progressLine(i.outgoingProgress) : null;
 
       /**
        * SOMEBODY ASKED, AND YOU ANSWERED — the strongest thing this screen can
@@ -348,8 +514,10 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           support: `You backed ${i.side}.`,
           // Already asked their people about this one — say so instead of
           // offering a second Challenge for the same market.
-          consequence: i.outgoing === "live" ? "branch_live" : null,
+          consequence: branchLive,
+          consequenceLine: branchLine,
           challengeModule: module,
+          identity: identityFor(i.role, i.side),
           primary,
           secondary,
           stayOnMarket: false,
@@ -365,8 +533,10 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
         return {
           headline: `You added ${i.side}.`,
           support: "You now hold both sides.",
-          consequence: null,
+          consequence: branchLive,
+          consequenceLine: branchLine,
           challengeModule: module,
+          identity: identityFor(i.role, null),
           primary,
           secondary,
           stayOnMarket: false,
@@ -376,12 +546,38 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
         };
       }
 
+      /**
+       * A FLIP IS A CANONICAL FACT, NOT AN INFERENCE FROM THE BUTTON PRESSED.
+       *
+       * `flipped` means the post-trade balance shows the original side GONE.
+       * Holding both is handled above and is not a change of mind; buying the
+       * other side while keeping the first is somebody widening a position, and
+       * calling that a flip would put words in their mouth about a belief they
+       * still hold.
+       */
+      if (i.flipped) {
+        return {
+          headline: `Your position flipped to ${i.side}.`,
+          support: null,
+          consequence: branchLive,
+          consequenceLine: branchLine,
+          challengeModule: module,
+          identity: identityFor(i.role, i.side),
+          primary,
+          secondary,
+          stayOnMarket: false,
+          copyCategory: "general",
+        };
+      }
+
       if (i.action === "buy_more") {
         return {
           headline: `You added to ${i.side}.`,
-          support: null,
-          consequence: i.outgoing === "live" ? "branch_live" : null,
+          support: "Your conviction grew.",
+          consequence: branchLive,
+          consequenceLine: branchLine,
           challengeModule: module,
+          identity: identityFor(i.role, i.side),
           primary,
           secondary,
           stayOnMarket: false,
@@ -394,8 +590,10 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
         return {
           headline: "You made the question. Now you're in.",
           support: `You're backing ${i.side}.`,
-          consequence: null,
+          consequence: branchLive,
+          consequenceLine: branchLine,
           challengeModule: module,
+          identity: identityFor(i.role, i.side),
           primary,
           secondary,
           stayOnMarket: false,
@@ -408,11 +606,33 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
        * than writing one. `conviction-reveal` already knows whether they were
        * first, early, or surprised the House.
        */
+      /**
+       * FIRST, AND SAYING SO PLAINLY. It is the rarest checkable fact a buy can
+       * carry, and it outranks the generic confirmation — the reveal underneath
+       * then spends its strongest card on something the headline did not use.
+       */
+      if (i.firstBeliever) {
+        return {
+          headline: "You're first.",
+          support: `You're the first believer on ${i.side}.`,
+          consequence: branchLive ?? "reveal",
+          consequenceLine: branchLine,
+          challengeModule: module,
+          identity: null,
+          primary,
+          secondary,
+          stayOnMarket: false,
+          copyCategory: "first_or_early",
+        };
+      }
+
       return {
         headline: "That's a real call.",
         support: `You backed ${i.side}.`,
-        consequence: "reveal",
+        consequence: branchLive ?? "reveal",
+        consequenceLine: branchLine,
         challengeModule: module,
+        identity: null,
         primary,
         secondary,
         stayOnMarket: false,
@@ -442,7 +662,9 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           headline: "Sale confirmed.",
           support: "Your position is updating.",
           consequence: null,
+          consequenceLine: null,
           challengeModule: null,
+          identity: null,
           primary: backToMarket,
           secondary: null,
           stayOnMarket: true,
@@ -457,9 +679,24 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
         : full
           ? { kind: "make_room", label: "Make room" }
           : backToMarket;
-      const sellModule: ChallengeModule = offer ? "organic" : full ? "make_room" : null;
-      const sellSecondary = secondaryUnless(sellPrimary, backToMarket);
+      const sellModule: ChallengeModule | null = offer
+        ? moduleFor("sell", i.audience)
+        : full
+          ? MAKE_ROOM_MODULE
+          : null;
       const challengeLive: Consequence = i.outgoing === "live" ? "challenge_live" : null;
+      /**
+       * WHEN A CHALLENGE IS ALREADY LIVE HERE, THE SECOND ACTION IS THE CHAIN.
+       *
+       * "Back to Market" and "See chain" go to different places and answer
+       * different questions — the market is the position, the chain is the
+       * people. A live Challenge is the only state where the second one exists
+       * to look at, so it is the only state that offers it.
+       */
+      const seeChain: Cta = { kind: "see_chain", label: "See chain" };
+      const sellSecondary = challengeLive
+        ? secondaryUnless(sellPrimary, seeChain)
+        : secondaryUnless(sellPrimary, backToMarket);
 
       if (i.action === "market_exit") {
         /**
@@ -473,7 +710,11 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           headline: makerMayAsk ? "Your position is closed." : "You're out.",
           support: makerMayAsk ? "Your question is still alive." : sellSupport(i),
           consequence: challengeLive,
+          consequenceLine: challengeLive ? progressLine(i.outgoingProgress) : null,
           challengeModule: makerMayAsk ? sellModule : null,
+          // A creator who has exited still authored the question. No side —
+          // they hold none — but the authorship does not lapse with the position.
+          identity: makerMayAsk ? identityFor(i.role, null) : null,
           primary: makerMayAsk ? sellPrimary : backToMarket,
           secondary: makerMayAsk ? sellSecondary : null,
           stayOnMarket: true,
@@ -488,7 +729,9 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           headline: `You left ${i.side}.`,
           support: stillBacking(remaining, i.remainingValueUsd),
           consequence: challengeLive,
+          consequenceLine: challengeLive ? progressLine(i.outgoingProgress) : null,
           challengeModule: sellModule,
+          identity: identityFor(i.role, remaining),
           primary: sellPrimary,
           secondary: sellSecondary,
           stayOnMarket: true,
@@ -500,7 +743,9 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
         headline: "You took some off.",
         support: stillBacking(remaining, i.remainingValueUsd),
         consequence: challengeLive,
+        consequenceLine: challengeLive ? progressLine(i.outgoingProgress) : null,
         challengeModule: sellModule,
+        identity: identityFor(i.role, remaining),
         primary: sellPrimary,
         secondary: sellSecondary,
         stayOnMarket: true,

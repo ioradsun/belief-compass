@@ -1,0 +1,144 @@
+/**
+ * THE ONE CLOSING SCREEN — buy, sell and create, rendered from one decision.
+ *
+ * IT DECIDES NOTHING. Every branch on this page was already taken by
+ * `resolvePostAction`: which sentence leads, whether a consequence block
+ * appears, whether the Challenge module is offered and under which heading,
+ * what the two buttons say and where they go. This file turns that answer into
+ * pixels and hands presses back to the caller.
+ *
+ * WHY THAT MATTERS MORE THAN IT SOUNDS. The moment after a trade used to be
+ * assembled by whichever of four components happened to render — `ConvictionReveal`
+ * picked the personal story AND the navigation, `KeepChainMoving` decided
+ * eligibility on its own, `LaunchRail` owned the post-create decision, and the
+ * route invented its own exits. None could see the others, so a state nobody had
+ * thought about produced whatever fell out. Those components still draw; what
+ * they no longer do is choose.
+ *
+ * THE REVEAL IS A SLOT, NOT A COMPETITOR. `consequence: "reveal"` means the
+ * resolver decided the personal story is the strongest thing left to say, so the
+ * caller passes it in and it renders here — below the headline, above the
+ * social module, with no CTA of its own.
+ */
+import type { ReactNode } from "react";
+import type { Cta, PostActionExperience } from "@/domain/post-action";
+import { AudienceGroups } from "@/components/AudiencePreview";
+import type { AudienceGroupView } from "@/domain/audience";
+import { RELAY_COST } from "@/domain/chain";
+
+export interface PostActionScreenProps {
+  experience: PostActionExperience;
+  /** Executed as given. This component never picks a destination. */
+  onAct: (cta: Cta) => void;
+  /** Whether the primary is mid-flight. Never used to render a disabled CTA. */
+  pending?: boolean;
+  /**
+   * The personal story, when the resolver asked for one. Passing it while
+   * `consequence !== "reveal"` renders nothing — the resolver decides, not the
+   * presence of a prop.
+   */
+  reveal?: ReactNode;
+  /** Faces for the Challenge module. Absent while the audience is still loading. */
+  groups?: AudienceGroupView[];
+}
+
+export function PostActionScreen({
+  experience: x,
+  onAct,
+  pending = false,
+  reveal,
+  groups,
+}: PostActionScreenProps) {
+  const showReveal = x.consequence === "reveal" && reveal != null;
+  const showConsequenceBlock =
+    x.consequence === "branch_live" || x.consequence === "challenge_live";
+
+  return (
+    <section className="flex min-h-0 w-full flex-col gap-3 p-4" data-post-action={x.copyCategory}>
+      {/* MARKET MAKER FIRST. A creator who also backed their question is both,
+          and the authorship is the larger fact — this badge is the one place the
+          screen refuses to reduce them to a believer. */}
+      {x.identity && (
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          {x.identity}
+        </p>
+      )}
+
+      <div>
+        <h2 className="text-[19px] font-semibold leading-tight text-[var(--text)]">{x.headline}</h2>
+        {x.support && (
+          <p className="mt-1 text-[13px] leading-snug text-[var(--text-secondary)]">{x.support}</p>
+        )}
+      </div>
+
+      {/* AT MOST ONE CONSEQUENCE BLOCK, EVER. The resolver guarantees it; this
+          renders whichever one it chose and has no way to show two. */}
+      {showConsequenceBlock && (
+        <div className="rounded-lg border border-[var(--border)] p-2.5">
+          <p className="text-[12px] font-semibold leading-snug text-[var(--text)]">
+            {x.consequence === "branch_live"
+              ? "Your branch is already live"
+              : "Your Challenge is still live"}
+          </p>
+          {/* NO FRACTION WHEN THE READ DID NOT COMPLETE. "3 of 11" is a claim
+              about eleven real people, and half a checkable sentence is worse
+              than the half that is certain. */}
+          {x.consequenceLine && (
+            <p className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
+              {x.consequenceLine}
+            </p>
+          )}
+        </div>
+      )}
+
+      {showReveal && <div className="min-h-0">{reveal}</div>}
+
+      {x.challengeModule && (
+        <div className="border-t border-[var(--border)] pt-3">
+          <p className="text-[12px] font-semibold leading-snug text-[var(--text)]">
+            {x.challengeModule.title}
+          </p>
+          <p className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
+            {x.challengeModule.support}
+          </p>
+          {/* FACES ONLY WHEN THERE ARE FACES. `make_room` has an audience it
+              cannot reach yet, so it shows the sentence and the way out. */}
+          {x.challengeModule.kind !== "make_room" && groups && groups.length > 0 && (
+            <AudienceGroups groups={groups} />
+          )}
+        </div>
+      )}
+
+      <div className="mt-1 flex flex-col items-start gap-1.5">
+        <button
+          type="button"
+          /**
+           * NEVER RENDERED DISABLED. A CTA that cannot be used is a smaller
+           * version of a promise that cannot be kept — the resolver returns the
+           * strongest action that is actually available, so there is nothing to
+           * grey out. `pending` dims an in-flight press and nothing else.
+           */
+          disabled={pending}
+          onClick={() => onAct(x.primary)}
+          className="rounded-lg bg-[var(--text)] px-3 py-1.5 text-[13px] font-medium text-[var(--bg)] transition-opacity disabled:opacity-50"
+        >
+          {x.primary.label}
+        </button>
+        {/* WHAT IT COSTS, said plainly — and only beside an offer that spends
+            one. Not a balance to watch run down. */}
+        {x.primary.kind === "challenge" && (
+          <p className="text-[11px] text-[var(--text-muted)]">{RELAY_COST}</p>
+        )}
+        {x.secondary && (
+          <button
+            type="button"
+            onClick={() => onAct(x.secondary as Cta)}
+            className="text-[12px] text-[var(--text-muted)] underline transition-colors hover:text-[var(--text)]"
+          >
+            {x.secondary.label}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}

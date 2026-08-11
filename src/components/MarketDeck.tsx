@@ -22,6 +22,8 @@ import type { MarketRow } from "@/components/MarketCard";
 import { useHouseFinalize, houseKey } from "@/lib/house-round";
 import { useAnswerCalls } from "@/hooks/useAnswerCalls";
 import { ConvictionReveal } from "@/components/ConvictionReveal";
+import { PostAction } from "@/components/PostAction";
+import { usePositionShift } from "@/hooks/usePositionShift";
 import { getConvictionReveal } from "@/domain/conviction-reveal";
 import { assembleRevealInput } from "@/lib/reveal-input";
 import { MobileCaseView } from "@/components/MobileCase";
@@ -29,7 +31,12 @@ import { useEffectiveWallet } from "@/hooks/useEffectiveWallet";
 import { expressBelief } from "@/lib/beliefs.functions";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import { MarketMomentum } from "@/components/MarketVitality";
-import { insiderPulse, insiderRead, marketStateFacts, pulseFactsFromMarket } from "@/domain/insider";
+import {
+  insiderPulse,
+  insiderRead,
+  marketStateFacts,
+  pulseFactsFromMarket,
+} from "@/domain/insider";
 import { relationFromGroup } from "@/domain/participant-social";
 import { convictionMatch, presentRelationship } from "@/domain/relationship";
 import { marketAgeCopy } from "@/domain/market-freshness";
@@ -72,7 +79,6 @@ import {
   usesStageSwitch,
   mediaSwitchLabel,
   stageMediaFrom,
-
 } from "@/components/MediaStage";
 import { marketTitle } from "@/domain/market-title";
 
@@ -94,7 +100,6 @@ export function MarketDeck({
   mobileCaseOpen = false,
   onToggleCase,
   onSelectPerson,
-  onBacked,
   reason,
 }: {
   row: MarketRow;
@@ -106,7 +111,6 @@ export function MarketDeck({
    * same "your people got the call" line a publish shows — taking a side calls
    * your people exactly as creating a market does.
    */
-  onBacked?: (marketId: number) => void;
   /**
    * Why the feed chose THIS market — the same sentence the playlist row showed.
    *
@@ -159,6 +163,22 @@ export function MarketDeck({
     onRequestConnect: requestConnect,
     onRequestChain: () => switchChain({ chainId: CHAIN_ID }),
   });
+  /**
+   * BEFORE AND AFTER, kept apart. At the instant a trade confirms the on-chain
+   * read is still pre-trade, so the closing screen must not treat it as "after"
+   * — that is how a partial seller gets told they are out.
+   */
+  const shift = usePositionShift(marketId, trade.isSuccess && !dock.isSelling);
+  /**
+   * A COMPLETED SALE TAKES OVER THE CENTRE, exactly as a completed buy does.
+   *
+   * Selling used to end with the dock quietly closing — no sentence, no
+   * consequence, no exit. It is the one action where the reader most needs to
+   * be told plainly what they now hold, and where the product most easily lies
+   * ("You're out" to somebody who sold half). The same resolver answers it.
+   */
+  const [soldSide, setSoldSide] = useState<"YES" | "NO" | null>(null);
+  const sellShift = usePositionShift(marketId, soldSide != null);
 
   // A belief tap records a FREE expressed belief (no money) that feeds DNA /
   // Network / House. Refreshes the viewer's readiness so calibration progresses.
@@ -207,6 +227,11 @@ export function MarketDeck({
   });
   // Evidence, when the creator attached any. Null keeps the layout untouched.
   const stageMedia = useMemo(() => stageMediaFrom(cm), [cm]);
+  /** Market Maker is a permanent fact about a market; a position is not. */
+  const authoredByViewer =
+    !!cm?.creator?.wallet &&
+    !!viewerWallet &&
+    cm.creator.wallet.toLowerCase() === viewerWallet.toLowerCase();
   // Tall evidence (a video player, an X post) can't sit inline without pushing
   // the market off the panel, so those markets get a Market / Media switch.
   const tallMedia = usesStageSwitch(stageMedia);
@@ -327,15 +352,6 @@ export function MarketDeck({
   const backed = trade.isSuccess && !!trade.hash;
   useAnswerCalls(viewerWallet, marketId, backed);
 
-  // TELL THE RAIL, so it can say who this side just reached. The deck owns the
-  // trade state and the rail is a sibling, so this is the only way across —
-  // and it is a plain notification, not a second source of truth: the rail
-  // re-reads reach from the server rather than being handed a number.
-  useEffect(() => {
-    if (backed && viewerWallet) onBacked?.(marketId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backed, viewerWallet, marketId]);
-
   // Keyboard: ←/→ select a side, ↑ pass. None of them buy or reveal.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -367,7 +383,7 @@ export function MarketDeck({
       onBuySide={(s) => chooseSide(s)}
       onPass={() => choosePass()}
       onSold={() => {
-        void bal.refetch();
+        setSoldSide(dock.sellSide ?? null);
         dock.closeSell();
       }}
     />
@@ -375,6 +391,31 @@ export function MarketDeck({
 
   const relationshipBeat = row.story?.beats.find((b) => b.kind === "relationship")?.text ?? null;
   const eventBeat = row.story?.beats.find((b) => b.kind === "event")?.text ?? null;
+  /**
+   * A COMPLETED SELL, AND IT NEVER LEAVES THIS MARKET. No "Next Question" is
+   * offered and none is reachable — `SellInput` carries no `nextIncoming`, so
+   * the buy hierarchy is not merely unused here, it cannot be expressed.
+   */
+  if (soldSide != null) {
+    return (
+      <PostAction
+        kind="sell"
+        wallet={viewerWallet}
+        act={{
+          marketId,
+          side: soldSide,
+          authored: authoredByViewer,
+          after: sellShift.after,
+          before: sellShift.before,
+        }}
+        onStay={() => {
+          sellShift.refetch();
+          setSoldSide(null);
+        }}
+      />
+    );
+  }
+
   // A completed BUY takes over the whole center: the Conviction Reveal — the same
   // story engine + component the mobile game uses. The trade was only the unlock.
   if (trade.isSuccess && side != null && !dock.isSelling) {
@@ -392,18 +433,35 @@ export function MarketDeck({
         creatorName: cm?.creator?.name ?? null,
       }),
     );
+    /**
+     * ONE OWNER FOR THE CLOSING MOMENT. This used to render `ConvictionReveal`
+     * directly, which meant the reveal chose the navigation while
+     * `KeepChainMoving` decided independently whether a relay was on offer and
+     * the route decided separately what "done" meant.
+     *
+     * Now the reveal is a SLOT: `resolvePostAction` decides whether the personal
+     * story is the strongest thing left to say, and passing it here is not the
+     * same as showing it — with an answered call or a live branch it is not
+     * rendered at all, because somebody else's fact outranks it.
+     */
     return (
-      <ConvictionReveal
-        story={reveal}
-        side={side}
-        onNext={() => {
+      <PostAction
+        kind="buy"
+        wallet={viewerWallet}
+        act={{
+          marketId,
+          side,
+          authored: authoredByViewer,
+          after: shift.after,
+          before: shift.before,
+          firstBeliever: (side === "YES" ? evidence?.believersYes : evidence?.believersNo) === 1,
+        }}
+        onNextQuestion={() => {
           void bal.refetch();
           onSkip();
         }}
-        onMeetTribe={(() => {
-          const t = net?.people?.find((p) => ["twin", "tribe"].includes(p.relationship));
-          return t ? () => onSelectPerson?.(t.wallet) : undefined;
-        })()}
+        onStay={() => void bal.refetch()}
+        reveal={<ConvictionReveal story={reveal} side={side} />}
       />
     );
   }
@@ -434,7 +492,6 @@ export function MarketDeck({
         change={marketChange}
         faces={participantFaces}
         state={marketStateFacts(rr)}
-
         footer={
           onToggleCase && !mobileCaseOpen ? (
             <ExamineCta open={caseOpen} onToggle={onToggleCase} insiderRead={insiderRead_} />
@@ -449,7 +506,6 @@ export function MarketDeck({
           the second surfaced a match who had not taken a side in THIS market
           at all — a person the reader was being told about while looking at a
           question they never touched. Duplicate above, wrong below; both gone. */}
-
     </>
   );
 
@@ -533,7 +589,6 @@ export function MarketDeck({
             className="self-start"
           />
         )}
-
       </div>
 
       {mobileCaseOpen ? (
@@ -576,7 +631,6 @@ export function MarketDeck({
           ) : (
             marketInner
           )}
-
         </MediaStage>
       )}
 
@@ -591,7 +645,6 @@ export function MarketDeck({
           <ExamineCta open={caseOpen} onToggle={onToggleCase} insiderRead={insiderRead_} />
         </div>
       )}
-
 
       {/* Decision dock — buy by default; sell takes over when opened on a holding.
         Reaching the dock is the strongest signal a wallet is about to be needed,

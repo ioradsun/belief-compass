@@ -76,7 +76,7 @@ const INSIDER_SCOPES: readonly DotOption<"all" | "mine">[] = [
 import { IdeasRail } from "@/components/IdeasRail";
 import { AlternatesRail } from "@/components/AlternatesRail";
 import { useOpenCalls } from "@/lib/open-calls";
-import { LaunchRail } from "@/components/LaunchRail";
+import { PostAction } from "@/components/PostAction";
 import { MarketDeck } from "@/components/MarketDeck";
 import { MobileGame } from "@/components/MobileGame";
 import { MarketScene } from "@/components/MarketScene";
@@ -605,16 +605,6 @@ function Feed() {
   };
   const closeLaunch = () =>
     navigate({ search: (prev: Search) => ({ ...prev, launch: undefined }) });
-
-  /**
-   * The market a buy just confirmed in — component state, NOT a search param.
-   *
-   * Publishing owns `?launch=` because a creator arrives at that URL and the
-   * moment survives a reload. A buy is the opposite: it happened once, in this
-   * session, and resurrecting "you took a side" on a refresh two days later
-   * would be a lie the URL told on the app's behalf.
-   */
-  const [backedId, setBackedId] = useState<number | null>(null);
 
   const selectPerson = (personWallet: string) => {
     if (personWallet === selectedPerson) return;
@@ -1725,7 +1715,6 @@ function Feed() {
                     mobileCaseOpen={mobileCaseActive}
                     onToggleCase={toggleCase}
                     onSelectPerson={selectPerson}
-                    onBacked={setBackedId}
                     reason={reasonByMarket[Number(currentRow.onchain_id)] ?? null}
                   />
                 )}
@@ -1787,19 +1776,29 @@ function Feed() {
               {/* Publish wins when both are true for the same market: "your
                   market is live" is the larger fact, and a creator who backs
                   their own question should not have it downgraded. */}
+              {/* THE POST-CREATE CLOSING SCREEN, AND ONLY THAT.
+                  `LaunchRail` used to render here for BOTH a publish and a buy,
+                  which meant a confirmed buy produced two closing screens at
+                  once: this rail deciding one thing about relaying while the
+                  centre's reveal decided another about navigation. The buy
+                  branch is gone — `MarketDeck` owns that moment through the same
+                  resolver — and what is left is the creation, which has no
+                  centre takeover of its own. The route executes the CTA it is
+                  handed; it does not invent one. */}
               {launchId != null && launchId === shownId ? (
-                <LaunchRail
+                <PostAction
+                  kind="create"
                   wallet={wallet}
-                  kind="created"
-                  marketId={launchId}
-                  onDone={closeLaunch}
-                />
-              ) : backedId != null && backedId === shownId ? (
-                <LaunchRail
-                  wallet={wallet}
-                  kind="backed"
-                  marketId={backedId}
-                  onDone={() => setBackedId(null)}
+                  act={{
+                    marketId: launchId,
+                    // A creation's seeded side is not known to the route, and
+                    // guessing one would put a position on somebody who took
+                    // none. The resolver renders no side rather than a wrong one.
+                    side: null,
+                    authored: true,
+                    after: null,
+                  }}
+                  onStay={closeLaunch}
                 />
               ) : null}
               {/* THE RAILS CHANGE JOBS AS THE STORY MOVES.
