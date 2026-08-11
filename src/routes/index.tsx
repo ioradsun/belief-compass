@@ -1498,9 +1498,12 @@ function Feed() {
           className={`${show("mine")} relative row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
           style={{ borderRight: "1px solid var(--hairline)" }}
         >
-          {createOpen ? (
-            /* WRITING A MARKET — the everyday rail steps aside so nothing under
-               the composer shifts while the AI thinks. Left is the spark. */
+          {createOpen && !ideaDue ? (
+            /* WRITING A MARKET the reader chose to write — the everyday rail
+               steps aside so nothing under the composer shifts while the AI
+               thinks. Left is the spark. An idea arriving FROM THE FEED is not
+               that moment: it is the same browsing flow, so the rails keep
+               doing their normal job. */
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
               <IdeasRail
                 suggestion={ideaDue ? null : houseIdea.suggestion}
