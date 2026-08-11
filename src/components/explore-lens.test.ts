@@ -292,7 +292,25 @@ describe("the continuation state", () => {
 
   it("keeps the market on screen when a chosen lens ends", () => {
     // "Caught up" takes over the centre, and its copy is only true for For You.
-    expect(idx).toMatch(/if \(lens === "for_you"\) setCaughtUp\(true\)/);
+    expect(idx).toMatch(/lens === "for_you" && stableFeed\?\.exhausted === true/);
+  });
+
+  /**
+   * AND IT IS NOT ENOUGH TO BE FOR YOU.
+   *
+   * The takeover used to fire on `lens === "for_you"` alone — that is, on the
+   * LOCAL queue running out, which any session that outpaced the refill did.
+   * Reaching the last row is now an ordinary event that asks for more markets;
+   * only the server saying every tier is spent ends anything.
+   */
+  it("does not end the blend merely because the local queue drained", () => {
+    const start = idx.indexOf("const nextMarket =");
+    expect(start).toBeGreaterThan(-1);
+    const body = idx.slice(start, start + 1600);
+    expect(body).toMatch(/stableFeed\?\.exhausted === true/);
+    expect(body).toMatch(/refillNow\(\)/);
+    // The bare form must be gone: it is the whole bug.
+    expect(body).not.toMatch(/if \(lens === "for_you"\) setCaughtUp\(true\)/);
   });
 
   it("cannot fire twice or restart the playlist twice on repeated clicks", () => {
