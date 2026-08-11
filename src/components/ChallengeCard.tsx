@@ -17,6 +17,14 @@
 import { useEffect, useRef, useState } from "react";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { RELAY_COST } from "@/domain/chain";
+/**
+ * THE SAME LABEL RULES AS THE CLOSING SCREEN. One person with a name is
+ * "Challenge Maya", two is "Challenge both", three or more is "Challenge all N".
+ * This surface rendered "Challenge all 1" until it borrowed the canonical
+ * helper — a second labelling rule for the same button.
+ */
+import { challengeLabel } from "@/domain/post-action";
+import { REMOVED_HEADLINE, REMOVED_SUPPORT } from "@/domain/challenge-card";
 import {
   RELAY_TITLE,
   broughtYouIn,
@@ -109,6 +117,15 @@ export interface ChallengeCardProps {
   /** Open the lineage. #298 builds the real view; this is the entry point. */
   onSeeChain?: (marketId: number) => void;
   relayPending?: boolean;
+  /**
+   * JUST TAKEN DOWN — transient, and deliberately not in the projection.
+   *
+   * "Off the table. One Challenge spot opened." is a fact about a press, not
+   * about the market: a moment later the card is simply finished, and a reader
+   * arriving fresh must not be told about a removal they did not perform. Same
+   * reasoning as the post-action write status.
+   */
+  justRemoved?: boolean;
 }
 
 export function ChallengeCard({
@@ -119,6 +136,7 @@ export function ChallengeCard({
   onRemove,
   onSeeChain,
   relayPending = false,
+  justRemoved = false,
 }: ChallengeCardProps) {
   const out = p.outgoing;
   const fresh = useFreshResponse(out?.responders[0]?.wallet);
@@ -176,12 +194,32 @@ export function ChallengeCard({
   return (
     <article
       className="rounded-xl border p-3 transition-colors duration-700"
+      /**
+       * NEUTRAL, AND THAT IS THE WHOLE POINT. This used to tint with `--yes`,
+       * which quietly turned "somebody showed up" into a YES-coded event even
+       * when Casey answered NO — Showing Up is side-blind everywhere else, and a
+       * highlight that agrees with one side is the same claim made in colour.
+       */
       style={{
-        borderColor: fresh ? "color-mix(in oklab, var(--yes) 45%, var(--border))" : "var(--border)",
-        background: fresh ? "color-mix(in oklab, var(--yes) 7%, transparent)" : "transparent",
+        borderColor: fresh ? "var(--border-strong,var(--text-muted))" : "var(--border)",
+        background: fresh
+          ? "color-mix(in oklab, var(--text-muted) 10%, transparent)"
+          : "transparent",
       }}
       data-card-state={p.state}
     >
+      {/* THE CONFIRMATION FOR THE PRESS THAT JUST HAPPENED, above the settled
+          state and gone shortly after. The slot is already back. */}
+      {justRemoved && (
+        <div className="mb-2 rounded-lg border border-[var(--border)] p-2">
+          <p className="text-[12px] font-semibold leading-snug text-[var(--text)]">
+            {REMOVED_HEADLINE}
+          </p>
+          <p className="mt-0.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
+            {REMOVED_SUPPORT}
+          </p>
+        </div>
+      )}
       {headline && (
         <p className="text-[13px] font-semibold leading-snug text-[var(--text)]">{headline}</p>
       )}
@@ -226,7 +264,12 @@ export function ChallengeCard({
             onClick={() => onRelay?.(p)}
             className="mt-1.5 text-[12px] font-medium text-[var(--text)] underline transition-opacity disabled:opacity-50"
           >
-            Challenge all {p.viewer.relayAudience}
+            {challengeLabel({
+              status: "available",
+              total: p.viewer.relayAudience,
+              singleRecipientName: p.viewer.relayRecipientName,
+              formingOnly: false,
+            })}
           </button>
           <p className="mt-1 text-[11px] text-[var(--text-muted)]">{RELAY_COST}</p>
         </div>

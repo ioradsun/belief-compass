@@ -13,6 +13,7 @@
  * the server, from the canonical audience, before this component existed.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { getChallengeCards } from "@/lib/challenge.functions";
 import { putOnTable, takeOffTable } from "@/lib/table.functions";
 import { ChallengeCard } from "@/components/ChallengeCard";
@@ -47,6 +48,14 @@ export function ChallengeCardList({
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
   const { data: cards } = useChallengeCards(wallet);
+  /**
+   * WHICH MARKET WAS JUST TAKEN DOWN — transient, and never in the projection.
+   *
+   * The confirmation is a fact about a PRESS, not about the market. A moment
+   * later the card is simply finished, and a reader arriving fresh must not be
+   * told about a removal they did not perform.
+   */
+  const [justRemoved, setJustRemoved] = useState<number | null>(null);
 
   /** Both writes invalidate the same key, because both change every card. */
   const refresh = () => {
@@ -77,7 +86,7 @@ export function ChallengeCardList({
   });
 
   const remove = useMutation({
-    mutationFn: async (challengeId: number) =>
+    mutationFn: async ({ challengeId }: { challengeId: number; marketId: number }) =>
       bestEffort(async () =>
         takeOffTable({
           data: {
@@ -87,6 +96,12 @@ export function ChallengeCardList({
           },
         }),
       ),
+    onSuccess: (_res, { marketId }) => {
+      setJustRemoved(marketId);
+      // Long enough to read, short enough that it is gone before the reader
+      // comes back to a card that is now simply finished.
+      setTimeout(() => setJustRemoved((m) => (m === marketId ? null : m)), 4000);
+    },
     onSettled: refresh,
   });
 
@@ -102,9 +117,10 @@ export function ChallengeCardList({
           onSelect={onSelect}
           onPass={onPass}
           onRelay={(x) => relay.mutate(x)}
-          onRemove={(id) => remove.mutate(id)}
+          onRemove={(id) => remove.mutate({ challengeId: id, marketId: p.marketId })}
           onSeeChain={onSeeChain}
           relayPending={relay.isPending}
+          justRemoved={justRemoved === p.marketId}
         />
       ))}
     </div>

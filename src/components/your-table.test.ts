@@ -204,3 +204,39 @@ describe("the derived path is gone, not disabled", () => {
     expect(build).toMatch(/throw new Error\(error\.message\)/);
   });
 });
+
+/**
+ * THE DURABLE CARD BORROWS RULES; IT DOES NOT INVENT THEM.
+ *
+ * Three ways this surface could quietly grow a second opinion, asserted closed.
+ */
+describe("the durable card reuses the canonical rules", () => {
+  const cardCode = () => code("src/components/ChallengeCard.tsx");
+
+  it("labels the relay button with the closing screen's rules", () => {
+    // It rendered "Challenge all 1" and "Challenge all 2" until it borrowed the
+    // helper: one named person is "Challenge Maya", two is "Challenge both".
+    const c = cardCode();
+    expect(c).toMatch(/challengeLabel\(/);
+    expect(c).not.toMatch(/Challenge all \{/);
+  });
+
+  it("celebrates a response in a colour that takes no side", () => {
+    /**
+     * A `--yes` highlight turns "somebody showed up" into a YES-coded event even
+     * when they answered NO. Showing Up is side-blind everywhere else, and a
+     * tint that agrees with one side is the same claim made in colour.
+     */
+    const fresh = cardCode().slice(cardCode().indexOf("borderColor: fresh"));
+    const block = fresh.slice(0, fresh.indexOf("}"));
+    expect(block).not.toMatch(/--yes|--no/);
+  });
+
+  it("confirms a removal transiently, and never from the projection", () => {
+    // "Off the table" is a fact about a press, not about the market. A reader
+    // arriving fresh must not be told about a removal they did not perform.
+    expect(cardCode()).toMatch(/justRemoved/);
+    expect(code("src/domain/challenge-card.ts")).not.toMatch(/justRemoved/);
+    expect(code("src/components/ChallengeCardList.tsx")).toMatch(/setJustRemoved/);
+  });
+});

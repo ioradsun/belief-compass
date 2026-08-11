@@ -25,7 +25,7 @@ import {
   type Incoming,
   type Outgoing,
 } from "@/domain/challenge-card";
-import { eligibleAudience, type Sb } from "@/lib/challenge.server";
+import { audienceFor } from "@/lib/challenge.server";
 import type { Side } from "@/domain/post-action";
 
 /** Bounds. A living-card reader is not a feed builder. */
@@ -197,15 +197,20 @@ export async function challengeCardsFor(viewer: string): Promise<ChallengeCardPr
      */
     const audience =
       incoming?.respondedAtMs != null && capacity.active < capacity.total && !outgoing
-        ? await relayAudienceFor(sb, me, marketId)
-        : 0;
+        ? await relayAudienceFor(me, marketId)
+        : { total: 0, singleRecipientName: null };
 
     const base: Omit<ChallengeCardProjection, "state"> = {
       marketId,
       question,
       incoming,
       outgoing,
-      viewer: { canRelay: audience > 0, relayAudience: audience, capacity },
+      viewer: {
+        canRelay: audience.total > 0,
+        relayAudience: audience.total,
+        relayRecipientName: audience.singleRecipientName,
+        capacity,
+      },
       lineage: lineageFor(receivedRows, myChallenges, marketId, personOf),
       /**
        * NOT IMPLEMENTABLE YET, AND SAID SO RATHER THAN FAKED. Nothing in the
@@ -374,12 +379,25 @@ function lineageFor(
   return { startedBy, through, depth };
 }
 
-/** The canonical audience, asked only when a relay is actually on the table. */
-async function relayAudienceFor(sb: Sb, me: string, marketId: number): Promise<number> {
-  const res = await eligibleAudience(sb, me, marketId);
-  // A refused read is not an audience of zero — but on this surface the only
-  // consequence is that the offer is withheld, which is the correct silence.
-  return res.status === "ok" ? res.members.length : 0;
+/**
+ * THE CANONICAL AUDIENCE, asked only when a relay is actually on the table.
+ *
+ * `audienceFor` rather than `eligibleAudience` because the BUTTON needs a name
+ * for an audience of one, and names are resolved after membership there. It is
+ * the same membership either way — `audienceFor` calls `eligibleAudience` — so
+ * there is still one definition of who can be asked.
+ *
+ * A refused read is not an audience of zero. On this surface the only
+ * consequence is that the offer is withheld, which is the correct silence.
+ */
+async function relayAudienceFor(
+  me: string,
+  marketId: number,
+): Promise<{ total: number; singleRecipientName: string | null }> {
+  const res = await audienceFor(me, marketId);
+  return res.status === "available"
+    ? { total: res.total, singleRecipientName: res.singleRecipientName }
+    : { total: 0, singleRecipientName: null };
 }
 
 function lastEventMs(p: ChallengeCardProjection): number {
