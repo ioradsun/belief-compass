@@ -55,12 +55,15 @@ import {
 } from "@/components/order/OrderTicket";
 
 /**
- * A market carries exactly one piece of evidence, and it is always a link to a
- * post that lives on its own platform. Direct uploads are intentionally
- * disabled (the signed-upload pipeline is still on the server, unused) —
- * Conviction hosts the market, not the media.
+ * A market carries exactly one piece of evidence: either a link to a post that
+ * lives on its own platform, or an image dropped straight onto the form. The
+ * dropped file stays local until publish — the signed-upload pipeline needs a
+ * draft to own the bytes, so we upload once the draft exists and never before.
  */
-type Attachment = { kind: "embed"; media: EmbedMedia };
+type Attachment =
+  | { kind: "embed"; media: EmbedMedia }
+  | { kind: "file"; file: File; previewUrl: string; sha256?: string | null };
+
 
 const MIN_QUESTION = 8;
 
