@@ -54,6 +54,8 @@ import { RELATIONSHIP_MIN_SHARED } from "@/domain/dna/config";
 import { convictionMatch } from "@/domain/relationship";
 import { ChallengeRail } from "@/components/ChallengeRail";
 import { AudienceGroups } from "@/components/AudiencePreview";
+import { PostActionScreen } from "@/components/PostActionScreen";
+import { resolvePostAction, type PostActionInput } from "@/domain/post-action";
 import {
   audienceGroupFor,
   groupAudience,
@@ -120,6 +122,210 @@ const LAB_AUDIENCE: AudienceMember[] = [
   labPerson("Nia", "neutral", "neutral_dna"),
   labPerson("Owen", "insufficient", "closest_match"),
   labPerson("Priya", "insufficient", "answered_challenge"),
+];
+
+/**
+ * THE CLOSING SCREEN, EVERY SHAPE AT ONCE.
+ *
+ * `resolvePostAction` is pure and `PostActionScreen` takes only its output, so
+ * the whole matrix renders here with no wallet, no trade and no network. These
+ * are the rows most likely to be wrong in a way types cannot catch: two blocks
+ * where there should be one, a headline that wraps into the buttons, a module
+ * heading orphaned above no faces.
+ */
+const LAB_AUDIENCE_FACTS = {
+  status: "available" as const,
+  total: 13,
+  singleRecipientName: null,
+  formingOnly: false,
+};
+
+const LAB_POST_ACTIONS: { label: string; input: PostActionInput }[] = [
+  {
+    label: "Buy · answered one person",
+    input: {
+      action: "first_buy",
+      role: "believer",
+      side: "YES",
+      after: { yes: 1, no: 0 },
+      firstBeliever: false,
+      flipped: false,
+      answered: { count: 1, primaryCallerName: "Maya" },
+      nextIncoming: null,
+      outgoing: "none",
+      outgoingProgress: null,
+      capacity: { active: 0, total: 3 },
+      audience: LAB_AUDIENCE_FACTS,
+    },
+  },
+  {
+    label: "Buy · first believer, organic",
+    input: {
+      action: "first_buy",
+      role: "believer",
+      side: "NO",
+      after: { yes: 0, no: 1 },
+      firstBeliever: true,
+      flipped: false,
+      answered: null,
+      nextIncoming: null,
+      outgoing: "none",
+      outgoingProgress: null,
+      capacity: { active: 0, total: 3 },
+      audience: LAB_AUDIENCE_FACTS,
+    },
+  },
+  {
+    label: "Buy · branch already live",
+    input: {
+      action: "buy_more",
+      role: "believer",
+      side: "YES",
+      after: { yes: 1, no: 0 },
+      firstBeliever: false,
+      flipped: false,
+      answered: null,
+      nextIncoming: { name: "John" },
+      outgoing: "live",
+      outgoingProgress: { shown: 3, reached: 11 },
+      capacity: { active: 1, total: 3 },
+      audience: LAB_AUDIENCE_FACTS,
+    },
+  },
+  {
+    label: "Buy · table full",
+    input: {
+      action: "first_buy",
+      role: "believer",
+      side: "YES",
+      after: { yes: 1, no: 0 },
+      firstBeliever: false,
+      flipped: false,
+      answered: null,
+      nextIncoming: null,
+      outgoing: "none",
+      outgoingProgress: null,
+      capacity: { active: 3, total: 3 },
+      audience: LAB_AUDIENCE_FACTS,
+    },
+  },
+  {
+    label: "Buy · still forming only",
+    input: {
+      action: "first_buy",
+      role: "believer",
+      side: "YES",
+      after: { yes: 1, no: 0 },
+      firstBeliever: false,
+      flipped: false,
+      answered: null,
+      nextIncoming: null,
+      outgoing: "none",
+      outgoingProgress: null,
+      capacity: { active: 0, total: 3 },
+      audience: { ...LAB_AUDIENCE_FACTS, total: 6, formingOnly: true },
+    },
+  },
+  {
+    label: "Sell · side exit, still holds the other",
+    input: {
+      action: "side_exit",
+      role: "believer",
+      side: "YES",
+      after: { yes: 0, no: 1 },
+      realizedGainUsd: null,
+      proceedsUsd: null,
+      remainingValueUsd: 24.1,
+      outgoing: "none",
+      outgoingProgress: null,
+      capacity: { active: 0, total: 3 },
+      audience: { ...LAB_AUDIENCE_FACTS, status: "none", total: 0 },
+    },
+  },
+  {
+    label: "Sell · believer is out",
+    input: {
+      action: "market_exit",
+      role: "believer",
+      side: "YES",
+      after: { yes: 0, no: 0 },
+      realizedGainUsd: null,
+      proceedsUsd: 18.42,
+      remainingValueUsd: null,
+      outgoing: "none",
+      outgoingProgress: null,
+      capacity: { active: 0, total: 3 },
+      audience: LAB_AUDIENCE_FACTS,
+    },
+  },
+  {
+    label: "Sell · Market Maker exited, question alive",
+    input: {
+      action: "market_exit",
+      role: "market_maker_and_believer",
+      side: "YES",
+      after: { yes: 0, no: 0 },
+      realizedGainUsd: null,
+      proceedsUsd: 18.42,
+      remainingValueUsd: null,
+      outgoing: "none",
+      outgoingProgress: null,
+      capacity: { active: 0, total: 3 },
+      audience: { ...LAB_AUDIENCE_FACTS, total: 11 },
+    },
+  },
+  {
+    label: "Sell · balance unknown",
+    input: {
+      action: "partial_sell",
+      role: "believer",
+      side: "YES",
+      after: null,
+      realizedGainUsd: null,
+      proceedsUsd: null,
+      remainingValueUsd: null,
+      outgoing: "none",
+      outgoingProgress: null,
+      capacity: { active: 0, total: 3 },
+      audience: LAB_AUDIENCE_FACTS,
+    },
+  },
+  {
+    label: "Create · with an audience",
+    input: {
+      action: "create_market",
+      role: "market_maker_and_believer",
+      side: "YES",
+      outgoing: "none",
+      outgoingProgress: null,
+      capacity: { active: 0, total: 3 },
+      audience: LAB_AUDIENCE_FACTS,
+    },
+  },
+  {
+    label: "Create · no audience",
+    input: {
+      action: "create_market",
+      role: "market_maker",
+      side: null,
+      outgoing: "none",
+      outgoingProgress: null,
+      capacity: { active: 0, total: 3 },
+      audience: { ...LAB_AUDIENCE_FACTS, status: "none", total: 0 },
+    },
+  },
+  {
+    label: "Create · audience read FAILED",
+    input: {
+      action: "create_market",
+      role: "market_maker",
+      side: null,
+      outgoing: "none",
+      outgoingProgress: null,
+      capacity: { active: 0, total: 3 },
+      audience: { ...LAB_AUDIENCE_FACTS, status: "failed", total: 0 },
+    },
+  },
 ];
 
 const ME = "0xscene000000000000000000000000000000000001";
@@ -261,6 +467,26 @@ function TestingScene() {
         <Stage>
           <AudienceGroups groups={groupAudience(LAB_AUDIENCE)} />
         </Stage>
+        {/* THE CLOSING SCREEN, every shape. Pure props, so the whole matrix is
+            visible at once — which is the only way the two-blocks-at-once and
+            orphaned-heading failures are ever going to be caught. */}
+        <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+          Closing screen · every shape
+        </p>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          {LAB_POST_ACTIONS.map((s) => (
+            <div key={s.label} className="rounded-xl border border-[var(--border)]">
+              <p className="border-b border-[var(--border)] px-3 py-1.5 text-[10.5px] uppercase tracking-wide text-[var(--text-muted)]">
+                {s.label}
+              </p>
+              <PostActionScreen
+                experience={resolvePostAction(s.input)}
+                onAct={() => undefined}
+                groups={groupAudience(LAB_AUDIENCE)}
+              />
+            </div>
+          ))}
+        </div>
       </Panel>
     ),
     challenged: (

@@ -84,7 +84,20 @@ export function ConvictionReveal({
 }: {
   story: RevealStory;
   side: "YES" | "NO";
-  onNext: () => void;
+  /**
+   * THIS COMPONENT NO LONGER OWNS WHERE "NEXT" GOES.
+   *
+   * It used to render the one CTA on the post-buy screen and decide, by itself,
+   * that the way out was `story.cta` — while `KeepChainMoving` decided
+   * separately whether to offer a relay and the route decided separately what
+   * "done" meant. Three owners, one moment, none able to see the others.
+   *
+   * `resolvePostAction` owns that now. Omit both handlers and this renders the
+   * STORY ALONE, as a slot inside `PostActionScreen` — which is how every
+   * post-buy surface uses it. The handlers survive for the standalone contexts
+   * that are genuinely just a story with a way onward.
+   */
+  onNext?: () => void;
   /** Optional deeper path when the secondary CTA is a people-story. */
   onMeetTribe?: () => void;
 }) {
@@ -133,28 +146,33 @@ export function ConvictionReveal({
           </Beat>
         ))}
 
-        {/* One CTA — keep going. A single quiet secondary link when meaningful. */}
-        <Beat delay={ctaDelay}>
-          <div className="flex flex-col items-center gap-2.5">
-            <button
-              type="button"
-              onClick={onNext}
-              className="w-full rounded-full px-6 py-3 text-[15px] font-semibold text-[var(--bg)] transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
-              style={{ background: "var(--text)" }}
-            >
-              {story.cta.label} →
-            </button>
-            {story.secondaryCta && onMeetTribe && (
+        {/* One CTA — keep going. A single quiet secondary link when meaningful.
+            ABSENT ENTIRELY when no handler is given: the closing screen owns the
+            navigation, and a second button here would be the old competing
+            decision wearing the new architecture's clothes. */}
+        {onNext && (
+          <Beat delay={ctaDelay}>
+            <div className="flex flex-col items-center gap-2.5">
               <button
                 type="button"
-                onClick={onMeetTribe}
-                className="text-[13px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+                onClick={onNext}
+                className="w-full rounded-full px-6 py-3 text-[15px] font-semibold text-[var(--bg)] transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
+                style={{ background: "var(--text)" }}
               >
-                {story.secondaryCta.label} →
+                {story.cta.label} →
               </button>
-            )}
-          </div>
-        </Beat>
+              {story.secondaryCta && onMeetTribe && (
+                <button
+                  type="button"
+                  onClick={onMeetTribe}
+                  className="text-[13px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+                >
+                  {story.secondaryCta.label} →
+                </button>
+              )}
+            </div>
+          </Beat>
+        )}
       </div>
     </div>
   );

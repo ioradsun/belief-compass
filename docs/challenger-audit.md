@@ -1244,3 +1244,117 @@ makes it convincing.
 The rule this earns: **when a fix lands, the section that found it is part of the
 diff.** Not deleted — the measurement is usually still the right regression watch
 — but re-narrated to describe the code that exists now.
+
+---
+
+## R. One owner for the closing moment
+
+### R.1 What four owners produced
+
+The moment after a confirmed action was decided by four components that could
+not see each other. `ConvictionReveal` chose the personal story **and** the
+navigation. `KeepChainMoving` decided relay eligibility on its own arithmetic.
+`LaunchRail` owned the post-create decision — and rendered for a **buy** as well,
+so a confirmed buy produced two closing screens at once. The route invented its
+own exits.
+
+Nothing was wrong with any of them individually. What was missing was anywhere a
+state nobody had thought about could be handled, so it produced whatever fell
+out — and mobile fell out differently from desktop, because `MobileGame`
+rendered the reveal directly and offered no Challenge at all.
+
+### R.2 The transfer
+
+```
+Confirmed buy / sell / create
+        ↓  adapter gathers facts
+   PostActionInput
+        ↓  resolvePostAction decides meaning
+ PostActionExperience
+        ↓  PostActionScreen renders
+ Challenge all N / Make room / Next Question / Back to Market / View Market
+```
+
+The division is load-bearing. The **adapter** gathers and is forbidden from
+interpreting; the **resolver** decides and owns the words; the **screen** renders
+and picks nothing. `post-action-ownership.test.ts` asserts each of those
+boundaries, including that the adapter contains no copy and the screen contains
+no literal headline — so bypassing the resolver renders _nothing_, rather than
+something slightly worse.
+
+### R.3 Deleted, not bypassed
+
+`LaunchRail` and `KeepChainMoving` are **gone**. A new screen added on top of the
+old decisions would leave every competing branch alive and unreachable, which is
+indistinguishable in a diff from having fixed the problem. `ConvictionReveal`
+survives as a pure story renderer: its CTA block is absent entirely when no
+handler is passed, and the post-buy surface passes none.
+
+`PutOnTable` was already unrendered before this change and is left alone — its
+deadness predates this work and removing it is a different decision.
+
+### R.4 Two facts that had to be read rather than assumed
+
+**The balance is pre-trade at the instant a trade confirms.** The on-chain read
+has not refetched yet, so treating it as "after" would tell a first buyer they
+hold nothing and — far worse — tell a partial seller they are out.
+`usePositionShift` freezes the reading as `before`, issues a refetch, and returns
+`after: null` until it lands. The resolver has a branch for exactly that:
+_"Sale confirmed. Your position is updating."_
+
+**A flip needs two readings.** "Your position flipped to NO" is a claim about a
+transition, and a transition cannot be read from one number. Holding both sides
+is not a change of mind, so `flipped` is proved from `before` and `after` or it
+is not claimed.
+
+### R.5 Found by rendering
+
+The whole matrix is in `/lab-9f3c7a21b4` — twelve shapes, pure props, no wallet
+or network. Rendered at 1200px in a two-column grid the audience labels
+truncated to three characters; at real surface widths (including 390px mobile)
+they are correct. Worth recording as a non-finding: the lab's own layout was the
+constraint, not the component, and the check that established that took one
+screenshot.
+
+### R.6 A resolver gap the matrix tests found
+
+`branch_live` was decided per-branch, so it appeared for an answered call and for
+buying more, and vanished for a first buy or a creator backing their own
+question. Those are exactly the cases where losing it is most surprising: a
+Market Maker who put their question up and only now takes a side has a Challenge
+running that the screen would not have mentioned. It is one value now, computed
+once per buy, and `reveal` yields to it — both are consequence blocks, there is
+only one slot, and other people showing up is the bigger news.
+
+### R.7 Two holes found in review, before merge
+
+**A confirmed buy was turning an unknown balance into zero.** The sell path
+correctly kept `after: null` until the post-trade read landed; the buy path did
+`act.after ?? { yes: 0, no: 0 }` — a fabricated holdings reading, invented purely
+to satisfy a required field, and indistinguishable from a real one at the type
+level. The visible cost was a Market Maker who had just bought their own YES
+being classified `market_maker` rather than `market_maker_and_believer` for the
+width of a refetch, saying less than the confirmed transaction already proved.
+
+`BuyInput.after` is nullable now, and role comes from the action:
+
+> **A confirmed action proves the action. A balance proves the resulting
+> holdings.** Nothing fabricates the second to satisfy a type.
+
+`flipped` stays false without a reading, because a transition genuinely does need
+two.
+
+**A refused Challenge write said nothing at all.** The button reappeared,
+unchanged, at the emotional peak of the product. A refusal now rides ALONGSIDE
+the experience rather than re-deciding it — `put_on_table` rolls back whole, so
+nothing about the market or the person changed, and folding a network error into
+`resolvePostAction` would make it look like a permanent property of somebody's
+position.
+
+The split that matters: `already_up`, `full`, `no_audience` and `no_reach` are
+**not failures**. They mean the world moved under the press, and re-reading makes
+the screen say the true thing on its own — "your branch is already live", a Make
+room offer, an honest "nobody new to ask". Only `failed`, `bad_parent` and
+`audience_unavailable` produce the block, which says _"Couldn't put it on the
+table. Nothing changed."_ and offers a retry. No database language, and the
+second sentence is the one that matters.

@@ -8,7 +8,15 @@ const code = (p: string) =>
     .replace(/\/\/.*$/gm, "");
 
 const cta = () => code("src/components/PutOnTable.tsx");
-const launch = () => code("src/components/LaunchRail.tsx");
+/**
+ * THE LAUNCH MOMENT MOVED, AND SO DID THIS ASSERTION.
+ *
+ * `LaunchRail` is deleted. It rendered a closing screen for BOTH a publish and a
+ * buy, which meant a confirmed buy produced two of them at once — the rail
+ * deciding whether to offer a relay while the centre's reveal decided the
+ * navigation. `resolvePostAction` owns the create branch now.
+ */
+const launch = () => code("src/domain/post-action.ts");
 
 describe("one action, both paths", () => {
   it("keeps the launch moment to one fact", () => {
@@ -18,6 +26,8 @@ describe("one action, both paths", () => {
     const c = launch();
     expect(c).not.toMatch(/<PutOnTable/);
     expect(c).toMatch(/Your market is live\./);
+    // And the file it used to live in is gone rather than left as a second owner.
+    expect(() => code("src/components/LaunchRail.tsx")).toThrow();
   });
 
   it("keeps the confirmation a confirmation", () => {

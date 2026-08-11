@@ -3,7 +3,11 @@ import {
   POST_ACTION_BANNED,
   challengeLabel,
   realizedLine,
+  refusalIsCanonical,
   resolvePostAction,
+  WRITE_FAILED_SUPPORT,
+  WRITE_FAILED_TITLE,
+  WRITE_RETRY_LABEL,
   type Audience,
   type BuyInput,
   type CreateMarketInput,
@@ -16,6 +20,7 @@ const aud = (over: Partial<Audience> = {}): Audience => ({
   status: "available",
   total: 13,
   singleRecipientName: null,
+  formingOnly: false,
   ...over,
 });
 
@@ -24,9 +29,12 @@ const buy = (over: Partial<BuyInput> = {}): BuyInput => ({
   role: "believer",
   side: "YES",
   after: { yes: 10, no: 0 },
+  firstBeliever: false,
+  flipped: false,
   answered: null,
   nextIncoming: null,
   outgoing: "none",
+  outgoingProgress: null,
   capacity: { active: 0, total: 3 },
   audience: aud(),
   ...over,
@@ -42,6 +50,7 @@ const sell = (over: Partial<SellInput> = {}): SellInput =>
     proceedsUsd: null,
     remainingValueUsd: null,
     outgoing: "none",
+    outgoingProgress: null,
     capacity: { active: 0, total: 3 },
     audience: aud(),
     ...over,
@@ -52,6 +61,7 @@ const create = (over: Partial<CreateMarketInput> = {}): CreateMarketInput => ({
   role: "market_maker",
   side: null,
   outgoing: "none",
+  outgoingProgress: null,
   capacity: { active: 0, total: 3 },
   audience: aud(),
   ...over,
@@ -108,7 +118,7 @@ describe("one next action, in one order", () => {
   it("offers Make room when the audience exists but the table is full", () => {
     const r = resolvePostAction(buy({ capacity: { active: 3, total: 3 } }));
     expect(r.primary.kind).toBe("make_room");
-    expect(r.challengeModule).toBe("make_room");
+    expect(r.challengeModule?.kind).toBe("make_room");
   });
 
   it("points at a waiting person before a generic next question", () => {
@@ -293,7 +303,7 @@ describe("the create screen", () => {
   });
 
   it("never calls a creator's own Challenge a relay — nobody brought them in", () => {
-    expect(resolvePostAction(create()).challengeModule).toBe("organic");
+    expect(resolvePostAction(create()).challengeModule?.kind).toBe("organic");
   });
 });
 
@@ -333,7 +343,8 @@ function corpus(): { input: PostActionInput; out: PostActionExperience }[] {
   for (const status of ["loading", "available", "none", "failed"] as const)
     for (const total of [0, 1, 2, 13])
       for (const singleRecipientName of [null, "Casey"])
-        audiences.push({ status, total, singleRecipientName });
+        for (const formingOnly of [false, true])
+          audiences.push({ status, total, singleRecipientName, formingOnly });
 
   for (const base of bases) {
     rows.push(base);
@@ -466,5 +477,354 @@ describe("every branch, asserted together", () => {
       expect(out.headline.split(/\s+/).length).toBeLessThanOrEqual(12);
       expect((out.support ?? "").split(/\s+/).length).toBeLessThanOrEqual(18);
     }
+  });
+});
+
+/**
+ * THE BASELINE COPY MATRIX, ROW BY ROW.
+ *
+ * Each `it` below is one row of the approved matrix. They are deliberately
+ * literal about the words: this screen is the product's single most-read moment
+ * and the difference between "You're out" and "You left YES" is the difference
+ * between a true sentence and a false one about somebody who still holds half a
+ * position.
+ */
+describe("the approved copy matrix", () => {
+  describe("buy", () => {
+    it("names one person who was answered, and never pluralises a count of one", () => {
+      const r = resolvePostAction(
+        buy({ answered: { count: 1, primaryCallerName: "Maya" }, side: "YES" }),
+      );
+      expect(r.headline).toBe("You showed up for Maya.");
+      expect(r.support).toBe("You backed YES.");
+      expect(r.primary.kind).toBe("challenge");
+    });
+
+    it("counts several without naming any of them", () => {
+      const r = resolvePostAction(buy({ answered: { count: 3, primaryCallerName: "Maya" } }));
+      expect(r.headline).toBe("You showed up for 3 people.");
+      expect(r.headline).not.toContain("Maya");
+    });
+
+    it("leads with being first, and still hands the reveal the moment", () => {
+      const r = resolvePostAction(buy({ firstBeliever: true, side: "NO" }));
+      expect(r.headline).toBe("You're first.");
+      expect(r.support).toBe("You're the first believer on NO.");
+      expect(r.consequence).toBe("reveal");
+    });
+
+    it("confirms an ordinary organic buy and defers to the reveal", () => {
+      const r = resolvePostAction(buy());
+      expect(r.headline).toBe("That's a real call.");
+      expect(r.consequence).toBe("reveal");
+    });
+
+    it("says conviction grew when more of the same side is bought", () => {
+      const r = resolvePostAction(buy({ action: "buy_more", side: "YES" }));
+      expect(r.headline).toBe("You added to YES.");
+      expect(r.support).toBe("Your conviction grew.");
+    });
+
+    it("calls holding both sides what it is, and never a flip", () => {
+      const r = resolvePostAction(
+        buy({ action: "buy_opposite_side", side: "NO", after: { yes: 5, no: 5 }, flipped: false }),
+      );
+      expect(r.headline).toBe("You added NO.");
+      expect(r.support).toBe("You now hold both sides.");
+      expect(r.headline).not.toMatch(/flip/i);
+      // Neutral framing: "see who stands with you" is wrong for somebody holding both.
+      expect(r.copyCategory).toBe("general");
+    });
+
+    it("calls a proven flip a flip, and only when the old side is gone", () => {
+      const r = resolvePostAction(
+        buy({ action: "buy_opposite_side", side: "NO", after: { yes: 0, no: 9 }, flipped: true }),
+      );
+      expect(r.headline).toBe("Your position flipped to NO.");
+    });
+
+    it("keeps a Market Maker a Market Maker on their own question", () => {
+      const r = resolvePostAction(buy({ role: "market_maker_and_believer", side: "YES" }));
+      expect(r.headline).toBe("You made the question. Now you're in.");
+      expect(r.identity).toBe("Market Maker · Backing YES");
+      // NEVER reduced to a believer badge on a market they authored.
+      expect(r.identity).not.toMatch(/believer/i);
+    });
+
+    it("says the branch is already live rather than offering a second Challenge", () => {
+      const r = resolvePostAction(
+        buy({
+          answered: { count: 1, primaryCallerName: "Maya" },
+          outgoing: "live",
+          outgoingProgress: { shown: 3, reached: 11 },
+        }),
+      );
+      expect(r.consequence).toBe("branch_live");
+      expect(r.consequenceLine).toBe("3 of 11 have shown up.");
+      expect(r.primary.kind).not.toBe("challenge");
+    });
+
+    it("says a Challenge is live without a fraction when the read did not complete", () => {
+      const r = resolvePostAction(buy({ outgoing: "live", outgoingProgress: null }));
+      expect(r.consequence).toBe("branch_live");
+      // Half this sentence is checkable and the other half would be invented.
+      expect(r.consequenceLine).toBeNull();
+    });
+
+    it("offers Next Question, never a disabled Challenge, when nobody qualifies", () => {
+      const r = resolvePostAction(buy({ audience: aud({ status: "none", total: 0 }) }));
+      expect(r.primary).toEqual({ kind: "next_question", label: "Next Question" });
+      expect(r.challengeModule).toBeNull();
+    });
+
+    it("makes no audience claim at all when the audience read failed", () => {
+      const r = resolvePostAction(buy({ audience: aud({ status: "failed", total: 0 }) }));
+      expect(r.challengeModule).toBeNull();
+      expect(r.primary.kind).toBe("next_question");
+      // The reader must never learn an enhancement was attempted and failed.
+      expect(`${r.headline} ${r.support ?? ""}`).not.toMatch(/qualif|nobody|could not|failed/i);
+    });
+  });
+
+  describe("the challenge module says what is true of this audience", () => {
+    it("frames a relay as keeping the chain moving", () => {
+      const r = resolvePostAction(buy({ answered: { count: 1, primaryCallerName: "Maya" } }));
+      expect(r.challengeModule?.kind).toBe("relay");
+      expect(r.challengeModule?.title).toBe("Keep the chain moving");
+    });
+
+    it("frames an organic buy as belief nobody can answer back", () => {
+      expect(resolvePostAction(buy()).challengeModule?.title).toBe(
+        "Belief is easy when no one can answer back",
+      );
+    });
+
+    it("refuses to promise a Tribe to somebody whose audience is all Still Forming", () => {
+      const r = resolvePostAction(buy({ audience: aud({ total: 6, formingOnly: true }) }));
+      expect(r.challengeModule?.kind).toBe("still_forming");
+      expect(r.challengeModule?.title).toBe("The map is still taking shape");
+      expect(r.challengeModule?.support).toBe("Every honest answer makes it clearer.");
+      // The CTA still reaches all six — the framing changed, not the offer.
+      expect(r.primary.label).toBe("Challenge all 6");
+    });
+
+    it("still forming outranks the relay framing, because the promise is the risk", () => {
+      const r = resolvePostAction(
+        buy({
+          answered: { count: 1, primaryCallerName: "Maya" },
+          audience: aud({ total: 6, formingOnly: true }),
+        }),
+      );
+      expect(r.challengeModule?.kind).toBe("still_forming");
+    });
+  });
+
+  describe("sell", () => {
+    it("never leaves the market and never offers Next Question", () => {
+      for (const action of ["partial_sell", "side_exit", "market_exit"] as const) {
+        const r = resolvePostAction(
+          sell({
+            action,
+            after: action === "market_exit" ? { yes: 0, no: 0 } : { yes: 3, no: 0 },
+          } as Partial<SellInput>),
+        );
+        expect(r.stayOnMarket).toBe(true);
+        for (const cta of [r.primary, r.secondary]) expect(cta?.kind).not.toBe("next_question");
+      }
+    });
+
+    it("says what is left after taking some off", () => {
+      const r = resolvePostAction(
+        sell({
+          after: { yes: 4, no: 0 },
+          remainingValueUsd: 41.2,
+          audience: aud({ total: 0, status: "none" }),
+        }),
+      );
+      expect(r.headline).toBe("You took some off.");
+      expect(r.support).toBe("Still backing YES with $41.20.");
+    });
+
+    it("frames a sell Challenge around where people land, not around leaving", () => {
+      const r = resolvePostAction(sell({ audience: aud({ total: 8 }) }));
+      expect(r.primary.label).toBe("Challenge all 8");
+      expect(r.challengeModule?.support).toBe("See where your people land.");
+    });
+
+    it("offers the chain, not the market twice, when a Challenge is already live here", () => {
+      const r = resolvePostAction(
+        sell({ outgoing: "live", outgoingProgress: { shown: 3, reached: 9 } }),
+      );
+      expect(r.consequence).toBe("challenge_live");
+      expect(r.consequenceLine).toBe("3 of 9 have shown up.");
+      expect(r.primary.kind).toBe("back_to_market");
+      expect(r.secondary?.kind).toBe("see_chain");
+    });
+
+    it("does NOT say 'you're out' to somebody who still holds the other side", () => {
+      const r = resolvePostAction(
+        sell({
+          action: "side_exit",
+          side: "YES",
+          after: { yes: 0, no: 7 },
+          remainingValueUsd: 24.1,
+        }),
+      );
+      expect(r.headline).toBe("You left YES.");
+      expect(r.support).toBe("Still backing NO with $24.10.");
+      expect(r.headline).not.toMatch(/you're out/i);
+    });
+
+    it("says a believer is out, returns proceeds, and offers nothing social", () => {
+      const r = resolvePostAction(
+        sell({
+          action: "market_exit",
+          role: "believer",
+          side: "YES",
+          after: { yes: 0, no: 0 },
+          proceedsUsd: 18.42,
+        }),
+      );
+      expect(r.headline).toBe("You're out.");
+      expect(r.support).toBe("Closed YES. $18.42 returned.");
+      expect(r.challengeModule).toBeNull();
+      expect(r.primary.kind).toBe("back_to_market");
+      expect(r.secondary).toBeNull();
+      // Proceeds are what came back. A gain is what was made.
+      expect(r.support).not.toMatch(/profit/i);
+    });
+
+    it("lets a Market Maker who exited still ask about their own question", () => {
+      const r = resolvePostAction(
+        sell({
+          action: "market_exit",
+          role: "market_maker_and_believer",
+          after: { yes: 0, no: 0 },
+          audience: aud({ total: 11 }),
+        }),
+      );
+      expect(r.headline).toBe("Your position is closed.");
+      expect(r.support).toBe("Your question is still alive.");
+      expect(r.primary.label).toBe("Challenge all 11");
+      // Asking people to answer the question, not to copy a position they left.
+      expect(r.identity).toBe("Market Maker");
+    });
+
+    it("characterises nothing when the post-sell balance is unknown", () => {
+      const r = resolvePostAction(sell({ after: null }));
+      expect(r.headline).toBe("Sale confirmed.");
+      expect(r.support).toBe("Your position is updating.");
+      for (const wrong of ["out", "left", "took some off"])
+        expect(r.headline.toLowerCase()).not.toContain(wrong);
+    });
+  });
+
+  describe("create", () => {
+    it("invites rather than congratulating when there are people to ask", () => {
+      const r = resolvePostAction(create({ audience: aud({ total: 13 }) }));
+      expect(r.headline).toBe("Your market is live.");
+      expect(r.support).toBe("The question began with you. It doesn't have to end there.");
+      expect(r.primary.label).toBe("Challenge all 13");
+      expect(r.secondary).toEqual({ kind: "view_market", label: "View Market" });
+    });
+
+    it("never turns a successful creation into an empty-network message", () => {
+      const r = resolvePostAction(create({ audience: aud({ status: "none", total: 0 }) }));
+      expect(r.support).toBe("You gave the question a place to live.");
+      expect(r.primary).toEqual({ kind: "view_market", label: "View Market" });
+      // One destination rendered twice reads as a bug.
+      expect(r.secondary).toBeNull();
+      expect(`${r.headline} ${r.support}`).not.toMatch(/nobody|no one|qualif|empty/i);
+    });
+
+    it("offers Make room rather than swallowing the moment at a full table", () => {
+      const r = resolvePostAction(create({ capacity: { active: 3, total: 3 } }));
+      expect(r.primary).toEqual({ kind: "make_room", label: "Make room" });
+      expect(r.challengeModule?.title).toBe("Your table is full");
+      expect(r.challengeModule?.support).toBe("Three questions already have a place.");
+      expect(r.secondary?.kind).toBe("view_market");
+    });
+
+    it("keeps the Market Maker identity when the creator seeded a position", () => {
+      const r = resolvePostAction(create({ role: "market_maker_and_believer", side: "YES" }));
+      expect(r.identity).toBe("Market Maker · Backing YES");
+    });
+
+    it("never sends a creator to Next Question", () => {
+      for (const audience of [aud(), aud({ status: "none", total: 0 }), aud({ status: "failed" })])
+        for (const capacity of [
+          { active: 0, total: 3 },
+          { active: 3, total: 3 },
+        ]) {
+          const r = resolvePostAction(create({ audience, capacity }));
+          for (const cta of [r.primary, r.secondary]) expect(cta?.kind).not.toBe("next_question");
+        }
+    });
+  });
+});
+
+/**
+ * UNKNOWN IS NOT ZERO — the invariant, now applied to all three actions.
+ *
+ * A buy's `after` used to be a required `Holdings`, so the adapter filled it
+ * with `{ yes: 0, no: 0 }` purely to satisfy the type. That is a fabricated
+ * reading, and the type could not tell it from a real one.
+ */
+describe("a confirmed action proves the action; a balance proves the holdings", () => {
+  it("still says what a buy did when the balance has not landed", () => {
+    const r = resolvePostAction(buy({ after: null, side: "YES" }));
+    expect(r.headline).toBe("That's a real call.");
+    expect(r.support).toBe("You backed YES.");
+  });
+
+  it("claims neither both-sides nor a flip without a reading", () => {
+    const r = resolvePostAction(buy({ action: "buy_opposite_side", side: "NO", after: null }));
+    expect(r.headline).toBe("You added NO.");
+    // Both of these need a balance, and neither is guessed in either direction.
+    expect(r.support).toBeNull();
+    expect(r.headline).not.toMatch(/flip/i);
+  });
+
+  it("keeps a Market Maker who just bought their own question a Market Maker", () => {
+    /**
+     * THE BUG THIS CLOSES. Role was derived from `after`, so for the width of a
+     * refetch a creator who had just backed their own YES was classified
+     * `market_maker` — saying less than the confirmed transaction already proved.
+     */
+    const r = resolvePostAction(
+      buy({ role: "market_maker_and_believer", side: "YES", after: null }),
+    );
+    expect(r.headline).toBe("You made the question. Now you're in.");
+    expect(r.identity).toBe("Market Maker · Backing YES");
+  });
+});
+
+describe("a refused write is a transient fact, not a new post-action state", () => {
+  it("keeps refusals out of the experience entirely", () => {
+    // `put_on_table` rolls back whole, so nothing about this market or person
+    // changed. The experience is identical before and after a failed press.
+    const before = resolvePostAction(buy());
+    expect(before).not.toHaveProperty("status");
+    expect(before).not.toHaveProperty("error");
+  });
+
+  it("treats a lost race as the canonical state arriving late, not a failure", () => {
+    // Another tab put this market up, or filled the table, or the audience moved.
+    // Re-reading makes the screen say the true thing on its own.
+    for (const reason of ["already_up", "full", "no_audience", "no_reach"] as const)
+      expect(refusalIsCanonical(reason)).toBe(true);
+  });
+
+  it("treats a genuine write failure as a failure worth saying out loud", () => {
+    for (const reason of ["failed", "bad_parent", "audience_unavailable"] as const)
+      expect(refusalIsCanonical(reason)).toBe(false);
+  });
+
+  it("says nothing changed, and says it without a database in it", () => {
+    const said = `${WRITE_FAILED_TITLE} ${WRITE_FAILED_SUPPORT} ${WRITE_RETRY_LABEL}`;
+    expect(WRITE_FAILED_SUPPORT).toBe("Nothing changed.");
+    for (const jargon of ["rpc", "sql", "postgres", "constraint", "transaction", "error", "500"])
+      expect(said.toLowerCase()).not.toContain(jargon);
+    for (const banned of POST_ACTION_BANNED) expect(said.toLowerCase()).not.toContain(banned);
   });
 });

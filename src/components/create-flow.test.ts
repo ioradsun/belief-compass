@@ -104,7 +104,10 @@ describe("the centre stops selling and asks one thing", () => {
     // The fee is what the act is worth, so it sits with the act. The post-publish
     // moment says one fact — the market is live — and stops.
     expect(code("src/components/CreateMarket.tsx")).toMatch(/4\.5%/);
-    expect(code("src/components/LaunchRail.tsx")).not.toMatch(/4\.5%/);
+    // The post-publish moment is `resolvePostAction`'s create branch now, and it
+    // says one fact — the market is live — with no fee repeated after the act.
+    expect(code("src/domain/post-action.ts")).not.toMatch(/4\.5%/);
+    expect(code("src/components/PostActionScreen.tsx")).not.toMatch(/4\.5%/);
   });
 
   it("drops the badge that congratulated the system", () => {
