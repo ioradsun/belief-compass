@@ -11,6 +11,7 @@
  * IT DECIDES NOTHING. `resolvePostAction` already chose the sentence and the two
  * controls; this draws them at bar scale and hands presses back.
  */
+import { useEffect, useRef, useState } from "react";
 import {
   WRITE_FAILED_TITLE,
   WRITE_RETRY_LABEL,
@@ -32,7 +33,20 @@ export interface PostPositionBarProps {
   pending?: boolean;
   status?: ActionStatus;
   onRetry?: () => void;
+  /**
+   * CARRY THE READER ON BY THEMSELVES, after a beat.
+   *
+   * The receipt stays on the market it belongs to — it never rides along to a
+   * different question — and the move happens only if the reader does nothing.
+   * The smallest sign of attention (a pointer, a key, a scroll) cancels it for
+   * good, because a countdown that fights someone reading is worse than a
+   * button they have to press.
+   */
+  autoAdvance?: boolean;
 }
+
+/** Long enough to read one line, short enough not to feel like waiting. */
+const ADVANCE_MS = 3000;
 
 const CONSEQUENCE_COPY: Record<string, string> = {
   branch_live: "You already asked people about this one.",
@@ -47,12 +61,61 @@ export function PostPositionBar({
   pending = false,
   status = { state: "idle" },
   onRetry,
+  autoAdvance = false,
 }: PostPositionBarProps) {
   const ctas = [x.primary, x.secondary].filter(Boolean) as Cta[];
   const challenge = ctas.find((c) => c.kind === "challenge");
   const next = ctas.find((c) => c.kind === "next_question");
   const rest = ctas.filter((c) => c !== challenge && c !== next);
   const consequence = CONSEQUENCE_COPY[x.consequence as string] ?? null;
+
+  /* ── The unattended advance ──────────────────────────────────────────────
+     `progress` is 0→1 while it runs and null once cancelled or finished, so a
+     single value drives both the line and whether the countdown copy shows. */
+  const armed = autoAdvance && !!next && !pending && status.state === "idle";
+  const [progress, setProgress] = useState<number | null>(null);
+  const cancelled = useRef(false);
+  const act = useRef(onAct);
+  act.current = onAct;
+
+  useEffect(() => {
+    if (!armed || cancelled.current || !next) return;
+    const stop = () => {
+      cancelled.current = true;
+      setProgress(null);
+    };
+    const start = performance.now();
+    let raf = 0;
+    const tick = (t: number) => {
+      if (cancelled.current) return;
+      const p = Math.min(1, (t - start) / ADVANCE_MS);
+      setProgress(p);
+      if (p >= 1) {
+        cancelled.current = true;
+        act.current(next);
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const opts = { passive: true } as const;
+    window.addEventListener("pointerdown", stop, opts);
+    window.addEventListener("keydown", stop, opts);
+    window.addEventListener("wheel", stop, opts);
+    window.addEventListener("touchmove", stop, opts);
+    window.addEventListener("pointermove", stop, opts);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("pointerdown", stop);
+      window.removeEventListener("keydown", stop);
+      window.removeEventListener("wheel", stop);
+      window.removeEventListener("touchmove", stop);
+      window.removeEventListener("pointermove", stop);
+    };
+  }, [armed, next]);
+
+  const counting = progress != null && progress < 1;
+
 
   return (
     <div className="grid gap-2 px-3 py-3" data-post-position={x.copyCategory}>
