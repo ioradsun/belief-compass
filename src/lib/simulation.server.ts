@@ -609,10 +609,21 @@ export async function executeSimulationOrder(input: {
     feeCc = q.feeCc;
     priceUsd = q.priceUsd;
   } else {
-    const q = await quoteSell(sb, input.marketId, yes, input.size, ethUsd);
+    /**
+     * A FULL SELL MUST BE ABLE TO CLOSE THE POSITION.
+     *
+     * The ticket sizes shares through an 18-decimal integer, and that conversion
+     * rounds: 59.28491885357129 held came back as 59.284918854 asked for, and the
+     * ledger — correctly — refused to sell shares that were not there. The ask is
+     * clamped to the holding here, at the one boundary that knows the holding, so
+     * "sell everything" sells exactly everything instead of erroring on dust.
+     */
+    const size = await clampToHolding(sb, wallet, input.marketId, yes, input.size);
+    const q = await quoteSell(sb, input.marketId, yes, size, ethUsd);
     amountCc = q.proceedsCc;
-    shareDelta = input.size;
+    shareDelta = size;
     priceUsd = q.priceUsd;
+
   }
 
   const { data, error } = await sb.rpc("simulation_execute_order", {
