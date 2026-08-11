@@ -83,10 +83,28 @@ export function SimilarMarkets({
     staleTime: 5 * 60_000,
   });
 
-  // QUIET WHEN NOTHING MATCHES, and quiet is the honest answer most of the time.
-  // A panel that renders "no similar markets" on every keystroke would train the
-  // reader to stop looking at the one time it has something to say.
-  if (!enabled || !data?.length) return null;
+  // THE HEADING IS PERMANENT; THE LINE UNDER IT TELLS THE TRUTH. Hiding the
+  // panel until it had a hit meant the check was invisible exactly when it was
+  // reassuring — a writer never learned the room was being searched at all. So
+  // the column always states which stage it is in, and "no one is asking this
+  // yet" is a genuinely useful answer, not filler.
+  if (!enabled || !data?.length) {
+    return (
+      <section className="mb-4 shrink-0">
+        <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          Already being debated
+        </div>
+        <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+          {!enabled
+            ? "We'll check whether this debate already exists as you write."
+            : isFetching
+              ? "Searching existing markets…"
+              : "No one is asking this yet — it's yours to start."}
+        </p>
+      </section>
+    );
+  }
+
 
   return (
     <section className="mb-4 shrink-0">
