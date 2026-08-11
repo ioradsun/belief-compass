@@ -90,6 +90,9 @@ type Built = {
   side: Side;
   /** The other side of this market is held too — so two cards is not a duplicate. */
   paired: boolean;
+  /** You WROTE this question. A permanent fact about the market, not the holding. */
+  maker: boolean;
+
   value: number;
   /** The value is a real mark, not a cost-basis stand-in. False → no return yet. */
   priced: boolean;
