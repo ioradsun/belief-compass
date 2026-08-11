@@ -751,9 +751,56 @@ function EmbedPicker({
   );
 }
 
-/** The confirmed embed, shown compactly above the conviction statement. */
+/** Pick an image from the file system — the click-equivalent of dropping one. */
+function DropImage({ onPick }: { onPick: (file: File | null | undefined) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input
+        ref={ref}
+        type="file"
+        accept={accept("image")}
+        className="hidden"
+        onChange={(e) => {
+          onPick(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => ref.current?.click()}
+        title="Drop or choose an image — JPG, PNG, WEBP, AVIF, GIF · 10MB"
+        className="flex items-center gap-1 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+      >
+        <span aria-hidden>🖼</span> Drop an image
+      </button>
+    </>
+  );
+}
+
+/** Natural size of a local preview, best-effort — never blocks the publish. */
+function imageDimensions(url: string): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+/** The confirmed evidence — an embed or a dropped image — shown compactly above
+ *  the conviction statement. */
 function MediaChip({ attachment, onRemove }: { attachment: Attachment; onRemove: () => void }) {
-  const m = attachment.media;
+  const isFile = attachment.kind === "file";
+  const thumb = isFile ? attachment.previewUrl : attachment.media.thumbnail;
+  const title = isFile
+    ? attachment.file.name
+    : (attachment.media.title ?? attachment.media.url.replace(/^https?:\/\//, ""));
+  const sub = isFile
+    ? `Image · ${Math.max(1, Math.round(attachment.file.size / 1024))} KB`
+    : `${PLATFORM_LABEL[attachment.media.platform]}${
+        attachment.media.author ? ` · ${attachment.media.author}` : ""
+      }`;
   return (
     <div className="border-b px-2.5 py-2.5" style={{ borderColor: "var(--border)" }}>
       <div className="flex items-center gap-2">
@@ -761,19 +808,16 @@ function MediaChip({ attachment, onRemove }: { attachment: Attachment; onRemove:
           className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[8px] text-[14px]"
           style={{ border: "1px solid var(--border)" }}
         >
-          {m.thumbnail ? (
-            <img src={m.thumbnail} alt="" className="h-full w-full object-cover" />
+          {thumb ? (
+            <img src={thumb} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span aria-hidden>🔗</span>
+            <span aria-hidden>{isFile ? "🖼" : "🔗"}</span>
           )}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[12px] font-medium text-[var(--text)]">
-            {m.title ?? m.url.replace(/^https?:\/\//, "")}
-          </span>
+          <span className="block truncate text-[12px] font-medium text-[var(--text)]">{title}</span>
           <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-            {PLATFORM_LABEL[m.platform]}
-            {m.author ? ` · ${m.author}` : ""}
+            {sub}
           </span>
         </span>
         <button
@@ -787,5 +831,6 @@ function MediaChip({ attachment, onRemove }: { attachment: Attachment; onRemove:
     </div>
   );
 }
+
 
 export { kindForMime };
