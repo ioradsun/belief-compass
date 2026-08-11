@@ -359,11 +359,24 @@ export function FeedListPanel({
             Nothing matches this feed yet. Try widening it.
           </p>
         ) : (
-          /* THE QUEUE DRAINED, BUT THE POOL HAS NOT. The server only says
-             `exhausted` when it has nothing left; short of that, a top-up is
-             already in flight (see the route's low-water refill) and telling the
-             reader they are "at the end" would be a claim nobody made. */
-          <PlaylistSkeleton />
+          /* THE QUEUE DRAINED, BUT THE POOL HAS NOT. A skeleton alone was a
+             promise nobody had made — if the top-up had already been asked for
+             and answered short, the column shimmered forever. Two rows of shape
+             plus one honest control: the reader can always ask again. */
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <LoadMoreSentinel onLoadMore={onLoadMore} />
+            <PlaylistSkeleton />
+            {onLoadMore && (
+              <button
+                type="button"
+                onClick={onLoadMore}
+                className="mt-1 px-3 text-[12px] font-semibold transition-opacity hover:opacity-80"
+                style={{ color: "var(--rel,#9b87f5)" }}
+              >
+                Load more
+              </button>
+            )}
+          </div>
         )
       ) : (
         <ol className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
@@ -375,8 +388,17 @@ export function FeedListPanel({
           {lensExhausted && <Continuation onContinue={() => onLens("for_you")} />}
           {/* The other end of the same question: the list has NOT ended, so the
             bottom of the scroll must not look like it has. Mutually exclusive
-            with the row above by construction — see `moreBelow` in the route. */}
-          {moreBelow && !lensExhausted && <MoreBelow />}
+            with the row above by construction — see `moreBelow` in the route.
+            Reaching it now ASKS: scrolling to the end of a playlist is the
+            plainest possible request for what comes after it. */}
+          {moreBelow && !lensExhausted && (
+            <li className="px-3 py-2 opacity-50">
+              <LoadMoreSentinel onLoadMore={onLoadMore} />
+              <div aria-hidden>
+                <SkeletonRow lines={2} />
+              </div>
+            </li>
+          )}
         </ol>
       )}
     </div>
