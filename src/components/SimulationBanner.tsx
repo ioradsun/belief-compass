@@ -8,36 +8,34 @@
  * banner owns the mode explanation, so the product underneath can go back to
  * speaking normally.
  *
+ * THE EXPLANATION IS A DISCLOSURE, NOT A PAGE. A `?` glyph beside the word
+ * "Simulation" read like a typo and sent people to a separate sheet to learn six
+ * things they could read in six lines. The whole banner is now the control: click
+ * it (or the chevron) and the explanation drops down in place, directly under the
+ * thing it explains. Nothing navigates, nothing is lost.
+ *
  * EXIT IS A BUTTON, NOT A MENU ITEM. One tap, no confirmation, always on screen.
  * A mode you have to go looking for the way out of is a mode you are trapped in,
  * and Simulation's whole promise is that leaving costs nothing.
- *
- * THE `?` IS ALSO ALWAYS THERE. Somebody seeing a balance in a unit they have
- * never heard of should never have to hunt for what it means.
  */
 import { useState } from "react";
-import { SimulationHelpSheet } from "@/components/SimulationHelpSheet";
+import { ChevronDown } from "lucide-react";
 import { useSimulationMode } from "@/lib/simulation-mode";
 import { formatCC, SIMULATION_COPY } from "@/domain/simulation";
 
-/** The round `?` beside the mode label. */
-function HelpButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="What is Simulation?"
-      className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-[var(--text-secondary)] transition-colors hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--text)]"
-      style={{ border: "1px solid var(--border-strong,var(--border))" }}
-    >
-      ?
-    </button>
-  );
-}
+/** The six lines, in the order a reader asks them. */
+const EXPLANATION: string[] = [
+  "Real choices. No real money.",
+  "Use CC to take positions and build your Conviction profile.",
+  "Market prices stay live. Your balance, orders, and positions are simulated.",
+  "CC means Conviction Company Units. They have no monetary value.",
+  "At 10 convictions, your profile is ready and Simulation ends.",
+  "You can leave anytime.",
+];
 
 export function SimulationBanner() {
   const sim = useSimulationMode();
-  const [helpOpen, setHelpOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
   // Real Mode renders NOTHING — not an empty bar, not a reserved row. The banner
   // exists only while there is a mode to declare.
@@ -50,79 +48,78 @@ export function SimulationBanner() {
    * TWO ACTS, AND THEY MUST NOT SHARE A HANDLER.
    *
    * `finish` is the graduation — the primary thing to do at ten, and a one-way
-   * door the server can refuse. `leave` is the reversible exit, which the server
-   * never refuses.
+   * door the SERVER CAN REFUSE. `leave` is the reversible exit, which it never
+   * refuses.
    *
-   * They were one function that branched on `graduated`, which meant the help
-   * sheet's "Exit Simulation" called the GRADUATION whenever the banner was in
-   * its graduated state. Combined with a refusal — a conviction lost after
-   * GRADUATING was written — that left somebody who could not finish, could not
-   * order, and could not leave either, because every control in front of them
-   * ran the call that was refusing. An exit that can be refused is not an exit.
+   * They were one function branching on `graduated`, so at ten there was no way
+   * to leave at all: every control ran the graduation. Combined with a refusal —
+   * a conviction lost after GRADUATING was written — that left somebody who
+   * could not finish, could not order, and could not leave either. An exit that
+   * can be refused is not an exit.
    */
   const finish = () => {
-    setHelpOpen(false);
+    setOpen(false);
     sim.continueAfterGraduation();
   };
   const leave = () => {
-    setHelpOpen(false);
+    setOpen(false);
     sim.exit();
   };
 
   return (
-    <>
-      <div
-        role="status"
-        aria-live="polite"
-        className="w-full shrink-0 px-4 py-2 lg:px-6"
-        style={{
-          background: "color-mix(in oklab, var(--notice) 10%, var(--bg))",
-          borderBottom: "1px solid color-mix(in oklab, var(--notice) 28%, var(--hairline))",
-        }}
-      >
+    <div
+      className="w-full shrink-0"
+      style={{
+        background: "color-mix(in oklab, var(--notice) 10%, var(--bg))",
+        borderBottom: "1px solid color-mix(in oklab, var(--notice) 28%, var(--hairline))",
+      }}
+    >
+      <div role="status" aria-live="polite" className="px-4 py-2 lg:px-6">
         {/* ONE INFORMATION SET, TWO SHAPES. Desktop reads as a single line;
             the phone wraps to two compact rows with the same facts in the same
             order, so nothing is dropped to fit — least of all the exit. */}
         <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
-          <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-controls="simulation-explanation"
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          >
             <span
               className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--notice)]"
               style={{ whiteSpace: "nowrap" }}
             >
               {graduated ? "Profile ready" : "Simulation"}
             </span>
-            <HelpButton onClick={() => setHelpOpen(true)} />
+            <ChevronDown
+              size={14}
+              aria-hidden
+              className="shrink-0 text-[var(--text-secondary)] transition-transform"
+              style={{ transform: open ? "rotate(180deg)" : undefined }}
+            />
 
-            {/* The phone puts the action on the first row, opposite the label. */}
-            <div className="ml-auto sm:hidden">
-              <ExitAction
-                graduated={graduated}
-                pending={sim.pending}
-                onClick={graduated ? finish : leave}
-              />
-            </div>
-          </div>
-
-          <div className="num flex min-w-0 flex-1 items-center gap-2 text-[12px] text-[var(--text-secondary)]">
-            {/* The balance is CC and only CC. It is never converted, never shown
-                beside a dollar figure, and never carries a currency symbol. */}
-            {!graduated && sim.balanceCc != null && (
-              <>
-                <span className="shrink-0 font-semibold text-[var(--text)]">
-                  {formatCC(sim.balanceCc)} available
-                </span>
-                <span aria-hidden className="text-[var(--text-muted)]">
-                  ·
-                </span>
-              </>
-            )}
-            <span className="shrink-0">{progress}</span>
-            <span className="hidden min-w-0 truncate text-[var(--text-muted)] lg:inline">
-              {graduated ? SIMULATION_COPY.graduatedSupport : SIMULATION_COPY.bannerSupport}
+            <span className="num flex min-w-0 flex-1 items-center gap-2 text-[12px] text-[var(--text-secondary)]">
+              {/* The balance is CC and only CC. It is never converted, never shown
+                  beside a dollar figure, and never carries a currency symbol. */}
+              {!graduated && sim.balanceCc != null && (
+                <>
+                  <span className="shrink-0 font-semibold text-[var(--text)]">
+                    {formatCC(sim.balanceCc)} available
+                  </span>
+                  <span aria-hidden className="text-[var(--text-muted)]">
+                    ·
+                  </span>
+                </>
+              )}
+              <span className="shrink-0">{progress}</span>
+              <span className="hidden min-w-0 truncate text-[var(--text-muted)] lg:inline">
+                {graduated ? SIMULATION_COPY.graduatedSupport : SIMULATION_COPY.bannerSupport}
+              </span>
             </span>
-          </div>
+          </button>
 
-          <div className="flex shrink-0 items-center gap-2 max-sm:hidden">
+          <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
             {/* AT GRADUATION THE REVERSIBLE EXIT SURVIVES, quietly, beside the
                 primary action. Continue can be refused; this cannot, so it is
                 the control that guarantees nobody is ever stuck on this screen. */}
@@ -155,9 +152,25 @@ export function SimulationBanner() {
         )}
       </div>
 
-      {/* The help sheet's Exit is ALWAYS the reversible one, in either state. */}
-      {helpOpen && <SimulationHelpSheet onClose={() => setHelpOpen(false)} onExit={leave} />}
-    </>
+      {open && (
+        <div
+          id="simulation-explanation"
+          className="px-4 pb-3 lg:px-6"
+          style={{ borderTop: "1px solid color-mix(in oklab, var(--notice) 18%, var(--hairline))" }}
+        >
+          <div className="mx-auto w-full max-w-[1400px] pt-3">
+            <p className="text-[13px] font-semibold text-[var(--text)]">{EXPLANATION[0]}</p>
+            <ul className="mt-1 space-y-1">
+              {EXPLANATION.slice(1).map((line) => (
+                <li key={line} className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

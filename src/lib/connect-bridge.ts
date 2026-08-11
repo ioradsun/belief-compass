@@ -49,17 +49,37 @@ export function takePendingConnect(): boolean {
   return p;
 }
 
-export function requestDisconnect() {
+/**
+ * SIGN OUT DOES NOT DEPEND ON THE WALLET LAYER BEING AWAKE.
+ *
+ * The RainbowKit layer only mounts once someone has asked to connect in this
+ * tab. A reader who arrived with a session already restored (URL wallet or a
+ * stored wallet session) has no listener at all, so dispatching the event and
+ * hoping was a no-op — Sign Out did nothing. We still fire the event, so a
+ * mounted wallet layer can drop the connector properly, and then perform the
+ * reset ourselves regardless. Whichever reload lands first wins; the second is
+ * discarded by the navigation.
+ */
+export function requestDisconnect(wallet?: string) {
   if (typeof window === "undefined") return;
   // Signing out withdraws the intent too, or the next connector swap would
   // silently restore the session the reader just ended.
   connectIntended = false;
   window.dispatchEvent(new Event(DISCONNECT_EVENT));
+  // A short beat for wagmi's async disconnect; the storage purge below removes
+  // its persisted state either way.
+  window.setTimeout(() => clearDisconnectedWalletFromUrl(wallet), 150);
 }
 
+
 /**
- * Remove the URL identity that can otherwise keep the account rail rendered
- * after wagmi has disconnected. Returns true when navigation started.
+ * SIGN OUT IS A FULL RESET.
+ *
+ * Disconnecting the wallet is not enough: the reader's positions, profile,
+ * challenge counts and persisted query cache are all keyed to the wallet that
+ * just left. We drop every browser-held trace of that identity, strip the
+ * identity out of the URL, and reload — so what paints next is genuinely the
+ * signed-out app, not a shell still hydrated from the previous session.
  */
 export function clearDisconnectedWalletFromUrl(wallet?: string): boolean {
   if (typeof window === "undefined") return false;
@@ -77,11 +97,40 @@ export function clearDisconnectedWalletFromUrl(wallet?: string): boolean {
   ) {
     url.searchParams.delete("p");
   }
+  // Anything that only makes sense for a signed-in reader.
+  for (const k of ["dash", "create"]) url.searchParams.delete(k);
 
-  if (url.href === window.location.href) return false;
+  clearIdentityStorage();
   window.location.replace(url.href);
   return true;
 }
+
+/** Forget wallet sessions, wallet links, connector state and cached data. */
+function clearIdentityStorage() {
+  const doomed = (k: string) =>
+    k.startsWith("conviction:wallet-session:") ||
+    k.startsWith("conviction:linked-wallet:") ||
+    k.startsWith("conviction:qcache") ||
+    k.startsWith("wagmi") ||
+    k.startsWith("rk-") ||
+    k.startsWith("wc@") ||
+    k.startsWith("walletconnect") ||
+    k.startsWith("-walletlink") ||
+    k.startsWith("WALLETCONNECT");
+  for (const store of [window.localStorage, window.sessionStorage]) {
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < store.length; i++) {
+        const k = store.key(i);
+        if (k && doomed(k)) keys.push(k);
+      }
+      for (const k of keys) store.removeItem(k);
+    } catch {
+      /* storage unavailable — the reload still clears in-memory state */
+    }
+  }
+}
+
 
 /**
  * Ask the connected provider (Coinbase, MetaMask, …) to reopen its own account

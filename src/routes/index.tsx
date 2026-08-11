@@ -1523,6 +1523,11 @@ function Feed() {
           className={`${show("mine")} relative row-start-1 h-full min-h-0 max-h-full flex-col overflow-hidden bg-[var(--bg)] px-5 py-6 lg:col-start-1 lg:flex`}
           style={{ borderRight: "1px solid var(--hairline)" }}
         >
+          {/* FIRST TEN CONVICTIONS — the brief owns the top of this rail on
+              every tab until the reader has taken ten sides. The composer and
+              an open Case File displace it: those rails belong to one job. */}
+          {!createOpen && !(caseActive && currentRow) && <TakeASide wallet={wallet} />}
+
           {createOpen && !ideaDue ? (
             /* WRITING A MARKET the reader chose to write — the everyday rail
                steps aside so nothing under the composer shifts while the AI
@@ -1574,10 +1579,9 @@ function Feed() {
                 launchPanel={null}
                 feedList={
                   <div className="flex min-h-0 flex-1 flex-col">
-                    {/* FIRST TEN CONVICTIONS — the brief owns this slot until
-                      the reader has taken ten sides, then the rail simply
-                      leads with the feed. */}
-                    <TakeASide wallet={wallet} />
+                    {/* The brief now sits at the top of the whole rail, above
+                      the tabs, so it is not tied to this list. */}
+
 
                     <FeedListPanel
                       lens={lens}

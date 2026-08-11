@@ -255,7 +255,7 @@ export function ProfileMenu({
             label="Sign Out"
             muted
             onClick={() => {
-              requestDisconnect();
+              requestDisconnect(me);
               setOpen(false);
             }}
           />

@@ -657,11 +657,12 @@ describe("no lifecycle state is a trap", () => {
     // `leave` is the reversible exit it cannot.
     expect(c).toMatch(/const finish = \(\) => \{[\s\S]*?sim\.continueAfterGraduation\(\);/);
     expect(c).toMatch(/const leave = \(\) => \{[\s\S]*?sim\.exit\(\);/);
-    // At graduation the exit survives beside the primary action…
+    // At graduation the reversible exit survives beside the primary action, so
+    // the screen always carries one control the server cannot refuse.
     expect(c).toMatch(/graduated && \(\s*<button[\s\S]*?onClick=\{leave\}/);
-    // …and the help sheet's Exit is the reversible one in either state.
-    expect(c).toMatch(/<SimulationHelpSheet[\s\S]*?onExit=\{leave\}/);
-    expect(c).not.toMatch(/onExit=\{finish\}/);
+    // And `leave` never branches into the graduation, which is the shape that
+    // made every control on the banner run the call that was refusing.
+    expect(c).not.toMatch(/const leave = \(\) => \{[\s\S]*?continueAfterGraduation/);
   });
 
   it("reports a refused graduation as an outcome rather than an error", () => {
