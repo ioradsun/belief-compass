@@ -115,6 +115,22 @@ export interface OpportunityFeedInput extends FeedSessionState {
    * reader had really consumed.
    */
   poolPage?: number;
+  /**
+   * MAY THIS BUILD OFFER MARKETS THE READER HAS ALREADY SEEN? Default NO.
+   *
+   * The catalogue has to be spent before anything is repeated. A pool page is a
+   * window of 240 on some 2,800 markets, so "this page has nothing fresh" and
+   * "this platform has nothing fresh" are wildly different statements, and the
+   * server can only ever observe the first. Answering the first with repeats is
+   * how a reader saw the same markets again with thousands untouched behind
+   * them.
+   *
+   * So the default is the honest one: return nothing rather than a repeat, which
+   * the client reads as "dig one page deeper". Only when it has reached a depth
+   * with no markets at all — the real bottom — does it come back asking for
+   * this, and only then is a repeat the best thing left.
+   */
+  allowResurface?: boolean;
   limit?: number;
 }
 
@@ -603,6 +619,8 @@ export async function buildOpportunityFeed(
     idea: ideaResult.idea,
     // A ranking is taken as given; a blend is sequenced. See sequence.ts.
     preserveOrder: lens !== "for_you",
+    // Spend the catalogue before repeating any of it — see `allowResurface`.
+    allowResurface: input.allowResurface === true,
     ...(input.limit ? { limit: input.limit } : { limit: SEQUENCE.DEFAULT_LIMIT }),
   });
 

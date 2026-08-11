@@ -995,6 +995,17 @@ function Feed() {
    * value it had when the tick began; nothing renders from it.
    */
   const poolPageRef = useRef(0);
+  /**
+   * Has this session spent the catalogue and started accepting repeats?
+   *
+   * THE SECOND PASS. The first walks every depth asking for fresh markets only,
+   * and a page with nothing fresh means "look deeper" rather than "you are
+   * finished" — which is what stops a reader being handed markets they have seen
+   * while thousands sit untouched behind the pool's ceiling. Only when a depth
+   * comes back with no markets AT ALL has the catalogue actually run out, and
+   * only then does the dig start again from the top with repeats allowed.
+   */
+  const resurfacingRef = useRef(false);
   const queueRef = useRef<FeedQueue>(queue);
   queueRef.current = queue;
   const serverOrder = items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
@@ -1196,6 +1207,9 @@ function Feed() {
           lens: lensRef.current,
           originMarketId: originRef.current,
           poolPage,
+          // Repeats only once every depth has been asked for fresh markets and
+          // come back empty — see `resurfacingRef`.
+          allowResurface: resurfacingRef.current,
           ...feedSession(),
           /**
            * THE WHOLE ORDER, not the part ahead of the reader.
@@ -1274,8 +1288,17 @@ function Feed() {
         const got = await fetchPage(q, depth);
         if (got === "more") return;
         if (got === "bottom") {
-          setPagedOut(true);
-          return;
+          // THE CATALOGUE IS SPENT. On the first pass that is not the end of
+          // the feed, it is the moment repeats become the best thing left: the
+          // dig restarts from the top with them allowed. On the second pass
+          // there is genuinely nothing, and only then is the feed over.
+          if (resurfacingRef.current) {
+            setPagedOut(true);
+            return;
+          }
+          resurfacingRef.current = true;
+          poolPageRef.current = 0;
+          continue;
         }
         // Picked clean, but the catalogue goes deeper. Advance and ask again.
         poolPageRef.current = depth + 1;
@@ -1345,6 +1368,7 @@ function Feed() {
     setCaughtUp(false);
     setPagedOut(false);
     poolPageRef.current = 0;
+    resurfacingRef.current = false;
     navigate({ search: (prev: Search) => ({ ...prev, m: undefined }) });
   };
 
@@ -1380,6 +1404,7 @@ function Feed() {
     setCaughtUp(false);
     setPagedOut(false);
     poolPageRef.current = 0;
+    resurfacingRef.current = false;
     resetFeedSession();
     // Starting over drops the thread. Everything else keeps it: walking the
     // queue and switching perspective are both "keep exploring from here",

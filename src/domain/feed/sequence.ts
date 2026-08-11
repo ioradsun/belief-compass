@@ -240,6 +240,20 @@ export interface SequenceInput {
    * markets stay out, because a ranked list is a ranking and not a mixture.
    */
   preserveOrder?: boolean;
+  /**
+   * MAY THIS BUILD OFFER MARKETS THE READER HAS ALREADY SEEN?
+   *
+   * Repeats are the right answer for an exhausted CATALOGUE and the wrong one
+   * for an exhausted retrieval window, and the sequencer cannot tell those apart
+   * — it sees one pool page and has no idea whether a deeper one exists. So the
+   * caller decides, and `buildOpportunityFeed` says no until the reader has dug
+   * to the bottom of the catalogue.
+   *
+   * Defaults to `true` here because this module is a pure function of its input:
+   * given a resurfaceable candidate and nothing else, placing it is the useful
+   * answer. The POLICY of when to ask lives one layer up.
+   */
+  allowResurface?: boolean;
 }
 
 export interface SequenceResult {
@@ -281,6 +295,7 @@ export interface SequenceResult {
  */
 export function sequenceFeed(input: SequenceInput): SequenceResult {
   const limit = Math.min(Math.max(1, input.limit ?? SEQUENCE.DEFAULT_LIMIT), SEQUENCE.MAX_LIMIT);
+  const allowResurface = input.allowResurface !== false;
 
   const excluded: { onchainId: number; reason: ExclusionReason | null }[] = [];
   const pool: SequenceCandidate[] = [];
@@ -323,7 +338,9 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
      */
     const banned = r === "hidden" || r === "queued_this_session" || r === "seen_this_session";
     if (c.reentry && !banned) reentries.push(c);
-    else if (c.eligibility.tier === "resurfaced") resurface.push(c);
+    // Not admitted at all when repeats are barred — which is what makes an
+    // otherwise-empty page mean "look deeper" rather than "you are finished".
+    else if (c.eligibility.tier === "resurfaced" && allowResurface) resurface.push(c);
     else excluded.push({ onchainId: c.onchainId, reason: r });
   }
 
