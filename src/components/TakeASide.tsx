@@ -137,7 +137,7 @@ export function TakeASide({
 
       {/* The offer, and only while it is genuinely on offer. A graduated wallet
           never sees it again, and neither does one that already has ten. */}
-      {!sim.active && (!wallet || sim.eligible) && (
+      {hydrated && !sim.active && (!wallet || sim.eligible) && (
         <>
           <button
             type="button"
