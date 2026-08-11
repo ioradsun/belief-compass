@@ -192,59 +192,52 @@ function verdict(
 }
 
 /**
- * The one eligibility decision. Order matters: the strongest signal about what
- * the person already told us wins, so the exclusion reason is always the honest
- * one (diagnostics show it verbatim).
+ * THE ONE ELIGIBILITY DECISION — one rule, applied to every kind of contact.
  *
- * The DECISIONS are tested first and the SIGHTINGS last, which is the same order
- * as before and now also means the tier degrades monotonically — a market that
- * was passed is blocked even though it was obviously also seen, because the pass
- * is the stronger statement and the reason must name it.
+ * "Did the viewer touch this market during the current pass?" If yes, it is out
+ * until the pass rolls; if no, it is in. No per-reason cooldowns, no tiers, no
+ * repeats offered while untouched markets remain. `hidden` is the single
+ * permanent exception, because that one IS a standing instruction.
+ *
+ * Order still matters, but only for the LABEL: the strongest statement the
+ * reader made is the reason diagnostics print.
  */
 export function eligibilityFor(input: EligibilityInput): Eligibility {
   const s = input.state ?? {};
-  const now = input.now;
+  /**
+   * WHEN THE CURRENT PASS BEGAN. Everything before it belongs to a spent pass
+   * and no longer excludes anything — that is what makes the feed cyclical
+   * instead of monotonically shrinking. Zero (the default) means "this viewer
+   * has always been in the same pass", which is the correct reading for a
+   * session that has never rolled.
+   */
+  const since = input.cycleStartedAt ?? 0;
+  /** Did this contact happen inside the current pass? */
+  const inCycle = (iso: string | null | undefined): boolean => {
+    if (!iso) return false;
+    const t = Date.parse(iso);
+    return Number.isFinite(t) ? t >= since : false;
+  };
 
-  if (s.hiddenAt) return verdict("hidden", null, null);
-  if (s.activePosition) return verdict("active_position", null, null);
-
-  const repeat = (s.passCount ?? 0) > 1;
-  const pass = cooling(s.passedAt, repeat ? COOLDOWNS.PASS_REPEAT_MS : COOLDOWNS.PASS_MS, now);
-  if (pass.active) return verdict(repeat ? "passed_repeat" : "passed", pass.until, null);
-
-  const sold = cooling(s.soldAt, COOLDOWNS.SOLD_MS, now);
-  if (sold.active) return verdict("sold_out", sold.until, null);
-
-  // From here down the reader has told us NOTHING — these are our own records of
-  // what we put in front of them. Each carries the moment it becomes the least
-  // objectionable thing left to show, which is what orders the resurface tier.
-  const opened = cooling(s.openedAt, COOLDOWNS.OPENED_MS, now);
-  if (opened.active) return verdict("recently_opened", opened.until, opened.until);
-
-  const viewed = cooling(s.viewedAt, COOLDOWNS.VIEWED_MS, now);
-  if (viewed.active) return verdict("recently_viewed", viewed.until, viewed.until);
-
-  if (input.sessionSeen.has(input.onchainId)) {
-    /**
-     * No cooldown to lift and no timestamp to read — see `sessionSeenRank`. So
-     * the key is synthesised at the PESSIMISTIC end of the viewed window, as
-     * though the sighting had happened this instant, and tie-broken by rank.
-     *
-     * Pessimistic because that is what the signal actually supports. All this
-     * says is "some time during this tab's life"; for a connected wallet it also
-     * implies the server-side view event has not landed yet, which makes it a
-     * sighting from the last few seconds rather than the last few hours. Ordering
-     * it as though it were about to expire would put the market the reader just
-     * scrolled past ahead of one they saw this morning — the exact inversion the
-     * tier exists to avoid.
-     */
-    const rank = input.sessionSeenRank?.get(input.onchainId) ?? 0;
-    return verdict("seen_this_session", null, now + COOLDOWNS.VIEWED_MS + rank);
-  }
-  if (input.sessionQueued.has(input.onchainId)) return verdict("queued_this_session", null, null);
+  if (s.hiddenAt) return verdict("hidden");
+  // A position TAKEN in this pass is out of it. One held since before the pass
+  // began is fair to offer again — the reader is being asked what they think
+  // now, and their own market is a legitimate thing to be shown.
+  if (s.activePosition && (s.positionAt == null || inCycle(s.positionAt)))
+    return verdict("active_position");
+  if (inCycle(s.passedAt)) return verdict((s.passCount ?? 0) > 1 ? "passed_repeat" : "passed");
+  if (inCycle(s.soldAt)) return verdict("sold_out");
+  if (inCycle(s.openedAt)) return verdict("recently_opened");
+  if (inCycle(s.viewedAt)) return verdict("recently_viewed");
+  // The client's own record of this pass, for sightings the server ledger has
+  // not caught up with (and for viewers with no wallet, where it is the only
+  // record there is).
+  if (input.sessionSeen.has(input.onchainId)) return verdict("seen_this_session");
+  if (input.sessionQueued.has(input.onchainId)) return verdict("queued_this_session");
 
   return { eligible: true, tier: "fresh", reason: null, availableAt: null, resurfaceAt: null };
 }
+
 
 /** Live signals that can justify bringing an acted-on market back. */
 export interface MaterialSignals {
