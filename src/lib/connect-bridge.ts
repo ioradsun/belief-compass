@@ -58,8 +58,13 @@ export function requestDisconnect() {
 }
 
 /**
- * Remove the URL identity that can otherwise keep the account rail rendered
- * after wagmi has disconnected. Returns true when navigation started.
+ * SIGN OUT IS A FULL RESET.
+ *
+ * Disconnecting the wallet is not enough: the reader's positions, profile,
+ * challenge counts and persisted query cache are all keyed to the wallet that
+ * just left. We drop every browser-held trace of that identity, strip the
+ * identity out of the URL, and reload — so what paints next is genuinely the
+ * signed-out app, not a shell still hydrated from the previous session.
  */
 export function clearDisconnectedWalletFromUrl(wallet?: string): boolean {
   if (typeof window === "undefined") return false;
@@ -77,10 +82,35 @@ export function clearDisconnectedWalletFromUrl(wallet?: string): boolean {
   ) {
     url.searchParams.delete("p");
   }
+  // Anything that only makes sense for a signed-in reader.
+  for (const k of ["dash", "create"]) url.searchParams.delete(k);
 
-  if (url.href === window.location.href) return false;
+  clearIdentityStorage();
   window.location.replace(url.href);
   return true;
+}
+
+/** Forget wallet sessions, wallet links and the persisted query cache. */
+function clearIdentityStorage() {
+  try {
+    const ls = window.localStorage;
+    const doomed: string[] = [];
+    for (let i = 0; i < ls.length; i++) {
+      const k = ls.key(i);
+      if (!k) continue;
+      if (
+        k.startsWith("conviction:wallet-session:") ||
+        k.startsWith("conviction:linked-wallet:") ||
+        k === "conviction:qcache:v1" ||
+        k.startsWith("wagmi.")
+      ) {
+        doomed.push(k);
+      }
+    }
+    for (const k of doomed) ls.removeItem(k);
+  } catch {
+    /* storage unavailable — the reload still clears in-memory state */
+  }
 }
 
 /**
