@@ -39,6 +39,7 @@ import {
 } from "@/domain/feed/momentum";
 import { orderForLens, toLens, type Lens, type LensCandidate } from "@/domain/feed/lens";
 import { participantCount } from "@/domain/participants";
+import { POOL } from "@/domain/feed/pool";
 import { peekSwr, swrCache } from "@/lib/server-cache";
 import { shouldInsertSuggestion } from "@/domain/market-suggestion";
 import { listFeed, type VolumeWindow } from "@/lib/markets.functions";
@@ -103,6 +104,17 @@ export interface OpportunityFeedInput extends FeedSessionState {
    * than a lookup that ends when the result opens.
    */
   originMarketId?: number | null;
+  /**
+   * HOW DEEP INTO THE CATALOGUE — see `poolRows`. Zero is the top of every
+   * ordering and the only page the shared SSR snapshot ever uses.
+   *
+   * The client owns this because the client is the only party that knows it has
+   * run out: it asks for the next markets, and when a page adds nothing new it
+   * asks the same question one page deeper. Server-side heuristics were the
+   * alternative and would have had to guess from `seenIds` how much of a pool a
+   * reader had really consumed.
+   */
+  poolPage?: number;
   limit?: number;
 }
 
@@ -287,6 +299,17 @@ export interface OpportunityFeedResult {
    * is a real terminal state and it is meant to be a rare one.
    */
   exhausted: boolean;
+  /** The catalogue depth this result was retrieved at — see `poolRows`. */
+  poolPage: number;
+  /**
+   * How many markets that depth actually held.
+   *
+   * ZERO IS THE END OF THE CATALOGUE, and it is the only honest way to say so:
+   * the orderings run out at different depths, so nothing else knows where the
+   * bottom is. A client that gets no new markets from a page can tell "this
+   * page was picked clean" (dig deeper) from "there is no such page" (stop).
+   */
+  poolSize: number;
   /** Why each dropped market was dropped — feed diagnostics, never rendered. */
   excluded: { onchainId: number; reason: string | null }[];
   error: string | null;
@@ -315,7 +338,10 @@ export async function buildOpportunityFeed(
   // Which question the reader asked. Declared here because it also decides what
   // the card's one sentence leads on, not only the order — see `preferMomentum`.
   const lens: Lens = toLens(input.lens);
-  const feed = await listFeed({ data: { window: win, ...(wallet ? { wallet } : {}) } });
+  const poolPage = Math.max(0, Math.min(Math.trunc(input.poolPage ?? 0), POOL.maxPages));
+  const feed = await listFeed({
+    data: { window: win, poolPage, ...(wallet ? { wallet } : {}) },
+  });
   const rows = (feed.data ?? []) as unknown as Row[];
   const ids = rows.map((r) => Number(r.onchain_id));
   /** The read-model row by id — the lens ranks off the same rows the client renders. */
@@ -606,6 +632,8 @@ export async function buildOpportunityFeed(
     modes: (feed as { modes?: FeedMode[] }).modes ?? ["for_you"],
     engineVersion,
     exhausted,
+    poolPage,
+    poolSize: rows.length,
     excluded,
     error: feed.error ?? null,
   };
@@ -733,6 +761,7 @@ function isAnonDefault(input: OpportunityFeedInput): boolean {
     dflt(input.mode, "for_you") &&
     dflt(input.sensitivity, "everything") &&
     !input.originMarketId &&
+    !input.poolPage &&
     !(input.networks?.length || input.topics?.length || input.momentum?.length) &&
     !(input.seenIds?.length || input.queuedIds?.length)
   );

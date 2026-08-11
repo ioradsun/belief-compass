@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildPool, POOL, POOL_SLICES, sliceLabel, type PoolSlice } from "./pool";
+import { buildPool, POOL, POOL_SLICES, sliceLabel, type PoolSlice, pageRange } from "./pool";
 
 /** Markets numbered inside a band so each slice's ids are recognisable. */
 const slice = (base: number, n: number) =>
@@ -225,5 +225,44 @@ describe("a failed slice is reported, not swallowed", () => {
     // The whole read failing throws so it is never cached; one slice failing is
     // a degraded pool, and a reader with a degraded feed beats a reader with none.
     expect(code).toMatch(/errs\.length === Object\.keys\(results\)\.length/);
+  });
+});
+
+/**
+ * PAGING THE CATALOGUE — see `pageRange`.
+ *
+ * The pool is a window of 240 on a platform of some 2,800, and the feed used to
+ * treat walking that window as walking the platform: a reader who got through it
+ * was handed markets they had already seen while thousands of untouched
+ * questions sat behind the ceiling.
+ */
+describe("pageRange", () => {
+  it("starts at the top of the ordering", () => {
+    expect(pageRange(90, 0)).toEqual([0, 89]);
+  });
+
+  it("moves the window by exactly one page, never widening it", () => {
+    const [from, to] = pageRange(90, 3);
+    expect(from).toBe(270);
+    expect(to - from + 1).toBe(90);
+  });
+
+  /** Inclusive ranges: an off-by-one here duplicates or skips a market. */
+  it("never overlaps or gaps between consecutive pages", () => {
+    for (const fetch of [40, 50, 60, 90]) {
+      for (let p = 0; p < 12; p += 1) {
+        expect(pageRange(fetch, p + 1)[0]).toBe(pageRange(fetch, p)[1] + 1);
+      }
+    }
+  });
+
+  it("treats a nonsense depth as the top rather than a negative offset", () => {
+    expect(pageRange(50, -4)).toEqual([0, 49]);
+    expect(pageRange(50, 1.7)).toEqual([50, 99]);
+  });
+
+  it("reaches the whole catalogue within maxPages", () => {
+    // ~2,800 markets on the platform; the guard rail has to clear it.
+    expect(POOL.total * POOL.maxPages).toBeGreaterThan(2800);
   });
 });

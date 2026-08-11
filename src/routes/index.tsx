@@ -37,6 +37,16 @@ const FEED_REFILL_MS = 10_000;
  * reader — the least likely place a duplicate would surface.
  */
 const MAX_QUEUED = 200;
+/**
+ * How many catalogue depths one refill will dig through before giving up.
+ *
+ * A page that adds nothing means the reader has consumed that window, so the
+ * next depth is tried immediately — but a reader deep in a heavily-filtered feed
+ * could otherwise walk the whole catalogue inside a single tick. Three keeps the
+ * common case (one empty page, one good page) instant and leaves the rest to the
+ * next low-water tick, which is a tenth of a second of work away.
+ */
+const MAX_DIG = 3;
 import { toLens, type Lens } from "@/domain/feed/lens";
 import { DEFAULT_SENSITIVITY, type Sensitivity } from "@/domain/market-change";
 import { useFeedSensitivity } from "@/lib/feed-sensitivity";
@@ -978,6 +988,13 @@ function Feed() {
    * at nine o'clock recovers on its own rather than staying ended.
    */
   const [pagedOut, setPagedOut] = useState(false);
+  /**
+   * HOW DEEP INTO THE CATALOGUE this session has had to look — see
+   * @/domain/feed/pool. A ref rather than state because the dig loop reads it
+   * and writes it inside a single tick, where state would still be reporting the
+   * value it had when the tick began; nothing renders from it.
+   */
+  const poolPageRef = useRef(0);
   const queueRef = useRef<FeedQueue>(queue);
   queueRef.current = queue;
   const serverOrder = items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
@@ -1158,43 +1175,14 @@ function Feed() {
   }, [caughtUp, pagedOut, stableFeed?.exhausted]);
 
   /**
-   * ASK FOR MORE — the one throttled entry point, shared by both callers.
+   * ONE REQUEST, AT ONE DEPTH — and what its answer MEANS.
    *
-   * Two places need it and they arrive from opposite directions: the low-water
-   * effect watches the queue drain and asks early, `nextMarket` discovers the
-   * end and asks late. Sharing the throttle is what stops the pair of them from
-   * turning a drained queue into a request loop.
+   * Returned as a verdict rather than a payload so the dig below reads as the
+   * decision it is. "empty" and "bottom" look identical in a response body and
+   * are opposites in meaning: one says look deeper, the other says stop.
    */
-  const refillAtRef = useRef(0);
-  /**
-   * FETCH THE NEXT PAGE AND ADD IT TO THE END.
-   *
-   * This used to be `invalidateQueries(["opp-feed"])` — a re-fetch of the SAME
-   * request, which is not paging. It came back as a fresh ranking of page one,
-   * `receiveOrder` held it as `incoming`, and the reader ran out anyway. The
-   * only thing keeping it from returning byte-for-byte what they already had was
-   * `seenIds`, which excludes what was VIEWED and knows nothing about what is
-   * sitting unread in the queue.
-   *
-   * `queuedIds` is the field that closes that gap, and it has existed on the
-   * wire and in the gate the whole time — the server reads it into
-   * `sessionQueued` and the gate returns `queued_this_session` — with no client
-   * ever populating it. Sending it makes the request mean "the next markets,
-   * not these", which is the entire mechanism. The queue's forward tail is what
-   * goes: markets behind the reader are already covered by `seenIds`, and it
-   * keeps the payload bounded no matter how long the session runs.
-   *
-   * THE ORIGIN RIDES HERE, not on the base query. This is the request that
-   * decides what comes NEXT, which is exactly the reach a market opened from
-   * outside the order should have — and it cannot disturb a single row already
-   * on screen, because the answer is appended.
-   */
-  const fetchMore = useCallback(async () => {
-    const at = Date.now();
-    if (at - refillAtRef.current < FEED_REFILL_MS) return;
-    refillAtRef.current = at;
-    const q = queueRef.current;
-    try {
+  const fetchPage = useCallback(
+    async (q: FeedQueue, poolPage: number): Promise<"more" | "empty" | "bottom"> => {
       const page = await getOpportunityFeed({
         data: {
           wallet: wallet ?? null,
@@ -1207,6 +1195,7 @@ function Feed() {
           sensitivity,
           lens: lensRef.current,
           originMarketId: originRef.current,
+          poolPage,
           ...feedSession(),
           /**
            * THE WHOLE ORDER, not the part ahead of the reader.
@@ -1223,14 +1212,14 @@ function Feed() {
           queuedIds: q.order.slice(-MAX_QUEUED),
         },
       });
-      if ((page.lens ?? "for_you") !== lensRef.current) return;
-      // THE PAGE'S OWN VERDICT, which nothing was reading. The low-water gate
-      // consulted the BASE query's `exhausted` — computed without `queuedIds`,
-      // so it answers a different question and never turns true for a reader who
-      // has paged. This is the only response that knows paging has run out.
-      const ids = page.items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
-      setPagedOut(page.exhausted === true || ids.length === 0);
-      if (ids.length === 0) return;
+      // A reply for a lens the reader has since left is not an answer to any
+      // question they are still asking. Treated as satisfied so the dig stops.
+      if ((page.lens ?? "for_you") !== lensRef.current) return "more";
+      // NOTHING AT THIS DEPTH AT ALL — the orderings ran out, so there is no
+      // page after this one. The only signal that knows where the catalogue
+      // ends, because the eight orderings end in different places.
+      if (page.poolSize === 0) return "bottom";
+
       for (const [id, row] of Object.entries(page.rows ?? {})) {
         if (row) knownRowsRef.current[Number(id)] = row as unknown as MarketRow;
       }
@@ -1238,12 +1227,65 @@ function Feed() {
         if (it.kind === "market" && it.primaryReason)
           reasonsRef.current[it.onchainId] = it.primaryReason;
       }
+
+      // `appendOrder` drops what the queue already holds, so "the server sent
+      // rows" is not the same as "the reader gained anything" — and only the
+      // second ends the dig. Computed before the setter so the updater stays a
+      // pure function of its input.
+      const ids = page.items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
+      const grown = appendOrder(q, ids);
+      if (grown === q) return "empty";
       setQueue((prev) => appendOrder(prev, ids));
-    } catch {
-      // A page that fails to arrive costs the reader nothing they had. The
-      // throttle has already moved, so the next low-water tick tries again.
+      return "more";
+    },
+    [wallet, win, sensitivity],
+  );
+
+  /**
+   * ASK FOR MORE — the one throttled entry point, shared by both callers.
+   *
+   * Two places need it and they arrive from opposite directions: the low-water
+   * effect watches the queue drain and asks early, `nextMarket` discovers the
+   * end and asks late. Sharing the throttle is what stops the pair of them from
+   * turning a drained queue into a request loop.
+   *
+   * DIG UNTIL SOMETHING NEW COMES BACK. A pool page is a WINDOW on the
+   * catalogue, not the catalogue — 240 rows out of some 2,800 — and the feed
+   * used to treat walking that window as walking the platform. A reader who got
+   * through it was handed the resurface tier: markets they had already been
+   * shown, while thousands of untouched questions sat behind the ceiling.
+   * Repeats are the right answer for an exhausted CATALOGUE and the wrong one
+   * for an exhausted page.
+   *
+   * So a page that adds nothing is not an ending, it is a signal to look one
+   * page deeper. The loop is bounded, and it stops on the only two answers that
+   * mean anything: markets arrived, or the depth itself came back empty — which
+   * is the real bottom, and the only place `pagedOut` becomes true.
+   */
+  const refillAtRef = useRef(0);
+  const fetchMore = useCallback(async () => {
+    const at = Date.now();
+    if (at - refillAtRef.current < FEED_REFILL_MS) return;
+    refillAtRef.current = at;
+    const q = queueRef.current;
+    for (let dig = 0; dig <= MAX_DIG; dig += 1) {
+      const depth = poolPageRef.current;
+      try {
+        const got = await fetchPage(q, depth);
+        if (got === "more") return;
+        if (got === "bottom") {
+          setPagedOut(true);
+          return;
+        }
+        // Picked clean, but the catalogue goes deeper. Advance and ask again.
+        poolPageRef.current = depth + 1;
+      } catch {
+        // A page that fails to arrive costs the reader nothing they had. The
+        // throttle has already moved, so the next low-water tick tries again.
+        return;
+      }
     }
-  }, [wallet, win, sensitivity]);
+  }, [fetchPage]);
 
   const refillNow = useCallback(() => {
     void fetchMore();
@@ -1302,6 +1344,7 @@ function Feed() {
     setOriginMarket(null);
     setCaughtUp(false);
     setPagedOut(false);
+    poolPageRef.current = 0;
     navigate({ search: (prev: Search) => ({ ...prev, m: undefined }) });
   };
 
@@ -1336,6 +1379,7 @@ function Feed() {
   const refreshFeed = () => {
     setCaughtUp(false);
     setPagedOut(false);
+    poolPageRef.current = 0;
     resetFeedSession();
     // Starting over drops the thread. Everything else keeps it: walking the
     // queue and switching perspective are both "keep exploring from here",

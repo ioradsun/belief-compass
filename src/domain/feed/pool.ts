@@ -96,7 +96,22 @@ export interface SliceSpec {
   quota: number;
 }
 
-export const POOL: { total: number; slices: Record<PoolSlice, SliceSpec> } = {
+export const POOL: { total: number; maxPages: number; slices: Record<PoolSlice, SliceSpec> } = {
+  /**
+   * HOW FAR THE FEED WILL DIG BEFORE IT ADMITS THERE IS NOTHING LEFT.
+   *
+   * `total` is a WINDOW, not a universe, and treating it as a universe was a
+   * real defect: a reader who walked 240 markets was handed repeats while some
+   * 2,500 untouched questions sat behind the ceiling. A page moves the window by
+   * one step through the same eight orderings — same size, same quotas, same
+   * cost — so the catalogue is reachable without any request getting bigger.
+   *
+   * Twelve pages is ~2,880 markets, which is the whole platform at the time of
+   * writing with room to grow. It is a guard rail rather than a target: the
+   * orderings run out first, a page past the end returns nothing, and the feed
+   * stops there on its own.
+   */
+  maxPages: 12,
   /**
    * The merged pool's ceiling.
    *
@@ -181,6 +196,21 @@ export const POOL: { total: number; slices: Record<PoolSlice, SliceSpec> } = {
     moving: { fetch: 40, quota: 20 },
   },
 };
+
+/**
+ * The inclusive row range one slice covers at a given depth.
+ *
+ * Lives here rather than beside the queries because it is POLICY: it is the
+ * statement that a page moves the window instead of widening it, which is the
+ * whole reason deepening costs nothing. PostgREST ranges are inclusive at both
+ * ends, so the last row of a page and the first of the next must not overlap —
+ * an off-by-one here silently serves a duplicate or skips a market, and neither
+ * is visible from the outside.
+ */
+export function pageRange(fetch: number, page: number): readonly [number, number] {
+  const from = Math.max(0, Math.trunc(page)) * fetch;
+  return [from, from + fetch - 1];
+}
 
 /** One market as it arrives from a slice query, in that slice's own order. */
 export interface PoolRow {
