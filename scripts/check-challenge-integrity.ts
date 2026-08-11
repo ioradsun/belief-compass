@@ -521,6 +521,28 @@ async function main() {
   line();
 
   // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * SECTION 3 — AND THE NARRATION THAT WAS DESCRIBING DELETED CODE.
+   *
+   * This section used to open by counting SELL events and stating that
+   * `buildChallenges` "selects wallet, market_id, kind, side, occurred_at" and
+   * "never reads `action`, so a SELL of YES is indistinguishable from a BUY."
+   * That was true of the DERIVED Challenge, which scanned `events` to infer who
+   * wanted you at the table. Challenge V2 deleted the scan: `buildChallenges`
+   * now reads `market_calls` — deliberate acts — and takes the caller's side from
+   * `wallet_beliefs.stance_side`, which is exactly the fix the old closing
+   * paragraph recommended.
+   *
+   * LEAVING IT IN WAS WORSE THAN A STALE COMMENT. A report is the instrument
+   * somebody decides what to fix WITH, and this one was reporting a clean result
+   * (14/14 matching) beside a sentence explaining why the clean result was luck.
+   * The honest reading is the opposite: matching is what the shipped guard
+   * produces, and the number to watch is whether it ever stops matching.
+   *
+   * The measurement below is UNCHANGED and still worth running — it compares the
+   * side a card would print against canonical stance, which is the claim the
+   * product actually makes about a real person.
+   */
   line("3 · CARDS THAT MISSTATE WHAT SOMEBODY BELIEVES");
   line('   "Sarah believes YES" — against the caller\'s CURRENT canonical stance.');
   line();
@@ -529,8 +551,8 @@ async function main() {
     const sells = EVENTS.filter((e) => e.kind === "trade" && lc(e.action) === "sell").length;
     const trades = EVENTS.filter((e) => e.kind === "trade").length;
     line(`   ${trades} trade events in window · ${sells} are SELL (${fmtPct(pct(sells, trades))})`);
-    line("   `buildChallenges` selects wallet, market_id, kind, side, occurred_at.");
-    line("   It never reads `action`, so a SELL of YES is indistinguishable from a BUY.");
+    line("   Context only. `buildChallenges` no longer reads `events` at all — the");
+    line("   derivation that could not tell a SELL from a BUY was deleted with V2.");
     line();
     let agree = 0;
     let contradicts = 0;
@@ -581,23 +603,51 @@ async function main() {
       for (const e of examples) line(e);
     }
     line();
-    line("   `wallet_beliefs.stance_side` is YES|NO|MIXED|INACTIVE and is already read");
-    line("   by buildChallenges for the viewer's own answered set. Sourcing the caller's");
-    line("   side from it instead of from whichever event produced the candidate is one");
-    line("   extra `.in()` on a query that already runs.");
+    line("   THIS IS A GUARD, NOT LUCK. `buildChallenges` sources the caller's side from");
+    line("   `wallet_beliefs.stance_side`, filtered to YES/NO — never from whichever");
+    line("   event produced them. A caller who has exited or flipped falls back to the");
+    line("   sentence that needs no side rather than being quoted on a belief they no");
+    line("   longer hold. A contradiction above would mean that guard has broken.");
   }
   line();
 
   // ─────────────────────────────────────────────────────────────────────────
-  line("4 · REACH THAT OVERSTATES THE OPPORTUNITY");
-  line('   "Now your people can show up for you. 8 Tribe · 2 Rivals"');
+  /**
+   * SECTION 4 — REWRITTEN, BECAUSE IT WAS MEASURING CODE THAT NO LONGER EXISTS.
+   *
+   * It used to close with: "`callReachFor(wallet)` takes no market id, so it
+   * cannot exclude people who already hold a position there." That was the whole
+   * finding, and it is now false in two ways at once.
+   *
+   *   THE SIGNATURE IS `callReachFor(wallet, marketId?)`, and the one call site
+   *   — KeepChainMoving — always passes a market. The scoped path resolves the
+   *   audience through `eligibleAudience`, the same function the WRITE calls.
+   *
+   *   AND THE EXCLUSION IS WIDER THAN THIS SECTION EVER MODELLED. It simulated
+   *   removing current DIRECTIONAL holders. The shipped rule removes anybody with
+   *   a `wallet_beliefs` row at all — which survives a full exit, because selling
+   *   out does not un-answer a question — plus the market's author and anybody
+   *   already asked in any state.
+   *
+   * So the old number was not "how much the product overstates". It was "how much
+   * the product WOULD overstate if the fix were reverted", reported as a live
+   * defect, which is how it generated work that was already done.
+   *
+   * WHAT IS MEASURED NOW: the size of the exclusion itself. It is the work the
+   * scoped path is doing on every reach line — a regression watch rather than a
+   * bug report. If it ever reads zero on a network with real participation, the
+   * market id has stopped being passed somewhere.
+   */
+  line("4 · WHAT THE MARKET-SCOPED EXCLUSION IS REMOVING");
+  line('   "Now your people can show up for you. 8 Tribe · 2 Rivals · 3 Still Forming"');
   line();
   {
-    /** Everyone holding a directional position, per market. */
+    /**
+     * ANY participant, not just current directional holders — the shipped test is
+     * the EXISTENCE of a `wallet_beliefs` row, because it survives a full exit.
+     */
     const inMarket = new Map<string, Set<string>>();
     for (const b of BELIEFS) {
-      const s = lc(b.stance_side);
-      if (s !== "yes" && s !== "no") continue;
       const m = String(b.onchain_id);
       (inMarket.get(m) ?? inMarket.set(m, new Set()).get(m)!).add(lc(b.wallet));
     }
@@ -623,18 +673,25 @@ async function main() {
       reachable += free;
       if (free < q.size) overstatedRows += 1;
     }
-    line(`   ${rows} positions where a reach number would have been printed`);
-    line(`   people the sentence claims  ${shown}`);
-    line(`   people who could receive    ${reachable}`);
+    line(`   ${rows} positions where a reach number would be printed`);
+    line(`   qualified before exclusion  ${shown}`);
+    line(`   reachable after exclusion   ${reachable}`);
     line(
-      `   OVERSTATED BY               ${shown - reachable}   (${fmtPct(pct(shown - reachable, shown))} of the claim)`,
+      `   REMOVED BY THE SCOPED RULE  ${shown - reachable}   (${fmtPct(pct(shown - reachable, shown))} of the pool)`,
     );
-    line(`   positions with any overstatement ${overstatedRows} of ${rows}`);
+    line(`   positions where it removes anybody ${overstatedRows} of ${rows}`);
     line();
-    line("   `callReachFor(wallet)` takes no market id, so it cannot exclude people who");
-    line("   already hold a position there. The number is right for a NEWLY CREATED");
-    line("   market — nobody can have participated yet — and drifts for every backing");
-    line("   of an existing one, which is the common case.");
+    line("   This is the exclusion WORKING, not a gap. `callReachFor(wallet, marketId)`");
+    line("   resolves through `eligibleAudience` — the same function the write calls —");
+    line("   so the number shown and the audience recorded are one set. A newly created");
+    line("   market has no participants, so nothing is removed there and the reach is");
+    line("   unchanged; a backing of an existing market is where the rule earns its keep.");
+    line();
+    line("   THIS SECTION MODELS ONLY THE PARTICIPANT EXCLUSION. The shipped rule also");
+    line("   drops the market's author and anybody already asked in any state, so the");
+    line("   real audience is this size or smaller — never larger. Treat the number as");
+    line("   a floor, and as a regression watch: zero here on a network with real");
+    line("   participation would mean a call site stopped passing the market id.");
   }
   line();
 

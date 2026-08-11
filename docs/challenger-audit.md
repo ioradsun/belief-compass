@@ -1174,3 +1174,73 @@ landed on nobody — differing only in where it was discovered. The copy dropped
 "as your Tribe and Rivals form": there are three groups now, and naming two of
 them tells somebody whose whole network is Still Forming that they do not have
 one.
+
+---
+
+## Q. When the report outlived the code it was reporting on
+
+The first production run against the shipped §4 came back with two findings that
+read as live defects and were neither. Both had the same shape: **a measurement
+that still ran, wrapped in narration about an implementation that had been
+deleted.**
+
+### Q.1 §4 "reach still overstates by 32 people"
+
+The section closed with: _"`callReachFor(wallet)` takes no market id, so it
+cannot exclude people who already hold a position there."_ False twice over.
+
+The signature is `callReachFor(wallet, marketId?)`, and the only call site —
+`KeepChainMoving` — always passes a market. The scoped path resolves through
+`eligibleAudience`, the same function the write calls. And the shipped exclusion
+is **wider** than the section ever modelled: it drops anybody with a
+`wallet_beliefs` row at all (which survives a full exit, because selling out does
+not un-answer a question), plus the market's author and anybody already asked in
+any state. The section simulated removing current _directional_ holders only.
+
+So the 32 was never "how much the product overstates". It was _how much the
+product would overstate if the fix were reverted_ — reported as a live defect.
+
+Rewritten to measure the exclusion itself, framed as a regression watch: **zero
+here on a network with real participation would mean a call site stopped passing
+the market id.** The narration says explicitly that it models only the
+participant exclusion, so the real audience is that size or smaller — never
+larger. It is a floor, and it says so.
+
+### Q.2 §3 "SELL is indistinguishable from a BUY"
+
+The section counted SELL events and stated that `buildChallenges` _"selects
+wallet, market_id, kind, side, occurred_at"_ and _"never reads `action`"_. True
+of the DERIVED Challenge, which scanned `events` to infer who wanted you at the
+table. **V2 deleted the scan.** `buildChallenges` reads `market_calls` and takes
+the caller's side from `wallet_beliefs.stance_side` — which is exactly what the
+section's own closing paragraph recommended as the fix.
+
+The result was a report showing a clean 14/14 beside a sentence explaining why
+the clean result was luck. The honest reading is the reverse: **matching is what
+the guard produces**, and a contradiction would mean it has broken.
+
+### Q.3 §6 was real, and the comment is now correct
+
+`src/lib/open-calls.ts` claimed _"three means three people are actually
+waiting."_ `composeChallenges` keeps one card per market — `Map<number,
+Challenge>` keyed by `marketId` — so one person calling you into two markets is
+two rows and one human, and two people calling you into one market is one row and
+two humans. Against production the two numbers diverged for **every** responder
+with an open call: 14 open markets across 7 open callers.
+
+It never reached a screen; no user-facing string says "N people are waiting". But
+it is the number a sentence would be built from, so three comments in that file
+now say _questions_, and the one that made the false claim explains why.
+
+### Q.4 The lesson, which is not "the report was wrong"
+
+The report was right about what it measured every time. What went stale was the
+**prose attached to the measurement** — and prose is what somebody reads when
+deciding what to build next. A section that keeps computing after its subject is
+deleted does not fail; it quietly starts describing a counterfactual, and every
+run reasserts it with fresh production numbers behind it, which is exactly what
+makes it convincing.
+
+The rule this earns: **when a fix lands, the section that found it is part of the
+diff.** Not deleted — the measurement is usually still the right regression watch
+— but re-narrated to describe the code that exists now.
