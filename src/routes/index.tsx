@@ -1653,7 +1653,9 @@ function Feed() {
       setQueue((q) => commit(q));
       return;
     }
-    refillNow();
+    // Nothing ahead at all is not a low-water mark, it is a stall the reader
+    // is looking at — so it skips the throttle.
+    refillNow(remainingAhead <= 0);
   }, [remainingAhead, queue, stableFeed?.exhausted, pagedOut, refillNow]);
 
   const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
