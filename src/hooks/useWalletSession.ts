@@ -46,23 +46,14 @@ export function useWalletSession() {
   }, [address, signMessageAsync]);
 
   const ensureSession = useCallback(
-    async (opts?: { interactive?: boolean }): Promise<string> => {
+    async (_opts?: { interactive?: boolean }): Promise<string> => {
       if (!address) throw new Error("Connect a wallet first.");
-      const cached = readSessionToken(address);
-      if (cached) return cached;
-      if (opts?.interactive === false) throw new SignatureRequired();
-      return mint();
+      return readSessionToken(address) ?? (await mint());
     },
     [address, mint],
   );
 
-
-  /**
-   * Run a wallet-signed call, healing a stale token. A cached token can stop
-   * verifying server-side (e.g. the signing secret rotated), which surfaces as
-   * "Verify your wallet…". We drop the token and re-sign; free (non-interactive)
-   * actions can't prompt, so they raise SignatureRequired and are skipped.
-   */
+  /** Run a session-backed call, healing a stale token by opening a new one. */
   const withSession = useCallback(
     async <T>(run: (session: string) => Promise<T>, opts?: { interactive?: boolean }) => {
       const session = await ensureSession(opts);
@@ -71,12 +62,13 @@ export function useWalletSession() {
       } catch (err) {
         if (!isStaleSession(err) || !address) throw err;
         clearSessionToken(address);
-        if (opts?.interactive === false) throw new SignatureRequired();
         return run(await mint());
       }
     },
     [address, ensureSession, mint],
   );
+
+
 
   return { ensureSession, withSession, address };
 }
