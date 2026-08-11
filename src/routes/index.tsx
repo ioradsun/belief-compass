@@ -1524,9 +1524,9 @@ function Feed() {
           style={{ borderRight: "1px solid var(--hairline)" }}
         >
           {/* FIRST TEN CONVICTIONS — the brief owns the top of this rail on
-              every tab and with a Case File open, until the reader has taken
-              ten sides. Only the composer displaces it. */}
-          {!createOpen && <TakeASide wallet={wallet} />}
+              every tab until the reader has taken ten sides. The composer and
+              an open Case File displace it: those rails belong to one job. */}
+          {!createOpen && !(caseActive && currentRow) && <TakeASide wallet={wallet} />}
 
           {createOpen && !ideaDue ? (
             /* WRITING A MARKET the reader chose to write — the everyday rail
