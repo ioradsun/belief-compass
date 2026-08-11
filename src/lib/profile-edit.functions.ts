@@ -50,7 +50,6 @@ export const saveProfileOverride = createServerFn({ method: "POST" })
     const { serviceClient } = await import("@/lib/supabase-clients");
     const sb = serviceClient();
 
-
     const name = data.displayName?.trim() || null;
     if (name && /^0x[a-f0-9]{6,}/i.test(name)) throw new Error("Pick a name, not an address.");
 

@@ -68,8 +68,6 @@ export function useWalletSession() {
     [address, ensureSession, mint],
   );
 
-
-
   return { ensureSession, withSession, mintSigned, address };
 }
 
