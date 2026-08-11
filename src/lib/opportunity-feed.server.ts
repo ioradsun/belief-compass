@@ -479,15 +479,20 @@ export async function buildOpportunityFeed(
     });
     const ai = aiOf(analyses.get(s.onchainId));
     const state: ViewerMarketState | undefined = signals.states.get(s.onchainId);
-    const scored = scoreMarket({ signals: s, ai, viewer: signals.profile, now, epoch });
+    const scored = deepPagePersonalFloor(
+      scoreMarket({ signals: s, ai, viewer: signals.profile, now, epoch }),
+      s,
+      poolPage,
+    );
     const eligibility = eligibilityFor({
       onchainId: s.onchainId,
       state,
       sessionSeen,
       sessionQueued,
-      sessionSeenRank,
+      cycleStartedAt,
       now,
     });
+
     const holds = signals.held.has(s.onchainId);
     const reentry = eligibility.eligible
       ? null
