@@ -52,12 +52,31 @@ describe("questions are rationed over the rows that actually render", () => {
     expect(ration()).toBeGreaterThan(draft());
   });
 
-  it("removes no rows after the question budget is spent", () => {
-    // The only row removal in the tape is the editorial splice. If another one
-    // ever appears below the question stage, a rationed question can vanish.
+  /**
+   * THIS TEST WAS RIGHT AND ITS METHOD STOPPED BEING ACHIEVABLE.
+   *
+   * It asserted no row removal below the question stage, and named the exact
+   * consequence: "a rationed question can vanish." It then went red and was
+   * carried as baseline for several merges — during which the thing it warned
+   * about was live. A de-duplication pass now runs after rationing, drops a
+   * question-carrying card whose verbatim twin outranks it, and the ledger went
+   * on reporting that question as kept.
+   *
+   * The structural rule cannot come back: the question layer rewrites bodies, so
+   * de-duplication has to run after it or it compares the wrong text. So the
+   * assertion moves from the SHAPE to the RULE — whatever removes rows, the
+   * ledger must agree with what survived.
+   */
+  it("never reports a question as kept on a row that was removed", () => {
     const after = src.slice(ration());
-    expect(after).not.toMatch(/\.splice\(/);
-    expect(after).not.toMatch(/editFeed\(/);
+    const removals = [...after.matchAll(/\.splice\(|editFeed\(/g)];
+    if (removals.length === 0) return; // nothing below the stage: rule holds trivially
+    // Every removal below the question stage must be reconciled against the ledger.
+    expect(after).toMatch(
+      /for \(const e of questionLedger\) if \(dup\.has\(e\.id\)\) e\.kept = false/,
+    );
+    // And the reconciliation must come AFTER the removal, not before it.
+    expect(after.indexOf("e.kept = false")).toBeGreaterThan(after.lastIndexOf(".splice("));
   });
 
   it("keeps a promoted person pattern readable by the question layer", () => {

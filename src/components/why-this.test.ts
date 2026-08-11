@@ -93,7 +93,9 @@ describe("Why this is one component, in one colour, on both surfaces", () => {
     expect(deck).toMatch(/<WhyThis reason=\{reason\} lead \/>/);
     // The playlist explains the rows the reader has not reached yet.
     expect((feed.match(/<WhyThis/g) ?? []).length).toBe(1);
-    expect(feed).toMatch(/const upcoming = entries\.filter\(\(e\) => e\.onchainId !== activeId\)/);
+    // Tolerant of formatting: prettier wrapped this declaration across lines and
+    // the single-line pattern stopped matching code that had not changed.
+    expect(feed).toMatch(/const upcoming =[\s\S]{0,80}?entries[\s\S]{0,80}?onchainId !== activeId/);
     // And nobody says it a second time — nor keeps the plumbing for saying it.
     // The rail card accepted a `reason` prop for several commits after it
     // stopped rendering one, and the route computed a per-render scan of the

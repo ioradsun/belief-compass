@@ -208,9 +208,25 @@ describe("the update control never moves the feed", () => {
     expect(c).toMatch(/aria-hidden=\{gate\.pending === 0/);
   });
 
-  it("the rail hands the heading to the tape rather than rendering its own", () => {
+  /**
+   * THE OWNERSHIP REVERSED, AND THE RULE DID NOT.
+   *
+   * This asserted `label="Insider"` on the route, back when the rail handed the
+   * heading down to the tape. The tab strip now says "Insider" itself, so the
+   * embedded tape is rendered HEADLESS — `label={undefined}` — and the word
+   * appears once rather than as a heading underneath a tab of the same name.
+   *
+   * What is protected either way is that exactly one thing says it. Pinning
+   * which one made a deliberate reversal look like a regression.
+   */
+  it("says Insider once — the tab strip, not a heading under it", () => {
     const idx = code("src/routes/index.tsx");
-    expect(idx).toMatch(/label="Insider"/);
+    const rail = code("src/components/ChallengeRail.tsx");
+    // The tab strip owns the word.
+    expect(rail).toMatch(/\? "Challenge" : "Insider"/);
+    // And the tape inside the rail is given no heading of its own.
+    expect(idx).toMatch(/label=\{undefined\}/);
+    expect(idx).not.toMatch(/label="Insider"/);
   });
 
   it("still holds every update until the reader asks", () => {
