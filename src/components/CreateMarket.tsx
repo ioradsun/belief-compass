@@ -625,7 +625,7 @@ function StepLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Opens the link composer. Uploads are disabled — evidence is always a link. */
+/** Opens the link composer. Images have their own affordance beside it. */
 function AddMedia({ onPick, active }: { onPick: () => void; active: boolean }) {
   return (
     <button
