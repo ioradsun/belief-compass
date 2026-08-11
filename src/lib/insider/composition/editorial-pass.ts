@@ -499,32 +499,8 @@ export function runEditorialPass<R extends LiveRow>({
     for (const e of questionLedger) if (keep.has(e.id) && !e.rejected) e.kept = true;
   }
 
-  // ── 4. NO TWO IDENTICAL CARDS ────────────────────────────────────────────
-  /* The very last act, after every promotion and the question layer: two
-     survivors can still print the exact same loud copy — two markets that
-     "woke up", two that have gone the same number of days with no one opposite
-     — because the sentence carries no market-specific detail (the title sits
-     below it, muted). Collapse each identical (headline, body) to its strongest
-     telling; the standing rotation resurfaces the rest on a later build. See
-     feed-editorial `dropVerbatimDuplicates`. */
-  const dup = dropVerbatimDuplicates(
-    material.flatMap((r) =>
-      r.story
-        ? [
-            {
-              id: r.id,
-              headline: r.story.headline,
-              body: r.story.body,
-              significance: r.mix?.significance ?? null,
-              informative: !!r.story.question,
-            },
-          ]
-        : [],
-    ),
-  );
-  if (dup.size > 0)
-    for (let i = material.length - 1; i >= 0; i--)
-      if (dup.has(material[i]!.id)) material.splice(i, 1);
+
+
 
   return { consumedRows, questionLedger };
 }
