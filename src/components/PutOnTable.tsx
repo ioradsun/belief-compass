@@ -92,11 +92,18 @@ export function PutOnTable({
     );
   }
 
-  // NOBODY QUALIFIES. Silence rather than an offer that leads nowhere.
-  if (result && !result.ok && result.reason === "no_audience") {
+  /**
+   * NOBODY LEFT TO ASK. Silence rather than an offer that leads nowhere.
+   *
+   * `no_reach` joins `no_audience` because to the reader they are one fact: the
+   * write landed on nobody. They differ only in where it was discovered — one
+   * before the transaction, one inside it, after everybody in the audience
+   * turned out to already have a row. Both rolled back; neither spent a slot.
+   */
+  if (result && !result.ok && (result.reason === "no_audience" || result.reason === "no_reach")) {
     return (
       <p className="mt-2 text-[11.5px] leading-snug text-[var(--text-muted)]">
-        Nobody qualifies to weigh in yet. As your Tribe and Rivals form, this becomes worth asking.
+        Nobody new to ask here yet. As your network fills in, this becomes worth asking.
       </p>
     );
   }

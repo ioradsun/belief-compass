@@ -26,7 +26,6 @@ import { serviceClient } from "@/lib/supabase-clients";
 import { aliasFor } from "@/lib/wallet-identity";
 import { eligibleAudience, type Sb } from "@/lib/challenge.server";
 import {
-  TABLE_SLOTS,
   tableProgress,
   shouldAutoClose,
   finishedVisible,
@@ -79,26 +78,78 @@ interface ChallengeRecord {
   close_reason: string | null;
 }
 
-/** Postgres unique violation — a taken slot, or a market already up. */
-const CONFLICT = "23505";
-
 export type PutResult =
   | { ok: true; id: number; reached: number }
   | {
       ok: false;
-      /** `audience_unavailable` is a refusal, never an empty room. */
-      reason: "full" | "already_up" | "no_audience" | "audience_unavailable" | "failed";
+      /**
+       * EVERY REFUSAL MEANS THE SAME THING ABOUT THE DATABASE: nothing was
+       * written, no slot was taken, and no carried call was repointed. They
+       * differ only in what to say to the reader.
+       *
+       *   full                  three are already up
+       *   already_up            this question is one of them
+       *   no_audience           nobody qualifies to be asked
+       *   audience_unavailable  the audience read was REFUSED — not nobody
+       *   bad_parent            the relay pointed at a call that does not
+       *                         describe a relay: wrong market, not addressed
+       *                         to this person, or never answered
+       *   no_reach              the write landed on nobody. Rolled back rather
+       *                         than left on the table asking no one.
+       *   failed                anything else, already logged
+       */
+      reason:
+        | "full"
+        | "already_up"
+        | "no_audience"
+        | "audience_unavailable"
+        | "bad_parent"
+        | "no_reach"
+        | "failed";
     };
 
+/** The RPC's shape. Untyped in the generated client until types are regenerated. */
+type RpcClient = {
+  rpc: (
+    name: string,
+    args: Record<string, unknown>,
+  ) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>;
+};
+
 /**
- * PUT IT ON THE TABLE.
+ * PUT IT ON THE TABLE — one round trip, and it is one transaction.
  *
- * THE CAP IS NOT CHECKED HERE, IT IS COLLIDED WITH. Counting active rows and then
- * inserting is a read-then-write race: two tabs both count two, both insert, and
- * the person has four. Instead this walks the slots and lets the partial unique
- * index reject a taken one — so the loop below is not retry-on-failure, it IS the
- * allocator. Falling out of it means all three are genuinely occupied, decided by
- * Postgres rather than by arithmetic that was true a moment ago.
+ * THIS USED TO BE FOUR WRITES AND IT COULD LEAVE A CORPSE. Take a slot, insert
+ * the Challenge, repoint last run's unanswered calls at it, write the
+ * recipients — and only the first two could fail loudly. A failed recipient
+ * write was logged and swallowed, and this function returned `ok: true` with
+ * `reached: 0`: a Challenge that exists, holds one of three editorial slots,
+ * asks nobody, prints no progress sentence, and can never auto-close because
+ * `allResponded` is false at zero. It holds that slot forever.
+ *
+ * A COMPENSATING CLOSE WOULD NOT HAVE FIXED IT, which is why this is an RPC
+ * rather than a tidy-up branch. By the time the recipient write fails, step
+ * three has already repointed last run's unanswered calls at the new Challenge.
+ * Closing it strands those people — the question they are still being asked
+ * quietly stops being asked, and the pointer that said which Challenge it
+ * belonged to has been overwritten, so there is nothing to restore. The write
+ * has to be undone, not apologised for.
+ *
+ * So the slot allocation, the Challenge row, the carry, the recipient upsert and
+ * the reach count all live in `put_on_table` and commit together or not at all.
+ * The invariant a caller may rely on:
+ *
+ *   ok: true   →  a durable, active Challenge exists AND reached > 0
+ *   ok: false  →  no Challenge exists, no slot was consumed, nothing was carried
+ *
+ * THE CAP IS STILL COLLIDED WITH, NEVER COUNTED — the slot walk moved into the
+ * function unchanged, still letting the partial unique index reject a taken slot
+ * rather than trusting a count that was true a moment ago.
+ *
+ * AND THERE IS NO FALLBACK TO THE OLD PATH. If the function is not deployed the
+ * write refuses. Falling back would restore the exact defect this replaces, and
+ * a Challenge that never went up is recoverable in a way a ghost holding a slot
+ * is not.
  */
 export async function putOnTable(
   wallet: string,
@@ -110,6 +161,10 @@ export async function putOnTable(
    * Challenge points back at the call that brought them in, and provenance is a
    * walk up that pointer rather than a guess from timestamps. Null for a market
    * somebody put up on their own initiative, which is most of them.
+   *
+   * VALIDATED SERVER-SIDE, inside the transaction. The foreign key only proves
+   * the call exists; the function additionally requires that it is in this
+   * market, was addressed to this person, and was actually answered.
    */
   parentCall?: number | null,
 ): Promise<PutResult> {
@@ -117,9 +172,7 @@ export async function putOnTable(
   const me = wallet.toLowerCase();
 
   /**
-   * WHO IT WILL REACH, resolved BEFORE a slot is taken. A Challenge nobody can
-   * receive should not consume one of three — the person would spend an editorial
-   * choice on silence and have no way to know why.
+   * WHO IT WILL REACH, resolved BEFORE the transaction opens.
    *
    * THE SAME FUNCTION THE PREVIEW CALLS, and that is the fix rather than a
    * detail. This used to read `qualifiedCallers` with no market-scoped exclusion
@@ -127,156 +180,78 @@ export async function putOnTable(
    * the audience written were decided by different rules, and production
    * measured the gap at 32 people across 26 positions. One definition means the
    * "8" in "3 of 8 showed up" is the same 8 the reader was promised.
+   *
+   * A REFUSED AUDIENCE IS NOT AN EMPTY ONE, AND IT IS NOT PERMISSION. The
+   * exclusions are what keep a Challenge away from people who already answered
+   * this market. If one of those reads fails we do not know who to leave out —
+   * so nothing is written and the caller is told the audience was unavailable.
    */
   const resolved = await eligibleAudience(sb, me, marketId);
-  /**
-   * A REFUSED AUDIENCE IS NOT AN EMPTY ONE, AND IT IS NOT PERMISSION.
-   *
-   * The exclusions are what keep a Challenge away from people who already
-   * answered this market. If one of those reads fails we do not know who to
-   * leave out — so nothing is written, no slot is spent, and the caller is told
-   * the audience was unavailable rather than being handed a Challenge that
-   * reached the wrong people.
-   */
   if (resolved.status === "failed") return { ok: false, reason: "audience_unavailable" };
   const audience = resolved.members.filter((m) => m.wallet !== me);
   if (audience.length === 0) return { ok: false, reason: "no_audience" };
 
-  let id: number | null = null;
-  for (let slot = 1; slot <= TABLE_SLOTS; slot++) {
-    const row: Record<string, unknown> = {
-      challenger_wallet: me,
-      market_id: marketId,
-      slot_no: slot,
-    };
-    if (typeof parentCall === "number") row["parent_call"] = parentCall;
-    let { data, error } = await sb.from("challenges").insert(row).select("id").maybeSingle();
+  const { data, error } = await (sb as unknown as RpcClient).rpc("put_on_table", {
+    p_challenger: me,
+    p_market_id: marketId,
+    p_parent_call: typeof parentCall === "number" ? parentCall : null,
     /**
-     * LINEAGE IS DECORATION; THE CHALLENGE IS NOT.
-     *
-     * `42703` is "column does not exist" — code can ship ahead of its migration,
-     * and losing somebody's deliberate act to a missing provenance column would
-     * be the wrong trade. Retry without it once; the relay still happens.
+     * THE RELATION, NEVER THE GROUP. `group` is not on a candidate and is not
+     * sent — "Still Forming" is a heading, and a row that stored it would make
+     * presentation copy permanent. What is frozen is what the engine believed:
+     * `neutral`, or `insufficient` with the provenance that let them in.
      */
-    if (error?.code === "42703" && typeof parentCall === "number") {
-      console.warn("[table] parent_call not present yet — relaying without lineage");
-      delete row["parent_call"];
-      ({ data, error } = await sb.from("challenges").insert(row).select("id").maybeSingle());
-    }
-    if (!error && data) {
-      id = Number((data as { id: number }).id);
-      break;
-    }
-    if (error?.code !== CONFLICT) {
-      console.error("[table] could not put on the table", {
-        code: error?.code,
-        message: error?.message,
+    p_audience: audience.map((m) => ({ wallet: m.wallet, relation: m.relationAtCall })),
+  });
+
+  if (error) {
+    /**
+     * `PGRST202` is "no function matches" — the migration has not been applied.
+     * Said differently from a runtime failure, because the fix is different and
+     * one is permanent until somebody acts.
+     */
+    if (error.code === "PGRST202") {
+      console.error("[table] put_on_table is not deployed — refusing rather than writing", {
+        message: error.message,
       });
-      return { ok: false, reason: "failed" };
+    } else {
+      console.error("[table] put_on_table failed", { code: error.code, message: error.message });
     }
-    // A conflict is either "this slot is taken" or "this market is already up",
-    // and the second is not something to retry into the next slot. Distinguished
-    // by asking, because the two indexes raise the same code.
-    const { data: dup } = await sb
-      .from("challenges")
-      .select("id")
-      .eq("challenger_wallet", me)
-      .eq("market_id", marketId)
-      .is("closed_at", null)
-      .maybeSingle();
-    if (dup) return { ok: false, reason: "already_up" };
+    return { ok: false, reason: "failed" };
   }
-  if (id == null) return { ok: false, reason: "full" };
 
-  /**
-   * STILL WAITING FROM LAST TIME? THEY MOVE WITH THE QUESTION.
-   *
-   * `market_calls`'s primary key is (market_id, caller_wallet, responder_wallet)
-   * with no `closed_at` predicate — it is unique FOREVER, not per Challenge. So
-   * the second time somebody puts the same market up, every recipient row they
-   * need already exists, and the insert below can only add the people who are
-   * genuinely new.
-   *
-   * Which leaves the people who never answered the first run. They are still
-   * being asked — the question is back on the table and they can still weigh in —
-   * so their row is re-pointed at the Challenge that is now doing the asking.
-   * Without this, a re-issued Challenge would reach an audience of nobody:
-   * `tableProgress` would report `reached: 0`, `progressLine` would say nothing at
-   * all, `allResponded` is false by design at zero, so `shouldAutoClose` could
-   * never fire — and one of three editorial slots would be occupied permanently
-   * by a card with no sentence on it.
-   *
-   * A TERMINATED ROW NEVER MOVES. `responded_at`/`passed_at` are filtered out, so
-   * somebody who showed up for the first run stays attached to the run they
-   * showed up for. History belongs to the Challenge it actually happened under,
-   * and `relation_at_call` is not in the update — the relationship a call was
-   * made under is still written once and never rewritten.
-   */
-  const carried = await sb
-    .from("market_calls")
-    .update({ challenge_id: id })
-    .eq("market_id", marketId)
-    .eq("caller_wallet", me)
-    .is("responded_at", null)
-    .is("passed_at", null)
-    .select("responder_wallet");
-  if (carried.error) {
-    console.error("[table] could not carry unanswered calls onto the new challenge", {
-      code: carried.error.code,
-      message: carried.error.message,
-      challengeId: id,
+  const res = (data ?? {}) as {
+    ok?: boolean;
+    id?: number;
+    reached?: number;
+    reason?: string;
+    detail?: string;
+    code?: string;
+  };
+  if (res.ok === true && typeof res.id === "number" && (res.reached ?? 0) > 0) {
+    return { ok: true, id: Number(res.id), reached: Number(res.reached) };
+  }
+  // The function rolled itself back. `detail` never reaches a screen; it is the
+  // one place a check-constraint rejection or a timeout is legible at all.
+  if (res.detail || res.code)
+    console.error("[table] challenge rolled back", {
+      reason: res.reason,
+      code: res.code,
+      detail: res.detail,
+      marketId,
     });
-  }
-
-  /**
-   * THE FREEZE. One row per qualified person, `relation_at_call` stamped as it is
-   * right now and never recomputed.
-   *
-   * UPSERT, NOT INSERT, AND THE DIFFERENCE IS THE WHOLE BUG. A multi-row INSERT is
-   * ATOMIC: one duplicate and Postgres rolls back the entire statement. The old
-   * code swallowed 23505 believing it was skipping the odd repeat — it was in fact
-   * dropping the WHOLE audience, silently, every time any single recipient already
-   * had a row. `ignoreDuplicates` is what the swallow always meant: keep every
-   * existing row exactly as it is, write the ones that are new.
-   */
-  const inserted = await sb
-    .from("market_calls")
-    .upsert(
-      audience.map((member) => ({
-        market_id: marketId,
-        caller_wallet: me,
-        responder_wallet: member.wallet,
-        /**
-         * THE RELATION, NEVER THE GROUP. `member.group` is not written and does
-         * not exist on a candidate — "Still Forming" is a heading, and a row
-         * that stored it would make presentation copy permanent. The frozen
-         * value is what the engine actually believed: `neutral`, or
-         * `insufficient` with the provenance that let them in.
-         */
-        relation_at_call: member.relationAtCall,
-        challenge_id: id,
-      })),
-      { onConflict: "market_id,caller_wallet,responder_wallet", ignoreDuplicates: true },
-    )
-    .select("responder_wallet");
-  if (inserted.error && inserted.error.code !== CONFLICT) {
-    console.error("[table] challenge is up but its audience was not recorded", {
-      code: inserted.error.code,
-      message: inserted.error.message,
-      challengeId: id,
-    });
-  }
-
-  // WHAT IT ACTUALLY REACHED, not what it hoped to. This used to return
-  // `audience.length` regardless of whether a single row was written, which is
-  // how the failure above stayed invisible for as long as it did.
-  const reached = new Set<string>();
-  for (const r of [...(carried.data ?? []), ...(inserted.data ?? [])] as {
-    responder_wallet: string;
-  }[]) {
-    reached.add(String(r.responder_wallet).toLowerCase());
-  }
-  return { ok: true, id, reached: reached.size };
+  const reason = res.reason;
+  return {
+    ok: false,
+    reason:
+      reason === "full" ||
+      reason === "already_up" ||
+      reason === "no_audience" ||
+      reason === "bad_parent" ||
+      reason === "no_reach"
+        ? reason
+        : "failed",
+  };
 }
 
 /**

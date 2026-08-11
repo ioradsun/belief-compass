@@ -1078,3 +1078,99 @@ Section 12 of `check:challenge-integrity` reports on it and deliberately refuses
 to conclude from row counts alone — zero Still Forming rows is what an unapplied
 migration looks like _and_ what an applied one looks like before anybody has a
 neutral person in range. It prints the `pg_constraint` query that settles it.
+
+---
+
+## P. The ghost Challenge, and making the write atomic
+
+### P.1 What the four writes could leave behind
+
+`putOnTable` did this in four round trips: take a slot, insert the `challenges`
+row, repoint last run's unanswered calls at it, write the recipients. Only the
+first two could fail loudly. **A failed recipient write was logged and swallowed,
+and the function returned `ok: true` with `reached: 0`.**
+
+That is a Challenge which exists, occupies one of three editorial slots, asks
+nobody, prints no progress sentence, and can never auto-close — `allResponded` is
+false at zero, so `shouldAutoClose` never fires. It holds that slot **forever**.
+
+The unapplied `market_calls_relation` CHECK is what made it visible: a Challenge
+reaching a Still Forming person is rejected by Postgres and produces exactly that
+corpse. But the CHECK is only the current trigger. Any recipient-write failure —
+a foreign key, a dropped connection, a statement timeout on a large audience —
+produces the same thing.
+
+### P.2 Why a compensating close would not have fixed it
+
+The obvious repair is "if the recipients did not land, close the Challenge". It
+is wrong here, and not marginally.
+
+By the time step four fails, **step three has already repointed last run's
+unanswered calls at the new Challenge.** Closing it strands those people: the
+question they are still being asked quietly stops being asked, and their original
+Challenge cannot be restored, because the pointer that said which one it was has
+been overwritten. A compensating action cannot recover information the failed
+sequence destroyed. The write has to be undone, not apologised for.
+
+### P.3 One function is one transaction
+
+`put_on_table(challenger, market_id, parent_call, audience jsonb)` holds the slot
+allocation, the Challenge insert, the carry, the recipient upsert and the reach
+count. Every write lives inside a `BEGIN … EXCEPTION` block — a plpgsql
+subtransaction, so reaching the handler undoes every row the block touched.
+
+```
+ok = true   →  a durable, active Challenge exists AND reached > 0
+ok = false  →  no Challenge exists, no slot was consumed, nothing was carried
+```
+
+Unchanged by the move: the cap is still **collided with, never counted** — the
+slot walk letting `challenges_active_slot_idx` reject a taken slot moved into the
+function intact. The recipients are still an upsert with `DO NOTHING`, because
+`market_calls`'s primary key is unique _forever_ rather than per Challenge.
+`relation_at_call` is still absent from the carry's `SET`.
+
+New: **`parent_call` is validated rather than trusted.** The foreign key only
+proves the call exists. A relay must additionally be in this market, addressed to
+the person now putting the question up, and actually answered — otherwise
+"Maya → Sundeep → You" is drawn from a number.
+
+**There is no fallback to the old path.** If the function is not deployed the
+write refuses with `PGRST202` logged. Falling back would restore the exact defect
+this replaces, and a Challenge that never went up is recoverable in a way a ghost
+holding a slot is not.
+
+### P.4 Proved against a real cluster, because the claim is transactional
+
+"No slot was consumed" is a statement about what survives a rollback, and a mock
+cannot be wrong about a rollback it is simulating. `put-on-table.pg.test.ts` runs
+the real function on a real Postgres and inspects the tables afterwards.
+
+```
+npm run test:pg        # brings up a throwaway cluster, runs it, tears it down
+```
+
+22 tests: neutral and insufficient recipients, mixed strong + forming audiences,
+recipient constraint failure, zero actual reach, no slot consumed on any failure,
+no carried call changed after rollback, three invalid `parent_call` shapes,
+duplicate live market, full table, slot reuse after close, and returned reach
+matching durable recipient rows.
+
+The constraint failure is reproduced **deliberately**, by narrowing the CHECK back
+to four values mid-test — that is the failure the production database can produce
+today, and simulating it any other way would be testing something else.
+
+Two guards on the harness itself. The suite **skips without a cluster and says so
+out loud**, because a silently skipped suite reads as a passing one in a summary
+line. And `scripts/put-on-table-schema.sql` is asserted against the real
+migrations, so a constraint relaxed in the fixture and not in production cannot
+quietly make every test above weaker than the thing it claims to prove.
+
+### P.5 Two new refusals reach the surface
+
+`bad_parent` and `no_reach` join the `PutResult` union. `no_reach` shares
+`no_audience`'s sentence, because to the reader they are one fact — the write
+landed on nobody — differing only in where it was discovered. The copy dropped
+"as your Tribe and Rivals form": there are three groups now, and naming two of
+them tells somebody whose whole network is Still Forming that they do not have
+one.
