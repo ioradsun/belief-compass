@@ -481,6 +481,8 @@ export function MyConvictions({
       id: f.id,
       side: f.side,
       paired: (sidesPerMarket.get(f.id) ?? 0) > 1,
+      maker: makerIds.has(f.id),
+
       value: f.value,
       priced: f.priced,
       gainUsd: f.gainUsd,
