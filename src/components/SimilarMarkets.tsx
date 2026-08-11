@@ -73,7 +73,7 @@ export function SimilarMarkets({
   // input for the session and React Query cancels/replaces stale fetches. No
   // second retrieval path — this is the same server function the right rail
   // called, moved rather than reimplemented.
-  const { data } = useQuery({
+  const { data, isFetching } = useQuery({
     queryKey: ["market-suggestions", question.toLowerCase(), probe?.sha256, probe?.linkUrl],
     queryFn: () =>
       suggestExistingMarkets({
