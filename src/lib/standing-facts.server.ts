@@ -32,6 +32,7 @@ import {
   type StandingStoryRow,
 } from "@/domain/standing-story";
 import type { NetworkLabel, Side } from "@/domain/story";
+import { relFromStoredPct } from "@/domain/price-move";
 
 type Row = Record<string, unknown>;
 
@@ -276,7 +277,8 @@ export async function buildStandingStories(input: StandingFactsInput): Promise<S
     const [idStr, side] = key.split(":");
     const marketId = Number(idStr);
     const ev = input.evidenceByMarket.get(marketId);
-    const yesMove = fin(ev?.yesPriceChange24h);
+    // Stored as a percent by market_state; standing copy speaks in fractions.
+  const yesMove = relFromStoredPct(fin(ev?.yesPriceChange24h));
     const whale = whales.get(marketId) ?? null;
     all.push(
       ...composeStandingStories({
