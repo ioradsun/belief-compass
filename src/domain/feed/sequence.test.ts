@@ -434,96 +434,53 @@ describe("exhausted", () => {
 });
 
 /**
- * THE SECOND TIER — markets the reader has been shown and did not decide on.
+ * A REPEAT NEVER ENTERS A PASS.
  *
- * The behaviour these lock down is the difference between a feed and a playlist:
- * running out of NEVER-SEEN markets is a fact about retrieval, and it must not
- * reach the reader as "discovery is over".
+ * There used to be a second tier: markets the reader had already been shown,
+ * offered back once the fresh pool thinned. It answered "this PAGE has nothing
+ * fresh" as though it meant "this PLATFORM has nothing fresh", and readers saw
+ * the same questions again with thousands untouched behind the pool ceiling.
+ *
+ * The gate now emits one verdict — touched during this pass, or not — so the
+ * sequencer simply drops what the reader has met. Repeats come back by ROLLING
+ * THE PASS (see feed-session), which re-ranks the whole platform with today's
+ * signal rather than replaying one page's leftovers.
  */
-describe("the resurface tier", () => {
-  const seen = (id: number, resurfaceAt = 0) =>
-    cand(id, { eligibility: elig("recently_viewed", resurfaceAt) });
+describe("markets the reader already met", () => {
+  const seen = (id: number) => cand(id, { eligibility: elig("recently_viewed") });
 
-  it("fills the queue when the fresh pool runs out", () => {
-    const { items } = sequenceFeed({
-      limit: 4,
-      candidates: [cand(1), seen(2), seen(3), seen(4)],
-    });
-    expect(items.map((i) => (i.kind === "market" ? i.onchainId : null))).toHaveLength(4);
-  });
-
-  /** A repeat is a last resort, never a competitor for an early slot. */
-  it("never places a repeat while a fresh market is available", () => {
+  it("are dropped, however well they score", () => {
     const { items } = sequenceFeed({
       limit: 4,
       // The repeats outscore every fresh market, and it must not matter.
       candidates: [seen(1), seen(2), cand(50), cand(51)],
     });
-    const ids = items.flatMap((i) => (i.kind === "market" ? [i.onchainId] : []));
-    expect(ids.slice(0, 2).sort()).toEqual([50, 51]);
+    expect(items.flatMap((i) => (i.kind === "market" ? [i.onchainId] : [])).sort()).toEqual([
+      50, 51,
+    ]);
   });
 
-  it("offers the oldest sighting first, not the best-scoring one", () => {
-    const { items } = sequenceFeed({
-      limit: 2,
-      // 1 scores highest (cand scores 100 - id) and was seen most recently.
-      candidates: [seen(1, 9_000), seen(2, 1_000)],
-    });
-    expect(items.flatMap((i) => (i.kind === "market" ? [i.onchainId] : []))).toEqual([2, 1]);
-  });
-
-  it("marks what it placed, so a session of repeats is visible", () => {
-    const { items } = sequenceFeed({ limit: 2, candidates: [cand(1), seen(2)] });
-    const flags = items.flatMap((i) => (i.kind === "market" ? [i.diagnostics.resurfaced] : []));
-    expect(flags).toEqual([false, true]);
-  });
-
-  it("is not exhausted while repeats are still waiting", () => {
-    expect(sequenceFeed({ limit: 1, candidates: [cand(1), seen(2)] }).exhausted).toBe(false);
-    expect(sequenceFeed({ limit: 4, candidates: [cand(1), seen(2)] }).exhausted).toBe(true);
-  });
-
-  it("still obeys the diversity rules — a repeat earns its slot like any card", () => {
-    const cands = Array.from({ length: 8 }, (_, i) =>
-      cand(i + 1, {
-        category: i < 6 ? "crypto" : "sports",
-        eligibility: elig("recently_viewed", i * 1_000),
-      }),
-    );
-    const { items } = sequenceFeed({ candidates: cands, limit: 8 });
-    const cats = items.flatMap((it) =>
-      it.kind === "market" ? [cands.find((c) => c.onchainId === it.onchainId)!.category] : [],
-    );
-    let run = 1;
-    for (let i = 1; i < cats.length; i += 1) {
-      run = cats[i] === cats[i - 1] ? run + 1 : 1;
-      expect(run).toBeLessThanOrEqual(SEQUENCE.MAX_SAME_CATEGORY_RUN);
-    }
-  });
-
-  /**
-   * A RANKING IS ALLOWED TO END. Padding "Most Capital" with markets already
-   * seen would answer a question the reader did not ask, and the playlist's
-   * continuation row is the honest exit.
-   */
-  it("is not offered to a ranked lens", () => {
-    const { items, exhausted, excluded } = sequenceFeed({
-      preserveOrder: true,
-      limit: 4,
-      candidates: [cand(1), seen(2), seen(3)],
-    });
-    expect(items.flatMap((i) => (i.kind === "market" ? [i.onchainId] : []))).toEqual([1]);
+  it("leave an empty page rather than a page of repeats", () => {
+    // An empty page is what tells the client to dig deeper — and, at the very
+    // bottom, to roll the pass. A page of repeats would say the opposite.
+    const { items, exhausted } = sequenceFeed({ limit: 4, candidates: [seen(1), seen(2)] });
+    expect(items).toHaveLength(0);
     expect(exhausted).toBe(true);
-    expect(excluded.map((e) => e.onchainId).sort()).toEqual([2, 3]);
   });
 
-  it("prefers a labelled re-entry over an unlabelled repeat of the same market", () => {
+  it("are reported rather than lost", () => {
+    const { excluded } = sequenceFeed({ limit: 4, candidates: [seen(1), seen(2)] });
+    expect(excluded.map((e) => e.onchainId).sort()).toEqual([1, 2]);
+  });
+
+  /** A re-entry is a labelled card about a real change, not a repeat. */
+  it("still come back when something changed and the card says what", () => {
     const { items } = sequenceFeed({
       limit: 24,
       candidates: [
         ...Array.from({ length: 12 }, (_, i) => cand(i + 100)),
         cand(1, {
-          eligibility: elig("recently_viewed", 0),
+          eligibility: elig("recently_viewed"),
           reentry: { label: "Your Tribe is joining", detail: "Someone you match with is here." },
         }),
       ],
@@ -533,78 +490,3 @@ describe("the resurface tier", () => {
   });
 });
 
-/**
- * SPEND THE CATALOGUE BEFORE REPEATING ANY OF IT.
- *
- * The sequencer sees ONE pool page — 240 rows of some 2,800 — so "this page has
- * nothing fresh" and "this platform has nothing fresh" look identical to it and
- * mean completely different things. Answering the first with repeats is how a
- * reader saw markets again with thousands untouched behind the ceiling. The
- * caller knows which it is; this flag is how it says so.
- */
-describe("allowResurface", () => {
-  const seen = (id: number, resurfaceAt = 0) =>
-    cand(id, { eligibility: elig("recently_viewed", resurfaceAt) });
-
-  it("returns nothing rather than a repeat when repeats are barred", () => {
-    const { items, exhausted } = sequenceFeed({
-      limit: 4,
-      allowResurface: false,
-      candidates: [seen(1), seen(2), seen(3)],
-    });
-    // An empty page is what tells the client to dig deeper. A page of repeats
-    // would have told it the opposite.
-    expect(items).toHaveLength(0);
-    expect(exhausted).toBe(true);
-  });
-
-  it("still places every fresh market on the page", () => {
-    const { items } = sequenceFeed({
-      limit: 4,
-      allowResurface: false,
-      candidates: [seen(1), cand(50), seen(2), cand(51)],
-    });
-    expect(items.flatMap((i) => (i.kind === "market" ? [i.onchainId] : [])).sort()).toEqual([
-      50, 51,
-    ]);
-  });
-
-  it("reports the barred markets rather than losing them", () => {
-    const { excluded } = sequenceFeed({
-      limit: 4,
-      allowResurface: false,
-      candidates: [seen(1), seen(2)],
-    });
-    expect(excluded.map((e) => e.onchainId).sort()).toEqual([1, 2]);
-  });
-
-  it("places them once the caller says the catalogue is spent", () => {
-    const { items } = sequenceFeed({
-      limit: 4,
-      allowResurface: true,
-      candidates: [seen(1), seen(2)],
-    });
-    expect(items).toHaveLength(2);
-    expect(items.every((i) => i.kind === "market" && i.diagnostics.resurfaced)).toBe(true);
-  });
-
-  it("defaults to allowing them — the policy of when to ask lives one layer up", () => {
-    expect(sequenceFeed({ limit: 4, candidates: [seen(1)] }).items).toHaveLength(1);
-  });
-
-  /** A re-entry is a labelled card about a real change, not a repeat. */
-  it("never bars a labelled re-entry", () => {
-    const { items } = sequenceFeed({
-      limit: 24,
-      allowResurface: false,
-      candidates: [
-        ...Array.from({ length: 12 }, (_, i) => cand(i + 100)),
-        cand(1, {
-          eligibility: elig("recently_viewed", 0),
-          reentry: { label: "Your Tribe is joining", detail: "Someone you match with is here." },
-        }),
-      ],
-    });
-    expect(items.some((i) => i.kind === "market" && i.reentryLabel)).toBe(true);
-  });
-});
