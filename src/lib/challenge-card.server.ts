@@ -111,6 +111,27 @@ export async function challengeCardsFor(viewer: string): Promise<ChallengeCardPr
    * my question to their own people. Nobody who PASSED is reachable from here:
    * a relay requires an answered call, so every name is a deliberate public act.
    */
+  /**
+   * WHICH CHALLENGES OWN THE CALLS ADDRESSED TO ME — needed for removal.
+   *
+   * Removal stops a branch; it does not delete a chain. A WAITING call whose
+   * parent Challenge has been taken down must stop appearing as a live request,
+   * because nobody is asking any more — but the recipient must NOT become a
+   * passer, and an ANSWERED call survives as history regardless. Without this
+   * read the card could not tell a live call from an abandoned one.
+   */
+  const parentIds = [
+    ...new Set(receivedRows.map((r) => Number(r.challenge_id)).filter(Number.isFinite)),
+  ];
+  const { data: parents } = parentIds.length
+    ? await sb.from("challenges").select("id, closed_at").in("id", parentIds)
+    : { data: [] as { id: number; closed_at: string | null }[] };
+  const closedParents = new Set(
+    ((parents ?? []) as { id: number; closed_at: string | null }[])
+      .filter((c) => c.closed_at != null)
+      .map((c) => Number(c.id)),
+  );
+
   const myCallIds = issuedRows.filter((r) => r.id != null).map((r) => Number(r.id));
   const [{ data: children }, { data: childCalls }, { data: markets }] = await Promise.all([
     myCallIds.length
@@ -158,7 +179,7 @@ export async function challengeCardsFor(viewer: string): Promise<ChallengeCardPr
     const question = titleOf.get(marketId);
     if (!question) continue;
 
-    const incoming = incomingFor(receivedRows, marketId, personOf);
+    const incoming = incomingFor(receivedRows, marketId, personOf, closedParents);
     const outgoing = outgoingFor(
       myChallenges,
       issuedRows,
@@ -216,6 +237,7 @@ function incomingFor(
   rows: readonly CallRow[],
   marketId: number,
   personOf: (w: string) => CardPerson,
+  closedParents: ReadonlySet<number>,
 ): Incoming | null {
   const mine = rows
     .filter((r) => Number(r.market_id) === marketId)
@@ -223,8 +245,30 @@ function incomingFor(
   if (mine.length === 0) return null;
 
   const answered = mine.find((r) => r.responded_at);
-  const active = mine.filter((r) => !r.passed_at);
-  const ordered = active.length > 0 ? active : mine;
+  /**
+   * ACTIVE = not passed, and not orphaned by a removal.
+   *
+   * THREE THINGS HAPPEN AT ONCE HERE, and they are the removal contract:
+   *
+   *   a waiting call under a closed Challenge stops being live — nobody is
+   *   asking any more, and the card must not keep requesting an answer for
+   *   somebody who took the question down;
+   *
+   *   that recipient does NOT become a passer — passing is a choice, and the
+   *   ledger is untouched, so nothing here writes or infers one;
+   *
+   *   an ANSWERED call is unaffected. `answered` is found above this filter, so
+   *   a response survives its parent's removal exactly as the relationship
+   *   evidence does.
+   *
+   * AND REMOVING ONE OF SEVERAL CALLERS DOES NOT DELETE THE CARD. The filter
+   * drops that caller's row and the next earliest still-active call is promoted
+   * by the same sort — one rule, no special case.
+   */
+  const active = mine.filter((r) => !r.passed_at && !closedParents.has(Number(r.challenge_id)));
+  // With every caller gone and no answer, there is nothing live to render.
+  if (active.length === 0 && !answered) return null;
+  const ordered = active.length > 0 ? active : mine.filter((r) => r.responded_at);
   const primary = ordered[0];
 
   return {

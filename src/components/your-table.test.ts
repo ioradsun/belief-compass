@@ -102,11 +102,19 @@ describe("one column, no whose-table filter", () => {
     // A reader brought into a question who then relays it used to appear twice
     // in this column with no visible connection between the two cards — the
     // chain passing THROUGH a person was the one thing it could not show.
+    /**
+     * NOW ONE PROJECTION, NOT ONE MERGED LIST. `ChainList` merged the incoming
+     * calls by market, which was right as far as it went — a reader who had ALSO
+     * put the question up still had a second card for it on the Yours tab, and
+     * neither could see the other. `challengeCardsFor` projects both directions
+     * into a single object with a single state.
+     */
     const c = rail();
-    expect(c).toMatch(/<ChainList/);
+    expect(c).toMatch(/<ChallengeCardList/);
     expect(c).not.toMatch(/<ChallengeRow/);
     expect(c).not.toMatch(/<YourTable/);
-    expect(yours()).toMatch(/mergeChain\(/);
+    // The component switches on the server's state and reconstructs nothing.
+    expect(code("src/components/ChallengeCard.tsx")).toMatch(/switch \(p\.state\)/);
   });
 
   it("counts everything live on the tab", () => {
@@ -150,7 +158,9 @@ describe("a pass reaches the server now, and still tells nobody", () => {
 describe("more than fits", () => {
   it("shows a railful and says how many are behind it", () => {
     const c = rail();
-    expect(c).toMatch(/open\.slice\(0, shown\)/);
+    // One list now, bounded by `limit` rather than sliced twice — same railful,
+    // same "N more waiting" underneath, one object per market.
+    expect(c).toMatch(/limit=\{shown \+ CHALLENGE\.maxRecent\}/);
     expect(c).toMatch(/\{open\.length - shown\} more waiting/);
   });
 

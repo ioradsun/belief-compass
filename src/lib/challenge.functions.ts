@@ -15,6 +15,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { CallReach, Challenge, NamedPerson } from "@/domain/challenge";
 import type { AudienceResult } from "@/domain/audience";
+import type { ChallengeCardProjection } from "@/domain/challenge-card";
 import type {
   ChainContext,
   ChallengeHistory,
@@ -174,4 +175,21 @@ export const getChainContext = createServerFn({ method: "GET" })
     if (!data.wallet || data.marketIds.length === 0) return {};
     const { chainContextFor } = await import("@/lib/challenge.server");
     return chainContextFor(data.wallet, data.marketIds);
+  });
+
+/**
+ * THE LIVING CARDS — one projection per market this viewer has a relationship in.
+ *
+ * Unsigned for the same reason every other read here is: it is the viewer's own
+ * social history, assembled from rows that already name them, and it grants
+ * nothing. The one thing it cannot return is somebody else's pass — a passer is
+ * counted and never named, and `challengeCardsFor` drops them from `responders`
+ * rather than anonymising them.
+ */
+export const getChallengeCards = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) => z.object({ wallet: WALLET.nullish() }).parse(raw ?? {}))
+  .handler(async ({ data }): Promise<ChallengeCardProjection[]> => {
+    if (!data.wallet) return [];
+    const { challengeCardsFor } = await import("@/lib/challenge-card.server");
+    return challengeCardsFor(data.wallet);
   });
