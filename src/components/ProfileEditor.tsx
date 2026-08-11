@@ -40,16 +40,11 @@ export function ProfileEditor({ wallet, fallbackName }: { wallet: string; fallba
   const save = useMutation({
     mutationFn: async () => {
       if (!address) throw new Error("Connect a wallet first.");
-      const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
-      const signature = await signMessageAsync({
-        message: profileEditMessage(wallet, nonce),
-      });
+      const session = await ensureSession();
       return await saveProfileOverride({
         data: {
           wallet,
-          signer: address,
-          nonce,
-          signature,
+          session,
           displayName: name.trim() || null,
           avatarUrl: avatar,
         },
