@@ -182,9 +182,19 @@ function ConvictionCard({
         story, the side, the figures — is supporting evidence, so it borrows the
         Insider tape's scale (13/11px, secondary and muted) rather than
         competing at full strength. A card that shouts four times says nothing. */}
+      {/* 0 — THE ROLE, WHEN THERE IS ONE. An eyebrow above the question rather
+        than a section above the list: it is one word about THIS market, and it
+        only shows for the rarer, more consequential role. "Believer" is what
+        every other card already is, so printing it would be noise. */}
+      {p.maker && (
+        <div className="mb-1 pr-9 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
+          Market Maker
+        </div>
+      )}
       <div className="pr-9 text-[13px] font-semibold leading-snug text-[var(--text)]">
         {p.title}
       </div>
+
 
       {/* 2 — The platform's own material fact about this market, in the owner's
         voice. Absent when nothing material is on file: a position card does not
