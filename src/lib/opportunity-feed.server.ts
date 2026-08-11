@@ -275,11 +275,16 @@ export interface OpportunityFeedResult {
   modes: FeedMode[];
   engineVersion: number;
   /**
-   * The lens has nothing further to offer — see `SequenceResult.exhausted`.
+   * Nothing further to offer, at any tier — see `SequenceResult.exhausted`.
    *
    * Read together with `lens` above and never on its own: a response is only
    * evidence about the lens it was BUILT for, and the client holds the previous
    * feed on screen while a new one is in flight.
+   *
+   * Under a RANKED lens this is ordinary — a finite ranking ends. Under For You
+   * it now requires the fresh pool, the resurface tier and the re-entry queue to
+   * all be empty, which for any reader with history is close to unreachable. It
+   * is a real terminal state and it is meant to be a rare one.
    */
   exhausted: boolean;
   /** Why each dropped market was dropped — feed diagnostics, never rendered. */
@@ -334,6 +339,16 @@ export async function buildOpportunityFeed(
 
   const sessionSeen = new Set<number>(input.seenIds ?? []);
   const sessionQueued = new Set<number>(input.queuedIds ?? []);
+  /**
+   * WHICH SIGHTING WAS OLDEST. `seenIds` arrives in the order the reader saw
+   * them, so the index is the only recency signal the wire carries — and the
+   * resurface tier needs exactly that to decide which repeat to offer first.
+   * Built once here rather than per market, which is what makes it a lookup
+   * instead of an O(n²) scan. See EligibilityInput.sessionSeenRank.
+   */
+  const sessionSeenRank = new Map<number, number>(
+    (input.seenIds ?? []).map((id, i) => [Number(id), i]),
+  );
   // A rotating epoch keeps the exploration slot moving without reshuffling the
   // rest of the feed between polls.
   const epoch = Math.floor(now / 3_600_000);
@@ -437,6 +452,7 @@ export async function buildOpportunityFeed(
       state,
       sessionSeen,
       sessionQueued,
+      sessionSeenRank,
       now,
     });
     const holds = signals.held.has(s.onchainId);
@@ -744,4 +760,3 @@ export async function opportunityFeed(input: OpportunityFeedInput): Promise<Oppo
     return buildOpportunityFeed(input);
   }
 }
-

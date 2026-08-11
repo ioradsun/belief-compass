@@ -108,14 +108,37 @@ export function ideaGateOpen(): boolean {
   return state.cardsViewed >= MIN_CARDS_FOR_IDEA;
 }
 
-/** Count one market card as actually viewed. Idempotent per market. */
+/**
+ * Count one market card as actually viewed.
+ *
+ * THE SET IS AN LRU, and it has to be. `seenIds` travels to the server in
+ * insertion order and the feed reads that order as recency — it is what decides
+ * which already-seen market comes back first once the fresh pool is empty (see
+ * EligibilityInput.sessionSeenRank), and it is what `MAX_SEEN` evicts against.
+ *
+ * So a REPEAT VIEW is not a no-op. It used to be — `if (seen.has(id)) return`
+ * before anything else — which was harmless while a seen market could never be
+ * shown twice, and became a loop the moment it could: the market kept the rank
+ * it was first given, stayed the oldest sighting forever, and would be offered
+ * back ahead of everything else on every subsequent build. Re-inserting moves it
+ * to the end of the order, which is the honest record of when it was last on
+ * screen.
+ *
+ * The COUNTERS stay idempotent. `cardsViewed` and `cardsSinceIdea` pace the
+ * House idea against how much NEW material the reader has worked through, and
+ * seeing the same market twice is not progress by that measure.
+ */
 export function noteCardViewed(marketId: number): void {
   hydrate();
-  if (state.seen.has(marketId)) return;
+  const repeat = state.seen.delete(marketId);
   state.seen.add(marketId);
   if (state.seen.size > MAX_SEEN) {
     const first = state.seen.values().next().value as number | undefined;
     if (first != null) state.seen.delete(first);
+  }
+  if (repeat) {
+    bump();
+    return;
   }
   state.cardsViewed += 1;
   if (state.cardsSinceIdea < Number.MAX_SAFE_INTEGER) state.cardsSinceIdea += 1;

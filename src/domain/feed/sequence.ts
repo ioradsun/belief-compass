@@ -56,6 +56,14 @@ export interface FeedDiagnostics {
   /** Sequencing moves applied when placing this card. */
   diversityAdjustments: string[];
   slotIntent: ScoreComponent | "reentry" | "fill";
+  /**
+   * This card came from the RESURFACE tier — the fresh pool was empty when the
+   * slot was filled. Not reader-facing: the card reads exactly as it always did,
+   * because "we have shown you this before" is not news the way a re-entry
+   * label is. It is here so the one question worth asking of a long session —
+   * how deep into repeats is this reader — has an answer.
+   */
+  resurfaced: boolean;
   reasonCode: string | null;
   /**
    * Which candidate-pool slice(s) admitted this market — see @/domain/feed/pool.
@@ -140,6 +148,7 @@ interface Placed {
   adjustments: string[];
   intent: ScoreComponent | "reentry" | "fill";
   displaced: DisplacedCandidate[];
+  resurfaced: boolean;
 }
 
 /**
@@ -239,7 +248,7 @@ export interface SequenceResult {
   /** Markets the gate removed, with the reason — feed diagnostics. */
   excluded: { onchainId: number; reason: ExclusionReason | null }[];
   /**
-   * EVERYTHING ELIGIBLE WAS PLACED — there is no next page.
+   * THERE IS NOTHING LEFT TO SHOW, AT ANY TIER.
    *
    * The distinction this exists to make: a response that returns `limit` items
    * has almost certainly left candidates behind, while a response that empties
@@ -247,9 +256,21 @@ export interface SequenceResult {
    * counting rows, and inferring "the end" from a short batch is exactly how an
    * interface tells someone they are caught up one poll before more arrives.
    *
-   * Scoped to what the feed can see: the candidate pool, minus this session's
-   * already-seen markets. It is the end of the LENS as the reader experiences
-   * it, not a claim about every market on the platform.
+   * WHAT THIS USED TO MEAN, AND WHY IT WAS THE WRONG CONTRACT. It was scoped to
+   * "the candidate pool minus this session's already-seen markets" — a bounded
+   * retrieval window minus a monotonically growing exclusion set — and it was
+   * documented as the end of the LENS rather than a claim about the platform.
+   * Internally consistent, and it still reached the reader as "You're caught up.
+   * You've made a call on every market currently in your feed", which is a claim
+   * about the platform and was routinely false. A reader with 600 untouched
+   * markets was told discovery was over because a 240-row pool had been walked.
+   *
+   * It now means what it says: the fresh pool is empty, the RESURFACE tier is
+   * empty, and no re-entry is waiting. For a blend that is a real end — every
+   * market the pool can see is one the reader decided on — and it is rare enough
+   * to be worth saying. For a ranked lens (`preserveOrder`) it keeps its old and
+   * correct meaning: the ranking ran out, which is a normal thing for a ranking
+   * to do, and the playlist's continuation row says so.
    */
   exhausted: boolean;
 }
@@ -263,6 +284,12 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
 
   const excluded: { onchainId: number; reason: ExclusionReason | null }[] = [];
   const pool: SequenceCandidate[] = [];
+  /**
+   * SHOWN, NOT DECIDED — the second tier, and the reason a finite catalogue can
+   * still behave like a feed. See @/domain/feed/eligibility for the line between
+   * this and `excluded`. Untouched until `pool` is empty.
+   */
+  const resurface: SequenceCandidate[] = [];
   const reentries: SequenceCandidate[] = [];
 
   for (const c of input.candidates) {
@@ -270,15 +297,40 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
       pool.push(c);
       continue;
     }
-    // Hidden and session-duplicates can NEVER come back, whatever happened.
     const r = c.eligibility.reason;
-    const banned = r === "hidden" || r === "seen_this_session" || r === "queued_this_session";
+    /**
+     * A LABELLED CARD BEATS AN UNLABELLED ONE, so a market with a material
+     * update takes the re-entry path whichever tier it fell into: "your position
+     * is moving" is a better thing to show than the same market carrying its
+     * ordinary reason.
+     *
+     * THE THREE BARRED FROM IT, for three different reasons — unchanged from
+     * before the tiers existed, because none of them is about supply:
+     *
+     *   hidden               an explicit instruction. No market event overrides
+     *                        it, and none ever should.
+     *   queued_this_session  not history at all. The market is already further
+     *                        down THIS queue, so a second placement is a
+     *                        duplicate row.
+     *   seen_this_session    too soon. A re-entry is rationed to one card in
+     *                        REENTRY_EVERY, which is well inside the reach of a
+     *                        single sitting — labelling a market the reader
+     *                        scrolled past ninety seconds ago as news reads as a
+     *                        glitch, whatever the label says. It now falls
+     *                        through to `resurface` instead of being dropped,
+     *                        which is the whole change: it comes back at the end
+     *                        of the queue rather than not at all.
+     */
+    const banned = r === "hidden" || r === "queued_this_session" || r === "seen_this_session";
     if (c.reentry && !banned) reentries.push(c);
+    else if (c.eligibility.tier === "resurfaced") resurface.push(c);
     else excluded.push({ onchainId: c.onchainId, reason: r });
   }
 
   const out: Placed[] = [];
   let reentryIdx = 0;
+  /** True once the fresh tier ran out and the queue switched to repeats. */
+  let resurfacing = false;
 
   // A RANKING IS TAKEN AS GIVEN. The caller already sorted on the measure the
   // reader chose, so the composite-score sort and the rhythm below are skipped
@@ -288,15 +340,44 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
   let exhausted: boolean;
   if (input.preserveOrder) {
     for (const c of pool.slice(0, limit)) {
-      out.push({ c, adjustments: [], intent: "fill", displaced: [] });
+      out.push({ c, adjustments: [], intent: "fill", displaced: [], resurfaced: false });
     }
+    /**
+     * A RANKING IS ALLOWED TO END, and the resurface tier is not offered to one.
+     *
+     * "Most Capital" is a promise to descend by capital, and padding its tail
+     * with markets the reader has already seen would answer a question nobody
+     * asked — the honest end of a finite ranking is the end of it, and the
+     * playlist's continuation row hands the reader back to the blend, which is
+     * where the never-ending feed lives. So the tier is reported as excluded
+     * here rather than silently dropped.
+     */
+    for (const c of resurface)
+      excluded.push({ onchainId: c.onchainId, reason: c.eligibility.reason });
     // Nothing left over: the ranking ran out before the limit did.
     exhausted = pool.length <= limit;
   } else {
     pool.sort((a, b) => b.scored.score - a.scored.score || a.onchainId - b.onchainId);
     reentries.sort((a, b) => b.scored.score - a.scored.score || a.onchainId - b.onchainId);
+    /**
+     * OLDEST SIGHTING FIRST, then score. `resurfaceAt` is "when this became the
+     * least objectionable thing left" (see Eligibility), so ascending is exactly
+     * "show me the one they saw longest ago". Score is the tie-break rather than
+     * the sort key on purpose: within a tier of things the reader has already
+     * been shown, how long ago matters more than how good we think it is —
+     * ranking on score alone would hand back the same top few markets forever.
+     */
+    resurface.sort(
+      (a, b) =>
+        (a.eligibility.resurfaceAt ?? 0) - (b.eligibility.resurfaceAt ?? 0) ||
+        b.scored.score - a.scored.score ||
+        a.onchainId - b.onchainId,
+    );
 
-    while (out.length < limit && (pool.length > 0 || reentryIdx < reentries.length)) {
+    while (
+      out.length < limit &&
+      (pool.length > 0 || resurface.length > 0 || reentryIdx < reentries.length)
+    ) {
       const slot = out.length;
       // Rare, evenly-spaced re-entry slots — never more than 1 in REENTRY_EVERY.
       if (slot > 0 && slot % SEQUENCE.REENTRY_EVERY === 0 && reentryIdx < reentries.length) {
@@ -305,11 +386,37 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
           adjustments: [],
           intent: "reentry",
           displaced: [],
+          // A re-entry announces itself with a label; `slotIntent` already says
+          // where it came from. The repeat flag is about the unlabelled tier.
+          resurfaced: false,
         });
         reentryIdx += 1;
         continue;
       }
-      if (pool.length === 0) break;
+      /**
+       * THE FEED DOES NOT END BECAUSE THE FRESH POOL DID.
+       *
+       * This line used to be `if (pool.length === 0) break;` — the queue stopped
+       * at whatever the fresh tier happened to hold, and `exhausted` then told
+       * the client that discovery was over. Everything below is unchanged: the
+       * resurface tier is poured into the same pool and placed by the same
+       * rhythm, the same category and creator caps, the same duplicate spacing.
+       * A repeat is a normal card that has to earn its slot like any other.
+       *
+       * Poured whole rather than drawn from, because the sort orders are
+       * different — `pool` descends by score, `resurface` ascends by sighting
+       * age — and merging them by score would let a market seen a minute ago
+       * outrank one seen this morning. Emptying the fresh tier first, then
+       * walking the second in its own order, is the only sequence that respects
+       * both. The flip happens ONCE per build, so a fresh market that arrives on
+       * a later poll is still placed above every repeat.
+       */
+      if (pool.length === 0) {
+        if (resurface.length === 0) break;
+        pool.push(...resurface);
+        resurface.length = 0;
+        resurfacing = true;
+      }
 
       const want = RHYTHM[slot % RHYTHM.length]!;
       const adjustments: string[] = [];
@@ -359,6 +466,8 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
       // The pool is sorted by score, so everything before `cursor` scored at least
       // as high as the card taking this slot. Each was passed for a knowable
       // reason — record it rather than leaving the ordering to look arbitrary.
+      // (Once `resurfacing`, the pool is ordered by sighting age instead, so
+      // "displaced" there means passed over in the repeat queue, not outscored.)
       const displaced: DisplacedCandidate[] = [];
       for (let i = 0; i < cursor && displaced.length < MAX_DISPLACED; i += 1) {
         const c = pool[i]!;
@@ -370,11 +479,15 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
       }
 
       const [chosen] = pool.splice(cursor, 1);
-      out.push({ c: chosen!, adjustments, intent, displaced });
+      out.push({ c: chosen!, adjustments, intent, displaced, resurfaced: resurfacing });
     }
-    // The blended loop SPLICES what it places, so an empty pool with no
-    // re-entries waiting is the honest end of the line.
-    exhausted = pool.length === 0 && reentryIdx >= reentries.length;
+    /**
+     * The blended loop SPLICES what it places, so empty really is empty. All
+     * three tiers have to be spent before this is true — which is the whole
+     * point of the change: the fresh pool running dry is now a fact about
+     * retrieval, and only this is a fact about the reader.
+     */
+    exhausted = pool.length === 0 && resurface.length === 0 && reentryIdx >= reentries.length;
   }
 
   const items: OpportunityFeedItem[] = out.map((p, i) => ({
@@ -398,6 +511,7 @@ export function sequenceFeed(input: SequenceInput): SequenceResult {
       clusterId: p.c.clusterId,
       diversityAdjustments: p.adjustments,
       slotIntent: p.intent,
+      resurfaced: p.resurfaced,
       reasonCode: p.c.reentry ? "reentry" : (p.c.reason?.code ?? null),
       poolSlices: p.c.poolSlices ?? [],
       displaced: p.displaced,

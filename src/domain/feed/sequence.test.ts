@@ -2,7 +2,25 @@ import { describe, it, expect } from "vitest";
 import { sequenceFeed, MAX_DISPLACED, type SequenceCandidate } from "./sequence";
 import { familyOf, type ReasonCode } from "./reasons";
 import { SEQUENCE } from "./config";
+import { tierFor, type Eligibility, type ExclusionReason } from "./eligibility";
 import type { ScoredMarket } from "./score";
+
+/**
+ * An exclusion as the real gate would report it — the TIER comes from `tierFor`
+ * rather than the test, so a test can never assert against a tier the gate would
+ * not actually assign. `resurfaceAt` defaults to 0 (oldest sighting), which the
+ * ordering tests below override when they care.
+ */
+const elig = (reason: ExclusionReason, resurfaceAt = 0): Eligibility => {
+  const tier = tierFor(reason);
+  return {
+    eligible: false,
+    tier,
+    reason,
+    availableAt: null,
+    resurfaceAt: tier === "resurfaced" ? resurfaceAt : null,
+  };
+};
 
 const scored = (
   id: number,
@@ -31,7 +49,13 @@ const cand = (id: number, o: Partial<SequenceCandidate> = {}): SequenceCandidate
   creator: null,
   clusterId: null,
   scored: scored(id, 100 - id),
-  eligibility: { eligible: true, reason: null, availableAt: null },
+  eligibility: {
+    eligible: true,
+    tier: "fresh",
+    reason: null,
+    availableAt: null,
+    resurfaceAt: null,
+  },
   reason: { code: "taking_off", text: `reason ${id}` },
   reentry: null,
   ...o,
@@ -43,7 +67,7 @@ describe("hard exclusion", () => {
       candidates: [
         cand(1),
         cand(2, {
-          eligibility: { eligible: false, reason: "active_position", availableAt: null },
+          eligibility: elig("active_position"),
         }),
         cand(3),
       ],
@@ -56,7 +80,7 @@ describe("hard exclusion", () => {
     const { items } = sequenceFeed({
       candidates: [
         cand(1, {
-          eligibility: { eligible: false, reason: "hidden", availableAt: null },
+          eligibility: elig("hidden"),
           reentry: { label: "This market is heating up", detail: "10 new believers." },
         }),
       ],
@@ -68,7 +92,7 @@ describe("hard exclusion", () => {
 describe("re-entry cards", () => {
   const pool = Array.from({ length: 30 }, (_, i) => cand(i + 100));
   const back = cand(1, {
-    eligibility: { eligible: false, reason: "passed", availableAt: null },
+    eligibility: elig("passed"),
     reentry: { label: "Your position is moving", detail: "Your side has moved 20%." },
   });
 
@@ -297,11 +321,7 @@ describe("preserveOrder", () => {
   it("still drops ineligible markets — that is correctness, not taste", () => {
     const { items, excluded } = sequenceFeed({
       preserveOrder: true,
-      candidates: [
-        cand(1),
-        cand(2, { eligibility: { eligible: false, reason: "hidden", availableAt: null } }),
-        cand(3),
-      ],
+      candidates: [cand(1), cand(2, { eligibility: elig("hidden") }), cand(3)],
     });
     expect(items.map((i) => (i.kind === "market" ? i.onchainId : null))).toEqual([1, 3]);
     expect(excluded.map((e) => e.onchainId)).toEqual([2]);
@@ -382,11 +402,7 @@ describe("exhausted", () => {
     const { exhausted } = sequenceFeed({
       preserveOrder: true,
       limit: 2,
-      candidates: [
-        cand(1),
-        cand(2),
-        cand(3, { eligibility: { eligible: false, reason: "hidden", availableAt: null } }),
-      ],
+      candidates: [cand(1), cand(2), cand(3, { eligibility: elig("hidden") })],
     });
     expect(exhausted).toBe(true);
   });
@@ -404,7 +420,7 @@ describe("exhausted", () => {
       candidates: [
         cand(1),
         cand(2, {
-          eligibility: { eligible: false, reason: "passed", availableAt: null },
+          eligibility: elig("passed"),
           reentry: { label: "Your position is moving", detail: "YES moved up" },
         }),
       ],
@@ -414,5 +430,105 @@ describe("exhausted", () => {
 
   it("an empty feed is exhausted, not pending", () => {
     expect(sequenceFeed({ candidates: [] }).exhausted).toBe(true);
+  });
+});
+
+/**
+ * THE SECOND TIER — markets the reader has been shown and did not decide on.
+ *
+ * The behaviour these lock down is the difference between a feed and a playlist:
+ * running out of NEVER-SEEN markets is a fact about retrieval, and it must not
+ * reach the reader as "discovery is over".
+ */
+describe("the resurface tier", () => {
+  const seen = (id: number, resurfaceAt = 0) =>
+    cand(id, { eligibility: elig("recently_viewed", resurfaceAt) });
+
+  it("fills the queue when the fresh pool runs out", () => {
+    const { items } = sequenceFeed({
+      limit: 4,
+      candidates: [cand(1), seen(2), seen(3), seen(4)],
+    });
+    expect(items.map((i) => (i.kind === "market" ? i.onchainId : null))).toHaveLength(4);
+  });
+
+  /** A repeat is a last resort, never a competitor for an early slot. */
+  it("never places a repeat while a fresh market is available", () => {
+    const { items } = sequenceFeed({
+      limit: 4,
+      // The repeats outscore every fresh market, and it must not matter.
+      candidates: [seen(1), seen(2), cand(50), cand(51)],
+    });
+    const ids = items.flatMap((i) => (i.kind === "market" ? [i.onchainId] : []));
+    expect(ids.slice(0, 2).sort()).toEqual([50, 51]);
+  });
+
+  it("offers the oldest sighting first, not the best-scoring one", () => {
+    const { items } = sequenceFeed({
+      limit: 2,
+      // 1 scores highest (cand scores 100 - id) and was seen most recently.
+      candidates: [seen(1, 9_000), seen(2, 1_000)],
+    });
+    expect(items.flatMap((i) => (i.kind === "market" ? [i.onchainId] : []))).toEqual([2, 1]);
+  });
+
+  it("marks what it placed, so a session of repeats is visible", () => {
+    const { items } = sequenceFeed({ limit: 2, candidates: [cand(1), seen(2)] });
+    const flags = items.flatMap((i) => (i.kind === "market" ? [i.diagnostics.resurfaced] : []));
+    expect(flags).toEqual([false, true]);
+  });
+
+  it("is not exhausted while repeats are still waiting", () => {
+    expect(sequenceFeed({ limit: 1, candidates: [cand(1), seen(2)] }).exhausted).toBe(false);
+    expect(sequenceFeed({ limit: 4, candidates: [cand(1), seen(2)] }).exhausted).toBe(true);
+  });
+
+  it("still obeys the diversity rules — a repeat earns its slot like any card", () => {
+    const cands = Array.from({ length: 8 }, (_, i) =>
+      cand(i + 1, {
+        category: i < 6 ? "crypto" : "sports",
+        eligibility: elig("recently_viewed", i * 1_000),
+      }),
+    );
+    const { items } = sequenceFeed({ candidates: cands, limit: 8 });
+    const cats = items.flatMap((it) =>
+      it.kind === "market" ? [cands.find((c) => c.onchainId === it.onchainId)!.category] : [],
+    );
+    let run = 1;
+    for (let i = 1; i < cats.length; i += 1) {
+      run = cats[i] === cats[i - 1] ? run + 1 : 1;
+      expect(run).toBeLessThanOrEqual(SEQUENCE.MAX_SAME_CATEGORY_RUN);
+    }
+  });
+
+  /**
+   * A RANKING IS ALLOWED TO END. Padding "Most Capital" with markets already
+   * seen would answer a question the reader did not ask, and the playlist's
+   * continuation row is the honest exit.
+   */
+  it("is not offered to a ranked lens", () => {
+    const { items, exhausted, excluded } = sequenceFeed({
+      preserveOrder: true,
+      limit: 4,
+      candidates: [cand(1), seen(2), seen(3)],
+    });
+    expect(items.flatMap((i) => (i.kind === "market" ? [i.onchainId] : []))).toEqual([1]);
+    expect(exhausted).toBe(true);
+    expect(excluded.map((e) => e.onchainId).sort()).toEqual([2, 3]);
+  });
+
+  it("prefers a labelled re-entry over an unlabelled repeat of the same market", () => {
+    const { items } = sequenceFeed({
+      limit: 24,
+      candidates: [
+        ...Array.from({ length: 12 }, (_, i) => cand(i + 100)),
+        cand(1, {
+          eligibility: elig("recently_viewed", 0),
+          reentry: { label: "Your Tribe is joining", detail: "Someone you match with is here." },
+        }),
+      ],
+    });
+    const back = items.find((i) => i.kind === "market" && i.onchainId === 1);
+    expect(back && back.kind === "market" && back.reentryLabel).toBe("Your Tribe is joining");
   });
 });

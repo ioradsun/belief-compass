@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { insiderPulseKey } from "@/lib/insider/keys";
-import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { lazyRetry } from "@/lib/lazy-retry";
 
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1078,6 +1078,36 @@ function Feed() {
     });
   }, [activeMarket]);
 
+  /**
+   * "CAUGHT UP" LETS GO BY ITSELF.
+   *
+   * It was a one-way door: once set, only Refresh Feed or a lens change cleared
+   * it, so a reader who reached the end at 9pm was still looking at the
+   * end-of-the-road screen when the poll behind it had markets in hand. The
+   * condition that put them there is the server's, and when the server stops
+   * saying it the screen has no argument left — so it goes, and the queue the
+   * poll already filled is underneath it.
+   */
+  useEffect(() => {
+    if (caughtUp && stableFeed?.exhausted === false) setCaughtUp(false);
+  }, [caughtUp, stableFeed?.exhausted]);
+
+  /**
+   * ASK FOR MORE — the one throttled entry point, shared by both callers.
+   *
+   * Two places need it and they arrive from opposite directions: the low-water
+   * effect watches the queue drain and asks early, `nextMarket` discovers the
+   * end and asks late. Sharing the throttle is what stops the pair of them from
+   * turning a drained queue into a request loop.
+   */
+  const refillAtRef = useRef(0);
+  const refillNow = useCallback(() => {
+    const at = Date.now();
+    if (at - refillAtRef.current < FEED_REFILL_MS) return;
+    refillAtRef.current = at;
+    void qc.invalidateQueries({ queryKey: ["opp-feed"] });
+  }, [qc]);
+
   // Forward only — never a carousel. The queue decides what "next" means,
   // including the one case that used to end the session early: running off the
   // end now adopts whatever arrived while the reader was working through the
@@ -1091,14 +1121,26 @@ function Feed() {
     }
     if (moved !== queue) setQueue(moved);
     /**
-     * "Caught up" TAKES OVER THE CENTRE, and that is only right for For You,
-     * where running out means every market the reader could be shown has been
-     * decided on. Under a chosen lens it would say "you've made a call on every
-     * market currently in your feed" — which is false, and it would throw away
-     * the market they are reading to say it. The playlist's own continuation
-     * row carries that news instead, and the market stays put.
+     * RUNNING OFF THE END OF THE QUEUE IS NOT THE END OF THE FEED.
+     *
+     * This used to be `if (lens === "for_you") setCaughtUp(true)` — reaching the
+     * last row of the LOCAL queue took over the centre with "You've made a call
+     * on every market currently in your feed", a sentence about the platform
+     * justified by a fact about one client-side array. A reader who walked 24
+     * cards faster than the low-water refill could answer got the end-of-the-road
+     * screen with the rest of the platform still waiting behind it.
+     *
+     * The server is the only thing that knows, and it now answers honestly — all
+     * three tiers spent, not merely the fresh pool (see SequenceResult). So the
+     * takeover is gated on that answer, and the ordinary case of a drained queue
+     * does what the low-water refill does: asks for more and stays put on the
+     * market the reader is already looking at.
      */
-    if (lens === "for_you") setCaughtUp(true);
+    if (lens === "for_you" && stableFeed?.exhausted === true) {
+      setCaughtUp(true);
+      return;
+    }
+    refillNow();
   };
 
   /**
@@ -1360,7 +1402,6 @@ function Feed() {
    * waiting and otherwise ask for more, throttled so a drained queue cannot
    * become a request loop. `exhausted` is the one honest stop.
    */
-  const refillAtRef = useRef(0);
   const remainingAhead = (() => {
     const idx = activeMarket == null ? -1 : queue.order.indexOf(activeMarket);
     return idx >= 0 ? queue.order.length - idx - 1 : queue.order.length;
@@ -1372,11 +1413,8 @@ function Feed() {
       setQueue((q) => commit(q));
       return;
     }
-    const now = Date.now();
-    if (now - refillAtRef.current < FEED_REFILL_MS) return;
-    refillAtRef.current = now;
-    void qc.invalidateQueries({ queryKey: ["opp-feed"] });
-  }, [remainingAhead, queue, stableFeed?.exhausted, qc]);
+    refillNow();
+  }, [remainingAhead, queue, stableFeed?.exhausted, refillNow]);
 
   const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
   useEffect(() => {
@@ -1582,7 +1620,6 @@ function Feed() {
                     {/* The brief now sits at the top of the whole rail, above
                       the tabs, so it is not tied to this list. */}
 
-
                     <FeedListPanel
                       lens={lens}
                       onLens={selectLens}
@@ -1696,7 +1733,9 @@ function Feed() {
                 </Suspense>
               </div>
             ) : caughtUp && wallet ? (
-              // Ran off the end of the sequence — every eligible market decided.
+              // The server reported every tier spent — fresh, resurfaced and
+              // re-entry — and the reader then walked off the end of the queue.
+              // Not "the local list ran out", which is what this used to mean.
               <CaughtUp
                 onRefresh={refreshFeed}
                 onConvictions={() => setTab("mine")}
@@ -1867,7 +1906,6 @@ function Feed() {
                     <SimilarMarkets wallet={wallet} onJoin={selectMarket} />
                   </div>
                 </div>
-
               ) : (
                 <ChallengeRail
                   wallet={wallet}
@@ -1979,9 +2017,15 @@ function FeedUnavailable({ onRetry }: { onRetry: () => void }) {
 }
 
 /**
- * Discovery end-state. The center feed is a journey through unanswered
- * convictions, not a carousel — when a viewer has decided on every eligible
- * market, we say so plainly rather than looping back to the first one.
+ * Discovery end-state, and now a genuinely rare one.
+ *
+ * It used to render whenever the LOCAL queue ran out, which happened on any
+ * ordinary session that outpaced the refill. It now renders only when the server
+ * reports every tier spent — fresh, resurfaced and re-entry alike — which for a
+ * reader with any history means they really have decided on everything the pool
+ * can offer them. The copy says that and no more: "in your feed", because the
+ * candidate pool is still a window onto the platform and this screen has no
+ * business claiming otherwise.
  */
 function CaughtUp({
   onRefresh,
