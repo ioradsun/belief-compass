@@ -39,6 +39,8 @@ const input = z.object({
   queuedIds: z.array(z.number().int().nonnegative()).max(200).optional(),
   /** How deep into the catalogue to retrieve — see @/domain/feed/pool. */
   poolPage: z.number().int().min(0).max(64).optional(),
+  /** Repeat markets already seen — only once the catalogue is spent. */
+  allowResurface: z.boolean().optional(),
   cardsViewed: z.number().int().nonnegative().max(10_000).optional(),
   cardsSinceIdea: z.number().int().nonnegative().max(10_000).optional(),
   ideasShownThisSession: z.number().int().nonnegative().max(100).optional(),

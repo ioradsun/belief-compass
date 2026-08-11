@@ -482,3 +482,55 @@ describe("history is bounded", () => {
     }
   });
 });
+
+/**
+ * ONE FEED. Clicking out to another market must not cost the reader the feed
+ * they already have — not a row of it, and not its depth.
+ *
+ * This is the product rule the queue exists to serve, and it has been broken
+ * twice in different ways: once by re-keying the feed query on the market being
+ * opened, and once by landing the reader deep in an order that only had one
+ * page. Both are fixed elsewhere; this holds the reducer to the invariant so a
+ * third way cannot open quietly.
+ */
+describe("clicking out keeps the loaded feed", () => {
+  const loaded = () => {
+    let q = initQueue(Array.from({ length: 30 }, (_, i) => i + 1));
+    q = appendOrder(q, [101, 102, 103]); // a page the reader dug up
+    return jumpTo(q, 5, { admit: true }); // reading somewhere in the middle
+  };
+
+  it("keeps every market when the reader opens something from outside", () => {
+    const before = loaded();
+    const after = jumpTo(before, 9999, { admit: true });
+    for (const id of before.order) expect(after.order).toContain(id);
+    expect(after.activeId).toBe(9999);
+  });
+
+  it("keeps the paged depth, so Up Next does not shrink to page one", () => {
+    const after = jumpTo(loaded(), 9999, { admit: true });
+    expect(after.appended).toEqual([101, 102, 103]);
+    for (const id of [101, 102, 103]) expect(after.order).toContain(id);
+  });
+
+  it("continues the running order from where the reader arrived", () => {
+    // The foreign market is spliced in place rather than replacing anything, so
+    // Next walks straight back into the feed.
+    const after = jumpTo(loaded(), 9999, { admit: true });
+    expect(advance(after).activeId).toBe(6);
+  });
+
+  it("survives a poll landing while the reader is on the foreign market", () => {
+    let q = jumpTo(loaded(), 9999, { admit: true });
+    q = commit(receiveOrder(q, [7, 8, 9]));
+    expect(q.activeId).toBe(9999);
+    for (const id of [101, 102, 103]) expect(q.order).toContain(id);
+  });
+
+  it("keeps it even when the reader hops between several foreign markets", () => {
+    let q = loaded();
+    for (const id of [9001, 9002, 9003]) q = jumpTo(q, id, { admit: true });
+    expect(q.activeId).toBe(9003);
+    for (const id of [101, 102, 103]) expect(q.order).toContain(id);
+  });
+});

@@ -532,3 +532,79 @@ describe("the resurface tier", () => {
     expect(back && back.kind === "market" && back.reentryLabel).toBe("Your Tribe is joining");
   });
 });
+
+/**
+ * SPEND THE CATALOGUE BEFORE REPEATING ANY OF IT.
+ *
+ * The sequencer sees ONE pool page — 240 rows of some 2,800 — so "this page has
+ * nothing fresh" and "this platform has nothing fresh" look identical to it and
+ * mean completely different things. Answering the first with repeats is how a
+ * reader saw markets again with thousands untouched behind the ceiling. The
+ * caller knows which it is; this flag is how it says so.
+ */
+describe("allowResurface", () => {
+  const seen = (id: number, resurfaceAt = 0) =>
+    cand(id, { eligibility: elig("recently_viewed", resurfaceAt) });
+
+  it("returns nothing rather than a repeat when repeats are barred", () => {
+    const { items, exhausted } = sequenceFeed({
+      limit: 4,
+      allowResurface: false,
+      candidates: [seen(1), seen(2), seen(3)],
+    });
+    // An empty page is what tells the client to dig deeper. A page of repeats
+    // would have told it the opposite.
+    expect(items).toHaveLength(0);
+    expect(exhausted).toBe(true);
+  });
+
+  it("still places every fresh market on the page", () => {
+    const { items } = sequenceFeed({
+      limit: 4,
+      allowResurface: false,
+      candidates: [seen(1), cand(50), seen(2), cand(51)],
+    });
+    expect(items.flatMap((i) => (i.kind === "market" ? [i.onchainId] : [])).sort()).toEqual([
+      50, 51,
+    ]);
+  });
+
+  it("reports the barred markets rather than losing them", () => {
+    const { excluded } = sequenceFeed({
+      limit: 4,
+      allowResurface: false,
+      candidates: [seen(1), seen(2)],
+    });
+    expect(excluded.map((e) => e.onchainId).sort()).toEqual([1, 2]);
+  });
+
+  it("places them once the caller says the catalogue is spent", () => {
+    const { items } = sequenceFeed({
+      limit: 4,
+      allowResurface: true,
+      candidates: [seen(1), seen(2)],
+    });
+    expect(items).toHaveLength(2);
+    expect(items.every((i) => i.kind === "market" && i.diagnostics.resurfaced)).toBe(true);
+  });
+
+  it("defaults to allowing them — the policy of when to ask lives one layer up", () => {
+    expect(sequenceFeed({ limit: 4, candidates: [seen(1)] }).items).toHaveLength(1);
+  });
+
+  /** A re-entry is a labelled card about a real change, not a repeat. */
+  it("never bars a labelled re-entry", () => {
+    const { items } = sequenceFeed({
+      limit: 24,
+      allowResurface: false,
+      candidates: [
+        ...Array.from({ length: 12 }, (_, i) => cand(i + 100)),
+        cand(1, {
+          eligibility: elig("recently_viewed", 0),
+          reentry: { label: "Your Tribe is joining", detail: "Someone you match with is here." },
+        }),
+      ],
+    });
+    expect(items.some((i) => i.kind === "market" && i.reentryLabel)).toBe(true);
+  });
+});
