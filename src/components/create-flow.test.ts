@@ -32,6 +32,11 @@ describe("the create surface tells one story, and the rails follow it", () => {
      */
     const route = code("src/routes/index.tsx");
     expect(route).toMatch(/createOpen \? \([\s\S]{0,400}?<IdeasRail/);
+    /**
+     * THE SPARK MOVED SIDES AND THE INVARIANT DID NOT. What this protects is not
+     * which rail holds the spark — that changed deliberately — but that while a
+     * question is being written, NEITHER rail recruits.
+     */
     const composing = route.slice(route.indexOf("createOpen || ideaDue ? ("));
     const rail = composing.slice(0, composing.indexOf(") : ("));
     for (const recruiting of ["callReach", "AudiencePreview", "PutOnTable", "Challenge all"])
@@ -75,7 +80,7 @@ describe("the idea rail never costs the writer a sentence", () => {
     // than invented: invitation, thinking, or an honest empty answer.
     const c = code("src/components/IdeasRail.tsx");
     expect(c).toMatch(/Market ideas/);
-    expect(c).toMatch(/Tap a topic above to see ideas\./);
+    expect(c).not.toMatch(/Tap a topic above to see ideas\./);
     expect(c).toMatch(/questions…/);
   });
 });
@@ -123,54 +128,46 @@ describe("the centre stops selling and asks one thing", () => {
 
   it("states the earn once, in the title, and nowhere after", () => {
     /**
-     * THE NUMBER CHANGED, THE RULE DID NOT. The creator's cut is now 1% on all
-     * trading, not 4.5% — a deliberate product change, and this assertion caught
-     * it as a failure for several merges because it pinned the figure rather
-     * than the placement.
+     * THE NUMBER CHANGED, THE RULE DID NOT. The creator's cut is 1% now, not
+     * 4.5%, and this assertion read as a broken test for several merges because
+     * it pinned the FIGURE rather than the PLACEMENT.
      *
-     * The rule being protected is WHERE it appears: with the act, once. A fee
-     * repeated after publish turns a completed decision back into a pitch. So
-     * the title is asserted to carry a percentage, and the post-publish surfaces
-     * are asserted to carry none.
+     * What it protects is where the claim appears: with the act, once. A fee
+     * repeated after publish turns a completed decision back into a pitch.
      */
-    const form = code("src/components/CreateMarket.tsx");
-    expect(form).toMatch(/Earn 1% on all trading/);
-    // A bare percentage regex would catch `color-mix(... 40%)`, so the test
-    // looks for the CLAIM rather than the character: an earn, a fee, a cut.
+    // The fee is what the act is worth, so it sits with the act. The post-publish
+    // moment says one fact — the market is live — and stops.
+    expect(code("src/components/CreateMarket.tsx")).toMatch(/Earn 1% on all trading/);
+    // A bare percentage regex would catch `color-mix(... 40%)`, so the post-publish
+    // check looks for the CLAIM rather than the character: an earn, a fee, a cut.
     for (const f of ["src/domain/post-action.ts", "src/components/PostActionScreen.tsx"])
       expect(code(f), f).not.toMatch(/\bEarn\b|\bfee\b|\bcut\b|on all trading/i);
     // The post-publish moment is `resolvePostAction`'s create branch now, and it
     // says one fact — the market is live — with no fee repeated after the act.
   });
 
-  it("drops the badge that congratulated the system", () => {
-    // "✓ AI-checked" gave the reader no decision and spent the gain colour on
-    // housekeeping. The one affordance with an action behind it survives.
+  it("keeps AI opinion out of the form entirely", () => {
+    // "✓ AI-checked" gave the reader no decision, and the inline rewrite moved
+    // to the right rail so nothing the AI thinks can shift a field.
     const c = code("src/components/CreateMarket.tsx");
     expect(c).not.toMatch(/AI-checked/);
     /**
-     * AND "POLISH" WENT WITH IT. The test used to assert that the one affordance
-     * with an action behind it SURVIVED — then the form stopped rendering AI
-     * feedback altogether ("NO AI FEEDBACK RENDERS IN THE FORM"), which is a
-     * larger version of the same decision rather than a reversal of it. The
-     * assertion now matches the code: no inline rewrite, no badge.
+     * AND "POLISH" WENT WITH IT — the form stopped rendering AI feedback
+     * altogether, which is a larger version of the decision that removed the
+     * badge rather than a reversal of it. Scoped to the RENDERED element so a
+     * comment explaining the removal cannot fail the test that asserts it.
      */
-    expect(c).not.toMatch(/Polish/);
+    expect(c).not.toMatch(/>\s*Polish\s*</);
   });
 
-  it("leaves only the legal line under the primary action", () => {
-    // Positioning copy directly beneath the commit button is the one place a
-    // reader is deciding rather than being persuaded.
+  it("leaves nothing but the action under the primary action", () => {
+    // Positioning copy — and the legal line — directly beneath the commit
+    // button is the one place a reader is deciding rather than being read to.
     const c = code("src/components/CreateMarket.tsx");
     expect(c).not.toMatch(/pov\.co|Exclusive/);
-    /**
-     * NOTHING AT ALL IS LEFT UNDER THE BUTTON NOW, INCLUDING TERMS. The link was
-     * removed on the same reasoning that removed the positioning copy — the one
-     * place a reader is deciding rather than being persuaded is directly beneath
-     * the commit, and Terms stay reachable from the app menu. Asserting the link
-     * still present contradicted the comment three lines above it in the source.
-     */
-    expect(c).not.toMatch(/Terms/);
+    // Terms went for the same reason as the positioning copy, and stay reachable
+    // from the app menu. Element-scoped, like Polish above.
+    expect(c).not.toMatch(/>\s*Terms/);
   });
 
   it("keeps the link secondary, inside the field", () => {

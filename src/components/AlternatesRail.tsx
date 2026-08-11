@@ -54,7 +54,7 @@ export function AlternatesRail() {
       <div>
         <RailHeading />
         <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
-          Write your question and we&apos;ll offer sharper ways to ask it.
+          We&apos;ll help make your question clearer.
         </p>
       </div>
     );
@@ -96,7 +96,7 @@ export function AlternatesRail() {
 function RailHeading() {
   return (
     <div className="mb-3 text-[11px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
-      Other ways to ask
+      Better ways to ask
     </div>
   );
 }
