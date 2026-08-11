@@ -189,17 +189,9 @@ function useSimulationTrade(
          * and a re-authentication deserves the line that says no transaction is
          * being sent.
          */
-        let session: string;
-        try {
-          session = await ensureSession({ interactive: false });
-        } catch {
-          setVerifying(true);
-          try {
-            session = await ensureSession({ interactive: true });
-          } finally {
-            setVerifying(false);
-          }
-        }
+        // Simulation spends no real money: the connected wallet is the proof,
+        // and the session opens without ever asking for a signature.
+        const session = await ensureSession();
         const result = await placeSimulationOrder({
           data: {
             wallet,

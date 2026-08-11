@@ -210,13 +210,10 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
   const activation = useMutation({
     mutationFn: async () => {
       if (!wallet) throw new Error("Connect a wallet first.");
-      setVerifying(true);
-      try {
-        const session = await ensureSession({ interactive: true });
-        return await activateSimulation({ data: { wallet, session } });
-      } finally {
-        setVerifying(false);
-      }
+      // Starting Simulation moves no money, so it opens a session silently
+      // from the connected wallet — no signature prompt, nothing to announce.
+      const session = await ensureSession();
+      return await activateSimulation({ data: { wallet, session } });
     },
     onSuccess: (next) => {
       setNotice(null);
