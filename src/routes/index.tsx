@@ -1286,18 +1286,29 @@ function Feed() {
         const got = await fetchPage(q, depth);
         if (got === "more") return;
         if (got === "bottom") {
-          // THE CATALOGUE IS SPENT. On the first pass that is not the end of
-          // the feed, it is the moment repeats become the best thing left: the
-          // dig restarts from the top with them allowed. On the second pass
-          // there is genuinely nothing, and only then is the feed over.
-          if (resurfacingRef.current) {
+          /**
+           * THE CATALOGUE IS SPENT — ROLL THE PASS.
+           *
+           * Not an ending. Every market the reader touched during this pass
+           * stops excluding anything, the depth resets, and the next request is
+           * ranked from the top of the platform again with today's signal —
+           * today's tribe activity, today's momentum — so a second pass is a
+           * new running order rather than a replay of the last one.
+           *
+           * The one true ending is a rolled pass that STILL comes back empty:
+           * that means the platform itself has nothing, not that the reader has
+           * been through it.
+           */
+          if (rolledRef.current) {
             setPagedOut(true);
             return;
           }
-          resurfacingRef.current = true;
+          rolledRef.current = true;
+          rollFeedCycle();
           poolPageRef.current = 0;
           continue;
         }
+
         // Picked clean, but the catalogue goes deeper. Advance and ask again.
         poolPageRef.current = depth + 1;
       } catch {
