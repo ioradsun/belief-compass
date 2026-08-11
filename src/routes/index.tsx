@@ -1289,7 +1289,13 @@ function Feed() {
       const depth = poolPageRef.current;
       try {
         const got = await fetchPage(q, depth);
-        if (got === "more") return;
+        if (got === "more") {
+          // Material arrived, so this pass is alive again — a future dry spell
+          // is allowed its own roll rather than being read as the end.
+          rolledRef.current = false;
+          return;
+        }
+
         if (got === "bottom") {
           /**
            * THE CATALOGUE IS SPENT — ROLL THE PASS.
