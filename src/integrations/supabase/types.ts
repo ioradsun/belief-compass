@@ -40,6 +40,7 @@ export type Database = {
           created_at: string
           id: number
           market_id: number
+          mode: string
           parent_call: number | null
           slot_no: number
         }
@@ -50,6 +51,7 @@ export type Database = {
           created_at?: string
           id?: number
           market_id: number
+          mode?: string
           parent_call?: number | null
           slot_no: number
         }
@@ -60,6 +62,7 @@ export type Database = {
           created_at?: string
           id?: number
           market_id?: number
+          mode?: string
           parent_call?: number | null
           slot_no?: number
         }
@@ -548,6 +551,7 @@ export type Database = {
           challenge_id: number | null
           id: number
           market_id: number
+          mode: string
           passed_at: string | null
           relation_at_call: string
           responded_at: string | null
@@ -560,6 +564,7 @@ export type Database = {
           challenge_id?: number | null
           id?: number
           market_id: number
+          mode?: string
           passed_at?: string | null
           relation_at_call: string
           responded_at?: string | null
@@ -572,6 +577,7 @@ export type Database = {
           challenge_id?: number | null
           id?: number
           market_id?: number
+          mode?: string
           passed_at?: string | null
           relation_at_call?: string
           responded_at?: string | null
@@ -1402,6 +1408,164 @@ export type Database = {
         }
         Relationships: []
       }
+      simulation_accounts: {
+        Row: {
+          activated_at: string
+          available_balance_cc: number
+          created_at: string
+          exited_at: string | null
+          graduated_at: string | null
+          starting_balance_cc: number
+          state: string
+          updated_at: string
+          wallet: string
+        }
+        Insert: {
+          activated_at?: string
+          available_balance_cc?: number
+          created_at?: string
+          exited_at?: string | null
+          graduated_at?: string | null
+          starting_balance_cc?: number
+          state?: string
+          updated_at?: string
+          wallet: string
+        }
+        Update: {
+          activated_at?: string
+          available_balance_cc?: number
+          created_at?: string
+          exited_at?: string | null
+          graduated_at?: string | null
+          starting_balance_cc?: number
+          state?: string
+          updated_at?: string
+          wallet?: string
+        }
+        Relationships: []
+      }
+      simulation_house_rounds: {
+        Row: {
+          actual_action: string | null
+          created_at: string
+          finalized_via: string | null
+          onchain_id: number
+          revealed_at: string | null
+          simulation_order_id: number | null
+          wallet: string
+        }
+        Insert: {
+          actual_action?: string | null
+          created_at?: string
+          finalized_via?: string | null
+          onchain_id: number
+          revealed_at?: string | null
+          simulation_order_id?: number | null
+          wallet: string
+        }
+        Update: {
+          actual_action?: string | null
+          created_at?: string
+          finalized_via?: string | null
+          onchain_id?: number
+          revealed_at?: string | null
+          simulation_order_id?: number | null
+          wallet?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulation_house_rounds_simulation_order_id_fkey"
+            columns: ["simulation_order_id"]
+            isOneToOne: false
+            referencedRelation: "simulation_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      simulation_orders: {
+        Row: {
+          action: string
+          amount_cc: number
+          created_at: string
+          id: number
+          idempotency_key: string
+          market_price_usd: number | null
+          onchain_id: number
+          request_fingerprint: string
+          share_delta: number
+          side: string
+          simulated_fee_cc: number
+          status: string
+          wallet: string
+        }
+        Insert: {
+          action: string
+          amount_cc: number
+          created_at?: string
+          id?: number
+          idempotency_key: string
+          market_price_usd?: number | null
+          onchain_id: number
+          request_fingerprint?: string
+          share_delta: number
+          side: string
+          simulated_fee_cc?: number
+          status?: string
+          wallet: string
+        }
+        Update: {
+          action?: string
+          amount_cc?: number
+          created_at?: string
+          id?: number
+          idempotency_key?: string
+          market_price_usd?: number | null
+          onchain_id?: number
+          request_fingerprint?: string
+          share_delta?: number
+          side?: string
+          simulated_fee_cc?: number
+          status?: string
+          wallet?: string
+        }
+        Relationships: []
+      }
+      simulation_positions: {
+        Row: {
+          last_directional_side: string | null
+          no_cost_cc: number
+          no_shares: number
+          onchain_id: number
+          opened_at: string
+          updated_at: string
+          wallet: string
+          yes_cost_cc: number
+          yes_shares: number
+        }
+        Insert: {
+          last_directional_side?: string | null
+          no_cost_cc?: number
+          no_shares?: number
+          onchain_id: number
+          opened_at?: string
+          updated_at?: string
+          wallet: string
+          yes_cost_cc?: number
+          yes_shares?: number
+        }
+        Update: {
+          last_directional_side?: string | null
+          no_cost_cc?: number
+          no_shares?: number
+          onchain_id?: number
+          opened_at?: string
+          updated_at?: string
+          wallet?: string
+          yes_cost_cc?: number
+          yes_shares?: number
+        }
+        Relationships: []
+      }
       user_events: {
         Row: {
           dwell_ms: number | null
@@ -1889,15 +2053,26 @@ export type Database = {
           pct: number
         }[]
       }
-      put_on_table: {
-        Args: {
-          p_audience: Json
-          p_challenger: string
-          p_market_id: number
-          p_parent_call: number
-        }
-        Returns: Json
-      }
+      put_on_table:
+        | {
+            Args: {
+              p_audience: Json
+              p_challenger: string
+              p_market_id: number
+              p_parent_call: number
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_audience: Json
+              p_challenger: string
+              p_market_id: number
+              p_mode: string
+              p_parent_call: number
+            }
+            Returns: Json
+          }
       rebuild_position: {
         Args: {
           p_applied_count: number
@@ -1924,6 +2099,48 @@ export type Database = {
       request_viewer_match_refresh: {
         Args: { p_wallet: string }
         Returns: undefined
+      }
+      simulation_activate: {
+        Args: { p_start: number; p_target: number; p_wallet: string }
+        Returns: Json
+      }
+      simulation_conviction_count: {
+        Args: { p_wallet: string }
+        Returns: number
+      }
+      simulation_execute_order: {
+        Args: {
+          p_action: string
+          p_amount_cc: number
+          p_fee_cc: number
+          p_fingerprint?: string
+          p_idempotency_key: string
+          p_market_id: number
+          p_price_usd: number
+          p_share_delta: number
+          p_side: string
+          p_target: number
+          p_wallet: string
+          p_weight: number
+        }
+        Returns: Json
+      }
+      simulation_exit: { Args: { p_wallet: string }; Returns: Json }
+      simulation_graduate: {
+        Args: { p_target: number; p_wallet: string }
+        Returns: Json
+      }
+      simulation_release_challenges: {
+        Args: { p_me: string }
+        Returns: undefined
+      }
+      simulation_replay_order: {
+        Args: {
+          p_fingerprint: string
+          p_idempotency_key: string
+          p_wallet: string
+        }
+        Returns: Json
       }
       snapshot_market_state: { Args: never; Returns: number }
     }
