@@ -95,12 +95,9 @@ function hydrate(): void {
     state.cycleStartedAt = Date.now();
   }
 }
-
-
 function persist(): void {
-  if (typeof window === "undefined") return;
   try {
-    window.sessionStorage.setItem(
+    store()?.setItem(
       KEY,
       JSON.stringify({
         seenIds: [...state.seen],
@@ -108,12 +105,14 @@ function persist(): void {
         cardsSinceIdea:
           state.cardsSinceIdea === Number.MAX_SAFE_INTEGER ? 10_000 : state.cardsSinceIdea,
         ideasShownThisSession: state.ideasShown,
+        cycleStartedAt: state.cycleStartedAt,
       }),
     );
   } catch {
     /* storage full or blocked — the counters simply stay in memory */
   }
 }
+
 
 /**
  * Anyone who needs to REACT to the session changing, not just read it.
