@@ -115,6 +115,7 @@ export function FeedListPanel({
   filters,
   onFilters,
   availableNetworks,
+  onLoadMore,
 }: {
   /** The visible running order, already sequenced by the server. */
   entries: FeedListEntry[];
@@ -163,6 +164,17 @@ export function FeedListPanel({
   onFilters: (f: FeedFilters) => void;
   /** Network groups this viewer's evidence can fill. Always includes everyone. */
   availableNetworks: FeedNetwork[];
+  /**
+   * ASK FOR MORE, FROM THE BOTTOM OF THE LIST.
+   *
+   * The queue tops up on READING POSITION, which is right for someone moving
+   * card by card and wrong for someone who scrolls this column to its end and
+   * taps the last row: they arrive somewhere the refill has no reason to have
+   * run, and the playlist under them is empty. Scrolling to the end is itself a
+   * request for more, so the sentinel at the bottom makes one — and the button
+   * is there for the case where the automatic ask has already been and gone.
+   */
+  onLoadMore?: () => void;
 }) {
   const rowRefs = useRef(new Map<number, HTMLLIElement>());
   const nowMs = Date.now();
@@ -348,11 +360,24 @@ export function FeedListPanel({
             Nothing matches this feed yet. Try widening it.
           </p>
         ) : (
-          /* THE QUEUE DRAINED, BUT THE POOL HAS NOT. The server only says
-             `exhausted` when it has nothing left; short of that, a top-up is
-             already in flight (see the route's low-water refill) and telling the
-             reader they are "at the end" would be a claim nobody made. */
-          <PlaylistSkeleton />
+          /* THE QUEUE DRAINED, BUT THE POOL HAS NOT. A skeleton alone was a
+             promise nobody had made — if the top-up had already been asked for
+             and answered short, the column shimmered forever. Two rows of shape
+             plus one honest control: the reader can always ask again. */
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <LoadMoreSentinel onLoadMore={onLoadMore} />
+            <PlaylistSkeleton />
+            {onLoadMore && (
+              <button
+                type="button"
+                onClick={onLoadMore}
+                className="mt-1 px-3 text-[12px] font-semibold transition-opacity hover:opacity-80"
+                style={{ color: "var(--rel,#9b87f5)" }}
+              >
+                Load more
+              </button>
+            )}
+          </div>
         )
       ) : (
         <ol className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
@@ -364,8 +389,17 @@ export function FeedListPanel({
           {lensExhausted && <Continuation onContinue={() => onLens("for_you")} />}
           {/* The other end of the same question: the list has NOT ended, so the
             bottom of the scroll must not look like it has. Mutually exclusive
-            with the row above by construction — see `moreBelow` in the route. */}
-          {moreBelow && !lensExhausted && <MoreBelow />}
+            with the row above by construction — see `moreBelow` in the route.
+            Reaching it now ASKS: scrolling to the end of a playlist is the
+            plainest possible request for what comes after it. */}
+          {moreBelow && !lensExhausted && (
+            <li className="px-3 py-2 opacity-50">
+              <LoadMoreSentinel onLoadMore={onLoadMore} />
+              <div aria-hidden>
+                <SkeletonRow lines={2} />
+              </div>
+            </li>
+          )}
         </ol>
       )}
     </div>
@@ -459,27 +493,29 @@ function PlaylistSkeleton() {
 }
 
 /**
- * THE BOTTOM OF A LIST THAT HAS NOT ENDED.
+ * THE BOTTOM OF A LIST THAT HAS NOT ENDED — AND ASKS.
  *
- * A scrollable column that simply stops is a claim, and it was the wrong one:
- * the reader who flicked to the last row saw the same thing they would see if
- * the platform had run out. `Continuation` says "you're caught up" when that is
- * TRUE; this is the other case, and it had nothing at all.
+ * The queue tops up on reading position, so a reader who SCROLLS to the end
+ * used to arrive somewhere nothing had been requested: tapping the last row
+ * emptied the playlist and left the column shimmering at a request that was
+ * never made. Reaching this marker is the request. One shot per mount, and the
+ * route throttles the rest.
  *
- * IT MAKES NO SENTENCE, on purpose. "Loading more" would be a claim about a
- * request that may not be in flight — the queue tops up on READING POSITION, not
- * on scroll, so reaching the bottom of the list triggers nothing and should not
- * pretend otherwise. Two placeholder rows say the only thing that is actually
- * known: the list continues past here. It is the same row shape the pre-feed
- * skeleton uses, so the column reads as one thing in both states.
- *
- * `aria-hidden` for the same reason the skeleton is: a screen reader following
- * the list should hear markets, not an ornament about there being more.
+ * Zero height and aria-hidden: it is a tripwire, not a row.
  */
-function MoreBelow() {
-  return (
-    <li className="px-3 py-2 opacity-50" aria-hidden>
-      <SkeletonRow lines={2} />
-    </li>
-  );
+function LoadMoreSentinel({ onLoadMore }: { onLoadMore?: () => void }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !onLoadMore || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) onLoadMore();
+      },
+      { rootMargin: "200px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [onLoadMore]);
+  return <span ref={ref} aria-hidden className="block h-0" />;
 }

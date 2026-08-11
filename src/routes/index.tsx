@@ -1280,11 +1280,16 @@ function Feed() {
    * is the real bottom, and the only place `pagedOut` becomes true.
    */
   const refillAtRef = useRef(0);
-  const fetchMore = useCallback(async () => {
-    const at = Date.now();
-    if (at - refillAtRef.current < FEED_REFILL_MS) return;
-    refillAtRef.current = at;
-    const q = queueRef.current;
+  /**
+   * `force` is for the two cases where waiting out the throttle is just a stall
+   * the reader can see: an empty playlist, and an explicit "Load more" tap.
+   */
+  const fetchMore = useCallback(
+    async (force = false) => {
+      const at = Date.now();
+      if (!force && at - refillAtRef.current < FEED_REFILL_MS) return;
+      refillAtRef.current = at;
+      const q = queueRef.current;
     for (let dig = 0; dig <= MAX_DIG; dig += 1) {
       const depth = poolPageRef.current;
       try {
@@ -1330,9 +1335,12 @@ function Feed() {
     }
   }, [fetchPage]);
 
-  const refillNow = useCallback(() => {
-    void fetchMore();
-  }, [fetchMore]);
+  const refillNow = useCallback(
+    (force = false) => {
+      void fetchMore(force);
+    },
+    [fetchMore],
+  );
 
   // Forward only — never a carousel. The queue decides what "next" means,
   // including the one case that used to end the session early: running off the
@@ -1645,7 +1653,9 @@ function Feed() {
       setQueue((q) => commit(q));
       return;
     }
-    refillNow();
+    // Nothing ahead at all is not a low-water mark, it is a stall the reader
+    // is looking at — so it skips the throttle.
+    refillNow(remainingAhead <= 0);
   }, [remainingAhead, queue, stableFeed?.exhausted, pagedOut, refillNow]);
 
   const viewedId = currentRow ? Number(currentRow.onchain_id) : null;
@@ -1868,6 +1878,7 @@ function Feed() {
                       filters={filters}
                       onFilters={selectFilters}
                       availableNetworks={availableNetworks}
+                      onLoadMore={() => refillNow(true)}
                     />
                   </div>
                 }
