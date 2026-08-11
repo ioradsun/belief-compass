@@ -1358,3 +1358,96 @@ room offer, an honest "nobody new to ask". Only `failed`, `bad_parent` and
 `audience_unavailable` produce the block, which says _"Couldn't put it on the
 table. Nothing changed."_ and offers a retry. No database language, and the
 second sentence is the one that matters.
+
+## S. Contextual copy, and the second owner hiding in a heading
+
+The brief asked for one contextual category, chosen by a fixed priority, with
+deterministic variant selection and no invented persistence. Building that as a
+new module would have been easy and would have been wrong, because the product
+already had a copy owner nobody had named: `moduleFor`, in the post-action
+resolver, decided between a relay framing, a Still Forming framing and a generic
+one with its own switch — a **second categorisation of the same facts**, sitting
+four lines below the `copyCategory` the resolver publishes.
+
+Two categorisations of one moment agree on the day they are written. They drift
+the first time one of them learns a new case.
+
+So `domain/copy` owns the priority and the variants, and `moduleFor` consumes
+them. What stayed in the resolver is the part that is a **truth decision rather
+than a copy decision** — which categories are even on offer:
+
+```
+candidates = [general]
+  + reciprocity     when somebody actually asked (the relay slot)
+  + still_forming   when the whole audience is Still Forming
+```
+
+### The priority inversion that turned out not to be one
+
+There was a test — deliberate, reasoned, green — asserting that Still Forming
+**outranked** the relay framing. The brief says the opposite: Reciprocity is
+rung 1, Still Forming is rung 6.
+
+Reading the original reasoning rather than the original rule resolved it. The
+risk being guarded against was never "reciprocity is less important". It was a
+specific sentence: _"see who stands with you"_, said to somebody whose entire
+reachable network is relationships the engine cannot yet name, **promises a
+Tribe they do not have.** That promise lives in exactly one family —
+`tribe_rivals` — and `moduleFor` never offers it as a candidate while
+`formingOnly` holds.
+
+Expressed as a constraint on candidates instead of a priority inversion, both
+rules hold at once: reciprocity wins, and no Tribe is promised, because nothing
+in the reciprocity family claims one. The old test is replaced by one that
+asserts both halves.
+
+### Two defects the consolidation surfaced
+
+**`pickCategory` could not return `exit`.** It seeded its accumulator with
+`general` and kept anything strictly stronger — so `exit`, the only rung below
+`general`, lost even when it was the only candidate. `general` is the answer to
+an _empty_ context, not a floor under a supplied one. The reduce starts inside
+the candidate list now, and somebody who just closed a position no longer gets a
+rousing headline over the sale.
+
+**The sell module told a Market Maker who had fully exited that they were "still
+in this one".** That module is deliberately offered after a `market_exit` — a
+creator may still ask people about their _question_ — so the heading was simply
+false for the one reader most able to notice. General framing is true in both
+cases.
+
+### What rotates, and what cannot
+
+The seed is the market id, supplied by the adapter. It is stable across a
+refetch, a remount and a second device, and it contains no clock and no render
+counter — the reader must never be able to watch the emotional premise mutate
+while looking at unchanged state. Two different questions do not read as the
+same screen; the same question reads identically every time.
+
+Mechanics do not rotate, and the tests say so directly: across forty seeds the
+CTA stays `Challenge all 6` and the module kind stays `organic`. `challengeLabel`
+remains the only source of a CTA string, and no hook may begin with one.
+
+### What every variant is held to
+
+Word limits, at most one question mark across headline and support, no digits,
+no crowd nouns, no claim of agreement, no casino vocabulary, no feature
+language, and the banned Challenge list. Two are worth stating as rules rather
+than as filters:
+
+> **"You showed up" is allowed. "They showed up" is not.** The first is the
+> reader's own confirmed act — reciprocity is only ever a candidate where the
+> canonical `answered` facts exist. The second would be read off a call row,
+> which records that somebody was asked, not that anybody answered.
+
+> **Still Forming stays about the map.** Never discovery, never "somebody
+> interesting is out there". The variants may say the pattern is thin and that a
+> real answer thickens it, because that is what the evidence actually supports.
+
+### Left undone, deliberately
+
+`tribe_rivals` has four variants and no live caller. Feeding it would mean
+deciding, from the audience, that a Tribe or a Rival context is _meaningful_ —
+and `Audience` carries only `formingOnly` today. Per the brief's own rule, that
+belongs in a domain projection first, not in a component or in a copy module
+guessing from group counts.

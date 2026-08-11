@@ -33,6 +33,8 @@
  * ZERO IO, pure, fully testable.
  */
 
+import { pickCategory, pickHook } from "@/domain/copy";
+
 export type Side = "YES" | "NO";
 
 /** Their standing in THIS market, which decides whose screen this is. */
@@ -111,6 +113,16 @@ interface Common {
   outgoingProgress: { shown: number; reached: number } | null;
   capacity: { active: number; total: number };
   audience: Audience;
+  /**
+   * WHAT MAKES THIS MOMENT THIS MOMENT, for the one rotating line on the screen.
+   *
+   * The market id, normally. It must be STABLE for a given market and must never
+   * contain a timestamp or a render counter — those are what turn deterministic
+   * selection back into rotation the reader can watch happen while they read.
+   * Optional so that a caller with nothing stable to offer gets a fixed choice
+   * rather than a fabricated one; there is no default that is a lie.
+   */
+  copySeed?: string;
 }
 
 /**
@@ -236,7 +248,12 @@ export type ChallengeModuleKind = "relay" | "organic" | "still_forming" | "sell"
 export interface ChallengeModule {
   kind: ChallengeModuleKind;
   title: string;
-  support: string;
+  /**
+   * NULL WHEN THE HOOK IS ONE SENTENCE. Some framings are stronger alone —
+   * "Do your people see it too?" wants nothing under it — and padding them with
+   * a second line to fill a slot is how a heading becomes an explanation.
+   */
+  support: string | null;
 }
 
 export type CopyCategory =
@@ -338,42 +355,52 @@ const MAKE_ROOM_MODULE: ChallengeModule = {
   support: "Three questions already have a place.",
 };
 
+/** Stable per market, and empty rather than invented when the caller has none. */
+const copySeed = (i: PostActionInput): string => i.copySeed ?? "";
+
 /**
- * THE MODULE'S HEADING, CHOSEN BY WHAT IS ACTUALLY TRUE OF THIS AUDIENCE.
+ * THE MODULE'S HEADING — the one place on this screen where the words rotate.
  *
- * `still_forming` outranks the others when it applies, because the sentence it
- * replaces would be a small lie: "see who stands with you" said to somebody
- * whose entire reachable network is unnamed relationships promises a Tribe they
- * do not have. The honest version is not a downgrade — an answer from a Still
- * Forming person is the single most informative thing the graph can receive.
+ * IT USED TO WRITE ITS OWN COPY, and that made it the second owner of "what
+ * kind of moment is this". The resolver already publishes `copyCategory`, so a
+ * switch here that independently decided between a relay framing, a Still
+ * Forming framing and a generic one was a second categorisation of the same
+ * facts — the kind that agrees on the day it is written and drifts the first
+ * time one of them learns a new case. It now hands the canonical candidates to
+ * `pickCategory` and renders whatever `domain/copy` returns.
+ *
+ * WHICH CANDIDATES ARE ON OFFER IS STILL A TRUTH DECISION, and it is made here
+ * because only here are the facts. A relay is only a candidate when somebody
+ * actually asked; `tribe_rivals` is never a candidate at all while the audience
+ * is entirely Still Forming, because "Do your people see it too?" promises a
+ * Tribe to somebody whose whole reachable network is relationships the engine
+ * cannot yet name. That was the real content of the old `still_forming`
+ * override — not that Still Forming outranks reciprocity, but that a Tribe must
+ * not be promised. Expressed as a constraint on candidates it survives the
+ * brief's priority intact: reciprocity wins when both apply, and it wins
+ * safely, because none of its variants claims a Tribe.
+ *
+ * THE SEED IS THE MARKET, so the same question says the same thing every time
+ * it is drawn, and two different questions do not read as the same screen.
  */
-function moduleFor(kind: ChallengeModuleKind, audience: Audience): ChallengeModule {
-  if (audience.formingOnly)
-    return {
-      kind: "still_forming",
-      title: "The map is still taking shape",
-      support: "Every honest answer makes it clearer.",
-    };
-  switch (kind) {
-    case "relay":
-      return {
-        kind,
-        title: "Keep the chain moving",
-        support: "Somebody asked you. The same is available to you, once.",
-      };
-    case "sell":
-      return {
-        kind,
-        title: "Still in this one",
-        support: "See where your people land.",
-      };
-    default:
-      return {
-        kind: "organic",
-        title: "Belief is easy when no one can answer back",
-        support: "Put this one in front of your people.",
-      };
-  }
+function moduleFor(
+  slot: "relay" | "organic" | "sell",
+  audience: Audience,
+  seed: string,
+): ChallengeModule {
+  const candidates: CopyCategory[] = ["general"];
+  if (slot === "relay") candidates.push("reciprocity");
+  if (audience.formingOnly) candidates.push("still_forming");
+
+  const category = pickCategory(candidates);
+  const hook = pickHook({ category, seed: `${slot}:${seed}` });
+  return {
+    // The slot is mechanics — it decides whether faces render. The category only
+    // renames it when the framing itself changed, so the two cannot disagree.
+    kind: category === "still_forming" ? "still_forming" : slot,
+    title: hook.headline,
+    support: hook.support,
+  };
 }
 
 function nextForBuy(i: CreateMarketInput | BuyInput): {
@@ -381,11 +408,10 @@ function nextForBuy(i: CreateMarketInput | BuyInput): {
   module: ChallengeModule | null;
 } {
   if (canOffer(i) && spotsOpen(i.capacity) > 0) {
-    const kind: ChallengeModuleKind =
-      i.action !== "create_market" && i.answered ? "relay" : "organic";
+    const slot = i.action !== "create_market" && i.answered ? "relay" : "organic";
     return {
       primary: { kind: "challenge", label: challengeLabel(i.audience) },
-      module: moduleFor(kind, i.audience),
+      module: moduleFor(slot, i.audience, copySeed(i)),
     };
   }
   if (canOffer(i) && spotsOpen(i.capacity) === 0) {
@@ -719,7 +745,7 @@ export function resolvePostAction(i: PostActionInput): PostActionExperience {
           ? { kind: "make_room", label: "Make room" }
           : backToMarket;
       const sellModule: ChallengeModule | null = offer
-        ? moduleFor("sell", i.audience)
+        ? moduleFor("sell", i.audience, copySeed(i))
         : full
           ? MAKE_ROOM_MODULE
           : null;

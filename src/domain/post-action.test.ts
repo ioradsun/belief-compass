@@ -13,8 +13,10 @@ import {
   type CreateMarketInput,
   type PostActionExperience,
   type PostActionInput,
+  type CopyCategory,
   type SellInput,
 } from "./post-action";
+import { allHooks } from "./copy";
 
 const aud = (over: Partial<Audience> = {}): Audience => ({
   status: "available",
@@ -587,35 +589,84 @@ describe("the approved copy matrix", () => {
   });
 
   describe("the challenge module says what is true of this audience", () => {
-    it("frames a relay as keeping the chain moving", () => {
+    const family = (category: CopyCategory) =>
+      allHooks()
+        .filter((h) => h.category === category)
+        .map((h) => h.hook.headline);
+
+    it("frames a relay as reciprocity", () => {
       const r = resolvePostAction(buy({ answered: { count: 1, primaryCallerName: "Maya" } }));
       expect(r.challengeModule?.kind).toBe("relay");
-      expect(r.challengeModule?.title).toBe("Keep the chain moving");
+      expect(family("reciprocity")).toContain(r.challengeModule?.title);
     });
 
-    it("frames an organic buy as belief nobody can answer back", () => {
-      expect(resolvePostAction(buy()).challengeModule?.title).toBe(
-        "Belief is easy when no one can answer back",
-      );
+    it("frames an organic buy in general terms", () => {
+      const r = resolvePostAction(buy());
+      expect(r.challengeModule?.kind).toBe("organic");
+      expect(family("general")).toContain(r.challengeModule?.title);
     });
 
     it("refuses to promise a Tribe to somebody whose audience is all Still Forming", () => {
       const r = resolvePostAction(buy({ audience: aud({ total: 6, formingOnly: true }) }));
       expect(r.challengeModule?.kind).toBe("still_forming");
-      expect(r.challengeModule?.title).toBe("The map is still taking shape");
-      expect(r.challengeModule?.support).toBe("Every honest answer makes it clearer.");
+      expect(family("still_forming")).toContain(r.challengeModule?.title);
       // The CTA still reaches all six — the framing changed, not the offer.
       expect(r.primary.label).toBe("Challenge all 6");
     });
 
-    it("still forming outranks the relay framing, because the promise is the risk", () => {
+    /**
+     * THE PRIORITY DECIDES, AND THE TRIBE PROMISE IS STILL IMPOSSIBLE.
+     *
+     * This used to assert the opposite — that Still Forming overrode the relay
+     * framing. The risk that motivated the override was a promise of a Tribe to
+     * somebody whose whole reachable network is unnamed relationships, and that
+     * risk lives in the `tribe_rivals` family, which `moduleFor` never offers as
+     * a candidate while `formingOnly` holds. Reciprocity outranks Still Forming
+     * per the brief and claims no Tribe, so both rules hold at once.
+     */
+    it("lets reciprocity win over Still Forming without promising a Tribe", () => {
       const r = resolvePostAction(
         buy({
           answered: { count: 1, primaryCallerName: "Maya" },
           audience: aud({ total: 6, formingOnly: true }),
         }),
       );
-      expect(r.challengeModule?.kind).toBe("still_forming");
+      expect(r.challengeModule?.kind).toBe("relay");
+      expect(family("reciprocity")).toContain(r.challengeModule?.title);
+      const said = `${r.challengeModule?.title} ${r.challengeModule?.support ?? ""}`;
+      expect(said).not.toMatch(/your people|your tribe|stands with you/i);
+    });
+
+    /**
+     * THE SAME QUESTION SAYS THE SAME THING EVERY TIME IT IS DRAWN. A reader who
+     * watched the premise change between two renders of identical state would be
+     * watching the software be unsure what it thinks.
+     */
+    it("is stable across repeated resolutions of the same market", () => {
+      const input = buy({ copySeed: "2815" });
+      const first = resolvePostAction(input).challengeModule;
+      for (let i = 0; i < 10; i++) expect(resolvePostAction(input).challengeModule).toEqual(first);
+    });
+
+    it("does not read the same on two different markets", () => {
+      const titles = new Set(
+        Array.from(
+          { length: 40 },
+          (_, i) => resolvePostAction(buy({ copySeed: `m${i}` })).challengeModule?.title,
+        ),
+      );
+      expect(titles.size).toBeGreaterThan(1);
+    });
+
+    /** Rotating copy must never rotate an offer. */
+    it("never rotates the CTA, the kind or the reach", () => {
+      const seen = Array.from({ length: 40 }, (_, i) =>
+        resolvePostAction(buy({ copySeed: `m${i}`, audience: aud({ total: 6 }) })),
+      );
+      for (const r of seen) {
+        expect(r.primary).toEqual({ kind: "challenge", label: "Challenge all 6" });
+        expect(r.challengeModule?.kind).toBe("organic");
+      }
     });
   });
 
@@ -645,10 +696,35 @@ describe("the approved copy matrix", () => {
       expect(r.support).toBe("Still backing YES with $41.20.");
     });
 
-    it("frames a sell Challenge around where people land, not around leaving", () => {
+    /**
+     * A SELL MODULE NO LONGER SAYS "STILL IN THIS ONE".
+     *
+     * The same module is offered to a Market Maker who has fully EXITED — they
+     * may still ask people about their question — where "Still in this one" was
+     * simply false. General framing is true in both cases, which is the whole
+     * reason the copy layer owns these words now.
+     */
+    it("frames a sell Challenge without claiming the reader is still in", () => {
       const r = resolvePostAction(sell({ audience: aud({ total: 8 }) }));
       expect(r.primary.label).toBe("Challenge all 8");
-      expect(r.challengeModule?.support).toBe("See where your people land.");
+      const titles = allHooks()
+        .filter((h) => h.category === "general")
+        .map((h) => h.hook.headline);
+      expect(titles).toContain(r.challengeModule?.title);
+      expect(r.challengeModule?.kind).toBe("sell");
+    });
+
+    it("never tells a Market Maker who fully exited that they are still in", () => {
+      const r = resolvePostAction(
+        sell({
+          action: "market_exit",
+          after: { yes: 0, no: 0 },
+          role: "market_maker",
+          audience: aud({ total: 8 }),
+        } as Partial<SellInput>),
+      );
+      const said = `${r.challengeModule?.title} ${r.challengeModule?.support ?? ""}`;
+      expect(said).not.toMatch(/still in/i);
     });
 
     it("offers the chain, not the market twice, when a Challenge is already live here", () => {
