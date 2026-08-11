@@ -132,11 +132,8 @@ export function IdeasRail({
         {/* EVERY STAGE SAYS WHERE IT IS. No topic → the invitation. Thinking →
             say so, because four generated questions take a beat. Nothing back →
             admit it rather than leaving a hole the reader has to interpret. */}
-        {!topic ? (
-          <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
-            Tap a topic above to see ideas.
-          </p>
-        ) : isFetching && ideas.length === 0 ? (
+        {!topic ? null : isFetching && ideas.length === 0 ? (
+
           <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
             Writing {topic.toLowerCase()} questions…
           </p>
