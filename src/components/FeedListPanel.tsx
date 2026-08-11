@@ -163,6 +163,17 @@ export function FeedListPanel({
   onFilters: (f: FeedFilters) => void;
   /** Network groups this viewer's evidence can fill. Always includes everyone. */
   availableNetworks: FeedNetwork[];
+  /**
+   * ASK FOR MORE, FROM THE BOTTOM OF THE LIST.
+   *
+   * The queue tops up on READING POSITION, which is right for someone moving
+   * card by card and wrong for someone who scrolls this column to its end and
+   * taps the last row: they arrive somewhere the refill has no reason to have
+   * run, and the playlist under them is empty. Scrolling to the end is itself a
+   * request for more, so the sentinel at the bottom makes one — and the button
+   * is there for the case where the automatic ask has already been and gone.
+   */
+  onLoadMore?: () => void;
 }) {
   const rowRefs = useRef(new Map<number, HTMLLIElement>());
   const nowMs = Date.now();
