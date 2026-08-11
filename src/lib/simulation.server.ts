@@ -446,44 +446,68 @@ export class IdempotencyConflict extends Error {
   }
 }
 
-async function quoteBuy(marketId: number, yes: boolean, amountCc: number, ethUsd: number) {
-  const ethWei = usdToWei(amountCc, ethUsd);
-  if (ethWei <= 0n) throw new QuoteUnavailable();
+/**
+ * THE ONE PRICE A SIMULATION ORDER USES — the live spot price of a share.
+ *
+ * NOT the bonding curve's execution quote, and that distinction is the whole
+ * fix. A Simulation order moves no reserves, so pushing its notional through
+ * `getTokensForETH` charged it a price impact no real order ever paid: 1000 CC
+ * on a thin market filled at $16.87 a share while the market marked at $1.96,
+ * and the position read −88% the instant it opened. Execution and valuation must
+ * come from the SAME number, and `market_state` is the number every other
+ * surface marks against.
+ *
+ * The chain is still the fallback, but read as a PRICE (a $1 probe) rather than
+ * as a fill, so it carries no impact either.
+ */
+async function spotPrice(
+  sb: Sb,
+  marketId: number,
+  yes: boolean,
+  ethUsd: number,
+): Promise<number | null> {
+  const { data } = await sb
+    .from("market_state")
+    .select("yes_price_usd, no_price_usd")
+    .eq("onchain_id", marketId)
+    .maybeSingle();
+  const row = (data ?? null) as { yes_price_usd: unknown; no_price_usd: unknown } | null;
+  const stored = row == null ? 0 : num(yes ? row.yes_price_usd : row.no_price_usd);
+  if (stored > 0) return stored;
+
+  const probeWei = usdToWei(1, ethUsd);
+  if (probeWei <= 0n) return null;
   const { client, address } = await contract();
   const read = (await client
     .readContract({
       address,
       abi: TRADE_VIEW_ABI,
       functionName: "getTokensForETH",
-      args: [BigInt(marketId), yes, ethWei],
+      args: [BigInt(marketId), yes, probeWei],
     })
     .catch(() => null)) as readonly [bigint, bigint, bigint] | null;
-  if (!read) throw new QuoteUnavailable();
-
+  if (!read) return null;
   const shares = weiToEth(read[0]);
+  return shares > 0 ? 1 / shares : null;
+}
+
+async function quoteBuy(sb: Sb, marketId: number, yes: boolean, amountCc: number, ethUsd: number) {
+  const price = await spotPrice(sb, marketId, yes, ethUsd);
+  if (price == null || !(price > 0)) throw new QuoteUnavailable();
+  const shares = amountCc / price;
   if (!(shares > 0)) throw new QuoteUnavailable();
-  const feeCc = weiToEth(read[1]) * ethUsd;
-  return { shares, feeCc: feeCc > 0 ? feeCc : 0, priceUsd: amountCc / shares } satisfies Quote;
+  // No fee: a Simulation order pays no gas and no protocol fee, and charging a
+  // fabricated one would make the position open below what it is marked at.
+  return { shares, feeCc: 0, priceUsd: price } satisfies Quote;
 }
 
-async function quoteSell(marketId: number, yes: boolean, shares: number, ethUsd: number) {
-  const amountWei = sharesToWei(shares);
-  if (amountWei <= 0n) throw new QuoteUnavailable();
-  const { client, address } = await contract();
-  const read = (await client
-    .readContract({
-      address,
-      abi: TRADE_VIEW_ABI,
-      functionName: "getSellProceeds",
-      args: [BigInt(marketId), yes, amountWei],
-    })
-    .catch(() => null)) as bigint | null;
-  if (read == null) throw new QuoteUnavailable();
-
-  const proceedsCc = weiToEth(read) * ethUsd;
-  if (!(proceedsCc > 0)) throw new QuoteUnavailable();
-  return { proceedsCc, priceUsd: proceedsCc / shares };
+async function quoteSell(sb: Sb, marketId: number, yes: boolean, shares: number, ethUsd: number) {
+  if (!(shares > 0)) throw new QuoteUnavailable();
+  const price = await spotPrice(sb, marketId, yes, ethUsd);
+  if (price == null || !(price > 0)) throw new QuoteUnavailable();
+  return { proceedsCc: shares * price, priceUsd: price };
 }
+
 
 /* ── The order ───────────────────────────────────────────────────────────── */
 
