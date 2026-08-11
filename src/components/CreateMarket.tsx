@@ -608,8 +608,9 @@ export function CreateMarket({
             creating no longer asks the writer to step out of it. */}
       </div>
 
-      {/* Direct uploads are intentionally disabled in this version — a market's
-          evidence is always a link to a post that lives on its own platform. */}
+      {/* Evidence is either a link to a post on its own platform, or an image
+          dropped here — video and audio uploads stay off in this version. */}
+
     </div>
   );
 }
