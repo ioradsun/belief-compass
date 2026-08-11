@@ -38,7 +38,14 @@ import {
   reviewMarketQuestion,
   signMarketUpload,
 } from "@/lib/market-create.functions";
-import { clearDraft, getDraft, hashFile, setDraft, setProbe, useAdoptedQuestion } from "@/lib/create-draft";
+import {
+  clearDraft,
+  getDraft,
+  hashFile,
+  setDraft,
+  setProbe,
+  useAdoptedQuestion,
+} from "@/lib/create-draft";
 
 import {
   CATEGORY_LABEL,
@@ -66,7 +73,6 @@ import {
 type Attachment =
   | { kind: "embed"; media: EmbedMedia }
   | { kind: "file"; file: File; previewUrl: string; sha256?: string | null };
-
 
 const MIN_QUESTION = 8;
 
@@ -256,7 +262,6 @@ export function CreateMarket({
           });
         }
 
-
         const result = await create({ questionId, yes: side === "YES", seedWei });
         await finalizeMarketCreate({
           data: {
@@ -352,7 +357,6 @@ export function CreateMarket({
       setAttachment((a) => (a?.kind === "file" && a.file === file ? { ...a, sha256 } : a)),
     );
   };
-
 
   return (
     <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[600px] flex-col justify-center">
@@ -453,7 +457,6 @@ export function CreateMarket({
               }}
             />
           )}
-
 
           {/* NO AI FEEDBACK RENDERS IN THE FORM. The old inline "Polish" rewrite
               and the rejection reason both appeared a beat after typing paused and
@@ -610,7 +613,6 @@ export function CreateMarket({
 
       {/* Evidence is either a link to a post on its own platform, or an image
           dropped here — video and audio uploads stay off in this version. */}
-
     </div>
   );
 }
@@ -832,6 +834,5 @@ function MediaChip({ attachment, onRemove }: { attachment: Attachment; onRemove:
     </div>
   );
 }
-
 
 export { kindForMime };
