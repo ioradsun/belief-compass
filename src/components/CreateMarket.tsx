@@ -31,12 +31,15 @@ import {
 import { MediaEmbed, preconnectEmbed } from "@/components/MediaEmbed";
 import { attachMarketEmbed, resolveEmbed } from "@/lib/embed.functions";
 import {
+  attachMarketMedia,
   createMarketDraft,
   finalizeMarketCreate,
   recordCreateFailure,
   reviewMarketQuestion,
+  signMarketUpload,
 } from "@/lib/market-create.functions";
-import { clearDraft, getDraft, setDraft, setProbe, useAdoptedQuestion } from "@/lib/create-draft";
+import { clearDraft, getDraft, hashFile, setDraft, setProbe, useAdoptedQuestion } from "@/lib/create-draft";
+
 import {
   CATEGORY_LABEL,
   CREATOR_CATEGORIES,
