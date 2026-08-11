@@ -1878,6 +1878,7 @@ function Feed() {
                       filters={filters}
                       onFilters={selectFilters}
                       availableNetworks={availableNetworks}
+                      onLoadMore={() => refillNow(true)}
                     />
                   </div>
                 }
