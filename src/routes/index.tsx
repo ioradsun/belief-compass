@@ -1002,10 +1002,13 @@ function Feed() {
    * and a page with nothing fresh means "look deeper" rather than "you are
    * finished" — which is what stops a reader being handed markets they have seen
    * while thousands sit untouched behind the pool's ceiling. Only when a depth
-   * comes back with no markets AT ALL has the catalogue actually run out, and
-   * only then does the dig start again from the top with repeats allowed.
+   * comes back with no markets AT ALL has the catalogue actually run out — and
+   * that is when the PASS ROLLS: contact resets, the dig starts from the top,
+   * and the platform is ranked fresh. This flag exists so a roll that changes
+   * nothing is read as a genuinely empty platform rather than looping.
    */
   const rolledRef = useRef(false);
+
   const queueRef = useRef<FeedQueue>(queue);
   queueRef.current = queue;
   const serverOrder = items.flatMap((it) => (it.kind === "market" ? [it.onchainId] : []));
