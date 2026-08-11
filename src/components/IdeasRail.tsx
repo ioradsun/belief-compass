@@ -1,95 +1,170 @@
 /**
- * NEED A SPARK? — the right rail while a market is being written.
+ * MARKET IDEAS — the left rail while a market is being written.
  *
- * THE RAILS CHANGE JOBS AS THE STORY MOVES, and that transition is the whole
- * design. While somebody is composing:
+ * THE COLUMN ALWAYS SPEAKS. It used to render nothing whenever the House had no
+ * personalised spark, which is exactly the writer who needed it most: a first
+ * timer with an empty form and an empty column beside it. Silence is only
+ * honest when the reader knows why it is silent. So the heading is permanent,
+ * and under it the rail says what it can do and how to make it do it.
  *
- *   LEFT    Already out there?   — SimilarMarkets, so nobody rebuilds a live debate
- *   CENTRE  What do you believe? — the question, the side, the amount
- *   RIGHT   Need a spark?        — this
+ * A TOPIC IS THE SMALLEST HONEST INPUT. We cannot suggest a good question from
+ * nothing, and we will not pad the column with filler. One tap on a topic buys
+ * four questions people genuinely disagree about — the model is told to aim at
+ * the disagreement, never at a fact that can be looked up.
  *
- * The instant the market publishes, the right rail becomes `LaunchRail`: "Your
- * market is live. 8 Tribe · 2 Rivals." Left protects against duplication, right
- * stimulates creation, centre is the act — and asking "who should participate?"
- * before the market exists is premature, which is why recruitment lives strictly
- * after publish and never in the form.
- *
- * ONE IDEA, NOT A FEED. `useHouseIdea` produces a single ready suggestion at a
- * time, and this renders exactly that. No filler, no "ideas you might like"
- * carousel assembled to make the column look busy: with nothing to suggest the
- * panel renders nothing at all, the same way SimilarMarkets self-hides when
- * nothing is genuinely similar. An empty rail is honest; a padded one teaches a
- * reader to ignore the column.
- *
- * IT WILL NOT OVERWRITE WHAT SOMEBODY IS TYPING. Accepting a suggestion calls
- * `startDraftFromSuggestion`, which replaces the draft wholesale — fine from an
- * empty form, destructive halfway through a sentence somebody is still choosing.
- * So the action appears only while the question is empty. Once there are words in
- * the field the same idea stays on screen as pure inspiration, with nothing to
- * click. Nobody loses a thought to a mis-tap.
+ * IT WILL NOT OVERWRITE A SENTENCE IN PROGRESS. The House spark replaces the
+ * draft wholesale (`startDraftFromSuggestion`), so its button only appears from
+ * an empty field. Topic ideas go through `adoptQuestion`, which swaps only the
+ * question text in place — safe at any point, so those stay tappable.
  */
-import { getDraft } from "@/lib/create-draft";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { adoptQuestion, getDraft } from "@/lib/create-draft";
+import { suggestTopicIdeas } from "@/lib/market-create.functions";
 import type { ReadySuggestion } from "@/lib/market-suggestion.server";
+
+/**
+ * The topics people argue hardest about. Deliberately weighted to belief rather
+ * than news: a market about human nature is still contested next month, a
+ * market about this week's headline is dead by then.
+ */
+const TOPICS = [
+  "Human nature",
+  "Religion & meaning",
+  "Self-help",
+  "Relationships",
+  "Money",
+  "AI",
+  "Society",
+  "Morality",
+] as const;
 
 export function IdeasRail({
   suggestion,
   onUse,
   onDismiss,
 }: {
-  /** The one ready suggestion, or null — in which case nothing renders. */
+  /** The one personalised House suggestion, or null. */
   suggestion: ReadySuggestion | null;
   onUse: () => void;
   onDismiss: () => void;
 }) {
-  if (!suggestion) return null;
+  const [topic, setTopic] = useState<string | null>(null);
+
   // Read at render rather than held in state: the draft is written by the form
   // next door, and a stale copy here would offer to overwrite a question that
-  // now exists. Cheap — this is a localStorage read behind a mounted panel.
+  // now exists.
   const writing = getDraft().question.trim().length > 0;
+
+  const { data, isFetching, isError } = useQuery({
+    queryKey: ["topic-ideas", topic],
+    queryFn: () => suggestTopicIdeas({ data: { topic: topic! } }),
+    enabled: !!topic,
+    // Same topic, same four ideas for the session — re-tapping costs nothing.
+    staleTime: 10 * 60_000,
+  });
+  const ideas = data?.ideas ?? [];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-3 shrink-0 text-[11px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
-        Market Ideas
+      <div className="mb-1.5 shrink-0 text-[11px] font-semibold tracking-wide text-[var(--text-muted)] uppercase">
+        Market ideas
       </div>
+      {/* WHAT THIS COLUMN IS FOR, said once. A reader who understands the offer
+          can ignore it deliberately instead of wondering what it is. */}
+      <p className="mb-3 shrink-0 text-[11.5px] leading-snug text-[var(--text-secondary)]">
+        Pick a topic and we&apos;ll draft four questions people actually disagree about.
+      </p>
 
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-        <p className="text-[13px] leading-snug text-[var(--text)]">{suggestion.question}</p>
-        {/* WHY THIS ONE, in the suggester's own words. `fitLine` says what about
-            this reader made it worth suggesting; `shortReason` says why the
-            question is worth asking at all. The fit is the more interesting of
-            the two here, because the reader is already choosing what to ask. */}
-        {(suggestion.fitLine || suggestion.shortReason).trim() && (
-          <p className="mt-1.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
-            {(suggestion.fitLine || suggestion.shortReason).trim()}
-          </p>
-        )}
+      {/* THE PERSONALISED SPARK, when there is one, sits above the topics — it
+          knows something about this reader that a topic never will. */}
+      {suggestion && (
+        <div className="mb-3 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <p className="text-[13px] leading-snug text-[var(--text)]">{suggestion.question}</p>
+          {(suggestion.fitLine || suggestion.shortReason).trim() && (
+            <p className="mt-1.5 text-[11.5px] leading-snug text-[var(--text-secondary)]">
+              {(suggestion.fitLine || suggestion.shortReason).trim()}
+            </p>
+          )}
 
-        {writing ? (
-          /* WORDS ALREADY IN THE FIELD. The idea stays visible — it may still be
-             the better question — but there is nothing to press, because pressing
-             it would replace a sentence somebody is mid-way through writing. */
-          <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-            Keep your own question — this one is just here for the angle.
-          </p>
-        ) : (
+          {writing ? (
+            <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+              Keep your own question — this one is just here for the angle.
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={onUse}
+              className="mt-2.5 w-full rounded-lg border border-[var(--border)] px-2 py-1.5 text-[12px] font-medium text-[var(--text)] transition-colors hover:border-[var(--border-strong)]"
+            >
+              Ask this instead
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={onUse}
-            className="mt-2.5 w-full rounded-lg border border-[var(--border)] px-2 py-1.5 text-[12px] font-medium text-[var(--text)] transition-colors hover:border-[var(--border-strong)]"
+            onClick={onDismiss}
+            className="mt-2 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
           >
-            Ask this instead
+            Not this one
           </button>
-        )}
+        </div>
+      )}
+
+      <div className="mb-3 flex shrink-0 flex-wrap gap-1.5">
+        {TOPICS.map((t) => {
+          const on = topic === t;
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTopic(t)}
+              className="rounded-full border px-2.5 py-1 text-[11.5px] transition-colors"
+              style={{
+                borderColor: on ? "var(--border-strong)" : "var(--border)",
+                color: on ? "var(--text)" : "var(--text-secondary)",
+                background: on ? "var(--surface)" : "transparent",
+              }}
+            >
+              {t}
+            </button>
+          );
+        })}
       </div>
 
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="mt-2 self-start text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-      >
-        Not this one
-      </button>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* EVERY STAGE SAYS WHERE IT IS. No topic → the invitation. Thinking →
+            say so, because four generated questions take a beat. Nothing back →
+            admit it rather than leaving a hole the reader has to interpret. */}
+        {!topic ? (
+          <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+            Tap a topic above to see ideas.
+          </p>
+        ) : isFetching && ideas.length === 0 ? (
+          <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+            Writing {topic.toLowerCase()} questions…
+          </p>
+        ) : ideas.length === 0 ? (
+          <p className="text-[11.5px] leading-snug text-[var(--text-muted)]">
+            {isError
+              ? "Couldn't reach the idea writer. Try another topic."
+              : "Nothing sharp enough on that one — try another topic."}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {ideas.map((idea) => (
+              <button
+                key={idea}
+                type="button"
+                onClick={() => adoptQuestion(idea)}
+                className="block w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left text-[13px] leading-snug text-[var(--text)] transition-colors hover:border-[var(--border-strong)]"
+              >
+                {idea}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
