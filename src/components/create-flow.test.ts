@@ -54,9 +54,16 @@ describe("the idea rail never costs the writer a sentence", () => {
     expect(action.indexOf("onUse")).toBeGreaterThan(action.indexOf("Keep your own question"));
   });
 
-  it("renders nothing rather than padding the column", () => {
-    expect(code("src/components/IdeasRail.tsx")).toMatch(/if \(!suggestion\) return null;/);
+  it("always states what the column is for, and never pads it with filler", () => {
+    // The heading is permanent — a writer with no personalised spark still
+    // learns the column exists — but every stage below it is narrated rather
+    // than invented: invitation, thinking, or an honest empty answer.
+    const c = code("src/components/IdeasRail.tsx");
+    expect(c).toMatch(/Market ideas/);
+    expect(c).toMatch(/Tap a topic above to see ideas\./);
+    expect(c).toMatch(/questions…/);
   });
+
 });
 
 describe("category is the system's business, not the creator's", () => {
