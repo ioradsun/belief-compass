@@ -25,6 +25,8 @@ import { putOnTable } from "@/lib/table.functions";
 import { railSideKey, tableKey } from "@/components/YourTable";
 import { audienceKey, useAudience } from "@/components/AudiencePreview";
 import { PostActionScreen } from "@/components/PostActionScreen";
+import { PostPositionBar } from "@/components/PostPositionBar";
+import { ChallengeSheet } from "@/components/ChallengeSheet";
 import { usePostActionFacts, type ConfirmedAction } from "@/lib/post-action.adapter";
 import {
   refusalIsCanonical,
@@ -60,6 +62,14 @@ export interface PostActionProps {
   onAnswer?: () => void;
   /** The personal story, rendered only if the resolver asked for one. */
   reveal?: ReactNode;
+  /**
+   * WHERE THIS MOMENT LIVES.
+   *
+   * `surface` is the full vertical document. `bar` is the SAME moment rendered
+   * into the region the order form just vacated, leaving the market on screen —
+   * a state change at the bottom of the interface rather than a new screen.
+   */
+  variant?: "surface" | "bar";
 }
 
 export function PostAction({
@@ -72,11 +82,16 @@ export function PostAction({
   onSeeChain,
   onAnswer,
   reveal,
+  variant = "surface",
 }: PostActionProps) {
   const qc = useQueryClient();
   const { ensureSession } = useWalletSession();
   const { input, parentCall } = usePostActionFacts(kind, wallet, act, mode);
   const { data: audience } = useAudience(wallet, act.marketId, mode);
+  /** Open only by a press on the bar; closes back to this same market state. */
+  const [sheet, setSheet] = useState(false);
+  /** Scarcity, not a fraction: how many Challenge slots are still free. */
+  const remaining = Math.max(0, input.capacity.total - Math.max(0, input.capacity.active));
 
   /**
    * ONE PRESS'S OUTCOME, and deliberately not part of the experience.
@@ -187,6 +202,50 @@ export function PostAction({
     }
   };
 
+  const groups = audience?.status === "available" ? audience.groups : undefined;
+
+  /**
+   * THE BAR IS THE SAME MOMENT, IN THE REGION THE ORDER FORM OCCUPIED.
+   *
+   * One resolver, one relay, two presentations. `surface` still owns the mobile
+   * game and the create flow; `bar` keeps the market on screen and lets the
+   * bottom of the interface change state instead of the page changing.
+   */
+  if (variant === "bar") {
+    const reach = audience?.status === "available" ? audience.total : 0;
+    return (
+      <>
+        <PostPositionBar
+          experience={experience}
+          lockLine={lockLine(kind, act.side ?? null, mode)}
+          remaining={remaining}
+          onAct={(cta) => {
+            // Challenge never fires from the bar: it opens over the market so
+            // the reader can see who it reaches before spending a slot.
+            if (cta.kind === "challenge") return setSheet(true);
+            act_(cta);
+          }}
+          pending={relay.isPending}
+          status={status}
+          onRetry={() => act_({ kind: "challenge", label: WRITE_FAILED_TITLE })}
+        />
+        {sheet && (
+          <ChallengeSheet
+            count={reach}
+            groups={groups}
+            remaining={remaining}
+            pending={relay.isPending}
+            onSend={() => {
+              setStatus({ state: "pending" });
+              relay.mutate(undefined, { onSettled: () => setSheet(false) });
+            }}
+            onClose={() => setSheet(false)}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
     <PostActionScreen
       experience={experience}
@@ -195,7 +254,16 @@ export function PostAction({
       status={status}
       onRetry={() => act_({ kind: "challenge", label: WRITE_FAILED_TITLE })}
       reveal={reveal}
-      groups={audience?.status === "available" ? audience.groups : undefined}
+      groups={groups}
     />
   );
 }
+
+/** The plain record of what just happened. No system nouns, no mechanics. */
+function lockLine(kind: "buy" | "sell" | "create", side: string | null, mode: RecordMode): string {
+  const sim = mode === "SIMULATION" ? " (simulated)" : "";
+  if (kind === "sell") return `Position closed${sim}.`;
+  if (kind === "create") return `Your question is live${sim}.`;
+  return side ? `You backed ${side}${sim}.` : `Locked in${sim}.`;
+}
+
