@@ -124,13 +124,15 @@ export function TakeASide({
         </p>
       ) : (
         <p className="relative mt-2.5 text-[12px] leading-relaxed text-[var(--text-muted)]">
-          {SIMULATION_COPY.entryBody}
+          {sim.active
+            ? "Take sides on your own reasons. Simulated or real, every conviction counts toward your profile."
+            : SIMULATION_COPY.entryBody}
         </p>
       )}
 
       {/* The offer, and only while it is genuinely on offer. A graduated wallet
           never sees it again, and neither does one that already has ten. */}
-      {(!wallet || sim.eligible) && (
+      {!sim.active && (!wallet || sim.eligible) && (
         <>
           <button
             type="button"
