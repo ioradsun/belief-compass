@@ -79,19 +79,31 @@ export function useSellQuote(marketId: number | null, yes: boolean, tokenAmount:
   };
 }
 
-/** The connected wallet's current YES/NO share balances for a market. */
-export function useUserBalance(marketId: number | null) {
+/**
+ * THE VIEWER'S share balances for a market — not the connector's.
+ *
+ * A wallet can be signed in to Conviction through a wallet session without an
+ * active wagmi connection (page reloads drop the connector long before the
+ * session expires). Reading `useAccount()` here meant the market page saw zero
+ * tokens and hid ownership entirely, while MARKETS — which reads by wallet on
+ * the server — still showed the position. Holdings are a fact about an ADDRESS,
+ * so this asks the chain about the viewer's address. Signing a sale still needs
+ * a live connector; the dock asks for it at that moment.
+ */
+export function useUserBalance(marketId: number | null, viewerWallet?: string | null) {
   const { address } = useAccount();
+  const owner = ((viewerWallet ?? address) as `0x${string}` | undefined) || undefined;
   const q = useReadContract({
     ...CONTRACT,
     functionName: "getUserBalance",
-    args: marketId != null && address ? [BigInt(marketId), address] : undefined,
+    args: marketId != null && owner ? [BigInt(marketId), owner] : undefined,
     chainId: CHAIN_ID,
-    query: { enabled: marketId != null && !!address },
+    query: { enabled: marketId != null && !!owner },
   });
   const d = q.data as readonly [bigint, bigint] | undefined;
   return { yes: d?.[0] ?? 0n, no: d?.[1] ?? 0n, refetch: q.refetch };
 }
+
 
 /**
  * Buy/sell executor. `buy` sends ETH as value with a minTokens floor derived
