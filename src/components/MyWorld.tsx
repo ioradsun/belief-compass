@@ -108,7 +108,17 @@ export function MyWorld({
   /** Shown inside the three personal tabs when there is no wallet. */
   connectPrompt?: ReactNode;
 }) {
-  const [tab, setTab] = useState<Tab>(() => (initialNetwork ? "people" : initialTab()));
+  // SSR knows nothing about sessionStorage, so the first paint must match the
+  // server's ("feed", or "people" when the route already opened a person) and
+  // the remembered tab is applied after hydration. Reading storage in the
+  // initializer rendered a different selected tab on the client and tore the
+  // whole rail's hydration.
+  const [tab, setTab] = useState<Tab>(() => (initialNetwork ? "people" : "feed"));
+  useEffect(() => {
+    if (!initialNetwork) setTab(initialTab());
+    // Once, on mount: later changes come from `select`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [convictionCount, setConvictionCount] = useState<number | null>(null);
   const [peopleCount, setPeopleCount] = useState<number | null>(null);
   const select = (t: Tab) => {
