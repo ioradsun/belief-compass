@@ -260,9 +260,12 @@ export function ProfileMenu({
         >
           <Suspense
             fallback={
-              <div className="py-6 text-center text-[12px] text-[var(--text-muted)]">…</div>
+              <div className="grid min-h-[180px] place-items-center text-[12px] text-[var(--text-muted)]">
+                …
+              </div>
             }
           >
+
             {panel === "edit" && <ProfileEditor wallet={me} fallbackName={name} />}
             {panel === "earnings" && <CreatorEarnings ethUsd={ethUsd} />}
             {panel === "import" && (
