@@ -30,14 +30,25 @@ describe("the create surface tells one story, and the rails follow it", () => {
      * would have made a deliberate layout decision look like a regression, which
      * is exactly what it did until this was rewritten.
      */
-    const route = code("src/routes/index.tsx");
-    expect(route).toMatch(/createOpen \? \([\s\S]{0,400}?<IdeasRail/);
     /**
-     * THE SPARK MOVED SIDES AND THE INVARIANT DID NOT. What this protects is not
-     * which rail holds the spark — that changed deliberately — but that while a
-     * question is being written, NEITHER rail recruits.
+     * THE CONDITION NARROWED, AND THE INVARIANT STILL DID NOT. The rail now
+     * steps aside only for a market the reader CHOSE to write — `createOpen &&
+     * !ideaDue` — because an idea arriving from the feed is the same browsing
+     * flow and the rails should keep doing their normal job. Pinning the old
+     * `createOpen || ideaDue` made that deliberate narrowing read as a
+     * regression; what is actually protected is the second assertion below.
      */
-    const composing = route.slice(route.indexOf("createOpen || ideaDue ? ("));
+    const route = code("src/routes/index.tsx");
+    const COMPOSING = "createOpen && !ideaDue ? (";
+    expect(route).toMatch(/createOpen && !ideaDue \? \([\s\S]{0,400}?<IdeasRail/);
+    /**
+     * WHILE A QUESTION IS BEING WRITTEN, NEITHER RAIL RECRUITS. Asking "who
+     * should show up?" before the question exists turns the form into a CMS.
+     */
+    const at = route.indexOf(COMPOSING);
+    // A slice from -1 would silently search the whole file and pass on nothing.
+    expect(at, "the composing branch must exist to be checked").toBeGreaterThan(-1);
+    const composing = route.slice(at);
     const rail = composing.slice(0, composing.indexOf(") : ("));
     for (const recruiting of ["callReach", "AudiencePreview", "PutOnTable", "Challenge all"])
       expect(rail, recruiting).not.toContain(recruiting);
