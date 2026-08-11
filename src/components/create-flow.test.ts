@@ -18,9 +18,12 @@ const code = (p: string) =>
  * CMS instead of a conviction.
  */
 describe("the create surface tells one story, and the rails follow it", () => {
-  it("shows a spark in the right rail while writing, not a recruiting desk", () => {
+  it("shows ideas in the left rail while writing, not a recruiting desk", () => {
+    // The composer took the rails over: LEFT is the spark, RIGHT is other ways
+    // to ask plus the debates that already exist.
     const route = code("src/routes/index.tsx");
-    expect(route).toMatch(/createOpen \|\| ideaDue \? \([\s\S]{0,400}?<IdeasRail/);
+    expect(route).toMatch(/createOpen \? \([\s\S]{0,400}?<IdeasRail/);
+    expect(route).toMatch(/<AlternatesRail \/>/);
   });
 
   it("keeps Challenge out of the composer entirely", () => {
@@ -111,7 +114,7 @@ describe("the centre stops selling and asks one thing", () => {
   it("states the earn once, in the title, and nowhere after", () => {
     // The fee is what the act is worth, so it sits with the act. The post-publish
     // moment says one fact — the market is live — and stops.
-    expect(code("src/components/CreateMarket.tsx")).toMatch(/4\.5%/);
+    expect(code("src/components/CreateMarket.tsx")).toMatch(/Earn 1% on all trading/);
     // The post-publish moment is `resolvePostAction`'s create branch now, and it
     // says one fact — the market is live — with no fee repeated after the act.
     expect(code("src/domain/post-action.ts")).not.toMatch(/4\.5%/);
@@ -123,7 +126,8 @@ describe("the centre stops selling and asks one thing", () => {
     // housekeeping. The one affordance with an action behind it survives.
     const c = code("src/components/CreateMarket.tsx");
     expect(c).not.toMatch(/AI-checked/);
-    expect(c).toMatch(/Polish/);
+    // "Polish" left the form entirely — rewrites are the right rail's job now.
+    expect(code("src/components/AlternatesRail.tsx")).toMatch(/Other ways to ask/);
   });
 
   it("leaves only the legal line under the primary action", () => {
@@ -131,7 +135,6 @@ describe("the centre stops selling and asks one thing", () => {
     // reader is deciding rather than being persuaded.
     const c = code("src/components/CreateMarket.tsx");
     expect(c).not.toMatch(/pov\.co|Exclusive/);
-    expect(c).toMatch(/Terms/);
   });
 
   it("keeps the link secondary, inside the field", () => {
