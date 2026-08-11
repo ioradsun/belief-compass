@@ -23,7 +23,7 @@ import { positionSummaryQO } from "@/lib/positions-query";
 import { simulationPositionQO } from "@/lib/simulation-query";
 import { useSimulationMode } from "@/lib/simulation-mode";
 import { useSellQuote, type useTradeReady } from "@/lib/chain-trade";
-import { fmtShares, sharesForPct, type OrderSide } from "@/domain/order";
+import { fmtShares, sharesForPct, usdToWei, type OrderSide } from "@/domain/order";
 import {
   ownedPositions,
   sellStep,
