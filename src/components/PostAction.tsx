@@ -187,6 +187,50 @@ export function PostAction({
     }
   };
 
+  const groups = audience?.status === "available" ? audience.groups : undefined;
+
+  /**
+   * THE BAR IS THE SAME MOMENT, IN THE REGION THE ORDER FORM OCCUPIED.
+   *
+   * One resolver, one relay, two presentations. `surface` still owns the mobile
+   * game and the create flow; `bar` keeps the market on screen and lets the
+   * bottom of the interface change state instead of the page changing.
+   */
+  if (variant === "bar") {
+    const reach = audience?.status === "available" ? audience.total : 0;
+    return (
+      <>
+        <PostPositionBar
+          experience={experience}
+          lockLine={lockLine(kind, act.side ?? null, mode)}
+          remaining={remaining}
+          onAct={(cta) => {
+            // Challenge never fires from the bar: it opens over the market so
+            // the reader can see who it reaches before spending a slot.
+            if (cta.kind === "challenge") return setSheet(true);
+            act_(cta);
+          }}
+          pending={relay.isPending}
+          status={status}
+          onRetry={() => act_({ kind: "challenge", label: WRITE_FAILED_TITLE })}
+        />
+        {sheet && (
+          <ChallengeSheet
+            count={reach}
+            groups={groups}
+            remaining={remaining}
+            pending={relay.isPending}
+            onSend={() => {
+              setStatus({ state: "pending" });
+              relay.mutate(undefined, { onSettled: () => setSheet(false) });
+            }}
+            onClose={() => setSheet(false)}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
     <PostActionScreen
       experience={experience}
@@ -195,7 +239,16 @@ export function PostAction({
       status={status}
       onRetry={() => act_({ kind: "challenge", label: WRITE_FAILED_TITLE })}
       reveal={reveal}
-      groups={audience?.status === "available" ? audience.groups : undefined}
+      groups={groups}
     />
   );
 }
+
+/** The plain record of what just happened. No system nouns, no mechanics. */
+function lockLine(kind: "buy" | "sell" | "create", side: string | null, mode: RecordMode): string {
+  const sim = mode === "SIMULATION" ? " (simulated)" : "";
+  if (kind === "sell") return `Position closed${sim}.`;
+  if (kind === "create") return `Your question is live${sim}.`;
+  return side ? `You backed ${side}${sim}.` : `Locked in${sim}.`;
+}
+
