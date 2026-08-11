@@ -714,3 +714,16 @@
     display: none;
   }
 }
+
+/* A card that has just been created settles into the list rather than appearing
+   already at rest — the only way a highlight reads as "this one is yours". */
+@keyframes chain-arrive {
+  from {
+    transform: translateY(-6px) scale(0.985);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}

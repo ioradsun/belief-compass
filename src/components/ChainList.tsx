@@ -52,6 +52,7 @@ import { relationshipTone } from "@/lib/dna-labels";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { bestEffort, useWalletSession } from "@/hooks/useWalletSession";
 import type { Challenge, CallerRelation } from "@/domain/challenge";
+import { useChallengeSent } from "@/lib/challenge-signal";
 
 const BADGE: Record<CallerRelation, string> = {
   twin: "Tribe",
@@ -289,8 +290,25 @@ function ChainCardRow({
    */
   const quiet = !card.live;
 
+  /**
+   * JUST SENT — a few seconds of "there it is", then nothing. The rail turned
+   * to this tab on the same signal, so without the light the reader arrives at
+   * a list and has to find their own work in it.
+   */
+  const sent = useChallengeSent();
+  const fresh = sent?.marketId === card.marketId;
+
   return (
-    <li className="relative" data-market={card.marketId} data-tone={card.tone}>
+    <li
+      className={`relative transition-all duration-500 ${fresh ? "animate-[chain-arrive_500ms_ease-out]" : ""}`}
+      data-market={card.marketId}
+      data-tone={card.tone}
+      style={
+        fresh
+          ? { boxShadow: "0 0 0 2px var(--notice, var(--border-strong))", borderRadius: 14 }
+          : undefined
+      }
+    >
       <button
         type="button"
         onClick={() => onSelect(card.marketId)}

@@ -27,6 +27,8 @@ import { audienceKey, useAudience } from "@/components/AudiencePreview";
 import { PostActionScreen } from "@/components/PostActionScreen";
 import { PostPositionBar } from "@/components/PostPositionBar";
 import { ChallengePanel } from "@/components/ChallengePanel";
+import { notify } from "@/components/Toasts";
+import { announceChallengeSent } from "@/lib/challenge-signal";
 import { usePostActionFacts, type ConfirmedAction } from "@/lib/post-action.adapter";
 import {
   refusalIsCanonical,
@@ -236,8 +238,30 @@ export function PostAction({
             remaining={remaining}
             pending={relay.isPending}
             onSend={() => {
+              /**
+               * THE PRESS IS THE END OF THE TASK, so the interface behaves as
+               * if it is. The panel closes on the press, a receipt says what
+               * happened, the rail turns to Challenge and lights the card this
+               * just created, and the reader is carried to the next question —
+               * a sent Challenge has nothing left to look at on this market.
+               * The write continues underneath; only a genuine failure comes
+               * back to the reader, and it comes back as a sentence, not a
+               * reversal of the screen they are now on.
+               */
               setStatus({ state: "pending" });
-              relay.mutate(undefined, { onSettled: () => setSheet(false) });
+              setSheet(false);
+              notify("Challenge sent");
+              announceChallengeSent(act.marketId);
+              relay.mutate(undefined, {
+                onSettled: (res) => {
+                  if (res == null || (!res.ok && !refusalIsCanonical(res.reason))) {
+                    notify("Could not send that one. Try again.", "bad");
+                  }
+                },
+              });
+              // One beat, so the receipt and the rail's turn are seen before
+              // the column moves. Any longer and it reads as a hang.
+              window.setTimeout(() => onNextQuestion?.(), 420);
             }}
             onClose={() => setSheet(false)}
           />
