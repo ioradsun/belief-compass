@@ -11,6 +11,8 @@ import {
   retreat,
   isCaughtUp,
   emptyQueue,
+  appendOrder,
+  type FeedQueue,
 } from "./feed-queue";
 
 describe("the visible order never changes without a commit", () => {
@@ -270,7 +272,13 @@ describe("admit", () => {
   it("closes the door the lens change actually opens", () => {
     // Empty queue + an active market from the previous lens + the first ranked
     // response. This is the exact sequence behind the screenshot.
-    const empty = { order: [], activeId: 99, incoming: null, seeded: false } as const;
+    const empty = {
+      order: [],
+      activeId: 99,
+      incoming: null,
+      seeded: false,
+      appended: [],
+    } as const;
     const ranked = receiveOrder(empty, [10, 20, 30], { admit: false });
     expect(ranked.order).toEqual([10, 20, 30]);
     expect(ranked.order[0]).not.toBe(99);
@@ -289,5 +297,80 @@ describe("admit", () => {
     // ranking begins, rather than stranding the reader.
     const q = jumpTo(initQueue([10, 20, 30]), 99, { admit: false });
     expect(advance(q).activeId).toBe(10);
+  });
+});
+
+/**
+ * PAGING — the feed grows at the bottom, and nothing above it moves.
+ *
+ * The symptom these lock down: opening a market from the insider rail (or
+ * search, or a position) left an Up Next of two rows while the same session on
+ * a different market had forty. Nothing had run out — the reader had simply
+ * landed deep in an order that only ever had one page.
+ */
+describe("appendOrder", () => {
+  const upcoming = (q: FeedQueue) => {
+    const i = q.activeId == null ? -1 : q.order.indexOf(q.activeId);
+    return i >= 0 ? q.order.slice(i + 1) : [...q.order];
+  };
+
+  it("adds to the tail and moves nothing already on screen", () => {
+    const q = initQueue([1, 2, 3]);
+    const grown = appendOrder(q, [4, 5]);
+    expect(grown.order).toEqual([1, 2, 3, 4, 5]);
+    expect(grown.activeId).toBe(1);
+    // Every index the reader could see is unchanged — that is why appending
+    // needs no commit.
+    expect(grown.order.slice(0, 3)).toEqual(q.order);
+  });
+
+  it("rescues a reader who jumped into the tail", () => {
+    // The reported bug, in three lines.
+    const order = Array.from({ length: 48 }, (_, i) => i + 1);
+    const deep = jumpTo(initQueue(order), 47, { admit: true });
+    expect(upcoming(deep)).toEqual([48]);
+    expect(upcoming(appendOrder(deep, [101, 102, 103]))).toEqual([48, 101, 102, 103]);
+  });
+
+  it("never places a market it already holds", () => {
+    const q = appendOrder(initQueue([1, 2, 3]), [3, 4, 3]);
+    expect(q.order).toEqual([1, 2, 3, 4]);
+  });
+
+  it("is a no-op when the page adds nothing", () => {
+    const q = initQueue([1, 2, 3]);
+    expect(appendOrder(q, [1, 2])).toBe(q);
+    expect(appendOrder(q, [])).toBe(q);
+  });
+
+  /**
+   * THE ONE THAT MADE `appended` A FIELD. `commit` replaces the order with the
+   * newest ranking, and that ranking is of page ONE — so without this the feed
+   * silently truncated back to its first page on every poll the reader accepted.
+   */
+  it("survives a commit of a re-ranked first page", () => {
+    let q = initQueue([1, 2, 3]);
+    q = appendOrder(q, [10, 11]);
+    q = receiveOrder(q, [3, 2, 1]);
+    q = commit(q);
+    expect(q.order).toEqual([3, 2, 1, 10, 11]);
+  });
+
+  it("does not re-add a paged market the new ranking promoted", () => {
+    let q = initQueue([1, 2, 3]);
+    q = appendOrder(q, [10]);
+    // 10 scored its way onto page one this time.
+    q = commit(receiveOrder(q, [10, 1, 2, 3]));
+    expect(q.order).toEqual([10, 1, 2, 3]);
+  });
+
+  it("keeps the active market even when it is in neither list", () => {
+    let q = initQueue([1, 2, 3]);
+    q = appendOrder(q, [10]);
+    q = jumpTo(q, 999, { admit: true });
+    q = commit(receiveOrder(q, [1, 2, 3]));
+    expect(q.order).toContain(999);
+    expect(q.order).toContain(10);
+    expect(q.activeId).toBe(999);
   });
 });
