@@ -26,7 +26,7 @@ import { railSideKey, tableKey } from "@/components/YourTable";
 import { audienceKey, useAudience } from "@/components/AudiencePreview";
 import { PostActionScreen } from "@/components/PostActionScreen";
 import { PostPositionBar } from "@/components/PostPositionBar";
-import { ChallengeSheet } from "@/components/ChallengeSheet";
+import { ChallengePanel } from "@/components/ChallengePanel";
 import { usePostActionFacts, type ConfirmedAction } from "@/lib/post-action.adapter";
 import {
   refusalIsCanonical,
@@ -230,7 +230,7 @@ export function PostAction({
           onRetry={() => act_({ kind: "challenge", label: WRITE_FAILED_TITLE })}
         />
         {sheet && (
-          <ChallengeSheet
+          <ChallengePanel
             count={reach}
             groups={groups}
             remaining={remaining}
