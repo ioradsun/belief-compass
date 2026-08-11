@@ -20,7 +20,7 @@ import { useAccount } from "wagmi";
 import { useWalletSession } from "@/hooks/useWalletSession";
 import { requestConnect } from "@/lib/connect-bridge";
 import { fmtUsd, usdToWei } from "@/domain/order";
-import { QUESTION_MAX, kindForMime } from "@/lib/market-create";
+import { MEDIA_LIMITS, QUESTION_MAX, accept, kindForMime } from "@/lib/market-create";
 import {
   EMBED_HINT,
   PLATFORM_LABEL,
@@ -31,12 +31,22 @@ import {
 import { MediaEmbed, preconnectEmbed } from "@/components/MediaEmbed";
 import { attachMarketEmbed, resolveEmbed } from "@/lib/embed.functions";
 import {
+  attachMarketMedia,
   createMarketDraft,
   finalizeMarketCreate,
   recordCreateFailure,
   reviewMarketQuestion,
+  signMarketUpload,
 } from "@/lib/market-create.functions";
-import { clearDraft, getDraft, setDraft, setProbe, useAdoptedQuestion } from "@/lib/create-draft";
+import {
+  clearDraft,
+  getDraft,
+  hashFile,
+  setDraft,
+  setProbe,
+  useAdoptedQuestion,
+} from "@/lib/create-draft";
+
 import {
   CATEGORY_LABEL,
   CREATOR_CATEGORIES,
@@ -55,12 +65,14 @@ import {
 } from "@/components/order/OrderTicket";
 
 /**
- * A market carries exactly one piece of evidence, and it is always a link to a
- * post that lives on its own platform. Direct uploads are intentionally
- * disabled (the signed-upload pipeline is still on the server, unused) —
- * Conviction hosts the market, not the media.
+ * A market carries exactly one piece of evidence: either a link to a post that
+ * lives on its own platform, or an image dropped straight onto the form. The
+ * dropped file stays local until publish — the signed-upload pipeline needs a
+ * draft to own the bytes, so we upload once the draft exists and never before.
  */
-type Attachment = { kind: "embed"; media: EmbedMedia };
+type Attachment =
+  | { kind: "embed"; media: EmbedMedia }
+  | { kind: "file"; file: File; previewUrl: string; sha256?: string | null };
 
 const MIN_QUESTION = 8;
 
@@ -90,11 +102,23 @@ export function CreateMarket({
   const [side, setSide] = useState<"YES" | "NO">(saved.side);
   const [amount, setAmount] = useState<number>(saved.amount);
   const [attachment, setAttachment] = useState<Attachment | null>(() => {
-    const a = saved.attachment as { embed?: EmbedMedia } | null;
-    return a?.embed ? { kind: "embed", media: a.embed } : null;
+    const a = saved.attachment as {
+      kind?: string;
+      embed?: EmbedMedia;
+      file?: File;
+      previewUrl?: string;
+      sha256?: string | null;
+    } | null;
+    if (a?.embed) return { kind: "embed", media: a.embed };
+    if (a?.file && a.previewUrl) {
+      return { kind: "file", file: a.file, previewUrl: a.previewUrl, sha256: a.sha256 ?? null };
+    }
+    return null;
   });
   const [localError, setLocalError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+
   /** Null until the creator picks. The AI's read is shown, never silently kept. */
   const [category, setCategory] = useState<CategorySlug | null>(saved.category);
   /** Chips hidden until asked for. A creator who already chose stays expanded, so
@@ -143,18 +167,27 @@ export function CreateMarket({
       amount,
       category,
       type: attachment ? "media" : "text",
-      attachment: attachment
-        ? { kind: "link", url: attachment.media.url, embed: attachment.media }
-        : null,
+      attachment:
+        attachment == null
+          ? null
+          : attachment.kind === "embed"
+            ? { kind: "link", url: attachment.media.url, embed: attachment.media }
+            : {
+                kind: "image",
+                file: attachment.file,
+                previewUrl: attachment.previewUrl,
+                sha256: attachment.sha256 ?? null,
+              },
     });
   }, [question, side, amount, attachment, category]);
   useEffect(() => {
     setProbe({
       question: debounced,
-      sha256: null,
-      linkUrl: attachment?.media.url ?? null,
+      sha256: attachment?.kind === "file" ? (attachment.sha256 ?? null) : null,
+      linkUrl: attachment?.kind === "embed" ? attachment.media.url : null,
     });
   }, [debounced, attachment]);
+
   useEffect(() => () => setProbe(null), []);
 
   const { data: review } = useQuery({
@@ -200,9 +233,32 @@ export function CreateMarket({
       });
 
       try {
-        if (attachment) {
+        if (attachment?.kind === "embed") {
           await attachMarketEmbed({
             data: { wallet: address, token, questionId, url: attachment.media.url },
+          });
+        } else if (attachment?.kind === "file") {
+          // The draft now exists and owns the bytes: sign, PUT, verify, attach.
+          const file = attachment.file;
+          const ext = (file.name.split(".").pop() ?? "").slice(0, 5) || "bin";
+          const up = await signMarketUpload({ data: { wallet: address, token, questionId, ext } });
+          const put = await fetch(up.signedUrl, {
+            method: "PUT",
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+            body: file,
+          });
+          if (!put.ok) throw new Error("That image didn't upload — try again.");
+          const dims = await imageDimensions(attachment.previewUrl);
+          await attachMarketMedia({
+            data: {
+              wallet: address,
+              token,
+              questionId,
+              path: up.path,
+              width: dims?.width ?? null,
+              height: dims?.height ?? null,
+              sha256: attachment.sha256 ?? null,
+            },
           });
         }
 
@@ -277,6 +333,31 @@ export function CreateMarket({
     chainError ??
     (submit.error instanceof Error ? submit.error.message.split("\n")[0] : null);
 
+  /**
+   * DROP AN IMAGE. Accepted locally and previewed instantly from an object URL —
+   * nothing is uploaded until the draft exists at publish, so an abandoned form
+   * never leaves bytes behind. The fingerprint is computed in the background and
+   * feeds the duplicate probe.
+   */
+  const takeFile = (file: File | null | undefined) => {
+    if (!file) return;
+    if (kindForMime(file.type) !== "image") {
+      setLocalError("Images only — JPG, PNG, WEBP, AVIF or GIF.");
+      return;
+    }
+    if (file.size > MEDIA_LIMITS.image.bytes) {
+      setLocalError("That image is over 10MB.");
+      return;
+    }
+    setLocalError(null);
+    setLinkOpen(false);
+    const previewUrl = URL.createObjectURL(file);
+    setAttachment({ kind: "file", file, previewUrl, sha256: null });
+    void hashFile(file).then((sha256) =>
+      setAttachment((a) => (a?.kind === "file" && a.file === file ? { ...a, sha256 } : a)),
+    );
+  };
+
   return (
     <div className="relative mx-auto flex h-full min-h-0 w-full max-w-[600px] flex-col justify-center">
       {/* 1 · THE TITLE NAMES THE ACT, AND STOPS SELLING.
@@ -302,8 +383,23 @@ export function CreateMarket({
         {/* 2 · The conviction statement. */}
         <div>
           <div
-            className="rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
-            style={{ borderColor: "var(--border)" }}
+            className="relative rounded-[14px] border bg-[var(--surface)] transition-colors focus-within:border-[var(--border-strong)]"
+            style={{ borderColor: dragging ? "var(--border-strong)" : "var(--border)" }}
+            onDragOver={(e) => {
+              if (!e.dataTransfer.types.includes("Files")) return;
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+              setDragging(false);
+            }}
+            onDrop={(e) => {
+              if (!e.dataTransfer.types.includes("Files")) return;
+              e.preventDefault();
+              setDragging(false);
+              takeFile(e.dataTransfer.files?.[0]);
+            }}
           >
             {attachment && !linkOpen && (
               <MediaChip attachment={attachment} onRemove={() => setAttachment(null)} />
@@ -315,26 +411,42 @@ export function CreateMarket({
               rows={3}
               autoFocus
               onChange={(e) => setQuestion(e.target.value)}
+              onPaste={(e) => {
+                // A screenshot pasted into the statement is the same gesture.
+                const f = Array.from(e.clipboardData.files ?? [])[0];
+                if (f) takeFile(f);
+              }}
               placeholder={"Write a statement people can answer Yes or No."}
               className="w-full resize-none bg-transparent px-3 pt-2.5 text-[16px] leading-snug text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
             />
-            {/* Inside the field: Add media on the left (only until one is
+            {/* Inside the field: media affordances on the left (only until one is
               attached — a market holds a single media object; the chip's Remove
               is then the control), counter on the right. */}
             <div className="flex items-center justify-between px-3 pb-2">
               {attachment && !linkOpen ? (
                 <span />
               ) : (
-                <AddMedia onPick={() => setLinkOpen((v) => !v)} active={linkOpen} />
+                <span className="flex items-center gap-3">
+                  <AddMedia onPick={() => setLinkOpen((v) => !v)} active={linkOpen} />
+                  <DropImage onPick={takeFile} />
+                </span>
               )}
               <span className="num text-[11px] text-[var(--text-muted)]">
                 {question.length}/{QUESTION_MAX}
               </span>
             </div>
+            {dragging && (
+              <div
+                className="pointer-events-none absolute inset-0 grid place-items-center rounded-[14px] bg-[var(--surface)]/90 text-[12px] font-medium text-[var(--text)]"
+                style={{ border: "1px dashed var(--border-strong)" }}
+              >
+                Drop the image
+              </div>
+            )}
           </div>
           {linkOpen && (
             <EmbedPicker
-              initialUrl={attachment?.media.url ?? ""}
+              initialUrl={attachment?.kind === "embed" ? attachment.media.url : ""}
               onClose={() => {
                 setAttachment(null);
                 setLinkOpen(false);
@@ -499,8 +611,8 @@ export function CreateMarket({
             creating no longer asks the writer to step out of it. */}
       </div>
 
-      {/* Direct uploads are intentionally disabled in this version — a market's
-          evidence is always a link to a post that lives on its own platform. */}
+      {/* Evidence is either a link to a post on its own platform, or an image
+          dropped here — video and audio uploads stay off in this version. */}
     </div>
   );
 }
@@ -515,7 +627,7 @@ function StepLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Opens the link composer. Uploads are disabled — evidence is always a link. */
+/** Opens the link composer. Images have their own affordance beside it. */
 function AddMedia({ onPick, active }: { onPick: () => void; active: boolean }) {
   return (
     <button
@@ -642,9 +754,56 @@ function EmbedPicker({
   );
 }
 
-/** The confirmed embed, shown compactly above the conviction statement. */
+/** Pick an image from the file system — the click-equivalent of dropping one. */
+function DropImage({ onPick }: { onPick: (file: File | null | undefined) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input
+        ref={ref}
+        type="file"
+        accept={accept("image")}
+        className="hidden"
+        onChange={(e) => {
+          onPick(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => ref.current?.click()}
+        title="Drop or choose an image — JPG, PNG, WEBP, AVIF, GIF · 10MB"
+        className="flex items-center gap-1 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+      >
+        <span aria-hidden>🖼</span> Drop an image
+      </button>
+    </>
+  );
+}
+
+/** Natural size of a local preview, best-effort — never blocks the publish. */
+function imageDimensions(url: string): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+/** The confirmed evidence — an embed or a dropped image — shown compactly above
+ *  the conviction statement. */
 function MediaChip({ attachment, onRemove }: { attachment: Attachment; onRemove: () => void }) {
-  const m = attachment.media;
+  const isFile = attachment.kind === "file";
+  const thumb = isFile ? attachment.previewUrl : attachment.media.thumbnail;
+  const title = isFile
+    ? attachment.file.name
+    : (attachment.media.title ?? attachment.media.url.replace(/^https?:\/\//, ""));
+  const sub = isFile
+    ? `Image · ${Math.max(1, Math.round(attachment.file.size / 1024))} KB`
+    : `${PLATFORM_LABEL[attachment.media.platform]}${
+        attachment.media.author ? ` · ${attachment.media.author}` : ""
+      }`;
   return (
     <div className="border-b px-2.5 py-2.5" style={{ borderColor: "var(--border)" }}>
       <div className="flex items-center gap-2">
@@ -652,19 +811,16 @@ function MediaChip({ attachment, onRemove }: { attachment: Attachment; onRemove:
           className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[8px] text-[14px]"
           style={{ border: "1px solid var(--border)" }}
         >
-          {m.thumbnail ? (
-            <img src={m.thumbnail} alt="" className="h-full w-full object-cover" />
+          {thumb ? (
+            <img src={thumb} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span aria-hidden>🔗</span>
+            <span aria-hidden>{isFile ? "🖼" : "🔗"}</span>
           )}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[12px] font-medium text-[var(--text)]">
-            {m.title ?? m.url.replace(/^https?:\/\//, "")}
-          </span>
+          <span className="block truncate text-[12px] font-medium text-[var(--text)]">{title}</span>
           <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-            {PLATFORM_LABEL[m.platform]}
-            {m.author ? ` · ${m.author}` : ""}
+            {sub}
           </span>
         </span>
         <button
