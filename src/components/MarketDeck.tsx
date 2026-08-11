@@ -145,6 +145,12 @@ export function MarketDeck({
    */
   const exec = useMarketExecution({ viewerWallet, ethUsd });
   const { trade, ready, sim } = exec;
+  /**
+   * WHICH LEDGER OWNS EXECUTION IS NOT YET ESTABLISHED. Nothing may settle, and
+   * no ownership is shown, until it is — see `market-execution`, which hands out
+   * a refusing adapter rather than defaulting to the real one.
+   */
+  const resolving = !exec.resolved;
   const bal = useUserBalance(marketId);
   const house = useHouseFinalize(marketId, viewerWallet, sim ? "SIMULATION" : "REAL");
   // The owned-position flow — the SAME hook the phone game mounts, so the
@@ -158,6 +164,7 @@ export function MarketDeck({
     ready,
     trade,
     sim,
+    resolving,
     onRequestConnect: requestConnect,
     onRequestChain: () => switchChain({ chainId: CHAIN_ID }),
   });
@@ -428,6 +435,7 @@ export function MarketDeck({
       ready={ready}
       trade={trade}
       sim={sim}
+      resolving={resolving}
       onBuySide={(s) => chooseSide(s)}
       onPass={() => choosePass()}
       onSold={() => {
@@ -743,7 +751,10 @@ export function MarketDeck({
               ready={ready}
               trade={trade}
               sim={sim}
+              resolving={resolving}
               onConfirm={async () => {
+                // Nothing settles before the owning ledger is established.
+                if (resolving) return;
                 if (!ready.connected) return requestConnect();
                 // Simulation never switches networks — `ready.onBase` is true by
                 // construction there, so this asks only when a chain is involved.

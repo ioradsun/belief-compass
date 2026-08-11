@@ -32,6 +32,7 @@ import {
   type SimulationLifecycle,
   type SimulationMode,
   type SimulationPosition,
+  type SimulationRouting,
 } from "@/domain/simulation";
 import { weiToEth } from "@/domain/money";
 import { usdToWei } from "@/domain/order";
@@ -129,14 +130,36 @@ async function convictionCount(sb: Sb, wallet: string): Promise<number> {
 }
 
 /**
- * THE PRIVATE ACCOUNT, and only it.
+ * WHICH LEDGER OWNS EXECUTION — the routing fact, unsigned.
  *
- * Separate from `loadSimulationState` because the two have different audiences:
- * this is the balance and the lifecycle, which nobody but the owner may read,
- * while the conviction count in the state is an aggregate the entry card prints
- * before anybody has signed anything. Splitting them is what let the read
- * endpoints be signed without making a signature the price of seeing your own
- * progress.
+ * THE ONE THING ABOUT SIMULATION THAT CANNOT REQUIRE A SIGNATURE. Everything
+ * else private stays proved: the balance, the positions, every write. But the
+ * application has to know which executor to offer BEFORE anybody signs anything,
+ * and an app that cannot answer that has only two options — refuse to trade at
+ * all, or guess. Guessing means treating an unproved state as Real Mode, which
+ * hands somebody the real-money executor on the strength of a query that had not
+ * come back yet.
+ *
+ * SO THE PAYLOAD IS THE SMALLEST THING THAT ANSWERS THE QUESTION: one lifecycle
+ * state, or null. No balance, no positions, no CC, no timestamps. What it
+ * discloses to somebody who guesses an address is that the address is, or once
+ * was, in Simulation — materially weaker than the ledger itself, and the price
+ * of being able to route execution safely.
+ */
+export async function loadSimulationRouting(walletRaw: string): Promise<SimulationRouting> {
+  const sb = serviceClient();
+  const { data } = await sb
+    .from("simulation_accounts")
+    .select("state")
+    .eq("wallet", walletRaw.toLowerCase())
+    .maybeSingle();
+  const row = (data ?? null) as { state: string } | null;
+  return { state: row ? toState(row.state) : null };
+}
+
+/**
+ * THE PRIVATE ACCOUNT — the balance, and everything else nobody but the owner
+ * may read. Signed, always.
  */
 export async function loadSimulationAccount(walletRaw: string): Promise<SimulationAccount | null> {
   const sb = serviceClient();
@@ -163,7 +186,7 @@ export async function loadSimulationState(walletRaw: string | null): Promise<Sim
   return {
     account,
     progress,
-    mode: modeFor(account, progress),
+    mode: modeFor({ state: account?.state ?? null }, progress),
     eligible: simulationEligible({ progress, state: account?.state ?? null }),
   };
 }
@@ -207,7 +230,34 @@ export async function exitSimulation(
 ): Promise<SimulationState> {
   const sb = serviceClient();
   const wallet = walletRaw.toLowerCase();
-  const { error } = await sb.rpc("simulation_exit", { p_wallet: wallet, p_graduate: graduate });
+
+  /**
+   * TWO DOORS, TWO FUNCTIONS — and the caller's intent is a REQUEST, not a
+   * permission. A boolean the client supplies cannot gate a permanent state
+   * transition: `simulation_graduate` re-reads the account state and the
+   * conviction count itself and refuses if either is wrong. Leaving needs no
+   * conditions at all, which is exactly why the two are not one call with a
+   * flag.
+   */
+  if (graduate) {
+    const { data, error } = await sb.rpc("simulation_graduate", {
+      p_wallet: wallet,
+      p_target: PROFILE_TARGET,
+    });
+    if (error) throw new Error(error.message);
+    const res = (data ?? {}) as { ok?: boolean; reason?: string };
+    if (!res.ok) {
+      // A refusal here is not a failure to leave — it means this account was
+      // never at the door. Leaving is still available and still reversible, so
+      // the reader is not stranded by a graduation they were not entitled to.
+      if (res.reason === "not_graduating" || res.reason === "not_complete")
+        throw new Error("Your profile isn't ready to finish yet.");
+      throw new Error("We couldn't finish Simulation. Try again.");
+    }
+    return loadSimulationState(wallet);
+  }
+
+  const { error } = await sb.rpc("simulation_exit", { p_wallet: wallet });
   if (error) throw new Error(error.message);
   return loadSimulationState(wallet);
 }
@@ -576,7 +626,7 @@ function shapeOrderResult(
     account,
     position,
     progress,
-    mode: modeFor(account, progress),
+    mode: modeFor({ state: account.state }, progress),
     order: {
       id: Number(row.id ?? 0),
       side,

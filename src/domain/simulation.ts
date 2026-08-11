@@ -54,8 +54,22 @@ export const DEFAULT_ORDER_CC = 100;
  * order may be opened. Collapsing it into REAL would yank the confirmation they
  * are mid-way through reading; collapsing it into SIMULATION would let them
  * start an eleventh.
+ *
+ * `UNKNOWN` IS THE ONE THAT MATTERS MOST, and it exists because its absence was
+ * a real defect. With three states, "we have not established which ledger owns
+ * execution" had to be reported as one of them — and it was reported as REAL,
+ * which is the answer that hands somebody the real-money executor. A fresh tab,
+ * a slow query, a page that has not settled: each of those is a moment when the
+ * honest answer is "we do not know yet", and the only safe behaviour is to offer
+ * NEITHER executor.
+ *
+ * "Could not establish the mode" and "confirmed Real Mode" are different facts.
+ * A type with three states could not tell them apart.
  */
-export type SimulationMode = "REAL" | "SIMULATION" | "GRADUATING";
+export type SimulationMode = "UNKNOWN" | "REAL" | "SIMULATION" | "GRADUATING";
+
+/** Execution may be routed. False while the owning ledger is still unknown. */
+export const modeResolved = (mode: SimulationMode): boolean => mode !== "UNKNOWN";
 
 /** The mode stamped on a social record. Simulation never reaches Real audiences. */
 export type RecordMode = "REAL" | "SIMULATION";
@@ -146,7 +160,26 @@ export function simulationEligible(input: {
 }
 
 /**
- * WHAT THE MODE IS, given the account and the progress.
+ * WHICH LEDGER OWNS EXECUTION FOR THIS WALLET — the routing fact, and nothing
+ * else.
+ *
+ * Deliberately NOT the account. It carries no balance, no positions, no
+ * timestamps — only the lifecycle state, or `null` for a wallet that has never
+ * simulated. That is what lets it be read WITHOUT a wallet session, which it
+ * has to be: an application that cannot learn which ledger owns execution until
+ * somebody signs cannot route anything, and would have to guess. Guessing is
+ * what produced the defect this type exists to close.
+ *
+ * `state: null` is a POSITIVE ANSWER — the server looked and there is no
+ * account. It is not the same as never having asked, which is `undefined` and
+ * resolves to UNKNOWN below.
+ */
+export interface SimulationRouting {
+  state: SimulationLifecycle | null;
+}
+
+/**
+ * WHAT THE MODE IS, given the routing fact and the progress.
  *
  * The tenth conviction does not switch the screen to REAL. It switches to
  * GRADUATING, which keeps the Simulation receipt on screen and the Simulation
@@ -159,14 +192,21 @@ export function simulationEligible(input: {
  * indexed while somebody is simulating — and no Simulation transaction runs for
  * that. The screen must not offer an eleventh Simulation order in the seconds
  * before anything notices.
+ *
+ * AN UNRESOLVED ROUTING FACT IS `UNKNOWN`, NEVER `REAL`. This is the whole
+ * reason the argument is nullable rather than a plain account: absence of an
+ * answer must not become an answer, least of all the one that unlocks real
+ * money.
  */
 export function modeFor(
-  account: SimulationAccount | null,
+  routing: SimulationRouting | null | undefined,
   progress: ProfileProgress,
 ): SimulationMode {
-  if (!account) return "REAL";
-  if (account.state === "EXITED" || account.state === "GRADUATED") return "REAL";
-  if (account.state === "GRADUATING") return "GRADUATING";
+  if (routing == null) return "UNKNOWN";
+  const state = routing.state;
+  if (state == null) return "REAL";
+  if (state === "EXITED" || state === "GRADUATED") return "REAL";
+  if (state === "GRADUATING") return "GRADUATING";
   return progress.complete ? "GRADUATING" : "SIMULATION";
 }
 

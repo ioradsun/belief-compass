@@ -762,7 +762,7 @@ export async function eligibleAudience(
   if (candidates.length === 0) return { status: "ok", members: [] };
   const wallets = candidates.map((c) => c.wallet);
 
-  const [participants, asked, market, simulators] = await Promise.all([
+  const [participants, asked, market, simulators, simParticipants] = await Promise.all([
     sb.from("wallet_beliefs").select("wallet").eq("onchain_id", marketId).in("wallet", wallets),
     sb
       .from("market_calls")
@@ -772,13 +772,37 @@ export async function eligibleAudience(
       .eq("mode", mode)
       .in("responder_wallet", wallets),
     sb.from("markets").select("author_wallet").eq("onchain_id", marketId).maybeSingle(),
-    // The intersection, read only when it is needed.
+    /**
+     * THE INTERSECTION: who can actually ANSWER in this ledger.
+     *
+     * `state = 'ACTIVE'` and nothing looser. A GRADUATING account is finished —
+     * it may still read its receipt but may not place another order — so
+     * including one would ask somebody for a thing they are forbidden from
+     * giving. EXITED and GRADUATED are excluded by the same predicate rather
+     * than by three separate conditions a future edit could forget one of.
+     */
+    mode === "SIMULATION"
+      ? sb.from("simulation_accounts").select("wallet").eq("state", "ACTIVE").in("wallet", wallets)
+      : Promise.resolve({ data: null, error: null }),
+    /**
+     * ALREADY ANSWERED THIS MARKET — IN THIS LEDGER.
+     *
+     * The `wallet_beliefs` read above finds real participants and cannot see a
+     * Simulation one, because Simulation positions live in their own table. So a
+     * person who had already taken a side here in Simulation stayed eligible for
+     * somebody else's Simulation Challenge on the same market — asked a question
+     * they had already answered.
+     *
+     * ROW EXISTENCE, NOT POSITIVE SHARES. Selling out does not un-answer a
+     * question, which is exactly the rule the real read already follows: a
+     * `wallet_beliefs` row survives a full exit, and that is why its mere
+     * existence is the right test.
+     */
     mode === "SIMULATION"
       ? sb
-          .from("simulation_accounts")
+          .from("simulation_positions")
           .select("wallet")
-          .eq("active", true)
-          .is("graduated_at", null)
+          .eq("onchain_id", marketId)
           .in("wallet", wallets)
       : Promise.resolve({ data: null, error: null }),
   ]);
@@ -798,6 +822,7 @@ export async function eligibleAudience(
   // "nobody qualifies" because a query broke is the exact confident-and-wrong
   // sentence this path already refuses to say about somebody's network.
   if (simulators.error) return refuse("calls_unavailable", simulators.error);
+  if (simParticipants.error) return refuse("participants_unavailable", simParticipants.error);
 
   const excluded = new Set<string>();
   const drop = (w: unknown) => {
@@ -805,6 +830,8 @@ export async function eligibleAudience(
     if (k) excluded.add(k);
   };
   for (const r of (participants.data ?? []) as { wallet: string }[]) drop(r.wallet);
+  // The other ledger's participants, on this market, in Simulation only.
+  for (const r of (simParticipants.data ?? []) as { wallet: string }[]) drop(r.wallet);
   for (const r of (asked.data ?? []) as { responder_wallet: string }[]) drop(r.responder_wallet);
   drop((market.data as { author_wallet?: string } | null)?.author_wallet);
   drop(me);

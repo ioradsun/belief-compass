@@ -12,9 +12,15 @@
  * positions are private to their owner in V1, and "private" has to mean the
  * server refuses, not that no screen happens to render them.
  *
- * So the line is PRIVATE LEDGER versus PUBLIC AGGREGATE:
+ * So the line is drawn by WHAT THE ANSWER IS, not by read-versus-write:
  *
- *   SIGNED    the account (balance, lifecycle), the positions, every write.
+ *   SIGNED    the account's contents — balance, timestamps — the positions, and
+ *             every write.
+ *   UNSIGNED  the ROUTING FACT: which ledger owns execution for this wallet. One
+ *             lifecycle state, nothing else. It cannot require a signature,
+ *             because the application must route execution before anybody signs
+ *             — and an app that cannot answer it would have to guess, which
+ *             means treating an unresolved account as Real Mode.
  *   UNSIGNED  how many convictions somebody has — an aggregate over belief data
  *             the product already treats as viewer-readable, and the number the
  *             entry card has to print before anybody has signed anything.
@@ -34,10 +40,33 @@ import type {
   SimulationOrderResult,
   SimulationState,
 } from "@/lib/simulation.server";
-import type { SimulationAccount } from "@/domain/simulation";
+import type { SimulationAccount, SimulationRouting } from "@/domain/simulation";
 
 const WALLET = z.string().min(3).max(80);
 const SESSION = z.string().min(16).max(2000);
+
+/**
+ * WHICH LEDGER OWNS EXECUTION FOR THIS WALLET — unsigned, and deliberately so.
+ *
+ * THE ONE SIMULATION FACT THAT CANNOT WAIT FOR A SIGNATURE. The application has
+ * to route execution before anybody signs anything, and an app that cannot
+ * answer "which ledger is this" has only two options: refuse to trade at all, or
+ * guess. Guessing means an unresolved account resolves to Real Mode, which hands
+ * somebody the real-money executor on the strength of a query that had not come
+ * back — the defect this endpoint exists to remove.
+ *
+ * IT RETURNS A LIFECYCLE STATE AND NOTHING ELSE. No balance, no positions, no
+ * timestamps. To somebody guessing an address it discloses that the address is
+ * or once was in Simulation, which is materially weaker than the ledger itself
+ * and is the price of routing execution safely rather than optimistically.
+ */
+export const getSimulationRouting = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) => z.object({ wallet: WALLET.nullish() }).parse(raw ?? {}))
+  .handler(async ({ data }): Promise<SimulationRouting> => {
+    if (!data.wallet) return { state: null };
+    const { loadSimulationRouting } = await import("@/lib/simulation.server");
+    return loadSimulationRouting(data.wallet);
+  });
 
 /**
  * THE PRIVATE LEDGER'S ACCOUNT — balance and lifecycle, proved.

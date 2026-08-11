@@ -5,6 +5,7 @@ import {
   insufficientCc,
   simulationEligible,
   modeFor,
+  modeResolved,
   isSimulating,
   canOrder,
   directionalSide,
@@ -14,6 +15,7 @@ import {
   CC_DEFINITION,
   SIMULATION_COPY,
   type SimulationAccount,
+  type SimulationLifecycle,
 } from "./simulation";
 import { profileProgressFor, PROFILE_TARGET, CALIBRATION_TARGET } from "./beliefs";
 
@@ -103,22 +105,35 @@ describe("eligibility", () => {
 });
 
 describe("modeFor", () => {
-  it("is REAL with no account, an exited one, or a graduated one", () => {
-    expect(modeFor(null, profileProgressFor(2))).toBe("REAL");
-    expect(modeFor(account({ state: "EXITED" }), profileProgressFor(2))).toBe("REAL");
-    expect(
-      modeFor(
-        account({ state: "GRADUATED", graduatedAt: "2026-08-01T00:00:00Z" }),
-        profileProgressFor(2),
-      ),
-    ).toBe("REAL");
+  /** The routing fact, which is all `modeFor` is allowed to see. */
+  const routing = (state: SimulationLifecycle | null) => ({ state });
+
+  /**
+   * THE ONE THAT MATTERS MOST. An unresolved routing fact must never resolve to
+   * REAL — REAL is the answer that hands somebody the real-money executor, and
+   * "we have not established which ledger this is" is not that answer.
+   */
+  it("is UNKNOWN until the routing fact has been established", () => {
+    expect(modeFor(undefined, profileProgressFor(2))).toBe("UNKNOWN");
+    expect(modeFor(null, profileProgressFor(2))).toBe("UNKNOWN");
+    expect(modeResolved("UNKNOWN")).toBe(false);
+    for (const m of ["REAL", "SIMULATION", "GRADUATING"] as const)
+      expect(modeResolved(m)).toBe(true);
+  });
+
+  it("is REAL only on a POSITIVE answer — no account, exited, or graduated", () => {
+    // `state: null` is the server saying it looked and found nothing. That is a
+    // different fact from never having asked, and only this one means REAL.
+    expect(modeFor(routing(null), profileProgressFor(2))).toBe("REAL");
+    expect(modeFor(routing("EXITED"), profileProgressFor(2))).toBe("REAL");
+    expect(modeFor(routing("GRADUATED"), profileProgressFor(2))).toBe("REAL");
   });
   it("simulates below ten", () => {
-    expect(modeFor(account(), profileProgressFor(6))).toBe("SIMULATION");
+    expect(modeFor(routing("ACTIVE"), profileProgressFor(6))).toBe("SIMULATION");
   });
   it("reads the persisted GRADUATING state, whatever the count says", () => {
     // The order transaction writes it; the screen does not re-derive it.
-    expect(modeFor(account({ state: "GRADUATING" }), profileProgressFor(10))).toBe("GRADUATING");
+    expect(modeFor(routing("GRADUATING"), profileProgressFor(10))).toBe("GRADUATING");
   });
 
   it("still graduates on the count alone, as a backstop", () => {
@@ -126,7 +141,7 @@ describe("modeFor", () => {
     // indexed mid-session — and no Simulation transaction runs for that. The
     // screen must not offer an eleventh order in the seconds before anyone
     // notices, and the tenth receipt must stay readable.
-    expect(modeFor(account({ state: "ACTIVE" }), profileProgressFor(10))).toBe("GRADUATING");
+    expect(modeFor(routing("ACTIVE"), profileProgressFor(10))).toBe("GRADUATING");
   });
   it("keeps Simulation data visible while graduating but opens no new order", () => {
     expect(isSimulating("GRADUATING")).toBe(true);

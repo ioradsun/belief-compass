@@ -34,6 +34,8 @@ import {
   profileProgressQO,
   simulationAccountKey,
   simulationAccountQO,
+  simulationRoutingKey,
+  simulationRoutingQO,
 } from "@/lib/simulation-query";
 import { activateSimulation, exitSimulation } from "@/lib/simulation.functions";
 import type { SimulationState } from "@/lib/simulation.functions";
@@ -42,10 +44,13 @@ import {
   canOrder as canOrderIn,
   isSimulating,
   modeFor,
+  modeResolved,
   simulationEligible,
   SIMULATION_COPY,
   type SimulationAccount,
+  type SimulationLifecycle,
   type SimulationMode,
+  type SimulationRouting,
 } from "@/domain/simulation";
 
 export interface SimulationModeApi {
@@ -56,6 +61,14 @@ export interface SimulationModeApi {
   profileProgress: ProfileProgress;
   /** May this wallet start (or continue) Simulation at all? */
   eligible: boolean;
+  /**
+   * WHICH LEDGER OWNS EXECUTION HAS BEEN ESTABLISHED.
+   *
+   * False while the routing read is in flight. Nothing may execute in that
+   * window — see `market-execution`, which hands out a refusing adapter rather
+   * than choosing between two it cannot choose between.
+   */
+  resolved: boolean;
   /** Simulation owns the order and position surfaces right now. */
   active: boolean;
   /** A NEW Simulation order may be opened. False while graduating. */
@@ -102,12 +115,20 @@ export interface SimulationModeApi {
   dismissNotice: () => void;
 }
 
-const REAL: SimulationModeApi = {
-  mode: "REAL",
+/**
+ * THE DEFAULT IS UNKNOWN, NOT REAL.
+ *
+ * A component rendered outside the provider has not established anything, and
+ * the context default is exactly the case this whole type exists for: absence of
+ * an answer must never present itself as the answer that unlocks real money.
+ */
+const UNRESOLVED: SimulationModeApi = {
+  mode: "UNKNOWN",
   account: null,
   balanceCc: null,
   profileProgress: profileProgressFor(0),
   eligible: false,
+  resolved: false,
   active: false,
   canOrder: false,
   activate: () => {},
@@ -123,7 +144,7 @@ const REAL: SimulationModeApi = {
   dismissNotice: () => {},
 };
 
-const Ctx = createContext<SimulationModeApi>(REAL);
+const Ctx = createContext<SimulationModeApi>(UNRESOLVED);
 
 export function SimulationModeProvider({ children }: { children: ReactNode }) {
   const wallet = useEffectiveWallet();
@@ -145,10 +166,19 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
 
   // PUBLIC: the count. Available with no session at all.
   const { data: progressData } = useQuery(profileProgressQO(wallet));
-  // PRIVATE: the ledger. Proved, or null.
+  /**
+   * PUBLIC: which ledger owns execution. THE MODE IS DERIVED FROM THIS, and
+   * never from the account — the account read can fail for want of a session,
+   * and a mode derived from it would report "could not prove" as "Real Mode".
+   */
+  const { data: routing } = useQuery(simulationRoutingQO(wallet));
+  // PRIVATE: the ledger's contents. Proved, or null.
   const { data: account } = useQuery(simulationAccountQO(wallet, cachedSession));
 
   const write = (next: SimulationState) => {
+    // The routing fact FIRST: it is what the mode is derived from, so a write
+    // that updated only the account would move the balance and leave the banner.
+    qc.setQueryData(simulationRoutingKey(wallet), { state: next.account?.state ?? null });
     qc.setQueryData(simulationAccountKey(wallet), next.account);
     qc.setQueryData(profileProgressKey(wallet), next.progress);
     // Readiness reads the same rows through the other threshold, and is not
@@ -200,20 +230,47 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
    * at Real Mode while the server still has them simulating.
    */
   const departure = useMutation({
+    /**
+     * OUT OF THE MODE NOW, AND THE OLD STATE KEPT SO IT CAN BE PUT BACK.
+     *
+     * The optimistic write is what makes Exit one tap: the screen leaves before
+     * the authenticated cleanup, so a wallet prompt can never stand between
+     * somebody and the door.
+     *
+     * THE SNAPSHOT IS THE OTHER HALF, and re-fetching is not a substitute for
+     * it. The commonest failure here is a MISSING OR REJECTED SIGNATURE — and a
+     * re-read in that state has no session either, so it returns null, which
+     * reads as Real Mode all over again. The rollback would confirm the very
+     * thing it was supposed to undo. Only the captured value can restore the
+     * truth.
+     */
+    onMutate: (graduate: boolean) => {
+      const previousRouting = qc.getQueryData<SimulationRouting>(simulationRoutingKey(wallet));
+      const previousAccount = qc.getQueryData<SimulationAccount | null>(
+        simulationAccountKey(wallet),
+      );
+      const state: SimulationLifecycle = graduate ? "GRADUATED" : "EXITED";
+      // The ROUTING fact is what the mode is derived from, so it is the one that
+      // has to move for the banner to go.
+      qc.setQueryData(simulationRoutingKey(wallet), { state });
+      qc.setQueryData(simulationAccountKey(wallet), (prev: SimulationAccount | null | undefined) =>
+        prev ? { ...prev, state } : prev,
+      );
+      return { previousRouting, previousAccount };
+    },
     mutationFn: async (graduate: boolean) => {
       if (!wallet) throw new Error("Connect a wallet first.");
-      // Out of the mode now, on the client, before anything can block.
-      qc.setQueryData(simulationAccountKey(wallet), (prev: SimulationAccount | null | undefined) =>
-        prev ? { ...prev, state: graduate ? "GRADUATED" : "EXITED" } : prev,
-      );
       const session = await ensureSession({ interactive: true });
       return await exitSimulation({ data: { wallet, session, graduate } });
     },
-    onError: (e: Error) => {
+    onError: (e: Error, _graduate, context) => {
       setError(e.message || "We couldn't finish leaving Simulation.");
-      // The optimistic exit was not confirmed — go and look rather than leave the
-      // screen and the server disagreeing about which ledger this wallet is in.
-      void qc.invalidateQueries({ queryKey: simulationAccountKey(wallet) });
+      // Put back exactly what was there. The screen and the server must not be
+      // left disagreeing about which ledger owns this wallet.
+      if (context) {
+        qc.setQueryData(simulationRoutingKey(wallet), context.previousRouting);
+        qc.setQueryData(simulationAccountKey(wallet), context.previousAccount ?? null);
+      }
     },
     onSuccess: (next, graduate) => {
       // A graduation gets no "your progress is saved" line — the profile IS the
@@ -228,6 +285,7 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
       // The order transaction computed both authoritatively — including the move
       // to GRADUATING when the tenth conviction settled — so both are written
       // rather than re-fetched. Nothing here derives a mode of its own.
+      qc.setQueryData(simulationRoutingKey(wallet), { state: next.account?.state ?? null });
       qc.setQueryData(simulationAccountKey(wallet), next.account);
       qc.setQueryData(profileProgressKey(wallet), next.progress);
       void qc.invalidateQueries({ queryKey: ["readiness"] });
@@ -239,18 +297,29 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
     const progress = progressData ?? profileProgressFor(0);
     const acct = account ?? null;
     /**
-     * THE MODE IS DERIVED HERE, from the two reads, through the SAME pure
-     * function the server uses. Two implementations of "which ledger is this" —
-     * one for the screen and one for the write — is how a banner comes to say
-     * Simulation while an order settles somewhere else.
+     * THE MODE IS DERIVED FROM THE ROUTING FACT, through the SAME pure function
+     * the server uses. Two implementations of "which ledger is this" — one for
+     * the screen and one for the write — is how a banner comes to say Simulation
+     * while an order settles somewhere else.
+     *
+     * A wallet that is not connected has nothing to route and no executor to
+     * offer either way, so it reads as REAL: there is no Simulation account
+     * behind an address that does not exist. An address that IS connected waits
+     * for its answer rather than assuming one.
      */
-    const mode: SimulationMode = modeFor(acct, progress);
+    const mode: SimulationMode = wallet ? modeFor(routing, progress) : "REAL";
     return {
       mode,
       account: acct,
+      // Null until PROVED, in every mode. The order form fails closed on a null
+      // balance rather than treating an unknown one as spendable.
       balanceCc: acct?.balanceCc ?? null,
       profileProgress: progress,
-      eligible: !!wallet && simulationEligible({ progress, state: acct?.state ?? null }),
+      eligible:
+        !!wallet &&
+        modeResolved(mode) &&
+        simulationEligible({ progress, state: routing?.state ?? null }),
+      resolved: modeResolved(mode),
       active: isSimulating(mode),
       canOrder: canOrderIn(mode),
       activate: () => {
@@ -266,6 +335,7 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
         departure.mutate(true);
       },
       refresh: () => {
+        void qc.invalidateQueries({ queryKey: simulationRoutingKey(wallet) });
         void qc.invalidateQueries({ queryKey: simulationAccountKey(wallet) });
         void qc.invalidateQueries({ queryKey: profileProgressKey(wallet) });
       },
@@ -280,6 +350,7 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     progressData,
+    routing,
     account,
     wallet,
     activation.isPending,
@@ -295,7 +366,10 @@ export function SimulationModeProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-/** The one mode reader. Outside the provider it answers REAL, never undefined. */
+/**
+ * The one mode reader. Outside the provider it answers UNKNOWN — which offers no
+ * executor — rather than REAL, which would offer the real-money one.
+ */
 export function useSimulationMode(): SimulationModeApi {
   return useContext(Ctx);
 }

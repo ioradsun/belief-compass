@@ -24,6 +24,7 @@ import {
   getSimulationAccount,
   getSimulationPositions,
   getSimulationPosition,
+  getSimulationRouting,
 } from "@/lib/simulation.functions";
 import { getProfileProgress } from "@/lib/beliefs.functions";
 import { profileProgressFor } from "@/domain/beliefs";
@@ -74,6 +75,34 @@ export function profileProgressQO(wallet: string | undefined) {
     staleTime: SIMULATION_STALE_MS,
     initialData: () => profileProgressFor(0),
     initialDataUpdatedAt: 0,
+  });
+}
+
+export const simulationRoutingKey = (wallet: string | undefined) =>
+  ["simulation-routing", wallet?.toLowerCase() ?? null] as const;
+
+/**
+ * WHICH LEDGER OWNS EXECUTION — unsigned, so it always resolves.
+ *
+ * This is the query the mode is derived from, and it is separate from the
+ * account for one reason: the account read needs a session, and a session can be
+ * absent or expired. If the MODE depended on it, "we could not prove ownership"
+ * would become "Real Mode" — and the facade would hand out the real-money
+ * executor on the strength of a missing signature. The routing fact carries no
+ * balance and no positions, so it can be answered for anybody and the mode is
+ * never a guess.
+ *
+ * `initialData` is deliberately ABSENT. There is no safe default: a seeded
+ * `{ state: null }` would read as a confirmed "no Simulation account" and put
+ * the app straight back into assuming Real Mode before the query returns.
+ * Undefined means UNKNOWN, and UNKNOWN offers no executor at all.
+ */
+export function simulationRoutingQO(wallet: string | undefined) {
+  return queryOptions({
+    queryKey: simulationRoutingKey(wallet),
+    queryFn: () => getSimulationRouting({ data: { wallet: wallet ?? null } }),
+    enabled: !!wallet,
+    staleTime: SIMULATION_STALE_MS,
   });
 }
 

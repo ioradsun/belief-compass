@@ -421,23 +421,20 @@ GRANT EXECUTE ON FUNCTION public.simulation_activate(text, numeric, integer) TO 
 -- are closed with a NEUTRAL reason — not a pass, not a decline, not an ignore —
 -- and `passed_at` is deliberately never set, because a pass reaches Challenge
 -- lifecycle and this must not.
-CREATE OR REPLACE FUNCTION public.simulation_exit(
-  p_wallet    text,
-  p_graduate  boolean
-)
-RETURNS jsonb
+/**
+ * THE CLEANUP BOTH DOORS SHARE.
+ *
+ * Extracted because it must never be skipped by either, and because the two
+ * doors now differ in exactly one respect — what the account state becomes —
+ * which is precisely the part that has to be checked rather than copied.
+ */
+CREATE OR REPLACE FUNCTION public.simulation_release_challenges(p_me text)
+RETURNS void
 LANGUAGE plpgsql
 SECURITY INVOKER
 SET search_path = public
 AS $$
-DECLARE
-  v_me  text := lower(p_wallet);
-  v_row simulation_accounts%ROWTYPE;
 BEGIN
-  IF v_me IS NULL OR v_me = '' THEN
-    RETURN jsonb_build_object('ok', false, 'reason', 'no_wallet');
-  END IF;
-
   /**
    * OUTGOING, IN BOTH TABLES — and the second half is the one that was missing.
    *
@@ -455,12 +452,12 @@ BEGIN
    */
   UPDATE challenges
      SET closed_at = now(), close_reason = 'simulation_exit'
-   WHERE challenger_wallet = v_me
+   WHERE challenger_wallet = p_me
      AND mode = 'SIMULATION'
      AND closed_at IS NULL;
 
   DELETE FROM market_calls
-   WHERE caller_wallet = v_me
+   WHERE caller_wallet = p_me
      AND mode = 'SIMULATION'
      AND responded_at IS NULL
      AND passed_at IS NULL;
@@ -469,7 +466,7 @@ BEGIN
   -- answered. Deleted for the same reason, and it is the same neutrality: the
   -- caller's own Challenge simply reached one fewer person.
   DELETE FROM market_calls
-   WHERE responder_wallet = v_me
+   WHERE responder_wallet = p_me
      AND mode = 'SIMULATION'
      AND responded_at IS NULL
      AND passed_at IS NULL;
@@ -489,11 +486,43 @@ BEGIN
    WHERE c.mode = 'SIMULATION'
      AND c.closed_at IS NULL
      AND NOT EXISTS (SELECT 1 FROM market_calls mc WHERE mc.challenge_id = c.id);
+END;
+$$;
 
+REVOKE ALL ON FUNCTION public.simulation_release_challenges(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.simulation_release_challenges(text) TO service_role;
+
+/**
+ * LEAVING. Reversible, always available, and it asks for nothing.
+ *
+ * There is NO `graduate` PARAMETER, and its removal is the point. A boolean the
+ * caller supplies cannot gate a permanent state transition: an authenticated
+ * client could activate with zero convictions, send `graduate => true`, and
+ * close its own account forever. The UI only offers Continue after the tenth
+ * conviction, but a durable lifecycle invariant that depends on an honest client
+ * is not an invariant — it is a convention. Graduation now has its own function,
+ * which checks the conditions itself.
+ */
+CREATE OR REPLACE FUNCTION public.simulation_exit(p_wallet text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_me  text := lower(p_wallet);
+  v_row simulation_accounts%ROWTYPE;
+BEGIN
+  IF v_me IS NULL OR v_me = '' THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'no_wallet');
+  END IF;
+
+  PERFORM simulation_release_challenges(v_me);
+
+  -- A graduated account is already out; leaving again must not un-graduate it.
   UPDATE simulation_accounts
-     SET state = CASE WHEN p_graduate THEN 'GRADUATED' ELSE 'EXITED' END,
-         exited_at = now(),
-         graduated_at = CASE WHEN p_graduate THEN coalesce(graduated_at, now()) ELSE graduated_at END
+     SET state = CASE WHEN state = 'GRADUATED' THEN 'GRADUATED' ELSE 'EXITED' END,
+         exited_at = now()
    WHERE wallet = v_me
   RETURNING * INTO v_row;
 
@@ -504,8 +533,77 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.simulation_exit(text, boolean) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.simulation_exit(text, boolean) TO service_role;
+REVOKE ALL ON FUNCTION public.simulation_exit(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.simulation_exit(text) TO service_role;
+
+/**
+ * GRADUATING — the one-way door, with the door's conditions checked HERE.
+ *
+ * TWO REQUIREMENTS, BOTH RE-READ IN THIS TRANSACTION rather than taken from the
+ * caller:
+ *
+ *   · the account is already GRADUATING — which only `simulation_execute_order`
+ *     can write, and only in the same transaction as a tenth conviction;
+ *   · the conviction count is STILL at or above the target.
+ *
+ * The second is not redundant with the first. GRADUATING is written once and
+ * persists, and a conviction can disappear afterwards — a real position the
+ * indexer revises, a belief row removed. Permanently closing an account on the
+ * strength of a state written earlier, about a count that is no longer true,
+ * is the same class of mistake as trusting the client's boolean.
+ */
+CREATE OR REPLACE FUNCTION public.simulation_graduate(
+  p_wallet text,
+  p_target integer
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_me    text := lower(p_wallet);
+  v_row   simulation_accounts%ROWTYPE;
+  v_count integer;
+BEGIN
+  IF v_me IS NULL OR v_me = '' THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'no_wallet');
+  END IF;
+
+  SELECT * INTO v_row FROM simulation_accounts WHERE wallet = v_me FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'no_account');
+  END IF;
+
+  -- Already through the door. Idempotent, so a double tap is not an error.
+  IF v_row.state = 'GRADUATED' THEN
+    RETURN jsonb_build_object('ok', true, 'account', to_jsonb(v_row));
+  END IF;
+
+  IF v_row.state <> 'GRADUATING' THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'not_graduating', 'state', v_row.state);
+  END IF;
+
+  v_count := simulation_conviction_count(v_me);
+  IF v_count < p_target THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'not_complete', 'convictions', v_count);
+  END IF;
+
+  PERFORM simulation_release_challenges(v_me);
+
+  UPDATE simulation_accounts
+     SET state = 'GRADUATED',
+         graduated_at = coalesce(graduated_at, now()),
+         exited_at = now()
+   WHERE wallet = v_me
+  RETURNING * INTO v_row;
+
+  RETURN jsonb_build_object('ok', true, 'account', to_jsonb(v_row));
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.simulation_graduate(text, integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.simulation_graduate(text, integer) TO service_role;
 
 -- ── The one write that matters ─────────────────────────────────────────────
 --

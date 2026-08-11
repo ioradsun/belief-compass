@@ -43,25 +43,71 @@ Simulation position still readable, while no new order may be opened and no new
 outgoing Simulation Challenge is offered. Collapsing it into `REAL` would yank a
 confirmation mid-read; collapsing it into `SIMULATION` would allow an eleventh.
 
+**Graduation is earned, not requested.** Exit and graduate are two functions, not
+one call with a boolean — `simulation_exit(wallet)` and
+`simulation_graduate(wallet, target)`. A flag the client supplies cannot gate a
+permanent state transition: an authenticated client could otherwise activate with
+zero convictions, ask to graduate, and close its own account forever. The
+graduate path locks the account row and re-reads **both** conditions itself: the
+state must already be `GRADUATING` (which only the order transaction writes, and
+only alongside a tenth conviction) and the count must **still** be at or above
+the target — a conviction can disappear after `GRADUATING` was written, and
+closing an account on the strength of a stale count is the same mistake as
+trusting the flag.
+
 Leaving — by either door — closes unresolved Simulation Challenges with the
 neutral reason `simulation_exit` and deletes unresolved incoming Simulation
 calls. Neither is recorded as a pass, and `passed_at` is never set: a pass
 reaches Challenge lifecycle and this must not.
 
-## Privacy
+## Privacy, and why it is a three-way split
 
 A wallet address is public, so anything keyed by one and not proved is readable
-by anyone who knows it. The split:
+by anyone who knows it. But the line is drawn by *what the answer is*, not by
+read-versus-write:
 
 | | |
 | --- | --- |
-| **Private, signed** | the account (CC balance, lifecycle state), the positions, every write |
+| **Private, signed** | the account's contents — CC balance, timestamps — the positions, and every write |
+| **Public, unsigned** | the **routing fact**: which ledger owns execution. One lifecycle state, nothing else |
 | **Public, unsigned** | the conviction count — an aggregate, and the number the entry card must print before anybody has signed anything |
 
 Private reads take a **required** session and read the wallet
 `assertWalletOwnership` returns, never the one the request claimed. No read ever
 opens a wallet: the queries supply a session that already exists and resolve to
 the empty answer when there is none.
+
+The routing fact cannot require a signature. The application has to know which
+executor to offer *before* anybody signs, and an app that cannot answer that has
+only two options — refuse to trade at all, or guess. Guessing means treating an
+unproved state as Real Mode. It discloses that an address is, or once was, in
+Simulation; that is materially weaker than the ledger itself, and it is the price
+of routing execution safely rather than optimistically.
+
+## UNKNOWN is a mode
+
+```
+UNKNOWN ──► REAL | SIMULATION | GRADUATING
+```
+
+`modeFor` returns `UNKNOWN` for an unresolved routing fact, and `REAL` only on a
+**positive** answer — the server looked and there is no account, or it is
+`EXITED`/`GRADUATED`. "Could not establish the mode" and "confirmed Real Mode"
+are different facts, and a type with three states could not tell them apart.
+
+While the mode is `UNKNOWN` the execution facade hands out a **refusing**
+adapter: neither `realTrade` nor `simTrade` is reachable, its `buy`/`sell`
+reject, the confirm button reads *Checking your account…* and is disabled, and
+the owned dock reports no holdings in either ledger. The `resolved` check comes
+first in that ternary — testing `simulated` first would read an unresolved mode
+as "not simulated", which is the original defect.
+
+Leaving is optimistic (the mode drops on the tap, so a wallet prompt can never
+stand between somebody and the door) and the previous routing fact is captured in
+the mutation context. On failure it is **restored**, not re-fetched: the
+commonest failure is a missing or rejected signature, and a re-read in that state
+has no session either — it would return null, read as Real Mode, and confirm the
+very thing the rollback was undoing.
 
 ## Idempotency
 
@@ -73,6 +119,12 @@ The check runs **twice**: once before the account lock (cheap, catches the doubl
 tap) and once after it (the case the mechanism exists for — two concurrent
 submissions both miss the first check, and without the second the loser collides
 with the unique index and fails instead of replaying).
+
+That second check is proved by a genuine three-session test, not by two
+sequential calls: a coordinator holds the account row while both callers clear
+their pre-lock lookup and park on the lock, and the assertion is that one settles
+and the other **replays**. Deleting the post-lock recheck makes it fail with
+`duplicate key value violates unique constraint`.
 
 A settled order replays through `simulation_replay_order`, which reads rows and
 nothing else. The server calls it **before** any ETH/USD or contract read, so a
@@ -194,6 +246,13 @@ An intersection, never a second matching algorithm. An empty audience omits the
 action rather than rendering it disabled. `ACTIVE` and not merely "has an
 account": a `GRADUATING` user can no longer answer, so putting them in an
 audience would ask somebody for something they are forbidden from giving.
+
+The audience also excludes anyone who has **already answered this market in
+Simulation**. `wallet_beliefs` finds real participants and cannot see a Simulation
+position, so without a second read against `simulation_positions` somebody could
+be asked a question they had already answered. Row existence is the test, not
+positive shares — selling out does not un-answer, which is the rule the real read
+already follows.
 
 ### Where the mode line falls — and where it deliberately does not
 

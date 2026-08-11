@@ -71,6 +71,7 @@ export function useOwnedDock({
   ready,
   trade,
   sim,
+  resolving = false,
   onRequestConnect,
   onRequestChain,
 }: {
@@ -85,6 +86,16 @@ export function useOwnedDock({
   trade: TradeApi;
   /** Simulation ledger descriptor, or null in Real Mode. */
   sim?: SimulationTicket | null;
+  /**
+   * WHICH LEDGER OWNS THIS MARKET IS NOT YET KNOWN.
+   *
+   * Ownership is reported EMPTY while this is true. Showing real holdings to
+   * somebody the server has in Simulation is not a data leak — it is their own
+   * position — but it is a wrong answer, and it would put a Sell button on a
+   * ledger the app has not established. Empty for the moment it takes to find
+   * out is the honest state.
+   */
+  resolving?: boolean;
   onRequestConnect: () => void;
   onRequestChain: () => void;
 }): OwnedDockApi {
@@ -114,8 +125,9 @@ export function useOwnedDock({
   const simulated = !!sim;
   const simYes = sharesToWei(simPos?.yesShares ?? 0);
   const simNo = sharesToWei(simPos?.noShares ?? 0);
-  const activeYes = simulated ? simYes : yesTokens;
-  const activeNo = simulated ? simNo : noTokens;
+  // Neither ledger's holdings while the owning one is unknown — see `resolving`.
+  const activeYes = resolving ? 0n : simulated ? simYes : yesTokens;
+  const activeNo = resolving ? 0n : simulated ? simNo : noTokens;
 
   // What each whole side would actually fetch right now, straight from the
   // contract. This is the LAST RESORT for a side's value — the read model's
@@ -185,6 +197,8 @@ export function useOwnedDock({
     setAction(null);
   };
   const onSellConfirm = async () => {
+    // Nothing may settle before the owning ledger is established.
+    if (resolving) return;
     if (!ready.connected) return onRequestConnect();
     // Simulation never needs a network: `ready.onBase` is true by construction in
     // that adapter, and asking for a chain switch here would be a prompt for a
@@ -246,6 +260,7 @@ export function OwnedDock({
   ready,
   trade,
   sim,
+  resolving = false,
   onBuySide,
   onPass,
   onSold,
@@ -258,6 +273,8 @@ export function OwnedDock({
   trade: TradeApi;
   /** Simulation ledger descriptor, or null in Real Mode. */
   sim?: SimulationTicket | null;
+  /** The owning ledger is not yet known — nothing may be submitted. */
+  resolving?: boolean;
   /** Chose a side to BUY — the parent records the belief and opens its ticket. */
   onBuySide: (s: OrderSide) => void;
   onPass: () => void;
@@ -292,6 +309,7 @@ export function OwnedDock({
         ready={ready}
         trade={trade}
         sim={sim}
+        resolving={resolving}
         onConfirm={api.onSellConfirm}
         onCancel={api.closeSell}
         onDone={onSold}

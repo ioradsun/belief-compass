@@ -77,6 +77,12 @@ export interface ExecutionApi {
   mode: SimulationMode;
   /** The active ledger is the Simulation one. */
   simulated: boolean;
+  /**
+   * WHICH LEDGER OWNS EXECUTION IS KNOWN. False while the routing read is in
+   * flight — and while it is false, `trade` is the REFUSING adapter rather than
+   * either real one.
+   */
+  resolved: boolean;
   trade: TradeLike;
   /** Ticket descriptor for the Simulation ledger, or null in Real Mode. */
   sim: SimulationTicket | null;
@@ -258,6 +264,31 @@ function useSimulationTrade(
 }
 
 /**
+ * THE ADAPTER FOR "WE DO NOT KNOW YET".
+ *
+ * Not a third ledger — a REFUSAL. While the routing fact is unresolved the app
+ * cannot choose between the two executors, and the old code resolved that by
+ * choosing the real one, because an absent Simulation account and a confirmed
+ * absence looked identical. That is the whole defect: a fresh tab, a slow query
+ * or an expired session could put the real-money executor behind a Confirm
+ * button belonging to somebody the server had in Simulation.
+ *
+ * So neither executor is handed out. This one throws if called at all, and every
+ * surface renders its confirm disabled while `resolved` is false — belt and
+ * braces, because a disabled button is a rendering decision and this is not.
+ */
+const UNRESOLVED_TRADE: TradeLike = Object.freeze({
+  buy: () => Promise.reject(new Error("Still checking which account this order belongs to.")),
+  sell: () => Promise.reject(new Error("Still checking which account this order belongs to.")),
+  isSubmitting: false,
+  isMining: false,
+  isSuccess: false,
+  isError: false,
+  error: null,
+  reset: () => {},
+});
+
+/**
  * THE FACADE. One call, and the surface above it stops caring which ledger it is
  * writing to.
  *
@@ -270,7 +301,7 @@ export function useMarketExecution(input: {
   viewerWallet: string | undefined;
   ethUsd: number;
 }): ExecutionApi {
-  const { mode, simulated, balanceCc, canOrder } = useSimulationModeSlice();
+  const { mode, simulated, resolved, balanceCc, canOrder } = useSimulationModeSlice();
   const realTrade = useTrade();
   const realReady = useTradeReady();
   const simTrade = useSimulationTrade(input.viewerWallet, input.ethUsd);
@@ -279,7 +310,13 @@ export function useMarketExecution(input: {
     () => ({
       mode,
       simulated,
-      trade: simulated ? simTrade : realTrade,
+      resolved,
+      /**
+       * ONE OF THREE, AND THE THIRD IS A REFUSAL. `resolved` is checked FIRST:
+       * an unresolved mode is not "not simulated", and reading it as such is
+       * exactly how the real executor used to be handed out by default.
+       */
+      trade: !resolved ? UNRESOLVED_TRADE : simulated ? simTrade : realTrade,
       sim: simulated ? { balanceCc, canOrder, verifying: simTrade.verifying } : null,
       ready: simulated
         ? { connected: !!input.viewerWallet, onBase: true }
@@ -289,6 +326,7 @@ export function useMarketExecution(input: {
     [
       mode,
       simulated,
+      resolved,
       simTrade,
       realTrade,
       balanceCc,
@@ -302,6 +340,6 @@ export function useMarketExecution(input: {
 
 /** The slice of mode state the facade needs, kept narrow so re-renders are too. */
 function useSimulationModeSlice() {
-  const { mode, active, balanceCc, canOrder } = useSimulationMode();
-  return { mode, simulated: active, balanceCc, canOrder };
+  const { mode, active, resolved, balanceCc, canOrder } = useSimulationMode();
+  return { mode, simulated: active, resolved, balanceCc, canOrder };
 }

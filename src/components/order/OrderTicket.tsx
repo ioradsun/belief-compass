@@ -357,6 +357,14 @@ interface BuyTicketProps {
   onDone: () => void;
   /** Simulation ledger descriptor, or null/absent in Real Mode. */
   sim?: SimTicket;
+  /**
+   * WHICH LEDGER OWNS THIS ORDER IS NOT YET KNOWN.
+   *
+   * Distinct from `sim` being null, which means "confirmed Real Mode". While
+   * this is true nothing may be submitted in EITHER ledger — the facade hands
+   * out a refusing adapter, and this is the visible half of the same rule.
+   */
+  resolving?: boolean;
 }
 
 interface SellTicketProps {
@@ -375,6 +383,8 @@ interface SellTicketProps {
   onDone: () => void;
   /** Simulation ledger descriptor, or null/absent in Real Mode. */
   sim?: SimTicket;
+  /** The owning ledger is not yet known — see the buy ticket's note. */
+  resolving?: boolean;
 }
 
 /**
@@ -390,6 +400,15 @@ export type OrderTicketProps =
 export function OrderTicket(p: OrderTicketProps) {
   return p.mode === "buy" ? <BuyTicket {...p} /> : <SellTicket {...p} />;
 }
+
+/**
+ * WHAT A BUTTON SAYS WHEN THE APP DOES NOT YET KNOW WHICH LEDGER IT IS IN.
+ *
+ * Not "Loading" — the reader is not waiting for the market, they are waiting for
+ * the app to establish whose money this would be. Saying that plainly is better
+ * than a spinner that implies the order is already underway.
+ */
+const CHECKING_ACCOUNT = "Checking your account…";
 
 /**
  * Amount in the viewer's currency, from a USD-native value.
@@ -510,6 +529,7 @@ function BuyTicket({
   onConfirm,
   onDone,
   sim,
+  resolving = false,
 }: BuyTicketProps) {
   const { unit } = useDisplayUnit();
   /**
@@ -647,30 +667,34 @@ function BuyTicket({
    * transaction vocabulary anywhere. "Adding position…" is what is actually
    * happening: a row is being written.
    */
-  const label = !ready.connected
-    ? "Connect wallet"
-    : !sim && !ready.onBase
-      ? "Switch to Base"
-      : sim && !sim.canOrder
-        ? "Your profile is ready"
-        : busy
-          ? sim
-            ? "Adding position…"
-            : `Backing ${side}…`
-          : amount <= 0
-            ? "Enter an amount"
-            : sim
-              ? simCheck!.ok
-                ? `Back ${side} · ${money(amount)}`
-                : simCheck!.reason
-              : affordCopy
-                ? affordCopy.label
-                : `Back ${side} · ${money(amount)}`;
-  const disabled = sim
-    ? !ready.connected || !sim.canOrder || busy || !quote || amount <= 0 || overBalance
-    : ready.connected &&
-      ready.onBase &&
-      (busy || !quote || ethWei <= 0n || amount <= 0 || overBalance);
+  const label = resolving
+    ? CHECKING_ACCOUNT
+    : !ready.connected
+      ? "Connect wallet"
+      : !sim && !ready.onBase
+        ? "Switch to Base"
+        : sim && !sim.canOrder
+          ? "Your profile is ready"
+          : busy
+            ? sim
+              ? "Adding position…"
+              : `Backing ${side}…`
+            : amount <= 0
+              ? "Enter an amount"
+              : sim
+                ? simCheck!.ok
+                  ? `Back ${side} · ${money(amount)}`
+                  : simCheck!.reason
+                : affordCopy
+                  ? affordCopy.label
+                  : `Back ${side} · ${money(amount)}`;
+  const disabled =
+    resolving ||
+    (sim
+      ? !ready.connected || !sim.canOrder || busy || !quote || amount <= 0 || overBalance
+      : ready.connected &&
+        ready.onBase &&
+        (busy || !quote || ethWei <= 0n || amount <= 0 || overBalance));
 
   return (
     <div className="rounded-[16px] p-5 sm:p-[22px]" style={CARD_STYLE}>
@@ -845,6 +869,7 @@ function SellTicket({
   onCancel,
   onDone,
   sim,
+  resolving = false,
 }: SellTicketProps) {
   const { unit } = useDisplayUnit();
   // Proceeds are ETH-native (a wei quote); worth is USD-native. Both go to the
@@ -929,22 +954,26 @@ function SellTicket({
   const positionUnit = priced ? money(worthUsd!) : `${fmtShares(held.tokens)} shares`;
   const remainingUsd = priced ? worthUsd! - amountUsd : null;
 
-  const confirmLabel = !ready.connected
-    ? "Connect wallet"
-    : !sim && !ready.onBase
-      ? "Switch to Base"
-      : busy
-        ? sim
-          ? "Updating position…"
-          : "Selling…"
-        : priced && amountUsd <= 0
-          ? "Enter an amount"
-          : priced
-            ? `Sell ${money(amountUsd)}`
-            : `Sell all ${held.side}`;
-  const disabled = sim
-    ? !ready.connected || busy || proceeds == null || shares <= 0n
-    : ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n);
+  const confirmLabel = resolving
+    ? CHECKING_ACCOUNT
+    : !ready.connected
+      ? "Connect wallet"
+      : !sim && !ready.onBase
+        ? "Switch to Base"
+        : busy
+          ? sim
+            ? "Updating position…"
+            : "Selling…"
+          : priced && amountUsd <= 0
+            ? "Enter an amount"
+            : priced
+              ? `Sell ${money(amountUsd)}`
+              : `Sell all ${held.side}`;
+  const disabled =
+    resolving ||
+    (sim
+      ? !ready.connected || busy || proceeds == null || shares <= 0n
+      : ready.connected && ready.onBase && (busy || proceeds == null || shares <= 0n));
 
   // The SAME form as Back — title + close, the big editable amount, the size
   // line beneath it, one summary row with Details, one full-width action.

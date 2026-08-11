@@ -260,6 +260,12 @@ export function MobileGame({
    */
   const exec = useMarketExecution({ viewerWallet, ethUsd });
   const { trade, ready, sim } = exec;
+  /**
+   * WHICH LEDGER OWNS EXECUTION IS NOT YET ESTABLISHED. Nothing may settle, and
+   * no ownership is shown, until it is — see `market-execution`, which hands out
+   * a refusing adapter rather than defaulting to the real one.
+   */
+  const resolving = !exec.resolved;
   const bal = useUserBalance(marketId);
   // The SAME owned-position hook the desktop deck mounts — the phone previously
   // had no sell path at all, so owning shares here was a one-way door.
@@ -272,6 +278,7 @@ export function MobileGame({
     ready,
     trade,
     sim,
+    resolving,
     onRequestConnect: requestConnect,
     onRequestChain: () => switchChain({ chainId: CHAIN_ID }),
   });
@@ -612,6 +619,7 @@ export function MobileGame({
               ready={ready}
               trade={trade}
               sim={sim}
+              resolving={resolving}
               onBuySide={(s) => {
                 trade.reset();
                 choose(s);
@@ -645,7 +653,10 @@ export function MobileGame({
               ready={ready}
               trade={trade}
               sim={sim}
+              resolving={resolving}
               onConfirm={async () => {
+                // Nothing settles before the owning ledger is established.
+                if (resolving) return;
                 if (!ready.connected) return requestConnect();
                 if (!ready.onBase) return switchChain({ chainId: CHAIN_ID });
                 if (quote && ethWei > 0n && !(trade.isSubmitting || trade.isMining)) {

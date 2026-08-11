@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { join } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 
 const PGURL = process.env.PGURL ?? "";
 const ready = (() => {
@@ -39,6 +39,51 @@ const file = (p: string) =>
   });
 
 const lit = (s: string) => `'${s.replace(/'/g, "''")}'`;
+
+/**
+ * A psql session that is NOT waited on — the only way to hold a lock while
+ * something else runs. `execFileSync` cannot express concurrency at all, which
+ * is why a "race" written with it is really two sequential calls.
+ */
+function psqlAsync(text: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const p = spawn("psql", [PGURL, "-v", "ON_ERROR_STOP=1", "-tAc", text]);
+    let out = "";
+    let err = "";
+    p.stdout.on("data", (d) => (out += String(d)));
+    p.stderr.on("data", (d) => (err += String(d)));
+    p.on("close", (codeNum) =>
+      codeNum === 0
+        ? resolve(out.trim())
+        : reject(new Error(err.trim() || `psql exited ${codeNum}`)),
+    );
+  });
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Sessions currently parked on a lock inside the order function. */
+const blockedOnOrder = (): number =>
+  Number(
+    sql(
+      `select count(*) from pg_stat_activity
+        where state = 'active'
+          and wait_event_type = 'Lock'
+          and query ilike '%simulation_execute_order%'`,
+    ),
+  );
+
+/** Poll a predicate until it holds, or give up loudly rather than hanging. */
+async function waitFor(predicate: () => boolean, timeoutMs = 8000) {
+  const started = Date.now();
+  for (;;) {
+    if (predicate()) return;
+    if (Date.now() - started > timeoutMs)
+      throw new Error("timed out waiting for the expected database state");
+    await sleep(100);
+  }
+}
+
 const count = (table: string, where = "true") =>
   Number(sql(`select count(*) from ${table} where ${where}`));
 const one = (q: string) => sql(q);
@@ -61,8 +106,8 @@ interface OrderResult {
   answered?: string[];
 }
 
-/** Call `simulation_execute_order` exactly as the server does. */
-const order = (
+/** The exact statement the server issues — shared by the sync and async paths. */
+const orderSql = (
   o: {
     wallet?: string;
     market?: number;
@@ -74,7 +119,7 @@ const order = (
     fingerprint?: string;
     target?: number;
   } = {},
-): OrderResult => {
+): string => {
   const wallet = o.wallet ?? ME;
   const market = o.market ?? MARKET;
   const side = o.side ?? "YES";
@@ -83,13 +128,13 @@ const order = (
   const shares = o.shares ?? 200;
   const key = o.key ?? `k-${Math.random().toString(36).slice(2)}`;
   const print = o.fingerprint ?? `${market}:${side}:${action}:${amount.toFixed(6)}`;
-  return JSON.parse(
-    sql(
-      `select simulation_execute_order(${lit(wallet)}, ${market}, ${lit(side)}, ${lit(action)},
-       ${amount}, ${shares}, 0.42, 1.2, ${lit(key)}, 0.15, ${o.target ?? TARGET}, ${lit(print)})`,
-    ),
-  ) as OrderResult;
+  return `select simulation_execute_order(${lit(wallet)}, ${market}, ${lit(side)}, ${lit(action)},
+       ${amount}, ${shares}, 0.42, 1.2, ${lit(key)}, 0.15, ${o.target ?? TARGET}, ${lit(print)})`;
 };
+
+/** Call `simulation_execute_order` exactly as the server does. */
+const order = (o: Parameters<typeof orderSql>[0] = {}): OrderResult =>
+  JSON.parse(sql(orderSql(o))) as OrderResult;
 
 const activate = (wallet = ME) =>
   JSON.parse(sql(`select simulation_activate(${lit(wallet)}, ${START}, ${TARGET})`)) as {
@@ -97,9 +142,16 @@ const activate = (wallet = ME) =>
     reason?: string;
   };
 
-const exit_ = (wallet = ME, graduate = false) =>
-  JSON.parse(sql(`select simulation_exit(${lit(wallet)}, ${graduate})`)) as {
+const exit_ = (wallet = ME) =>
+  JSON.parse(sql(`select simulation_exit(${lit(wallet)})`)) as {
     ok?: boolean;
+    account?: { state: string };
+  };
+
+const graduate = (wallet = ME, target = TARGET) =>
+  JSON.parse(sql(`select simulation_graduate(${lit(wallet)}, ${target})`)) as {
+    ok?: boolean;
+    reason?: string;
     account?: { state: string };
   };
 
@@ -156,17 +208,63 @@ describe.skipIf(!ready)("the Simulation ledger, on a real cluster", () => {
       expect(Number(one("select available_balance_cc from simulation_accounts"))).toBe(START - 100);
     });
 
-    it("replays even when the pre-lock check is bypassed — the post-lock one catches it", () => {
-      // Both concurrent submissions miss the cheap check; the second acquires the
-      // lock in a world where the order already exists. Without the recheck it
-      // would collide with the unique index and FAIL rather than replay.
+    /**
+     * THE ACTUAL RACE, IN THREE SESSIONS.
+     *
+     * A sequential second call proves nothing about the post-lock recheck: it
+     * finds the settled order in the CHEAP pre-lock path and never reaches the
+     * lock at all. The case the recheck exists for is two submissions that BOTH
+     * miss the pre-lock lookup and then queue on the account row — and that
+     * cannot be produced by calling the function twice in a row.
+     *
+     * So a coordinator session takes the account lock and holds it. Both callers
+     * are launched while it is held: each one runs its pre-lock replay check
+     * (finding nothing, because nothing has committed) and then BLOCKS on the
+     * account row. Releasing the lock lets them proceed one at a time — the
+     * winner settles, and the loser reaches its post-lock recheck in a world
+     * where the order now exists. Without that recheck the loser hits the unique
+     * index and fails.
+     */
+    it("replays the loser of a genuine two-session race", async () => {
       activate();
-      order({ key: "racy" });
-      // Simulate the loser of the race arriving after the winner committed.
-      const late = order({ key: "racy" });
-      expect(late.ok).toBe(true);
-      expect(late.replayed).toBe(true);
+
+      // 1 · A coordinator holds the account row, so neither caller can pass the
+      //     lock until it commits.
+      const coordinator = psqlAsync(
+        `begin;
+         select 1 from simulation_accounts where wallet = ${lit(ME)} for update;
+         select pg_sleep(3);
+         commit;`,
+      );
+      await sleep(500);
+
+      // 2 · Both callers start now. Each clears its pre-lock replay check
+      //     (nothing has committed) and then waits on the row.
+      const a = psqlAsync(orderSql({ key: "contended" }));
+      const b = psqlAsync(orderSql({ key: "contended" }));
+
+      // 3 · Confirm they are genuinely BLOCKED rather than already finished.
+      //     Without this the test could pass by accident on a slow machine where
+      //     the first call completed before the second even started.
+      await waitFor(() => blockedOnOrder() >= 2);
+
+      // 4 · The coordinator commits; the two proceed in series.
+      await coordinator;
+      const [first, second] = (await Promise.all([a, b])).map((r) => JSON.parse(r) as OrderResult);
+
+      const results = [first, second];
+      expect(results.every((r) => r.ok)).toBe(true);
+      // Exactly one settled and exactly one replayed — the loser did not fail.
+      expect(results.filter((r) => r.replayed === false)).toHaveLength(1);
+      expect(results.filter((r) => r.replayed === true)).toHaveLength(1);
+      expect(first.order?.id).toBe(second.order?.id);
+
+      // And the ledger agrees: one order, one debit, one position, one belief.
       expect(count("simulation_orders")).toBe(1);
+      expect(Number(one("select available_balance_cc from simulation_accounts"))).toBe(START - 100);
+      expect(count("simulation_positions")).toBe(1);
+      expect(Number(one("select yes_shares from simulation_positions"))).toBe(200);
+      expect(count("expressed_beliefs", "source = 'simulation'")).toBe(1);
     });
 
     it("rejects the same key carrying a different order", () => {
@@ -324,11 +422,84 @@ describe.skipIf(!ready)("the Simulation ledger, on a real cluster", () => {
 
     it("never reactivates a graduated account", () => {
       activate();
-      exit_(ME, true);
+      giveConvictions(ME, 9);
+      order();
+      expect(graduate().ok).toBe(true);
       expect(one("select state from simulation_accounts")).toBe("GRADUATED");
       const again = activate();
       expect(again.ok).toBe(false);
       expect(again.reason).toBe("graduated");
+      expect(one("select state from simulation_accounts")).toBe("GRADUATED");
+    });
+  });
+
+  /* ── 3 · The one-way door has its own conditions ─────────────────────────── */
+
+  describe("graduation is earned, never requested", () => {
+    it("refuses to graduate an ACTIVE account", () => {
+      // The whole defect: an authenticated client could activate with zero
+      // convictions, ask to graduate, and permanently close its own account. The
+      // UI only offers Continue after the tenth — but a durable invariant that
+      // depends on an honest client is a convention, not an invariant.
+      activate();
+      const res = graduate();
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("not_graduating");
+      expect(one("select state from simulation_accounts")).toBe("ACTIVE");
+      expect(one("select coalesce(graduated_at::text,'') from simulation_accounts")).toBe("");
+    });
+
+    it("refuses to graduate an EXITED account", () => {
+      activate();
+      exit_();
+      const res = graduate();
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("not_graduating");
+      expect(one("select state from simulation_accounts")).toBe("EXITED");
+    });
+
+    it("refuses when the count has fallen back below the target", () => {
+      // GRADUATING is written once and persists; a conviction can disappear
+      // afterwards. Closing an account permanently on the strength of a state
+      // written earlier, about a count that is no longer true, is the same
+      // mistake as trusting the client.
+      activate();
+      giveConvictions(ME, 9);
+      order();
+      expect(one("select state from simulation_accounts")).toBe("GRADUATING");
+      sql("delete from expressed_beliefs where source = 'tap'");
+
+      const res = graduate();
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("not_complete");
+      expect(one("select state from simulation_accounts")).toBe("GRADUATING");
+    });
+
+    it("graduates a GRADUATING account that is genuinely at the target", () => {
+      activate();
+      giveConvictions(ME, 9);
+      order();
+      const res = graduate();
+      expect(res.ok).toBe(true);
+      expect(res.account?.state).toBe("GRADUATED");
+      expect(one("select coalesce(graduated_at::text,'') from simulation_accounts")).not.toBe("");
+    });
+
+    it("is idempotent — a double tap on Continue is not an error", () => {
+      activate();
+      giveConvictions(ME, 9);
+      order();
+      expect(graduate().ok).toBe(true);
+      expect(graduate().ok).toBe(true);
+      expect(one("select state from simulation_accounts")).toBe("GRADUATED");
+    });
+
+    it("leaving a graduated account never un-graduates it", () => {
+      activate();
+      giveConvictions(ME, 9);
+      order();
+      graduate();
+      exit_();
       expect(one("select state from simulation_accounts")).toBe("GRADUATED");
     });
   });
@@ -376,6 +547,72 @@ describe.skipIf(!ready)("the Simulation ledger, on a real cluster", () => {
       expect(count("market_calls", "mode = 'SIMULATION' and responded_at is not null")).toBe(1);
       // The real call is untouched — a simulated position does not answer it.
       expect(count("market_calls", "mode = 'REAL' and responded_at is null")).toBe(1);
+    });
+  });
+
+  /* ── 1 · Who a Simulation Challenge can actually reach ───────────────────── */
+
+  describe("the Simulation audience intersection, against the real schema", () => {
+    /**
+     * THE APPLICATION'S OWN PREDICATE, run here so a column rename cannot pass
+     * a static test and then suppress every Simulation Challenge in production.
+     * `eligibleAudience` narrows its candidates with exactly this.
+     */
+    const reachable = (wallets: string[]): string[] =>
+      sql(
+        `select coalesce(string_agg(wallet, ',' order by wallet), '')
+           from simulation_accounts
+          where state = 'ACTIVE'
+            and wallet in (${wallets.map(lit).join(",")})`,
+      )
+        .split(",")
+        .filter(Boolean);
+
+    it("includes ACTIVE and excludes every other lifecycle state", () => {
+      const active = "0xactive";
+      const graduating = "0xgraduating";
+      const exited = "0xexited";
+      const graduated = "0xgraduated";
+
+      activate(active);
+
+      activate(graduating);
+      giveConvictions(graduating, 9);
+      order({ wallet: graduating });
+      expect(one(`select state from simulation_accounts where wallet = ${lit(graduating)}`)).toBe(
+        "GRADUATING",
+      );
+
+      activate(exited);
+      exit_(exited);
+
+      activate(graduated);
+      giveConvictions(graduated, 9);
+      order({ wallet: graduated, market: MARKET + 1 });
+      graduate(graduated);
+
+      // A GRADUATING account can no longer answer, so it must not be asked.
+      expect(reachable([active, graduating, exited, graduated])).toEqual([active]);
+    });
+
+    it("excludes a wallet with no Simulation account at all", () => {
+      expect(reachable([ME])).toEqual([]);
+    });
+
+    it("counts a Simulation position as having answered the market", () => {
+      // `wallet_beliefs` cannot see one, so without the positions read somebody
+      // would be asked about a question they had already answered.
+      activate();
+      order();
+      expect(count("simulation_positions", `wallet = ${lit(ME)} and onchain_id = ${MARKET}`)).toBe(
+        1,
+      );
+      // ROW EXISTENCE, not shares: selling out does not un-answer.
+      order({ action: "SELL", shares: 200, amount: 90, key: "out" });
+      expect(Number(one("select yes_shares from simulation_positions"))).toBe(0);
+      expect(count("simulation_positions", `wallet = ${lit(ME)} and onchain_id = ${MARKET}`)).toBe(
+        1,
+      );
     });
   });
 

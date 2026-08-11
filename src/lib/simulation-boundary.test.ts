@@ -62,6 +62,86 @@ describe("no Simulation order can reach the chain", () => {
   });
 });
 
+/**
+ * "COULD NOT ESTABLISH THE MODE" AND "CONFIRMED REAL MODE" ARE DIFFERENT FACTS.
+ *
+ * Conflating them is the most dangerous shape this feature can take: a fresh
+ * tab, a slow query or an expired session would resolve to Real Mode, and the
+ * facade would hand out the real-money executor to somebody the server has in
+ * Simulation. Every assertion here is a way that could come back.
+ */
+describe("an unresolved mode never falls through to real money", () => {
+  it("offers NEITHER executor while the owning ledger is unknown", () => {
+    const c = code(EXECUTION);
+    expect(c).toMatch(/const UNRESOLVED_TRADE: TradeLike = Object\.freeze/);
+    // `resolved` is checked FIRST. A ternary that tested `simulated` first would
+    // read an unresolved mode as "not simulated" — the original defect exactly.
+    expect(c).toMatch(/trade: !resolved \? UNRESOLVED_TRADE : simulated \? simTrade : realTrade/);
+    // And the refusing adapter cannot quietly succeed.
+    expect(c).toMatch(/buy: \(\) => Promise\.reject/);
+    expect(c).toMatch(/sell: \(\) => Promise\.reject/);
+  });
+
+  it("defaults the context to UNKNOWN rather than REAL", () => {
+    const c = code("src/lib/simulation-mode.tsx");
+    expect(c).toMatch(/const UNRESOLVED: SimulationModeApi = \{\s*mode: "UNKNOWN"/);
+    expect(c).toMatch(/createContext<SimulationModeApi>\(UNRESOLVED\)/);
+  });
+
+  it("derives the mode from the ROUTING read, never from the private account", () => {
+    // The account read needs a session and can legitimately return null. A mode
+    // derived from it reports "could not prove ownership" as "Real Mode".
+    const c = code("src/lib/simulation-mode.tsx");
+    expect(c).toMatch(/modeFor\(routing, progress\)/);
+    expect(c).not.toMatch(/modeFor\(acct/);
+  });
+
+  it("seeds the routing query with no default, because there is no safe one", () => {
+    const q = code("src/lib/simulation-query.ts");
+    const fn = q.slice(q.indexOf("export function simulationRoutingQO"));
+    expect(fn.slice(0, 400)).not.toMatch(/initialData|placeholderData/);
+  });
+
+  it("restores the captured account when an exit fails, rather than re-reading", () => {
+    // The commonest failure is a missing or rejected signature — and a re-read in
+    // that state has no session either, so it returns null, which reads as Real
+    // Mode. The rollback would confirm the very thing it was undoing.
+    const c = code("src/lib/simulation-mode.tsx");
+    expect(c).toMatch(/onMutate: \(graduate: boolean\)/);
+    expect(c).toMatch(/previousRouting/);
+    expect(c).toMatch(
+      /qc\.setQueryData\(simulationRoutingKey\(wallet\), context\.previousRouting\)/,
+    );
+  });
+
+  it("blocks the confirm on every order surface while unresolved", () => {
+    const ticket = code("src/components/order/OrderTicket.tsx");
+    // Formatting varies with line length; the decision is what is asserted.
+    expect(ticket).toMatch(/resolving\s*\?\s*CHECKING_ACCOUNT/g);
+    expect((ticket.match(/resolving\s*\?\s*CHECKING_ACCOUNT/g) ?? []).length).toBe(2);
+    expect(ticket).toMatch(/const disabled =\s*resolving \|\|/);
+    for (const p of ["src/components/MarketDeck.tsx", "src/components/MobileGame.tsx"]) {
+      expect(code(p)).toMatch(/const resolving = !exec\.resolved/);
+      expect(code(p)).toMatch(/if \(resolving\) return;/);
+    }
+  });
+
+  it("shows neither ledger's holdings while unresolved", () => {
+    const dock = code("src/components/order/OwnedDock.tsx");
+    expect(dock).toMatch(/const activeYes = resolving \? 0n :/);
+    expect(dock).toMatch(/const activeNo = resolving \? 0n :/);
+  });
+
+  it("keeps the routing payload to the routing fact and nothing else", () => {
+    // It is unsigned, so it must disclose the least that answers the question.
+    const server = code(SIM_SERVER);
+    const fn = server.slice(server.indexOf("export async function loadSimulationRouting"));
+    const body = fn.slice(0, fn.indexOf("export async function loadSimulationAccount"));
+    expect(body).toMatch(/\.select\("state"\)/);
+    expect(body).not.toMatch(/available_balance_cc|starting_balance_cc|select\("\*"\)/);
+  });
+});
+
 describe("the ledger is separate, not a flag on the real one", () => {
   it("writes only Simulation tables plus the shared belief bridge", () => {
     const c = code(SIM_SERVER);
@@ -331,12 +411,34 @@ describe("Challenge is mode-scoped end to end", () => {
     );
   });
 
-  it("intersects the Simulation audience with active Simulation users", () => {
+  it("intersects the Simulation audience with ACCOUNTS IN THE ACTIVE STATE", () => {
     const c = code("src/lib/challenge.server.ts");
-    expect(c).toMatch(/from\("simulation_accounts"\)[\s\S]{0,160}\.eq\("active", true\)/);
+    expect(c).toMatch(/from\("simulation_accounts"\)[\s\S]{0,160}\.eq\("state", "ACTIVE"\)/);
+    // The boolean is GONE from the schema. A query naming it does not narrow the
+    // audience — it errors, the audience fails closed, and every Simulation
+    // Challenge silently disappears. Asserted absent, not merely un-asserted.
+    expect(c).not.toMatch(/\.eq\("active", true\)/);
+    expect(c).not.toMatch(/simulation_accounts[\s\S]{0,160}graduated_at/);
     // A narrowing, never a replacement — the relationships that qualify somebody
     // are identical in both modes.
     expect(c).toMatch(/members = members\.filter\(\(c\) => active\.has\(c\.wallet\)\)/);
+  });
+
+  it("excludes people who already answered the market IN SIMULATION", () => {
+    // `wallet_beliefs` cannot see a Simulation position, so without this read
+    // somebody who had already taken a side here stayed eligible to be asked
+    // about it again.
+    const c = code("src/lib/challenge.server.ts");
+    expect(c).toMatch(/from\("simulation_positions"\)[\s\S]{0,200}\.eq\("onchain_id", marketId\)/);
+    // Row existence, never positive shares: selling out does not un-answer.
+    const read = c.slice(c.indexOf('from("simulation_positions")'));
+    expect(read.slice(0, 260)).not.toMatch(/yes_shares|no_shares|\.gt\(/);
+  });
+
+  it("treats a failed intersection read as a failure, never an empty audience", () => {
+    const c = code("src/lib/challenge.server.ts");
+    expect(c).toMatch(/if \(simulators\.error\) return refuse/);
+    expect(c).toMatch(/if \(simParticipants\.error\) return refuse/);
   });
 
   it("a real position cannot close a Simulation call", () => {
@@ -346,11 +448,34 @@ describe("Challenge is mode-scoped end to end", () => {
 
   it("leaving closes unresolved Simulation Challenges without recording a pass", () => {
     const sql = readFileSync(join(process.cwd(), MIGRATION), "utf8");
-    const exit = sql.slice(sql.indexOf("FUNCTION public.simulation_exit"));
-    const body = exit.slice(0, exit.indexOf("REVOKE ALL ON FUNCTION public.simulation_exit"));
+    const fn = sql.slice(sql.indexOf("FUNCTION public.simulation_release_challenges"));
+    const body = fn.slice(0, fn.indexOf("REVOKE ALL ON FUNCTION public.simulation_release"));
     expect(body).toMatch(/close_reason = 'simulation_exit'/);
     // `passed_at` reaches Challenge lifecycle, so it must never be set here.
     expect(body).not.toMatch(/SET[\s\S]{0,80}passed_at/);
+    // BOTH doors run it. Neither may skip the cleanup they share.
+    expect(sql).toMatch(
+      /FUNCTION public\.simulation_exit\(p_wallet text\)[\s\S]{0,900}PERFORM simulation_release_challenges/,
+    );
+    expect(sql).toMatch(
+      /FUNCTION public\.simulation_graduate\([\s\S]{0,2000}PERFORM simulation_release_challenges/,
+    );
+  });
+
+  it("graduation is earned inside the transaction, never requested by the caller", () => {
+    // A boolean the client supplies cannot gate a permanent state transition:
+    // an authenticated client could activate with zero convictions, ask to
+    // graduate, and close its own account forever.
+    const sql = readFileSync(join(process.cwd(), MIGRATION), "utf8");
+    expect(sql).not.toMatch(/FUNCTION public\.simulation_exit\([\s\S]{0,80}p_graduate/);
+    const grad = sql.slice(sql.indexOf("FUNCTION public.simulation_graduate"));
+    const body = grad.slice(0, grad.indexOf("REVOKE ALL ON FUNCTION public.simulation_graduate"));
+    // Both conditions, re-read here rather than taken on the caller's word.
+    expect(body).toMatch(/v_row\.state <> 'GRADUATING'[\s\S]{0,120}'not_graduating'/);
+    expect(body).toMatch(/v_count := simulation_conviction_count\(v_me\)/);
+    expect(body).toMatch(/IF v_count < p_target THEN[\s\S]{0,120}'not_complete'/);
+    // And the account row is locked before either is evaluated.
+    expect(body.indexOf("FOR UPDATE")).toBeLessThan(body.indexOf("'not_graduating'"));
   });
 });
 
